@@ -18,7 +18,7 @@ struct UpdateField {
 }
 
 // 筛选条件，大于、大于等于、小于、小于等于
-enum ConditionOP {EQ, NE, GT, GE, LT, LE}
+enum ConditionOP {EQ, NE, GT, GE, LT, LE, STARTS_WITH, ENDS_WITH, CONTAINS}
 struct Condition {
     ConditionOP op;
     uint32 field;

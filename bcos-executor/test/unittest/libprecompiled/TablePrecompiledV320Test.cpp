@@ -33,10 +33,10 @@ using namespace bcos::ledger;
 
 namespace bcos::test
 {
-class TableFactoryPrecompiledFixture : public PrecompiledFixture
+class TableFactoryPrecompiledV320Fixture : public PrecompiledFixture
 {
 public:
-   TableFactoryPrecompiledFixture() { init(false); }
+   TableFactoryPrecompiledV320Fixture() { init(false); }
 
    void init(bool isWasm)
    {
@@ -44,7 +44,7 @@ public:
        tableTestAddress = isWasm ? "/tables/t_test" : "420f853b49838bd3e9466c85a4cc3428c960dde2";
    }
 
-   virtual ~TableFactoryPrecompiledFixture() = default;
+   virtual ~TableFactoryPrecompiledV320Fixture() = default;
 
    ExecutionMessage::UniquePtr creatTable(protocol::BlockNumber _number,
        const std::string& tableName, const std::string& key, const std::vector<std::string>& value,
@@ -690,7 +690,7 @@ static void generateRandomVector(
    }
 }
 
-BOOST_FIXTURE_TEST_SUITE(precompiledTableTestV320, TableFactoryPrecompiledFixture)
+BOOST_FIXTURE_TEST_SUITE(precompiledTableTestV320, TableFactoryPrecompiledV320Fixture)
 
 
 BOOST_AUTO_TEST_CASE(countTest)
@@ -761,8 +761,7 @@ BOOST_AUTO_TEST_CASE(countTest)
        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
        uint32_t countRes = 0;
        codec->decode(r1->data(), countRes);
-       // FIXME: the ut will failed
-       // BOOST_TEST(countRes == validCount);
+       BOOST_TEST(countRes == validCount);
 
        // lowKey <= key <= highKey && value != "yes"
        low = boost::lexical_cast<uint32_t>(lowKey);
@@ -771,8 +770,7 @@ BOOST_AUTO_TEST_CASE(countTest)
        auto r2 = count(number++, {cond1, cond2, cond4}, callAddress);
        countRes = 0;
        codec->decode(r2->data(), countRes);
-       // FIXME: the ut will failed
-       // BOOST_CHECK(countRes == total - validCount);
+       BOOST_CHECK(countRes == total - validCount);
    }
 
    // (< && < && ==) or (< && < && !=)
@@ -950,8 +948,7 @@ BOOST_AUTO_TEST_CASE(countWasmTest)
        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
        uint32_t countRes = 0;
        codec->decode(r1->data(), countRes);
-       // FIXME: the ut will failed
-       // BOOST_TEST(countRes == validCount);
+       BOOST_TEST(countRes == validCount);
 
        // lowKey <= key <= highKey && value != "yes"
        low = boost::lexical_cast<uint32_t>(lowKey);
@@ -960,8 +957,7 @@ BOOST_AUTO_TEST_CASE(countWasmTest)
        auto r2 = count(number++, {cond1, cond2, cond4}, callAddress);
        countRes = 0;
        codec->decode(r2->data(), countRes);
-       // FIXME: the ut will failed
-       // BOOST_CHECK(countRes == total - validCount);
+       BOOST_CHECK(countRes == total - validCount);
    }
 
    // (< && < && ==) or (< && < && !=)
@@ -2390,6 +2386,332 @@ BOOST_AUTO_TEST_CASE(removeWasmTest)
        auto r1 = removeByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
    }
+}
+
+BOOST_AUTO_TEST_CASE(containsTest)
+{
+    auto callAddress = tableTestAddress;
+    const int INSERT_COUNT = 500;
+    BlockNumber number = 1;
+    {
+        creatTable(number++, "t_test_condv320", "id", {"v1", "v2"}, callAddress);
+    }
+
+    for (int j = 0; j < INSERT_COUNT; j += 2)
+    {
+        boost::log::core::get()->set_logging_enabled(false);
+        {
+            std::string value = _fillZeros(j);
+            std::string key = "abc_" + value;
+            insert(number++, key, {value, key}, callAddress);
+        }
+        {            
+            std::string value = _fillZeros(j + 1);
+            std::string key = value + "_abc";
+            insert(number++, key, {value, key}, callAddress);
+        }
+        boost::log::core::get()->set_logging_enabled(true);
+    }
+
+    // STARTS_WITH ENDS_WITH CONTAINS 
+    {   
+        LimitTuple limit = {0, 500};
+        {
+            ConditionTupleV320 cond1 = {6, 0, "abc"};
+            ConditionTupleV320 cond2 = {7, 0, "abc"};
+            ConditionTupleV320 cond3 = {8, 0, "abc"};
+            auto r1 = count(number++, {cond1}, callAddress);
+            auto r2 = count(number++, {cond2}, callAddress);
+            auto r3 = count(number++, {cond3}, callAddress);
+            uint32_t countPrefix = 0;
+            uint32_t countSuffix = 0;
+            uint32_t countContains = 0;
+            codec->decode(r1->data(), countPrefix);
+            codec->decode(r2->data(), countSuffix);
+            codec->decode(r3->data(), countContains);
+            BOOST_CHECK(countPrefix == INSERT_COUNT / 2);
+            BOOST_CHECK(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
+            BOOST_CHECK(countContains == INSERT_COUNT);
+
+            auto r4 = selectByCondition(number++, {cond1}, limit, callAddress);
+            auto r5 = selectByCondition(number++, {cond2}, limit, callAddress);
+            auto r6 = selectByCondition(number++, {cond3}, limit, callAddress); 
+            std::vector<EntryTuple> entries1;
+            codec->decode(r4->data(), entries1);
+            std::vector<EntryTuple> entries2;
+            codec->decode(r5->data(), entries2);
+            std::vector<EntryTuple> entries3;
+            codec->decode(r6->data(), entries3);
+            size_t count1 = 0;
+            size_t count2 = 0;
+            size_t count3 = 0;
+            for (uint32_t j = 0; j < 500; j += 2)
+            {
+                if (std::get<1>(entries1[j / 2])[0] == _fillZeros(j))
+                    ++count1;
+                if (std::get<1>(entries2[j / 2])[0] == _fillZeros(j + 1))
+                    ++count2;   
+                if (std::get<1>(entries3[j / 2 + 250])[0] == _fillZeros(j))
+                    ++count3;
+                if (std::get<1>(entries3[j / 2])[0] == _fillZeros(j + 1))
+                    ++count3;
+            }
+            BOOST_CHECK(count1 == entries1.size());
+            BOOST_CHECK(count2 == entries2.size());
+            BOOST_CHECK(count3 == entries3.size());
+        }
+
+        {
+            ConditionTupleV320 cond1 = {6, 2, "abc"};
+            ConditionTupleV320 cond2 = {7, 2, "abc"};
+            ConditionTupleV320 cond3 = {8, 2, "abc"};
+            auto r1 = count(number++, {cond1}, callAddress);
+            auto r2 = count(number++, {cond2}, callAddress);
+            auto r3 = count(number++, {cond3}, callAddress);
+            uint32_t countPrefix = 0;
+            uint32_t countSuffix = 0;
+            uint32_t countContains = 0;
+            codec->decode(r1->data(), countPrefix);
+            codec->decode(r2->data(), countSuffix);
+            codec->decode(r3->data(), countContains);
+            BOOST_CHECK(countPrefix == INSERT_COUNT / 2);
+            BOOST_CHECK(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
+            BOOST_CHECK(countContains == INSERT_COUNT);
+
+            auto r4 = selectByCondition(number++, {cond1}, limit, callAddress);
+            auto r5 = selectByCondition(number++, {cond2}, limit, callAddress);
+            auto r6 = selectByCondition(number++, {cond3}, limit, callAddress); 
+            std::vector<EntryTuple> entries1;
+            codec->decode(r4->data(), entries1);
+            std::vector<EntryTuple> entries2;
+            codec->decode(r5->data(), entries2);
+            std::vector<EntryTuple> entries3;
+            codec->decode(r6->data(), entries3);
+            size_t count1 = 0;
+            size_t count2 = 0;
+            size_t count3 = 0;
+            for (uint32_t j = 0; j < 500; j += 2)
+            {
+                if (std::get<1>(entries1[j / 2])[0] == _fillZeros(j))
+                    ++count1;
+                if (std::get<1>(entries2[j / 2])[0] == _fillZeros(j + 1))
+                    ++count2;   
+                if (std::get<1>(entries3[j / 2 + 250])[0] == _fillZeros(j))
+                    ++count3;
+                if (std::get<1>(entries3[j / 2])[0] == _fillZeros(j + 1))
+                    ++count3;
+            }
+            BOOST_CHECK(count1 == entries1.size());
+            BOOST_CHECK(count2 == entries2.size());
+            BOOST_CHECK(count3 == entries3.size());
+        }
+    }
+
+    // empty key
+    {
+        ConditionTupleV320 cond1 = {6, 0, ""};
+        ConditionTupleV320 cond2 = {7, 0, ""};
+        ConditionTupleV320 cond3 = {8, 0, ""};
+
+        auto r1 = count(number++, {cond1}, callAddress);
+        auto r2 = count(number++, {cond2}, callAddress);
+        auto r3 = count(number++, {cond3}, callAddress);
+        uint32_t countPrefix = 0;
+        uint32_t countSuffix = 0;
+        uint32_t countContains = 0;
+        codec->decode(r1->data(), countPrefix);
+        codec->decode(r2->data(), countSuffix);
+        codec->decode(r3->data(), countContains);
+
+        BOOST_CHECK(countPrefix == INSERT_COUNT);
+        BOOST_CHECK(countSuffix == INSERT_COUNT);
+        BOOST_CHECK(countContains == INSERT_COUNT);
+    }
+
+    // error key
+    {
+        ConditionTupleV320 cond1 = {6, 0, "abcd"};
+        ConditionTupleV320 cond2 = {7, 0, "abcd"};
+        ConditionTupleV320 cond3 = {8, 0, "abcd"};
+
+        auto r1 = count(number++, {cond1}, callAddress);
+        auto r2 = count(number++, {cond2}, callAddress);
+        auto r3 = count(number++, {cond3}, callAddress);
+        uint32_t countPrefix = 0;
+        uint32_t countSuffix = 0;
+        uint32_t countContains = 0;
+        codec->decode(r1->data(), countPrefix);
+        codec->decode(r2->data(), countSuffix);
+        codec->decode(r3->data(), countContains);
+
+        BOOST_CHECK(countPrefix == 0);
+        BOOST_CHECK(countSuffix == 0);
+        BOOST_CHECK(countContains == 0);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(containsWasmTest)
+{
+    init(true);
+
+    auto callAddress = tableTestAddress;
+    const int INSERT_COUNT = 500;
+    BlockNumber number = 1;
+    {
+        creatTable(number++, "t_test_condv320", "id", {"v1", "v2"}, callAddress);
+    }
+
+    for (int j = 0; j < INSERT_COUNT; j += 2)
+    {
+        boost::log::core::get()->set_logging_enabled(false);
+        {
+            std::string value = _fillZeros(j);
+            std::string key = "abc_" + value;
+            insert(number++, key, {value, key}, callAddress);
+        }
+        {            
+            std::string value = _fillZeros(j + 1);
+            std::string key = value + "_abc";
+            insert(number++, key, {value, key}, callAddress);
+        }
+        boost::log::core::get()->set_logging_enabled(true);
+    }
+
+    // STARTS_WITH ENDS_WITH CONTAINS 
+    {   
+        LimitTuple limit = {0, 500};
+        {
+            ConditionTupleV320 cond1 = {6, 0, "abc"};
+            ConditionTupleV320 cond2 = {7, 0, "abc"};
+            ConditionTupleV320 cond3 = {8, 0, "abc"};
+            auto r1 = count(number++, {cond1}, callAddress);
+            auto r2 = count(number++, {cond2}, callAddress);
+            auto r3 = count(number++, {cond3}, callAddress);
+            uint32_t countPrefix = 0;
+            uint32_t countSuffix = 0;
+            uint32_t countContains = 0;
+            codec->decode(r1->data(), countPrefix);
+            codec->decode(r2->data(), countSuffix);
+            codec->decode(r3->data(), countContains);
+            BOOST_CHECK(countPrefix == INSERT_COUNT / 2);
+            BOOST_CHECK(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
+            BOOST_CHECK(countContains == INSERT_COUNT);
+
+            auto r4 = selectByCondition(number++, {cond1}, limit, callAddress);
+            auto r5 = selectByCondition(number++, {cond2}, limit, callAddress);
+            auto r6 = selectByCondition(number++, {cond3}, limit, callAddress); 
+            std::vector<EntryTuple> entries1;
+            codec->decode(r4->data(), entries1);
+            std::vector<EntryTuple> entries2;
+            codec->decode(r5->data(), entries2);
+            std::vector<EntryTuple> entries3;
+            codec->decode(r6->data(), entries3);
+            size_t count1 = 0;
+            size_t count2 = 0;
+            size_t count3 = 0;
+            for (uint32_t j = 0; j < 500; j += 2)
+            {
+                if (std::get<1>(entries1[j / 2])[0] == _fillZeros(j))
+                    ++count1;
+                if (std::get<1>(entries2[j / 2])[0] == _fillZeros(j + 1))
+                    ++count2;   
+                if (std::get<1>(entries3[j / 2 + 250])[0] == _fillZeros(j))
+                    ++count3;
+                if (std::get<1>(entries3[j / 2])[0] == _fillZeros(j + 1))
+                    ++count3;
+            }
+            BOOST_CHECK(count1 == entries1.size());
+            BOOST_CHECK(count2 == entries2.size());
+            BOOST_CHECK(count3 == entries3.size());
+        }
+
+        {
+            ConditionTupleV320 cond1 = {6, 2, "abc"};
+            ConditionTupleV320 cond2 = {7, 2, "abc"};
+            ConditionTupleV320 cond3 = {8, 2, "abc"};
+            auto r1 = count(number++, {cond1}, callAddress);
+            auto r2 = count(number++, {cond2}, callAddress);
+            auto r3 = count(number++, {cond3}, callAddress);
+            uint32_t countPrefix = 0;
+            uint32_t countSuffix = 0;
+            uint32_t countContains = 0;
+            codec->decode(r1->data(), countPrefix);
+            codec->decode(r2->data(), countSuffix);
+            codec->decode(r3->data(), countContains);
+            BOOST_CHECK(countPrefix == INSERT_COUNT / 2);
+            BOOST_CHECK(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
+            BOOST_CHECK(countContains == INSERT_COUNT);
+
+            auto r4 = selectByCondition(number++, {cond1}, limit, callAddress);
+            auto r5 = selectByCondition(number++, {cond2}, limit, callAddress);
+            auto r6 = selectByCondition(number++, {cond3}, limit, callAddress); 
+            std::vector<EntryTuple> entries1;
+            codec->decode(r4->data(), entries1);
+            std::vector<EntryTuple> entries2;
+            codec->decode(r5->data(), entries2);
+            std::vector<EntryTuple> entries3;
+            codec->decode(r6->data(), entries3);
+            size_t count1 = 0;
+            size_t count2 = 0;
+            size_t count3 = 0;
+            for (uint32_t j = 0; j < 500; j += 2)
+            {
+                if (std::get<1>(entries1[j / 2])[0] == _fillZeros(j))
+                    ++count1;
+                if (std::get<1>(entries2[j / 2])[0] == _fillZeros(j + 1))
+                    ++count2;   
+                if (std::get<1>(entries3[j / 2 + 250])[0] == _fillZeros(j))
+                    ++count3;
+                if (std::get<1>(entries3[j / 2])[0] == _fillZeros(j + 1))
+                    ++count3;
+            }
+            BOOST_CHECK(count1 == entries1.size());
+            BOOST_CHECK(count2 == entries2.size());
+            BOOST_CHECK(count3 == entries3.size());
+        }
+    }
+
+    // empty key
+    {
+        ConditionTupleV320 cond1 = {6, 0, ""};
+        ConditionTupleV320 cond2 = {7, 0, ""};
+        ConditionTupleV320 cond3 = {8, 0, ""};
+
+        auto r1 = count(number++, {cond1}, callAddress);
+        auto r2 = count(number++, {cond2}, callAddress);
+        auto r3 = count(number++, {cond3}, callAddress);
+        uint32_t countPrefix = 0;
+        uint32_t countSuffix = 0;
+        uint32_t countContains = 0;
+        codec->decode(r1->data(), countPrefix);
+        codec->decode(r2->data(), countSuffix);
+        codec->decode(r3->data(), countContains);
+
+        BOOST_CHECK(countPrefix == INSERT_COUNT);
+        BOOST_CHECK(countSuffix == INSERT_COUNT);
+        BOOST_CHECK(countContains == INSERT_COUNT);
+    }
+
+    // error key
+    {
+        ConditionTupleV320 cond1 = {6, 0, "abcd"};
+        ConditionTupleV320 cond2 = {7, 0, "abcd"};
+        ConditionTupleV320 cond3 = {8, 0, "abcd"};
+
+        auto r1 = count(number++, {cond1}, callAddress);
+        auto r2 = count(number++, {cond2}, callAddress);
+        auto r3 = count(number++, {cond3}, callAddress);
+        uint32_t countPrefix = 0;
+        uint32_t countSuffix = 0;
+        uint32_t countContains = 0;
+        codec->decode(r1->data(), countPrefix);
+        codec->decode(r2->data(), countSuffix);
+        codec->decode(r3->data(), countContains);
+
+        BOOST_CHECK(countPrefix == 0);
+        BOOST_CHECK(countSuffix == 0);
+        BOOST_CHECK(countContains == 0);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

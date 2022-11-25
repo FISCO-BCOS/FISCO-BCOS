@@ -107,6 +107,9 @@ public:
     size_t blockLimit() const { return m_blockLimit; }
 
     std::string const& privateKeyPath() const { return m_privateKeyPath; }
+    bool const& hsmEnable() const { return m_hsmEnable; }
+    int const& keyIndex() const { return m_keyIndex; }
+    std::string const& password() const { return m_password; }
 
     size_t minSealTime() const { return m_minSealTime; }
     size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
@@ -276,6 +279,9 @@ private:
 
     // for security
     std::string m_privateKeyPath;
+    bool m_hsmEnable;
+    int m_keyIndex;
+    std::string m_password;
 
     // storage security configuration
     bool m_storageSecurityEnable;

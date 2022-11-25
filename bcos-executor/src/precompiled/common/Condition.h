@@ -44,6 +44,21 @@ public:
         addCondtion(idx, value, 
             [this](uint32_t idx, const std::string& value) {m_conditions[idx]->LE(value);});
     }
+    void STARTS_WITH(uint32_t idx, const std::string& value) 
+    { 
+        addCondtion(idx, value, 
+            [this](uint32_t idx, const std::string& value) {m_conditions[idx]->STARTS_WITH(value);});
+    }
+    void ENDS_WITH(uint32_t idx, const std::string& value) 
+    { 
+        addCondtion(idx, value, 
+            [this](uint32_t idx, const std::string& value) {m_conditions[idx]->ENDS_WITH(value);});
+    }
+    void CONTAINS(uint32_t idx, const std::string& value) 
+    { 
+        addCondtion(idx, value, 
+            [this](uint32_t idx, const std::string& value) {m_conditions[idx]->CONTAINS(value);});
+    }
 
     void limit(size_t start, size_t count) { m_limit = std::pair<size_t, size_t>(start, count); }
     std::pair<size_t, size_t> getLimit() const { return {m_limit.first, m_limit.second}; }

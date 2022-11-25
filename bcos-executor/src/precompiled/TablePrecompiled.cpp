@@ -345,6 +345,24 @@ bool TablePrecompiled::buildConditions(std::optional<storage::Condition>& keyCon
             else
                 valueCondition->LE(field_idx, value);
             break;
+        case 6:
+            if (field_idx == 0)
+                keyCondition->STARTS_WITH(value);
+            else
+                valueCondition->STARTS_WITH(field_idx, value);
+            break;
+        case 7:
+            if (field_idx == 0)
+                keyCondition->ENDS_WITH(value);
+            else
+                valueCondition->ENDS_WITH(field_idx, value);
+            break;
+        case 8:
+            if (field_idx == 0)
+                keyCondition->CONTAINS(value);
+            else
+                valueCondition->CONTAINS(field_idx, value);
+            break;
         default:
             BOOST_THROW_EXCEPTION(
                 PrecompiledError(std::to_string(cmp) + " ConditionOP not exist!"));

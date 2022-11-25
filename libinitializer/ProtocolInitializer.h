@@ -48,12 +48,19 @@ public:
     }
 
     bcos::crypto::KeyPairInterface::Ptr keyPair() const { return m_keyPair; }
+    bool hsmEnable() const { return m_hsmEnable; }
+    int keyIndex() const { return m_keyIndex; }
+    const std::string& password() const { return m_password; }
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
     bcos::security::DataEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
 
 private:
     void createCryptoSuite();
     void createSMCryptoSuite();
+
+#ifdef WITH_HSM
+    void createHsmSMCryptoSuite();
+#endif
 
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
@@ -63,6 +70,9 @@ private:
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     size_t c_hexedPrivateKeySize = 64;
     bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
+    bool m_hsmEnable;
+    int m_keyIndex;
+    std::string m_password;
 };
 }  // namespace initializer
 }  // namespace bcos
