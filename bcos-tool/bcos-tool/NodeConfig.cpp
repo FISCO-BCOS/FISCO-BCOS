@@ -701,11 +701,14 @@ void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig)
 {
     // consensus type
-    m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type");
-    if(m_consensusType.empty())
+    try
+    {
+        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type"); 
+    }
+    catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "consensus_type is null， please set consensus.consensusType to positive!"));
+            "consensus_type is null， please set consensus.consensus_type to positive!"));
     }
     // blockTxCountLimit
     auto blockTxCountLimit =
@@ -911,8 +914,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     if(m_isAuthCheck && m_authAdminAddress.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "m_authAdminAddress is null, "
-            "please set correct m_authAdminAddress"));
+            "auth_admin_account is null, "
+            "please set correct auth_admin_account"));
     }
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
