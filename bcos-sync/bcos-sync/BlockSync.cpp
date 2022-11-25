@@ -333,19 +333,23 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
         auto syncMsg = m_config->msgFactory()->createBlockSyncMsg(_data);
         switch (syncMsg->packetType())
         {
-        case BlockSyncPacketType::BlockStatusPacket: {
+        case BlockSyncPacketType::BlockStatusPacket:
+        {
             onPeerStatus(_nodeID, syncMsg);
             break;
         }
-        case BlockSyncPacketType::BlockRequestPacket: {
+        case BlockSyncPacketType::BlockRequestPacket:
+        {
             onPeerBlocksRequest(_nodeID, syncMsg);
             break;
         }
-        case BlockSyncPacketType::BlockResponsePacket: {
+        case BlockSyncPacketType::BlockResponsePacket:
+        {
             onPeerBlocks(_nodeID, syncMsg);
             break;
         }
-        default: {
+        default:
+        {
             BLKSYNC_LOG(WARNING) << LOG_DESC(
                                         "asyncNotifyBlockSyncMessage: unknown block sync message")
                                  << LOG_KV("type", syncMsg->packetType())
@@ -666,13 +670,13 @@ void BlockSync::fetchAndSendBlock(
     auto self = weak_from_this();
     m_config->ledger()->asyncGetBlockDataByNumber(_number, blockFlag,
         [self, _reqQueue, _peer, _number](Error::Ptr _error, Block::Ptr _block) {
+            // Note: no need to retry here
             if (_error != nullptr)
             {
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("fetchAndSendBlock failed for asyncGetBlockDataByNumber failed")
                     << LOG_KV("number", _number) << LOG_KV("errorCode", _error->errorCode())
                     << LOG_KV("errorMessage", _error->errorMessage());
-                _reqQueue->push(_number, 1);
                 return;
             }
             try
