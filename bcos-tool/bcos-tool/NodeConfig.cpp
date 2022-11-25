@@ -56,14 +56,14 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 {}
 
 void NodeConfig::loadConfig(
-    boost::property_tree::ptree const& _pt, bool _enforceMemberID, bool _enforceChainConfig, bool _enforceNoGroupId)
+    boost::property_tree::ptree const& _pt, bool _enforceMemberID, bool _enforceChainConfig, bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig  ||
         (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
             m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
-        loadChainConfig(_pt, _enforceNoGroupId);
+        loadChainConfig(_pt, _enforceGroupId);
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
@@ -504,7 +504,7 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime);
 }
 
-void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceNoGroupId)
+void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId)
 {
     try
     {
@@ -513,21 +513,28 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "smCryptoType is null, please set chain.smCryptoType to positive!"));
+            "sm_crypto is null, please set chain.sm_crypto to positive!"));
     }
-    if(!_enforceNoGroupId){
-        m_groupId = _pt.get<std::string>("chain.group_id");
-    }
-    m_chainId = _pt.get<std::string>("chain.chain_id");
-    if(m_groupId.empty()&&!_enforceNoGroupId)
+    if(!_enforceGroupId)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("groupId is null, please set chain.groupId to positive!"));
+        try
+        {
+            m_groupId = _pt.get<std::string>("chain.group_id");
+        }
+        catch (std::exception const& e)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                "group_id is null, please set chain.group_id to positive!"));
+        }
     }
-    if(m_chainId.empty())
+    try
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("chainId is null, please set chain.chainId to positive!"));
+        m_chainId = _pt.get<std::string>("chain.chain_id");
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+            "chain_id is null, please set chain.chain_id to positive!"));
     }
     if (!isalNumStr(m_chainId))
     {
@@ -855,7 +862,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "m_isWasm is null, please set executor.m_isWasm to positive!"));
+            "is_wasm is null, please set executor.is_wasm to positive!"));
     }
     try
     {
@@ -864,7 +871,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "m_isAuthCheck is null, please set executor.m_isAuthCheck to positive!"));
+            "is_auth_check is null, please set executor.is_auth_check to positive!"));
     }
     try
     {
@@ -873,7 +880,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "m_isSerialExecute is null, please set executor.m_isSerialExecute to positive!"));
+            "is_serial_execute is null, please set executor.is_serial_execute to positive!"));
     }
     if (m_isWasm && !m_isSerialExecute)
     {
