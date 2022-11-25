@@ -131,7 +131,7 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
             if (edgeSeq == seq)
             {
                 ++removed;
-                if (bcos::LogLevel::TRACE >= bcos::c_fileLogLevel)
+                if (bcos::LogLevel::TRACE <= bcos::c_fileLogLevel)
                 {
                     auto source =
                         boost::get(VertexPropertyTag(), boost::source(*range.first, *graph));
