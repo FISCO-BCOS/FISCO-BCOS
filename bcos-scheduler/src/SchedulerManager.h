@@ -108,7 +108,7 @@ public:
     {
         if (m_status == STOPPED)
         {
-            std::cout << "scheduler has just stopped." << std::endl;
+            SCHEDULER_LOG(INFO) << "scheduler has just stopped." << std::endl;
             return;
         }
 

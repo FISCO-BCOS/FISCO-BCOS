@@ -507,8 +507,8 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
 {
     m_smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
-    m_groupId = _pt.get<std::string>("chain.group_id", "group");
-    m_chainId = _pt.get<std::string>("chain.chain_id", "chain");
+    m_groupId = _pt.get<std::string>("chain.group_id", "group0");
+    m_chainId = _pt.get<std::string>("chain.chain_id", "chain0");
     if (!isalNumStr(m_chainId))
     {
         BOOST_THROW_EXCEPTION(
@@ -529,7 +529,18 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
+    m_hsmEnable = _pt.get<bool>("security.enable_hsm", false);
+    if (m_hsmEnable)
+    {
+        m_keyIndex = _pt.get<int>("security.key_index");
+        m_password = _pt.get<std::string>("security.password", "");
+        NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig HSM")
+                             << LOG_KV("key_index", m_keyIndex)
+                             << LOG_KV("password", m_password);
+    }
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig")
+                         << LOG_KV("enable_hsm", m_hsmEnable)
                          << LOG_KV("privateKeyPath", m_privateKeyPath);
 }
 
