@@ -107,6 +107,9 @@ public:
     size_t blockLimit() const { return m_blockLimit; }
 
     std::string const& privateKeyPath() const { return m_privateKeyPath; }
+    bool const& hsmEnable() const { return m_hsmEnable; }
+    int const& keyIndex() const { return m_keyIndex; }
+    std::string const& password() const { return m_password; }
 
     size_t minSealTime() const { return m_minSealTime; }
     size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
@@ -120,6 +123,9 @@ public:
     std::string const& pdKeyPath() const { return m_pdKeyPath; }
     std::string const& storageDBName() const { return m_storageDBName; }
     std::string const& stateDBName() const { return m_stateDBName; }
+    bool enableArchive() const { return m_enableArchive; }
+    std::string const& archiveListenIP() const { return m_archiveListenIP; }
+    uint16_t archiveListenPort() const { return m_archiveListenPort; }
 
     bcos::crypto::KeyFactory::Ptr keyFactory() { return m_keyFactory; }
 
@@ -273,6 +279,9 @@ private:
 
     // for security
     std::string m_privateKeyPath;
+    bool m_hsmEnable;
+    int m_keyIndex;
+    std::string m_password;
 
     // storage security configuration
     bool m_storageSecurityEnable;
@@ -294,6 +303,9 @@ private:
     std::string m_pdCaPath;
     std::string m_pdCertPath;
     std::string m_pdKeyPath;
+    bool m_enableArchive = false;
+    std::string m_archiveListenIP;
+    uint16_t m_archiveListenPort = 0;
 
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";

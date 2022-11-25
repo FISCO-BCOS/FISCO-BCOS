@@ -48,7 +48,11 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+
+#ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
+#endif
+
 #include "ExecuteOutputs.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
@@ -133,7 +137,9 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
+#ifdef WITH_WASM
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
+#endif
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
     if (m_isWasm)
@@ -212,9 +218,9 @@ void TransactionExecutor::initEvmEnvironment()
     if (m_isAuthCheck)
     {
         m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
-            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, m_isWasm)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
-            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
     m_constantPrecompiled->insert(
         {GROUP_SIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
@@ -255,17 +261,16 @@ void TransactionExecutor::initWasmEnvironment()
     m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {BFS_NAME, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl)});
-
     m_constantPrecompiled->insert(
         {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {RING_SIG_NAME, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
     if (m_isAuthCheck)
     {
-        m_constantPrecompiled->insert(
-            {AUTH_MANAGER_NAME, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({AUTH_MANAGER_NAME,
+            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, m_isWasm)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
-            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
 
     set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};

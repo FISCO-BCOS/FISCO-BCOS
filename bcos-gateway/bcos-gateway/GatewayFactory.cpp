@@ -3,6 +3,8 @@
  *  @date 2021-05-17
  */
 
+#include "bcos-gateway/GatewayConfig.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-utilities/BoostLog.h"
@@ -18,7 +20,9 @@
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
+#include <bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
+#include <bcos-gateway/libp2p/Service.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
 #include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
@@ -45,69 +49,91 @@ using namespace bcos::amop;
 using namespace bcos::protocol;
 using namespace bcos::boostssl;
 
+struct GatewayP2PReloadHandler
+{
+    static GatewayConfig::Ptr config;
+    static Service::Ptr service;
+
+    static void handle(int sig)
+    {
+        BCOS_LOG(INFO) << LOG_BADGE("Gateway::Signal") << LOG_DESC("receive SIGUSER1 sig");
+
+        if (!config || !service)
+        {
+            return;
+        }
+
+        try
+        {
+            config->loadP2pConnectedNodes();
+            auto nodes = config->connectedNodes();
+            service->setStaticNodes(nodes);
+
+            BCOS_LOG(INFO) << LOG_BADGE("Gateway::Signal")
+                           << LOG_DESC("reload p2p connected nodes successfully")
+                           << LOG_KV("nodes count: ", nodes.size());
+        }
+        catch (const std::exception& e)
+        {
+            BCOS_LOG(WARNING) << LOG_BADGE("Gateway::Signal")
+                              << LOG_DESC("reload p2p connected nodes failed, e: " +
+                                          std::string(e.what()));
+        }
+    }
+};
+
+GatewayConfig::Ptr GatewayP2PReloadHandler::config = nullptr;
+Service::Ptr GatewayP2PReloadHandler::service = nullptr;
+
 // register the function fetch pub hex from the cert
 void GatewayFactory::initCert2PubHexHandler()
 {
-    auto handler = [](const std::string& _cert, std::string& _pubHex) -> bool {
-        std::string errorMessage;
-        do
+    auto handler = [this](const std::string& _cert, std::string& _pubHex) -> bool {
+        auto certContent = readContentsToString(boost::filesystem::path(_cert));
+        if (!certContent || certContent->empty())
         {
-            auto certContent = readContentsToString(boost::filesystem::path(_cert));
-            if (!certContent || certContent->empty())
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
+                << LOG_KV("errorMessage", "unable to load cert content, cert: " + _cert);
+            return false;
+        }
+
+        GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
+                                  << LOG_KV("certContent: ", certContent);
+
+        std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [](BIO* p) {
+            if (p != NULL)
             {
-                errorMessage = "unable to load cert content, cert: " + _cert;
-                break;
+                BIO_free(p);
             }
+        });
 
-            GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
-                                      << LOG_KV("certContent: ", certContent);
+        if (!bioMem)
+        {
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
+                << LOG_KV("errorMessage", "BIO_new error");
+            return false;
+        }
 
-            std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [](BIO* p) {
+        BIO_write(bioMem.get(), certContent->data(), certContent->size());
+        std::shared_ptr<X509> x509Ptr(
+            PEM_read_bio_X509(bioMem.get(), NULL, NULL, NULL), [](X509* p) {
                 if (p != NULL)
                 {
-                    BIO_free(p);
+                    X509_free(p);
                 }
             });
 
-            if (!bioMem)
-            {
-                errorMessage = "BIO_new error";
-                break;
-            }
+        if (!x509Ptr)
+        {
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
+                << LOG_KV("errorMessage", "PEM_read_bio_X509 error");
+            return false;
+        }
 
-            BIO_write(bioMem.get(), certContent->data(), certContent->size());
-            std::shared_ptr<X509> x509Ptr(
-                PEM_read_bio_X509(bioMem.get(), NULL, NULL, NULL), [](X509* p) {
-                    if (p != NULL)
-                    {
-                        X509_free(p);
-                    }
-                });
-
-            if (!x509Ptr)
-            {
-                errorMessage = "PEM_read_bio_X509 error";
-                break;
-            }
-
-            ASN1_BIT_STRING* pubKey = X509_get0_pubkey_bitstr(x509Ptr.get());
-            if (!pubKey)
-            {
-                errorMessage = "X509_get0_pubkey_bitstr error";
-                break;
-            }
-
-            auto hex = bcos::toHexString(pubKey->data, pubKey->data + pubKey->length, "");
-            _pubHex = *hex.get();
-
-            GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("initCert2PubHexHandler ")
-                                      << LOG_KV("cert", _cert) << LOG_KV("pubHex: ", _pubHex);
-            return true;
-        } while (0);
-
-        GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
-                                   << LOG_KV("errorMessage", errorMessage);
-        return false;
+        return m_sslContextPubHandler(x509Ptr.get(), _pubHex);
     };
 
     m_certPubHexHandler = handler;
@@ -117,17 +143,79 @@ void GatewayFactory::initCert2PubHexHandler()
 void GatewayFactory::initSSLContextPubHexHandler()
 {
     auto handler = [](X509* x509, std::string& _pubHex) -> bool {
-        ASN1_BIT_STRING* pubKey =
-            X509_get0_pubkey_bitstr(x509);  // csc->current_cert is an X509 struct
-        if (pubKey == NULL)
+        EVP_PKEY* pKey = X509_get_pubkey(x509);
+        if (nullptr == pKey)
         {
             GATEWAY_FACTORY_LOG(ERROR)
-                << LOG_DESC("initSSLContextPubHexHandler X509_get0_pubkey_bitstr error");
+                << LOG_DESC("initSSLContextPubHexHandler X509_get_pubkey error");
             return false;
         }
 
-        auto hex = bcos::toHexString(pubKey->data, pubKey->data + pubKey->length, "");
-        _pubHex = *hex.get();
+        int type = EVP_PKEY_base_id(pKey);
+        if (EVP_PKEY_RSA == type || EVP_PKEY_RSA2 == type)
+        {
+            RSA* rsa = EVP_PKEY_get0_RSA(pKey);
+            if (nullptr == rsa)
+            {
+                GATEWAY_FACTORY_LOG(ERROR)
+                    << LOG_DESC("initSSLContextPubHexHandler EVP_PKEY_get0_RSA error");
+                return false;
+            }
+
+            const BIGNUM* n = RSA_get0_n(rsa);
+            if (nullptr == n)
+            {
+                GATEWAY_FACTORY_LOG(ERROR)
+                    << LOG_DESC("initSSLContextPubHexHandler RSA_get0_n error");
+                return false;
+            }
+
+            _pubHex = BN_bn2hex(n);  // RSA_print_fp(stdout, rsa, 0);
+        }
+        else if (EVP_PKEY_EC == type)
+        {
+            ec_key_st* ecPublicKey = EVP_PKEY_get0_EC_KEY(pKey);
+            if (nullptr == ecPublicKey)
+            {
+                GATEWAY_FACTORY_LOG(ERROR)
+                    << LOG_DESC("initSSLContextPubHexHandler EVP_PKEY_get1_EC_KEY error");
+                return false;
+            }
+
+            const EC_POINT* ecPoint = EC_KEY_get0_public_key(ecPublicKey);
+            if (nullptr == ecPoint)
+            {
+                GATEWAY_FACTORY_LOG(ERROR)
+                    << LOG_DESC("initSSLContextPubHexHandler EC_KEY_get0_public_key error");
+                return false;
+            }
+
+            const EC_GROUP* ecGroup = EC_KEY_get0_group(ecPublicKey);
+            if (nullptr == ecGroup)
+            {
+                GATEWAY_FACTORY_LOG(ERROR)
+                    << LOG_DESC("initSSLContextPubHexHandler EC_KEY_get0_group error");
+                return false;
+            }
+
+            std::shared_ptr<char> hex = std::shared_ptr<char>(
+                EC_POINT_point2hex(ecGroup, ecPoint, EC_KEY_get_conv_form(ecPublicKey), NULL),
+                [](char* p) { OPENSSL_free(p); });
+            if (nullptr != hex)
+            {
+                if ('0' == *(hex.get()) && '4' == *(hex.get() + 1))
+                    _pubHex = hex.get() + 2;
+                else
+                    _pubHex = hex.get();
+            }
+        }
+        else
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("initSSLContextPubHexHandler unknown type error")
+                                       << LOG_KV("type", type);
+
+            return false;
+        }
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("[NEW]SSLContext pubHex: " + _pubHex);
         return true;
@@ -483,18 +571,34 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         auto sessionFactory = std::make_shared<SessionFactory>(pubHex);
         // KeyFactory
         auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+
+        // init peer black list
+        PeerBlackWhitelistInterface::Ptr peerBlacklist =
+            std::make_shared<PeerBlacklist>(_config->peerBlacklist(), _config->enableBlacklist());
+        // init peer white list
+        PeerBlackWhitelistInterface::Ptr peerWhitelist =
+            std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
+
         // init Host
         auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
-
         host->setHostPort(_config->listenIP(), _config->listenPort());
         host->setThreadPool(std::make_shared<ThreadPool>("P2P", _config->threadPoolSize()));
         host->setSSLContextPubHandler(m_sslContextPubHandler);
+        host->setPeerBlacklist(peerBlacklist);
+        host->setPeerWhitelist(peerWhitelist);
 
         // init Service
         auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
         auto service = std::make_shared<ServiceV2>(pubHex, routerTableFactory);
         service->setHost(host);
         service->setStaticNodes(_config->connectedNodes());
+
+        GatewayP2PReloadHandler::config = _config;
+        GatewayP2PReloadHandler::service = service;
+        // register SIGUSR1 for reload connected p2p nodes config
+        signal(SIGUSR1, GatewayP2PReloadHandler::handle);
+
+        BCOS_LOG(INFO) << LOG_DESC("register SIGUSR1 sig for reload p2p connected nodes config");
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init")
                                   << LOG_KV("myself pub id", pubHex)

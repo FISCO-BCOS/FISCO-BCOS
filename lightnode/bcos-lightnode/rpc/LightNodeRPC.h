@@ -92,37 +92,41 @@ public:
         [[maybe_unused]] std::string_view to, [[maybe_unused]] std::string_view hexTransaction,
         RespFunc respFunc) override
     {
-        // call data is json
-        auto transaction = std::make_unique<bcostars::Transaction>();
-        decodeData(hexTransaction, transaction->data.input);
-        transaction->data.to = to;
-        transaction->data.nonce = "0";
-        transaction->data.blockLimit = 0;
-        transaction->data.chainID = "";
-        transaction->data.groupID = "";
-        transaction->importTime = 0;
+        bcos::task::wait([](decltype(this) self, std::string_view hexTransaction,
+                             std::string_view to, RespFunc respFunc) -> task::Task<void> {
+            // call data is json
+            bcostars::Transaction transaction;
+            self->decodeData(hexTransaction, transaction.data.input);
+            transaction.data.to = to;
+            transaction.data.nonce = "0";
+            transaction.data.blockLimit = 0;
+            transaction.data.chainID = "";
+            transaction.data.groupID = "";
+            transaction.importTime = 0;
 
-        LIGHTNODE_LOG(INFO) << "RPC call request, to: " << to;
+            LIGHTNODE_LOG(INFO) << "RPC call request, to: " << to;
+            if (transaction.dataHash.empty())
+            {
+                bcos::concepts::hash::calculate<Hasher>(transaction, transaction.dataHash);
+            }
 
-        auto receipt = std::make_unique<bcostars::TransactionReceipt>();
+            bcostars::TransactionReceipt receipt;
+            try
+            {
+                co_await self->scheduler().call(transaction, receipt);
+            }
+            catch (std::exception& e)
+            {
+                self->toErrorResp(e, respFunc);
+                co_return;
+            }
 
-        auto& transactionRef = *transaction;
-        auto& receiptRef = *receipt;
-        bcos::task::wait(scheduler().call(transactionRef, receiptRef),
-            [this, m_transaction = std::move(transaction), m_receipt = std::move(receipt),
-                m_respFunc = std::move(respFunc)](std::exception_ptr error = {}) mutable {
-                if (error)
-                {
-                    toErrorResp(error, m_respFunc);
-                    return;
-                }
+            Json::Value resp;
+            toJsonResp<Hasher>(receipt, {}, resp);
 
-                Json::Value resp;
-                toJsonResp<Hasher>(*m_receipt, {}, resp);
-
-                LIGHTNODE_LOG(INFO) << "RPC call transaction finished";
-                m_respFunc(nullptr, resp);
-            });
+            LIGHTNODE_LOG(INFO) << "RPC call transaction finished";
+            respFunc(nullptr, resp);
+        }(this, hexTransaction, to, std::move(respFunc)));
     }
 
     void sendTransaction([[maybe_unused]] std::string_view _groupID,
@@ -138,8 +142,11 @@ public:
                 bcostars::Transaction transaction;
                 bcos::concepts::serialize::decode(binData, transaction);
 
-                bcos::bytes txHash;
-                bcos::concepts::hash::calculate<Hasher>(transaction, txHash);
+                if (transaction.dataHash.empty())
+                {
+                    bcos::concepts::hash::calculate<Hasher>(transaction, transaction.dataHash);
+                }
+                auto& txHash = transaction.dataHash;
                 std::string txHashStr;
                 txHashStr.reserve(txHash.size() * 2);
                 boost::algorithm::hex_lower(
@@ -242,11 +249,11 @@ public:
                 }
 
                 LIGHTNODE_LOG(INFO)
-                    << "RPC get block by hash request: 0x"
-                    // << bcos::toHex<decltype(*m_hash), std::string>(*m_hash) << " "
-                    << *m_blockNumber << " " << m_onlyHeader;
+                    << "RPC get block by hash request: 0x" << *m_blockNumber << " " << m_onlyHeader;
                 if (*m_blockNumber < 0)
+                {
                     BOOST_THROW_EXCEPTION(std::runtime_error{"Unable to find block hash!"});
+                }
 
                 getBlockByNumber(m_groupID, m_nodeName, *m_blockNumber, m_onlyHeader, m_onlyTxHash,
                     std::move(m_respFunc));

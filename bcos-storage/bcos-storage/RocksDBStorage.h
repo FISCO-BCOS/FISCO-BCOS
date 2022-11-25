@@ -69,8 +69,13 @@ public:
 
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) override;
-    Error::Ptr setRows(std::string_view table, std::vector<std::string_view> keys,
-        std::vector<std::string_view> values) noexcept override;
+    Error::Ptr setRows(std::string_view table,
+        const std::variant<const gsl::span<std::string_view const>,
+            const gsl::span<std::string const>>& keys,
+        std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>> values) noexcept override;
+    virtual Error::Ptr deleteRows(
+        std::string_view, const std::variant<const gsl::span<std::string_view const>,
+                              const gsl::span<std::string const>>&) noexcept override;
 
 private:
     Error::Ptr checkStatus(rocksdb::Status const& status);

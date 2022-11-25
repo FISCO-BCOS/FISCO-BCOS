@@ -29,9 +29,7 @@
 #include <boost/core/ignore_unused.hpp>
 #include <unordered_map>
 
-namespace bcos
-{
-namespace rpc
+namespace bcos::rpc
 {
 class JsonRpcImpl_2_0 : public JsonRpcInterface,
                         public std::enable_shared_from_this<JsonRpcImpl_2_0>
@@ -41,12 +39,10 @@ public:
     JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         std::shared_ptr<boostssl::ws::WsService> _wsService);
-    ~JsonRpcImpl_2_0() override {}
-
+    ~JsonRpcImpl_2_0() override = default;
 
     void setClientID(std::string_view _clientID) { m_clientID = _clientID; }
 
-public:
     void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
         std::string_view _data, RespFunc _respFunc) override;
 
@@ -116,7 +112,6 @@ public:
 
     void getGroupBlockNumber(RespFunc _respFunc) override;
 
-public:
     void setNodeInfo(const NodeInfo& _nodeInfo) { m_nodeInfo = _nodeInfo; }
     NodeInfo nodeInfo() const { return m_nodeInfo; }
     GroupManager::Ptr groupManager() { return m_groupManager; }
@@ -129,15 +124,7 @@ protected:
 
     static void parseRpcResponseJson(std::string_view _responseBody, JsonResponse& _jsonResponse);
 
-    static void toJsonResp(
-        Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr);
 
-    static void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
-    static void toJsonResp(
-        Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
-    static void toJsonResp(Json::Value& jResp, std::string_view _txHash,
-        bcos::protocol::TransactionReceipt const& transactionReceiptPtr, bool _isWasm,
-        crypto::Hash& hashImpl);
     static void addProofToResponse(
         Json::Value& jResp, std::string_view _key, ledger::MerkleProofPtr _merkleProofPtr);
 
@@ -167,7 +154,6 @@ private:
         bcos::gateway::GatewayInfo::Ptr _localP2pInfo, bcos::gateway::GatewayInfosPtr _peersInfo);
     void getGroupPeers(std::string_view _groupID, RespFunc _respFunc) override;
 
-private:
     // ms
     int m_sendTxTimeout = -1;
 
@@ -193,5 +179,11 @@ private:
     };
 };
 
-}  // namespace rpc
-}  // namespace bcos
+void toJsonResp(Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr);
+void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
+void toJsonResp(Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
+void toJsonResp(Json::Value& jResp, std::string_view _txHash,
+    bcos::protocol::TransactionReceipt const& transactionReceiptPtr, bool _isWasm,
+    crypto::Hash& hashImpl);
+
+}  // namespace bcos::rpc

@@ -168,7 +168,7 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
         if (!isValid(_table))
         {
             STORAGE_ROCKSDB_LOG(WARNING)
-                << LOG_DESC("asyncGetRow empty tableName") << LOG_KV("table", _table);
+                << LOG_DESC("asyncGetRows empty tableName") << LOG_KV("table", _table);
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName"), {});
             return;
         }
@@ -216,29 +216,28 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                             {
                                 if (status.IsNotFound())
                                 {
-                                    STORAGE_LOG(TRACE)
+                                    STORAGE_ROCKSDB_LOG(TRACE)
                                         << "Multi get rows, not found key: " << keys[i];
                                 }
                                 else if (status.getState())
                                 {
-                                    STORAGE_LOG(WARNING)
+                                    STORAGE_ROCKSDB_LOG(WARNING)
                                         << "Multi get rows error: " << status.getState();
                                 }
                                 else
                                 {
-                                    STORAGE_LOG(WARNING)
+                                    STORAGE_ROCKSDB_LOG(WARNING)
                                         << "Multi get rows error:" << status.ToString();
                                 }
                             }
                         }
                     });
                 auto decode = utcTime();
-                _callback(nullptr, std::move(entries));
                 STORAGE_ROCKSDB_LOG(TRACE)
                     << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
                     << LOG_KV("count", entries.size()) << LOG_KV("read time(ms)", end - start)
-                    << LOG_KV("decode time(ms)", decode - end)
-                    << LOG_KV("callback time(ms)", utcTime() - decode);
+                    << LOG_KV("decode time(ms)", decode - end);
+                _callback(nullptr, std::move(entries));
             },
             _keys);
     }
@@ -255,7 +254,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
     {
         if (!isValid(_table, _key))
         {
-            STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("asyncGetRow empty tableName or key")
+            STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("asyncSetRow empty tableName or key")
                                          << LOG_KV("table", _table) << LOG_KV("key", _key);
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"));
             return;
@@ -482,69 +481,117 @@ void RocksDBStorage::asyncRollback(
                               << LOG_KV("callback time(ms)", utcTime() - end);
 }
 
-bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table, std::vector<std::string_view> keys,
-    std::vector<std::string_view> values) noexcept
+bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,
+    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
+        _keys,
+    std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>> _values) noexcept
 {
-    if (table.empty())
-    {
-        STORAGE_ROCKSDB_LOG(WARNING)
-            << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
-        return BCOS_ERROR_PTR(TableNotExists, "empty tableName");
-    }
-    if (keys.size() != values.size())
-    {
-        STORAGE_ROCKSDB_LOG(WARNING)
-            << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("keys", keys.size())
-            << LOG_KV("values", values.size());
-        return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
-    }
-    if (keys.empty())
-    {
-        STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
-        return nullptr;
-    }
-    std::vector<std::string> realKeys(keys.size());
-
-    std::vector<std::string> encryptedValues;
-    if (m_dataEncryption)
-    {
-        encryptedValues.resize(values.size());
-    }
-
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size(), 256),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i != range.end(); ++i)
+    bcos::Error::Ptr err = nullptr;
+    std::visit(
+        [&](auto&& keys, auto&& values) {
+            if (table.empty())
             {
-                realKeys[i] = toDBKey(table, keys[i]);
+                STORAGE_ROCKSDB_LOG(WARNING)
+                    << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
+                err = BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+                return;
+            }
+            if (keys.size() != values.size())
+            {
+                STORAGE_ROCKSDB_LOG(WARNING)
+                    << LOG_DESC("setRows values size mismatch keys size")
+                    << LOG_KV("keys", keys.size()) << LOG_KV("values", values.size());
+                err = BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+                return;
+            }
+            if (keys.empty())
+            {
+                STORAGE_ROCKSDB_LOG(WARNING)
+                    << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
+                return;
+            }
+            std::vector<std::string> realKeys(keys.size());
+
+            std::vector<std::string> encryptedValues;
+            if (m_dataEncryption)
+            {
+                encryptedValues.resize(values.size());
+            }
+
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size(), 256),
+                [&](const tbb::blocked_range<size_t>& range) {
+                    for (size_t i = range.begin(); i != range.end(); ++i)
+                    {
+                        realKeys[i] = toDBKey(table, keys[i]);
+                        if (m_dataEncryption)
+                        {
+                            encryptedValues[i] =
+                                m_dataEncryption->encrypt(std::string(std::move(values[i])));
+                        }
+                    }
+                });
+            auto writeBatch = WriteBatch();
+            for (size_t i = 0; i < keys.size(); ++i)
+            {
+                // Storage Security
                 if (m_dataEncryption)
                 {
-                    encryptedValues[i] = m_dataEncryption->encrypt(std::string(values[i]));
+                    writeBatch.Put(std::move(realKeys[i]), std::move(encryptedValues[i]));
+                }
+                else
+                {
+                    writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
                 }
             }
-        });
-    auto writeBatch = WriteBatch();
-    for (size_t i = 0; i < values.size(); ++i)
-    {
-        // Storage Security
-        if (m_dataEncryption)
-        {
-            writeBatch.Put(realKeys[i], encryptedValues[i]);
-        }
-        else
-        {
-            writeBatch.Put(realKeys[i], values[i]);
-        }
-    }
-    WriteOptions options;
-    auto status = m_db->Write(options, &writeBatch);
-    auto err = checkStatus(status);
-    if (err)
-    {
-        STORAGE_ROCKSDB_LOG(WARNING)
-            << LOG_DESC("setRows failed") << LOG_KV("message", err->errorMessage());
-        return err;
-    }
-    return nullptr;
+            WriteOptions options;
+            auto status = m_db->Write(options, &writeBatch);
+            err = checkStatus(status);
+        },
+        _keys, _values);
+    return err;
+}
+
+bcos::Error::Ptr RocksDBStorage::deleteRows(std::string_view table,
+    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
+        _keys) noexcept
+{
+    bcos::Error::Ptr err = nullptr;
+    std::visit(
+        [&](auto&& keys) {
+            if (table.empty())
+            {
+                STORAGE_ROCKSDB_LOG(WARNING)
+                    << LOG_DESC("deleteRows empty tableName") << LOG_KV("table", table);
+                err = BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+                return;
+            }
+            if (keys.empty())
+            {
+                STORAGE_ROCKSDB_LOG(WARNING)
+                    << LOG_DESC("deleteRows empty keys") << LOG_KV("table", table);
+                return;
+            }
+            std::vector<std::string> realKeys(keys.size());
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size(), 256),
+                [&](const tbb::blocked_range<size_t>& range) {
+                    for (size_t i = range.begin(); i != range.end(); ++i)
+                    {
+                        realKeys[i] = toDBKey(table, keys[i]);
+                    }
+                });
+            auto writeBatch = WriteBatch();
+            for (size_t i = 0; i < keys.size(); ++i)
+            {
+                writeBatch.Delete(realKeys[i]);
+            }
+            WriteOptions options;
+            auto status = m_db->Write(options, &writeBatch);
+            err = checkStatus(status);
+            STORAGE_ROCKSDB_LOG(DEBUG)
+                << LOG_DESC("deleteRows") << LOG_KV("table", table) << LOG_KV("size", keys.size());
+        },
+        _keys);
+    return err;
 }
 
 bcos::Error::Ptr RocksDBStorage::checkStatus(rocksdb::Status const& status)

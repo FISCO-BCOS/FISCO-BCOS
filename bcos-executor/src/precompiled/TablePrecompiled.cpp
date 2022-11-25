@@ -43,6 +43,62 @@ constexpr const char* const TABLE_METHOD_UPDATE_CON =
     "update((uint8,string)[],(uint32,uint32),(string,string)[])";
 constexpr const char* const TABLE_METHOD_REMOVE_KEY = "remove(string)";
 constexpr const char* const TABLE_METHOD_REMOVE_CON = "remove((uint8,string)[],(uint32,uint32))";
+constexpr const char* const TABLE_METHOD_SELECT_CON_V320 = "select((uint8,uint32,string)[],(uint32,uint32))";
+constexpr const char* const TABLE_METHOD_COUNT_V320 = "count((uint8,uint32,string)[])";
+constexpr const char* const TABLE_METHOD_UPDATE_CON_V320 =
+    "update((uint8,uint32,string)[],(uint32,uint32),(string,string)[])";
+constexpr const char* const TABLE_METHOD_REMOVE_CON_V320 = "remove((uint8,uint32,string)[],(uint32,uint32))";
+
+static size_t selectByValueCond(std::shared_ptr<executor::TransactionExecutive> _executive,
+    const std::string& tableName, const std::vector<std::string>& tableKeyList,
+    std::vector<EntryTuple>& entries, std::optional<precompiled::Condition> valueCondition)
+{
+    auto [offset, total] = valueCondition->getLimit();
+    if (total == 0)
+        return 0;
+
+    size_t validCount = 0;
+    for (auto& key : tableKeyList)
+    {
+        auto tableEntry = _executive->storage().getRow(tableName, key);
+        EntryTuple entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
+        if (valueCondition->isValid(std::get<1>(entryTuple)))
+        {
+            if (validCount >= offset && validCount < offset + total)
+            {
+                entries.emplace_back(std::move(entryTuple));
+            }
+            ++validCount;
+            if (validCount >= offset + total)
+            {
+                break;
+            }
+        }
+    }
+    return validCount;
+}
+
+template<typename Functor>
+static void processEntryByValueCond(std::shared_ptr<executor::TransactionExecutive> _executive,
+    const std::string& tableName, std::optional<storage::Condition> keyCondition,
+    std::optional<precompiled::Condition> valueCondition, Functor&& processEntry)
+{
+    size_t totalCount = 0;
+    size_t singleCountByKeyMax = keyCondition->getLimit().second;
+    size_t singleCountByKey = singleCountByKeyMax;
+    auto [valueLimitOffset, valueLimitCount]  = valueCondition->getLimit();
+    while (singleCountByKey >= singleCountByKeyMax && totalCount < valueLimitCount)
+    {
+        auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
+        auto [validCount, entrySize] = processEntry(tableKeyList, valueCondition);
+        singleCountByKey = tableKeyList.size();
+        totalCount += entrySize;
+        valueLimitOffset = std::max(int(valueLimitOffset - validCount), 0);
+        auto [keyLimitOffset, keyLimitCount] = keyCondition->getLimit();
+        keyCondition->limit(keyLimitOffset + singleCountByKey, keyLimitCount);
+        valueCondition->limit(valueLimitOffset, valueLimitCount - totalCount);
+    }
+}
 
 TablePrecompiled::TablePrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -54,6 +110,10 @@ TablePrecompiled::TablePrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_h
     name2Selector[TABLE_METHOD_UPDATE_CON] = getFuncSelector(TABLE_METHOD_UPDATE_CON, _hashImpl);
     name2Selector[TABLE_METHOD_REMOVE_KEY] = getFuncSelector(TABLE_METHOD_REMOVE_KEY, _hashImpl);
     name2Selector[TABLE_METHOD_REMOVE_CON] = getFuncSelector(TABLE_METHOD_REMOVE_CON, _hashImpl);
+    name2Selector[TABLE_METHOD_SELECT_CON_V320] = getFuncSelector(TABLE_METHOD_SELECT_CON_V320, _hashImpl);
+    name2Selector[TABLE_METHOD_COUNT_V320] = getFuncSelector(TABLE_METHOD_COUNT_V320, _hashImpl);
+    name2Selector[TABLE_METHOD_UPDATE_CON_V320] = getFuncSelector(TABLE_METHOD_UPDATE_CON_V320, _hashImpl);
+    name2Selector[TABLE_METHOD_REMOVE_CON_V320] = getFuncSelector(TABLE_METHOD_REMOVE_CON_V320, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
@@ -75,6 +135,19 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(param.size());
 
+    auto version = blockContext->blockVersion();
+    std::string tableMethodSelectCond = TABLE_METHOD_SELECT_CON;
+    std::string tableMethodCount      = TABLE_METHOD_COUNT;
+    std::string tableMethodUpdateCond = TABLE_METHOD_UPDATE_CON;
+    std::string tableMethodRemoveCond = TABLE_METHOD_REMOVE_CON;
+    if (version >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        tableMethodSelectCond = TABLE_METHOD_SELECT_CON_V320;
+        tableMethodCount      = TABLE_METHOD_COUNT_V320;
+        tableMethodUpdateCond = TABLE_METHOD_UPDATE_CON_V320;
+        tableMethodRemoveCond = TABLE_METHOD_REMOVE_CON_V320;
+    }
+
     auto table = _executive->storage().openTable(tableName);
     if (!table.has_value())
     {
@@ -86,9 +159,10 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
         /// select(string)
         selectByKey(tableName, _executive, data, gasPricer, _callParameters);
     }
-    else if (func == name2Selector[TABLE_METHOD_SELECT_CON])
+    else if (func == name2Selector[tableMethodSelectCond])
     {
-        /// select((uint8,string)[],(uint32,uint32))
+        /// select((uint8,string)[],(uint32,uint32)) or
+        /// select((uint8,uint32,string)[],(uint32,uint32))
         selectByCondition(tableName, _executive, data, gasPricer, _callParameters);
     }
     else if (func == name2Selector[TABLE_METHOD_INSERT])
@@ -101,9 +175,10 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
         /// update(string,(uint,string)[])
         updateByKey(tableName, _executive, data, gasPricer, _callParameters);
     }
-    else if (func == name2Selector[TABLE_METHOD_UPDATE_CON])
+    else if (func == name2Selector[tableMethodUpdateCond])
     {
-        /// update((uint8,string)[],(uint32,uint32),(uint,string)[])
+        /// update((uint8,string)[],(uint32,uint32),(uint,string)[]) or
+        /// update((uint8,uint32,string)[],(uint32,uint32),(uint,string)[])
         updateByCondition(tableName, _executive, data, gasPricer, _callParameters);
     }
     else if (func == name2Selector[TABLE_METHOD_REMOVE_KEY])
@@ -111,14 +186,15 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
         /// remove(string)
         removeByKey(tableName, _executive, data, gasPricer, _callParameters);
     }
-    else if (func == name2Selector[TABLE_METHOD_REMOVE_CON])
+    else if (func == name2Selector[tableMethodRemoveCond])
     {
-        /// remove((uint8,string)[],(uint32,uint32))
+        /// remove((uint8,string)[],(uint32,uint32)) or
+        /// remove((uint8,uint32,string)[],(uint32,uint32))
         removeByCondition(tableName, _executive, data, gasPricer, _callParameters);
     }
-    else if (func == name2Selector[TABLE_METHOD_COUNT])
+    else if (func == name2Selector[tableMethodCount])
     {
-        /// count((uint8,string)[])
+        /// count((uint8,string)[]) or count((uint8,uint32,string)[])
         count(tableName, _executive, data, gasPricer, _callParameters);
     }
     else
@@ -195,6 +271,118 @@ void TablePrecompiled::buildKeyCondition(std::optional<storage::Condition>& keyC
     keyCondition->limit(offset, count);
 }
 
+bool TablePrecompiled::buildConditions(std::optional<storage::Condition>& keyCondition,
+    std::optional<precompiled::Condition>& valueCondition,
+    const precompiled::Conditions& conditions, const LimitTuple& limit, uint32_t version) const
+{
+    if (version < (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        buildKeyCondition(keyCondition, conditions.cond, limit);
+        return false;
+    }
+    auto& offset = std::get<0>(limit);
+    auto& count = std::get<1>(limit);
+    if (count > USER_TABLE_MAX_LIMIT_COUNT || offset > offset + count)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_DESC("build key condition limit overflow")
+                              << LOG_KV("offset", offset) << LOG_KV("count", count);
+        BOOST_THROW_EXCEPTION(PrecompiledError("Limit overflow."));
+    }
+    if (conditions.cond_v320.empty())
+    {
+        BOOST_THROW_EXCEPTION(PrecompiledError("Condition is empty"));
+    }
+
+    bool useValueCond = false;
+    bool useKeyCond = false;
+    bool isRangeSelect = true;
+    for (const auto& condition : conditions.cond_v320)
+    {
+        auto& cmp = std::get<0>(condition);
+        auto& field_idx = std::get<1>(condition);
+        auto& value = std::get<2>(condition);
+        useValueCond = useValueCond || (field_idx != 0);
+        if (field_idx == 0)
+        {
+            isRangeSelect = isRangeSelect && !(cmp < 2 || cmp > 5);
+            useKeyCond = true;
+        }
+        switch (cmp)
+        {
+        case 0:
+            if (field_idx == 0)
+                keyCondition->EQ(value);
+            else
+                valueCondition->EQ(field_idx, value);
+            break;
+        case 1:
+            if (field_idx == 0)
+                keyCondition->NE(value);
+            else
+                valueCondition->NE(field_idx, value);
+            break;
+        case 2:
+            if (field_idx == 0)
+                keyCondition->GT(value);
+            else
+                valueCondition->GT(field_idx, value);
+            break;
+        case 3:
+            if (field_idx == 0)
+                keyCondition->GE(value);
+            else
+                valueCondition->GE(field_idx, value);
+            break;
+        case 4:
+            if (field_idx == 0)
+                keyCondition->LT(value);
+            else
+                valueCondition->LT(field_idx, value);
+            break;
+        case 5:
+            if (field_idx == 0)
+                keyCondition->LE(value);
+            else
+                valueCondition->LE(field_idx, value);
+            break;
+        case 6:
+            if (field_idx == 0)
+                keyCondition->STARTS_WITH(value);
+            else
+                valueCondition->STARTS_WITH(field_idx, value);
+            break;
+        case 7:
+            if (field_idx == 0)
+                keyCondition->ENDS_WITH(value);
+            else
+                valueCondition->ENDS_WITH(field_idx, value);
+            break;
+        case 8:
+            if (field_idx == 0)
+                keyCondition->CONTAINS(value);
+            else
+                valueCondition->CONTAINS(field_idx, value);
+            break;
+        default:
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError(std::to_string(cmp) + " ConditionOP not exist!"));
+        }
+    }
+    if (useValueCond)
+    {
+        valueCondition->limit(offset, count);
+        if (isRangeSelect && useKeyCond)
+            keyCondition->limit(0, std::max(count, (uint32_t)USER_TABLE_MIN_LIMIT_COUNT));
+        else
+            keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
+    }
+    else
+    {
+        keyCondition->limit(offset, count);
+    }
+    return useValueCond;
+}
+
 void TablePrecompiled::selectByKey(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
@@ -232,31 +420,63 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
 {
-    /// select((uint8,string)[],(uint32,uint32))
-    std::vector<precompiled::ConditionTuple> conditions;
+    /// select((uint8,string)[],(uint32,uint32)) or select((uint8,uint32,string)[],(uint32,uint32))
+    precompiled::Conditions conditions;
     precompiled::LimitTuple limit;
     auto blockContext = _executive->blockContext().lock();
+    auto version = blockContext->blockVersion();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    codec.decode(data, conditions, limit);
+    size_t condSize = 0;
+    if (version < (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        codec.decode(data, conditions.cond, limit);
+        condSize = conditions.cond.size();
+    }
+    else
+    {
+        codec.decode(data, conditions.cond_v320, limit);
+        condSize = conditions.cond_v320.size();
+    }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("tableName", tableName)
-                           << LOG_KV("ConditionSize", conditions.size())
+                           << LOG_KV("ConditionSize", condSize)
                            << LOG_KV("limitOffset", std::get<0>(limit))
                            << LOG_KV("limitCount", std::get<1>(limit));
 
     auto keyCondition = std::make_optional<storage::Condition>();
+    auto valueCondition = std::make_optional<precompiled::Condition>();
     // will throw exception when wrong condition cmp or limit count overflow
-    buildKeyCondition(keyCondition, std::move(conditions), std::move(limit));
+    bool useValueCond = buildConditions(
+        keyCondition, valueCondition, std::move(conditions), limit, version);
 
-    // merge keys from storage and eqKeys
-    auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
     std::vector<EntryTuple> entries({});
-    entries.reserve(tableKeyList.size());
-    for (auto& key : tableKeyList)
+    // when limitcount==0, skip select operation directly
+    if (std::get<1>(limit) > 0)
     {
-        auto tableEntry = _executive->storage().getRow(tableName, key);
-        EntryTuple entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
-        entries.emplace_back(std::move(entryTuple));
+        if (useValueCond)
+        {
+            auto func = [_executive, &tableName, &entries]
+                (const std::vector<std::string>& tableKeyList,
+                    std::optional<precompiled::Condition> _valueCondition)
+            {
+                size_t entrySize = entries.size();
+                size_t validCount = selectByValueCond(_executive, tableName, tableKeyList, entries, _valueCondition);
+                return std::pair<size_t, size_t>{validCount, entries.size() - entrySize};
+            };
+            processEntryByValueCond(_executive, tableName, keyCondition, valueCondition, std::move(func));
+        }
+        else
+        {
+            // merge keys from storage and eqKeys
+            auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
+            entries.reserve(tableKeyList.size());
+            for (auto& key : tableKeyList)
+            {
+                auto tableEntry = _executive->storage().getRow(tableName, key);
+                EntryTuple entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
+                entries.emplace_back(std::move(entryTuple));
+            }
+        }
     }
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("entries.size", entries.size());
@@ -269,36 +489,54 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
 void TablePrecompiled::count(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
-
 {
-    /// count((uint8,string)[])
-    std::vector<precompiled::ConditionTuple> conditions;
+    /// count((uint8,string)[]) or count((uint8,uint32,string)[])
+    precompiled::Conditions conditions;
     auto blockContext = _executive->blockContext().lock();
+    auto version = blockContext->blockVersion();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    codec.decode(data, conditions);
+    size_t condSize = 0;
+    if (version < (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        codec.decode(data, conditions.cond);
+        condSize = conditions.cond.size();
+    }
+    else
+    {
+        codec.decode(data, conditions.cond_v320);
+        condSize = conditions.cond_v320.size();
+    }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
-                           << LOG_KV("tableName", tableName)
-                           << LOG_KV("ConditionSize", conditions.size());
+                           << LOG_KV("tableName", tableName) << LOG_KV("ConditionSize", condSize);
 
+    auto keyCondition = std::make_optional<storage::Condition>();
+    auto valueCondition = std::make_optional<precompiled::Condition>();
+    bool useValueCond = buildConditions(
+        keyCondition, valueCondition, conditions, {0, USER_TABLE_MAX_LIMIT_COUNT}, version);
     uint32_t totalCount = 0;
     uint32_t singleCount = 0;
+    uint32_t singleCountByKey = 0;
+    uint32_t singleCountByKeyMax = keyCondition->getLimit().second;
     do
     {
-        auto keyCondition = std::make_optional<storage::Condition>();
-        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        if (versionCompareTo(version, BlockVersion::V3_0_VERSION) <= 0)
         {
-            // will throw exception when wrong condition cmp or limit count overflow
-            buildKeyCondition(
-                keyCondition, conditions, {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
-        }
-        else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
-        {
-            /// NOTE: if version <= 3.0, here will use empty limit, which means count always return
+            /// NOTE: if version <= 3.0, here will use {1, 0} limit, which means count always return
             /// 0
-            buildKeyCondition(keyCondition, conditions, {});
+            keyCondition->limit(1, 0);
         }
-
-        singleCount = _executive->storage().getPrimaryKeys(tableName, keyCondition).size();
+        auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
+        singleCountByKey = tableKeyList.size();
+        singleCount = singleCountByKey;
+        auto [keyLimitOffset, keyLimitCount] = keyCondition->getLimit();
+        keyCondition->limit(keyLimitOffset + singleCountByKey, keyLimitCount);
+        if (useValueCond)
+        {
+            std::vector<EntryTuple> entries({});
+            entries.reserve(tableKeyList.size());
+            selectByValueCond(_executive, tableName, tableKeyList, entries, valueCondition);
+            singleCount = entries.size();
+        }
         if (totalCount > totalCount + singleCount)
         {
             // overflow
@@ -306,7 +544,7 @@ void TablePrecompiled::count(const std::string& tableName,
             break;
         }
         totalCount += singleCount;
-    } while (singleCount >= USER_TABLE_MAX_LIMIT_COUNT);
+    } while (singleCountByKey >= singleCountByKeyMax);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
                            << LOG_KV("totalCount", totalCount);
     // update the memory gas and the computation gas
@@ -434,31 +672,43 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
 {
-    /// update((uint8,string)[],(uint32,uint32),(uint,string)[])
-    std::vector<precompiled::ConditionTuple> conditions;
+    /// update((uint8,string)[],(uint32,uint32),(uint,string)[]) or
+    /// update((uint8,uint32,string)[],(uint32,uint32),(uint,string)[])
+    precompiled::Conditions conditions;
     precompiled::LimitTuple limitTuple;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
     auto blockContext = _executive->blockContext().lock();
+    auto version = blockContext->blockVersion();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    codec.decode(data, conditions, limitTuple, updateFields);
+    size_t condSize = 0;
+    if (version < (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        codec.decode(data, conditions.cond, limitTuple, updateFields);
+        condSize = conditions.cond.size();
+    }
+    else
+    {
+        codec.decode(data, conditions.cond_v320, limitTuple, updateFields);
+        condSize = conditions.cond_v320.size();
+    }
     PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                           << LOG_KV("tableName", tableName)
-                          << LOG_KV("ConditionSize", conditions.size())
+                          << LOG_KV("ConditionSize", condSize)
                           << LOG_KV("limitOffset", std::get<0>(limitTuple))
                           << LOG_KV("limitCount", std::get<1>(limitTuple))
                           << LOG_KV("updateFieldsSize", updateFields.size());
-    auto keyCondition = std::make_optional<storage::Condition>();
 
+    auto keyCondition = std::make_optional<storage::Condition>();
+    auto valueCondition = std::make_optional<precompiled::Condition>();
     // will throw exception when wrong condition cmp or limit count overflow
-    buildKeyCondition(keyCondition, std::move(conditions), std::move(limitTuple));
+    bool useValueCond = buildConditions(
+        keyCondition, valueCondition, std::move(conditions), limitTuple, version);
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
         PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                                << LOG_DESC("keyCond trace ") << keyCondition->toString();
     }
-
-    auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
 
     TableInfoTuple tableInfo;
     // external call table manager desc
@@ -494,24 +744,58 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
         updateValue.emplace_back(std::move(p));
     }
 
-    auto entries = _executive->storage().getRows(tableName, tableKeyList);
-    for (size_t i = 0; i < entries.size(); ++i)
+    uint32_t affectedRows = 0;
+    // when limitcount==0, skip update operation directly
+    if (std::get<1>(limitTuple) > 0)
     {
-        auto&& entry = entries[i];
-        auto values = entry->getObject<std::vector<std::string>>();
-        for (auto& kv : updateValue)
+        if (useValueCond)
         {
-            values[kv.first] = kv.second;
+            auto func = [_executive, &tableName, &updateValue, &affectedRows]
+                (const std::vector<std::string>& tableKeyList,
+                    std::optional<precompiled::Condition> _valueCondition)
+            {
+                std::vector<EntryTuple> entries({});
+                size_t validCount = selectByValueCond(_executive, tableName, tableKeyList, entries, _valueCondition);
+                for (auto& entryTuple : entries)
+                {
+                    auto& values = std::get<1>(entryTuple);
+                    for (auto& kv : updateValue)
+                    {
+                        values[kv.first] = kv.second;
+                    }
+                    storage::Entry entry;
+                    entry.setObject(values);
+                    _executive->storage().setRow(tableName, std::get<0>(entryTuple), std::move(entry));
+                }
+                affectedRows += entries.size();
+                return std::pair<size_t, size_t>{validCount, entries.size()};
+            };
+            processEntryByValueCond(_executive, tableName, keyCondition, valueCondition, std::move(func));
         }
-        entry->setObject(std::move(values));
-        _executive->storage().setRow(tableName, tableKeyList[i], std::move(entry.value()));
+        else
+        {
+            auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
+            auto entries = _executive->storage().getRows(tableName, tableKeyList);
+            for (size_t i = 0; i < entries.size(); ++i)
+            {
+                auto&& entry = entries[i];
+                auto values = entry->getObject<std::vector<std::string>>();
+                for (auto& kv : updateValue)
+                {
+                    values[kv.first] = kv.second;
+                }
+                entry->setObject(std::move(values));
+                _executive->storage().setRow(tableName, tableKeyList[i], std::move(entry.value()));
+            }
+            affectedRows = tableKeyList.size();
+        }
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
-                           << LOG_KV("selectKeySize", tableKeyList.size())
-                           << LOG_KV("affectedRows", entries.size());
-    gasPricer->setMemUsed(tableKeyList.size() * columns.size());
-    gasPricer->appendOperation(InterfaceOpcode::Update, tableKeyList.size());
-    _callParameters->setExecResult(codec.encode((int32_t)tableKeyList.size()));
+                           << LOG_KV("selectSize", affectedRows)
+                           << LOG_KV("affectedRows", affectedRows);
+    gasPricer->setMemUsed(affectedRows * columns.size());
+    gasPricer->appendOperation(InterfaceOpcode::Update, affectedRows);
+    _callParameters->setExecResult(codec.encode((int32_t)affectedRows));
 }
 
 void TablePrecompiled::removeByKey(const std::string& tableName,
@@ -546,22 +830,35 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
 {
-    /// remove((uint8,string)[],(uint32,uint32))
-    std::vector<precompiled::ConditionTuple> conditions;
+    /// remove((uint8,string)[],(uint32,uint32)) or remove((uint8,uint32,string)[],(uint32,uint32))
+    precompiled::Conditions conditions;
     precompiled::LimitTuple limitTuple;
     auto blockContext = _executive->blockContext().lock();
+    auto version = blockContext->blockVersion();
+
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    codec.decode(data, conditions, limitTuple);
+    size_t condSize = 0;
+    if (version < (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        codec.decode(data, conditions.cond, limitTuple);
+        condSize = conditions.cond.size();
+    }
+    else
+    {
+        codec.decode(data, conditions.cond_v320, limitTuple);
+        condSize = conditions.cond_v320.size();
+    }
     PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
                           << LOG_KV("tableName", tableName)
-                          << LOG_KV("ConditionSize", conditions.size())
+                          << LOG_KV("ConditionSize", condSize)
                           << LOG_KV("limitOffset", std::get<0>(limitTuple))
                           << LOG_KV("limitCount", std::get<1>(limitTuple));
 
     auto keyCondition = std::make_optional<storage::Condition>();
-
+    auto valueCondition = std::make_optional<precompiled::Condition>();
     // will throw exception when wrong condition cmp or limit count overflow
-    buildKeyCondition(keyCondition, std::move(conditions), std::move(limitTuple));
+    bool useValueCond = buildConditions(
+        keyCondition, valueCondition, std::move(conditions), limitTuple, version);
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
@@ -569,17 +866,44 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
                                << LOG_DESC("keyCond trace ") << keyCondition->toString();
     }
 
-    auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
-
-    for (auto& tableKey : tableKeyList)
+    uint32_t removedRows = 0;
+    // when limitcount==0, skip remove operation directly
+    if (std::get<1>(limitTuple) > 0)
     {
-        Entry deletedEntry;
-        deletedEntry.setStatus(Entry::DELETED);
-        _executive->storage().setRow(tableName, tableKey, std::move(deletedEntry));
+        if (useValueCond)
+        {
+            auto func = [_executive, &tableName, &removedRows]
+                (const std::vector<std::string>& tableKeyList,
+                    std::optional<precompiled::Condition> _valueCondition)
+            {
+                std::vector<EntryTuple> entries({});
+                size_t validCount = selectByValueCond(_executive, tableName, tableKeyList, entries, _valueCondition);
+                for (auto& entry : entries)
+                {
+                    storage::Entry deletedEntry;
+                    deletedEntry.setStatus(Entry::DELETED);
+                    _executive->storage().setRow(tableName, std::get<0>(entry), std::move(deletedEntry));
+                }
+                removedRows += entries.size();
+                return std::pair<size_t, size_t>{validCount, entries.size()};
+            };
+            processEntryByValueCond(_executive, tableName, keyCondition, valueCondition, std::move(func));
+        }
+        else
+        {
+            auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
+            for (auto& tableKey : tableKeyList)
+            {
+                storage::Entry deletedEntry;
+                deletedEntry.setStatus(Entry::DELETED);
+                _executive->storage().setRow(tableName, tableKey, std::move(deletedEntry));
+            }
+            removedRows = tableKeyList.size();
+        }
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
-                           << LOG_KV("affectedRows", tableKeyList.size());
-    gasPricer->setMemUsed(tableKeyList.size());
-    gasPricer->appendOperation(InterfaceOpcode::Remove, tableKeyList.size());
-    _callParameters->setExecResult(codec.encode((int32_t)tableKeyList.size()));
+                           << LOG_KV("removedRows", removedRows);
+    gasPricer->setMemUsed(removedRows);
+    gasPricer->appendOperation(InterfaceOpcode::Remove, removedRows);
+    _callParameters->setExecResult(codec.encode((int32_t)removedRows));
 }

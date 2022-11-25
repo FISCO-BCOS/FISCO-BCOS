@@ -522,19 +522,23 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     }
     std::cout << "#### txpoolStorage size:" << txpoolStorage->size() << std::endl;
     std::cout << "#### importedTxNum:" << importedTxNum << std::endl;
+
     // check txs submitted to the ledger
-    auto txsHash2Data = ledger->txsHashToData();
-    for (size_t i = 0; i < transactions.size(); i++)
-    {
-        auto startT = utcTime();
-        while (!txsHash2Data.count(transactions[i]->hash()) && (utcTime() - startT <= 5000))
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
-            txsHash2Data = ledger->txsHashToData();
-        }
-        std::cout << "### txsHash2Data size: " << txsHash2Data.size() << ", i: " << i
-                  << ", transactions size:" << transactions.size() << std::endl;
-    }
+
+    // TxPool doesn't commit any data before block commited
+    // auto txsHash2Data = ledger->txsHashToData();
+    // for (size_t i = 0; i < transactions.size(); i++)
+    // {
+    //     auto startT = utcTime();
+    //     while (!txsHash2Data.count(transactions[i]->hash()) && (utcTime() - startT <= 5000))
+    //     {
+    //         std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    //         txsHash2Data = ledger->txsHashToData();
+    //     }
+    //     std::cout << "### txsHash2Data size: " << txsHash2Data.size() << ", i: " << i
+    //               << ", transactions size:" << transactions.size() << std::endl;
+    // }
+
     // case9: the txpool is full
     txpoolConfig->setPoolLimit(importedTxNum);
     checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::TxPoolIsFull,

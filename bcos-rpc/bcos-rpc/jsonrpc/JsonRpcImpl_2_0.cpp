@@ -109,11 +109,11 @@ void JsonRpcImpl_2_0::handleRpcRequest(
         }
         else
         {
-            BCOS_LOG(WARNING) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
-                              << LOG_DESC("unable to send response for session has been inactive")
-                              << LOG_KV("seq", seq) << LOG_KV("totalTime", total)
-                              << LOG_KV("endpoint", session->endPoint())
-                              << LOG_KV("refCount", session.use_count());
+            BCOS_LOG(TRACE) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
+                            << LOG_DESC("unable to send response for session has been inactive")
+                            << LOG_KV("seq", seq) << LOG_KV("totalTime", total)
+                            << LOG_KV("endpoint", session->endPoint())
+                            << LOG_KV("refCount", session.use_count());
         }
     });
 }
@@ -209,7 +209,7 @@ void JsonRpcImpl_2_0::parseRpcResponseJson(
         JsonRpcError::InvalidRequest, "The JSON sent is not a valid Response object."));
 }
 
-void JsonRpcImpl_2_0::toJsonResp(
+void bcos::rpc::toJsonResp(
     Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr)
 {
     // transaction version
@@ -238,7 +238,7 @@ void JsonRpcImpl_2_0::toJsonResp(
     jResp["signature"] = toHexStringWithPrefix(_transactionPtr->signatureData());
 }
 
-void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
+void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     bcos::protocol::TransactionReceipt const& transactionReceipt, bool _isWasm,
     crypto::Hash& hashImpl)
 {
@@ -293,8 +293,7 @@ void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
 }
 
 
-void JsonRpcImpl_2_0::toJsonResp(
-    Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr)
+void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr)
 {
     if (!_blockHeaderPtr)
     {
@@ -345,7 +344,7 @@ void JsonRpcImpl_2_0::toJsonResp(
     jResp["signatureList"] = jSignList;
 }
 
-void JsonRpcImpl_2_0::toJsonResp(
+void bcos::rpc::toJsonResp(
     Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash)
 {
     if (!_blockPtr)
@@ -385,8 +384,8 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
 
     auto nodeService = getNodeService(_groupID, _nodeName, "call");
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
-    auto transaction =
-        transactionFactory->createTransaction(0, _to, decodeData(_data), u256(0), 0, "", "", 0);
+    auto transaction = transactionFactory->createTransaction(
+        0, std::string(_to), decodeData(_data), u256(0), 0, std::string(), std::string(), 0);
     nodeService->scheduler()->call(std::move(transaction),
         [m_to = std::string(_to), m_respFunc = std::move(_respFunc)](
             Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
@@ -444,6 +443,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             Json::Value jResp;
             try
             {
+                co_await txpool->broadcastPushTransaction(*transaction);
                 auto submitResult = co_await txpool->submitTransaction(transaction);
 
                 auto txHash = submitResult->txHash();
@@ -475,7 +475,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
                 toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
                     *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
-                jResp["to"] = string(submitResult->to());
+                jResp["to"] = submitResult->to();
                 jResp["from"] = toHexStringWithPrefix(submitResult->sender());
 
                 // TODO: check if needed
@@ -486,7 +486,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             catch (bcos::Error& e)
             {
                 auto info = boost::diagnostic_information(e);
-                RPC_IMPL_LOG(WARNING) << "RPC bcos error: " << info;
+                RPC_IMPL_LOG(WARNING) << "RPC bcos error: " << e.errorCode() << " " << info;
                 respFunc(std::make_shared<bcos::Error>(std::move(e)), jResp);
             }
             catch (std::exception& e)
@@ -879,7 +879,7 @@ void JsonRpcImpl_2_0::getABI(std::string_view _groupID, std::string_view _nodeNa
                     << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success")
                     << LOG_KV("contractAddress", lowerAddress);
             }
-            Json::Value jResp = std::move(_abi);
+            Json::Value jResp = _abi;
             callback(_error, jResp);
         });
 }

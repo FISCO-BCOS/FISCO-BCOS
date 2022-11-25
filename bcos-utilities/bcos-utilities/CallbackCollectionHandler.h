@@ -69,12 +69,12 @@ public:
         }
     }
 
-    std::shared_ptr<SingleCallback> add(Callback const& _callback)
+    std::shared_ptr<SingleCallback> add(Callback _callback)
     {
         auto iterator =
             m_callbackCollection.empty() ? 0 : (m_callbackCollection.rbegin()->first + 1);
-        auto callback =
-            std::shared_ptr<SingleCallback>(new SingleCallback(iterator, this, _callback));
+        auto callback = std::shared_ptr<SingleCallback>(
+            new SingleCallback(iterator, this, std::move(_callback)));
         m_callbackCollection[iterator] = callback;
         return callback;
     }

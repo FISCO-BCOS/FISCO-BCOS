@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
+#include <utility>
 
 namespace bcos
 {
@@ -34,10 +35,10 @@ public:
     using Ptr = std::shared_ptr<TransactionReceipt>;
     using ConstPtr = std::shared_ptr<const TransactionReceipt>;
     explicit TransactionReceipt(bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
-      : m_cryptoSuite(_cryptoSuite)
+      : m_cryptoSuite(std::move(_cryptoSuite))
     {}
 
-    virtual ~TransactionReceipt() {}
+    virtual ~TransactionReceipt() = default;
 
     virtual void decode(bytesConstRef _receiptData) = 0;
     virtual void encode(bytes& _encodedData) const = 0;
@@ -54,8 +55,7 @@ public:
     // additional information on transaction execution, no need to be involved in the hash
     // calculation
     virtual std::string const& message() const = 0;
-    virtual void setMessage(std::string const& _message) = 0;
-    virtual void setMessage(std::string&& _message) = 0;
+    virtual void setMessage(std::string message) = 0;
 
 protected:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

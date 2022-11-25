@@ -361,14 +361,11 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
     auto total = _txToStore->size();
     std::vector<std::string_view> keys(total);
     std::vector<std::string_view> values(total);
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); ++i)
-            {
-                keys[i] = bcos::concepts::bytebuffer::toView((*_txHashList)[i]);
-                values[i] = bcos::concepts::bytebuffer::toView((*(*_txToStore)[i]));
-            }
-        });
+    for (auto i = 0U; i < _txToStore->size(); ++i)
+    {
+        keys[i] = bcos::concepts::bytebuffer::toView((*_txHashList)[i]);
+        values[i] = bcos::concepts::bytebuffer::toView((*(*_txToStore)[i]));
+    }
     // Note: transactions must be submitted serially, because transaction submissions are
     // transactional, preventing write conflicts
     RecursiveGuard l(m_mutex);
@@ -395,9 +392,13 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
 
     auto finally = [_blockNumber, total, result, block, _onGetBlock](Error::Ptr&& error) {
         if (error)
+        {
             ++std::get<1>(*result);
+        }
         else
+        {
             ++std::get<0>(*result);
+        }
 
         if (std::get<0>(*result) + std::get<1>(*result) == *total)
         {
@@ -425,10 +426,14 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                 block, _blockNumber, [finally](Error::Ptr&& error) { finally(std::move(error)); });
         });
     }
-    if (_blockFlag & TRANSACTIONS)
+    if ((_blockFlag & TRANSACTIONS) != 0)
+    {
         ++(*total);
-    if (_blockFlag & RECEIPTS)
+    }
+    if ((_blockFlag & RECEIPTS) != 0)
+    {
         ++(*total);
+    }
 
     if ((_blockFlag & TRANSACTIONS) || (_blockFlag & RECEIPTS))
     {
@@ -1453,9 +1458,9 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
             if (m_genesisBlockHeader)
             {
                 std::cout << "The Genesis Data is inconsistent with the initial Genesis Data. "
-                             "Initial Genesis Data is :"
                           << std::endl
-                          << initialGenesisData << std::endl;
+                          << LOG_KV("initialGenesisData", initialGenesisData) << std::endl
+                          << LOG_KV("genesisData", _genesisData) << std::endl;
                 BOOST_THROW_EXCEPTION(
                     bcos::tool::InvalidConfig() << errinfo_comment(
                         "The Genesis Data is inconsistent with the initial Genesis Data"));

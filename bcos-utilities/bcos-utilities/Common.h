@@ -18,25 +18,25 @@
 #pragma once
 
 //#include <sys/time.h>
+#include "Log.h"
+#include "RefDataContainer.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/container/options.hpp>
+#include <boost/container/small_vector.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
+#include <boost/thread.hpp>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <queue>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <boost/multiprecision/cpp_int.hpp>
-#include "Log.h"
-#include "RefDataContainer.h"
-#include <boost/container/small_vector.hpp>
-#include <boost/thread.hpp>
-#include <atomic>
-#include <condition_variable>
-#include <mutex>
 
 namespace bcos
 {
@@ -49,8 +49,6 @@ using bytesPointer = std::shared_ptr<std::vector<byte>>;
 using bytesConstPtr = std::shared_ptr<const bytes>;
 using bytesRef = RefDataContainer<byte>;
 using bytesConstRef = RefDataContainer<byte const>;
-
-using smallBytes = boost::container::small_vector<byte, 40>;
 
 // Numeric types.
 using bigint = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>>;
@@ -256,26 +254,6 @@ private:
     std::queue<T> m_queue;
 };
 
-// do not use TIME_RECORD in tbb code block
-#define __TIME_RECORD(name, var, line) ::bcos::TimeRecorder var##line(__FUNCTION__, name)
-#define _TIME_RECORD(name, line) __TIME_RECORD(name, _time_anonymous, line)
-#define TIME_RECORD(name) _TIME_RECORD(name, __LINE__)
-
-class TimeRecorder
-{
-public:
-    TimeRecorder(const std::string& function, const std::string& name);
-    ~TimeRecorder();
-
-private:
-    std::string m_function;
-    static thread_local std::string m_name;
-    static thread_local std::chrono::steady_clock::time_point m_timePoint;
-    static thread_local size_t m_heapCount;
-    static thread_local std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>>
-        m_record;
-};
-
 template <typename T>
 class HolderForDestructor
 {
@@ -290,7 +268,6 @@ private:
     std::shared_ptr<T> m_elementsToDestroy;
 };
 
-std::string newSeq();
 void pthread_setThreadName(std::string const& _n);
 
 /*

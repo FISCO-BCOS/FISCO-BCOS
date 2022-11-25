@@ -41,10 +41,7 @@ public:
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage)
       : m_blockFactory(std::move(_blockFactory)), m_storage(std::move(_storage))
-    {
-        assert(m_blockFactory);
-        assert(m_storage);
-    };
+    {}
 
     ~Ledger() override = default;
 
@@ -100,6 +97,8 @@ public:
     bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
         const std::string_view& _genesisData, std::string const& _compatibilityVersion);
 
+    void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
+        std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Table>& table, const std::string_view& tableName);
@@ -109,9 +108,6 @@ private:
 
     void asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
         bcos::protocol::BlockNumber blockNumber, std::function<void(Error::Ptr&&)> callback);
-
-    void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
-        std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
 
     void asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback);

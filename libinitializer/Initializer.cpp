@@ -338,6 +338,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
 
+    if (m_nodeConfig->enableArchive())
+    {
+        INITIALIZER_LOG(INFO) << LOG_BADGE("create archive service");
+        m_archiveService = std::make_shared<bcos::archive::ArchiveService>(
+            storage, ledger, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
+    }
 #ifdef WITH_LIGHTNODE
     bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
 
@@ -347,7 +353,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             using Hasher = std::remove_cvref_t<decltype(hasher)>;
             auto ledger =
                 std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(
-                    std::move(storageWrapper));
+                    std::move(storageWrapper), m_protocolInitializer->blockFactory(), storage);
 
             auto txpool = m_txpoolInitializer->txpool();
             auto transactionPool =
@@ -480,6 +486,10 @@ void Initializer::start()
     {
         m_frontServiceInitializer->start();
     }
+    if (m_archiveService)
+    {
+        m_archiveService->start();
+    }
 }
 
 void Initializer::stop()
@@ -501,6 +511,10 @@ void Initializer::stop()
         if (m_scheduler)
         {
             m_scheduler->stop();
+        }
+        if (m_archiveService)
+        {
+            m_archiveService->stop();
         }
     }
     catch (std::exception const& e)

@@ -34,7 +34,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.1.0"
+default_version="v3.2.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -248,6 +248,7 @@ generate_cert_conf() {
     cat <<EOF >"${output}"
 [ca]
 default_ca=default_ca
+
 [default_ca]
 default_days = 36500
 default_md = sha256
@@ -255,6 +256,7 @@ default_md = sha256
 [req]
 distinguished_name = req_distinguished_name
 req_extensions = v3_req
+
 [req_distinguished_name]
 countryName = CN
 countryName_default = CN
@@ -273,7 +275,7 @@ basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 
 [ v4_req ]
-basicConstraints = CA:TRUE
+basicConstraints = CA:FALSE
 
 EOF
 }
@@ -329,6 +331,11 @@ gen_rsa_node_cert() {
     rm -f "$ndpath"/"$type".key
 
     mv "$ndpath"/pkcs8_node.key "$ndpath"/"$type".key
+
+    # extract p2p id
+    ${OPENSSL_CMD} rsa -in "$ndpath"/"$type".key -pubout -out public.pem
+    ${OPENSSL_CMD} rsa -pubin -in public.pem -text -noout 2> /dev/null | sed -n '3,20p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "${ndpath}/${type}.nodeid"
+    rm -f public.pem
 
     LOG_INFO "Generate ${ndpath} cert successful!"
 }
@@ -1150,6 +1157,14 @@ generate_config_ini() {
     nodes_path=${file_dir}
     nodes_file=${p2p_connected_conf_name}
 
+[certificate_blacklist]
+    ; crl.0 should be nodeid, nodeid's length is 512
+    ;crl.0=
+
+[certificate_whitelist]
+    ; cal.0 should be nodeid, nodeid's length is 512
+    ;cal.0=
+
 [rpc]
     listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
@@ -1201,6 +1216,9 @@ generate_common_ini() {
     pd_ssl_ca_path=
     pd_ssl_cert_path=
     pd_ssl_key_path=
+    enable_archive=false
+    archive_ip=127.0.0.1
+    archive_port=
 
 [txpool]
     ; size of the txpool, default is 15000
@@ -1294,6 +1312,14 @@ generate_sm_config_ini() {
     sm_ssl=true
     nodes_path=${file_dir}
     nodes_file=${p2p_connected_conf_name}
+
+[certificate_blacklist]
+    ; crl.0 should be nodeid, nodeid's length is 128
+    ;crl.0=
+
+[certificate_whitelist]
+    ; cal.0 should be nodeid, nodeid's length is 128
+    ;cal.0=
 
 [rpc]
     listen_ip=${rpc_listen_ip}
@@ -1428,8 +1454,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.1.0
-    compatibility_version=3.1.0
+    ; the default is 3.2.0
+    compatibility_version=3.2.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000

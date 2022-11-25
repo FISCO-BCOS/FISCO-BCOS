@@ -528,43 +528,54 @@ void TiKVStorage::asyncRollback(
     }
 }
 
-bcos::Error::Ptr TiKVStorage::setRows(std::string_view table, std::vector<std::string_view> keys,
-    std::vector<std::string_view> values) noexcept
+bcos::Error::Ptr TiKVStorage::setRows(std::string_view table,
+    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
+        _keys,
+    std::variant<gsl::span<const std::string_view>, gsl::span<std::string const>> _values) noexcept
 {
+    bcos::Error::Ptr err = nullptr;
     try
     {
-        if (table.empty())
-        {
-            STORAGE_TIKV_LOG(WARNING)
-                << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
-            return BCOS_ERROR_PTR(TableNotExists, "empty tableName");
-        }
-        if (keys.size() != values.size())
-        {
-            STORAGE_TIKV_LOG(WARNING)
-                << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("table", table)
-                << LOG_KV("keys", keys.size()) << LOG_KV("values", values.size());
-            return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
-        }
-        if (keys.empty())
-        {
-            STORAGE_TIKV_LOG(WARNING) << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
-            return nullptr;
-        }
-        std::vector<std::string> realKeys(keys.size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
-            [&](const tbb::blocked_range<size_t>& range) {
-                for (size_t i = range.begin(); i != range.end(); ++i)
+        std::visit(
+            [&](auto&& keys, auto&& values) {
+                if (table.empty())
                 {
-                    realKeys[i] = toDBKey(table, keys[i]);
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
+                    err = BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+                    return;
                 }
-            });
-        auto txn = m_cluster->begin();
-        for (size_t i = 0; i < values.size(); ++i)
-        {
-            txn.put(std::string(realKeys[i]), std::string(values[i]));
-        }
-        txn.commit();
+                if (keys.size() != values.size())
+                {
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("setRows values size mismatch keys size")
+                        << LOG_KV("table", table) << LOG_KV("keys", keys.size())
+                        << LOG_KV("values", values.size());
+                    err = BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+                    return;
+                }
+                if (values.empty())
+                {
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
+                    return;
+                }
+                std::vector<std::string> realKeys(keys.size());
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+                    [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t i = range.begin(); i != range.end(); ++i)
+                        {
+                            realKeys[i] = toDBKey(table, keys[i]);
+                        }
+                    });
+                auto txn = m_cluster->begin();
+                for (size_t i = 0; i < keys.size(); ++i)
+                {
+                    txn.put(std::move(realKeys[i]), std::string(std::move(values[i])));
+                }
+                txn.commit();
+            },
+            _keys, _values);
     }
     catch (std::exception& e)
     {
@@ -573,7 +584,58 @@ bcos::Error::Ptr TiKVStorage::setRows(std::string_view table, std::vector<std::s
         return BCOS_ERROR_WITH_PREV_PTR(WriteError, "setRows failed! ", e);
     }
     m_lastCommitTimestamp = m_cluster->current_timestamp();
-    return nullptr;
+    return err;
+}
+
+bcos::Error::Ptr TiKVStorage::deleteRows(std::string_view table,
+    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
+        _keys) noexcept
+{
+    bcos::Error::Ptr err = nullptr;
+    try
+    {
+        std::visit(
+            [&](auto&& keys) {
+                if (table.empty())
+                {
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("deleteRows empty tableName") << LOG_KV("table", table);
+                    err = BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+                    return;
+                }
+                if (keys.empty())
+                {
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("deleteRows empty keys") << LOG_KV("table", table);
+                    return;
+                }
+                std::vector<std::string> realKeys(keys.size());
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+                    [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t i = range.begin(); i != range.end(); ++i)
+                        {
+                            realKeys[i] = toDBKey(table, keys[i]);
+                        }
+                    });
+                auto txn = m_cluster->begin();
+                for (size_t i = 0; i < keys.size(); ++i)
+                {
+                    txn.remove(std::string(std::move(realKeys[i])));
+                }
+                STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("deleteRows") << LOG_KV("table", table)
+                                        << LOG_KV("size", keys.size());
+                txn.commit();
+            },
+            _keys);
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("deleteRows failed") << LOG_KV("what", e.what());
+        m_lastCommitTimestamp = m_cluster->current_timestamp();
+        return BCOS_ERROR_WITH_PREV_PTR(WriteError, "deleteRows failed! ", e);
+    }
+    m_lastCommitTimestamp = m_cluster->current_timestamp();
+    return err;
 }
 
 void TiKVStorage::triggerSwitch()

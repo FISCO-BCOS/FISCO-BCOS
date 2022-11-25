@@ -33,7 +33,10 @@
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
+#include <algorithm>
 #include <functional>
+#include <iterator>
+#include <memory>
 #include <set>
 
 namespace bcos
@@ -69,12 +72,12 @@ static const char* const ACCOUNT_ALIVE = "alive";
 static const char* const ACCOUNT_FROZEN = "frozen";
 
 /// auth
-static const char* const CONTRACT_SUFFIX = "_accessAuth";
-static const char* const ADMIN_FIELD = "admin";
-static const char* const STATUS_FIELD = "status";
-static const char* const METHOD_AUTH_TYPE = "method_auth_type";
-static const char* const METHOD_AUTH_WHITE = "method_auth_white";
-static const char* const METHOD_AUTH_BLACK = "method_auth_black";
+static constexpr const std::string_view CONTRACT_SUFFIX = "_accessAuth";
+static constexpr const std::string_view ADMIN_FIELD = "admin";
+static constexpr const std::string_view STATUS_FIELD = "status";
+static constexpr const std::string_view METHOD_AUTH_TYPE = "method_auth_type";
+static constexpr const std::string_view METHOD_AUTH_WHITE = "method_auth_white";
+static constexpr const std::string_view METHOD_AUTH_BLACK = "method_auth_black";
 
 /// account
 static constexpr const std::string_view ACCOUNT_STATUS = "status";
@@ -88,8 +91,23 @@ enum AccountStatus : uint8_t
 };
 
 /// contract status
-static const char* const CONTRACT_FROZEN = "frozen";
-static const char* const CONTRACT_NORMAL = "normal";
+static constexpr const std::string_view CONTRACT_NORMAL = "normal";
+static constexpr const std::string_view CONTRACT_FROZEN = "frozen";
+static constexpr const std::string_view CONTRACT_ABOLISH = "abolish";
+static constexpr inline std::string_view StatusToString(uint8_t _status) noexcept
+{
+    switch (_status)
+    {
+    case 0:
+        return CONTRACT_NORMAL;
+    case 1:
+        return CONTRACT_FROZEN;
+    case 2:
+        return CONTRACT_ABOLISH;
+    default:
+        return "";
+    }
+}
 
 /// FileSystem table keys
 static const char* const FS_KEY_NAME = "name";
@@ -328,10 +346,19 @@ bool hasPrecompiledPrefix(const std::string_view& _code);
  * @param _addr : the string address
  * @return evmc_address : the transformed evm address
  */
-inline evmc_address toEvmC(const std::string_view& _addr)
+inline evmc_address toEvmC(const std::string_view& addr)
 {  // TODO: add another interfaces for wasm
     evmc_address ret;
-    memcpy(ret.bytes, _addr.data(), 20);
+    constexpr static auto evmAddressLength = sizeof(ret);
+
+    if (addr.size() < evmAddressLength)
+    {
+        std::uninitialized_fill_n(ret.bytes, evmAddressLength, 0);
+    }
+    else
+    {
+        std::uninitialized_copy_n(addr.begin(), evmAddressLength, ret.bytes);
+    }
     return ret;
 }
 
@@ -340,9 +367,12 @@ inline evmc_address toEvmC(const std::string_view& _addr)
  * @param _h : hash value
  * @return evmc_bytes32 : transformed hash
  */
-inline evmc_bytes32 toEvmC(h256 const& _h)
+inline evmc_bytes32 toEvmC(h256 const& hash)
 {
-    return reinterpret_cast<evmc_bytes32 const&>(_h);
+    evmc_bytes32 evmBytes;
+    static_assert(sizeof(evmBytes) == h256::SIZE, "Hash size mismatch!");
+    std::uninitialized_copy(hash.begin(), hash.end(), evmBytes.bytes);
+    return evmBytes;
 }
 /**
  * @brief : trans uint256 number of evm-represented to u256
@@ -381,11 +411,22 @@ inline bytes toBytes(const std::string_view& _addr)
 
 inline std::string getContractTableName(const std::string_view& _address)
 {
-    std::string formatAddress(_address);
+    constexpr static std::string_view prefix("/apps/");
+    std::string out;
+    if (_address[0] == '/')
+    {
+        out.reserve(prefix.size() + _address.size() - 1);
+        std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
+        std::copy(_address.begin() + 1, _address.end(), std::back_inserter(out));
+    }
+    else
+    {
+        out.reserve(prefix.size() + _address.size());
+        std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
+        std::copy(_address.begin(), _address.end(), std::back_inserter(out));
+    }
 
-    std::string address = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
-
-    return std::string("/apps/").append(address);
+    return out;
 }
 
 }  // namespace bcos

@@ -50,6 +50,7 @@ const char* const AUTH_METHOD_CHECK_AUTH_ADD = "checkMethodAuth(address,bytes4,a
 const char* const AUTH_METHOD_GET_AUTH_ADD = "getMethodAuth(address,bytes4)";
 
 const char* const AUTH_METHOD_SET_CONTRACT = "setContractStatus(address,bool)";
+const char* const AUTH_METHOD_SET_CONTRACT_32 = "setContractStatus(address,uint8)";
 const char* const AUTH_METHOD_GET_CONTRACT = "contractAvailable(address)";
 
 /// deploy
@@ -64,53 +65,108 @@ const char* const AUTH_OPEN_DEPLOY_ACCOUNT_ADD = "openDeployAuth(address)";
 const char* const AUTH_CLOSE_DEPLOY_ACCOUNT_ADD = "closeDeployAuth(address)";
 const char* const AUTH_CHECK_DEPLOY_ACCESS_ADD = "hasDeployAuth(address)";
 
-AuthManagerPrecompiled::AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
+AuthManagerPrecompiled::AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl, bool _isWasm)
+  : Precompiled(_hashImpl)
 {
-    /// wasm
-    name2Selector[AUTH_METHOD_GET_ADMIN] = getFuncSelector(AUTH_METHOD_GET_ADMIN, _hashImpl);
-    name2Selector[AUTH_METHOD_SET_ADMIN] = getFuncSelector(AUTH_METHOD_SET_ADMIN, _hashImpl);
-    name2Selector[AUTH_METHOD_SET_AUTH_TYPE] =
-        getFuncSelector(AUTH_METHOD_SET_AUTH_TYPE, _hashImpl);
-    name2Selector[AUTH_METHOD_OPEN_AUTH] = getFuncSelector(AUTH_METHOD_OPEN_AUTH, _hashImpl);
-    name2Selector[AUTH_METHOD_CLOSE_AUTH] = getFuncSelector(AUTH_METHOD_CLOSE_AUTH, _hashImpl);
-    name2Selector[AUTH_METHOD_CHECK_AUTH] = getFuncSelector(AUTH_METHOD_CHECK_AUTH, _hashImpl);
-    name2Selector[AUTH_METHOD_GET_AUTH] = getFuncSelector(AUTH_METHOD_GET_AUTH, _hashImpl);
+    const auto* getAdminStr = _isWasm ? AUTH_METHOD_GET_ADMIN : AUTH_METHOD_GET_ADMIN_ADD;
+    registerFunc(getFuncSelector(getAdminStr), [this](auto&& _executive, auto&& _callParameters) {
+        getAdmin(std::forward<decltype(_executive)>(_executive),
+            std::forward<decltype(_callParameters)>(_callParameters));
+    });
 
-    /// evm
-    name2Selector[AUTH_METHOD_GET_ADMIN_ADD] =
-        getFuncSelector(AUTH_METHOD_GET_ADMIN_ADD, _hashImpl);
-    name2Selector[AUTH_METHOD_SET_ADMIN_ADD] =
-        getFuncSelector(AUTH_METHOD_SET_ADMIN_ADD, _hashImpl);
-    name2Selector[AUTH_METHOD_SET_AUTH_TYPE_ADD] =
-        getFuncSelector(AUTH_METHOD_SET_AUTH_TYPE_ADD, _hashImpl);
-    name2Selector[AUTH_METHOD_OPEN_AUTH_ADD] =
-        getFuncSelector(AUTH_METHOD_OPEN_AUTH_ADD, _hashImpl);
-    name2Selector[AUTH_METHOD_CLOSE_AUTH_ADD] =
-        getFuncSelector(AUTH_METHOD_CLOSE_AUTH_ADD, _hashImpl);
-    name2Selector[AUTH_METHOD_CHECK_AUTH_ADD] =
-        getFuncSelector(AUTH_METHOD_CHECK_AUTH_ADD, _hashImpl);
-    name2Selector[AUTH_METHOD_SET_CONTRACT] = getFuncSelector(AUTH_METHOD_SET_CONTRACT, _hashImpl);
-    name2Selector[AUTH_METHOD_GET_CONTRACT] = getFuncSelector(AUTH_METHOD_GET_CONTRACT, _hashImpl);
-    name2Selector[AUTH_METHOD_GET_AUTH_ADD] = getFuncSelector(AUTH_METHOD_GET_AUTH_ADD, _hashImpl);
+    const auto* resetAdminStr = _isWasm ? AUTH_METHOD_SET_ADMIN : AUTH_METHOD_SET_ADMIN_ADD;
+    registerFunc(getFuncSelector(resetAdminStr), [this](auto&& _executive, auto&& _callParameters) {
+        resetAdmin(std::forward<decltype(_executive)>(_executive),
+            std::forward<decltype(_callParameters)>(_callParameters));
+    });
+
+    const auto* setMethodAuthTypeStr =
+        _isWasm ? AUTH_METHOD_SET_AUTH_TYPE : AUTH_METHOD_SET_AUTH_TYPE_ADD;
+    registerFunc(
+        getFuncSelector(setMethodAuthTypeStr), [this](auto&& _executive, auto&& _callParameters) {
+            setMethodAuthType(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+
+    const auto* openMethodAuthStr = _isWasm ? AUTH_METHOD_OPEN_AUTH : AUTH_METHOD_OPEN_AUTH_ADD;
+    registerFunc(
+        getFuncSelector(openMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
+            setMethodAuth(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+
+    const auto* closeMethodAuthStr = _isWasm ? AUTH_METHOD_CLOSE_AUTH : AUTH_METHOD_CLOSE_AUTH_ADD;
+    registerFunc(
+        getFuncSelector(closeMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
+            setMethodAuth(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+
+    const auto* checkMethodAuthStr = _isWasm ? AUTH_METHOD_CHECK_AUTH : AUTH_METHOD_CHECK_AUTH_ADD;
+    registerFunc(
+        getFuncSelector(checkMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
+            checkMethodAuth(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+
+    const auto* getMethodAuthStr = _isWasm ? AUTH_METHOD_GET_AUTH : AUTH_METHOD_GET_AUTH_ADD;
+    registerFunc(
+        getFuncSelector(getMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
+            getMethodAuth(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+
+    registerFunc(
+        getFuncSelector(AUTH_METHOD_SET_CONTRACT_32),
+        [this](auto&& _executive, auto&& _callParameters) {
+            setContractStatus(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        },
+        protocol::BlockVersion::V3_2_VERSION);
+
+    registerFunc(getFuncSelector(AUTH_METHOD_SET_CONTRACT),
+        [this](auto&& _executive, auto&& _callParameters) {
+            setContractStatus(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+    registerFunc(getFuncSelector(AUTH_METHOD_GET_CONTRACT),
+        [this](auto&& _executive, auto&& _callParameters) {
+            contractAvailable(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
 
     /// deploy
-    name2Selector[AUTH_METHOD_GET_DEPLOY_TYPE] =
-        getFuncSelector(AUTH_METHOD_GET_DEPLOY_TYPE, _hashImpl);
-    name2Selector[AUTH_METHOD_SET_DEPLOY_TYPE] =
-        getFuncSelector(AUTH_METHOD_SET_DEPLOY_TYPE, _hashImpl);
-
-    /// wasm deploy auth
-    name2Selector[AUTH_OPEN_DEPLOY_ACCOUNT] = getFuncSelector(AUTH_OPEN_DEPLOY_ACCOUNT, _hashImpl);
-    name2Selector[AUTH_CLOSE_DEPLOY_ACCOUNT] =
-        getFuncSelector(AUTH_CLOSE_DEPLOY_ACCOUNT, _hashImpl);
-    name2Selector[AUTH_CHECK_DEPLOY_ACCESS] = getFuncSelector(AUTH_CHECK_DEPLOY_ACCESS, _hashImpl);
-    /// evm deploy auth
-    name2Selector[AUTH_OPEN_DEPLOY_ACCOUNT_ADD] =
-        getFuncSelector(AUTH_OPEN_DEPLOY_ACCOUNT_ADD, _hashImpl);
-    name2Selector[AUTH_CLOSE_DEPLOY_ACCOUNT_ADD] =
-        getFuncSelector(AUTH_CLOSE_DEPLOY_ACCOUNT_ADD, _hashImpl);
-    name2Selector[AUTH_CHECK_DEPLOY_ACCESS_ADD] =
-        getFuncSelector(AUTH_CHECK_DEPLOY_ACCESS_ADD, _hashImpl);
+    registerFunc(getFuncSelector(AUTH_METHOD_GET_DEPLOY_TYPE),
+        [this](auto&& _executive, auto&& _callParameters) {
+            getDeployType(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+    registerFunc(getFuncSelector(AUTH_METHOD_SET_DEPLOY_TYPE),
+        [this](auto&& _executive, auto&& _callParameters) {
+            setDeployType(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+    const auto* openDeployAccountStr =
+        _isWasm ? AUTH_OPEN_DEPLOY_ACCOUNT : AUTH_OPEN_DEPLOY_ACCOUNT_ADD;
+    registerFunc(
+        getFuncSelector(openDeployAccountStr), [this](auto&& _executive, auto&& _callParameters) {
+            openDeployAuth(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+    const auto* closeDeployAccountStr =
+        _isWasm ? AUTH_CLOSE_DEPLOY_ACCOUNT : AUTH_CLOSE_DEPLOY_ACCOUNT_ADD;
+    registerFunc(
+        getFuncSelector(closeDeployAccountStr), [this](auto&& _executive, auto&& _callParameters) {
+            closeDeployAuth(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
+    const auto* checkDeployAuthStr =
+        _isWasm ? AUTH_CHECK_DEPLOY_ACCESS : AUTH_CHECK_DEPLOY_ACCESS_ADD;
+    registerFunc(
+        getFuncSelector(checkDeployAuthStr), [this](auto&& _executive, auto&& _callParameters) {
+            hasDeployAuth(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
 }
 
 std::shared_ptr<PrecompiledExecResult> AuthManagerPrecompiled::call(
@@ -119,79 +175,30 @@ std::shared_ptr<PrecompiledExecResult> AuthManagerPrecompiled::call(
 {
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
+    auto blockContext = _executive->blockContext().lock();
 
     /// directly passthrough data to call
-    if (func == name2Selector[AUTH_METHOD_GET_ADMIN] ||
-        func == name2Selector[AUTH_METHOD_GET_ADMIN_ADD])
+    auto selector = selector2Func.find(func);
+    if (selector != selector2Func.end())
     {
-        getAdmin(_executive, _callParameters);
+        auto& [minVersion, execFunc] = selector->second;
+        if (versionCompareTo(blockContext->blockVersion(), minVersion) >= 0)
+        {
+            execFunc(_executive, _callParameters);
+
+            if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+            {
+                PRECOMPILED_LOG(TRACE)
+                    << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("call function")
+                    << LOG_KV("func", func) << LOG_KV("minVersion", minVersion);
+            }
+            return _callParameters;
+        }
     }
-    else if (func == name2Selector[AUTH_METHOD_SET_ADMIN] ||
-             func == name2Selector[AUTH_METHOD_SET_ADMIN_ADD])
-    {
-        resetAdmin(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_METHOD_SET_AUTH_TYPE] ||
-             func == name2Selector[AUTH_METHOD_SET_AUTH_TYPE_ADD])
-    {
-        setMethodAuthType(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_METHOD_OPEN_AUTH] ||
-             func == name2Selector[AUTH_METHOD_OPEN_AUTH_ADD] ||
-             func == name2Selector[AUTH_METHOD_CLOSE_AUTH] ||
-             func == name2Selector[AUTH_METHOD_CLOSE_AUTH_ADD])
-    {
-        setMethodAuth(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_METHOD_CHECK_AUTH] ||
-             func == name2Selector[AUTH_METHOD_CHECK_AUTH_ADD])
-    {
-        checkMethodAuth(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_METHOD_GET_AUTH] ||
-             func == name2Selector[AUTH_METHOD_GET_AUTH_ADD])
-    {
-        getMethodAuth(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_METHOD_GET_DEPLOY_TYPE])
-    {
-        getDeployType(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_METHOD_SET_DEPLOY_TYPE])
-    {
-        setDeployType(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_OPEN_DEPLOY_ACCOUNT] ||
-             func == name2Selector[AUTH_OPEN_DEPLOY_ACCOUNT_ADD])
-    {
-        setDeployAuth(_executive, false, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_CLOSE_DEPLOY_ACCOUNT] ||
-             func == name2Selector[AUTH_CLOSE_DEPLOY_ACCOUNT_ADD])
-    {
-        setDeployAuth(_executive, true, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_CHECK_DEPLOY_ACCESS] ||
-             func == name2Selector[AUTH_CHECK_DEPLOY_ACCESS_ADD])
-    {
-        hasDeployAuth(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_METHOD_SET_CONTRACT])
-    {
-        setContractStatus(_executive, _callParameters);
-    }
-    else if (func == name2Selector[AUTH_METHOD_GET_CONTRACT])
-    {
-        contractAvailable(_executive, _callParameters);
-    }
-    else
-    {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
-                              << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError("AuthManagerPrecompiled call undefined function!"));
-    }
-    return _callParameters;
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
+                          << LOG_DESC("call undefined function") << LOG_KV("func", func);
+    BOOST_THROW_EXCEPTION(
+        bcos::protocol::PrecompiledError("AuthManagerPrecompiled call undefined function!"));
 }
 
 void AuthManagerPrecompiled::getAdmin(
@@ -423,22 +430,27 @@ void AuthManagerPrecompiled::setContractStatus(
 {
     std::string address;
     bool isFreeze = false;
+    uint8_t status = 0;
     bytesConstRef data = getParamData(_callParameters->input());
+    auto func = getParamFunc(_callParameters->input());
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (blockContext->isWasm())
-    {
-        codec.decode(data, address, isFreeze);
-    }
-    else
+    if (func == getFuncSelector(AUTH_METHOD_SET_CONTRACT))
     {
         Address contractAddress;
         codec.decode(data, contractAddress, isFreeze);
         address = contractAddress.hex();
     }
+    else if (func == getFuncSelector(AUTH_METHOD_SET_CONTRACT_32))
+    {
+        Address contractAddress;
+        codec.decode(data, contractAddress, status);
+        address = contractAddress.hex();
+    }
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
                            << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setContractStatus")
-                           << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze);
+                           << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze)
+                           << LOG_KV("status", std::to_string(status));
 
     /// check sender is contract admin
     auto admin = getContractAdmin(_executive, address, _callParameters);
@@ -591,11 +603,11 @@ void AuthManagerPrecompiled::setDeployType(
         return;
     }
     u256 type = _type[_type.size() - 1];
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployType")
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployType")
                            << LOG_KV("type", type);
     if (type > 2) [[unlikely]]
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                                << LOG_DESC("deploy auth type must be 1 or 2.");
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;
@@ -648,7 +660,7 @@ void AuthManagerPrecompiled::setDeployAuth(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployAuth")
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployAuth")
                            << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
     auto type = getDeployAuthType(_executive);
     std::map<std::string, bool> aclMap;

@@ -1,4 +1,4 @@
-#include <bcos-lightnode/storage/StorageImpl.h>
+#include <bcos-storage/StorageImpl.h>
 #include <bcos-table/src/StateStorage.h>
 #include <boost/test/unit_test.hpp>
 

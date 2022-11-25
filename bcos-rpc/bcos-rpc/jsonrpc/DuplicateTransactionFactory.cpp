@@ -29,8 +29,8 @@ void DuplicateTransactionFactory::multiBuild(
             seedBlockLimit + sentNum.fetch_add(1) / 10000;  //  maybe this block limit is not so
                                                             //  fast nor so slow
         int64_t importTime = utcTime();
-        Transaction::Ptr tx = transactionFactory->createTransaction(
-            version, to, input, nonce, blockLimit, chainId, groupId, importTime, keyPair);
+        Transaction::Ptr tx = transactionFactory->createTransaction(version, std::string(to), input,
+            nonce, blockLimit, chainId, groupId, importTime, keyPair);
 
         onTxBuild(tx);
     } while (num > sentNum);

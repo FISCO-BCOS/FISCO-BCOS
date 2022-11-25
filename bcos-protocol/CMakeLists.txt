@@ -17,7 +17,7 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "Minimum OS X deployment version")
 
 add_subdirectory(bcos-protocol)
 
@@ -30,7 +30,7 @@ target_include_directories(bcos-protocol INTERFACE
 target_link_libraries(bcos-protocol INTERFACE ${CODEC_TARGET})
 
 if (TESTS)
-    # fetch bcos-test    
+    # fetch bcos-test
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)

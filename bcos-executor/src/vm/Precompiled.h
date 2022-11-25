@@ -25,6 +25,7 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledGas.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -139,6 +140,9 @@ class Precompiled : public std::enable_shared_from_this<Precompiled>
 {
 public:
     using Ptr = std::shared_ptr<Precompiled>;
+    using PrecompiledParams =
+        std::function<void(const std::shared_ptr<executor::TransactionExecutive>& executive,
+            PrecompiledExecResult::Ptr const& callParameters)>;
 
     Precompiled(crypto::Hash::Ptr _hashImpl) : m_hashImpl(std::move(_hashImpl))
     {
@@ -147,22 +151,38 @@ public:
         assert(m_precompiledGasFactory);
     }
     virtual ~Precompiled() = default;
+
     virtual std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) = 0;
-
     virtual bool isParallelPrecompiled() { return false; }
+
     virtual std::vector<std::string> getParallelTag(bytesConstRef, bool) { return {}; }
 
 protected:
     std::map<std::string, uint32_t> name2Selector;
+    std::unordered_map<uint32_t, std::pair<protocol::BlockVersion, PrecompiledParams>>
+        selector2Func;
     crypto::Hash::Ptr m_hashImpl;
 
-protected:
-    std::optional<bcos::storage::Table> createTable(
-        storage::StateStorageInterface::Ptr _tableFactory, const std::string& _tableName,
-        const std::string& _valueField);
+    void registerFunc(uint32_t _selector, PrecompiledParams _func,
+        protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
+    {
+        selector2Func.insert({_selector, {_minVersion, std::move(_func)}});
+    }
 
+    template <class F>
+    void registerFuncF(uint32_t _selector, F _func,
+        protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
+    {
+        selector2Func.insert(
+            {_selector, {_minVersion, [this](auto&& _executive, auto&& _callParameters) {
+                             F(std::forward<decltype(_executive)>(_executive),
+                                 std::forward<decltype(_callParameters)>(_callParameters));
+                         }}});
+    }
+
+protected:
     std::shared_ptr<PrecompiledGasFactory> m_precompiledGasFactory;
 };
 

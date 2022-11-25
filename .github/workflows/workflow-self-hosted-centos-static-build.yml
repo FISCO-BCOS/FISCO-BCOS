@@ -2,7 +2,9 @@ name: Centos Static build
 on:
   pull_request:
     branches:
-      - release-3.1.0
+      - release-3.*
+      - feature-3.*
+      - master
     types: [closed]
 
 concurrency:
