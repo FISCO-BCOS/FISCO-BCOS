@@ -66,7 +66,7 @@ protected:
         // !!! Notice:
         auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(
             std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        nodeConfig->loadConfig(m_iniConfigPath, false, false);
+        nodeConfig->loadConfig(m_iniConfigPath, false, true, true);
         if (nodeConfig->rpcSmSsl())
         {
             addConfig("sm_ca.crt");

@@ -1453,7 +1453,8 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
         bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
         result = contractAuthPrecompiled->checkMethodAuth(
             shared_from_this(), callParameters->receiveAddress, func, callParameters->origin);
-        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0)
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
+            callParameters->origin != callParameters->senderAddress)
         {
             auto senderCheck = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
                 callParameters->receiveAddress, func, callParameters->senderAddress);

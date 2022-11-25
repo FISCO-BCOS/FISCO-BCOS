@@ -603,11 +603,11 @@ void AuthManagerPrecompiled::setDeployType(
         return;
     }
     u256 type = _type[_type.size() - 1];
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployType")
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployType")
                            << LOG_KV("type", type);
     if (type > 2) [[unlikely]]
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                                << LOG_DESC("deploy auth type must be 1 or 2.");
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;
@@ -660,7 +660,7 @@ void AuthManagerPrecompiled::setDeployAuth(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployAuth")
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployAuth")
                            << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
     auto type = getDeployAuthType(_executive);
     std::map<std::string, bool> aclMap;
