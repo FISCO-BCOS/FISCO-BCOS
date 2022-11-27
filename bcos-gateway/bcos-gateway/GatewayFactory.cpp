@@ -19,8 +19,8 @@
 #include <bcos-gateway/libnetwork/ASIOInterface.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Host.h>
-#include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h>
+#include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-gateway/libp2p/Service.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
@@ -596,7 +596,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         GatewayP2PReloadHandler::config = _config;
         GatewayP2PReloadHandler::service = service;
         // register SIGUSR1 for reload connected p2p nodes config
-        signal(SIGUSR1, GatewayP2PReloadHandler::handle);
+        signal(GATEWAY_RELOAD_P2P_CONFIG, GatewayP2PReloadHandler::handle);
 
         BCOS_LOG(INFO) << LOG_DESC("register SIGUSR1 sig for reload p2p connected nodes config");
 

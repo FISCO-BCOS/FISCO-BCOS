@@ -132,7 +132,7 @@ void SchedulerServiceApp::initConfig()
     {
         m_logInitializer->setLogPath(getLogPath());
     }
-    m_logInitializer->initLog(pt);
+    m_logInitializer->initLog(m_iniConfigPath);
 
     m_nodeConfig =
         std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
