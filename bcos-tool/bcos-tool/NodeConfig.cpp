@@ -509,32 +509,16 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     try
     {
         m_smCryptoType = _pt.get<bool>("chain.sm_crypto");
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "sm_crypto is null, please set chain.sm_crypto to positive!"));
-    }
-    if(!_enforceGroupId)
-    {
-        try
+        if (!_enforceGroupId)
         {
             m_groupId = _pt.get<std::string>("chain.group_id");
         }
-        catch (std::exception const& e)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                "group_id is null, please set chain.group_id to positive!"));
-        }
-    }
-    try
-    {
         m_chainId = _pt.get<std::string>("chain.chain_id");
     }
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "chain_id is null, please set chain.chain_id to positive!"));
+            "config.genesis chainConfig parameter is null, please set it to positive!"));
     }
     if (!isalNumStr(m_chainId))
     {
@@ -872,29 +856,13 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     try
     {
         m_isWasm = _genesisConfig.get<bool>("executor.is_wasm");
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "is_wasm is null, please set executor.is_wasm to positive!"));
-    }
-    try
-    {
         m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check");
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "is_auth_check is null, please set executor.is_auth_check to positive!"));
-    }
-    try
-    {
         m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute");
     }
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "is_serial_execute is null, please set executor.is_serial_execute to positive!"));
+            "config.genesis executor section config parameter is null, please set it to positive!"));
     }
     if (m_isWasm && !m_isSerialExecute)
     {
@@ -920,13 +888,19 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                                 << LOG_DESC(
                                        "loadExecutorConfig wasm auth is not supported for now");
     }
-
-    m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
-    if(m_isAuthCheck && m_authAdminAddress.empty())
+    try
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "auth_admin_account is null, "
-            "please set correct auth_admin_account"));
+        m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
+
+    }
+    catch (std::exception const& e)
+    {
+        if(m_isAuthCheck)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                "auth_admin_account is null, "
+                "please set correct auth_admin_account"));
+        }
     }
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
