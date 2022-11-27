@@ -87,7 +87,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        loadChainConfig(_genesisConfig, false);
+        loadChainConfig(_genesisConfig, true);
     }
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
@@ -509,7 +509,7 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     try
     {
         m_smCryptoType = _pt.get<bool>("chain.sm_crypto");
-        if (!_enforceGroupId)
+        if (_enforceGroupId)
         {
             m_groupId = _pt.get<std::string>("chain.group_id");
         }
@@ -518,7 +518,7 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "config.genesis chainConfig parameter is null, please set it to positive!"));
+            "config.genesis chainConfig section parameter is null, please set it to positive!"));
     }
     if (!isalNumStr(m_chainId))
     {

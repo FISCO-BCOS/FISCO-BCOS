@@ -48,7 +48,7 @@ public:
     virtual ~NodeConfig() = default;
 
     virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
-        bool enforceChainConfig = false, bool enforceGroupId = false)
+        bool enforceChainConfig = false, bool enforceGroupId = true)
     {
         boost::property_tree::ptree iniConfig;
         boost::property_tree::read_ini(_configPath, iniConfig);
@@ -92,7 +92,7 @@ public:
     }
 
     virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
-        bool _enforceChainConfig = false, bool _enforceGroupId = false);
+        bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
     // the txpool configurations
