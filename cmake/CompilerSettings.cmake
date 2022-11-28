@@ -106,7 +106,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
 
         add_compile_options(-fPIC)
-        add_definitions(-DUSE_STD_RANGES)
+        # add_definitions(-DUSE_STD_RANGES)
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG "-O -g")

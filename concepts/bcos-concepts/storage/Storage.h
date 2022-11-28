@@ -1,34 +1,63 @@
 #pragma once
 
 #include "../Basic.h"
+#include "../ByteBuffer.h"
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Ranges.h>
 #include <type_traits>
 
 namespace bcos::concepts::storage
 {
 
+template <class KeyType>
+concept KeyLike = bytebuffer::ByteBuffer<KeyType>;
+template <class KeysType>
+concept Keys = RANGES::range<KeysType> && bytebuffer::ByteBuffer<RANGES::range_value_t<KeysType>>;
+
+template <class EntryType>
+concept EntryLike = std::same_as<EntryType, bcos::storage::Entry> || PointerLike<EntryType>;
+template <class KeysType>
+concept Entries = RANGES::range<KeysType> && EntryLike<RANGES::range_value_t<KeysType>>;
+
 template <class Impl>
 class StorageBase
 {
 public:
-    std::optional<bcos::storage::Entry> getRow(std::string_view table, std::string_view key)
+    task::Task<void> getRow(
+        bytebuffer::ByteBuffer auto const& tableName, KeyLike auto const& key, EntryLike auto& out)
     {
-        return impl().impl_getRow(table, key);
+        RANGES::single_view<decltype(key)> keys{bytebuffer::toView(key)};
+        RANGES::single_view<decltype(key)> entries(&out);
+
+        co_await impl().impl_getRows(tableName, keys, entries);
     }
 
-    std::vector<std::optional<bcos::storage::Entry>> getRows(
-        std::string_view table, RANGES::range auto&& keys)
+    task::Task<void> setRow(bytebuffer::ByteBuffer auto const& tableName, KeyLike auto const& key,
+        EntryLike auto const& entry)
     {
-        return impl().impl_getRows(table, std::forward<decltype(keys)>(keys));
+        RANGES::single_view<decltype(key)> keys{bytebuffer::toView(key)};
+        RANGES::single_view<decltype(key)> entries(&entry);
+
+        co_await impl().impl_setRow(tableName, keys, entries);
     }
 
-    void setRow(std::string_view table, std::string_view key, bcos::storage::Entry entry)
+    task::Task<void> getRows(
+        bytebuffer::ByteBuffer auto const& tableName, Keys auto const& keys, Entries auto& out)
     {
-        impl().impl_setRow(table, key, std::move(entry));
+        co_await impl().impl_getRows(tableName, keys, out);
     }
 
-    void createTable(std::string tableName) { impl().impl_createTable(std::move(tableName)); }
+    task::Task<void> setRows(bytebuffer::ByteBuffer auto const& tableName, Keys auto const& keys,
+        Entries auto const& entries)
+    {
+        co_await impl().impl_setRows(tableName, keys, entries);
+    }
+
+    task::Task<void> createTable(bytebuffer::ByteBuffer auto const& tableName)
+    {
+        co_await impl().impl_createTable(tableName);
+    }
 
 private:
     friend Impl;
