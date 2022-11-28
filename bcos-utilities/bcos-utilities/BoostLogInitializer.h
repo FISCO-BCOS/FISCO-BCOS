@@ -86,6 +86,12 @@ public:
     virtual ~BoostLogInitializer() { stopLogging(); }
     BoostLogInitializer() {}
 
+    void initLog(const std::string& _configFile, std::string const& _logger = bcos::FileLogger,
+        std::string const& _logPrefix = "log");
+
+    void initStatLog(const std::string& _configFile,
+        std::string const& _logger = bcos::StatFileLogger, std::string const& _logPrefix = "stat");
+
     void initLog(boost::property_tree::ptree const& _pt,
         std::string const& _logger = bcos::FileLogger, std::string const& _logPrefix = "log");
 
@@ -94,7 +100,7 @@ public:
 
     void stopLogging();
 
-    unsigned getLogLevel(std::string const& levelStr);
+    static unsigned getLogLevel(std::string const& levelStr);
 
     void setLogPath(std::string const& _logPath) { m_logPath = _logPath; }
     std::string logPath() const { return m_logPath; }

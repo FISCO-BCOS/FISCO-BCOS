@@ -94,7 +94,7 @@ protected:
             m_logInitializer->setLogPath(getLogPath());
         }
 
-        m_logInitializer->initLog(pt);
+        m_logInitializer->initLog(m_iniConfigPath);
         nodeConfig->loadServiceConfig(pt);
         // for stat the nodeVersion
         bcos::initializer::showNodeVersionMetric();
