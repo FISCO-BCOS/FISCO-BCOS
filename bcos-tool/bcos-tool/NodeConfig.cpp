@@ -930,6 +930,7 @@ int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt, std
     try
     {
         auto value = _pt.get<std::string>(_key);
+        return boost::lexical_cast<int64_t>(value);
     }
     catch (std::exception const& e)
     {
