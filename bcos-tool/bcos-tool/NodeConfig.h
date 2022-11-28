@@ -48,11 +48,11 @@ public:
     virtual ~NodeConfig() = default;
 
     virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
-        bool enforceChainConfig = false)
+        bool enforceChainConfig = false, bool enforceGroupId = true)
     {
         boost::property_tree::ptree iniConfig;
         boost::property_tree::read_ini(_configPath, iniConfig);
-        loadConfig(iniConfig, _enforceMemberID, enforceChainConfig);
+        loadConfig(iniConfig, _enforceMemberID, enforceChainConfig, enforceGroupId);
     }
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
@@ -92,7 +92,7 @@ public:
     }
 
     virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
-        bool _enforceChainConfig = false);
+        bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
     // the txpool configurations
@@ -223,7 +223,7 @@ public:
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
 protected:
-    virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayConfig(boost::property_tree::ptree const& _pt);
     virtual void loadCertConfig(boost::property_tree::ptree const& _pt);
@@ -372,5 +372,6 @@ private:
 
     // others config
     int m_sendTxTimeout = -1;
+    int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
 };
 }  // namespace bcos::tool
