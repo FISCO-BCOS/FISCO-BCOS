@@ -935,7 +935,7 @@ int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt, std
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "Invalid value " + value + " for configuration " + _key +
+            "Invalid value for configuration " + _key +
             ", please set the value with a valid number"));
     }
 }
