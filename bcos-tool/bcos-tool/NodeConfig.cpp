@@ -518,7 +518,7 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "config.genesis chainConfig section parameter is null, please set it to positive!"));
+            "config.genesis chain.sm_crypto/chain.group_id/chain.chain_id is null, please set it!"));
     }
     if (!isalNumStr(m_chainId))
     {
@@ -703,7 +703,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "consensus_type is null， please set consensus.consensus_type to positive!"));
+            "consensus.consensus_type is null， please set it!"));
     }
     // blockTxCountLimit
     auto blockTxCountLimit =
@@ -862,7 +862,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "config.genesis executor section config parameter is null, please set it to positive!"));
+            "executor.is_wasm/executor.is_auth_check/executor.is_serial_execute is null, please set it!"));
     }
     if (m_isWasm && !m_isSerialExecute)
     {
@@ -898,7 +898,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         if(m_isAuthCheck)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                "auth_admin_account is null, "
+                "executor.auth_admin_account is null, "
                 "please set correct auth_admin_account"));
         }
     }
