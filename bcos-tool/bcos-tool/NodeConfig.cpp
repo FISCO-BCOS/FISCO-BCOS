@@ -927,16 +927,9 @@ int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt,
 
 int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt, std::string const& _key)
 {
-    auto value = _pt.get<std::string>(_key);
-    if(value.empty())
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "Invalid value " + value + " for configuration " + _key +
-            ", please set the value with a valid number"));
-    }
     try
     {
-        return boost::lexical_cast<int64_t>(value);
+        auto value = _pt.get<std::string>(_key);
     }
     catch (std::exception const& e)
     {
