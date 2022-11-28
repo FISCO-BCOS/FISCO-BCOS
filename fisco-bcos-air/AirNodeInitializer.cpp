@@ -43,7 +43,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     boost::property_tree::read_ini(_configFilePath, pt);
 
     m_logInitializer = std::make_shared<BoostLogInitializer>();
-    m_logInitializer->initLog(pt);
+    m_logInitializer->initLog(_configFilePath);
     INITIALIZER_LOG(INFO) << LOG_DESC("initGlobalConfig");
 
     // load nodeConfig

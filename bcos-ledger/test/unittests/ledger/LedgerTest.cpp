@@ -84,7 +84,7 @@ public:
     bcos::Error::Ptr setRows(std::string_view table,
         const std::variant<const gsl::span<std::string_view const>,
             const gsl::span<std::string const>>& keys,
-        std::variant<gsl::span<std::string_view const >, gsl::span<std::string const>> values)
+        std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>> values)
     {
         std::visit(
             [&](auto&& keys, auto&& values) {
@@ -805,6 +805,16 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block->receiptsSize(), 0);
             p7.set_value(true);
         });
+    std::promise<bool> p8;
+    auto f8 = p8.get_future();
+    m_ledger->asyncGetBlockDataByNumber(
+        15, TRANSACTIONS_HASH, [=, &p8](Error::Ptr _error, Block::Ptr _block) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(_block->transactionsSize(), 0);
+            BOOST_CHECK_EQUAL(_block->receiptsSize(), 0);
+            BOOST_TEST(_block->transactionsMetaDataSize() != 0);
+            p8.set_value(true);
+        });
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(ff1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -813,6 +823,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     BOOST_CHECK_EQUAL(f5.get(), true);
     BOOST_CHECK_EQUAL(f6.get(), true);
     BOOST_CHECK_EQUAL(f7.get(), true);
+    BOOST_CHECK_EQUAL(f8.get(), true);
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionByHash)
