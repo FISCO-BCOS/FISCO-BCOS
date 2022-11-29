@@ -339,7 +339,7 @@ download_bin()
         LOG_INFO "Use binary ${binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
+    if [ "${x86_64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64 or macOS. Please compile from source."; fi
     binary_path="bin/${binary_name}"
     package_name="${binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
@@ -491,7 +491,7 @@ Usage:
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
-    -D <docker mode>                    Default off. If set -d, build with docker
+    -D <docker mode>                    Default off. If set -D, build with docker
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
