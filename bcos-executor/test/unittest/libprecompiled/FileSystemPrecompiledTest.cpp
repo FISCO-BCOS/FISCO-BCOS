@@ -304,7 +304,7 @@ public:
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result4->data().toBytes() == codec->encode(int32_t(_errorCode)));
         }
 
         commitBlock(_number);
@@ -1096,6 +1096,66 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
     {
         auto result = mkdir(_number++, "/tables", 0, true);
         BOOST_CHECK(result->data().toBytes() == codec->encode(s256((int)CODE_FILE_ALREADY_EXIST)));
+    }
+
+    // mkdir in wrong path
+    {
+        auto result = mkdir(_number++, "/sys/test1", CODE_FILE_INVALID_PATH);
+        auto result2 = mkdir(_number++, "/user/test1", CODE_FILE_INVALID_PATH);
+        auto result3 = mkdir(_number++, "/test1", CODE_FILE_INVALID_PATH);
+    }
+
+    // mkdir invalid path
+    {
+        mkdir(_number++, "", CODE_FILE_INVALID_PATH);
+        std::stringstream errorPath;
+        errorPath << std::setfill('0') << std::setw(56) << 1;
+        mkdir(_number++, "/" + errorPath.str(), CODE_FILE_INVALID_PATH);
+        mkdir(_number++, "/path/level/too/deep/not/over/six/", CODE_FILE_INVALID_PATH);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(mkdirWasmTest)
+{
+    init(true);
+    BlockNumber _number = 3;
+    // simple mkdir
+    {
+        auto result = mkdir(_number++, "/tables/temp/test");
+        s256 m;
+        codec->decode(result->data(), m);
+        BOOST_TEST(m == 0u);
+
+        auto lsResult = list(_number++, "/tables");
+        std::vector<BfsTuple> ls;
+        s256 code;
+        codec->decode(lsResult->data(), code, ls);
+        BOOST_CHECK(code == (int)CODE_SUCCESS);
+        BOOST_CHECK(ls.size() == 3);
+
+        auto lsResult2 = list(_number++, "/tables/temp");
+        std::vector<BfsTuple> ls2;
+        codec->decode(lsResult2->data(), code, ls2);
+        BOOST_CHECK(ls2.size() == 1);
+        BOOST_CHECK(std::get<0>(ls2[0]) == "test");
+        BOOST_CHECK(std::get<1>(ls2[0]) == executor::FS_TYPE_DIR);
+    }
+
+    // mkdir /tables/test1/test
+    {
+        auto result = mkdir(_number++, "/tables/test1/test", CODE_FILE_BUILD_DIR_FAILED);
+    }
+
+    // mkdir /tables/test1
+    {
+        auto result = mkdir(_number++, "/tables/test1", 0, true);
+        BOOST_CHECK(result->data().toBytes() == codec->encode((int32_t)CODE_FILE_ALREADY_EXIST));
+    }
+
+    // mkdir /tables
+    {
+        auto result = mkdir(_number++, "/tables", 0, true);
+        BOOST_CHECK(result->data().toBytes() == codec->encode((int32_t)CODE_FILE_ALREADY_EXIST));
     }
 
     // mkdir in wrong path
