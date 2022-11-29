@@ -1324,7 +1324,9 @@ generate_common_ini() {
     ; info debug trace
     level=info
     ; MB
-    max_log_file_size=200
+    max_log_file_size=1024
+    ; rotate the log every hour
+    ;enable_rotate_by_hour=true
 EOF
 }
 
