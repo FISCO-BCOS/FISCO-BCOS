@@ -29,8 +29,8 @@
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/sync/SyncConfig.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-utilities/CallbackCollectionHandler.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/CallbackCollectionHandler.h>
 
 namespace bcos
 {
@@ -138,6 +138,8 @@ public:
 
     bool masterNode() const { return m_masterNode; }
 
+    bcos::protocol::BlockNumber archiveBlockNumber() const;
+
 protected:
     void setHash(bcos::crypto::HashType const& _hash);
 
@@ -176,8 +178,6 @@ private:
     std::atomic<size_t> m_downloadTimeout = (200 * m_maxRequestBlocks);
 
     std::atomic<size_t> m_maxShardPerPeer = {2};
-    std::atomic<bcos::protocol::BlockNumber> m_archivedNumber = {0};
-
     std::atomic<bcos::protocol::BlockNumber> m_committedProposalNumber = {0};
 
     // TODO: ensure thread-safe

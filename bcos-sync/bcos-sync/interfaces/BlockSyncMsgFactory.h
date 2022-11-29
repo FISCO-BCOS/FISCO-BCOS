@@ -19,10 +19,10 @@
  * @date 2021-05-23
  */
 #pragma once
-#include "bcos-sync/utilities/Common.h"
 #include "bcos-sync/interfaces/BlockRequestInterface.h"
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/interfaces/BlocksMsgInterface.h"
+#include "bcos-sync/utilities/Common.h"
 namespace bcos
 {
 namespace sync
@@ -41,14 +41,15 @@ public:
         BlockSyncMsgInterface::Ptr _msg) = 0;
     virtual BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(
         bcos::protocol::BlockNumber _number, bcos::crypto::HashType const& _hash,
-        bcos::crypto::HashType const& _gensisHash,int32_t _version = 0, 
-        int64_t const time = utcTime())
+        bcos::crypto::HashType const& _gensisHash, int32_t _version = 0,
+        bcos::protocol::BlockNumber _archivedNumber = 0, int64_t const time = utcTime())
     {
         auto statusMsg = createBlockSyncStatusMsg(_version);
         statusMsg->setNumber(_number);
         statusMsg->setHash(_hash);
         statusMsg->setGenesisHash(_gensisHash);
         statusMsg->setTime(time);
+        statusMsg->setArchivedNumber(_archivedNumber);
         return statusMsg;
     }
 
