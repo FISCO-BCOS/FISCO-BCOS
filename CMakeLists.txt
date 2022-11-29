@@ -44,7 +44,7 @@ if(FULLNODE)
     endif()
     include(ProjectGroupSig)
 
-    if(USE_HSM_SDF)
+    if(WITH_HSM_SDF)
         include(ProjectSDF)
     endif()
 
