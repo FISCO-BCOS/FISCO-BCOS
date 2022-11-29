@@ -641,14 +641,27 @@ int main(int argc, const char* argv[])
             cout << "current block number is " << number << endl;
         });
     auto currentBlockNumber = promise.get_future().get();
-
     // verify the start and end block number, the genesis block should not be archived and the end
     // block number should not be larger than the latest block number
     if (startBlockNumber <= 0 || startBlockNumber >= currentBlockNumber || endBlockNumber <= 0 ||
         endBlockNumber >= currentBlockNumber || startBlockNumber >= endBlockNumber)
     {
-        cout << "invalid block number, start: " << startBlockNumber << ", end: " << endBlockNumber
+        cerr << "invalid block number, start: " << startBlockNumber << ", end: " << endBlockNumber
              << ", current: " << currentBlockNumber << endl;
+        return 1;
+    }
+    // read archived block number to check the request range
+    std::promise<std::pair<Error::Ptr, ledger::CurrentState>> statePromise;
+    ledger->asyncGetCurrentState(
+        [&statePromise](const Error::Ptr& err, ledger::CurrentState state) {
+            statePromise.set_value(std::make_pair(err, state));
+        });
+    auto archivedBlockNumber = statePromise.get_future().get().second.archivedNumber;
+    if (isArchive && startBlockNumber < archivedBlockNumber)
+    {
+        cerr << "the block range [" << startBlockNumber << "," << archivedBlockNumber
+             << ") has been archived, the start block number should be " << archivedBlockNumber
+             << endl;
         return 1;
     }
     StorageInterface::Ptr archiveStorage = nullptr;

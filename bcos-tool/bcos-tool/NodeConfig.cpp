@@ -87,7 +87,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        loadChainConfig(_genesisConfig, false);
+        loadChainConfig(_genesisConfig, true);
     }
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
@@ -509,32 +509,16 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     try
     {
         m_smCryptoType = _pt.get<bool>("chain.sm_crypto");
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "sm_crypto is null, please set chain.sm_crypto to positive!"));
-    }
-    if(!_enforceGroupId)
-    {
-        try
+        if (_enforceGroupId)
         {
             m_groupId = _pt.get<std::string>("chain.group_id");
         }
-        catch (std::exception const& e)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                "group_id is null, please set chain.group_id to positive!"));
-        }
-    }
-    try
-    {
         m_chainId = _pt.get<std::string>("chain.chain_id");
     }
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "chain_id is null, please set chain.chain_id to positive!"));
+            "config.genesis chain.sm_crypto/chain.group_id/chain.chain_id is null, please set it!"));
     }
     if (!isalNumStr(m_chainId))
     {
@@ -719,7 +703,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "consensus_type is null， please set consensus.consensus_type to positive!"));
+            "consensus.consensus_type is null， please set it!"));
     }
     // blockTxCountLimit
     auto blockTxCountLimit =
@@ -872,29 +856,13 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     try
     {
         m_isWasm = _genesisConfig.get<bool>("executor.is_wasm");
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "is_wasm is null, please set executor.is_wasm to positive!"));
-    }
-    try
-    {
         m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check");
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "is_auth_check is null, please set executor.is_auth_check to positive!"));
-    }
-    try
-    {
         m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute");
     }
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "is_serial_execute is null, please set executor.is_serial_execute to positive!"));
+            "executor.is_wasm/executor.is_auth_check/executor.is_serial_execute is null, please set it!"));
     }
     if (m_isWasm && !m_isSerialExecute)
     {
@@ -920,13 +888,19 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                                 << LOG_DESC(
                                        "loadExecutorConfig wasm auth is not supported for now");
     }
-
-    m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
-    if(m_isAuthCheck && m_authAdminAddress.empty())
+    try
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "auth_admin_account is null, "
-            "please set correct auth_admin_account"));
+        m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
+
+    }
+    catch (std::exception const& e)
+    {
+        if(m_isAuthCheck)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                "executor.auth_admin_account is null, "
+                "please set correct auth_admin_account"));
+        }
     }
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
@@ -953,21 +927,15 @@ int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt,
 
 int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt, std::string const& _key)
 {
-    auto value = _pt.get<std::string>(_key);
-    if(value.empty())
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "Invalid value " + value + " for configuration " + _key +
-            ", please set the value with a valid number"));
-    }
     try
     {
+        auto value = _pt.get<std::string>(_key);
         return boost::lexical_cast<int64_t>(value);
     }
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "Invalid value " + value + " for configuration " + _key +
+            "Invalid value for configuration " + _key +
             ", please set the value with a valid number"));
     }
 }

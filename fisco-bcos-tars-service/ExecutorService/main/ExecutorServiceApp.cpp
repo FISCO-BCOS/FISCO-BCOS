@@ -80,7 +80,7 @@ void ExecutorServiceApp::createAndInitExecutor()
     {
         m_logInitializer->setLogPath(getLogPath());
     }
-    m_logInitializer->initLog(pt);
+    m_logInitializer->initLog(m_iniConfigPath);
 
     boost::property_tree::ptree genesisPt;
     boost::property_tree::read_ini(m_genesisConfigPath, genesisPt);
@@ -155,14 +155,15 @@ void ExecutorServiceApp::createAndInitExecutor()
     m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
 
     std::weak_ptr<bcos::executor::SwitchExecutorManager> executorWeakPtr = m_executor;
-    std::weak_ptr<bcos::storage::TiKVStorage> storageWeakPtr = dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage);
+    std::weak_ptr<bcos::storage::TiKVStorage> storageWeakPtr =
+        dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage);
     auto switchHandler = [executor = executorWeakPtr, storageWeakPtr]() {
         if (executor.lock())
         {
             executor.lock()->triggerSwitch();
         }
         auto storage = storageWeakPtr.lock();
-        if(storage)
+        if (storage)
         {
             storage->reset();
         }

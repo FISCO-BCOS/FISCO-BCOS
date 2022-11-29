@@ -167,7 +167,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     boost::property_tree::read_ini(configFile, configProperty);
 
     auto logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    logInitializer->initLog(configProperty);
+    logInitializer->initLog(configFile);
 
     g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 

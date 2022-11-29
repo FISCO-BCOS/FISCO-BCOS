@@ -19,6 +19,8 @@
  * @author: yujiechen
  */
 #include "BoostLogInitializer.h"
+#include "bcos-framework/bcos-framework/Common.h"
+#include "bcos-utilities/BoostLog.h"
 #include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/core/core.hpp>
@@ -29,6 +31,37 @@ using namespace bcos;
 
 namespace logging = boost::log;
 namespace expr = boost::log::expressions;
+
+// register SIGUSE2 for dynamic reset log level
+struct BoostLogLevelResetHandler
+{
+    static void handle(int sig)
+    {
+        BCOS_LOG(INFO) << LOG_BADGE("BoostLogInitializer::Signal")
+                       << LOG_DESC("receive SIGUSE2 sig");
+
+        try
+        {
+            boost::property_tree::ptree pt;
+            boost::property_tree::read_ini(configFile, pt);
+
+            auto logLevelStr = pt.get<std::string>("log.level", "info");
+            /// set log level
+            unsigned logLevel = bcos::BoostLogInitializer::getLogLevel(logLevelStr);
+
+            setFileLogLevel((LogLevel)logLevel);
+
+            BCOS_LOG(INFO) << LOG_BADGE("BoostLogInitializer::Signal") << LOG_DESC("set log level")
+                           << LOG_KV("logLevelStr", logLevelStr) << LOG_KV("logLevel", logLevel);
+        }
+        catch (...)
+        {}
+    }
+
+    static std::string configFile;
+};
+
+std::string BoostLogLevelResetHandler::configFile;
 
 /// handler to solve log rotate
 bool BoostLogInitializer::canRotate(size_t const& _index)
@@ -89,6 +122,29 @@ BoostLogInitializer::initConsoleLogSink(
     boost::log::core::get()->set_logging_enabled(enable_log);
     return consoleSink;
 }
+
+void BoostLogInitializer::initLog(
+    const std::string& _configFile, std::string const& _logger, std::string const& _logPrefix)
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_ini(_configFile, pt);
+
+    initLog(pt, _logger, _logPrefix);
+
+    // register SIGUSR2 for reset boost log level
+    BoostLogLevelResetHandler::configFile = _configFile;
+    signal(BOOST_LOG_RELOAD_LOG_LEVEL, BoostLogLevelResetHandler::handle);
+}
+
+void BoostLogInitializer::initStatLog(
+    const std::string& _configFile, std::string const& _logger, std::string const& _logPrefix)
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_ini(_configFile, pt);
+
+    return initStatLog(pt, _logger, _logPrefix);
+}
+
 /**
  * @brief: set log for specified channel
  *
@@ -142,8 +198,7 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLo
     sink->locked_backend()->auto_flush(need_flush);
 
 
-    sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
-                     boost::log::trivial::severity >= _logLevel);
+    sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel);
 
 
     boost::log::core::get()->add_sink(sink);

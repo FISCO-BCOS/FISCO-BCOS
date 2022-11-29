@@ -354,7 +354,8 @@ void bcos::rpc::toJsonResp(
 
     // header
     toJsonResp(jResp, _blockPtr->blockHeader());
-    auto txSize = _blockPtr->transactionsSize();
+    auto txSize =
+        _onlyTxHash ? _blockPtr->transactionsMetaDataSize() : _blockPtr->transactionsSize();
 
     Json::Value jTxs(Json::arrayValue);
     for (std::size_t index = 0; index < txSize; ++index)
@@ -364,7 +365,7 @@ void bcos::rpc::toJsonResp(
         {
             // Note: should not call transactionHash for in the common cases transactionHash maybe
             // empty
-            jTx = toHexStringWithPrefix(_blockPtr->transaction(index)->hash());
+            jTx = toHexStringWithPrefix(_blockPtr->transactionMetaData(index)->hash());
         }
         else
         {
@@ -718,8 +719,11 @@ void JsonRpcImpl_2_0::getBlockByNumber(std::string_view _groupID, std::string_vi
     auto nodeService = getNodeService(_groupID, _nodeName, "getBlockByNumber");
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
-    ledger->asyncGetBlockDataByNumber(_blockNumber,
-        _onlyHeader ? bcos::ledger::HEADER : bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS,
+    auto flag = _onlyHeader ?
+                    bcos::ledger::HEADER :
+                    (_onlyTxHash ? bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH :
+                                   bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
+    ledger->asyncGetBlockDataByNumber(_blockNumber, flag,
         [_blockNumber, _onlyHeader, _onlyTxHash, m_respFunc = std::move(_respFunc)](
             Error::Ptr _error, protocol::Block::Ptr _block) {
             Json::Value jResp;
