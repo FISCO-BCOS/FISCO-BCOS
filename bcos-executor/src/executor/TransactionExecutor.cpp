@@ -227,6 +227,10 @@ void TransactionExecutor::initEvmEnvironment()
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_ADDRESS, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+
+    // test precompiled
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
 }
 
 void TransactionExecutor::initWasmEnvironment()
@@ -273,12 +277,15 @@ void TransactionExecutor::initWasmEnvironment()
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_NAME, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+
+    // test precompiled
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
 }
 
-void TransactionExecutor::initTestPrecompiled(storage::StorageInterface::Ptr storage)
+void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)
 {
-    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::createTable(storage);
     DagTransferPrecompiled::createDagTable(storage);
 }
 
@@ -401,7 +408,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
             if (blockHeader->number() == 0)
             {
-                initTestPrecompiled(stateStorage);
+                initTestPrecompiledTable(stateStorage);
             }
         }
 
