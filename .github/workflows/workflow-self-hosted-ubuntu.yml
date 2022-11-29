@@ -77,4 +77,6 @@ jobs:
         run: cd tools && bash .ci/ci_check_air.sh
       - name: Integration test - Pro
         run: cd tools && bash .ci/ci_check_pro.sh
+      - name: Integration test - Max
+        run: cd tools && bash .ci/ci_check_max.sh
 

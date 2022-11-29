@@ -63,8 +63,17 @@ jobs:
       - name: Test
         run: 
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
-
+      - name: Install tiup
+        run: |
+        export PATH=/home/ci/.tiup/bin/:$PATH
+          cat /home/ci/.bashrc
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/ci/.bashrc
+          tiup update --self && tiup update playground
+          tiup install playground tikv:v5.4.2 pd:v5.4.2
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh
       - name: Integration test - Pro
         run: cd tools && bash .ci/ci_check_pro.sh
+      - name: Integration test - Max
+        run: cd tools && bash .ci/ci_check_max.sh
