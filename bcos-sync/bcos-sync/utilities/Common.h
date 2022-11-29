@@ -41,7 +41,9 @@ enum SyncState : int32_t
 enum class BlockSyncMsgVersion
 {
     v0,
-    v1
+    v1,
+    // v2 add archived number
+    v2
 };
 }  // namespace sync
 }  // namespace bcos

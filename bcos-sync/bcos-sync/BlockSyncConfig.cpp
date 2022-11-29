@@ -172,3 +172,13 @@ bool BlockSyncConfig::existNode(bcos::consensus::ConsensusNodeListPtr const& _no
     }
     return false;
 }
+
+bcos::protocol::BlockNumber BlockSyncConfig::archiveBlockNumber() const
+{
+    std::promise<std::pair<Error::Ptr, ledger::CurrentState>> statePromise;
+    m_ledger->asyncGetCurrentState(
+        [&statePromise](const Error::Ptr& err, ledger::CurrentState state) {
+            statePromise.set_value(std::make_pair(err, state));
+        });
+    return statePromise.get_future().get().second.archivedNumber;
+}
