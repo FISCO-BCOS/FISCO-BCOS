@@ -318,7 +318,7 @@ protected:
     bcos::ThreadPool::Ptr m_threadPool;
     void initEvmEnvironment();
     void initWasmEnvironment();
-    void initTestPrecompiled(storage::StorageInterface::Ptr storage);
+    void initTestPrecompiledTable(storage::StorageInterface::Ptr storage);
 
     std::function<void()> f_onNeedSwitchEvent;
 
