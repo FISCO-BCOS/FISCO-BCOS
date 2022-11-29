@@ -676,7 +676,6 @@ void BlockSync::fetchAndSendBlock(
                     << LOG_DESC("fetchAndSendBlock failed for asyncGetBlockDataByNumber failed")
                     << LOG_KV("number", _number) << LOG_KV("errorCode", _error->errorCode())
                     << LOG_KV("errorMessage", _error->errorMessage());
-                _reqQueue->push(_number, 1);
                 return;
             }
             try

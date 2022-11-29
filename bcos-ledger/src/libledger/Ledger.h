@@ -99,6 +99,11 @@ public:
 
     void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
+
+    void asyncGetCurrentState(
+        std::function<void(Error::Ptr, const CurrentState&)>
+            _callback);
+
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Table>& table, const std::string_view& tableName);
