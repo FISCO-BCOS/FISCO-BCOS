@@ -217,9 +217,12 @@ void TransactionExecutor::initEvmEnvironment()
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
     }
 
-    m_constantPrecompiled->insert(
-        {ACCOUNT_MGR_ADDRESS, std::make_shared<AccountManagerPrecompiled>()});
-    m_constantPrecompiled->insert({ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>()});
+    if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    {
+        m_constantPrecompiled->insert(
+            {ACCOUNT_MGR_ADDRESS, std::make_shared<AccountManagerPrecompiled>()});
+        m_constantPrecompiled->insert({ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>()});
+    }
 
     m_constantPrecompiled->insert(
         {GROUP_SIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
@@ -278,9 +281,12 @@ void TransactionExecutor::initWasmEnvironment()
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
     }
 
-    m_constantPrecompiled->insert(
-        {ACCOUNT_MANAGER_NAME, std::make_shared<AccountManagerPrecompiled>()});
-    m_constantPrecompiled->insert({ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>()});
+    if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    {
+        m_constantPrecompiled->insert(
+            {ACCOUNT_MANAGER_NAME, std::make_shared<AccountManagerPrecompiled>()});
+        m_constantPrecompiled->insert({ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>()});
+    }
 
     set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
