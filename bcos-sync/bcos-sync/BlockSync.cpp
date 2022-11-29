@@ -649,11 +649,21 @@ void BlockSync::maintainBlockRequest()
         {
             auto blocksReq = reqQueue->topAndPop();
             BlockNumber numberLimit = blocksReq->fromNumber() + blocksReq->size();
+
             BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download Request: response blocks")
                                << LOG_KV("from", blocksReq->fromNumber())
                                << LOG_KV("size", blocksReq->size()) << LOG_KV("to", numberLimit - 1)
                                << LOG_KV("peer", _p->nodeId()->shortHex());
-            for (BlockNumber number = blocksReq->fromNumber(); number < numberLimit; number++)
+            // read archived block number to check the request range
+            std::promise<std::pair<Error::Ptr, ledger::CurrentState>> statePromise;
+            m_config->ledger()->asyncGetCurrentState(
+                [&statePromise](const Error::Ptr& err, ledger::CurrentState state) {
+                    statePromise.set_value(std::make_pair(err, state));
+                });
+            // the number less than archived block number is not exist
+            auto archivedBlockNumber = statePromise.get_future().get().second.archivedNumber;
+            BlockNumber startNumber = std::max(blocksReq->fromNumber(), archivedBlockNumber);
+            for (BlockNumber number = startNumber; number < numberLimit; number++)
             {
                 fetchAndSendBlock(reqQueue, _p->nodeId(), number);
             }
