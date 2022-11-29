@@ -466,6 +466,8 @@ void BlockSync::downloadFinish()
 {
     m_downloadingTimer->stop();
     m_state = SyncState::Idle;
+    // notify the worker to start next-round download
+    m_signalled.notify_all();
 }
 
 void BlockSync::tryToRequestBlocks()
