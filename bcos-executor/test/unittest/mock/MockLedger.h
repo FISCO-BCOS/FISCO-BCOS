@@ -103,6 +103,10 @@ public:
         BOOST_CHECK(false);  // Need implementations
     };
 
+    void asyncGetCurrentState(
+        std::function<void(Error::Ptr, const ledger::CurrentState&)> _callback) override
+    {}
+
 
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig) override

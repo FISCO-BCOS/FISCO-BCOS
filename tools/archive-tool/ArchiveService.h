@@ -145,9 +145,12 @@ public:
                     archivedNumber.importFields({std::to_string(endBlock)});
                     m_storage->asyncSetRow(ledger::SYS_CURRENT_STATE,
                         ledger::SYS_KEY_ARCHIVED_NUMBER, archivedNumber, [](Error::UniquePtr err) {
-                            ARCHIVE_SERVICE_LOG(WARNING)
-                                << LOG_BADGE("deleteArchivedData set archived number failed")
-                                << LOG_KV("message", err->errorMessage());
+                            if (err)
+                            {
+                                ARCHIVE_SERVICE_LOG(WARNING)
+                                    << LOG_BADGE("deleteArchivedData set archived number failed")
+                                    << LOG_KV("message", err->errorMessage());
+                            }
                         });
                     callback(nullptr, result);
                 }
@@ -245,25 +248,25 @@ public:
                     bcos::rpc::JsonRpcException(bcos::rpc::JsonRpcError::MethodNotFound,
                         "The method does not exist/is not available."));
             }
-            it->second(request.params,
-                [_requestBody, response, _sender](const Error::Ptr& _error, Json::Value& _result) mutable {
-                    if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
-                    {
-                        // error
-                        response.error.code = _error->errorCode();
-                        response.error.message = _error->errorMessage();
-                    }
-                    else
-                    {
-                        response.result.swap(_result);
-                    }
-                    auto strResp = bcos::rpc::toStringResponse(std::move(response));
-                    ARCHIVE_SERVICE_LOG(TRACE)
-                        << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
-                        << LOG_KV("response",
-                               std::string_view((const char*)strResp.data(), strResp.size()));
-                    _sender(std::move(strResp));
-                });
+            it->second(request.params, [_requestBody, response, _sender](
+                                           const Error::Ptr& _error, Json::Value& _result) mutable {
+                if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
+                {
+                    // error
+                    response.error.code = _error->errorCode();
+                    response.error.message = _error->errorMessage();
+                }
+                else
+                {
+                    response.result.swap(_result);
+                }
+                auto strResp = bcos::rpc::toStringResponse(std::move(response));
+                ARCHIVE_SERVICE_LOG(TRACE)
+                    << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
+                    << LOG_KV("response",
+                           std::string_view((const char*)strResp.data(), strResp.size()));
+                _sender(std::move(strResp));
+            });
 
             // success response
             return;
