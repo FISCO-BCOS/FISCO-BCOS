@@ -68,7 +68,7 @@ public:
                 auto endBlock = request[1].asInt64();
                 std::promise<std::pair<Error::Ptr, bcos::protocol::BlockNumber>> promise;
                 m_ledger->asyncGetBlockNumber(
-                    [&promise](Error::Ptr err, bcos::protocol::BlockNumber number) {
+                    [&promise](const Error::Ptr& err, bcos::protocol::BlockNumber number) {
                         promise.set_value(std::make_pair(err, number));
                     });
                 auto ret = promise.get_future().get();
@@ -84,12 +84,44 @@ public:
                     return;
                 }
                 auto currentBlock = ret.second;
-                if (startBlock > currentBlock || endBlock > currentBlock || startBlock > endBlock)
+                if (startBlock > currentBlock || endBlock > currentBlock || startBlock > endBlock ||
+                    startBlock <= 0)
                 {
                     result["status"] = "error, invalid block range";
                     ARCHIVE_SERVICE_LOG(WARNING)
                         << LOG_BADGE("deleteArchivedData invalid range")
-                        << LOG_KV("start", startBlock) << LOG_KV("end", endBlock);
+                        << LOG_KV("start", startBlock) << LOG_KV("end", endBlock)
+                        << LOG_KV("current", currentBlock);
+                    callback(nullptr, result);
+                    return;
+                }
+                // read archived block number to check the request range
+                std::promise<std::pair<Error::Ptr, ledger::CurrentState>> statePromise;
+                m_ledger->asyncGetCurrentState(
+                    [&statePromise](const Error::Ptr& err, ledger::CurrentState state) {
+                        statePromise.set_value(std::make_pair(err, state));
+                    });
+                if (ret.first)
+                {
+                    result["status"] =
+                        "error, get current state failed, " + ret.first->errorMessage();
+                    ARCHIVE_SERVICE_LOG(WARNING)
+                        << LOG_BADGE("deleteArchivedData get current state failed")
+                        << LOG_KV("message", ret.first->errorMessage());
+                    callback(nullptr, result);
+                    return;
+                }
+                auto archivedNumber = statePromise.get_future().get().second.archivedNumber;
+                if (archivedNumber > 0 && startBlock != archivedNumber)
+                {
+                    result["status"] = "error, start block is not equal to archived block, " +
+                                       std::to_string(startBlock) +
+                                       " != " + std::to_string(archivedNumber);
+                    ARCHIVE_SERVICE_LOG(WARNING)
+                        << LOG_BADGE(
+                               "deleteArchivedData start block is not equal to archived block")
+                        << LOG_KV("startBlock", startBlock)
+                        << LOG_KV("archivedNumber", archivedNumber);
                     callback(nullptr, result);
                     return;
                 }
@@ -108,6 +140,18 @@ public:
                         << LOG_BADGE("deleteArchivedData success") << LOG_KV("start", startBlock)
                         << LOG_KV("end", endBlock);
                     result["status"] = "success";
+                    // update SYS_CURRENT_STATE SYS_KEY_ARCHIVED_NUMBER
+                    storage::Entry archivedNumber;
+                    archivedNumber.importFields({std::to_string(endBlock)});
+                    m_storage->asyncSetRow(ledger::SYS_CURRENT_STATE,
+                        ledger::SYS_KEY_ARCHIVED_NUMBER, archivedNumber, [](Error::UniquePtr err) {
+                            if (err)
+                            {
+                                ARCHIVE_SERVICE_LOG(WARNING)
+                                    << LOG_BADGE("deleteArchivedData set archived number failed")
+                                    << LOG_KV("message", err->errorMessage());
+                            }
+                        });
                     callback(nullptr, result);
                 }
             };
@@ -204,25 +248,25 @@ public:
                     bcos::rpc::JsonRpcException(bcos::rpc::JsonRpcError::MethodNotFound,
                         "The method does not exist/is not available."));
             }
-            it->second(request.params,
-                [_requestBody, response, _sender](Error::Ptr _error, Json::Value& _result) mutable {
-                    if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
-                    {
-                        // error
-                        response.error.code = _error->errorCode();
-                        response.error.message = _error->errorMessage();
-                    }
-                    else
-                    {
-                        response.result.swap(_result);
-                    }
-                    auto strResp = bcos::rpc::toStringResponse(std::move(response));
-                    ARCHIVE_SERVICE_LOG(TRACE)
-                        << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
-                        << LOG_KV("response",
-                               std::string_view((const char*)strResp.data(), strResp.size()));
-                    _sender(std::move(strResp));
-                });
+            it->second(request.params, [_requestBody, response, _sender](
+                                           const Error::Ptr& _error, Json::Value& _result) mutable {
+                if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
+                {
+                    // error
+                    response.error.code = _error->errorCode();
+                    response.error.message = _error->errorMessage();
+                }
+                else
+                {
+                    response.result.swap(_result);
+                }
+                auto strResp = bcos::rpc::toStringResponse(std::move(response));
+                ARCHIVE_SERVICE_LOG(TRACE)
+                    << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
+                    << LOG_KV("response",
+                           std::string_view((const char*)strResp.data(), strResp.size()));
+                _sender(std::move(strResp));
+            });
 
             // success response
             return;

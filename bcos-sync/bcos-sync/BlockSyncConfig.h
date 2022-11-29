@@ -29,8 +29,8 @@
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/sync/SyncConfig.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-utilities/CallbackCollectionHandler.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/CallbackCollectionHandler.h>
 
 namespace bcos
 {
@@ -45,7 +45,7 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
         bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
-        bcos::consensus::ConsensusInterface::Ptr _consensus, BlockSyncMsgFactory::Ptr _msgFactory, 
+        bcos::consensus::ConsensusInterface::Ptr _consensus, BlockSyncMsgFactory::Ptr _msgFactory,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
       : SyncConfig(_nodeId),
         m_ledger(_ledger),
@@ -138,6 +138,8 @@ public:
 
     bool masterNode() const { return m_masterNode; }
 
+    bcos::protocol::BlockNumber archiveBlockNumber() const;
+
 protected:
     void setHash(bcos::crypto::HashType const& _hash);
 
@@ -171,12 +173,11 @@ private:
 
     std::atomic<size_t> m_maxDownloadingBlockQueueSize = 256;
     std::atomic<size_t> m_maxDownloadRequestQueueSize = 1000;
-    std::atomic<size_t> m_downloadTimeout = (200 * m_maxDownloadingBlockQueueSize);
     // the max number of blocks this node can requested to
     std::atomic<size_t> m_maxRequestBlocks = {8};
+    std::atomic<size_t> m_downloadTimeout = (200 * m_maxRequestBlocks);
 
     std::atomic<size_t> m_maxShardPerPeer = {2};
-
     std::atomic<bcos::protocol::BlockNumber> m_committedProposalNumber = {0};
 
     // TODO: ensure thread-safe

@@ -1700,6 +1700,10 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     txFailedNumber.importFields({"0"});
     stateTable->setRow(SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(txFailedNumber));
 
+    Entry archivedNumber;
+    archivedNumber.importFields({"0"});
+    stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
+
     return true;
 }
 
@@ -1794,4 +1798,82 @@ std::optional<storage::Table> Ledger::buildDir(
     table->setRow(FS_ACL_BLACK, std::move(aclBEntry));
     table->setRow(FS_KEY_EXTRA, std::move(extraEntry));
     return table;
+}
+
+void Ledger::asyncGetCurrentState(std::function<void(Error::Ptr, const CurrentState&)> _callback)
+{
+    static std::string_view keys[] = {SYS_KEY_TOTAL_TRANSACTION_COUNT,
+        SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER, SYS_KEY_ARCHIVED_NUMBER};
+
+    m_storage->asyncOpenTable(SYS_CURRENT_STATE, [this, callback = std::move(_callback)](
+                                                     auto&& error, std::optional<Table>&& table) {
+        CurrentState result{0, 0, 0, 0};
+        auto tableError =
+            checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
+        if (tableError)
+        {
+            LEDGER_LOG(DEBUG) << "asyncGetCurrentState"
+                              << boost::diagnostic_information(*tableError);
+            callback(std::move(tableError), result);
+            return;
+        }
+        table->asyncGetRows(keys, [&result, &callback](
+                                      auto&& error, std::vector<std::optional<Entry>>&& entries) {
+            if (error)
+            {
+                LEDGER_LOG(DEBUG) << "asyncGetCurrentState"
+                                  << boost::diagnostic_information(*error);
+                callback(
+                    BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "Get row error", *error),
+                    result);
+                return;
+            }
+
+            size_t i = 0;
+            for (auto& entry : entries)
+            {
+                int64_t value = 0;
+                if (!entry && i != 3)
+                {
+                    LEDGER_LOG(WARNING) << "asyncGetCurrentState error" << LOG_KV("index", i)
+                                        << " empty" << LOG_KV("key", keys[i]);
+                }
+                else
+                {
+                    try
+                    {
+                        value = boost::lexical_cast<int64_t>(entry->getField(0));
+                    }
+                    catch (boost::bad_lexical_cast& e)
+                    {
+                        LEDGER_LOG(ERROR) << "Lexical cast transaction count failed, entry value: "
+                                          << entry->get();
+                        BOOST_THROW_EXCEPTION(e);
+                    }
+                }
+                switch (i++)
+                {
+                case 0:
+                    result.totalTransactionCount = value;
+                    break;
+                case 1:
+                    result.totalFailedTransactionCount = value;
+                    break;
+                case 2:
+                    result.latestBlockNumber = value;
+                    break;
+                case 3:
+                    result.archivedNumber = value;
+                    break;
+                }
+            }
+
+            LEDGER_LOG(TRACE) << "asyncGetCurrentState success"
+                              << LOG_KV("totalCount", result.totalTransactionCount)
+                              << LOG_KV("failedCount", result.totalFailedTransactionCount)
+                              << LOG_KV("blockNumber", result.latestBlockNumber)
+                              << LOG_KV("archivedNumber", result.archivedNumber);
+            callback(nullptr, result);
+        });
+    });
 }

@@ -232,6 +232,12 @@ public:
         _callback(nullptr, m_totalTxCount, 0, m_ledgerConfig->blockNumber());
     }
 
+    void asyncGetCurrentState(
+        std::function<void(Error::Ptr, const CurrentState&)> _callback) override
+    {
+        _callback(nullptr, CurrentState{0, 0, 0, 0});
+    }
+
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, BlockNumber)> _onGetConfig) override
     {
