@@ -1833,7 +1833,7 @@ void Ledger::asyncGetCurrentState(std::function<void(Error::Ptr, const CurrentSt
             for (auto& entry : entries)
             {
                 int64_t value = 0;
-                if (!entry)
+                if (!entry && i != 3)
                 {
                     LEDGER_LOG(WARNING) << "asyncGetCurrentState error" << LOG_KV("index", i)
                                         << " empty" << LOG_KV("key", keys[i]);

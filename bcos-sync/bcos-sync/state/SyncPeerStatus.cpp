@@ -46,7 +46,8 @@ PeerStatus::PeerStatus(
 bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 {
     UpgradableGuard l(x_mutex);
-    if (m_hash == _status->hash() && _status->number() == m_number)
+    if (m_hash == _status->hash() && _status->number() == m_number &&
+        m_archivedNumber == _status->archivedNumber())
     {
         return false;
     }
@@ -62,6 +63,7 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
     }
     UpgradeGuard ul(l);
     m_number = _status->number();
+    m_archivedNumber = _status->archivedNumber();
     m_hash = _status->hash();
     if (m_genesisHash == HashType())
     {
@@ -171,7 +173,7 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
 
     // Get nodeid list
     NodeIDs nodeIds;
-    for (auto& peer : m_peersStatus)
+    for (const auto& peer : m_peersStatus)
     {
         nodeIds.emplace_back(peer.first);
     }
@@ -184,7 +186,7 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
     }
 
     // access _f() according to the random list
-    for (auto nodeId : nodeIds)
+    for (const auto& nodeId : nodeIds)
     {
         auto const& peer = m_peersStatus.find(nodeId);
         if (peer == m_peersStatus.end())

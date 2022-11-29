@@ -51,6 +51,12 @@ public:
         return m_number;
     }
 
+    bcos::protocol::BlockNumber archivedNumber() const
+    {
+        ReadGuard l(x_mutex);
+        return m_archivedNumber;
+    }
+
     bcos::crypto::HashType const& hash() const
     {
         ReadGuard l(x_mutex);
@@ -68,6 +74,7 @@ public:
 private:
     bcos::crypto::PublicPtr m_nodeId;
     bcos::protocol::BlockNumber m_number;
+    bcos::protocol::BlockNumber m_archivedNumber;
     bcos::crypto::HashType m_hash;
     bcos::crypto::HashType m_genesisHash;
 
