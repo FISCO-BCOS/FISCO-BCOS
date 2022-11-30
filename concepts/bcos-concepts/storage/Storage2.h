@@ -29,6 +29,7 @@ template <class EntriesType>
 concept Entries = RANGES::range<EntriesType> &&
     std::same_as<RANGES::range_value_t<EntriesType>, bcos::storage::Entry>;
 
+// The class Impl only need impl_getRows and impl_setRows
 template <class Impl>
 class StorageBase
 {
@@ -50,7 +51,7 @@ public:
         RANGES::single_view<decltype(key)> keys{bytebuffer::toView(key)};
         RANGES::single_view<decltype(key)> entries(&entry);
 
-        co_await impl().impl_setRow(tableName, keys, entries);
+        co_await impl().impl_setRows(tableName, keys, entries);
     }
 
     task::Task<void> getRows(
@@ -67,7 +68,7 @@ public:
 
     task::Task<void> createTable(TableName auto const& tableName)
     {
-        co_await impl().impl_createTable(tableName);
+        // Impl it
     }
 
 private:
