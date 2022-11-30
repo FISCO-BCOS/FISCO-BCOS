@@ -5,5 +5,5 @@
 namespace RANGES = ::std::ranges;
 #else
 #include <range/v3/all.hpp>
-namespace RANGES = ::ranges::cpp20;
+namespace RANGES = ::ranges;
 #endif

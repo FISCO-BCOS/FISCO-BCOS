@@ -20,10 +20,10 @@ concept ByteBuffer = RANGES::contiguous_range<ByteBufferType> &&
     (sizeof(RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>) == 1);
 
 template <class Pointer>
-concept PointerLike = requires(Pointer p)
+concept PointerLike = requires(Pointer pointer)
 {
-    *p;
-    p.operator->();
+    *pointer;
+    pointer.operator->();
 };
 
 template <class Input>
