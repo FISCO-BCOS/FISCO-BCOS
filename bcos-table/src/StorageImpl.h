@@ -2,7 +2,7 @@
 
 #include "bcos-concepts/Basic.h"
 #include "bcos-concepts/ByteBuffer.h"
-#include <bcos-concepts/storage/Storage.h>
+#include <bcos-concepts/storage/Storage2.h>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
 #include <boost/multi_index/mem_fun.hpp>
@@ -14,6 +14,7 @@
 namespace bcos::storage
 {
 
+// TODO: Only for demo now
 template <bool withMRU>
 class StorageImpl : public concepts::storage::StorageBase<StorageImpl<withMRU>>
 {
@@ -79,12 +80,6 @@ public:
                 }
             }
         }
-    }
-
-    task::Task<void> impl_createTable(concepts::bytebuffer::ByteBuffer auto const& tableName)
-    {
-        // write table to sys_tables
-        co_return;
     }
 
 private:
