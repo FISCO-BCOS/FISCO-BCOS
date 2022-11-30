@@ -62,7 +62,6 @@ std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
 TiKVStorage::TiKVStorage(
     std::shared_ptr<tikv_client::TransactionClient> _cluster, int32_t _commitTimeout)
   : m_cluster(std::move(_cluster)),
-    m_lastCommitTimestamp(m_cluster->current_timestamp()),
     m_commitTimeout(_commitTimeout)
 {}
 
@@ -283,7 +282,6 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
                                   << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(WriteError, "asyncSetRow failed! ", e));
     }
-    m_lastCommitTimestamp = m_cluster->current_timestamp();
 }
 
 void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
@@ -457,7 +455,6 @@ void TiKVStorage::asyncCommit(
                 << LOG_KV("commitTS", params.timestamp) << LOG_KV("primaryCommitTS", ts)
                 << LOG_KV("time(ms)", end - start);
             lock.unlock();
-            m_lastCommitTimestamp = m_cluster->current_timestamp();
             callback(nullptr, ts);
         }
         else
@@ -569,10 +566,8 @@ bcos::Error::Ptr TiKVStorage::setRows(std::string_view table, std::vector<std::s
     catch (std::exception& e)
     {
         STORAGE_TIKV_LOG(WARNING) << LOG_DESC("setRows failed") << LOG_KV("what", e.what());
-        m_lastCommitTimestamp = m_cluster->current_timestamp();
         return BCOS_ERROR_WITH_PREV_PTR(WriteError, "setRows failed! ", e);
     }
-    m_lastCommitTimestamp = m_cluster->current_timestamp();
     return nullptr;
 }
 
@@ -585,7 +580,3 @@ void TiKVStorage::triggerSwitch()
     }
 }
 
-void TiKVStorage::reset()
-{
-    m_lastCommitTimestamp = m_cluster->current_timestamp();
-}
