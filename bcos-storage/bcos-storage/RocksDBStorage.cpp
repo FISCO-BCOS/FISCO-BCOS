@@ -226,7 +226,6 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                             }
                         }
                     });
-                auto decode = utcSteadyTime();
                 STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table);
                 _callback(nullptr, std::move(entries));
             },
