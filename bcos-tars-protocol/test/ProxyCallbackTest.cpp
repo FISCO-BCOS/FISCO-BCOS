@@ -52,7 +52,7 @@ BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
 
     std::string serviceName = "HelloApp.HelloServer.HelloObj";
 
-    TarsServantProxyCallback cb(serviceName);
+    TarsServantProxyCallback cb(serviceName, nullptr);
 
     int conCount = 0;
     cb.setOnConnectHandler([&conCount](const tars::TC_Endpoint& _ep) { conCount++; });
