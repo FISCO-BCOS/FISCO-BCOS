@@ -111,7 +111,7 @@ function check_PR_limit() {
         # exit 1
     fi
     local merges=$(git log --format=%s HEAD^..HEAD | grep -i merge | wc -l)
-    if [ ${merges} -gt 5 ]; then
+    if [ ${merges} -gt 10 ]; then
         LOG_ERROR "PR contain merge : ${merges}, Please rebase!"
         exit 1
     fi

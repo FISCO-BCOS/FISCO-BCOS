@@ -2,10 +2,7 @@
 #include "Task.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
-#include <new>
-#include <thread>
 #include <type_traits>
-#include <variant>
 
 namespace bcos::task
 {
