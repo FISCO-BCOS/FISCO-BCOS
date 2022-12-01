@@ -109,6 +109,8 @@ void SerialBlockExecutive::asyncExecute(
 
                 if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                 {
+                    SERIAL_EXECUTE_LOG(ERROR) << "Next block with error! SCHEDULER_TERM_ID_ERROR:"
+                                              << error->errorMessage() << ". trigger switch";
                     triggerSwitch();
                 }
                 return;

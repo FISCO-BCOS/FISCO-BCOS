@@ -355,7 +355,10 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                                          << "executeBlock error: " << error->what();
                     {
                         std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-                        m_blocks->pop_back();
+                        if (!m_blocks->empty() && m_blocks->back()->number() == requestBlockNumber)
+                        {
+                            m_blocks->pop_back();
+                        }
                         blocksLock.unlock();
                     }
                     executeLock->unlock();

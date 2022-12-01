@@ -225,10 +225,10 @@ void WsSession::asyncRead()
 
             if (_ec)
             {
-                BCOS_LOG(WARNING) << "[WS][SESSION]" << LOG_BADGE("asyncRead")
-                                  << LOG_KV("error", _ec.message())
-                                  << LOG_KV("endpoint", session->endPoint())
-                                  << LOG_KV("refCount", session.use_count());
+                BCOS_LOG(INFO) << "[WS][SESSION]" << LOG_BADGE("asyncRead")
+                               << LOG_KV("error", _ec.message())
+                               << LOG_KV("endpoint", session->endPoint())
+                               << LOG_KV("refCount", session.use_count());
 
                 return session->drop(WsError::ReadError);
             }
