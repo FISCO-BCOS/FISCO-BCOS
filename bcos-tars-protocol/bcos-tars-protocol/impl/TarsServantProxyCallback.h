@@ -24,6 +24,7 @@
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Timer.h"
 #include "servant/ServantProxy.h"
+#include <util/tc_autoptr.h>
 #include <boost/exception/detail/type_info.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
@@ -31,6 +32,7 @@
 #include <memory>
 #include <set>
 #include <shared_mutex>
+#include <utility>
 
 #define TARS_PING_PERIOD (3000)
 
@@ -50,7 +52,6 @@ using TarsServantProxyOnConnectHandler = std::function<void(const tars::TC_Endpo
 using TarsServantProxyOnCloseHandler = std::function<void(const tars::TC_Endpoint& ep)>;
 
 class TarsServantProxyCallback : public tars::ServantProxyCallback
-
 {
 public:
     using Ptr = std::shared_ptr<TarsServantProxyCallback>;
@@ -58,7 +59,9 @@ public:
     using UniquePtr = std::unique_ptr<const TarsServantProxyCallback>;
 
 public:
-    TarsServantProxyCallback(const std::string& _serviceName) : m_serviceName(_serviceName)
+    TarsServantProxyCallback(
+        const std::string& _serviceName, const tars::TC_AutoPtr<tars::ServantProxy>& _proxy)
+      : m_serviceName(_serviceName), m_proxy(_proxy)
     {
         BCOS_LOG(INFO) << LOG_BADGE("[NEWOBJ][TarsServantProxyCallback]")
                        << LOG_KV("_serviceName", _serviceName) << LOG_KV("this", this);
@@ -71,8 +74,8 @@ public:
 
     ~TarsServantProxyCallback() override
     {
-        // BCOS_LOG(INFO) << LOG_BADGE("[DELOBJ][TarsServantProxyCallback]") << LOG_KV("this",
-        // this);
+        BCOS_LOG(INFO) << LOG_BADGE("[DELOBJ][TarsServantProxyCallback]") << LOG_KV("this", this);
+        stop();
     }
 
 public:
@@ -83,7 +86,7 @@ public:
         try
         {
             auto p = addInactiveEndpoint(ep);
-            BCOS_LOG(INFO) << LOG_DESC("onClose:") << m_serviceName
+            BCOS_LOG(INFO) << LOG_DESC("onClose") << m_serviceName
                            << LOG_KV("endpoint", ep.toString())
                            << LOG_KV("inActiveEndPointSize", p.second);
             if (p.first && m_onCloseHandler)
@@ -111,8 +114,46 @@ public:
         }
     }
 
+    void heartbeat()
+    {
+        try
+        {
+            if (m_proxy)
+            {
+                m_proxy->tars_async_ping();
+            }
+        }
+        catch (...)
+        {}
+    }
+
+    void start()
+    {
+        if (m_keepAlive > 0)
+        {
+            // for heartbeat
+            m_heartbeat = std::make_shared<bcos::Timer>(m_keepAlive);
+            m_heartbeat->registerTimeoutHandler([this]() {
+                heartbeat();
+                m_heartbeat->restart();
+            });
+            m_heartbeat->start();
+        }
+    }
+
+    void stop()
+    {
+        if (m_heartbeat)
+        {
+            m_heartbeat->stop();
+        }
+    }
+
 public:
     const std::string& serviceName() const { return m_serviceName; }
+
+    int32_t keepAlive() const { return m_keepAlive; }
+    void setKeepAlive(int32_t _keepAlive) { m_keepAlive = _keepAlive; }
 
     auto activeEndpoints()
     {
@@ -162,10 +203,13 @@ public:
 
     void setOnConnectHandler(TarsServantProxyOnConnectHandler _handler)
     {
-        m_onConnectHandler = _handler;
+        m_onConnectHandler = std::move(_handler);
     }
 
-    void setOnCloseHandler(TarsServantProxyOnCloseHandler _handler) { m_onCloseHandler = _handler; }
+    void setOnCloseHandler(TarsServantProxyOnCloseHandler _handler)
+    {
+        m_onCloseHandler = std::move(_handler);
+    }
 
     bool available() { return !activeEndpoints().empty(); }
 
@@ -181,6 +225,11 @@ private:
 
     std::function<void(const tars::TC_Endpoint& ep)> m_onConnectHandler;
     std::function<void(const tars::TC_Endpoint& ep)> m_onCloseHandler;
+
+    int32_t m_keepAlive = 3000;
+    std::shared_ptr<bcos::Timer> m_heartbeat = nullptr;
+    // TODO: circle reference
+    tars::TC_AutoPtr<tars::ServantProxy> m_proxy;
 };
 
 template <typename T>
