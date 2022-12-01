@@ -251,8 +251,8 @@ check_env() {
         macOS="macOS"
     fi
 
-    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
-        echo "Openssl 1.1.0 or 1.0.2 is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
+    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep 3.)" ] || {
+        echo "Openssl higher than 1.0.2 is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
        #echo "download openssl from https://www.openssl.org."
       exit 1
     }
@@ -1620,13 +1620,13 @@ download_bin()
 {
     if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ];then exit_with_clean "We only offer x86_64/arm64 precompiled fisco-bcos binary, your OS architecture is not x86_64/arm64. Please compile from source."; fi
     bin_path=${output_dir}/${bcos_bin_name}
-    
+
     if [ -n "${macOS}" ];then
         package_name="fisco-bcos-macOS.tar.gz"
         if [ "${arm64_arch}" == "true" ];then
             package_name="fisco-bcos-macOS-aarch64.tar.gz"
         fi
-    else 
+    else
         package_name="fisco-bcos.tar.gz"
         if [ "${arm64_arch}" == "true" ];then
             package_name="fisco-bcos-aarch64.tar.gz"
@@ -1768,7 +1768,7 @@ fi
 if version_gt "2.9.0" "${compatibility_version}";then
     echo " ${compatibility_version} less than 2.9.0, does not use rsa ssl"
     rsa_crypto_channel="false"
-    LOG_INFO "compatibility_version: ${compatibility_version}, do not use rsa crypto channel" 
+    LOG_INFO "compatibility_version: ${compatibility_version}, do not use rsa crypto channel"
 fi
 
 # download fisco-bcos and check it
@@ -1819,7 +1819,7 @@ for line in ${ip_array[*]};do
         else
             gen_rsa_node_cert "${output_dir}/cert/${agency}/channel" "${sdk_path}" "sdk"
         fi
-        
+
         cd "${output_dir}"
         if [ -n "${guomi_mode}" ];then
             mkdir -p "${sdk_path}/gm"
