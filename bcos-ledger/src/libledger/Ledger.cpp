@@ -1833,10 +1833,13 @@ void Ledger::asyncGetCurrentState(std::function<void(Error::Ptr, const CurrentSt
             for (auto& entry : entries)
             {
                 int64_t value = 0;
-                if (!entry && i != 3)
+                if (!entry)
                 {
-                    LEDGER_LOG(WARNING) << "asyncGetCurrentState error" << LOG_KV("index", i)
-                                        << " empty" << LOG_KV("key", keys[i]);
+                    if (i != 3)
+                    {  // the node upgrade from v3.1 will not have the archived number
+                        LEDGER_LOG(WARNING) << "asyncGetCurrentState error" << LOG_KV("index", i)
+                                            << " empty" << LOG_KV("key", keys[i]);
+                    }
                 }
                 else
                 {

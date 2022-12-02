@@ -298,10 +298,11 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
                 << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
             auto start = utcTime();
-            tbb::spin_mutex writeMutex;
+            std::mutex writeMutex;
             atomic_bool isTableValid = true;
             std::atomic_uint64_t putCount{0};
             std::atomic_uint64_t deleteCount{0};
+            std::atomic_uint64_t dataSize{0};
             if (m_committer)
             {  // should wait for the previous committer to timeout
                 auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -330,16 +331,18 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 auto dbKey = toDBKey(table, key);
                 if (entry.status() == Entry::DELETED)
                 {
-                    tbb::spin_mutex::scoped_lock lock(writeMutex);
-                    m_committer->remove(dbKey);
                     ++deleteCount;
+                    dataSize += dbKey.size();
+                    std::lock_guard lock(writeMutex);
+                    m_committer->remove(dbKey);
                 }
                 else
                 {
                     std::string value = std::string(entry.get());
-                    tbb::spin_mutex::scoped_lock lock(writeMutex);
-                    m_committer->put(dbKey, value);
                     ++putCount;
+                    dataSize += dbKey.size() + value.size();
+                    std::lock_guard lock(writeMutex);
+                    m_committer->put(dbKey, value);
                 }
                 return true;
             });
@@ -374,7 +377,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
 
             if (params.timestamp == 0)
             {
-                STORAGE_TIKV_LOG(INFO)
+                STORAGE_TIKV_LOG(DEBUG)
                     << LOG_DESC("asyncPrepare primary") << LOG_KV("blockNumber", params.number);
                 auto result = m_committer->prewrite_primary(primaryLock);
                 auto write = utcTime();
@@ -384,27 +387,27 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 STORAGE_TIKV_LOG(INFO)
                     << "asyncPrepare primary finished" << LOG_KV("blockNumber", params.number)
                     << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
-                    << LOG_KV("size", size) << LOG_KV("primaryLock", toHex(primaryLock))
+                    << LOG_KV("dataSize(B)", dataSize) << LOG_KV("primaryLock", toHex(primaryLock))
                     << LOG_KV("primary", toHex(result.first)) << LOG_KV("startTS", result.second)
-                    << LOG_KV("encode time(ms)", encode - start)
-                    << LOG_KV("prewrite time(ms)", write - encode)
-                    << LOG_KV("callback time(ms)", utcTime() - write);
+                    << LOG_KV("encodeTime(ms)", encode - start)
+                    << LOG_KV("prepareTime(ms)", write - encode)
+                    << LOG_KV("callbackTime(ms)", utcTime() - write);
             }
             else
             {
-                STORAGE_TIKV_LOG(INFO)
-                    << "asyncPrepare secondary" << LOG_KV("blockNumber", params.number)
-                    << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
-                    << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
-                    << LOG_KV("startTS", params.timestamp)
-                    << LOG_KV("encode time(ms)", encode - start);
+                STORAGE_TIKV_LOG(DEBUG)
+                    << "asyncPrepare secondary" << LOG_KV("blockNumber", params.number);
                 m_currentStartTS = params.timestamp;
                 m_committer->prewrite_secondary(primaryLock, m_currentStartTS);
                 auto write = utcTime();
                 // m_committer = nullptr;
                 STORAGE_TIKV_LOG(INFO)
                     << "asyncPrepare secondary finished" << LOG_KV("blockNumber", params.number)
-                    << LOG_KV("prewrite time(ms)", write - encode);
+                    << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
+                    << LOG_KV("dataSize(B)", dataSize) << LOG_KV("primaryLock", primaryLock)
+                    << LOG_KV("startTS", params.timestamp)
+                    << LOG_KV("encodeTime(ms)", encode - start)
+                    << LOG_KV("prepareTime(ms)", write - encode);
                 callback(nullptr, 0, primaryLock);
             }
         }
@@ -434,8 +437,7 @@ void TiKVStorage::asyncCommit(
         {
             STORAGE_TIKV_LOG(INFO)
                 << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
-                << LOG_KV("timestamp", params.timestamp)
-                << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
+                << LOG_KV("timestamp", params.timestamp);
             auto start = utcTime();
             uint64_t ts = 0;
             if (m_committer)
