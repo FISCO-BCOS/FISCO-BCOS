@@ -51,7 +51,7 @@ public:
         return m_number;
     }
 
-    bcos::protocol::BlockNumber archivedNumber() const
+    bcos::protocol::BlockNumber archivedBlockNumber() const
     {
         ReadGuard l(x_mutex);
         return m_archivedNumber;

@@ -52,7 +52,7 @@ public:
         m_syncMessage->set_number(_number);
     }
 
-    bcos::protocol::BlockNumber archivedNumber() const override
+    bcos::protocol::BlockNumber archivedBlockNumber() const override
     {
         return m_syncMessage->archived_number();
     }
