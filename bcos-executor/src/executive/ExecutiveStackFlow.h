@@ -26,6 +26,7 @@
 #include "ExecutiveState.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
+#include <queue>
 #include <stack>
 
 namespace bcos

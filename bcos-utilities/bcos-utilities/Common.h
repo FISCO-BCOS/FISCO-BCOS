@@ -17,12 +17,9 @@
 
 #pragma once
 
-//#include <sys/time.h>
 #include "Log.h"
 #include "RefDataContainer.h"
 #include <boost/algorithm/string.hpp>
-#include <boost/container/options.hpp>
-#include <boost/container/small_vector.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/thread.hpp>
 #include <atomic>
@@ -31,7 +28,6 @@
 #include <functional>
 #include <map>
 #include <mutex>
-#include <queue>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -144,14 +140,6 @@ inline bool isalNumStr(std::string const& _stringData)
     return true;
 }
 
-enum class WithExisting : int
-{
-    Trust = 0,
-    Verify,
-    Rescue,
-    Kill
-};
-
 /// Get the current time in seconds since the epoch in UTC(ms)
 uint64_t utcTime();
 uint64_t utcSteadyTime();
@@ -166,107 +154,6 @@ std::string getCurrentDateTime();
 struct Exception;
 // callback when throw exceptions
 void errorExit(std::stringstream& _exitInfo, Exception const& exception);
-
-/// Reference to a slice of buffer that also owns the buffer.
-///
-/// This is extension to the concept C++ STL library names as array_view
-/// (also known as gsl::span, array_ref, here RefDataContainer) -- reference to
-/// continuous non-modifiable memory. The extension makes the object also owning
-/// the referenced buffer.
-///
-/// This type is used by VMs to return output coming from RETURN instruction.
-/// To avoid memory copy, a VM returns its whole memory + the information what
-/// part of this memory is actually the output. This simplifies the VM design,
-/// because there are multiple options how the output will be used (can be
-/// ignored, part of it copied, or all of it copied). The decision what to do
-/// with it was moved out of VM interface making VMs "stateless".
-///
-/// The type is movable, but not copyable. Default constructor available.
-class owning_bytes_ref : public RefDataContainer<byte const>
-{
-public:
-    owning_bytes_ref() = default;
-
-    /// @param _bytes  The buffer.
-    /// @param _begin  The index of the first referenced byte.
-    /// @param _size   The number of referenced bytes.
-    owning_bytes_ref(bytes&& _bytes, size_t _begin, size_t _size) : m_bytes(std::move(_bytes))
-    {
-        // Set the reference *after* the buffer is moved to avoid
-        // pointer invalidation.
-        retarget(&m_bytes[_begin], _size);
-    }
-
-    owning_bytes_ref(owning_bytes_ref const&) = delete;
-    owning_bytes_ref(owning_bytes_ref&&) = default;
-    owning_bytes_ref& operator=(owning_bytes_ref const&) = delete;
-    owning_bytes_ref& operator=(owning_bytes_ref&&) = default;
-
-    /// Moves the bytes vector out of here. The object cannot be used any more.
-    bytes&& takeBytes()
-    {
-        reset();  // Reset reference just in case.
-        return std::move(m_bytes);
-    }
-
-private:
-    bytes m_bytes;
-};
-
-template <class T>
-class QueueSet
-{
-public:
-    bool push(T const& _t)
-    {
-        if (m_set.count(_t) == 0)
-        {
-            m_set.insert(_t);
-            m_queue.push(_t);
-            return true;
-        }
-        return false;
-    }
-    bool pop()
-    {
-        if (m_queue.size() == 0)
-            return false;
-        auto t = m_queue.front();
-        m_queue.pop();
-        m_set.erase(t);
-        return true;
-    }
-
-    void insert(T const& _t) { push(_t); }
-    size_t count(T const& _t) const { return exist(_t) ? 1 : 0; }
-    bool exist(T const& _t) const { return m_set.count(_t) > 0; }
-    size_t size() const { return m_set.size(); }
-
-    void clear()
-    {
-        m_set.clear();
-        while (!m_queue.empty())
-            m_queue.pop();
-    }
-
-private:
-    std::unordered_set<T> m_set;
-    std::queue<T> m_queue;
-};
-
-template <typename T>
-class HolderForDestructor
-{
-public:
-    HolderForDestructor(std::shared_ptr<T> _elementsToDestroy)
-      : m_elementsToDestroy(std::move(_elementsToDestroy))
-    {}
-    void operator()() {}
-
-private:
-    // Elements to be deconstructed
-    std::shared_ptr<T> m_elementsToDestroy;
-};
 
 void pthread_setThreadName(std::string const& _n);
 

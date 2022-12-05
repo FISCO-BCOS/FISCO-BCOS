@@ -801,7 +801,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     revert();
                     return callResults;
                 }
-                hostContext.setCode(outputRef.toBytes());
             }
 
             callResults->gas -= outputRef.size() * hostContext.vmSchedule().createDataGas;

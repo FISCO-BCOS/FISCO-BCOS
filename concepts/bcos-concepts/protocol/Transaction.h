@@ -34,6 +34,5 @@ concept Transaction = requires(TransactionType transaction)
     transaction.sender;
     std::integral<decltype(transaction.importTime)>;
     std::integral<decltype(transaction.attribute)>;
-    transaction.source;
 };
 }  // namespace bcos::concepts::transaction
