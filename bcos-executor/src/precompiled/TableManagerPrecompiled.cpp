@@ -354,7 +354,7 @@ void TableManagerPrecompiled::desc(
         if (keyAndValue.starts_with(V320_TABLE_INFO_PREFIX))
         {
             keyAndValue = keyAndValue.substr(V320_TABLE_INFO_PREFIX.length());
-            keyOrder = (uint8_t)std::stoi(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
+            keyOrder = (uint8_t) boost::lexical_cast<int>(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
             keyAndValue = keyAndValue.substr(keyAndValue.find_first_of(',') + 1);
         }
         auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
