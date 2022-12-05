@@ -39,6 +39,7 @@ constexpr const char* const TABLE_METHOD_CREATE_KV = "createKVTable(string,strin
 constexpr const char* const TABLE_METHOD_APPEND = "appendColumns(string,string[])";
 constexpr const char* const TABLE_METHOD_OPEN = "openTable(string)";
 constexpr const char* const TABLE_METHOD_DESC = "desc(string)";
+constexpr const char* const TABLE_METHOD_CREATE_V320 = "createTable(string,(uint8,string,string[]))";
 
 
 TableManagerPrecompiled::TableManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
@@ -49,19 +50,28 @@ TableManagerPrecompiled::TableManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
     name2Selector[TABLE_METHOD_CREATE_KV] = getFuncSelector(TABLE_METHOD_CREATE_KV, _hashImpl);
     name2Selector[TABLE_METHOD_OPEN] = getFuncSelector(TABLE_METHOD_OPEN, _hashImpl);
     name2Selector[TABLE_METHOD_DESC] = getFuncSelector(TABLE_METHOD_DESC, _hashImpl);
+    name2Selector[TABLE_METHOD_CREATE_V320] = getFuncSelector(TABLE_METHOD_CREATE_V320, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
+    auto blockContext = _executive->blockContext().lock();
     uint32_t func = getParamFunc(_callParameters->input());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());
-
-    if (func == name2Selector[TABLE_METHOD_CREATE])
+ 
+    std::string tableMethodCreate = TABLE_METHOD_CREATE;    
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
-        /// createTable(string,string,string)
+        tableMethodCreate = TABLE_METHOD_CREATE_V320;
+    } 
+
+    if (func == name2Selector[tableMethodCreate])
+    {
+        /// createTable(string,(string,string[])) or 
+        /// createTable(string,(uint8,string,string[]))
         createTable(_executive, gasPricer, _callParameters);
     }
     else if (func == name2Selector[TABLE_METHOD_CREATE_KV])
@@ -99,18 +109,40 @@ void TableManagerPrecompiled::createTable(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
 {
-    // createTable(string,(string,string[]))
+    // createTable(string,(string,string[])) or createTable(string,(uint8,string,string[]))
     std::string tableName;
-    TableInfoTuple tableInfoTuple;
+    std::string keyField;
+    std::string valueField;
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    codec.decode(_callParameters->params(), tableName, tableInfoTuple);
-    auto& [keyField, valueFields] = tableInfoTuple;
-    auto valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields);
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("TableManagerPrecompiled")
-                          << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
-                          << LOG_KV("valueField", valueField);
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        TableInfoTupleV320 tableInfo;
+        codec.decode(_callParameters->params(), tableName, tableInfo);
+        auto keyOrder = std::make_optional<uint8_t>(std::get<0>(tableInfo));
+        keyField = std::get<1>(tableInfo);
+        auto& valueFields = std::get<2>(tableInfo);        
+        valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields, keyOrder);
+        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("TableManagerPrecompiled")
+                            << LOG_KV("createTable", tableName) << LOG_KV("keyOrder", int(*keyOrder))
+                            << LOG_KV("keyField", keyField) << LOG_KV("valueField", valueField);
+        // Compatible with older versions (< v3.2) of table and KvTable
+        valueField = V320_TABLE_INFO_PREFIX + std::to_string(*keyOrder)  + "," + keyField + "," + valueField;
+    }
+    else
+    {
+        TableInfoTuple tableInfo;
+        codec.decode(_callParameters->params(), tableName, tableInfo);
+        keyField = std::get<0>(tableInfo);
+        auto& valueFields = std::get<1>(tableInfo);        
+        valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields);
+        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                            << LOG_BADGE("TableManagerPrecompiled")
+                            << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
+                            << LOG_KV("valueField", valueField);
+        // here is a trick to set table key field info
+        valueField = keyField + "," + valueField;
+    }
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // /tables + tableName
     auto newTableName = getTableName(tableName);
@@ -125,8 +157,6 @@ void TableManagerPrecompiled::createTable(
         blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
     std::string tableAddress = blockContext->isWasm() ? TABLE_NAME : TABLE_ADDRESS;
 
-    // here is a trick to set table key field info
-    valueField = keyField + "," + valueField;
     std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
     auto input = codec.encode(newTableName, codeString);
     std::string abi = blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
@@ -317,13 +347,36 @@ void TableManagerPrecompiled::desc(
         return;
     }
     auto keyAndValue = sysEntry->get();
-    auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
-    auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
-    std::vector<std::string> values;
-    boost::split(values, std::move(valueFields), boost::is_any_of(","));
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        uint8_t keyOrder = 0;
+        // Compatible with older versions (< v3.2) of table and KVTable
+        if (keyAndValue.starts_with(V320_TABLE_INFO_PREFIX))
+        {
+            keyAndValue = keyAndValue.substr(V320_TABLE_INFO_PREFIX.length());
+            keyOrder = (uint8_t)std::stoi(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
+            keyAndValue = keyAndValue.substr(keyAndValue.find_first_of(',') + 1);
+        }
+        auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
+        auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
+        std::vector<std::string> values;
+        boost::split(values, std::move(valueFields), boost::is_any_of(","));
 
-    TableInfoTuple tableInfo = {std::move(keyField), std::move(values)};
+        TableInfoTupleV320 tableInfo = {keyOrder, std::move(keyField), std::move(values)};
 
-    gasPricer->appendOperation(InterfaceOpcode::Select);
-    _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
+        gasPricer->appendOperation(InterfaceOpcode::Select);
+        _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
+    }
+    else
+    {   
+        auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
+        auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
+        std::vector<std::string> values;
+        boost::split(values, std::move(valueFields), boost::is_any_of(","));
+
+        TableInfoTuple tableInfo = {std::move(keyField), std::move(values)};
+
+        gasPricer->appendOperation(InterfaceOpcode::Select);
+        _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
+    }
 }

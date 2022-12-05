@@ -14,12 +14,14 @@ using namespace bcos::storage;
 using namespace bcos::precompiled;
 using namespace bcos::protocol;
 
-constexpr const char* const CAST_STR_S256 = "stringToS256(string)" ;
-constexpr const char* const CAST_STR_U256 = "stringToU256(string)" ;
-constexpr const char* const CAST_STR_ADDR = "stringToAddr(string)" ;
-constexpr const char* const CAST_STR_BT32 = "stringToBytes32(string)" ;
+constexpr const char* const CAST_STR_S256 = "stringToS256(string)";
+constexpr const char* const CAST_STR_S64 = "stringToS64(string)";
+constexpr const char* const CAST_STR_U256 = "stringToU256(string)";
+constexpr const char* const CAST_STR_ADDR = "stringToAddr(string)";
+constexpr const char* const CAST_STR_BT32 = "stringToBytes32(string)";
 
-constexpr const char* const CAST_S256_STR = "s256ToString(int256)" ;
+constexpr const char* const CAST_S256_STR = "s256ToString(int256)";
+constexpr const char* const CAST_S64_STR = "s64ToString(int64)";
 constexpr const char* const CAST_U256_STR = "u256ToString(uint256)";
 constexpr const char* const CAST_ADDR_STR = "addrToString(address)";
 constexpr const char* const CAST_BT32_STR = "bytes32ToString(bytes32)";
@@ -27,11 +29,13 @@ constexpr const char* const CAST_BT32_STR = "bytes32ToString(bytes32)";
 CastPrecompiled::CastPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {    
     name2Selector[CAST_STR_S256] = getFuncSelector(CAST_STR_S256, _hashImpl);
+    name2Selector[CAST_STR_S64] = getFuncSelector(CAST_STR_S64, _hashImpl);
     name2Selector[CAST_STR_U256] = getFuncSelector(CAST_STR_U256, _hashImpl);
     name2Selector[CAST_STR_ADDR] = getFuncSelector(CAST_STR_ADDR, _hashImpl);
     name2Selector[CAST_STR_BT32] = getFuncSelector(CAST_STR_BT32, _hashImpl);
 
     name2Selector[CAST_S256_STR] = getFuncSelector(CAST_S256_STR, _hashImpl);
+    name2Selector[CAST_S64_STR] = getFuncSelector(CAST_S64_STR, _hashImpl);
     name2Selector[CAST_U256_STR] = getFuncSelector(CAST_U256_STR, _hashImpl);
     name2Selector[CAST_ADDR_STR] = getFuncSelector(CAST_ADDR_STR, _hashImpl);
     name2Selector[CAST_BT32_STR] = getFuncSelector(CAST_BT32_STR, _hashImpl);
@@ -54,6 +58,14 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
         s256 num = boost::lexical_cast<s256>(src);
         gasPricer->appendOperation(InterfaceOpcode::GetInt);
         _callParameters->setExecResult(codec.encode(num));
+    } 
+    else if (func == name2Selector[CAST_STR_S64])
+    {
+        // stringToS64(string)    
+        std::string src;
+        codec.decode(data, src);
+        gasPricer->appendOperation(InterfaceOpcode::GetInt);
+        _callParameters->setExecResult(codec.encode(boost::lexical_cast<int64_t>(src)));
     }
     else if (func == name2Selector[CAST_STR_U256])
     {        
@@ -90,7 +102,14 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
         std::string value = boost::lexical_cast<std::string>(src);
         gasPricer->appendOperation(InterfaceOpcode::GetString);
         _callParameters->setExecResult(codec.encode(value));
-
+    }
+    else if (func == name2Selector[CAST_S64_STR])
+    {        
+        // s64ToString(int64)
+        int64_t src;
+        codec.decode(data, src);
+        gasPricer->appendOperation(InterfaceOpcode::GetString);
+        _callParameters->setExecResult(codec.encode(boost::lexical_cast<std::string>(src)));
     }
     else if (func == name2Selector[CAST_U256_STR])
     {
