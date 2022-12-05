@@ -773,35 +773,32 @@ CallParameters::UniquePtr TransactionExecutive::go(
             }
 
             assert(extraData != nullptr);
-            hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->abi);
-            if (!blockContext->isWasm())
+
+            if (outputRef.empty())
             {
-                if (outputRef.empty())
+                callResults->type = CallParameters::REVERT;
+                callResults->status = (int32_t)TransactionStatus::Unknown;
+                callResults->message = "Create contract with empty code, wrong code input.";
+                EXECUTIVE_LOG(WARNING)
+                    << "Revert transaction: " << LOG_DESC("deploy failed code empty")
+                    << LOG_KV("message", callResults->message);
+                // Clear the creation flag
+                callResults->create = false;
+                // Clear the data
+                if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                 {
-                    callResults->type = CallParameters::REVERT;
-                    callResults->status = (int32_t)TransactionStatus::Unknown;
-                    callResults->message = "Create contract with empty code, wrong code input.";
-                    EXECUTIVE_LOG(WARNING)
-                        << "Revert transaction: " << LOG_DESC("deploy failed code empty")
-                        << LOG_KV("message", callResults->message);
-                    // Clear the creation flag
-                    callResults->create = false;
-                    // Clear the data
-                    if (versionCompareTo(
-                            blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
-                    {
-                        writeErrInfoToOutput(
-                            "Create contract with empty code, invalid code input.", *callResults);
-                    }
-                    else if (versionCompareTo(
-                                 blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
-                    {
-                        callResults->data.clear();
-                    }
-                    revert();
-                    return callResults;
+                    writeErrInfoToOutput(
+                        "Create contract with empty code, invalid code input.", *callResults);
                 }
+                else if (versionCompareTo(
+                             blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
+                {
+                    callResults->data.clear();
+                }
+                revert();
+                return callResults;
             }
+            hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->abi);
 
             callResults->gas -= outputRef.size() * hostContext.vmSchedule().createDataGas;
             callResults->newEVMContractAddress = callResults->codeAddress;
