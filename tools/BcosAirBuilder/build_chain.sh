@@ -1431,8 +1431,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.1.1
-    compatibility_version=3.1.1
+    ; the default is 3.1.0
+    compatibility_version=3.1.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
