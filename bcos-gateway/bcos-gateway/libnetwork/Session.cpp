@@ -120,7 +120,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         addSeqCallback(message->seq(), handler);
     }
     SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
-                       << LOG_KV("endpoint", nodeIPEndpoint());
+                       << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq());
 
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
@@ -138,7 +138,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     if (!m_socket->isConnected())
         return;
 
-    SESSION_LOG(TRACE) << "send" << LOG_KV("writeQueue size", m_writeQueue.size());
+    // SESSION_LOG(TRACE) << "send" << LOG_KV("writeQueue size", m_writeQueue.size());
     {
         Guard l(x_writeQueue);
 
