@@ -36,16 +36,15 @@ using namespace bcos::protocol;
 
 MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum,
     int64_t _txsExpirationTime, bool _preStoreTxs)
-  : m_config(_config), m_txsExpirationTime(_txsExpirationTime)
+  : m_config(std::move(_config)), m_txsExpirationTime(_txsExpirationTime)
 {
     m_blockNumberUpdatedTime = utcTime();
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer = std::make_shared<Timer>(3000, "txpoolTimer");
-    m_cleanUpTimer->registerTimeoutHandler(
-        boost::bind(&MemoryStorage::cleanUpExpiredTransactions, this));
+    m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
-                     << LOG_KV("txsExpriationTime", m_txsExpirationTime)
+                     << LOG_KV("txsExpirationTime", m_txsExpirationTime)
                      << LOG_KV("preStoreTxs", "false");
 }
 

@@ -55,7 +55,7 @@ public:
     {
         m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
         m_pullTxsTimer = std::make_shared<PBFTTimer>(consensusTimeout(), "pullTxsTimer");
-        m_pullTxsTimer->registerTimeoutHandler(std::bind(&PBFTConfig::broadCastEmptyTxsReq, this));
+        m_pullTxsTimer->registerTimeoutHandler([this] { broadCastEmptyTxsReq(); });
     }
 
     ~PBFTConfig() override = default;
@@ -204,6 +204,8 @@ public:
             // increase the changeCycle
             timer()->incChangeCycle(1);
         }
+        // drop in view change status, set consensus timeout as min seal time
+        setConsensusTimeout(std::max(m_consensusTimeout.load(), (uint64_t)m_minSealTime.load()));
         // start the timer again(the timer here must be restarted)
         timer()->restart();
     }
@@ -220,6 +222,8 @@ public:
         }
         // reset the timer when reach a new-view
         m_timeoutState.store(false);
+        // reach new view, consensus time recovery to normal
+        setConsensusTimeout(s_consensusTimeout);
         freshTimer();
         // update the changeCycle
         timer()->resetChangeCycle();
@@ -363,6 +367,8 @@ public:
 
     bcos::protocol::BlockNumber waitSealUntil() { return m_waitSealUntil; }
 
+    void setMinSealTime(int64_t _minSealTime) noexcept { this->m_minSealTime = _minSealTime; }
+
 protected:
     void updateQuorum() override;
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
@@ -414,17 +420,18 @@ protected:
 
     int64_t m_waterMarkLimit = 50;
     std::atomic<int64_t> m_checkPointTimeoutInterval = {3000};
+    std::atomic<int64_t> m_minSealTime = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
     const unsigned c_pbftMsgDefaultVersion = 0;
     const unsigned c_networkTimeoutInterval = 1000;
-    // state variable that identifies whether has timed out
+    // state variable that identifies whether it has timed out
     std::atomic_bool m_timeoutState = {false};
 
     std::atomic<size_t> m_unsealedTxsSize = {0};
     // notify the sealer to reseal new block until m_waitResealUntil stable committed
     std::atomic<bcos::protocol::BlockNumber> m_waitResealUntil = {0};
-    // notify the ealer to seal new block until m_waitSealUntil committed
+    // notify the sealer to seal new block until m_waitSealUntil committed
     std::atomic<bcos::protocol::BlockNumber> m_waitSealUntil = {0};
 
     bcos::crypto::NodeIDSetPtr m_connectedNodeList;
