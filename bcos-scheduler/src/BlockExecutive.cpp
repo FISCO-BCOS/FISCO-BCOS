@@ -274,7 +274,6 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
             {
                 auto tx = m_block->transaction(i);
                 m_executiveResults[i].transactionHash = tx->hash();
-                m_executiveResults[i].source = tx->source();
 
                 auto contextID = i + m_startContextID;
                 auto& [to, message, enableDAG] = results[i];

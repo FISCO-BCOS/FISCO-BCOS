@@ -53,6 +53,12 @@ public:
 
     using Ptr = std::shared_ptr<Transaction>;
     using ConstPtr = std::shared_ptr<const Transaction>;
+
+    Transaction() = default;
+    Transaction(const Transaction&) = delete;
+    Transaction(Transaction&&) = delete;
+    Transaction& operator=(const Transaction&) = delete;
+    Transaction& operator=(Transaction&&) = delete;
     virtual ~Transaction() = default;
 
     virtual void decode(bytesConstRef _txData) = 0;
@@ -82,8 +88,6 @@ public:
     virtual u256 nonce() const = 0;
     virtual std::string_view to() const = 0;
     virtual std::string_view abi() const = 0;
-    virtual std::string_view source() const = 0;
-    virtual void setSource(std::string const& _source) = 0;
 
     virtual std::string_view sender() const { return {(char*)m_sender.data(), m_sender.size()}; }
 
