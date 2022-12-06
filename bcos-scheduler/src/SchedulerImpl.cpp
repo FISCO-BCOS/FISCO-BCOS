@@ -343,6 +343,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                 Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool _sysBlock) {
                 if (!m_isRunning)
                 {
+                    executeLock->unlock();
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
                         nullptr, false);
