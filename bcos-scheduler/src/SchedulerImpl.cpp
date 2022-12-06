@@ -879,13 +879,6 @@ void SchedulerImpl::asyncGetLedgerConfig(
                              std::tuple<int, std::string, bcos::protocol::BlockNumber>,
                              bcos::protocol::BlockNumber, bcos::crypto::HashType>&&
                              result) mutable {
-        if (!m_isRunning)
-        {
-            (*callback)(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
-                nullptr);
-            return;
-        }
-
         auto& [total, success, failed] = *summary;
 
         if (error)
@@ -953,6 +946,14 @@ void SchedulerImpl::asyncGetLedgerConfig(
         // Collect done
         if (success + failed == total)
         {
+            if (!m_isRunning)
+            {
+                (*callback)(
+                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
+                    nullptr);
+                return;
+            }
+
             if (failed > 0)
             {
                 SCHEDULER_LOG(ERROR) << "Get ledger config with error: " << failed;
