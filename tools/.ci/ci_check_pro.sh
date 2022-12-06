@@ -26,7 +26,9 @@ stop_node()
 exit_node()
 {
     cd ${current_path}
-    for node in ${node_list}
+    local all_service="rpc_20200 rpc_20201 gateway_30300 gateway_30301 ${node_list}"
+
+    for node in ${all_service}
     do
         LOG_ERROR "exit_node ============= print error|warn info for ${node} ============="
         cat ${output_dir}/127.0.0.1/${node}/log/* |grep -iE 'error|warn|cons|connectedSize|heart'
