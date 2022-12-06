@@ -31,4 +31,4 @@
     is_auth_check=false
     auth_admin_account=
     ; enable serial execute or not, default use parallel
-    is_serial_execute=false 
+    is_serial_execute=true
