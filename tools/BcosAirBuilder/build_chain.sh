@@ -11,6 +11,7 @@ use_ip_param=
 mtail_ip_param=""
 ip_array=
 output_dir="./nodes"
+current_dir=$(pwd)
 binary_name="fisco-bcos"
 mtail_binary_name="mtail"
 key_page_size=10240
@@ -34,7 +35,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.1.0"
+default_version="v3.1.1"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -50,7 +51,7 @@ nodeids_dir=""
 genesis_conf_path=""
 lightnode_exec=""
 download_timeout=240
-
+make_tar=
 default_group="group0"
 default_chainid="chain0"
 
@@ -339,7 +340,7 @@ download_bin()
         LOG_INFO "Use binary ${binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
+    if [ "${x86_64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64 or macOS. Please compile from source."; fi
     binary_path="bin/${binary_name}"
     package_name="${binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
@@ -491,7 +492,7 @@ Usage:
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
-    -D <docker mode>                    Default off. If set -d, build with docker
+    -D <docker mode>                    Default off. If set -D, build with docker
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
@@ -500,6 +501,7 @@ Usage:
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
+    -z <Generate tar packet>            [Optional] Pack the data on the chain to generate tar packet
     -h Help
 
 deploy nodes e.g
@@ -515,7 +517,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:L:C:c:o:e:t:p:d:g:G:v:i:I:M:k:wDshmn:ARa:" option; do
+    while getopts "l:L:C:c:o:e:t:p:d:g:G:v:i:I:M:k:zwDshmn:ARa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -580,6 +582,7 @@ parse_params() {
           auth_admin_account="${OPTARG}"
         ;;
         v) compatibility_version="${OPTARG}";;
+        z) make_tar="true";;
         h) help ;;
         *) help ;;
         esac
@@ -1413,7 +1416,7 @@ generate_genesis_config() {
     group_id=${default_group}
     ; the chain id, should nerver be changed
     chain_id=${default_chainid}
-        
+
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft)
     consensus_type=pbft
@@ -1727,6 +1730,7 @@ deploy_nodes()
             set_value ${ip//./}_count $(($(get_value ${ip//./}_count) + 1))
             ((++count))
         done
+        if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
     done
 
     # Generate lightnode cert
@@ -1747,6 +1751,7 @@ deploy_nodes()
         generate_p2p_connected_conf "${lightnode_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
 
         cp "${lightnode_exec}" ${lightnode_dir}/
+        if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "lightnode.tar.gz" "../${lightnode_dir}" && cd ${current_dir};fi
     fi
 
     print_result

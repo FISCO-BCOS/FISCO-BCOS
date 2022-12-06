@@ -7,6 +7,10 @@ on:
   release:
     types: [prereleased]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   DOCKER_REPOSITORY: fiscobcos
 

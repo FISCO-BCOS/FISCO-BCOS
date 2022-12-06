@@ -54,23 +54,13 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
 }
 void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
 {
-    auto blockContext = m_blockContext.lock();
-    if (blockContext->blockVersion() >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
-    {
-        if (!executive->isPrecompiled(ACCOUNT_MGR_ADDRESS) &&
-            !executive->isPrecompiled(ACCOUNT_MANAGER_NAME))
-        {
-            executive->setConstantPrecompiled(
-                blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
-                std::make_shared<AccountManagerPrecompiled>());
-        }
+    // Code below has moved to initEvmEnvironment & initWasmEnvironment in TransactionExecutor.cpp:
+    //     m_constantPrecompiled->insert(
+    //        {ACCOUNT_MGR_ADDRESS, std::make_shared<AccountManagerPrecompiled>()});
+    //    m_constantPrecompiled->insert({ACCOUNT_MANAGER_NAME,
+    //    std::make_shared<AccountManagerPrecompiled>()});
+    //    m_constantPrecompiled->insert({ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>()});
 
-        if (!executive->isPrecompiled(ACCOUNT_ADDRESS))
-        {
-            executive->setConstantPrecompiled(
-                ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>());
-        }
-    }
     // TODO: register User developed Precompiled contract
     // registerUserPrecompiled(context);
 }

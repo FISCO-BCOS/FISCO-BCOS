@@ -18,6 +18,7 @@
  * @date 2021-04-19
  */
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
@@ -208,10 +209,12 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
                 }
                 return;
             }
+
+            auto seq = m_p2pMessage->seq();
             auto p2pID = chooseP2pID();
             auto self = shared_from_this();
             auto startT = utcTime();
-            auto callback = [self, startT, p2pID](NetworkException e,
+            auto callback = [seq, self, startT, p2pID](NetworkException e,
                                 std::shared_ptr<P2PSession> session,
                                 std::shared_ptr<P2PMessage> message) {
                 std::ignore = session;
@@ -231,7 +234,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
                     }
 
                     GATEWAY_LOG(ERROR)
-                        << LOG_BADGE("Retry") << LOG_DESC("network callback")
+                        << LOG_BADGE("Retry") << LOG_DESC("network callback") << LOG_KV("seq", seq)
                         << LOG_KV("dstP2P", p2pID) << LOG_KV("errorCode", e.errorCode())
                         << LOG_KV("errorMessage", e.what())
                         << LOG_KV("timeCost", (utcTime() - startT));

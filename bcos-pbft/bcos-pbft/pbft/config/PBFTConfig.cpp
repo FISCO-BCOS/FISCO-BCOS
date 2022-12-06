@@ -19,8 +19,8 @@
  * @date 2021-04-12
  */
 #include "PBFTConfig.h"
-#include "bcos-txpool/sync/protocol/PB/TxsSyncMsgFactoryImpl.h"
 #include "bcos-txpool/sync/interfaces/TxsSyncMsgFactory.h"
+#include "bcos-txpool/sync/protocol/PB/TxsSyncMsgFactoryImpl.h"
 #include "bcos-txpool/sync/utilities/Common.h"
 
 using namespace bcos;

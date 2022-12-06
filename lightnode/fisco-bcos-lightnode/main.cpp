@@ -214,6 +214,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             std::move(storageWrapper));
 
+        LIGHTNODE_LOG(INFO) << "start sm light node...";
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
     }
     else
@@ -222,6 +223,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             std::move(storageWrapper));
 
+        LIGHTNODE_LOG(INFO) << "start light node...";
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
     }
 
