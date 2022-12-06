@@ -46,6 +46,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <cstddef>
 #include <future>
 #include <memory>
 #include <utility>
@@ -159,12 +160,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         }
     };
 
-    // number 2 entry
-    Entry numberEntry;
-    numberEntry.importFields({blockNumberStr});
-    storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
-        [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
-
     // number 2 hash
     Entry hashEntry;
     hashEntry.importFields({header->hash().asBytes()});
@@ -196,6 +191,12 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     Entry number2NonceEntry;
     number2NonceEntry.importFields({std::move(nonceBuffer)});
     storage->asyncSetRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr, std::move(number2NonceEntry),
+        [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
+
+    // number 2 entry
+    Entry numberEntry;
+    numberEntry.importFields({blockNumberStr});
+    storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // number 2 transactions
@@ -1800,83 +1801,31 @@ std::optional<storage::Table> Ledger::buildDir(
     return table;
 }
 
-void Ledger::asyncGetCurrentState(std::function<void(Error::Ptr, const CurrentState&)> _callback)
+void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
+    std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
 {
-    static std::string_view keys[] = {SYS_KEY_TOTAL_TRANSACTION_COUNT,
-        SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER, SYS_KEY_ARCHIVED_NUMBER};
-
-    m_storage->asyncOpenTable(SYS_CURRENT_STATE, [this, callback = std::move(_callback)](
+    m_storage->asyncOpenTable(SYS_CURRENT_STATE, [this, callback = std::move(_callback), _key](
                                                      auto&& error, std::optional<Table>&& table) {
-        CurrentState result{0, 0, 0, 0};
         auto tableError =
             checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
         if (tableError)
         {
-            LEDGER_LOG(DEBUG) << "asyncGetCurrentState"
+            LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey failed") << LOG_KV("key", _key)
                               << boost::diagnostic_information(*tableError);
-            callback(std::move(tableError), result);
+            callback(std::move(tableError), {});
             return;
         }
-        table->asyncGetRows(keys, [&result, &callback](
-                                      auto&& error, std::vector<std::optional<Entry>>&& entries) {
+        table->asyncGetRow(_key, [_key, &callback](auto&& error, std::optional<Entry>&& entry) {
             if (error)
             {
-                LEDGER_LOG(DEBUG) << "asyncGetCurrentState"
-                                  << boost::diagnostic_information(*error);
+                LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey exception")
+                                  << LOG_KV("key", _key) << boost::diagnostic_information(*error);
                 callback(
                     BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "Get row error", *error),
-                    result);
+                    {});
                 return;
             }
-
-            size_t i = 0;
-            for (auto& entry : entries)
-            {
-                int64_t value = 0;
-                if (!entry)
-                {
-                    if (i != 3)
-                    {  // the node upgrade from v3.1 will not have the archived number
-                        LEDGER_LOG(WARNING) << "asyncGetCurrentState error" << LOG_KV("index", i)
-                                            << " empty" << LOG_KV("key", keys[i]);
-                    }
-                }
-                else
-                {
-                    try
-                    {
-                        value = boost::lexical_cast<int64_t>(entry->getField(0));
-                    }
-                    catch (boost::bad_lexical_cast& e)
-                    {
-                        LEDGER_LOG(ERROR) << "Lexical cast transaction count failed, entry value: "
-                                          << entry->get();
-                        BOOST_THROW_EXCEPTION(e);
-                    }
-                }
-                switch (i++)
-                {
-                case 0:
-                    result.totalTransactionCount = value;
-                    break;
-                case 1:
-                    result.totalFailedTransactionCount = value;
-                    break;
-                case 2:
-                    result.latestBlockNumber = value;
-                    break;
-                case 3:
-                    result.archivedNumber = value;
-                    break;
-                }
-            }
-
-            LEDGER_LOG(TRACE) << "asyncGetCurrentState success"
-                              << LOG_KV("totalCount", result.totalTransactionCount)
-                              << LOG_KV("failedCount", result.totalFailedTransactionCount)
-                              << LOG_KV("blockNumber", result.latestBlockNumber)
-                              << LOG_KV("archivedNumber", result.archivedNumber);
-            callback(nullptr, result);
+            callback(nullptr, std::move(entry));
         });
     });
 }

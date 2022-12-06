@@ -38,13 +38,12 @@ public:
     virtual bcos::protocol::BlockNumber number() const = 0;
     virtual int32_t packetType() const = 0;
     virtual int32_t version() const = 0;
-    virtual bcos::protocol::BlockNumber archivedNumber() const = 0;
+    virtual bcos::protocol::BlockNumber archivedBlockNumber() const = 0;
 
     virtual void setNumber(bcos::protocol::BlockNumber _number) = 0;
     virtual void setPacketType(int32_t packetType) = 0;
     virtual void setVersion(int32_t _version) = 0;
     virtual void setArchivedNumber(bcos::protocol::BlockNumber _number) = 0;
-
 };
 }  // namespace sync
 }  // namespace bcos

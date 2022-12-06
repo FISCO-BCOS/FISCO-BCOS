@@ -651,12 +651,17 @@ int main(int argc, const char* argv[])
         return 1;
     }
     // read archived block number to check the request range
-    std::promise<std::pair<Error::Ptr, ledger::CurrentState>> statePromise;
-    ledger->asyncGetCurrentState(
-        [&statePromise](const Error::Ptr& err, ledger::CurrentState state) {
-            statePromise.set_value(std::make_pair(err, state));
+    std::promise<std::pair<Error::Ptr, std::optional<bcos::storage::Entry>>> statePromise;
+    ledger->asyncGetCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER,
+        [&statePromise](Error::Ptr&& err, std::optional<bcos::storage::Entry>&& entry) {
+            statePromise.set_value(std::make_pair(err, entry));
         });
-    auto archivedBlockNumber = statePromise.get_future().get().second.archivedNumber;
+    auto entry = statePromise.get_future().get().second;
+    protocol::BlockNumber archivedBlockNumber = 0;
+    if (entry)
+    {
+        archivedBlockNumber = boost::lexical_cast<protocol::BlockNumber>(entry->get());
+    }
     if (isArchive && startBlockNumber < archivedBlockNumber)
     {
         cerr << "the block range [" << startBlockNumber << "," << archivedBlockNumber

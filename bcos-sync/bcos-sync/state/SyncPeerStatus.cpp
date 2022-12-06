@@ -47,7 +47,7 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 {
     UpgradableGuard l(x_mutex);
     if (m_hash == _status->hash() && _status->number() == m_number &&
-        m_archivedNumber == _status->archivedNumber())
+        m_archivedNumber == _status->archivedBlockNumber())
     {
         return false;
     }
@@ -63,7 +63,7 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
     }
     UpgradeGuard ul(l);
     m_number = _status->number();
-    m_archivedNumber = _status->archivedNumber();
+    m_archivedNumber = _status->archivedBlockNumber();
     m_hash = _status->hash();
     if (m_genesisHash == HashType())
     {

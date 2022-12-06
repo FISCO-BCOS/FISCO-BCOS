@@ -161,7 +161,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
             m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
         if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-        {
+        {  // TODO: in max node, scheduler will use storage to commit but the ledger only use
+           // storage to read, the storage which ledger use should not trigger the switch when the
+           // scheduler is committing block
             schedulerStorage = storage;
             consensusStorage = storage;
         }

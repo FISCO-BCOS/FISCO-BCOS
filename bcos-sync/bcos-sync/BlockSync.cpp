@@ -530,7 +530,7 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
             }
             BlockNumber from = _from + 1 + shard * blockSizePerShard;
             BlockNumber to = std::min((BlockNumber)(from + blockSizePerShard - 1), _to);
-            if (_p->number() < to || _p->archivedNumber() >= from)
+            if (_p->number() < to || _p->archivedBlockNumber() >= from)
             {
                 return true;  // to next peer
             }
@@ -548,7 +548,7 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
             BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("Request")
                               << LOG_DESC("Request blocks") << LOG_KV("from", from)
                               << LOG_KV("to", to) << LOG_KV("curNum", m_config->blockNumber())
-                              << LOG_KV("peerArchived", _p->archivedNumber())
+                              << LOG_KV("peerArchived", _p->archivedBlockNumber())
                               << LOG_KV("peer", _p->nodeId()->shortHex())
                               << LOG_KV("maxRequestNumber", m_maxRequestNumber)
                               << LOG_KV("node", m_config->nodeID()->shortHex());
@@ -833,7 +833,7 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
         info["genesisHash"] = *toHexString(_p->genesisHash());
         info["blockNumber"] = Json::UInt64(_p->number());
         info["latestHash"] = *toHexString(_p->hash());
-        info["archivedBlockNumber"] = Json::UInt64(_p->archivedNumber());
+        info["archivedBlockNumber"] = Json::UInt64(_p->archivedBlockNumber());
         peersInfo.append(info);
         return true;
     });

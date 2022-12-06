@@ -133,8 +133,8 @@ public:
      * and latest block number
      * @param _callback callback totalTxCount, totalFailedTxCount, and latest block number
      */
-    virtual void asyncGetCurrentState(
-        std::function<void(Error::Ptr, const CurrentState&)> _callback) = 0;
+    virtual void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) = 0;
 
     /**
      * @brief async get system config by table key
