@@ -144,7 +144,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
-
+    bcos::storage::TransactionalStorageInterface::Ptr airExecutorStorage = nullptr;
 
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
@@ -154,6 +154,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         schedulerStorage = storage;
         consensusStorage = StorageInitializer::build(
             consensusStoragePath, m_protocolInitializer->dataEncryption());
+        airExecutorStorage = storage;
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
@@ -164,14 +165,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {  // TODO: in max node, scheduler will use storage to commit but the ledger only use
            // storage to read, the storage which ledger use should not trigger the switch when the
            // scheduler is committing block
-            schedulerStorage = storage;
+            schedulerStorage  = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
             consensusStorage = storage;
+            airExecutorStorage = storage;
         }
         else
-        {  // in AIR node, scheduler and executor in one process so need different storage
+        {  // in AIR/PRO node, scheduler and executor in one process so need different storage
             schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
                 m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
             consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+            airExecutorStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
                 m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
         }
 #endif
@@ -231,7 +236,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 scheduler.lock()->triggerSwitch();
             }
         };
-        dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage)->setSwitchHandler(switchHandler);
+        if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
+        {
+            dynamic_pointer_cast<bcos::storage::TiKVStorage>(airExecutorStorage)->setSwitchHandler(switchHandler);
+        }
         dynamic_pointer_cast<bcos::storage::TiKVStorage>(schedulerStorage)
             ->setSwitchHandler(switchHandler);
 #endif
@@ -268,7 +276,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         std::string executorName = "executor-local";
         auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
-            m_ledger, m_txpoolInitializer->txpool(), cacheFactory, storage, executionMessageFactory,
+            m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage, executionMessageFactory,
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
             m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), executorName);
         auto switchExecutorManager =
