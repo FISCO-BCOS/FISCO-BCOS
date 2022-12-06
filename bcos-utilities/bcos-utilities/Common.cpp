@@ -40,25 +40,33 @@ bytes const NullBytes;
 /// get utc time(ms)
 uint64_t utcTime()
 {
-    return std::chrono::system_clock::now().time_since_epoch().count() / 1000000;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch())
+        .count();
 }
 
 // getSteadyTime(ms)
 uint64_t utcSteadyTime()
 {
     // trans (ns) into (ms)
-    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000000;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+        .count();
 }
 
 /// get utc time(us)
 uint64_t utcTimeUs()
 {
-    return std::chrono::system_clock::now().time_since_epoch().count() / 1000;
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch())
+        .count();
 }
 
 uint64_t utcSteadyTimeUs()
 {
-    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000;
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+        .count();
 }
 
 std::string getCurrentDateTime()
