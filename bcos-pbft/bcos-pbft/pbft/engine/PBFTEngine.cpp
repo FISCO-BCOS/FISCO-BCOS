@@ -1308,7 +1308,7 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
     for (const auto& prePrepare : prePrepareList)
     {
         // empty block proposal
-        if (prePrepare->consensusProposal()->data().size() > 0)
+        if (!prePrepare->consensusProposal()->data().empty())
         {
             PBFT_LOG(INFO) << LOG_DESC("reHandlePrePrepareProposals: hit the proposal")
                            << printPBFTMsgInfo(prePrepare) << m_config->printCurrentState();
