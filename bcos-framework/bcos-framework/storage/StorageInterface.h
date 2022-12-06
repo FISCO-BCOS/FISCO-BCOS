@@ -32,6 +32,7 @@
 #include <boost/range/iterator.hpp>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace bcos::storage
@@ -86,6 +87,17 @@ public:
     {
         throw std::invalid_argument("unimplemented method");
         return nullptr;
+    };
+
+    virtual std::pair<bcos::Error::UniquePtr, std::optional<Entry>> getRow(
+        const std::string_view& table, const std::string_view& _key)
+    {
+        std::pair<Error::UniquePtr, std::optional<Entry>> result;
+        asyncGetRow(table, _key, [&result](Error::UniquePtr _error, std::optional<Entry> _entry) {
+            result.first = std::move(_error);
+            result.second = std::move(_entry);
+        });
+        return result;
     };
 };
 

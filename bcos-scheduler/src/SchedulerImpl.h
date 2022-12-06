@@ -237,6 +237,7 @@ private:
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
+    // BlockExecutive will use the storage of scheduler
     bcos::storage::TransactionalStorageInterface::Ptr m_storage;
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::scheduler::BlockExecutiveFactory::Ptr m_blockExecutiveFactory;
