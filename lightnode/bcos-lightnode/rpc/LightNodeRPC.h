@@ -13,7 +13,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-concepts/scheduler/Scheduler.h>
-#include <bcos-concepts/transaction_pool/TransactionPool.h>
+#include <bcos-concepts/transaction-pool/TransactionPool.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>

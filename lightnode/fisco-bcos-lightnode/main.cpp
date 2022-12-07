@@ -73,30 +73,36 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
             {
                 auto& ledger = bcos::concepts::getRef(toLedger);
 
-                auto beforeStatus = ~ledger.getStatus();
-                ~ledger.template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
-                    fromLedger, true);
-                auto afterStatus = ~ledger.getStatus();
+                auto syncedBlock =
+                    ~ledger
+                         .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
+                             fromLedger, true);
+                auto currentStatus = ~ledger.getStatus();
 
-                // Notify the client if block number changed
-                Json::Value response;
-                response["group"] = groupID;
-                response["nodeName"] = nodeName;
-                response["blockNumber"] = afterStatus.blockNumber;
-                auto resp = response.toStyledString();
-                if (afterStatus.blockNumber > beforeStatus.blockNumber)
+                if (syncedBlock > 0)
                 {
+                    // Notify the client if block number changed
                     auto sessions = wsService->sessions();
 
-                    for (auto& session : sessions)
+                    if (!sessions.empty())
                     {
-                        if (session && session->isConnected())
+                        Json::Value response;
+                        response["group"] = groupID;
+                        response["nodeName"] = nodeName;
+                        response["blockNumber"] = currentStatus.blockNumber;
+                        auto resp = response.toStyledString();
+
+                        auto message = wsService->messageFactory()->buildMessage();
+                        message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
+                        message->setPayload(
+                            std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
+
+                        for (auto& session : sessions)
                         {
-                            auto message = wsService->messageFactory()->buildMessage();
-                            message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
-                            message->setPayload(
-                                std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
-                            session->asyncSendMessage(message);
+                            if (session && session->isConnected())
+                            {
+                                session->asyncSendMessage(message);
+                            }
                         }
                     }
                 }

@@ -13,7 +13,7 @@
 #include <bcos-ledger/src/libledger/LedgerImpl.h>
 #include <bcos-lightnode/Log.h>
 #include <bcos-lightnode/scheduler/SchedulerWrapperImpl.h>
-#include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
+#include <bcos-lightnode/transaction-pool/TransactionPoolImpl.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
@@ -249,8 +249,7 @@ private:
         front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID,
             bcos::ref(responseBuffer), [](Error::Ptr _error) {
                 if (_error)
-                {
-                }
+                {}
             });
     }
 

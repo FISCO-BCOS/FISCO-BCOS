@@ -218,6 +218,7 @@ private:
         auto sourceStatus = co_await sourceLedger.getStatus();
 
         std::optional<BlockType> parentBlock;
+        size_t syncedBlock = 0;
         for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
              ++blockNumber)
         {
@@ -269,7 +270,10 @@ private:
             }
 
             parentBlock = std::move(block);
+            ++syncedBlock;
         }
+
+        co_return syncedBlock;
     }
 
     template <std::same_as<bcos::concepts::ledger::HEADER>>
