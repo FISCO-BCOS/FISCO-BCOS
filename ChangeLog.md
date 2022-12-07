@@ -15,11 +15,12 @@
 
 **兼容性**
 
-* 历史链数据
+* 历史版本升级
 
-  当前链已有数据为如下版本时，是否可替换节点二进制完成升级
+  需要升级的链的“数据兼容版本号（[compatibility_version](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_1_0.html#id5)）”为如下版本时：
 
-  * 3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需在所有节点二进制替换完成后用[控制台将链版本升级为当前版本](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/develop/console/console_commands.html#setsystemconfigbykey)
+  * 3.1.0：数据完全兼容当前版本，直接替换二进制即可完成升级
+  * 3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需升级数据兼容版本号，操作见[文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_1_0.html#id5)
   * 3.0-rc x：数据不兼容，无法升级，可考虑逐步将业务迁移至3.x正式版
   * 2.x：数据不兼容，2.x版本仍持续维护，可考虑升级为2.x的最新版本
 
