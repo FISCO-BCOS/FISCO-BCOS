@@ -316,6 +316,7 @@ BOOST_AUTO_TEST_CASE(asyncNotify)
         //     hash, "contract" + boost::lexical_cast<std::string>((j + 1) % 10));
         block->appendTransaction(std::move(tx));
     }
+    block->blockHeader()->updateHash(*blockFactory->cryptoSuite()->hashImpl());
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
 
@@ -355,6 +356,7 @@ BOOST_AUTO_TEST_CASE(dagTest)
             hash, "contract" + boost::lexical_cast<std::string>((j + 1) % 10));
         metaTx->setAttribute(bcos::protocol::Transaction::Attribute::DAG);
         block->appendTransactionMetaData(std::move(metaTx));
+        block->blockHeader()->updateHash(*blockFactory->cryptoSuite()->hashImpl());
     }
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);

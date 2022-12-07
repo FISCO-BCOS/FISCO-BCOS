@@ -731,10 +731,11 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{0, h256(0)}});
+    blockHeader->updateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -968,7 +969,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{0, h256(0)}});

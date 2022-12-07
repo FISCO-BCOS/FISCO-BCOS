@@ -261,13 +261,14 @@ public:
             // for parallel test
             return;
         }
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
         blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
 
         blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);
+        blockHeader->updateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(
             0, blockHeader, [&](bcos::Error::Ptr&& error) { nextPromise.set_value(); });

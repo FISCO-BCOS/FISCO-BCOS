@@ -183,11 +183,12 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->updateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -258,11 +259,12 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     BOOST_CHECK_GT(entry->getField(0).size(), 0);
 
     // start new block
-    auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader2->setNumber(2);
     blockHeader2->setParentInfo({{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}});
     ledger->setBlockNumber(blockHeader2->number() - 1);
+    blockHeader->updateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise2;
     executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -420,11 +422,12 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->updateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -808,11 +811,12 @@ BOOST_AUTO_TEST_CASE(performance)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
         blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         ledger->setBlockNumber(blockHeader->number() - 1);
+        blockHeader->updateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
@@ -1021,11 +1025,12 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         paramsList.emplace_back(std::move(params));
     }
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->updateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -1138,11 +1143,12 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(1);
         blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         ledger->setBlockNumber(blockHeader->number() - 1);
+        blockHeader->updateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
@@ -1320,11 +1326,12 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(2);
         blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         ledger->setBlockNumber(blockHeader->number() - 1);
+        blockHeader->updateHash(*cryptoSuite->hashImpl());
 
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -1475,12 +1482,13 @@ contract DelegateCallTest {
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->updateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -1667,12 +1675,13 @@ contract HelloWorld {
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->updateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);

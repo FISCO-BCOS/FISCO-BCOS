@@ -111,6 +111,7 @@ public:
             SCHEDULER_LOG(DEBUG) << LOG_KV("BlockNumber", m_blockNumber)
                                  << LOG_KV("blockHeader", blockHeader);
             blockHeader->setNumber(m_blockNumber);
+            blockHeader->updateHash(*hashImpl);
             m_result = blockHeader;
             callback(nullptr, blockHeader, false);
             return;

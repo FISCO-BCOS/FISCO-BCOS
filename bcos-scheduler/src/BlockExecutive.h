@@ -56,7 +56,6 @@ public:
     {
         m_syncBlock = _syncBlock;
         m_gasLimit = _gasLimit;
-        m_hashImpl = _blockFactory->cryptoSuite()->hashImpl();
     }
 
     BlockExecutive(const BlockExecutive&) = delete;

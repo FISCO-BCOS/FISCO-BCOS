@@ -21,6 +21,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <iterator>
 #include <mutex>
 #include <thread>
@@ -44,6 +45,7 @@ BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* 
     m_txPool(std::move(_txPool)),
     m_staticCall(staticCall)
 {
+    m_hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
     start();
 }
 
@@ -444,6 +446,7 @@ void BlockExecutive::asyncExecute(
                         return;
                     }
                     auto blockHeader = m_block->blockHeader();
+                    blockHeader->updateHash(*m_hashImpl);
                     SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("DAGExecute success")
                                         << LOG_KV("createMsgT", createMsgT)
                                         << LOG_KV("dagExecuteT", (utcTime() - startT))
@@ -986,6 +989,12 @@ void BlockExecutive::DMCExecute(
         callback(
             std::make_unique<bcos::Error>(e.errorCode(), e.errorMessage()), nullptr, m_isSysBlock);
     }
+    catch (std::exception& e)
+    {
+        DMC_LOG(WARNING) << "DMCExecute exception " << boost::diagnostic_information(e);
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, "DMCExecute exception"),
+            nullptr, m_isSysBlock);
+    }
     catch (...)
     {
         DMC_LOG(WARNING) << "DMCExecute exception. ";
@@ -1087,6 +1096,7 @@ void BlockExecutive::onExecuteFinish(
             executedBlockHeader->setGasUsed(m_gasUsed);
             executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot(*m_hashImpl));
             executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot(*m_hashImpl));
+            executedBlockHeader->updateHash(*m_hashImpl);
 
             m_result = executedBlockHeader;
             callback(nullptr, m_result, m_isSysBlock);

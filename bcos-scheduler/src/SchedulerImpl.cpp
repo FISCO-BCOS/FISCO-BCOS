@@ -140,7 +140,7 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     catch (std::exception const& e)
     {
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "handleBlockQueue exception"
-                             << e.what();
+                             << boost::diagnostic_information(e);
         blocksLock.unlock();
         whenException(e);
     }

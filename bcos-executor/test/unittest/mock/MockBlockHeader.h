@@ -6,34 +6,28 @@ namespace bcos::test
 class MockBlockHeader : public bcos::protocol::BlockHeader
 {
 public:
-    MockBlockHeader(protocol::BlockNumber _number) : BlockHeader({}), m_blockNumber(_number) {}
-    virtual ~MockBlockHeader() {}
+    MockBlockHeader(protocol::BlockNumber _number) : m_blockNumber(_number) {}
+    ~MockBlockHeader() override = default;
+
+    bcos::crypto::HashType hash() const override { return {}; }
+    void updateHash(crypto::Hash& hashImpl) override {}
 
     void decode(bytesConstRef _data) override {}
     void encode(bytes& _encodeData) const override {}
     void clear() override {}
     uint32_t version() const override { return 0; }
-    gsl::span<const protocol::ParentInfo> parentInfo() const override
-    {
-        return gsl::span<const protocol::ParentInfo>();
-    }
-    crypto::HashType txsRoot() const override { return bcos::crypto::HashType(); }
-    crypto::HashType receiptsRoot() const override { return bcos::crypto::HashType(); }
-    crypto::HashType stateRoot() const override { return bcos::crypto::HashType(); }
+    gsl::span<const protocol::ParentInfo> parentInfo() const override { return {}; }
+    crypto::HashType txsRoot() const override { return {}; }
+    crypto::HashType receiptsRoot() const override { return {}; }
+    crypto::HashType stateRoot() const override { return {}; }
     protocol::BlockNumber number() const override { return m_blockNumber; }
-    u256 gasUsed() const override { return bcos::u256(); }
+    u256 gasUsed() const override { return {}; }
     int64_t timestamp() const override { return 0; }
     int64_t sealer() const override { return 0; }
-    gsl::span<const bytes> sealerList() const override { return gsl::span<const bytes>(); }
-    bytesConstRef extraData() const override { return bcos::bytesConstRef(); }
-    gsl::span<const protocol::Signature> signatureList() const override
-    {
-        return gsl::span<const protocol::Signature>();
-    }
-    gsl::span<const uint64_t> consensusWeights() const override
-    {
-        return gsl::span<const uint64_t>();
-    }
+    gsl::span<const bytes> sealerList() const override { return {}; }
+    bytesConstRef extraData() const override { return {}; }
+    gsl::span<const protocol::Signature> signatureList() const override { return {}; }
+    gsl::span<const uint64_t> consensusWeights() const override { return {}; }
     void setVersion(uint32_t _version) override {}
     void setParentInfo(const gsl::span<const protocol::ParentInfo>& _parentInfo) override {}
     void setParentInfo(protocol::ParentInfoList&& _parentInfo) override {}
