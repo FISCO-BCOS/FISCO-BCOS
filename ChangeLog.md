@@ -17,7 +17,7 @@
 
 * 历史版本升级
 
-  需要升级的链的“数据兼容版本号（[compatibility_version](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_1_0.html#id5)）”为如下版本时：
+  需要升级的链的“数据兼容版本号（[compatibility_version](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_1_1.html#id5)）”为如下版本时：
 
   * 3.1.0：数据完全兼容当前版本，直接替换二进制即可完成升级
   * 3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需升级数据兼容版本号，操作见[文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_1_0.html#id5)
