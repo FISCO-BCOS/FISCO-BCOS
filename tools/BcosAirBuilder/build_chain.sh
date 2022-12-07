@@ -13,6 +13,7 @@ ip_array=
 output_dir="./nodes"
 current_dir=$(pwd)
 binary_name="fisco-bcos"
+lightnode_binary_name="fisco-bcos-lightnode"
 mtail_binary_name="mtail"
 key_page_size=10240
 # for cert generation
@@ -43,6 +44,7 @@ auth_mode="false"
 monitor_mode="false"
 auth_admin_account=
 binary_path=""
+lightnode_binary_path=""
 mtail_binary_path=""
 wasm_mode="false"
 serial_mode="false"
@@ -365,6 +367,39 @@ download_bin()
     chmod a+x ${binary_path}
 }
 
+download_lightnode_bin()
+{
+    if [ ! -z "${lightnode_binary_path}" ];then
+        LOG_INFO "Use binary ${lightnode_binary_path}"
+        return
+    fi
+    if [ "${x86_64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64 and macOS precompiled fisco-bcos-light binary, your OS architecture is not x86_64 or macOS. Please compile from source."; fi
+    lightnode_binary_path="bin/${lightnode_binary_name}"
+    light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
+    if [ -n "${macOS}" ];then
+        light_package_name="${lightnode_binary_name}-macOS-x86_64.tar.gz"
+    fi
+
+    local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${light_package_name}"
+    local github_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${compatibility_version}/${light_package_name}"
+    echo "Download_Link is ${Download_Link}"
+    # the binary can obtained from the cos
+    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
+        # try cdn_link
+        echo "=============="
+        LOG_INFO "Downloading fisco-bcos lightnode binary from ${Download_Link} ..."
+        curl -#LO "${Download_Link}"
+    else
+        LOG_INFO "Downloading fisco-bcos lightnode binary from ${github_link} ..."
+        curl -#LO "${github_link}"
+    fi
+    if [[ "$(ls -al . | grep "fisco-bcos-lightnode.*tar.gz" | awk '{print $5}')" -lt "1048576" ]];then
+        exit_with_clean "Download fisco-bcos-lightnode failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
+    fi
+    mkdir -p bin && mv ${light_package_name} bin && cd bin && tar -zxf ${light_package_name} && cd ..
+    chmod a+x ${lightnode_binary_path}
+}
+
 download_monitor_bin()
 {
     if [ ! -z "${mtail_binary_path}" ];then
@@ -524,8 +559,8 @@ parse_params() {
             use_ip_param="true"
             ;;
         L)
-            lightnode_exec="$OPTARG"
-            file_must_exists "${lightnode_exec}"
+            lightnode_binary_path="$OPTARG"
+            file_must_exists "${lightnode_binary_path}"
             ;;
         o)
             output_dir="$OPTARG"
@@ -1637,6 +1672,14 @@ deploy_nodes()
             LOG_FATAL "fisco bcos binary exec ${binary_path} not exist, Must copy binary file ${binary_name} to ${binary_path}"
         fi
     fi
+    if [ -z "${lightnode_binary_path}" ];then
+        echo "lightnode_binary_path is ${lightnode_binary_path}"
+        download_lightnode_bin
+        echo "lightnode_binary_path is ${lightnode_binary_path}"
+        if [[ ! -f "$lightnode_binary_path" ]]; then
+            LOG_FATAL "fisco bcos lightnode binary exec lightnode not exist, Must copy binary file ${lightnode_binary_name} to ${lightnode_binary_path}"
+        fi
+    fi
     if "${monitor_mode}" ;then
         download_monitor_bin
         if [[ ! -f "$mtail_binary_path" ]]; then
@@ -1734,7 +1777,7 @@ deploy_nodes()
     done
 
     # Generate lightnode cert
-    if [ -e "${lightnode_exec}" ]; then
+    if [ -e "${lightnode_binary_path}" ]; then
         local lightnode_dir="${output_dir}/lightnode"
         mkdir -p ${lightnode_dir}
         generate_genesis_config "${lightnode_dir}/config.genesis" "${nodeid_list}"
@@ -1750,7 +1793,7 @@ deploy_nodes()
         generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
         generate_p2p_connected_conf "${lightnode_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
 
-        cp "${lightnode_exec}" ${lightnode_dir}/
+        cp "${lightnode_binary_path}" ${lightnode_dir}/
         if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "lightnode.tar.gz" "../${lightnode_dir}" && cd ${current_dir};fi
     fi
 
