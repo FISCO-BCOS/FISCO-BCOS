@@ -373,7 +373,6 @@ download_lightnode_bin()
         LOG_INFO "Use binary ${lightnode_binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64 and macOS precompiled fisco-bcos-light binary, your OS architecture is not x86_64 or macOS. Please compile from source."; fi
     lightnode_binary_path="bin/${lightnode_binary_name}"
     light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
@@ -552,7 +551,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:L:C:c:o:e:t:p:d:g:G:v:i:I:M:k:zwDshmn:ARa:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:v:i:I:M:k:zwDLshmn:ARa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -560,7 +559,6 @@ parse_params() {
             ;;
         L)
             lightnode_binary_path="$OPTARG"
-            file_must_exists "${lightnode_binary_path}"
             ;;
         o)
             output_dir="$OPTARG"
@@ -1673,7 +1671,6 @@ deploy_nodes()
         fi
     fi
     if [ -z "${lightnode_binary_path}" ];then
-        echo "lightnode_binary_path is ${lightnode_binary_path}"
         download_lightnode_bin
         echo "lightnode_binary_path is ${lightnode_binary_path}"
         if [[ ! -f "$lightnode_binary_path" ]]; then
