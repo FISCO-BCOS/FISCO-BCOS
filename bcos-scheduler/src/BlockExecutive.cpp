@@ -1085,8 +1085,8 @@ void BlockExecutive::onExecuteFinish(
                 m_blockFactory->blockHeaderFactory()->populateBlockHeader(m_block->blockHeader());
             executedBlockHeader->setStateRoot(hash);
             executedBlockHeader->setGasUsed(m_gasUsed);
-            executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot());
-            executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
+            executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot(*m_hashImpl));
+            executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot(*m_hashImpl));
 
             m_result = executedBlockHeader;
             callback(nullptr, m_result, m_isSysBlock);

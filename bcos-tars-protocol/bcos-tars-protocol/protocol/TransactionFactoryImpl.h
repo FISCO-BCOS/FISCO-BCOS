@@ -79,7 +79,6 @@ public:
             },
             m_cryptoSuite->hashImpl()->hasher());
 
-
         return transaction;
     }
 

@@ -32,7 +32,7 @@
 using namespace bcostars;
 using namespace bcostars::protocol;
 
-struct EmptyHash : public bcos::error::Exception
+struct EmptyTransactionHash : public bcos::error::Exception
 {
 };
 
@@ -50,7 +50,7 @@ bcos::crypto::HashType TransactionImpl::hash() const
 {
     if (m_inner()->dataHash.empty())
     {
-        BOOST_THROW_EXCEPTION(EmptyHash{});
+        BOOST_THROW_EXCEPTION(EmptyTransactionHash{});
     }
 
     bcos::crypto::HashType hashResult(

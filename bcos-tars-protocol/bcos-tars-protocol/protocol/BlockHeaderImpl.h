@@ -29,25 +29,18 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <gsl/span>
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class BlockHeaderImpl : public bcos::protocol::BlockHeader
 {
 public:
-    virtual ~BlockHeaderImpl() {}
-
-    BlockHeaderImpl() = delete;
-
-    BlockHeaderImpl(
-        bcos::crypto::CryptoSuite::Ptr cryptoSuite, std::function<bcostars::BlockHeader*()> inner)
-      : bcos::protocol::BlockHeader(cryptoSuite), m_inner(inner)
-    {}
+    BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner) : m_inner(std::move(inner)) {}
+    ~BlockHeaderImpl() override = default;
 
     void decode(bcos::bytesConstRef _data) override;
     void encode(bcos::bytes& _encodeData) const override;
     bcos::crypto::HashType hash() const override;
+    void updateHash(bcos::crypto::Hash& hashImpl) override;
 
     void clear() override;
 
@@ -190,15 +183,14 @@ public:
         *m_inner() = std::move(blockHeader);
     }
 
-protected:
-    // Note: When the field in the header used to calculate the hash changes, the dataHash needs to
-    // be cleaned up
-    virtual void clearDataHash() { m_inner()->dataHash = std::vector<char>(); }
 
 private:
+    // Note: When the field in the header used to calculate the hash changes, the dataHash needs to
+    // be cleaned up
+    void clearDataHash() { m_inner()->dataHash.clear(); }
+
     std::function<bcostars::BlockHeader*()> m_inner;
     mutable std::vector<bcos::protocol::ParentInfo> m_parentInfo;
     mutable bcos::SharedMutex x_inner;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

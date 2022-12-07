@@ -25,9 +25,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class BlockHeader
 {
@@ -35,21 +33,21 @@ public:
     using Ptr = std::shared_ptr<BlockHeader>;
     using ConstPtr = std::shared_ptr<const BlockHeader>;
     using BlockHeadersPtr = std::shared_ptr<std::vector<BlockHeader::Ptr> >;
-    explicit BlockHeader(bcos::crypto::CryptoSuite::Ptr _cryptoSuite) : m_cryptoSuite(_cryptoSuite)
-    {}
-
-    virtual ~BlockHeader() {}
+    BlockHeader() = default;
+    virtual ~BlockHeader() = default;
 
     virtual void decode(bytesConstRef _data) = 0;
     virtual void encode(bytes& _encodeData) const = 0;
 
-    virtual bcos::crypto::HashType hash() const { return {}; }
+    virtual bcos::crypto::HashType hash() const = 0;
+    virtual void updateHash(crypto::Hash& hashImpl) = 0;
 
-    virtual void populateFromParents(BlockHeadersPtr _parents, BlockNumber _number)
+    virtual void populateFromParents(const crypto::Hash& hashImpl,
+        const std::vector<BlockHeader::Ptr>& _parents, BlockNumber _number)
     {
         // set parentInfo
         ParentInfoList parentInfoList;
-        for (auto parentHeader : *_parents)
+        for (const auto& parentHeader : _parents)
         {
             ParentInfo parentInfo;
             parentInfo.blockNumber = parentHeader->number();
@@ -63,7 +61,8 @@ public:
     virtual void clear() = 0;
 
     // verifySignatureList verifys the signatureList
-    virtual void verifySignatureList() const
+    virtual void verifySignatureList(
+        const crypto::Hash& hashImpl, const crypto::SignatureCrypto& signatureImpl) const
     {
         auto signatures = signatureList();
         auto sealers = sealerList();
@@ -77,7 +76,7 @@ public:
         {
             auto sealerIndex = signature.index;
             auto signatureData = signature.signature;
-            if (!m_cryptoSuite->signatureImpl()->verify(
+            if (!signatureImpl.verify(
                     std::shared_ptr<const bytes>(&((sealers)[sealerIndex]), [](const bytes*) {}),
                     hash(), bytesConstRef(signatureData.data(), signatureData.size())))
             {
@@ -141,10 +140,5 @@ public:
 
     virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
     virtual void setSignatureList(SignatureList&& _signatureList) = 0;
-    virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
-
-protected:
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

@@ -19,31 +19,27 @@
  * @date 2021-04-20
  */
 #pragma once
-
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include "../impl/TarsHashable.h"
 
 #include "TransactionReceiptImpl.h"
+#include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
-
 #include <utility>
 
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class TransactionReceiptFactoryImpl : public bcos::protocol::TransactionReceiptFactory
 {
 public:
-    TransactionReceiptFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
-      : m_cryptoSuite(std::move(cryptoSuite))
+    TransactionReceiptFactoryImpl(const bcos::crypto::CryptoSuite::Ptr& cryptoSuite)
+      : m_hashImpl(cryptoSuite->hashImpl())
     {}
     ~TransactionReceiptFactoryImpl() override = default;
 
     TransactionReceiptImpl::Ptr createReceipt(bcos::bytesConstRef _receiptData) override
     {
-        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(m_cryptoSuite,
+        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
 
         transactionReceipt->decode(_receiptData);
@@ -61,27 +57,28 @@ public:
         int32_t status, bcos::bytesConstRef output,
         bcos::protocol::BlockNumber blockNumber) override
     {
-        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(m_cryptoSuite,
+        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
-        auto const& inner = transactionReceipt->innerGetter();
-        inner()->data.version = 0;
-        inner()->data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
-        inner()->data.contractAddress = std::move(contractAddress);
-        inner()->data.status = status;
-        inner()->data.output.assign(output.begin(), output.end());
+        auto& inner = transactionReceipt->mutableInner();
+        inner.data.version = 0;
+        inner.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
+        inner.data.contractAddress = std::move(contractAddress);
+        inner.data.status = status;
+        inner.data.output.assign(output.begin(), output.end());
         transactionReceipt->setLogEntries(logEntries);
+        inner.data.blockNumber = blockNumber;
 
-        inner()->data.blockNumber = blockNumber;
+        // Update the hash field
+        std::visit(
+            [&inner](auto&& hasher) {
+                using HasherType = std::decay_t<decltype(hasher)>;
+                bcos::concepts::hash::calculate<HasherType>(inner, inner.dataHash);
+            },
+            m_hashImpl->hasher());
         return transactionReceipt;
     }
 
-    void setCryptoSuite(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
-    {
-        m_cryptoSuite = std::move(cryptoSuite);
-    }
-    bcos::crypto::CryptoSuite::Ptr cryptoSuite() override { return m_cryptoSuite; }
-
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+private:
+    bcos::crypto::Hash::Ptr m_hashImpl;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

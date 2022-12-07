@@ -3,6 +3,7 @@
 #include "../Basic.h"
 #include "../Hash.h"
 #include "../Serialize.h"
+#include <bcos-framework/protocol/Transaction.h>
 #include <bcos-utilities/Ranges.h>
 #include <concepts>
 #include <type_traits>
@@ -35,4 +36,7 @@ concept Transaction = requires(TransactionType transaction)
     std::integral<decltype(transaction.importTime)>;
     std::integral<decltype(transaction.attribute)>;
 };
+
+// template <class TransactionType>
+// concept Transaction = std::derived_from<TransactionType, bcos::protocol::Transaction>;
 }  // namespace bcos::concepts::transaction

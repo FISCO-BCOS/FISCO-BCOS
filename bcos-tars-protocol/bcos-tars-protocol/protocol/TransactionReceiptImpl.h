@@ -34,16 +34,13 @@
 #include <utility>
 #include <variant>
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class TransactionReceiptImpl : public bcos::protocol::TransactionReceipt
 {
 public:
-    explicit TransactionReceiptImpl(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
-        std::function<bcostars::TransactionReceipt*()> inner)
-      : bcos::protocol::TransactionReceipt(std::move(_cryptoSuite)), m_inner(std::move(inner))
+    explicit TransactionReceiptImpl(std::function<bcostars::TransactionReceipt*()> inner)
+      : m_inner(std::move(inner))
     {}
 
     ~TransactionReceiptImpl() override = default;
@@ -77,6 +74,7 @@ public:
     bcos::protocol::BlockNumber blockNumber() const override { return m_inner()->data.blockNumber; }
 
     const bcostars::TransactionReceipt& inner() const { return *m_inner(); }
+    bcostars::TransactionReceipt& mutableInner() { return *m_inner(); }
 
     void setInner(const bcostars::TransactionReceipt& inner) { *m_inner() = inner; }
     void setInner(bcostars::TransactionReceipt&& inner) { *m_inner() = std::move(inner); }
@@ -104,5 +102,4 @@ private:
     std::function<bcostars::TransactionReceipt*()> m_inner;
     mutable std::vector<bcos::protocol::LogEntry> m_logEntries;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

@@ -28,6 +28,11 @@
 
 using namespace bcostars;
 using namespace bcostars::protocol;
+
+struct EmptyBlockHeaderHash : public bcos::error::Exception
+{
+};
+
 void BlockHeaderImpl::decode(bcos::bytesConstRef _data)
 {
     tars::TarsInputStream<tars::BufferReader> input;
@@ -44,28 +49,31 @@ void BlockHeaderImpl::encode(bcos::bytes& _encodeData) const
     output.getByteBuffer().swap(_encodeData);
 }
 
-
 bcos::crypto::HashType BlockHeaderImpl::hash() const
 {
-    bcos::UpgradableGuard l(x_inner);
-    if (!m_inner()->dataHash.empty())
+    if (m_inner()->dataHash.empty())
     {
-        return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->dataHash.data()));
+        BOOST_THROW_EXCEPTION(EmptyBlockHeaderHash{});
     }
-    auto hashImpl = m_cryptoSuite->hashImpl();
-    auto anyHasher = hashImpl->hasher();
 
+    bcos::crypto::HashType hashResult(
+        (bcos::byte*)m_inner()->dataHash.data(), m_inner()->dataHash.size());
+
+    return hashResult;
+}
+
+void BlockHeaderImpl::updateHash(bcos::crypto::Hash& hashImpl)
+{
+    auto anyHasher = hashImpl.hasher();
     bcos::crypto::HashType hashResult;
     std::visit(
-        [this, &hashResult, &l](auto& hasher) {
+        [this, &hashResult](auto& hasher) {
             using Hasher = std::remove_cvref_t<decltype(hasher)>;
             bcos::concepts::hash::calculate<Hasher>(*m_inner(), hashResult);
 
-            bcos::UpgradeGuard ul(l);
             m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
         },
         anyHasher);
-    return hashResult;
 }
 
 void BlockHeaderImpl::clear()
@@ -134,7 +142,7 @@ void BlockHeaderImpl::setParentInfo(gsl::span<const bcos::protocol::ParentInfo> 
     bcos::WriteGuard l(x_inner);
     m_parentInfo.clear();
     m_inner()->data.parentInfo.clear();
-    for (auto& it : _parentInfo)
+    for (const auto& it : _parentInfo)
     {
         ParentInfo parentInfo;
         parentInfo.blockNumber = it.blockNumber;
@@ -149,7 +157,7 @@ void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerL
     m_inner()->data.sealerList.clear();
     for (auto const& it : _sealerList)
     {
-        m_inner()->data.sealerList.push_back(std::vector<char>(it.begin(), it.end()));
+        m_inner()->data.sealerList.emplace_back(it.begin(), it.end());
     }
     clearDataHash();
 }
@@ -162,7 +170,7 @@ void BlockHeaderImpl::setSignatureList(
     // in case of the consensus module get the cached-sync-blockHeader with signatureList which will
     // cause redundant signature lists to be stored
     m_inner()->signatureList.clear();
-    for (auto& it : _signatureList)
+    for (const auto& it : _signatureList)
     {
         Signature signature;
         signature.sealerIndex = it.index;

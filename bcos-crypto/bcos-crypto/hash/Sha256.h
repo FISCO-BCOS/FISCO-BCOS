@@ -41,7 +41,7 @@ public:
     Sha256() { setHashImplType(HashImplType::Sha3); }
     virtual ~Sha256() {}
     HashType hash(bytesConstRef _data) override { return sha256Hash(_data); }
-    bcos::crypto::hasher::AnyHasher hasher() override
+    bcos::crypto::hasher::AnyHasher hasher() const override
     {
         return bcos::crypto::hasher::AnyHasher{
             bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher{}};

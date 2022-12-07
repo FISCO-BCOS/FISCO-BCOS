@@ -216,14 +216,14 @@ inline BlockHeader::Ptr testPBBlockHeader(CryptoSuite::Ptr _cryptoSuite)
     // test verifySignatureList
     signatureList = fakeSignatureList(signImpl, keyPairVec, blockHeader->hash());
     blockHeader->setSignatureList(signatureList);
-    blockHeader->verifySignatureList();
+    blockHeader->verifySignatureList(*hashImpl, *signImpl);
 
     auto invalidSignatureList = fakeSignatureList(signImpl, keyPairVec, receiptsRoot);
     blockHeader->setSignatureList(invalidSignatureList);
-    BOOST_CHECK_THROW(blockHeader->verifySignatureList(), InvalidSignatureList);
+    BOOST_CHECK_THROW(blockHeader->verifySignatureList(*hashImpl, *signImpl), InvalidSignatureList);
 
     blockHeader->setSignatureList(signatureList);
-    blockHeader->verifySignatureList();
+    blockHeader->verifySignatureList(*hashImpl, *signImpl);
     return blockHeader;
 }
 }  // namespace test

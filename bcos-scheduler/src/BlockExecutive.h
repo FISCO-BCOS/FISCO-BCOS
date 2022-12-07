@@ -56,6 +56,7 @@ public:
     {
         m_syncBlock = _syncBlock;
         m_gasLimit = _gasLimit;
+        m_hashImpl = _blockFactory->cryptoSuite()->hashImpl();
     }
 
     BlockExecutive(const BlockExecutive&) = delete;
@@ -197,6 +198,7 @@ protected:
     bool m_isRunning = false;
 
     std::function<void()> f_onNeedSwitchEvent;
+    crypto::Hash::Ptr m_hashImpl;
 };
 
 }  // namespace bcos::scheduler

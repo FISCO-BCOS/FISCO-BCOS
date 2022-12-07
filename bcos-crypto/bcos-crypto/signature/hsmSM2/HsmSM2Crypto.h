@@ -23,9 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPairFactory.h>
 
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 const int HSM_SM2_SIGNATURE_LEN = 64;
 const int HSM_SM3_DIGEST_LENGTH = 32;
@@ -34,28 +32,25 @@ class HsmSM2Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<HsmSM2Crypto>;
-    HsmSM2Crypto()
-    {
-        m_keyPairFactory = std::make_shared<HsmSM2KeyPairFactory>();
-    }
-    virtual ~HsmSM2Crypto() {}
+    HsmSM2Crypto() { m_keyPairFactory = std::make_shared<HsmSM2KeyPairFactory>(); }
+    ~HsmSM2Crypto() override = default;
 
     std::shared_ptr<bytes> sign(const KeyPairInterface& _keyPair, const HashType& _hash,
-        bool _signatureWithPub = false) override;
+        bool _signatureWithPub = false) const override;
 
-    bool verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) override;
+    bool verify(
+        PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const override;
     bool verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
-        bytesConstRef _signatureData) override;
+        bytesConstRef _signatureData) const override;
 
-    PublicPtr recover(const HashType& _hash, bytesConstRef _signatureData) override;
-    std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) override;
+    PublicPtr recover(const HashType& _hash, bytesConstRef _signatureData) const override;
+    std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) const override;
 
-    KeyPairInterface::UniquePtr generateKeyPair() override;
-    KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) override;
+    KeyPairInterface::UniquePtr generateKeyPair() const override;
+    KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
     KeyPairInterface::UniquePtr createKeyPair(unsigned int _keyIndex, std::string _password);
 
 private:
     KeyPairFactory::Ptr m_keyPairFactory;
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

@@ -33,7 +33,7 @@ public:
             receipt.data.status = 100;
             receipt.data.blockNumber = 10086;
             auto receiptObj = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                nullptr, [receipt = std::move(receipt)]() mutable { return &receipt; });
+                [receipt = std::move(receipt)]() mutable { return &receipt; });
             result->setTransactionReceipt(receiptObj);
             co_return result;
         }

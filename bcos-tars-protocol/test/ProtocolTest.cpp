@@ -153,7 +153,7 @@ BOOST_AUTO_TEST_CASE(transactionReceipt)
     }
     bcos::bytes output(bcos::asBytes("Output!"));
 
-    bcostars::protocol::TransactionReceiptFactoryImpl factory(cryptoSuite);
+    bcostars::protocol::TransactionReceiptFactoryImpl factory(*cryptoSuite);
     auto receipt =
         factory.createReceipt(gasUsed, contractAddress, *logEntries, 50, bcos::ref(output), 888);
 
