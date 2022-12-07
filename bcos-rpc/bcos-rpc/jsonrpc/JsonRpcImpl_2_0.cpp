@@ -344,18 +344,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr 
     jResp["signatureList"] = jSignList;
 }
 
-void bcos::rpc::toJsonResp(
-    Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash)
+void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, bool _onlyTxHash)
 {
-    if (!_blockPtr)
-    {
-        return;
-    }
-
     // header
-    toJsonResp(jResp, _blockPtr->blockHeader());
-    auto txSize =
-        _onlyTxHash ? _blockPtr->transactionsMetaDataSize() : _blockPtr->transactionsSize();
+    toJsonResp(jResp, block.blockHeader());
+    auto txSize = _onlyTxHash ? block.transactionsMetaDataSize() : block.transactionsSize();
 
     Json::Value jTxs(Json::arrayValue);
     for (std::size_t index = 0; index < txSize; ++index)
@@ -365,11 +358,11 @@ void bcos::rpc::toJsonResp(
         {
             // Note: should not call transactionHash for in the common cases transactionHash maybe
             // empty
-            jTx = toHexStringWithPrefix(_blockPtr->transactionMetaData(index)->hash());
+            jTx = toHexStringWithPrefix(block.transactionMetaData(index)->hash());
         }
         else
         {
-            toJsonResp(jTx, _blockPtr->transaction(index));
+            toJsonResp(jTx, block.transaction(index));
         }
         jTxs.append(jTx);
     }
@@ -434,11 +427,11 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             auto isWasm = groupInfo->wasm();
             auto transactionData = decodeData(data);
             auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
-                transactionData, false);
+                bcos::ref(transactionData), false);
 
             RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
                                 << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
-            auto start = utcTime();
+            auto start = utcSteadyTime();
             auto sendTxTimeout = self->m_sendTxTimeout;
 
             Json::Value jResp;
@@ -450,8 +443,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                 auto txHash = submitResult->txHash();
                 auto hexPreTxHash = txHash.hexPrefixed();
 
-                auto end = utcTime();
-                auto totalTime = end - start;  // ms
+                auto totalTime = utcSteadyTime() - start;  // ms
                 if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
                 {
                     RPC_IMPL_LOG(WARNING)
@@ -743,7 +735,7 @@ void JsonRpcImpl_2_0::getBlockByNumber(std::string_view _groupID, std::string_vi
                 }
                 else
                 {
-                    toJsonResp(jResp, _block, _onlyTxHash);
+                    toJsonResp(jResp, *_block, _onlyTxHash);
                 }
             }
             m_respFunc(_error, jResp);

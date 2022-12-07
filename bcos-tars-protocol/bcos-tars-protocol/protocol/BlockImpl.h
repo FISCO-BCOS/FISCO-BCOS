@@ -53,8 +53,7 @@ public:
     BlockImpl(bcos::protocol::TransactionFactory::Ptr _transactionFactory,
         bcos::protocol::TransactionReceiptFactory::Ptr _receiptFactory)
       : bcos::protocol::Block(_transactionFactory, _receiptFactory),
-        m_inner(std::make_shared<bcostars::Block>()),
-        x_mutex(std::make_shared<std::mutex>())
+        m_inner(std::make_shared<bcostars::Block>())
     {}
     BlockImpl(bcos::protocol::TransactionFactory::Ptr _transactionFactory,
         bcos::protocol::TransactionReceiptFactory::Ptr _receiptFactory, bcostars::Block _block)
@@ -198,7 +197,6 @@ public:
 private:
     std::shared_ptr<bcostars::Block> m_inner;
     mutable bcos::protocol::NonceList m_nonceList;
-    std::shared_ptr<std::mutex> x_mutex;
     mutable bcos::SharedMutex x_blockHeader;
 };
 }  // namespace protocol
