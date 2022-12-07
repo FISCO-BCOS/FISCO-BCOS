@@ -116,14 +116,13 @@ public:
     NodeInfo nodeInfo() const { return m_nodeInfo; }
     GroupManager::Ptr groupManager() { return m_groupManager; }
 
-    int sendTxTimeout() { return m_sendTxTimeout; }
+    int sendTxTimeout() const { return m_sendTxTimeout; }
     void setSendTxTimeout(int _sendTxTimeout) { m_sendTxTimeout = _sendTxTimeout; }
 
 protected:
     static bcos::bytes decodeData(std::string_view _data);
 
     static void parseRpcResponseJson(std::string_view _responseBody, JsonResponse& _jsonResponse);
-
 
     static void addProofToResponse(
         Json::Value& jResp, std::string_view _key, ledger::MerkleProofPtr _merkleProofPtr);
@@ -181,7 +180,7 @@ private:
 
 void toJsonResp(Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr);
 void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
-void toJsonResp(Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
+void toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, bool _onlyTxHash);
 void toJsonResp(Json::Value& jResp, std::string_view _txHash,
     bcos::protocol::TransactionReceipt const& transactionReceiptPtr, bool _isWasm,
     crypto::Hash& hashImpl);

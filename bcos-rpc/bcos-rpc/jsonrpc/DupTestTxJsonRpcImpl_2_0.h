@@ -38,7 +38,7 @@ public:
         // Note: avoid call tx->sender() or tx->verify() here in case of verify the same transaction
         // more than once
         auto tx = nodeService->blockFactory()->transactionFactory()->createTransaction(
-            transactionData, false);
+            bcos::ref(transactionData), false);
 
 
         if (tx->to().empty())

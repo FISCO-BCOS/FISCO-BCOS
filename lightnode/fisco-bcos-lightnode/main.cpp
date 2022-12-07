@@ -66,7 +66,7 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
                            wsService = std::move(wsService), groupID = std::move(groupID),
                            nodeName = std::move(nodeName),
                            stopToken = std::move(stopToken)]() mutable {
-        bcos::pthread_setThreadName("blkNotify");
+        bcos::pthread_setThreadName("Syncer");
         while (!(*stopToken))
         {
             try
@@ -79,15 +79,14 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
                 auto afterStatus = ~ledger.getStatus();
 
                 // Notify the client if block number changed
+                Json::Value response;
+                response["group"] = groupID;
+                response["nodeName"] = nodeName;
+                response["blockNumber"] = afterStatus.blockNumber;
+                auto resp = response.toStyledString();
                 if (afterStatus.blockNumber > beforeStatus.blockNumber)
                 {
                     auto sessions = wsService->sessions();
-                    std::string group;
-                    Json::Value response;
-                    response["group"] = groupID;
-                    response["nodeName"] = nodeName;
-                    response["blockNumber"] = afterStatus.blockNumber;
-                    auto resp = response.toStyledString();
 
                     for (auto& session : sessions)
                     {
@@ -101,13 +100,18 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
                         }
                     }
                 }
+                else
+                {
+                    // No block update, wait for it
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
             }
             catch (std::exception& e)
             {
                 LIGHTNODE_LOG(INFO)
                     << "Sync block fail, may be connecting" << boost::diagnostic_information(e);
+                std::this_thread::sleep_for(std::chrono::seconds(1));
             }
-            std::this_thread::sleep_for(std::chrono::seconds(2));
         }
     });
 

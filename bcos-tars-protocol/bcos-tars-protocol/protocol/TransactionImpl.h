@@ -41,7 +41,6 @@ public:
     explicit TransactionImpl(std::function<bcostars::Transaction*()> inner)
       : m_inner(std::move(inner))
     {}
-
     ~TransactionImpl() override = default;
 
     friend class TransactionFactoryImpl;
@@ -91,9 +90,8 @@ public:
     void setAttribute(int32_t attribute) override { m_inner()->attribute = attribute; }
 
     const bcostars::Transaction& inner() const { return *m_inner(); }
+    bcostars::Transaction& mutableInner() { return *m_inner(); }
     void setInner(bcostars::Transaction inner) { *m_inner() = std::move(inner); }
-
-    std::function<bcostars::Transaction*()> const& innerGetter() { return m_inner; }
 
 private:
     std::function<bcostars::Transaction*()> m_inner;

@@ -89,7 +89,7 @@ public:
     virtual std::string_view to() const = 0;
     virtual std::string_view abi() const = 0;
 
-    virtual std::string_view sender() const { return {(char*)m_sender.data(), m_sender.size()}; }
+    virtual std::string_view sender() const = 0;
 
     virtual bytesConstRef input() const = 0;
     virtual int64_t importTime() const = 0;
@@ -102,7 +102,7 @@ public:
         }
         return TransactionType::ContractCreation;
     }
-    virtual void forceSender(bytes _sender) const { m_sender = std::move(_sender); }
+    virtual void forceSender(bytes _sender) const = 0;
     virtual bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;
@@ -148,7 +148,6 @@ public:
     void setStoreToBackend(bool _storeToBackend) const { m_storeToBackend = _storeToBackend; }
 
 protected:
-    mutable bcos::bytes m_sender;
     TxSubmitCallback m_submitCallback;
     // the tx has been synced or not
 

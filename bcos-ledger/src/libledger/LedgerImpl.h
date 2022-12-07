@@ -210,7 +210,7 @@ private:
     }
 
     template <bcos::concepts::ledger::Ledger LedgerType, bcos::concepts::block::Block BlockType>
-    task::Task<void> impl_sync(LedgerType& source, bool onlyHeader)
+    task::Task<size_t> impl_sync(LedgerType& source, bool onlyHeader)
     {
         auto& sourceLedger = bcos::concepts::getRef(source);
 
@@ -382,10 +382,12 @@ private:
     {
         LEDGER_LOG(DEBUG) << "setBlockData header: " << blockNumberKey;
 
-        // current number
-        bcos::storage::Entry numberEntry;
-        numberEntry.importFields({std::string(blockNumberKey)});
-        storage().setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
+        // number 2 header
+        bcos::storage::Entry number2HeaderEntry;
+        std::vector<bcos::byte> number2HeaderBuffer;
+        bcos::concepts::serialize::encode(block.blockHeader, number2HeaderBuffer);
+        number2HeaderEntry.importFields({std::move(number2HeaderBuffer)});
+        storage().setRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey, std::move(number2HeaderEntry));
 
         // number 2 block hash
         bcos::storage::Entry hashEntry;
@@ -399,12 +401,10 @@ private:
             std::string_view{block.blockHeader.dataHash.data(), block.blockHeader.dataHash.size()},
             std::move(hash2NumberEntry));
 
-        // number 2 header
-        bcos::storage::Entry number2HeaderEntry;
-        std::vector<bcos::byte> number2HeaderBuffer;
-        bcos::concepts::serialize::encode(block.blockHeader, number2HeaderBuffer);
-        number2HeaderEntry.importFields({std::move(number2HeaderBuffer)});
-        storage().setRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey, std::move(number2HeaderEntry));
+        // current number
+        bcos::storage::Entry numberEntry;
+        numberEntry.importFields({std::string(blockNumberKey)});
+        storage().setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
 
         co_return;
     }

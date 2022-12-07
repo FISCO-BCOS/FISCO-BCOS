@@ -13,7 +13,7 @@ void DuplicateTransactionFactory::multiBuild(
     bcos::crypto::KeyPairInterface::Ptr keyPair, int64_t num,
     std::function<void(bcos::protocol::Transaction::Ptr)> onTxBuild)
 {
-    auto seedTx = transactionFactory->createTransaction(seedTxData, false);
+    auto seedTx = transactionFactory->createTransaction(bcos::ref(seedTxData), false);
     int32_t version = seedTx->version();
     const std::string_view to = seedTx->to();
     const bytes input = seedTx->input().toBytes();
