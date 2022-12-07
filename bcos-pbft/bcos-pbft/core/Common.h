@@ -23,11 +23,8 @@
 #include <bcos-utilities/Exceptions.h>
 
 #define CONSENSUS_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("Core")
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 const IndexType NON_CONSENSUS_NODE = (IndexType)(-1);
 DERIVE_BCOS_EXCEPTION(InitConsensusException);
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

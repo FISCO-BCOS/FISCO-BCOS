@@ -264,7 +264,12 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
     {
         return;
     }
+    // the proposal has already been committed
     auto proposalIndex = _committedProposal->index();
+    if (proposalIndex <= m_config->committedProposal()->index())
+    {
+        return;
+    }
     notifyMaxProposalIndex(proposalIndex);
     m_committedQueue.push(_committedProposal);
     m_committedProposalList.insert(proposalIndex);
@@ -390,13 +395,18 @@ void PBFTCacheProcessor::notifyToSealNextBlock()
     bcos::protocol::BlockNumber lastIndex = committedIndex;
     for (auto const& proposalIndex : m_proposalsToStableConsensus)
     {
+        if (proposalIndex <= committedIndex)
+        {
+            lastIndex = proposalIndex;
+            continue;
+        }
         if (lastIndex + 1 < proposalIndex)
         {
             break;
         }
         lastIndex = proposalIndex;
     }
-    auto nextProposalIndex = lastIndex + 1;
+    auto nextProposalIndex = std::max(lastIndex + 1, committedIndex + 1);
     m_config->notifySealer(nextProposalIndex);
     PBFT_LOG(INFO) << LOG_DESC("notify to seal next proposal")
                    << LOG_KV("nextProposalIndex", nextProposalIndex);
@@ -833,6 +843,7 @@ void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _con
         // lastAppliedProposalCheckPoint when apply the next proposal
         if (pcache->first <= _consensusedNumber)
         {
+            m_proposalsToStableConsensus.erase(pcache->first);
             pcache = m_caches.erase(pcache);
             continue;
         }

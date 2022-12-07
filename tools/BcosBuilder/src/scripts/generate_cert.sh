@@ -4,24 +4,29 @@ set -e
 dirpath="$(cd "$(dirname "$0")" && pwd)"
 # cd "${dirpath}"
 
+# cdn url for download tassl
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 
-command=""
-output_dir="cert"
+# os && arch
+macOS=""
+x86_64_arch="true"
 
 # for cert generation
 sm_cert_conf='sm_cert.cnf'
+# the validity period of the certificate
 days=36500
+# rsa key length
 rsa_key_length=2048
-
-macOS=""
-x86_64_arch="true"
 
 sm_mode='false'
 sm2_params="sm_sm2.param"
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
 
 ca_cert_path=""
+
+output_dir="cert"
+sub_command=""
+input_params=''
 ip_param=""
 
 LOG_WARN() {
@@ -265,6 +270,62 @@ gen_chain_cert() {
     LOG_INFO "Build ca cert successfully!"
 }
 
+gen_rsa_node_private_and_csr() {
+    local ndpath="${1}"
+    local type="${2}"
+
+    if [ ! -f "${cert_conf}" ]; then
+        generate_cert_conf "${cert_conf}"
+    fi
+
+    # check_name node "$node"
+    file_must_not_exists "$ndpath"/"${type}".key
+
+    mkdir -p "${ndpath}"
+    dir_must_exists "${ndpath}"
+
+    ${OPENSSL_CMD} genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2> /dev/null
+    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config ${cert_conf} -out "$ndpath"/"${type}".csr
+
+    ${OPENSSL_CMD} pkcs8 -topk8 -in "$ndpath"/"$type".key -out "$ndpath"/pkcs8_node.key -nocrypt
+
+    rm -f "$ndpath"/"${type}".key
+    mv "$ndpath"/pkcs8_node.key "$ndpath"/"${type}".key
+    cp "${cert_conf}" "$ndpath"
+
+    # extract p2p id
+    ${OPENSSL_CMD} rsa -in "$ndpath"/"$type".key -pubout -out public.pem
+    ${OPENSSL_CMD} rsa -pubin -in public.pem -text -noout 2> /dev/null | sed -n '3,20p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "${ndpath}/${type}.nodeid"
+    rm -f public.pem
+
+    LOG_INFO "Build rsa node cert private with csr successful!"
+}
+
+sign_rsa_node_cert_private_csr() {
+    local capath="${1}"
+    local csrpath="${2}"
+    local type="${3}"
+
+    # check_name node "$node"
+    file_must_exists "${csrpath}"
+    
+    file_must_exists "$capath/ca.key"
+    file_must_exists "$capath/ca.crt"
+    file_must_exists "$capath/cert.cnf"
+
+    local output=$(dirname ${csrpath})
+
+    mkdir -p "${output}"
+    dir_must_exists "${output}"
+
+    ${OPENSSL_CMD} x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
+        -in "${csrpath}" -out "$output"/"${type}".crt -extensions v4_req -extfile "$capath"/cert.cnf 2>/dev/null
+
+    cp "$capath"/ca.crt "$capath"/cert.cnf "$output"
+    
+    LOG_INFO "Sign rsa node cert private with csr successful!"
+}
+
 gen_rsa_node_cert() {
     local capath="${1}"
     local ndpath="${2}"
@@ -306,14 +367,6 @@ gen_sm_chain_cert() {
     name=$(basename "$chaindir")
     check_name chain "$name"
 
-    if [ ! -f "${sm_cert_conf}" ];then
-        generate_sm_cert_conf 'sm_cert.cnf'
-    elif [ ! -f "sm_cert.cnf" ];then
-        cp -f "${sm_cert_conf}" .
-    fi
-
-    generate_sm_sm2_param "${sm2_params}"
-
     mkdir -p "$chaindir"
     dir_must_exists "$chaindir"
 
@@ -325,6 +378,40 @@ gen_sm_chain_cert() {
     if [ ! -f "${chaindir}/${sm2_params}" ];then
         cp "${sm2_params}" "${chaindir}"
     fi
+}
+
+gen_sm_node_private_and_csr() {
+    local ndpath="${1}"
+    local type="${2}"
+
+    file_must_not_exists "$ndpath/sm_${type}.csr"
+    file_must_not_exists "$ndpath/sm_${type}.key"
+
+    mkdir -p "$ndpath"
+
+    "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$ndpath/sm_${type}.key"
+    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=${type}" -key "$ndpath/sm_${type}.key" -config "${sm_cert_conf}" -out "$ndpath/sm_${type}.csr"
+
+    # nodeid is pubkey
+    "$OPENSSL_CMD" ec -in "$ndpath/sm_${type}.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}' | cat > "$ndpath/sm_${type}.nodeid"
+}
+
+sign_sm_node_private_and_csr() {
+    local capath="$1"
+    local ndpath="$2"
+    local type="$3"
+    local extensions="$4"
+
+    file_must_exists "$capath/sm_ca.key"
+    file_must_exists "$capath/sm_ca.crt"
+    file_must_exists "$ndpath/sm_${type}.key"
+    file_must_exists "$ndpath/sm_${type}.csr"
+
+    file_must_not_exists "$ndpath/sm_${type}.crt"
+
+    echo "use $(basename "$capath") to sign $(basename $ndpath) ${type}"
+    "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$ndpath/sm_${type}.csr" -out "$ndpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions"
+    cp "$capath/sm_ca.crt" "$ndpath"
 }
 
 gen_sm_node_cert_with_ext() {
@@ -344,6 +431,9 @@ gen_sm_node_cert_with_ext() {
 
     echo "use $(basename "$capath") to sign $(basename $certpath) ${type}"
     "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions"
+
+    #nodeid is pubkey
+    "$OPENSSL_CMD" ec -in "$ndpath/sm_${type}.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}' | cat > "$ndpath/sm_${type}.nodeid"
 
     rm -f "$certpath/sm_${type}.csr"
 }
@@ -443,8 +533,8 @@ gen_sm_node_cert() {
 
     gen_sm_node_cert_with_ext "$capath" "$ndpath" ${type} v3_req
     gen_sm_node_cert_with_ext "$capath" "$ndpath" "en${type}" v3enc_req
-    #nodeid is pubkey
-    $OPENSSL_CMD ec -in "$ndpath/sm_${type}.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}' | cat > "$ndpath/sm_${type}.nodeid"
+    # nodeid is pubkey
+    # $OPENSSL_CMD ec -in "$ndpath/sm_${type}.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}' | cat > "$ndpath/sm_${type}.nodeid"
 
     cp "$capath/sm_ca.crt" "$ndpath"
 }
@@ -460,6 +550,34 @@ generate_single_node_cert() {
         gen_rsa_node_cert "${ca_cert_path}" "${node_cert_path}" "${type}" 2>&1
     else
         gen_sm_node_cert "${ca_cert_path}" "${node_cert_path}" "${type}" 2>&1
+    fi
+}
+
+generate_single_node_csr() {
+    local sm_mode="$1"
+    local node_path="${2}"
+    local type="${3}"
+
+    mkdir -p ${node_path}
+    if [[ "${sm_mode}" == "false" ]]; then
+        gen_rsa_node_private_and_csr "${node_path}" "${type}" 2>&1
+    else
+        gen_sm_node_private_and_csr "${node_path}" "${type}" 2>&1
+        gen_sm_node_private_and_csr "${node_path}" "en${type}" 2>&1
+    fi
+}
+
+sign_single_node_csr() {
+    local sm_mode="$1"
+    local ca_path="${2}"
+    local csr_path="${3}"
+    local type="${4}"
+
+    if [[ "${sm_mode}" == "false" ]]; then
+        sign_rsa_node_cert_private_csr "${ca_path}" "${csr_path}" "${type}" 2>&1
+    else
+        sign_sm_node_private_and_csr "${ca_path}" "${csr_path}" "${type}" v3_req
+        sign_sm_node_private_and_csr "${ca_path}" "${csr_path}" "en${type}" v3enc_req
     fi
 }
 
@@ -494,9 +612,7 @@ generate_sm_node_account()
     if [ ! -d "${output_path}" ];then
         mkdir -p ${output_path}
     fi
-    if [ ! -f ${sm2_params} ];then
-        generate_sm_sm2_param ${sm2_params}
-    fi
+
     ${OPENSSL_CMD} genpkey -paramfile ${sm2_params} -out ${output_path}/node.pem 2>/dev/null
     $OPENSSL_CMD ec -in "$output_path/node.pem" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$output_path/node.nodeid"
 }
@@ -561,9 +677,19 @@ help() {
     echo $1
     cat <<EOF
 Usage:
-    -c <commands>                       [Required] the operation command, support generate_all_cert/generate_ca_cert/generate_node_cert/generate_multi_nodes_cert/generate_sdk_cert and generate_private_key/generate_multi_private_key now
+    -c <commands>                       [Required] the operation sub command support list:
+                                                        - generate_all_cert
+                                                        - generate_ca_cert
+                                                        - generate_node_cert
+                                                        - generate_node_csr
+                                                        - sign_node_csr
+                                                        - generate_multi_nodes_cert
+                                                        - generate_sdk_cert
+                                                        - generate_private_key
+                                                        - generate_multi_private_key
     -o <output dir>                     [Optional] output directory default ./cert
     -s <SM model>                       [Optional] SM SSL connection ,or not, default no
+    -i <Input>                          [Optional] optional input params
     -d <ca cert path>                   [Optional] ca certificate path, specify ca certificate path to generate node/sdk certificate
     -l <IP list>                        [Optional] list of ip for generate certificate or private key, working with generate_multi_nodes_cert/generate_multi_private_key
     -O <OpenSSL path>                   [Optional] specify the OpenSSL path(Notice: OpenSSL 1.1.x is required), default download TASSL 1.1.1b to local dir ~/.fisco/tassl-1.1.1b
@@ -573,9 +699,9 @@ EOF
 }
 
 parse_params() {
-    while getopts "o:O:d:c:sl:h" option; do
+    while getopts "p:o:O:d:c:sl:h" option; do
         case $option in
-        c) command="$OPTARG";;
+        c) sub_command="$OPTARG";;
         d) 
             ca_cert_path="$OPTARG"
             dir_must_exists "${ca_cert_path}"
@@ -585,7 +711,17 @@ parse_params() {
             mkdir -p "$output_dir"
             dir_must_exists "${output_dir}"
             ;;
-        s) sm_mode="true" ;;
+        s) 
+            sm_mode="true" 
+            if [ ! -f "${sm2_params}" ];then
+                generate_sm_sm2_param ${sm2_params}
+            fi
+
+            if [ ! -f "${sm_cert_conf}" ];then
+                generate_sm_cert_conf "${sm_cert_conf}"
+            fi
+        ;;
+        p) input_params="$OPTARG" ;;
         l) ip_param="$OPTARG" ;;
         O) 
             OPENSSL_CMD="$OPTARG"
@@ -617,6 +753,23 @@ generate_ca_cert()
     mkdir -p "$ca_cert_path"
     generate_chain_cert "${sm_mode}" "${ca_cert_path}"
     LOG_INFO "generate ca cert success"
+}
+
+generate_node_csr()
+{
+    LOG_INFO "generate node csr"
+    cert_dir="${output_dir}/ssl"
+    mkdir -p "$cert_dir"
+    generate_single_node_csr "${sm_mode}" "${cert_dir}" "ssl"
+    LOG_INFO "generate node csr success"
+}
+
+sign_node_csr()
+{
+    LOG_INFO "sign node csr"
+    local csr_path="${input_params}"
+    sign_single_node_csr "${sm_mode}" "${ca_cert_path}" "${csr_path}" "ssl"
+    LOG_INFO "sign node csr success"
 }
 
 generate_node_cert()
@@ -671,20 +824,24 @@ main() {
     if [ -z "${ca_cert_path}" ];then
         ca_cert_path="${output_dir}/ca"
     fi
-    if [[ "${command}" == "generate_all_cert" ]]; then
+    if [[ "${sub_command}" == "generate_all_cert" ]]; then
         generate_all_cert
-    elif [[ "${command}" == "generate_ca_cert" ]]; then
+    elif [[ "${sub_command}" == "generate_ca_cert" ]]; then
         generate_ca_cert
-    elif [[ "${command}" == "generate_node_cert" ]]; then
+    elif [[ "${sub_command}" == "generate_node_cert" ]]; then
         generate_node_cert
-    elif [[ "${command}" == "generate_multi_nodes_cert" ]]; then
-        generate_multi_nodes_cert
-    elif [[ "${command}" == "generate_sdk_cert" ]]; then
+    elif [[ "${sub_command}" == "generate_node_csr" ]]; then
+        generate_node_csr
+    elif [[ "${sub_command}" == "sign_node_csr" ]]; then
+        sign_node_csr
+    elif [[ "${sub_command}" == "generate_sdk_cert" ]]; then
         generate_sdk_cert
-    elif [[ "${command}" == "generate_private_key" ]]; then
+    elif [[ "${sub_command}" == "generate_private_key" ]]; then
         generate_cert_node_private_key
-    elif [[ "${command}" == "generate_multi_private_key" ]]; then
+    elif [[ "${sub_command}" == "generate_multi_private_key" ]]; then
         generate_multi_nodes_private_key
+    elif [[ "${sub_command}" == "generate_multi_nodes_cert" ]]; then
+        generate_multi_nodes_cert
     else
         LOG_FALT "Unsupported command"
     fi

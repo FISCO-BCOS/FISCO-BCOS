@@ -87,7 +87,7 @@ public:
         std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
             _committedProposalNotifier)
     {
-        m_cacheProcessor->registerCommittedProposalNotifier(_committedProposalNotifier);
+        m_cacheProcessor->registerCommittedProposalNotifier(std::move(_committedProposalNotifier));
     }
 
     virtual void restart();

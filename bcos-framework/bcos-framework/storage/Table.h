@@ -25,9 +25,7 @@
 #include <future>
 #include <gsl/span>
 
-namespace bcos
-{
-namespace storage
+namespace bcos::storage
 {
 class Table
 {
@@ -40,7 +38,7 @@ public:
     Table(Table&&) = default;
     Table& operator=(const Table&) = default;
     Table& operator=(Table&&) = default;
-    ~Table() {}
+    ~Table() = default;
 
     std::optional<Entry> getRow(std::string_view _key);
     std::vector<std::optional<Entry>> getRows(
@@ -78,5 +76,4 @@ protected:
     TableInfo::ConstPtr m_tableInfo;
 };
 
-}  // namespace storage
 }  // namespace bcos

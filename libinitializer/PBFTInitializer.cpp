@@ -396,6 +396,7 @@ void PBFTInitializer::createPBFT()
     m_pbft = pbftFactory->createPBFT();
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();
     pbftConfig->setCheckPointTimeoutInterval(m_nodeConfig->checkPointTimeoutInterval());
+    pbftConfig->setMinSealTime(m_nodeConfig->minSealTime());
 }
 
 void PBFTInitializer::createSync()

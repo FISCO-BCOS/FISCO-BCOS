@@ -55,11 +55,11 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(_keyFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {}
 
-void NodeConfig::loadConfig(
-    boost::property_tree::ptree const& _pt, bool _enforceMemberID, bool _enforceChainConfig, bool _enforceGroupId)
+void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID,
+    bool _enforceChainConfig, bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
-    if (_enforceChainConfig  ||
+    if (_enforceChainConfig ||
         (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
             m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
@@ -68,12 +68,12 @@ void NodeConfig::loadConfig(
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
     loadGatewayConfig(_pt);
+    loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
     loadStorageSecurityConfig(_pt);
 
     loadFailOverConfig(_pt, _enforceMemberID);
     loadSecurityConfig(_pt);
-    loadSealerConfig(_pt);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
     loadOthersConfig(_pt);
@@ -484,7 +484,7 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
-    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
+    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS) [[unlikely]]
     {
         NodeConfig_LOG(WARNING)
             << LOG_DESC(
@@ -492,12 +492,10 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
                    "consensus time, reset to the consensus time")
             << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
             << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
-        m_txsExpirationTime = DEFAULT_MIN_CONSENSUS_TIME_MS;
     }
-    else
-    {
-        m_txsExpirationTime = txsExpirationTime * 1000;
-    }
+    m_txsExpirationTime = std::max(
+        {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
                          << LOG_KV("notifierWorkers", m_notifyWorkerNum)
                          << LOG_KV("verifierWorkers", m_verifierWorkerNum)
@@ -558,10 +556,10 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 {
     m_minSealTime = checkAndGetValue(_pt, "consensus.min_seal_time", "500");
-    if (m_minSealTime <= 0 || m_minSealTime > 3000)
+    if (m_minSealTime <= 0 || m_minSealTime > DEFAULT_MAX_SEAL_TIME_MS)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set consensus.min_seal_time between 1 and 3000!"));
+                                  "Please set consensus.min_seal_time between 1 and 600000!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
 }
@@ -698,7 +696,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     // consensus type
     try
     {
-        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type"); 
+        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type");
     }
     catch (std::exception const& e)
     {
@@ -706,8 +704,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
             "consensus.consensus_type is null， please set it!"));
     }
     // blockTxCountLimit
-    auto blockTxCountLimit =
-        checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit");
+    auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit");
     if (blockTxCountLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -725,8 +722,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
-        "version.compatibility_version");
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>("version.compatibility_version");
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
@@ -891,7 +887,6 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     try
     {
         m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
-
     }
     catch (std::exception const& e)
     {
@@ -925,7 +920,8 @@ int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt,
     }
 }
 
-int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt, std::string const& _key)
+int64_t NodeConfig::checkAndGetValue(
+    boost::property_tree::ptree const& _pt, std::string const& _key)
 {
     try
     {

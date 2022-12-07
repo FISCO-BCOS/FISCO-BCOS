@@ -207,7 +207,13 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
         absolutePath, FS_TYPE_DIR, _callParameters->m_gasLeft);
-    _callParameters->setExecResult(codec.encode(response));
+    auto result = codec.encode(response);
+    if (blockContext->isWasm() &&
+        protocol::versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION))
+    {
+        result = codec.encode((int32_t)response);
+    }
+    _callParameters->setExecResult(std::move(result));
 }
 
 void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
