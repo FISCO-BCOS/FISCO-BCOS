@@ -46,8 +46,9 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     transaction.data.abi = _abi;
     auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
-    std::visit([&pbTransaction](
-                   auto&& hasher) { pbTransaction->updateHash<std::decay_t<decltype(hasher)>>(); },
+    std::visit(
+        [&pbTransaction](
+            auto&& hasher) { pbTransaction->calculateHash<std::decay_t<decltype(hasher)>>(); },
         _cryptoSuite->hashImpl()->hasher());
 
 
