@@ -32,35 +32,11 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     //  whenQueueFront() -> afterFront()
     //  beforeBack() -> whenQueueBack()
 
+    bcos::protocol::BlockNumber currentNumber = getCurrentBlockNumber();
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-
-    // refresh block cache
-    bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
-    // note that genesis sysBlock is blockNumber 0, we need to ignore it
-    while (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() && currentNumber != 0)
-    {
-        SCHEDULER_LOG(DEBUG) << "Remove committed block on handleBlockQueue : "
-                             << m_blocks->front()->number() << " success";
-        m_blocks->pop_front();
-    }
 
     try
     {
-        /*
-        if (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() &&
-            currentNumber != 0)
-        {
-            SCHEDULER_LOG(DEBUG)
-                << "Doesn't receive block commit success callback but block has committed"
-                << LOG_KV("cacheFrontNumber", m_blocks->front()->number())
-                << LOG_KV("currentNumber", currentNumber);
-
-            triggerSwitch();
-            BOOST_THROW_EXCEPTION(std::runtime_error(
-                "Doesn't receive block commit success callback but block has committed"));
-            return;
-        }
-         */
 
         if (m_blocks->empty())
         {
@@ -509,14 +485,25 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             if (error)
             {
                 SCHEDULER_LOG(ERROR) << "CommitBlock error, " << error->errorMessage();
-
+                {
+                    std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                    // refresh block cache
+                    bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
+                    // note that genesis sysBlock is blockNumber 0, we need to ignore it
+                    while (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() &&
+                           currentNumber != 0)
+                    {
+                        SCHEDULER_LOG(DEBUG) << "Remove committed block on commit failed : "
+                                             << m_blocks->front()->number() << " success";
+                        m_blocks->pop_front();
+                    }
+                }
                 commitLock->unlock();
                 callback(BCOS_ERROR_UNIQUE_PTR(
                              error->errorCode(), "CommitBlock error: " + error->errorMessage()),
                     nullptr);
                 return;
             }
-
             {
                 std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
                 auto number = block->blockHeaderConst()->number();
@@ -1035,8 +1022,5 @@ bcos::protocol::BlockNumber SchedulerImpl::getCurrentBlockNumber()
         blocksLock.unlock();
         return getBlockNumberFromStorage();
     }
-    else
-    {
-        return m_blocks->front()->number() - 1;
-    }
+    return m_blocks->front()->number() - 1;
 }

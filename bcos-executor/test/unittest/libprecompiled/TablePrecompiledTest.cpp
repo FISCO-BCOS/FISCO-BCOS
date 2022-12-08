@@ -1230,7 +1230,7 @@ BOOST_AUTO_TEST_CASE(updateTest)
     // update by key not exist
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
-        auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress, true);
+        auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
     }
 
@@ -1339,7 +1339,7 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
     // update by key not exist
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
-        auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress, true);
+        auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress);
         BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
     }
 

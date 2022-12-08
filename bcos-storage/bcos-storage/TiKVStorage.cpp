@@ -361,14 +361,14 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 m_committer = nullptr;
                 if (params.timestamp == 0)
                 {
-                    STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare empty storage")
+                    STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare primary empty storage")
                                             << LOG_KV("blockNumber", params.number);
                     callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0, "");
                 }
                 else
                 {
-                    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare empty storage")
-                                            << LOG_KV("blockNumber", params.number);
+                    STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncPrepare secondary empty storage")
+                                           << LOG_KV("blockNumber", params.number);
                     callback(nullptr, 0, "");
                 }
                 return;
