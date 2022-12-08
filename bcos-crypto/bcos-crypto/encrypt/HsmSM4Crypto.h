@@ -25,17 +25,13 @@ namespace bcos
 {
 namespace crypto
 {
-bytesPointer HsmSM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize);
-bytesPointer HsmSM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize);
-
 class HsmSM4Crypto : public SymmetricEncryption
 {
 public:
     using Ptr = std::shared_ptr<HsmSM4Crypto>;
-    HsmSM4Crypto() = default;
+    HsmSM4Crypto(std::string _libPath) { m_hsmLibPath = _libPath; }
     ~HsmSM4Crypto() override {}
+
     bytesPointer symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
         const unsigned char* _key, size_t _keySize) override
     {
@@ -58,6 +54,16 @@ public:
     {
         return HsmSM4Decrypt(_cipherData, _cipherDataSize, _key, _keySize, _ivData, _ivDataSize);
     }
+
+    bytesPointer HsmSM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
+        const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
+        size_t _ivDataSize);
+    bytesPointer HsmSM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
+        const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
+        size_t _ivDataSize);
+
+private:
+    std::string m_hsmLibPath;
 };
 }  // namespace crypto
 }  // namespace bcos

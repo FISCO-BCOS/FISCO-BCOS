@@ -2,13 +2,7 @@
 project(bcos-crypto VERSION ${VERSION})
 
 file(GLOB_RECURSE ALL_SRCS bcos-crypto/*.cpp)
-file(GLOB_RECURSE HSM_SRCS bcos-crypto/Hsm*.cpp)
-set(LIB_LIST OpenSSL::SSL OpenSSL::Crypto wedprcrypto::crypto wedprcrypto::zkp bcos-utilities bcos-concepts TBB::tbb)
-if (NOT WITH_HSM_SDF)
-    list(REMOVE_ITEM ALL_SRCS ${HSM_SRCS})
-else ()
-    list(APPEND LIB_LIST SDF gmt0018)
-endif()
+set(LIB_LIST OpenSSL::SSL OpenSSL::Crypto wedprcrypto::crypto wedprcrypto::zkp bcos-utilities bcos-concepts TBB::tbb SDF)
 
 find_package(OpenSSL REQUIRED)
 find_package(TBB REQUIRED)

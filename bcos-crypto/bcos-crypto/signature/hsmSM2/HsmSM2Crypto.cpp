@@ -35,10 +35,11 @@ using namespace hsm::sdf;
 #define SDR_VERIFYERR (SDR_BASE + 0x0000000E)
 
 std::shared_ptr<bytes> HsmSM2Crypto::sign(
-    const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub)
+    const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {
     auto& hsmKeyPair = dynamic_cast<const HsmSM2KeyPair&>(_keyPair);
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+
     Key key = Key();
     if (hsmKeyPair.isInternalKey())
     {
@@ -102,16 +103,16 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
 }
 
 bool HsmSM2Crypto::verify(
-    std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData)
+    std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const
 {
     return verify(
         std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, _pubKeyBytes), _hash, _signatureData);
 }
 
-bool HsmSM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData)
+bool HsmSM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
     // get provider
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
 
     // parse input
     Key key = Key();
@@ -143,7 +144,7 @@ bool HsmSM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRe
     return true;
 }
 
-PublicPtr HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData)
+PublicPtr HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
 {
     auto signatureStruct = std::make_shared<SignatureDataWithPub>(_signData);
     auto hsmSM2Pub = std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, signatureStruct->pub());
@@ -156,7 +157,7 @@ PublicPtr HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData)
                               _hash.hex() + ", signature:" + *toHexString(_signData)));
 }
 
-std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input)
+std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input) const
 {
     struct
     {
@@ -186,12 +187,12 @@ std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesCo
     return {false, {}};
 }
 
-KeyPairInterface::UniquePtr HsmSM2Crypto::generateKeyPair()
+KeyPairInterface::UniquePtr HsmSM2Crypto::generateKeyPair() const
 {
     return m_keyPairFactory->generateKeyPair();
 }
 
-KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(SecretPtr _secretKey)
+KeyPairInterface::UniquePtr HsmSM2Crypto::createKeyPair(SecretPtr _secretKey) const
 {
     return m_keyPairFactory->createKeyPair(_secretKey);
 }

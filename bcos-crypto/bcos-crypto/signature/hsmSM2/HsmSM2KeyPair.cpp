@@ -31,7 +31,7 @@ using namespace hsm::sdf;
 
 #define SDR_OK 0x0
 
-HsmSM2KeyPair::HsmSM2KeyPair(SecretPtr _secretKey) : HsmSM2KeyPair ()
+HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, SecretPtr _secretKey) : HsmSM2KeyPair(_libPath)
 {
     if (_secretKey->size() != HSM_SM2_PRIVATE_KEY_LEN)
     {
@@ -43,19 +43,21 @@ HsmSM2KeyPair::HsmSM2KeyPair(SecretPtr _secretKey) : HsmSM2KeyPair ()
     m_publicKey = priToPub(_secretKey);
 }
 
-HsmSM2KeyPair::HsmSM2KeyPair(unsigned int _keyIndex, std::string _password) : HsmSM2KeyPair ()
+HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, unsigned int _keyIndex, std::string _password)
+  : HsmSM2KeyPair(_libPath)
 {
     m_keyIndex = _keyIndex;
     m_password = _password;
     m_isInternalKey = true;
 
-    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+
     Key key = Key(m_keyIndex);
     unsigned int code = provider.ExportInternalPublicKey(key, AlgorithmType::SM2);
     if (code != SDR_OK)
     {
-        BOOST_THROW_EXCEPTION(
-            GenerateKeyPairException() << errinfo_comment("HsmSM2ExportInternalPublicKey exception"));
+        BOOST_THROW_EXCEPTION(GenerateKeyPairException()
+                              << errinfo_comment("HsmSM2ExportInternalPublicKey exception"));
     }
     m_publicKey = std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, key.publicKey());
 }

@@ -30,23 +30,33 @@ class HsmSM2KeyPairFactory : public KeyPairFactory
 {
 public:
     using Ptr = std::shared_ptr<HsmSM2KeyPairFactory>;
-    HsmSM2KeyPairFactory() = default;
+    HsmSM2KeyPairFactory(std::string _libPath)
+    {
+        m_hsmLibPath = _libPath;
+        CRYPTO_LOG(INFO) << "[HsmSM2KeyPairFactory::HsmSM2KeyPairFactory]"
+                         << LOG_KV("_libPath", _libPath) << LOG_KV("lib_path", m_hsmLibPath);
+    }
     ~HsmSM2KeyPairFactory() override {}
+
+    void setHsmLibPath(std::string _libPath) { m_hsmLibPath = _libPath; }
 
     KeyPairInterface::UniquePtr createKeyPair(unsigned int _keyIndex, std::string _password)
     {
-        return std::make_unique<HsmSM2KeyPair>(_keyIndex, _password);
+        return std::make_unique<HsmSM2KeyPair>(m_hsmLibPath, _keyIndex, _password);
     }
 
     KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) override
     {
-        return std::make_unique<HsmSM2KeyPair>(_secretKey);
+        return std::make_unique<HsmSM2KeyPair>(m_hsmLibPath, _secretKey);
     }
 
     KeyPairInterface::UniquePtr generateKeyPair() override
     {
-        return std::make_unique<HsmSM2KeyPair>();
+        return std::make_unique<HsmSM2KeyPair>(m_hsmLibPath);
     }
+
+private:
+    std::string m_hsmLibPath;
 };
 }  // namespace crypto
 }  // namespace bcos
