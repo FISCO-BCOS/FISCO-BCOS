@@ -42,7 +42,6 @@ void TransactionReceiptImpl::encode(bcos::bytes& _encodedData) const
     bcos::concepts::serialize::encode(*m_inner(), _encodedData);
 }
 
-// Note: not thread-safe
 bcos::crypto::HashType TransactionReceiptImpl::hash() const
 {
     if (m_inner()->dataHash.empty())
