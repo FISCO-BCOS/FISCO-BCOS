@@ -49,6 +49,7 @@ public:
 
     bcos::crypto::KeyPairInterface::Ptr keyPair() const { return m_keyPair; }
     bool hsmEnable() const { return m_hsmEnable; }
+    const std::string& hsmLibPath() const { return m_hsmLibPath; }
     int keyIndex() const { return m_keyIndex; }
     const std::string& password() const { return m_password; }
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
@@ -57,10 +58,7 @@ public:
 private:
     void createCryptoSuite();
     void createSMCryptoSuite();
-
-#ifdef WITH_HSM
     void createHsmSMCryptoSuite();
-#endif
 
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
@@ -71,6 +69,7 @@ private:
     size_t c_hexedPrivateKeySize = 64;
     bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
     bool m_hsmEnable;
+    std::string m_hsmLibPath;
     int m_keyIndex;
     std::string m_password;
 };

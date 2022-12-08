@@ -484,15 +484,16 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
-    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS) [[unlikely]]
-    {
-        NodeConfig_LOG(WARNING)
-            << LOG_DESC(
-                   "loadTxPoolConfig: the configured txs_expiration_time is smaller than default "
-                   "consensus time, reset to the consensus time")
-            << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
-            << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
-    }
+    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
+        [[unlikely]]
+        {
+            NodeConfig_LOG(WARNING) << LOG_DESC(
+                                           "loadTxPoolConfig: the configured txs_expiration_time "
+                                           "is smaller than default "
+                                           "consensus time, reset to the consensus time")
+                                    << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
+                                    << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
+        }
     m_txsExpirationTime = std::max(
         {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
 
@@ -516,7 +517,8 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "config.genesis chain.sm_crypto/chain.group_id/chain.chain_id is null, please set it!"));
+                                  "config.genesis chain.sm_crypto/chain.group_id/chain.chain_id is "
+                                  "null, please set it!"));
     }
     if (!isalNumStr(m_chainId))
     {
@@ -541,15 +543,16 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
     m_hsmEnable = _pt.get<bool>("security.enable_hsm", false);
     if (m_hsmEnable)
     {
+        m_hsmLibPath =
+            _pt.get<std::string>("security.hsm_lib_path", "/usr/local/lib/libgmt0018.so");
         m_keyIndex = _pt.get<int>("security.key_index");
         m_password = _pt.get<std::string>("security.password", "");
         NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig HSM")
-                             << LOG_KV("key_index", m_keyIndex)
+                             << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("key_index", m_keyIndex)
                              << LOG_KV("password", m_password);
     }
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig")
-                         << LOG_KV("enable_hsm", m_hsmEnable)
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_hsmEnable)
                          << LOG_KV("privateKeyPath", m_privateKeyPath);
 }
 
@@ -701,7 +704,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "consensus.consensus_type is null， please set it!"));
+                                  "consensus.consensus_type is null， please set it!"));
     }
     // blockTxCountLimit
     auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit");
@@ -858,7 +861,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "executor.is_wasm/executor.is_auth_check/executor.is_serial_execute is null, please set it!"));
+                                  "executor.is_wasm/executor.is_auth_check/"
+                                  "executor.is_serial_execute is null, please set it!"));
     }
     if (m_isWasm && !m_isSerialExecute)
     {
@@ -890,11 +894,11 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     catch (std::exception const& e)
     {
-        if(m_isAuthCheck)
+        if (m_isAuthCheck)
         {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                "executor.auth_admin_account is null, "
-                "please set correct auth_admin_account"));
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
+                                                   "please set correct auth_admin_account"));
         }
     }
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
@@ -930,9 +934,9 @@ int64_t NodeConfig::checkAndGetValue(
     }
     catch (std::exception const& e)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "Invalid value for configuration " + _key +
-            ", please set the value with a valid number"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Invalid value for configuration " + _key +
+                                               ", please set the value with a valid number"));
     }
 }
 

@@ -18,7 +18,7 @@ endif()
 ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     GIT_REPOSITORY https://${URL_BASE}/WeBankBlockchain/hsm-crypto.git
-    GIT_TAG        e270f9cc577f3826432595375e480f59ba617592
+    GIT_TAG        9d8e79a88c8ca8365af75a7a0d107e485c0f7e3c
     BUILD_IN_SOURCE true
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -34,10 +34,6 @@ set(HSM_INCLUDE_DIR ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${HSM_INCLUDE_DIR})  # Must exist.
 
 set(SDF_LIB "${SOURCE_DIR}/lib/${SDF_LIB_NAME}")
-find_library(GMT0018 gmt0018)
-if(NOT GMT0018)
-    message(FATAL " Can not find library libgmt0018.so under default library path, please make sure you have a crypto PCI card on your machine, as well as the the driver and libraries are installed.")
-endif()
 
 add_library(SDF STATIC IMPORTED GLOBAL)
 set_property(TARGET SDF PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${HSM_INCLUDE_DIR})

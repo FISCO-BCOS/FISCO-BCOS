@@ -22,10 +22,12 @@
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
+#include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
+#include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
@@ -34,11 +36,6 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultFactoryImpl.h>
-
-#ifdef WITH_HSM
-#include <bcos-crypto/encrypt/HsmSM4Crypto.h>
-#include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
-#endif
 
 using namespace bcos;
 using namespace bcostars::protocol;
@@ -58,14 +55,11 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     {
         if (m_hsmEnable)
         {
-#ifdef WITH_HSM
+            m_hsmLibPath = _nodeConfig->hsmLibPath();
             m_keyIndex = _nodeConfig->keyIndex();
             m_password = _nodeConfig->password();
             createHsmSMCryptoSuite();
             INITIALIZER_LOG(INFO) << LOG_DESC("begin init hsm sm crypto suite");
-#else
-            INITIALIZER_LOG(FATAL) << LOG_DESC("ProtocolInitializer init FATAL, This binary is not compiled with hsm");
-#endif
         }
         else
         {
@@ -120,30 +114,24 @@ void ProtocolInitializer::createSMCryptoSuite()
     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
 }
 
-#ifdef WITH_HSM
 void ProtocolInitializer::createHsmSMCryptoSuite()
 {
     auto hashImpl = std::make_shared<SM3>();
-    auto signatureImpl = std::make_shared<HsmSM2Crypto>();
-    auto encryptImpl = std::make_shared<HsmSM4Crypto>();
+    auto signatureImpl = std::make_shared<HsmSM2Crypto>(m_hsmLibPath);
+    auto encryptImpl = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
 }
-#endif
 
 void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 {
     if (m_hsmEnable)
     {
-#ifdef WITH_HSM
         // Create key pair according to the key index which inside HSM(Hardware Secure Machine)
         m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
                         ->createKeyPair(m_keyIndex, m_password);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from HSM")
-                              << LOG_KV("keyIndex", m_keyIndex)
+                              << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("keyIndex", m_keyIndex)
                               << LOG_KV("HSM password", m_password);
-#else
-        INITIALIZER_LOG(FATAL) << LOG_DESC("loadKeyPair FATAL, This binary is not compiled with hsm");
-#endif
     }
     else
     {
