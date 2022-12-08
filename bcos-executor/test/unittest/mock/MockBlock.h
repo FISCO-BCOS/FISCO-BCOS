@@ -7,7 +7,7 @@ namespace bcos::test
 class MockBlock : public bcos::protocol::Block
 {
 public:
-    MockBlock() : bcos::protocol::Block(nullptr, nullptr) {}
+    MockBlock() {}
     ~MockBlock() override {}
 
     void setBlockHeader(protocol::BlockHeader::Ptr blockHeader) override
@@ -16,8 +16,14 @@ public:
     }
     void decode(bytesConstRef _data, bool _calculateHash, bool _checkSig) override {}
     void encode(bytes& _encodeData) const override {}
-    crypto::HashType calculateTransactionRoot() const override { return bcos::crypto::HashType(); }
-    crypto::HashType calculateReceiptRoot() const override { return bcos::crypto::HashType(); }
+    crypto::HashType calculateTransactionRoot(const crypto::Hash& hashImpl) const override
+    {
+        return {};
+    }
+    crypto::HashType calculateReceiptRoot(const crypto::Hash& hashImpl) const override
+    {
+        return {};
+    }
     int32_t version() const override { return m_blockHeader->version(); }
     void setVersion(int32_t _version) override { m_blockHeader->setVersion(_version); }
     protocol::BlockType blockType() const override { return protocol::WithTransactionsHash; }

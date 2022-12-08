@@ -21,6 +21,7 @@
 #pragma once
 #include "BlockHeaderImpl.h"
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
+#include <utility>
 
 
 namespace bcostars
@@ -30,13 +31,14 @@ namespace protocol
 class BlockHeaderFactoryImpl : public bcos::protocol::BlockHeaderFactory
 {
 public:
-    BlockHeaderFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite) : m_cryptoSuite(cryptoSuite)
+    BlockHeaderFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
+      : m_cryptoSuite(std::move(cryptoSuite))
     {}
     ~BlockHeaderFactoryImpl() override {}
     bcos::protocol::BlockHeader::Ptr createBlockHeader() override
     {
         return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            m_cryptoSuite, [m_header = bcostars::BlockHeader()]() mutable { return &m_header; });
+            [m_header = bcostars::BlockHeader()]() mutable { return &m_header; });
     }
     bcos::protocol::BlockHeader::Ptr createBlockHeader(bcos::bytes const& _data) override
     {

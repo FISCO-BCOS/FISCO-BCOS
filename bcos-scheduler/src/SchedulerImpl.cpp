@@ -116,7 +116,7 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     catch (std::exception const& e)
     {
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "handleBlockQueue exception"
-                             << e.what();
+                             << boost::diagnostic_information(e);
         blocksLock.unlock();
         whenException(e);
     }
@@ -631,6 +631,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     // Create temp block
     auto block = m_blockFactory->createBlock();
     block->blockHeader()->setNumber(blockNumber);
+    block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
     block->appendTransaction(std::move(tx));
 
     // Create temp executive

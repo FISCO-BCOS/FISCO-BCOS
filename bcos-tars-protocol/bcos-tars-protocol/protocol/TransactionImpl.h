@@ -51,8 +51,9 @@ public:
     void encode(bcos::bytes& txData) const override;
 
     bcos::crypto::HashType hash() const override;
+    
     template <bcos::crypto::hasher::Hasher Hasher>
-    void updateHash()
+    void calculateHash()
     {
         bcos::concepts::hash::calculate<Hasher>(*m_inner(), m_inner()->dataHash);
     }

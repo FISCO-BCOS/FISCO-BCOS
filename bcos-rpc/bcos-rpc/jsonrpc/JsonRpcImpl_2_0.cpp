@@ -239,11 +239,11 @@ void bcos::rpc::toJsonResp(
 }
 
 void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
+    protocol::TransactionStatus status,
     bcos::protocol::TransactionReceipt const& transactionReceipt, bool _isWasm,
     crypto::Hash& hashImpl)
 {
     jResp["version"] = transactionReceipt.version();
-
     std::string contractAddress = string(transactionReceipt.contractAddress());
 
     if (!contractAddress.empty() && !_isWasm)
@@ -276,7 +276,16 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     jResp["output"] = toHexStringWithPrefix(transactionReceipt.output());
     jResp["message"] = transactionReceipt.message();
     jResp["transactionHash"] = std::string(_txHash);
-    jResp["hash"] = transactionReceipt.hash().hexPrefixed();
+
+    if (status == protocol::TransactionStatus::None)
+    {
+        jResp["hash"] = transactionReceipt.hash().hexPrefixed();
+    }
+    else
+    {
+        jResp["hash"] = "0x";
+    }
+
     jResp["logEntries"] = Json::Value(Json::arrayValue);
     for (const auto& logEntry : transactionReceipt.logEntries())
     {
@@ -461,12 +470,12 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
                 if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
                 {
-                    std::stringstream errorMsg;
-                    errorMsg << (bcos::protocol::TransactionStatus)(submitResult->status());
-                    jResp["errorMessage"] = errorMsg.str();
+                    BOOST_THROW_EXCEPTION(
+                        bcos::Error(submitResult->status(), toString(submitResult->status())));
                 }
 
-                toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
+                toJsonResp(jResp, hexPreTxHash, (protocol::TransactionStatus)submitResult->status(),
+                    *(submitResult->transactionReceipt()), isWasm,
                     *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
                 jResp["to"] = submitResult->to();
                 jResp["from"] = toHexStringWithPrefix(submitResult->sender());
@@ -628,7 +637,8 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
                 return;
             }
 
-            toJsonResp(jResp, hash.hexPrefixed(), *_transactionReceiptPtr, isWasm, *hashImpl);
+            toJsonResp(jResp, hash.hexPrefixed(), protocol::TransactionStatus::None,
+                *_transactionReceiptPtr, isWasm, *hashImpl);
 
             RPC_IMPL_LOG(TRACE) << LOG_DESC("getTransactionReceipt") << LOG_KV("txHash", m_txHash)
                                 << LOG_KV("requireProof", _requireProof)

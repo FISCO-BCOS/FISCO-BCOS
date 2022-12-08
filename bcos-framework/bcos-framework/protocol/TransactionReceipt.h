@@ -24,9 +24,7 @@
 #include <gsl/span>
 #include <utility>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class LogEntry;
 class TransactionReceipt
@@ -34,9 +32,6 @@ class TransactionReceipt
 public:
     using Ptr = std::shared_ptr<TransactionReceipt>;
     using ConstPtr = std::shared_ptr<const TransactionReceipt>;
-    explicit TransactionReceipt(bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
-      : m_cryptoSuite(std::move(_cryptoSuite))
-    {}
 
     virtual ~TransactionReceipt() = default;
 
@@ -49,19 +44,14 @@ public:
     virtual int32_t status() const = 0;
     virtual bytesConstRef output() const = 0;
     virtual gsl::span<const LogEntry> logEntries() const = 0;
-    virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
     virtual BlockNumber blockNumber() const = 0;
 
     // additional information on transaction execution, no need to be involved in the hash
     // calculation
     virtual std::string const& message() const = 0;
     virtual void setMessage(std::string message) = 0;
-
-protected:
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 };
 using Receipts = std::vector<TransactionReceipt::Ptr>;
 using ReceiptsPtr = std::shared_ptr<Receipts>;
 using ReceiptsConstPtr = std::shared_ptr<const Receipts>;
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

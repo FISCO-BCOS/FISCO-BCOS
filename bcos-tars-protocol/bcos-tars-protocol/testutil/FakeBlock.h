@@ -111,35 +111,40 @@ inline void checkBlock(CryptoSuite::Ptr _cryptoSuite, Block::Ptr block, Block::P
     }
     // check receiptsRoot
     h256 originHash = h256();
+    auto hashImpl = _cryptoSuite->hashImpl();
     if (block->blockHeader())
     {
         originHash = block->blockHeader()->hash();
     }
-    BOOST_CHECK(block->calculateReceiptRoot() == decodedBlock->calculateReceiptRoot());
+    BOOST_CHECK(
+        block->calculateReceiptRoot(*hashImpl) == decodedBlock->calculateReceiptRoot(*hashImpl));
 
     if (block->blockHeader())
     {
-        BOOST_CHECK_EQUAL(block->blockHeader()->receiptsRoot(), block->calculateReceiptRoot());
         BOOST_CHECK_EQUAL(
-            decodedBlock->blockHeader()->receiptsRoot(), decodedBlock->calculateReceiptRoot());
+            block->blockHeader()->receiptsRoot(), block->calculateReceiptRoot(*hashImpl));
+        BOOST_CHECK_EQUAL(decodedBlock->blockHeader()->receiptsRoot(),
+            decodedBlock->calculateReceiptRoot(*hashImpl));
         BOOST_CHECK_EQUAL(decodedBlock->blockHeader()->hash(), originHash);
         originHash = block->blockHeader()->hash();
     }
     // check transactionsRoot
-    BOOST_CHECK(block->calculateTransactionRoot() == decodedBlock->calculateTransactionRoot());
+    BOOST_CHECK(block->calculateTransactionRoot(*hashImpl) ==
+                decodedBlock->calculateTransactionRoot(*hashImpl));
     if (block->blockHeader())
     {
-        BOOST_CHECK_EQUAL(block->blockHeader()->txsRoot(), block->calculateTransactionRoot());
         BOOST_CHECK_EQUAL(
-            decodedBlock->blockHeader()->txsRoot(), block->calculateTransactionRoot());
+            block->blockHeader()->txsRoot(), block->calculateTransactionRoot(*hashImpl));
+        BOOST_CHECK_EQUAL(
+            decodedBlock->blockHeader()->txsRoot(), block->calculateTransactionRoot(*hashImpl));
         BOOST_CHECK_EQUAL(decodedBlock->blockHeader()->hash(), originHash);
         originHash = decodedBlock->blockHeader()->hash();
     }
     // Check idempotence
-    auto txsRoot = block->calculateTransactionRoot();
-    auto receiptsRoot = block->calculateReceiptRoot();
-    BOOST_CHECK(txsRoot == block->calculateTransactionRoot());
-    BOOST_CHECK(receiptsRoot == block->calculateReceiptRoot());
+    auto txsRoot = block->calculateTransactionRoot(*hashImpl);
+    auto receiptsRoot = block->calculateReceiptRoot(*hashImpl);
+    BOOST_CHECK(txsRoot == block->calculateTransactionRoot(*hashImpl));
+    BOOST_CHECK(receiptsRoot == block->calculateReceiptRoot(*hashImpl));
     if (decodedBlock->blockHeader())
     {
         BOOST_CHECK(decodedBlock->blockHeader()->hash() == originHash);
@@ -154,6 +159,7 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     {
         auto blockHeader = testPBBlockHeader(_cryptoSuite);
         block->setBlockHeader(blockHeader);
+        block->blockHeader()->calculateHash(*_blockFactory->cryptoSuite()->hashImpl());
     }
 
     block->setBlockType(CompleteBlock);
@@ -191,10 +197,11 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     //     block->appendTransactionMetaData(metaData);
     // }
 
+    auto hashImpl = _cryptoSuite->hashImpl();
     if (block->blockHeaderConst())
     {
-        block->blockHeader()->setReceiptsRoot(block->calculateReceiptRoot());
-        block->blockHeader()->setTxsRoot(block->calculateTransactionRoot());
+        block->blockHeader()->setReceiptsRoot(block->calculateReceiptRoot(*hashImpl));
+        block->blockHeader()->setTxsRoot(block->calculateTransactionRoot(*hashImpl));
     }
     if (!_check)
     {

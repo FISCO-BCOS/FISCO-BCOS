@@ -197,6 +197,7 @@ protected:
     bool m_isRunning = false;
 
     std::function<void()> f_onNeedSwitchEvent;
+    crypto::Hash::Ptr m_hashImpl;
 };
 
 }  // namespace bcos::scheduler

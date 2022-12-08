@@ -43,7 +43,7 @@ public:
     Keccak256() { setHashImplType(HashImplType::Keccak256Hash); }
     ~Keccak256() override {}
     HashType hash(bytesConstRef _data) override { return keccak256Hash(_data); }
-    bcos::crypto::hasher::AnyHasher hasher() override
+    bcos::crypto::hasher::AnyHasher hasher() const override
     {
         return bcos::crypto::hasher::AnyHasher{
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}};

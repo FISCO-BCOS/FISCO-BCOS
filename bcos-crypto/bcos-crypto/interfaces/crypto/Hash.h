@@ -68,7 +68,7 @@ public:
 
     inline HashImplType getHashImplType() const { return m_type; }
 
-    virtual bcos::crypto::hasher::AnyHasher hasher() = 0;
+    virtual bcos::crypto::hasher::AnyHasher hasher() const = 0;
 
 private:
     HashType m_emptyHash = HashType();

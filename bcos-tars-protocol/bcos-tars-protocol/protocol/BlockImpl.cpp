@@ -41,7 +41,6 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
 {
     bcos::ReadGuard l(x_blockHeader);
     return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        m_transactionFactory->cryptoSuite(),
         [inner = this->m_inner]() mutable { return &inner->blockHeader; });
 }
 
@@ -49,7 +48,6 @@ bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
 {
     bcos::ReadGuard l(x_blockHeader);
     return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
-        m_transactionFactory->cryptoSuite(),
         [inner = this->m_inner]() { return &inner->blockHeader; });
 }
 
@@ -62,7 +60,6 @@ bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) co
 bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
 {
     return std::make_shared<const bcostars::protocol::TransactionReceiptImpl>(
-        m_transactionFactory->cryptoSuite(),
         [inner = m_inner, _index]() { return &(inner->receipts[_index]); });
 }
 
