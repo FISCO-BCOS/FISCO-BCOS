@@ -92,7 +92,7 @@ void checkNameValidate(std::string_view tableName, std::string_view _keyField,
 void checkLengthValidate(std::string_view field_value, int32_t max_length, int32_t errorCode);
 
 std::string checkCreateTableParam(const std::string_view& _tableName, std::string& _keyField,
-    const std::variant<std::string, std::vector<std::string>>& _valueField);
+    const std::variant<std::string, std::vector<std::string>>& _valueField, std::optional<uint8_t> keyOrder = std::nullopt);
 
 uint32_t getFuncSelector(std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl= executor::GlobalHashImpl::g_hashImpl);
 // for ut
