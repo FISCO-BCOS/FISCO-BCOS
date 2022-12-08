@@ -175,10 +175,24 @@ bool BlockSyncConfig::existNode(bcos::consensus::ConsensusNodeListPtr const& _no
 
 bcos::protocol::BlockNumber BlockSyncConfig::archiveBlockNumber() const
 {
-    std::promise<std::pair<Error::Ptr, ledger::CurrentState>> statePromise;
-    m_ledger->asyncGetCurrentState(
-        [&statePromise](const Error::Ptr& err, ledger::CurrentState state) {
-            statePromise.set_value(std::make_pair(err, state));
+    protocol::BlockNumber archivedBlockNumber = 0;
+    std::promise<std::pair<Error::Ptr, std::optional<bcos::storage::Entry>>> statePromise;
+    m_ledger->asyncGetCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER,
+        [&statePromise](Error::Ptr&& err, std::optional<bcos::storage::Entry>&& entry) {
+            statePromise.set_value(std::make_pair(std::move(err), std::move(entry)));
         });
-    return statePromise.get_future().get().second.archivedNumber;
+    auto archiveRet = statePromise.get_future().get();
+    if (!archiveRet.first && archiveRet.second)
+    {
+        try
+        {
+            archivedBlockNumber = boost::lexical_cast<int64_t>(archiveRet.second->get());
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            BLKSYNC_LOG(DEBUG) << "Lexical cast transaction count failed, entry value: "
+                               << archiveRet.second->get();
+        }
+    }
+    return archivedBlockNumber;
 }

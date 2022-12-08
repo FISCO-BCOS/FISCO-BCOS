@@ -231,7 +231,8 @@ public:
                 auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
                 txDataList->push_back(txPointer);
                 txHashList->push_back(m_fakeBlocks->at(i)->transaction(j)->hash());
-                txList->push_back(m_blockFactory->transactionFactory()->createTransaction(txData));
+                txList->push_back(
+                    m_blockFactory->transactionFactory()->createTransaction(bcos::ref(txData)));
             }
 
             std::promise<bool> p1;

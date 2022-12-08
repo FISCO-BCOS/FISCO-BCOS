@@ -1,7 +1,7 @@
 #include "bcos-task/Wait.h"
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
-#include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
+#include <bcos-lightnode/transaction-pool/TransactionPoolImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>

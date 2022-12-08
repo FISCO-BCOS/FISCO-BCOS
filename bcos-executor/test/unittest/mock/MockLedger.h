@@ -103,8 +103,8 @@ public:
         BOOST_CHECK(false);  // Need implementations
     };
 
-    void asyncGetCurrentState(
-        std::function<void(Error::Ptr, const ledger::CurrentState&)> _callback) override
+    void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) override
     {}
 
 

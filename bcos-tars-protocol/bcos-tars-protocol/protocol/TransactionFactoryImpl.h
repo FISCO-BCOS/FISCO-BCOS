@@ -20,11 +20,9 @@
  */
 #pragma once
 #include "../impl/TarsHashable.h"
-
 #include "TransactionImpl.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
-
 #include <utility>
 
 namespace bcostars::protocol
@@ -32,29 +30,29 @@ namespace bcostars::protocol
 class TransactionFactoryImpl : public bcos::protocol::TransactionFactory
 {
 public:
+    using TransactionType = TransactionImpl;
+
     TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
       : m_cryptoSuite(std::move(cryptoSuite))
     {}
+    TransactionFactoryImpl(const TransactionFactoryImpl&) = default;
+    TransactionFactoryImpl(TransactionFactoryImpl&&) = default;
+    TransactionFactoryImpl& operator=(const TransactionFactoryImpl&) = default;
+    TransactionFactoryImpl& operator=(TransactionFactoryImpl&&) = default;
     ~TransactionFactoryImpl() override = default;
 
     bcos::protocol::Transaction::Ptr createTransaction(
-        bcos::bytesConstRef _txData, bool _checkSig = true) override
+        bcos::bytesConstRef txData, bool checkSig = true) override
     {
         auto transaction = std::make_shared<TransactionImpl>(
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
 
-        transaction->decode(_txData);
-        if (_checkSig)
+        transaction->decode(txData);
+        if (checkSig)
         {
             transaction->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
         }
         return transaction;
-    }
-
-    bcos::protocol::Transaction::Ptr createTransaction(
-        bcos::bytes const& _txData, bool _checkSig = true) override
-    {
-        return createTransaction(bcos::ref(_txData), _checkSig);
     }
 
     bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
@@ -63,21 +61,21 @@ public:
     {
         auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
-        auto const& inner = transaction->innerGetter();
-        inner()->data.version = _version;
-        inner()->data.to = std::move(_to);
-        inner()->data.input.assign(_input.begin(), _input.end());
-        inner()->data.blockLimit = _blockLimit;
-        inner()->data.chainID = std::move(_chainId);
-        inner()->data.groupID = std::move(_groupId);
-        inner()->data.nonce = boost::lexical_cast<std::string>(_nonce);
-        inner()->importTime = _importTime;
+        auto& inner = transaction->mutableInner();
+        inner.data.version = _version;
+        inner.data.to = std::move(_to);
+        inner.data.input.assign(_input.begin(), _input.end());
+        inner.data.blockLimit = _blockLimit;
+        inner.data.chainID = std::move(_chainId);
+        inner.data.groupID = std::move(_groupId);
+        inner.data.nonce = boost::lexical_cast<std::string>(_nonce);
+        inner.importTime = _importTime;
 
         // Update the hash field
         std::visit(
             [&inner](auto&& hasher) {
                 using HasherType = std::decay_t<decltype(hasher)>;
-                bcos::concepts::hash::calculate<HasherType>(*inner(), inner()->dataHash);
+                bcos::concepts::hash::calculate<HasherType>(inner, inner.dataHash);
             },
             m_cryptoSuite->hashImpl()->hasher());
 
@@ -95,13 +93,16 @@ public:
         auto sign = m_cryptoSuite->signatureImpl()->sign(*keyPair, tx->hash(), true);
 
         auto tarsTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
-        auto const& inner = tarsTx->innerGetter();
-        inner()->signature.assign(sign->begin(), sign->end());
+        auto& inner = tarsTx->mutableInner();
+        inner.signature.assign(sign->begin(), sign->end());
 
         return tx;
     }
 
-    void setCryptoSuite(bcos::crypto::CryptoSuite::Ptr cryptoSuite) { m_cryptoSuite = cryptoSuite; }
+    void setCryptoSuite(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
+    {
+        m_cryptoSuite = std::move(cryptoSuite);
+    }
     bcos::crypto::CryptoSuite::Ptr cryptoSuite() override { return m_cryptoSuite; }
 
 private:

@@ -31,12 +31,9 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/iterator/iterator_categories.hpp>
-#include <boost/range/any_range.hpp>
 #include <memory>
 
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 class ParallelTransactionExecutorInterface
 {
@@ -137,5 +134,4 @@ public:
 protected:
     int64_t m_seq = utcTime();
 };
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

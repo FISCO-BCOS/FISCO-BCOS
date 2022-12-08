@@ -89,10 +89,11 @@ public:
             int64_t _failedTxCount, bcos::protocol::BlockNumber _latestBlockNumber)>
             _callback) override;
 
-    virtual void asyncGetCurrentState(
-        std::function<void(bcos::Error::Ptr, const bcos::ledger::CurrentState&)> _callback) override
+    virtual void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(bcos::Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
+        override
     {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncGetCurrentState");
+        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncGetCurrentStateByKey");
     }
 
     void asyncGetSystemConfigByKey(std::string_view const& _key,

@@ -103,7 +103,7 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     std::cout << "### to:" << *toHexString(pbTransaction->to()) << std::endl;
 #endif
     // decode
-    auto decodedTransaction = factory->createTransaction(encodedData, true);
+    auto decodedTransaction = factory->createTransaction(bcos::ref(encodedData), true);
     checkTransaction(pbTransaction, decodedTransaction);
     return decodedTransaction;
 }
