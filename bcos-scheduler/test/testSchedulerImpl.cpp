@@ -310,6 +310,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     size_t errorNumber = 0;
     size_t queueFrontNumber = 0;
     ledger->commitSuccess(true);
+    ledger->commitSuccess(true); // the committed block number is 7
     for (size_t i = 7; i < 11; ++i)
     {
         auto blockHeader = blockHeaderFactory->createBlockHeader();
@@ -341,8 +342,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
             commitBlockError = false;
         }
     }
-    BOOST_CHECK_EQUAL(errorNumber, 1);
-    BOOST_CHECK_EQUAL(queueFrontNumber, 3);
+    BOOST_CHECK_EQUAL(errorNumber, 4);
+    BOOST_CHECK_EQUAL(queueFrontNumber, 0);
     BOOST_CHECK(!commitBlockError);
     SCHEDULER_LOG(DEBUG) << LOG_KV("errorNumber", errorNumber)
                          << LOG_KV("queueFrontNumber", queueFrontNumber);
