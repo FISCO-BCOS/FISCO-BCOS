@@ -230,7 +230,7 @@ void TransactionExecutor::initEvmEnvironment()
         m_constantPrecompiled->insert(
             {CAST_ADDRESS, std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl)});
     }
-    else if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
         m_constantPrecompiled->insert(
             {ACCOUNT_MGR_ADDRESS, std::make_shared<AccountManagerPrecompiled>()});
@@ -298,7 +298,7 @@ void TransactionExecutor::initWasmEnvironment()
         m_constantPrecompiled->insert(
             {CAST_NAME, std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl)});
     }
-    else if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
         m_constantPrecompiled->insert(
             {ACCOUNT_MANAGER_NAME, std::make_shared<AccountManagerPrecompiled>()});
