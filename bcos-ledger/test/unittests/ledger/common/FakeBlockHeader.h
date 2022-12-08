@@ -59,6 +59,7 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
     WeightList weights;
     weights.push_back(0);
     blockHeader->setConsensusWeights(weights);
+    blockHeader->updateHash(*_cryptoSuite->hashImpl());
     return blockHeader;
 }
 

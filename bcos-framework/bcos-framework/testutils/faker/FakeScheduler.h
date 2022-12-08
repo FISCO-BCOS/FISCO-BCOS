@@ -19,8 +19,8 @@
  * @date 2021-09-07
  */
 #pragma once
-#include "FakeLedger.h"
 #include "../../dispatcher/SchedulerInterface.h"
+#include "FakeLedger.h"
 
 using namespace bcos;
 using namespace bcos::scheduler;
@@ -45,6 +45,7 @@ public:
         {
             blockHeader =
                 m_blockFactory->blockHeaderFactory()->populateBlockHeader(_block->blockHeader());
+            blockHeader->updateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         }
         _callback(nullptr, std::move(blockHeader), false);
         return;

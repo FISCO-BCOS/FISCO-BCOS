@@ -736,6 +736,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{0, h256(0)}});
     blockHeader->updateHash(*cryptoSuite->hashImpl());
+    std::cout << "Block hash is: " << blockHeader->hash() << std::endl;
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -973,6 +974,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{0, h256(0)}});
+    blockHeader->updateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {

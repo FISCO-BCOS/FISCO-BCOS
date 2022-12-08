@@ -211,6 +211,7 @@ BOOST_AUTO_TEST_CASE(block)
 
     header->setSealerList(gsl::span<const bcos::bytes>(sealerList));
     BOOST_CHECK(header->sealerList().size() == 4);
+    header->updateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto signatureList = std::make_shared<std::vector<bcos::protocol::Signature>>();
     for (int64_t i = 0; i < 2; i++)
@@ -223,7 +224,6 @@ BOOST_AUTO_TEST_CASE(block)
     }
     header->setSignatureList(*signatureList);
     BOOST_CHECK(header->signatureList().size() == 2);
-    header->hash();
     BOOST_CHECK(header->signatureList().size() == 2);
 
     for (size_t i = 0; i < 100; ++i)

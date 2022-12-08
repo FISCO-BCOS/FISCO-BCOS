@@ -64,6 +64,7 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         txsHash->emplace_back(txHash);
         block->appendTransactionMetaData(txMetaData);
     }
+    block->blockHeader()->updateHash(*blockFactory->cryptoSuite()->hashImpl());
     bool finish = false;
     _txpool->asyncFillBlock(txsHash, [&](Error::Ptr _error, TransactionsPtr) {
         BOOST_CHECK(_error->errorCode() == CommonError::TransactionsMissing);
@@ -107,6 +108,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         txMetaData->setTo(tx->hash().abridged());
         block->appendTransactionMetaData(txMetaData);
     }
+    block->blockHeader()->updateHash(*blockFactory->cryptoSuite()->hashImpl());
+
     finish = false;
     _txpool->asyncFillBlock(txsHash, [&](Error::Ptr _error, TransactionsPtr _fetchedTxs) {
         BOOST_CHECK(_error == nullptr);

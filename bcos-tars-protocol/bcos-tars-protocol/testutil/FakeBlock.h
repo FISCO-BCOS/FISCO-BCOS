@@ -159,6 +159,7 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     {
         auto blockHeader = testPBBlockHeader(_cryptoSuite);
         block->setBlockHeader(blockHeader);
+        block->blockHeader()->updateHash(*_blockFactory->cryptoSuite()->hashImpl());
     }
 
     block->setBlockType(CompleteBlock);

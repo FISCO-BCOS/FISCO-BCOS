@@ -264,7 +264,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     blockHeader2->setNumber(2);
     blockHeader2->setParentInfo({{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}});
     ledger->setBlockNumber(blockHeader2->number() - 1);
-    blockHeader->updateHash(*cryptoSuite->hashImpl());
+    blockHeader2->updateHash(*cryptoSuite->hashImpl());
+
     std::promise<void> nextPromise2;
     executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);

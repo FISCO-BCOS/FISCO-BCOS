@@ -115,6 +115,7 @@ public:
             rootHash, rootHash, rootHash, _blockNumber, gasUsed, _timestamp, 0, m_sealerList,
             bytes(), signatureList, false);
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
+        blockHeader->updateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         signatureList = fakeSignatureList(sigImpl, m_keyPairVec, blockHeader->hash());
         blockHeader->setSignatureList(signatureList);
         block->setBlockHeader(blockHeader);
@@ -124,6 +125,7 @@ public:
     Block::Ptr populateFromHeader(BlockHeader::Ptr _blockHeader)
     {
         auto block = m_blockFactory->createBlock();
+        block->blockHeader()->updateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         block->setBlockHeader(_blockHeader);
         return block;
     }

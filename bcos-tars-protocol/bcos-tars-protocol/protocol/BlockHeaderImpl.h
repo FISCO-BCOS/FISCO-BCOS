@@ -40,7 +40,7 @@ public:
     void decode(bcos::bytesConstRef _data) override;
     void encode(bcos::bytes& _encodeData) const override;
     bcos::crypto::HashType hash() const override;
-    void updateHash(bcos::crypto::Hash& hashImpl) override;
+    void updateHash(const bcos::crypto::Hash& hashImpl) override;
 
     void clear() override;
 

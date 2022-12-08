@@ -40,7 +40,7 @@ public:
     virtual void encode(bytes& _encodeData) const = 0;
 
     virtual bcos::crypto::HashType hash() const = 0;
-    virtual void updateHash(crypto::Hash& hashImpl) = 0;
+    virtual void updateHash(const crypto::Hash& hashImpl) = 0;
 
     virtual void populateFromParents(const crypto::Hash& hashImpl,
         const std::vector<BlockHeader::Ptr>& _parents, BlockNumber _number)

@@ -218,6 +218,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 {
     auto block = blockFactory->createBlock();
     auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
+    header->updateHash(*cryptoSuite->hashImpl());
     block->setBlockHeader(header);
     auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
     memcpy(keyPair->secretKey()->mutableData(),
