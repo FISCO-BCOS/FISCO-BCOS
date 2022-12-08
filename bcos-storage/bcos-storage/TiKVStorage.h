@@ -97,7 +97,6 @@ private:
     std::shared_ptr<tikv_client::TransactionClient> m_cluster;
     std::shared_ptr<tikv_client::Transaction> m_committer = nullptr;
     uint64_t m_currentStartTS = 0;
-    std::atomic_uint64_t m_lastCommitTimestamp;
     std::function<void()> f_onNeedSwitchEvent;
     int32_t m_commitTimeout = 3000;
     std::chrono::time_point<std::chrono::system_clock> m_committerCreateTime;

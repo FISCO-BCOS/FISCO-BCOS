@@ -396,6 +396,7 @@ bcos::bytes HostContext::externalCodeRequest(const std::string_view& address)
     request->status = 0;
     request->delegateCall = false;
     request->codeAddress = addressBytesStr2String(address);
+    request->staticCall = staticCall();
     auto response = m_executive->externalCall(std::move(request));
     return std::move(response->data);
 }

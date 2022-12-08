@@ -24,7 +24,6 @@
 #include "TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
-#include "bcos-executor/src/precompiled/CastPrecompiled.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 
@@ -55,32 +54,13 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
 }
 void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
 {
-    auto blockContext = m_blockContext.lock();
-    if (blockContext->blockVersion() >= (uint32_t)protocol::BlockVersion::V3_2_VERSION)
-    {
-        if (!executive->isPrecompiled(CAST_ADDRESS) && !executive->isPrecompiled(CAST_NAME))
-        {
-            executive->setConstantPrecompiled(
-                blockContext->isWasm() ? CAST_NAME : CAST_ADDRESS,
-                std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl));
-        }
-    }
-    if (blockContext->blockVersion() >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
-    {
-        if (!executive->isPrecompiled(ACCOUNT_MGR_ADDRESS) &&
-            !executive->isPrecompiled(ACCOUNT_MANAGER_NAME))
-        {
-            executive->setConstantPrecompiled(
-                blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS,
-                std::make_shared<AccountManagerPrecompiled>());
-        }
+    // Code below has moved to initEvmEnvironment & initWasmEnvironment in TransactionExecutor.cpp:
+    //     m_constantPrecompiled->insert(
+    //        {ACCOUNT_MGR_ADDRESS, std::make_shared<AccountManagerPrecompiled>()});
+    //    m_constantPrecompiled->insert({ACCOUNT_MANAGER_NAME,
+    //    std::make_shared<AccountManagerPrecompiled>()});
+    //    m_constantPrecompiled->insert({ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>()});
 
-        if (!executive->isPrecompiled(ACCOUNT_ADDRESS))
-        {
-            executive->setConstantPrecompiled(
-                ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>());
-        }
-    }
     // TODO: register User developed Precompiled contract
     // registerUserPrecompiled(context);
 }
