@@ -129,8 +129,13 @@ void bcos::precompiled::checkLengthValidate(
 }
 
 std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _tableName,
-    std::string& _keyField, const std::variant<std::string, std::vector<std::string>>& _valueField)
+    std::string& _keyField, const std::variant<std::string, std::vector<std::string>>& _valueField,
+    std::optional<uint8_t> keyOrder)
 {
+    if (keyOrder && (*keyOrder != 0 && *keyOrder != 1))
+    {
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(std::to_string(int(*keyOrder)) + " KeyOrder not exist!"));
+    }
     std::vector<std::string> fieldNameList;
     if (_valueField.index() == 1)
     {

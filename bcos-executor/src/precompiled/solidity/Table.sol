@@ -4,8 +4,9 @@ pragma experimental ABIEncoderV2;
 import "./EntryWrapper.sol";
 
 // KeyOrder指定Key的排序规则，字典序和数字序，如果指定为数字序，key只能为数字
-// enum KeyOrder {Lexicographic, Numerical}
+enum KeyOrder {Lexicographic, Numerical}
 struct TableInfo {
+    KeyOrder keyOrder;
     string keyColumn;
     string[] valueColumns;
 }

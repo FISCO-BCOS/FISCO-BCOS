@@ -69,10 +69,14 @@ private:
         const precompiled::LimitTuple& limit) const;
     bool buildConditions(std::optional<storage::Condition>& keyCondition,
         std::optional<precompiled::Condition>& valueCondition,
-        const precompiled::Conditions& conditions, 
-        const precompiled::LimitTuple& limit, uint32_t version) const;
-    void desc(TableInfoTuple& _tableInfo, const std::string& tableName,
+        const precompiled::Conditions& conditions,
+        const precompiled::LimitTuple& limit, uint32_t version,
+        size_t cloumSize, bool isNumericalOrder) const;
+    void desc(precompiled::TableInfo& _tableInfo, const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters) const;
+    bool isNumericalOrder(std::shared_ptr<executor::TransactionExecutive> _executive,
+        PrecompiledExecResult::Ptr _callParameters, const std::string& _tableName);
+    static bool isNumericalOrder(const TableInfoTupleV320& tableInfo);
 };
 }  // namespace bcos::precompiled
