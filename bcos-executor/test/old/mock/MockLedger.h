@@ -48,7 +48,7 @@ public:
         {
             auto block = blockFactory->createBlock();
             auto header = blockFactory->blockHeaderFactory()->createBlockHeader(_number);
-            header->updateHash(*blockFactory->cryptoSuite()->hashImpl());
+            header->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
             block->setBlockHeader(header);
             _callback(nullptr, block);
         }

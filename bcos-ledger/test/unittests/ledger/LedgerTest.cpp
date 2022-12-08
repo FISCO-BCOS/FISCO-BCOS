@@ -1145,7 +1145,7 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     auto block = m_blockFactory->createBlock();
     auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(100);
-    blockHeader->updateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
     block->setBlockHeader(blockHeader);
 

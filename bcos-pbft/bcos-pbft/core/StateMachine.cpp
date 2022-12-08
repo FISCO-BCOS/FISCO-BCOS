@@ -95,7 +95,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
                              << LOG_KV("lastAppliedIndex", _lastAppliedProposal->index())
                              << LOG_KV("proposal", _proposal->index());
     }
-    blockHeader->updateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
     // calls dispatcher to execute the block
     auto startT = utcTime();

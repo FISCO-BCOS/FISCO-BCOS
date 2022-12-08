@@ -1565,7 +1565,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         header->setVersion(versionNumber);
     }
     header->setExtraData(bcos::bytes(_genesisData.begin(), _genesisData.end()));
-    header->updateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
     auto block = m_blockFactory->createBlock();
     block->setBlockHeader(header);

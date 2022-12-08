@@ -266,7 +266,7 @@ void testTransactionSync(bool _onlyTxsStatus = false)
         block->appendTransactionMetaData(txMetaData);
     }
     auto encodedData = std::make_shared<bytes>();
-    block->blockHeader()->updateHash(*blockFactory->cryptoSuite()->hashImpl());
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     block->encode(*encodedData);
     finish = false;
     faker->txpool()->asyncVerifyBlock(

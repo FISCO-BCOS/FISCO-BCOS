@@ -149,7 +149,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(m_sealingNumber);
     blockHeader->setTimestamp(m_config->nodeTimeMaintenance()->getAlignedTime());
-    blockHeader->updateHash(*m_config->blockFactory()->cryptoSuite()->hashImpl());
+    blockHeader->calculateHash(*m_config->blockFactory()->cryptoSuite()->hashImpl());
     block->setBlockHeader(blockHeader);
     auto txsSize =
         std::min((size_t)m_maxTxsPerBlock, (m_pendingTxs->size() + m_pendingSysTxs->size()));

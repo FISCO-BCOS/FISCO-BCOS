@@ -271,7 +271,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     }
 
     jResp["gasUsed"] = transactionReceipt.gasUsed().str(16);
-    jResp["status"] = (int32_t)status;
+    jResp["status"] = transactionReceipt.status();
     jResp["blockNumber"] = transactionReceipt.blockNumber();
     jResp["output"] = toHexStringWithPrefix(transactionReceipt.output());
     jResp["message"] = transactionReceipt.message();
@@ -470,9 +470,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
                 if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
                 {
-                    std::stringstream errorMsg;
-                    errorMsg << (bcos::protocol::TransactionStatus)(submitResult->status());
-                    jResp["errorMessage"] = errorMsg.str();
+                    BOOST_THROW_EXCEPTION(
+                        bcos::Error(submitResult->status(), toString(submitResult->status())));
                 }
 
                 toJsonResp(jResp, hexPreTxHash, (protocol::TransactionStatus)submitResult->status(),

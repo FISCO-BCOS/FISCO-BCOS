@@ -45,7 +45,7 @@ public:
         {
             blockHeader =
                 m_blockFactory->blockHeaderFactory()->populateBlockHeader(_block->blockHeader());
-            blockHeader->updateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+            blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         }
         _callback(nullptr, std::move(blockHeader), false);
         return;

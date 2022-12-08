@@ -64,7 +64,7 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
 
     auto blockHeader = testPBBlockHeader(_cryptoSuite, _blockNumber);
     block->setBlockHeader(blockHeader);
-    blockHeader->updateHash(*_blockFactory->cryptoSuite()->hashImpl());
+    blockHeader->calculateHash(*_blockFactory->cryptoSuite()->hashImpl());
     block->setBlockType(CompleteBlock);
     // fake transactions
     for (size_t i = 0; i < _txsNum; i++)
@@ -100,7 +100,7 @@ inline Block::Ptr fakeEmptyBlock(
     auto block = _blockFactory->createBlock();
 
     auto blockHeader = testPBBlockHeader(_cryptoSuite, _blockNumber);
-    blockHeader->updateHash(*_blockFactory->cryptoSuite()->hashImpl());
+    blockHeader->calculateHash(*_blockFactory->cryptoSuite()->hashImpl());
     block->setBlockHeader(blockHeader);
     return block;
 }
@@ -120,7 +120,7 @@ inline BlocksPtr fakeBlocks(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
         parentInfos.push_back(parentInfo);
         block->blockHeader()->setNumber(1 + i);
         block->blockHeader()->setParentInfo(parentInfos);
-        block->blockHeader()->updateHash(*_cryptoSuite->hashImpl());
+        block->blockHeader()->calculateHash(*_cryptoSuite->hashImpl());
         parentInfo.blockNumber = block->blockHeader()->number();
         parentInfo.blockHash = block->blockHeader()->hash();
         blocks->emplace_back(block);
@@ -142,7 +142,7 @@ inline BlocksPtr fakeEmptyBlocks(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Pt
         parentInfos.push_back(parentInfo);
         block->blockHeader()->setNumber(1 + i);
         block->blockHeader()->setParentInfo(parentInfos);
-        block->blockHeader()->updateHash(*_cryptoSuite->hashImpl());
+        block->blockHeader()->calculateHash(*_cryptoSuite->hashImpl());
         parentInfo.blockNumber = block->blockHeader()->number();
         parentInfo.blockHash = block->blockHeader()->hash();
         blocks->emplace_back(block);

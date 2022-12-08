@@ -62,7 +62,7 @@ bcos::crypto::HashType BlockHeaderImpl::hash() const
     return hashResult;
 }
 
-void BlockHeaderImpl::updateHash(const bcos::crypto::Hash& hashImpl)
+void BlockHeaderImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
     auto anyHasher = hashImpl.hasher();
     bcos::crypto::HashType hashResult;

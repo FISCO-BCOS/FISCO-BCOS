@@ -188,7 +188,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
-    blockHeader->updateHash(*cryptoSuite->hashImpl());
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -264,7 +264,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     blockHeader2->setNumber(2);
     blockHeader2->setParentInfo({{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}});
     ledger->setBlockNumber(blockHeader2->number() - 1);
-    blockHeader2->updateHash(*cryptoSuite->hashImpl());
+    blockHeader2->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise2;
     executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
@@ -428,7 +428,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
-    blockHeader->updateHash(*cryptoSuite->hashImpl());
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -817,7 +817,7 @@ BOOST_AUTO_TEST_CASE(performance)
         blockHeader->setNumber(blockNumber);
         blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         ledger->setBlockNumber(blockHeader->number() - 1);
-        blockHeader->updateHash(*cryptoSuite->hashImpl());
+        blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
@@ -1031,7 +1031,7 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
-    blockHeader->updateHash(*cryptoSuite->hashImpl());
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -1149,7 +1149,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         blockHeader->setNumber(1);
         blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         ledger->setBlockNumber(blockHeader->number() - 1);
-        blockHeader->updateHash(*cryptoSuite->hashImpl());
+        blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
@@ -1332,7 +1332,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         blockHeader->setNumber(2);
         blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
         ledger->setBlockNumber(blockHeader->number() - 1);
-        blockHeader->updateHash(*cryptoSuite->hashImpl());
+        blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -1489,7 +1489,7 @@ contract DelegateCallTest {
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
-    blockHeader->updateHash(*cryptoSuite->hashImpl());
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -1682,7 +1682,7 @@ contract HelloWorld {
     blockHeader->setNumber(1);
     blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
     ledger->setBlockNumber(blockHeader->number() - 1);
-    blockHeader->updateHash(*cryptoSuite->hashImpl());
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);

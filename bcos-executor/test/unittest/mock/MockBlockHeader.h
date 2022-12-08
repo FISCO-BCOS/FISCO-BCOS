@@ -10,7 +10,7 @@ public:
     ~MockBlockHeader() override = default;
 
     bcos::crypto::HashType hash() const override { return {}; }
-    void updateHash(const crypto::Hash& hashImpl) override {}
+    void calculateHash(const crypto::Hash& hashImpl) override {}
 
     void decode(bytesConstRef _data) override {}
     void encode(bytes& _encodeData) const override {}

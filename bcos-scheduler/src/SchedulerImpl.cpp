@@ -644,7 +644,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     // Create temp block
     auto block = m_blockFactory->createBlock();
     block->blockHeader()->setNumber(blockNumber);
-    block->blockHeader()->updateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
     block->appendTransaction(std::move(tx));
 
     // Create temp executive

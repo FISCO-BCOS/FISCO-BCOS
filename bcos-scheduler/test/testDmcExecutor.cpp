@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
     auto block = blockFactory->createBlock();
     auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(1);
-    blockHeader->updateHash(*hashImpl);
+    blockHeader->calculateHash(*hashImpl);
     block->setBlockHeader(blockHeader);
     // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
     auto dmcExecutor = std::make_shared<DmcExecutor>(
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
             auto block = blockFactory->createBlock();
             auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
             blockHeader->setNumber(2);
-            blockHeader->updateHash(*hashImpl);
+            blockHeader->calculateHash(*hashImpl);
             block->setBlockHeader(blockHeader);
             auto dmcExecutor2 = std::make_shared<DmcExecutor>(
                 "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder);
@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     auto block = blockFactory->createBlock();
     auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(1);
-    blockHeader->updateHash(*hashImpl);
+    blockHeader->calculateHash(*hashImpl);
     block->setBlockHeader(blockHeader);
     // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
     auto dmcExecutor = std::make_shared<DmcExecutor>(
@@ -263,7 +263,7 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
             auto block = blockFactory->createBlock();
             auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
             blockHeader->setNumber(2);
-            blockHeader->updateHash(*blockFactory->cryptoSuite()->hashImpl());
+            blockHeader->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
             block->setBlockHeader(blockHeader);
             auto dmcExecutor2 = std::make_shared<DmcExecutor>(
                 "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder);
