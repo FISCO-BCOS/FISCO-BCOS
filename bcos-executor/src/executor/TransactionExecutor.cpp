@@ -48,6 +48,7 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+#include "bcos-executor/src/precompiled/CastPrecompiled.h"
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -222,6 +223,20 @@ void TransactionExecutor::initEvmEnvironment()
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
+
+
+    if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_2_VERSION)
+    {
+        m_constantPrecompiled->insert(
+            {CAST_ADDRESS, std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl)});
+    }
+    else if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    {
+        m_constantPrecompiled->insert(
+            {ACCOUNT_MGR_ADDRESS, std::make_shared<AccountManagerPrecompiled>()});
+        m_constantPrecompiled->insert({ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>()});
+    }
+
     m_constantPrecompiled->insert(
         {GROUP_SIG_ADDRESS, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
@@ -233,6 +248,11 @@ void TransactionExecutor::initEvmEnvironment()
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_ADDRESS, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+
+
+    // test precompiled
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
 }
 
 void TransactionExecutor::initWasmEnvironment()
@@ -273,17 +293,32 @@ void TransactionExecutor::initWasmEnvironment()
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
 
+    if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_2_VERSION)
+    {
+        m_constantPrecompiled->insert(
+            {CAST_NAME, std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl)});
+    }
+    else if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    {
+        m_constantPrecompiled->insert(
+            {ACCOUNT_MANAGER_NAME, std::make_shared<AccountManagerPrecompiled>()});
+        m_constantPrecompiled->insert({ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>()});
+    }
+
     set<string> builtIn = {CRYPTO_NAME, GROUP_SIG_NAME, RING_SIG_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_NAME, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+
+    // test precompiled
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
 }
 
-void TransactionExecutor::initTestPrecompiled(storage::StorageInterface::Ptr storage)
+void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)
 {
-    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    SmallBankPrecompiled::registerPrecompiled(storage, m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::createTable(storage);
     DagTransferPrecompiled::createDagTable(storage);
 }
 
@@ -406,7 +441,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
             if (blockHeader->number() == 0)
             {
-                initTestPrecompiled(stateStorage);
+                initTestPrecompiledTable(stateStorage);
             }
         }
 

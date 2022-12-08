@@ -245,6 +245,7 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
                            << LOG_KV("from", _message->srcP2PNodeID())
                            << LOG_KV("to", _message->dstP2PNodeID())
                            << LOG_KV("type", _message->packetType())
+                           << LOG_KV("seq", _message->seq())
                            << LOG_KV("rsp", _message->isRespPacket());
         return Service::asyncSendMessageByNodeID(dstNodeID, _message, _callback, _options);
     }
@@ -252,7 +253,7 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
     SERVICE_LOG(TRACE) << LOG_DESC("asyncSendMessageByNodeID: forwardMessage to nextHop")
                        << LOG_KV("from", _message->srcP2PNodeID())
                        << LOG_KV("to", _message->dstP2PNodeID()) << LOG_KV("nextHop", nextHop)
-                       << LOG_KV("type", _message->packetType())
+                       << LOG_KV("type", _message->packetType()) << LOG_KV("seq", _message->seq())
                        << LOG_KV("rsp", _message->isRespPacket());
     return Service::asyncSendMessageByNodeID(nextHop, _message, _callback, _options);
 }
@@ -281,7 +282,7 @@ void ServiceV2::onMessage(NetworkException _e, SessionFace::Ptr _session, Messag
     if (p2pMsg->dstP2PNodeID().size() == 0 || p2pMsg->dstP2PNodeID() == m_nodeID)
     {
         SERVICE_LOG(TRACE) << LOG_DESC("onMessage") << LOG_KV("from", p2pMsg->srcP2PNodeID())
-                           << LOG_KV("dst", p2pMsg->dstP2PNodeID())
+                           << LOG_KV("seq", p2pMsg->seq()) << LOG_KV("dst", p2pMsg->dstP2PNodeID())
                            << LOG_KV("type", p2pMsg->packetType())
                            << LOG_KV("rsp", p2pMsg->isRespPacket()) << LOG_KV("ttl", p2pMsg->ttl())
                            << LOG_KV("payLoadSize", p2pMsg->payload()->size());
@@ -292,7 +293,7 @@ void ServiceV2::onMessage(NetworkException _e, SessionFace::Ptr _session, Messag
     auto ttl = p2pMsg->ttl();
     if (ttl <= 0)
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onMessage: expired ttl")
+        SERVICE_LOG(WARNING) << LOG_DESC("onMessage: expired ttl") << LOG_KV("seq", p2pMsg->seq())
                              << LOG_KV("from", p2pMsg->srcP2PNodeID())
                              << LOG_KV("dst", p2pMsg->dstP2PNodeID())
                              << LOG_KV("type", p2pMsg->packetType())
@@ -303,9 +304,9 @@ void ServiceV2::onMessage(NetworkException _e, SessionFace::Ptr _session, Messag
     }
     p2pMsg->setTTL(ttl - 1);
     SERVICE_LOG(TRACE) << LOG_DESC("onMessage: asyncSendMessageByNodeIDWithMsgForward")
-                       << LOG_KV("from", p2pMsg->srcP2PNodeID())
+                       << LOG_KV("seq", p2pMsg->seq()) << LOG_KV("from", p2pMsg->srcP2PNodeID())
                        << LOG_KV("dst", p2pMsg->dstP2PNodeID())
-                       << LOG_KV("type", p2pMsg->packetType())
+                       << LOG_KV("type", p2pMsg->packetType()) << LOG_KV("seq", p2pMsg->seq())
                        << LOG_KV("rsp", p2pMsg->isRespPacket())
                        << LOG_KV("payLoadSize", p2pMsg->payload()->size())
                        << LOG_KV("ttl", p2pMsg->ttl());
@@ -364,13 +365,18 @@ void ServiceV2::sendRespMessageBySession(
     auto respMessage = std::dynamic_pointer_cast<P2PMessageV2>(messageFactory()->buildMessage());
     auto requestMsg = std::dynamic_pointer_cast<P2PMessageV2>(_p2pMessage);
     respMessage->setDstP2PNodeID(requestMsg->srcP2PNodeID());
-    respMessage->setSrcP2PNodeID(requestMsg->dstP2PNodeID());
+    // respMessage->setSrcP2PNodeID(requestMsg->dstP2PNodeID());
+    respMessage->setSrcP2PNodeID(m_nodeID);
     respMessage->setSeq(requestMsg->seq());
     respMessage->setRespPacket();
     respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
 
-    asyncSendMessageByNodeID(respMessage->dstP2PNodeID(), respMessage, nullptr);
-    SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", requestMsg->seq())
+    // asyncSendMessageByNodeID(respMessage->dstP2PNodeID(), respMessage, nullptr);
+
+    // Note: send response directly with the original session
+    sendMessageToSession(_p2pSession, respMessage);
+
+    SERVICE_LOG(TRACE) << "ServiceV2::sendRespMessageBySession" << LOG_KV("seq", requestMsg->seq())
                        << LOG_KV("from", respMessage->srcP2PNodeID())
                        << LOG_KV("dst", respMessage->dstP2PNodeID())
                        << LOG_KV("payload size", _payload.size());

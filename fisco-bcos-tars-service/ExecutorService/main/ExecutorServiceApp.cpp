@@ -162,11 +162,6 @@ void ExecutorServiceApp::createAndInitExecutor()
         {
             executor.lock()->triggerSwitch();
         }
-        auto storage = storageWeakPtr.lock();
-        if (storage)
-        {
-            storage->reset();
-        }
     };
     dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage)->setSwitchHandler(switchHandler);
 
