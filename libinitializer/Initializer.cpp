@@ -165,7 +165,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {  // TODO: in max node, scheduler will use storage to commit but the ledger only use
            // storage to read, the storage which ledger use should not trigger the switch when the
            // scheduler is committing block
-            schedulerStorage  = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
                 m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
             consensusStorage = storage;
             airExecutorStorage = storage;
@@ -238,7 +238,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         };
         if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
         {
-            dynamic_pointer_cast<bcos::storage::TiKVStorage>(airExecutorStorage)->setSwitchHandler(switchHandler);
+            dynamic_pointer_cast<bcos::storage::TiKVStorage>(airExecutorStorage)
+                ->setSwitchHandler(switchHandler);
         }
         dynamic_pointer_cast<bcos::storage::TiKVStorage>(schedulerStorage)
             ->setSwitchHandler(switchHandler);
@@ -276,9 +277,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         std::string executorName = "executor-local";
         auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
-            m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage, executionMessageFactory,
-            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
-            m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), executorName);
+            m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
+            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
+            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(),
+            executorName);
         auto switchExecutorManager =
             std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
         executorManager->addExecutor(executorName, switchExecutorManager);
@@ -425,6 +427,8 @@ void Initializer::initSysContract()
     auto block = m_protocolInitializer->blockFactory()->createBlock();
     block->blockHeader()->setNumber(SYS_CONTRACT_DEPLOY_NUMBER);
     block->blockHeader()->setVersion(m_nodeConfig->compatibilityVersion());
+    block->blockHeader()->calculateHash(
+        *m_protocolInitializer->blockFactory()->cryptoSuite()->hashImpl());
 
     if (m_nodeConfig->compatibilityVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
