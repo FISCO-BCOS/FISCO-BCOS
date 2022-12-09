@@ -216,10 +216,14 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                     _onVerifyFinished(verifyError, verifyRet);
                     // batchPreStore the proposal txs when verifySuccess in the case of not enable
                     // txsPreStore
+                    // Note: here storeVerifiedBlock will block m_verifier and decrease the
+                    // proposal-verify-perf, so we async the storeVerifiedBlock here using
+                    // m_txsPreStore
                     if (!txpoolStorage->preStoreTxs() && !verifyError && verifyRet && block &&
                         block->blockHeader())
                     {
-                        txpool->storeVerifiedBlock(block);
+                        txpool->m_txsPreStore->enqueue(
+                            [txpool, block]() { txpool->storeVerifiedBlock(block); });
                     }
                 };
 
