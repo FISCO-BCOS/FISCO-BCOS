@@ -35,24 +35,26 @@ class HsmSM2KeyPair : public KeyPair
 {
 public:
     using Ptr = std::shared_ptr<HsmSM2KeyPair>;
-    HsmSM2KeyPair() : KeyPair(HSM_SM2_PUBLIC_KEY_LEN, HSM_SM2_PRIVATE_KEY_LEN, KeyPairType::HsmSM2)
+    HsmSM2KeyPair(std::string _libPath)
+      : KeyPair(HSM_SM2_PUBLIC_KEY_LEN, HSM_SM2_PRIVATE_KEY_LEN, KeyPairType::HsmSM2)
     {
+        m_hsmLibPath = _libPath;
         m_publicKeyDeriver = wedpr_sm2_derive_public_key;
     }
-    HsmSM2KeyPair(SecretPtr _secretKey);
-    HsmSM2KeyPair(unsigned int _keyIndex, std::string _password);
+    HsmSM2KeyPair(std::string _libPath, SecretPtr _secretKey);
+    HsmSM2KeyPair(std::string _libPath, unsigned int _keyIndex, std::string _password);
     ~HsmSM2KeyPair() override {}
 
     PublicPtr priToPub(SecretPtr _secretKey);
     bool isInternalKey() const { return m_isInternalKey; }
 
+    void setHsmLibPath(std::string _libPath) { m_hsmLibPath = _libPath; }
     unsigned int keyIndex() const { return m_keyIndex; }
     void setKeyIndex(unsigned int _keyIndex)
     {
         m_keyIndex = _keyIndex;
         m_isInternalKey = true;
     }
-
     const std::string& password() const { return m_password; }
     void setPassword(std::string _password)
     {
@@ -64,6 +66,7 @@ private:
     std::function<int8_t(const CInputBuffer* private_key, COutputBuffer* output_public_key)>
         m_publicKeyDeriver;
     bool m_isInternalKey = false;
+    std::string m_hsmLibPath;
     unsigned int m_keyIndex;
     std::string m_password;
 };
