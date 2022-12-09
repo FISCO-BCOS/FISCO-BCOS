@@ -4,9 +4,9 @@ include(GNUInstallDirs)
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux")
     set(SDF_LIB_NAME libsdf-crypto_arm.a)
 elseif(APPLE)
-    message(FATAL "HSM  SDF only support Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
+    message(FATAL " HSM  SDF only support Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
 else()
-    message(FATAL "HSM  SDF only support Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
+    message(FATAL " HSM  SDF only support Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
 endif()
 
 EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
@@ -17,8 +17,8 @@ endif()
 
 ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    GIT_REPOSITORY https://${URL_BASE}/WeBankBlockchain/hsm-crypto.git
-    GIT_TAG        9d8e79a88c8ca8365af75a7a0d107e485c0f7e3c
+    GIT_REPOSITORY https://${URL_BASE}/LucasLi1024/hsm-crypto.git
+    GIT_TAG        de837b7ab41587b4b4fe02baad75b4e12ec7b380
     BUILD_IN_SOURCE true
     LOG_CONFIGURE 1
     LOG_BUILD 1
