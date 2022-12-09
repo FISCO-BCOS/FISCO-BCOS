@@ -126,7 +126,7 @@ protected:
     static void parseRpcResponseJson(std::string_view _responseBody, JsonResponse& _jsonResponse);
 
     static void addProofToResponse(
-        Json::Value& jResp, std::string_view _key, ledger::MerkleProofPtr _merkleProofPtr);
+        Json::Value& jResp, const std::string& _key, ledger::MerkleProofPtr _merkleProofPtr);
 
     virtual void handleRpcRequest(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);

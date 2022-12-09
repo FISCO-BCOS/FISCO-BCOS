@@ -1365,7 +1365,7 @@ void Ledger::getTxProof(
                             }
 
                             auto merkleProofPtr = std::make_shared<MerkleProof>();
-                            auto merkleProofUtility = std::make_shared<MerkleProofUtility>();
+                            auto merkleProofUtility = std::make_shared<MerkleProofUtilityNew<2>>();
 
                             merkleProofUtility->getMerkleProof(_txHash,
                                 std::forward<decltype(_txList)>(_txList), cryptoSuite,
@@ -1404,7 +1404,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                         return;
                     }
                     auto merkleProof = std::make_shared<MerkleProof>();
-                    auto merkleProofUtility = std::make_shared<MerkleProofUtility>();
+                    auto merkleProofUtility = std::make_shared<MerkleProofUtilityNew<2>>();
                     merkleProofUtility->getMerkleProof(receiptHash,
                         std::forward<decltype(_receiptList)>(_receiptList), cryptoSuite,
                         merkleProof);
