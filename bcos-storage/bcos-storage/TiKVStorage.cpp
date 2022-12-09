@@ -176,8 +176,9 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 }
 
 void TiKVStorage::asyncGetRows(std::string_view _table,
-    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
-        _keys,
+    RANGES::any_view<std::string_view,
+        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
 {
     try
@@ -190,46 +191,42 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
             return;
         }
         auto start = utcTime();
-        std::visit(
-            [&](auto const& keys) {
-                std::vector<std::optional<Entry>> entries(keys.size());
+        std::vector<std::optional<Entry>> entries(keys.size());
 
-                std::vector<std::string> realKeys(keys.size());
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
-                    [&](const tbb::blocked_range<size_t>& range) {
-                        for (size_t i = range.begin(); i != range.end(); ++i)
-                        {
-                            realKeys[i] = toDBKey(_table, keys[i]);
-                        }
-                    });
-                auto snap = m_cluster->snapshot();
-                auto result = snap->batch_get(realKeys);
-                auto end = utcTime();
-                size_t validCount = 0;
-                for (size_t i = 0; i < realKeys.size(); ++i)
+        std::vector<std::string> realKeys(keys.size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i != range.end(); ++i)
                 {
-                    auto node = result.extract(realKeys[i]);
-                    if (node.empty() || node.mapped().empty())
-                    {
-                        entries[i] = std::nullopt;
-                        STORAGE_TIKV_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
-                    }
-                    else
-                    {
-                        ++validCount;
-                        entries[i] = std::make_optional(Entry());
-                        entries[i]->set(std::move(node.mapped()));
-                    }
+                    realKeys[i] = toDBKey(_table, keys[i]);
                 }
-                auto decode = utcTime();
-                STORAGE_TIKV_LOG(DEBUG)
-                    << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
-                    << LOG_KV("count", entries.size()) << LOG_KV("validCount", validCount)
-                    << LOG_KV("read time(ms)", end - start)
-                    << LOG_KV("decode time(ms)", decode - end);
-                _callback(nullptr, std::move(entries));
-            },
-            _keys);
+            });
+        auto snap = m_cluster->snapshot();
+        auto result = snap->batch_get(realKeys);
+        auto end = utcTime();
+        size_t validCount = 0;
+        for (size_t i = 0; i < realKeys.size(); ++i)
+        {
+            auto node = result.extract(realKeys[i]);
+            if (node.empty() || node.mapped().empty())
+            {
+                entries[i] = std::nullopt;
+                STORAGE_TIKV_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
+            }
+            else
+            {
+                ++validCount;
+                entries[i] = std::make_optional(Entry());
+                entries[i]->set(std::move(node.mapped()));
+            }
+        }
+        auto decode = utcTime();
+        STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
+                                << LOG_KV("count", entries.size())
+                                << LOG_KV("validCount", validCount)
+                                << LOG_KV("read time(ms)", end - start)
+                                << LOG_KV("decode time(ms)", decode - end);
+        _callback(nullptr, std::move(entries));
     }
     catch (const std::exception& e)
     {

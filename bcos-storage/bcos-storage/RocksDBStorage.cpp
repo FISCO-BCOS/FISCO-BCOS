@@ -155,8 +155,9 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 }
 
 void RocksDBStorage::asyncGetRows(std::string_view _table,
-    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
-        _keys,
+    RANGES::any_view<std::string_view,
+        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
 {
     try
@@ -168,68 +169,65 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName"), {});
             return;
         }
-        std::visit(
-            [&](auto const& keys) {
-                std::vector<std::optional<Entry>> entries(keys.size());
 
-                std::vector<std::string> dbKeys(keys.size());
-                std::vector<Slice> slices(keys.size());
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
-                    [&](const tbb::blocked_range<size_t>& range) {
-                        for (size_t i = range.begin(); i != range.end(); ++i)
+        std::vector<std::optional<Entry>> entries(keys.size());
+
+        std::vector<std::string> dbKeys(keys.size());
+        std::vector<Slice> slices(keys.size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i != range.end(); ++i)
+                {
+                    dbKeys[i] = toDBKey(_table, keys[i]);
+                    slices[i] = Slice(dbKeys[i].data(), dbKeys[i].size());
+                }
+            });
+
+        std::vector<PinnableSlice> values(keys.size());
+        std::vector<Status> statusList(keys.size());
+        m_db->MultiGet(ReadOptions(), m_db->DefaultColumnFamily(), slices.size(), slices.data(),
+            values.data(), statusList.data());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i != range.end(); ++i)
+                {
+                    auto& status = statusList[i];
+                    auto& value = values[i];
+
+                    if (status.ok())
+                    {
+                        entries[i] = std::make_optional(Entry());
+
+                        std::string v(value.data(), value.size());
+
+                        // Storage Security
+                        if (false == v.empty() && nullptr != m_dataEncryption)
+                            v = m_dataEncryption->decrypt(v);
+
+                        entries[i]->set(std::move(v));
+                    }
+                    else
+                    {
+                        if (status.IsNotFound())
                         {
-                            dbKeys[i] = toDBKey(_table, keys[i]);
-                            slices[i] = Slice(dbKeys[i].data(), dbKeys[i].size());
+                            STORAGE_ROCKSDB_LOG(TRACE)
+                                << "Multi get rows, not found key: " << keys[i];
                         }
-                    });
-
-                std::vector<PinnableSlice> values(keys.size());
-                std::vector<Status> statusList(keys.size());
-                m_db->MultiGet(ReadOptions(), m_db->DefaultColumnFamily(), slices.size(),
-                    slices.data(), values.data(), statusList.data());
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
-                    [&](const tbb::blocked_range<size_t>& range) {
-                        for (size_t i = range.begin(); i != range.end(); ++i)
+                        else if (status.getState())
                         {
-                            auto& status = statusList[i];
-                            auto& value = values[i];
-
-                            if (status.ok())
-                            {
-                                entries[i] = std::make_optional(Entry());
-
-                                std::string v(value.data(), value.size());
-
-                                // Storage Security
-                                if (false == v.empty() && nullptr != m_dataEncryption)
-                                    v = m_dataEncryption->decrypt(v);
-
-                                entries[i]->set(std::move(v));
-                            }
-                            else
-                            {
-                                if (status.IsNotFound())
-                                {
-                                    STORAGE_ROCKSDB_LOG(TRACE)
-                                        << "Multi get rows, not found key: " << keys[i];
-                                }
-                                else if (status.getState())
-                                {
-                                    STORAGE_ROCKSDB_LOG(WARNING)
-                                        << "Multi get rows error: " << status.getState();
-                                }
-                                else
-                                {
-                                    STORAGE_ROCKSDB_LOG(WARNING)
-                                        << "Multi get rows error:" << status.ToString();
-                                }
-                            }
+                            STORAGE_ROCKSDB_LOG(WARNING)
+                                << "Multi get rows error: " << status.getState();
                         }
-                    });
-                STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table);
-                _callback(nullptr, std::move(entries));
-            },
-            _keys);
+                        else
+                        {
+                            STORAGE_ROCKSDB_LOG(WARNING)
+                                << "Multi get rows error:" << status.ToString();
+                        }
+                    }
+                }
+            });
+        STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table);
+        _callback(nullptr, std::move(entries));
     }
     catch (const std::exception& e)
     {

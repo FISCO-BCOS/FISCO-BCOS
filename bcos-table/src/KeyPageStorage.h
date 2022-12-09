@@ -130,8 +130,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override;
 
     void asyncGetRows(std::string_view tableView,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
         override;
 
