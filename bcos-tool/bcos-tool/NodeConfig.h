@@ -109,6 +109,7 @@ public:
 
     std::string const& privateKeyPath() const { return m_privateKeyPath; }
     bool const& hsmEnable() const { return m_hsmEnable; }
+    std::string const& hsmLibPath() const { return m_hsmLibPath; }
     int const& keyIndex() const { return m_keyIndex; }
     std::string const& password() const { return m_password; }
 
@@ -281,6 +282,7 @@ private:
     // for security
     std::string m_privateKeyPath;
     bool m_hsmEnable;
+    std::string m_hsmLibPath;
     int m_keyIndex;
     std::string m_password;
 

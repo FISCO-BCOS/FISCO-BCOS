@@ -29,7 +29,7 @@ using namespace hsm::sdf;
 using namespace bcos;
 using namespace bcos::crypto;
 
-bcos::bytesPointer bcos::crypto::HsmSM4Encrypt(const unsigned char* _plainData,
+bcos::bytesPointer HsmSM4Crypto::HsmSM4Encrypt(const unsigned char* _plainData,
     size_t _plainDataSize, const unsigned char* _key, size_t, const unsigned char* _ivData, size_t)
 {
     // note: parm _ivDataSize and _keySize wasn't used
@@ -46,7 +46,8 @@ bcos::bytesPointer bcos::crypto::HsmSM4Encrypt(const unsigned char* _plainData,
     std::shared_ptr<const std::vector<byte>> pbKeyValue =
         std::make_shared<const std::vector<byte>>(_key, _key + 16);
     key.setSymmetricKey(pbKeyValue);
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+
     unsigned int size;
     auto encryptedData = std::make_shared<bytes>();
     encryptedData->resize(inDataVLen);
@@ -56,7 +57,7 @@ bcos::bytesPointer bcos::crypto::HsmSM4Encrypt(const unsigned char* _plainData,
     return encryptedData;
 }
 
-bcos::bytesPointer bcos::crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
+bcos::bytesPointer HsmSM4Crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
     size_t _cipherDataSize, const unsigned char* _key, size_t, const unsigned char* _ivData, size_t)
 {
     auto decryptedData = std::make_shared<bytes>();
@@ -65,7 +66,7 @@ bcos::bytesPointer bcos::crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
     std::shared_ptr<const std::vector<byte>> pbKeyValue =
         std::make_shared<const std::vector<byte>>(_key, _key + 16);
     key.setSymmetricKey(pbKeyValue);
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
 
     unsigned int size;
     provider.Decrypt(key, SM4_CBC, (unsigned char*)_ivData, _cipherData, _cipherDataSize,
