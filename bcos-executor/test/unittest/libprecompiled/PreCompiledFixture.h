@@ -23,6 +23,7 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
@@ -264,7 +265,10 @@ public:
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
-        blockHeader->setParentInfo({{blockHeader->number() - 1, h256(blockHeader->number() - 1)}});
+
+        std::vector<bcos::protocol::ParentInfo> parentInfos{
+            {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
+        blockHeader->setParentInfo(parentInfos);
 
         blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);

@@ -25,6 +25,7 @@
 #include <bcos-concepts/Hash.h>
 #include <bcos-utilities/Common.h>
 #include <boost/endian/conversion.hpp>
+#include <range/v3/algorithm/transform.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -79,25 +80,19 @@ void BlockHeaderImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 void BlockHeaderImpl::clear()
 {
     m_inner()->resetDefautlt();
-    m_parentInfo.clear();
 }
 
-gsl::span<const bcos::protocol::ParentInfo> BlockHeaderImpl::parentInfo() const
+RANGES::any_view<bcos::protocol::ParentInfo, RANGES::category::input | RANGES::category::sized>
+BlockHeaderImpl::parentInfo() const
 {
-    bcos::ReadGuard l(x_inner);
-    if (m_parentInfo.empty())
-    {
-        for (auto const& it : m_inner()->data.parentInfo)
-        {
-            bcos::protocol::ParentInfo parentInfo;
-            parentInfo.blockNumber = it.blockNumber;
-            parentInfo.blockHash =
-                *(reinterpret_cast<const bcos::crypto::HashType*>(it.blockHash.data()));
-            m_parentInfo.emplace_back(parentInfo);
-        }
-    }
-
-    return gsl::span(m_parentInfo.data(), m_parentInfo.size());
+    return m_inner()->data.parentInfo |
+           RANGES::views::transform([](const bcostars::ParentInfo& tarsParentInfo) {
+               bcos::protocol::ParentInfo parentInfo;
+               parentInfo.blockNumber = tarsParentInfo.blockNumber;
+               parentInfo.blockHash = bcos::crypto::HashType(
+                   (bcos::byte*)tarsParentInfo.blockHash.data(), tarsParentInfo.blockHash.size());
+               return parentInfo;
+           });
 }
 
 bcos::crypto::HashType BlockHeaderImpl::txsRoot() const
@@ -137,17 +132,15 @@ bcos::u256 BlockHeaderImpl::gasUsed() const
     return {};
 }
 
-void BlockHeaderImpl::setParentInfo(gsl::span<const bcos::protocol::ParentInfo> const& _parentInfo)
+void BlockHeaderImpl::setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfos)
 {
-    bcos::WriteGuard l(x_inner);
-    m_parentInfo.clear();
-    m_inner()->data.parentInfo.clear();
-    for (const auto& it : _parentInfo)
+    auto* tarsParentInfo = m_inner();
+    tarsParentInfo->data.parentInfo.clear();
+    for (auto it : parentInfos)
     {
-        ParentInfo parentInfo;
+        auto& parentInfo = tarsParentInfo->data.parentInfo.emplace_back();
         parentInfo.blockNumber = it.blockNumber;
         parentInfo.blockHash.assign(it.blockHash.begin(), it.blockHash.end());
-        m_inner()->data.parentInfo.emplace_back(parentInfo);
     }
     clearDataHash();
 }

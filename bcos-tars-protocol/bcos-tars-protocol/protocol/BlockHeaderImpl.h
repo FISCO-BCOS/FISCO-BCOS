@@ -28,6 +28,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <gsl/span>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcostars::protocol
 {
@@ -45,7 +46,8 @@ public:
     void clear() override;
 
     uint32_t version() const override { return m_inner()->data.version; }
-    gsl::span<const bcos::protocol::ParentInfo> parentInfo() const override;
+    RANGES::any_view<bcos::protocol::ParentInfo, RANGES::category::input | RANGES::category::sized>
+    parentInfo() const override;
 
     bcos::crypto::HashType txsRoot() const override;
     bcos::crypto::HashType stateRoot() const override;
@@ -86,13 +88,7 @@ public:
         clearDataHash();
     }
 
-    void setParentInfo(gsl::span<const bcos::protocol::ParentInfo> const& _parentInfo) override;
-
-    void setParentInfo(bcos::protocol::ParentInfoList&& _parentInfo) override
-    {
-        setParentInfo(gsl::span(_parentInfo.data(), _parentInfo.size()));
-        clearDataHash();
-    }
+    void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) override;
 
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override
     {
@@ -190,7 +186,6 @@ private:
     void clearDataHash() { m_inner()->dataHash.clear(); }
 
     std::function<bcostars::BlockHeader*()> m_inner;
-    mutable std::vector<bcos::protocol::ParentInfo> m_parentInfo;
     mutable bcos::SharedMutex x_inner;
 };
 }  // namespace bcostars::protocol

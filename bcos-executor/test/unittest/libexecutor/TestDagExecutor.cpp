@@ -237,7 +237,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
-    blockHeader->setParentInfo({{0, h256(0)}});
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
@@ -736,7 +737,9 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
-    blockHeader->setParentInfo({{0, h256(0)}});
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::cout << "Block hash is: " << blockHeader->hash() << std::endl;
 
@@ -975,7 +978,9 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
-    blockHeader->setParentInfo({{0, h256(0)}});
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
