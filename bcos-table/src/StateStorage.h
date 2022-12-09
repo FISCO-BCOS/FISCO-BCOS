@@ -39,6 +39,7 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <mutex>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcos::storage
 {
@@ -222,88 +223,84 @@ public:
     }
 
     void asyncGetRows(std::string_view tableView,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) override
     {
-        std::visit(
-            [this, &tableView, &_callback](auto&& _keys) {
-                std::vector<std::optional<Entry>> results(_keys.size());
-                auto missinges = std::tuple<std::vector<std::string_view>,
-                    std::vector<std::tuple<std::string, size_t>>>();
+        auto size = keys.size();
+        std::vector<std::optional<Entry>> results(keys.size());
+        auto missinges = std::tuple<std::vector<std::string_view>,
+            std::vector<std::tuple<std::string, size_t>>>();
 
-                std::atomic_ulong existsCount = 0;
+        std::atomic_ulong existsCount = 0;
 
-                for (auto i = 0U; i < _keys.size(); ++i)
+        for (auto i = 0U; i < keys.size(); ++i)
+        {
+            auto [bucket, lock] = getBucket(tableView);
+            boost::ignore_unused(lock);
+
+            auto it = bucket->container.find(std::make_tuple(tableView, std::string_view(keys[i])));
+            if (it != bucket->container.end())
+            {
+                auto& entry = it->entry;
+                if (entry.status() == Entry::NORMAL || entry.status() == Entry::MODIFIED)
                 {
-                    auto [bucket, lock] = getBucket(tableView);
-                    boost::ignore_unused(lock);
+                    results[i].emplace(entry);
 
-                    auto it = bucket->container.find(
-                        std::make_tuple(tableView, std::string_view(_keys[i])));
-                    if (it != bucket->container.end())
+                    if constexpr (enableLRU)
                     {
-                        auto& entry = it->entry;
-                        if (entry.status() == Entry::NORMAL || entry.status() == Entry::MODIFIED)
-                        {
-                            results[i].emplace(entry);
-
-                            if constexpr (enableLRU)
-                            {
-                                updateMRUAndCheck(*bucket, it);
-                            }
-                        }
-                        else
-                        {
-                            results[i] = std::nullopt;
-                        }
-                        ++existsCount;
+                        updateMRUAndCheck(*bucket, it);
                     }
-                    else
-                    {
-                        std::get<1>(missinges).emplace_back(std::string(_keys[i]), i);
-                        std::get<0>(missinges).emplace_back(_keys[i]);
-                    }
-                }
-
-                auto prev = getPrev();
-                if (existsCount < _keys.size() && prev)
-                {
-                    prev->asyncGetRows(tableView, std::get<0>(missinges),
-                        [this, table = std::string(tableView), callback = std::move(_callback),
-                            missingIndexes = std::move(std::get<1>(missinges)),
-                            results = std::move(results)](
-                            auto&& error, std::vector<std::optional<Entry>>&& entries) mutable {
-                            if (error)
-                            {
-                                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(StorageError::ReadError,
-                                             "async get perv rows failed!", *error),
-                                    std::vector<std::optional<Entry>>());
-                                return;
-                            }
-
-                            for (size_t i = 0; i < entries.size(); ++i)
-                            {
-                                auto& entry = entries[i];
-
-                                if (entry)
-                                {
-                                    results[std::get<1>(missingIndexes[i])].emplace(
-                                        importExistingEntry(table,
-                                            std::move(std::get<0>(missingIndexes[i])),
-                                            std::move(*entry)));
-                                }
-                            }
-
-                            callback(nullptr, std::move(results));
-                        });
                 }
                 else
                 {
-                    _callback(nullptr, std::move(results));
+                    results[i] = std::nullopt;
                 }
-            },
-            _keys);
+                ++existsCount;
+            }
+            else
+            {
+                std::get<1>(missinges).emplace_back(std::string(keys[i]), i);
+                std::get<0>(missinges).emplace_back(keys[i]);
+            }
+        }
+
+        auto prev = getPrev();
+        if (existsCount < keys.size() && prev)
+        {
+            prev->asyncGetRows(tableView, std::get<0>(missinges),
+                [this, table = std::string(tableView), callback = std::move(_callback),
+                    missingIndexes = std::move(std::get<1>(missinges)),
+                    results = std::move(results)](
+                    auto&& error, std::vector<std::optional<Entry>>&& entries) mutable {
+                    if (error)
+                    {
+                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(StorageError::ReadError,
+                                     "async get perv rows failed!", *error),
+                            std::vector<std::optional<Entry>>());
+                        return;
+                    }
+
+                    for (size_t i = 0; i < entries.size(); ++i)
+                    {
+                        auto& entry = entries[i];
+
+                        if (entry)
+                        {
+                            results[std::get<1>(missingIndexes[i])].emplace(
+                                importExistingEntry(table,
+                                    std::move(std::get<0>(missingIndexes[i])), std::move(*entry)));
+                        }
+                    }
+
+                    callback(nullptr, std::move(results));
+                });
+        }
+        else
+        {
+            _callback(nullptr, std::move(results));
+        }
     }
 
     void asyncSetRow(std::string_view tableView, std::string_view keyView, Entry entry,

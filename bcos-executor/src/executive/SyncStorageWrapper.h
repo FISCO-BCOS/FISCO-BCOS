@@ -42,20 +42,17 @@ public:
         return StorageWrapper::getRow(table, _key);
     }
 
-    std::vector<std::optional<storage::Entry>> getRows(
-        const std::string_view& table, const std::variant<const gsl::span<std::string_view const>,
-                                           const gsl::span<std::string const>>& _keys) override
+    std::vector<std::optional<storage::Entry>> getRows(const std::string_view& table,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys) override
     {
-        std::visit(
-            [this](auto&& keys) {
-                for (auto& it : keys)
-                {
-                    acquireKeyLock(it);
-                }
-            },
-            _keys);
+        for (auto it : keys)
+        {
+            acquireKeyLock(it);
+        }
 
-        return StorageWrapper::getRows(table, _keys);
+        return StorageWrapper::getRows(table, keys);
     }
 
     void setRow(
