@@ -952,7 +952,8 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
             return;
         }
 
-        auto numberRange = RANGES::iota_view(_startNumber, _startNumber + _offset + 1);
+        auto numberRange =
+            RANGES::iota_view<uint64_t, uint64_t>(_startNumber, _startNumber + _offset + 1);
         auto numberList = numberRange | RANGES::views::transform([](BlockNumber blockNumber) {
             return boost::lexical_cast<std::string>(blockNumber);
         }) | RANGES::to<std::vector<std::string>>();
