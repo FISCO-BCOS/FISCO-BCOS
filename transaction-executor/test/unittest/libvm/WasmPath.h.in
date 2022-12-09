@@ -1,0 +1,7 @@
+#include <string>
+
+#pragma once
+
+char originBinary[] = "@CMAKE_CURRENT_SOURCE_DIR@/../wasm/infinit_loop.wasm";
+char useGasBinary[] = "@CMAKE_CURRENT_SOURCE_DIR@/../wasm/metric_infinit_loop_useGas.wasm";
+char globalGasBinary[] = "@CMAKE_CURRENT_SOURCE_DIR@/../wasm/metric_infinit_loop_global_gas.wasm";
