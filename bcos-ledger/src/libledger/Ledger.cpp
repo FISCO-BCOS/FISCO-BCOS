@@ -49,6 +49,8 @@
 #include <cstddef>
 #include <future>
 #include <memory>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/transform.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -941,7 +943,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
 
     m_storage->asyncOpenTable(SYS_BLOCK_NUMBER_2_NONCES, [this, callback = std::move(_onGetList),
                                                              _startNumber, _offset](auto&& error,
-                                                             std::optional<Table>&& table) {
+                                                             std::optional<Table>&& table) mutable {
         auto tableError =
             checkTableValid(std::forward<decltype(error)>(error), table, SYS_BLOCK_NUMBER_2_NONCES);
         if (tableError)
@@ -950,13 +952,12 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
             return;
         }
 
-        auto numberList = std::vector<std::string>();
-        for (BlockNumber i = _startNumber; i <= _startNumber + _offset; ++i)
-        {
-            numberList.push_back(boost::lexical_cast<std::string>(i));
-        }
+        auto numberRange = RANGES::iota_view(_startNumber, _startNumber + _offset + 1);
+        auto numberList = numberRange | RANGES::views::transform([](BlockNumber blockNumber) {
+            return boost::lexical_cast<std::string>(blockNumber);
+        }) | RANGES::to<std::vector<std::string>>();
 
-        table->asyncGetRows(numberList, [this, numberList, callback = std::move(callback)](
+        table->asyncGetRows(numberList, [this, numberRange, callback = std::move(callback)](
                                             auto&& error,
                                             std::vector<std::optional<Entry>>&& entries) {
             if (error)
@@ -971,12 +972,10 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
             auto retMap =
                 std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
 
-            for (size_t i = 0; i < numberList.size(); ++i)
+            for (auto const& [number, entry] : RANGES::zip_view(numberRange, entries))
             {
                 try
                 {
-                    auto number = numberList[i];
-                    auto entry = entries[i];
                     if (!entry)
                     {
                         continue;
@@ -986,9 +985,8 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                     auto block = m_blockFactory->createBlock(
                         bcos::bytesConstRef((bcos::byte*)value.data(), value.size()), false, false);
 
-                    auto nonceList = std::make_shared<protocol::NonceList>(block->nonceList());
-                    retMap->emplace(
-                        std::make_pair(boost::lexical_cast<BlockNumber>(number), nonceList));
+                    retMap->emplace(std::make_pair(number,
+                        std::make_shared<NonceList>(block->nonceList() | RANGES::to<NonceList>())));
                 }
                 catch (std::exception const& e)
                 {

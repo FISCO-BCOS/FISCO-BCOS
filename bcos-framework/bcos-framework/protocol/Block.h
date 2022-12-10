@@ -25,6 +25,7 @@
 #include "TransactionMetaData.h"
 #include "TransactionReceipt.h"
 #include "TransactionReceiptFactory.h"
+#include <range/v3/view/transform.hpp>
 
 namespace bcos::protocol
 {
@@ -94,20 +95,6 @@ public:
     // set transaction metaData
     virtual void appendTransactionMetaData(TransactionMetaData::Ptr _txMetaData) = 0;
 
-    virtual NonceListPtr nonces() const
-    {
-        auto nonceList = std::make_shared<NonceList>();
-        if (transactionsSize() == 0)
-        {
-            return nonceList;
-        }
-        for (uint64_t i = 0; i < transactionsSize(); ++i)
-        {
-            nonceList->push_back(transaction(i)->nonce());
-        }
-        return nonceList;
-    }
-
     // get transactions size
     virtual uint64_t transactionsSize() const = 0;
     virtual uint64_t transactionsMetaDataSize() const = 0;
@@ -117,9 +104,18 @@ public:
     virtual uint64_t receiptsSize() const = 0;
 
     // for nonceList
-    virtual void setNonceList(NonceList const& _nonceList) = 0;
-    virtual void setNonceList(NonceList&& _nonceList) = 0;
-    virtual NonceList const& nonceList() const = 0;
+    virtual void setNonceList(RANGES::any_view<u256> nonces) = 0;
+    virtual RANGES::any_view<u256> nonceList() const = 0;
+
+    virtual NonceListPtr nonces() const
+    {
+        return std::make_shared<NonceList>(RANGES::iota_view(0LU, transactionsSize()) |
+                                           RANGES::views::transform([this](uint64_t index) {
+                                               auto transaction = this->transaction(index);
+                                               return transaction->nonce();
+                                           }) |
+                                           RANGES::to<NonceList>());
+    }
 };
 using Blocks = std::vector<Block::Ptr>;
 using BlocksPtr = std::shared_ptr<Blocks>;
