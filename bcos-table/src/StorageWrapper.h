@@ -73,12 +73,13 @@ public:
         return std::move(entry);
     }
 
-    virtual std::vector<std::optional<storage::Entry>> getRows(
-        const std::string_view& table, const std::variant<const gsl::span<std::string_view const>,
-                                           const gsl::span<std::string const>>& _keys)
+    virtual std::vector<std::optional<storage::Entry>> getRows(const std::string_view& table,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys)
     {
         GetRowsResponse value;
-        m_storage->asyncGetRows(table, _keys, [&value](auto&& error, auto&& entries) mutable {
+        m_storage->asyncGetRows(table, keys, [&value](auto&& error, auto&& entries) mutable {
             value = {std::move(error), std::move(entries)};
         });
 

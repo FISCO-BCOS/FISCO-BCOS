@@ -41,9 +41,9 @@ public:
     ~Table() = default;
 
     std::optional<Entry> getRow(std::string_view _key);
-    std::vector<std::optional<Entry>> getRows(
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys);
+    std::vector<std::optional<Entry>> getRows(RANGES::any_view<std::string_view,
+        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys);
     std::vector<std::string> getPrimaryKeys(const std::optional<const Condition>& _condition);
 
     void setRow(std::string_view _key, Entry _entry);
@@ -54,8 +54,10 @@ public:
     void asyncGetRow(std::string_view _key,
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept;
 
-    void asyncGetRows(const std::variant<const gsl::span<std::string_view const>,
-                          const gsl::span<std::string const>>& _keys,
+    void asyncGetRows(
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)>
             _callback) noexcept;
 
@@ -76,4 +78,4 @@ protected:
     TableInfo::ConstPtr m_tableInfo;
 };
 
-}  // namespace bcos
+}  // namespace bcos::storage
