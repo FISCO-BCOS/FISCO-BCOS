@@ -687,13 +687,10 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
             {
                 // TODO: use Merkle.generateMerkleProof
             }
-            else
-            {
-                LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
-                                  << LOG_KV("txHashListSize", _txHashList->size())
-                                  << LOG_KV("withProof", _withProof);
-                callback(nullptr, results, nullptr);
-            }
+            LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
+                              << LOG_KV("txHashListSize", _txHashList->size())
+                              << LOG_KV("withProof", _withProof);
+            callback(nullptr, results, nullptr);
         });
 }
 
@@ -728,10 +725,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
             {
                 // TODO: use Merkle.generateMerkleProof
             }
-            else
-            {
-                callback(nullptr, receipt, nullptr);
-            }
+            callback(nullptr, receipt, nullptr);
         });
 }
 
