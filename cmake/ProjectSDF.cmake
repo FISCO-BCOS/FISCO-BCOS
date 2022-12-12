@@ -1,7 +1,6 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
-message("sysOS: ${CMAKE_HOST_SYSTEM_NAME}")
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux")
     set(SDF_LIB_NAME libsdf-crypto_arm.a)
 elseif(APPLE)
