@@ -35,7 +35,7 @@ void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
     {
         if (_verifyFinishedHandler)
         {
-            auto error = std::make_shared<Error>(-1, "Invalid proposal");
+            auto error = BCOS_ERROR_PTR(-1, "Invalid proposal");
             _verifyFinishedHandler(error, false);
         }
         return;

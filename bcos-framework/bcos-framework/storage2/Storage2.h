@@ -1,11 +1,13 @@
 #pragma once
 
+#include "Exception.h"
 #include "Iterator.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Ranges.h>
+#include <boost/throw_exception.hpp>
 #include <type_traits>
 
 namespace bcos::storage2
@@ -27,6 +29,39 @@ template <class Impl>
 class StorageBase
 {
 public:
+    static constexpr std::string_view SYS_TABLES{"s_tables"};
+    static constexpr std::string_view SYS_TABLE_VALUE_FIELDS{"key_field,value_fields"};
+
+    // BEGIN: Interfaces need to impl
+    task::Task<void> getRows(
+        std::string_view tableName, InputKeys auto const& keys, OutputEntries auto& out)
+    {
+        if (RANGES::size(keys) != RANGES::size(out))
+        {
+            BOOST_THROW_EXCEPTION(UnmatchKeyEntries{});
+        }
+
+        return impl().impl_getRows(tableName, keys, out);
+    }
+
+    task::Task<void> setRows(
+        std::string_view tableName, InputKeys auto const& keys, InputEntries auto const& entries)
+    {
+        if (RANGES::size(keys) != RANGES::size(entries))
+        {
+            BOOST_THROW_EXCEPTION(UnmatchKeyEntries{});
+        }
+
+        return impl().impl_setRows(tableName, keys, entries);
+    }
+
+    template <Iterator IteratorType>
+    task::Task<IteratorType> seek(std::string_view tableName, std::string_view key)
+    {
+        return impl().impl_seek(tableName, key);
+    }
+    // END: Interfaces need to impl
+
     task::Task<OptionalEntry> getRow(std::string_view tableName, std::string_view key)
     {
         RANGES::single_view<decltype(key)> keys{key};
@@ -47,30 +82,18 @@ public:
         co_await impl().impl_setRows(tableName, keys, entries);
     }
 
-    // Need impl
-    task::Task<void> getRows(
-        std::string_view tableName, InputKeys auto const& keys, OutputEntries auto& out)
-    {
-        return impl().impl_getRows(tableName, keys, out);
-    }
-
-    // Need impl
-    task::Task<void> setRows(
-        std::string_view tableName, InputKeys auto const& keys, InputEntries auto const& entries)
-    {
-        return impl().impl_setRows(tableName, keys, entries);
-    }
-
-    // Need impl
-    template <Iterator IteratorType>
-    task::Task<IteratorType> seek(std::string_view tableName, std::string_view key)
-    {
-        return impl().impl_seek(tableName, key);
-    }
-
     task::Task<void> createTable(std::string_view tableName)
     {
-        // Impl it here
+        auto entry = co_await getRow(SYS_TABLES, tableName);
+        if (entry)
+        {
+            BOOST_THROW_EXCEPTION(-1);
+        }
+
+        storage::Entry tableEntry;
+        // TODO: Write value fields
+        // ...
+        co_await setRow(SYS_TABLES, tableName, std::move(tableEntry));
     }
 
 private:

@@ -111,7 +111,7 @@ void JsonRpcImpl::sendTransaction(const std::string& _groupID, const std::string
     auto groupInfo = m_service->getGroupInfo(_groupID);
     if (!groupInfo)
     {
-        auto error = std::make_shared<Error>(bcos::boostssl::ws::WsError::EndPointNotExist,
+        auto error = BCOS_ERROR_PTR(bcos::boostssl::ws::WsError::EndPointNotExist,
             "the group does not exist, group: " + _groupID);
         _respFunc(error, nullptr);
         return;

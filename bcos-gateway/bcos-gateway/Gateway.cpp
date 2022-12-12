@@ -163,7 +163,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
                            << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
                            << LOG_KV("dstNodeID", _dstNodeID->hex());
 
-        auto errorPtr = std::make_shared<Error>(CommonError::NotFoundFrontServiceSendMsg,
+        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
             "could not find a gateway to "
             "send this message, groupID:" +
                 _groupID + " ,dstNodeID:" + _dstNodeID->hex());
@@ -203,7 +203,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
 
                 if (m_respFunc)
                 {
-                    auto errorPtr = std::make_shared<Error>(
+                    auto errorPtr = BCOS_ERROR_PTR(
                         CommonError::GatewaySendMsgFailed, "unable to send the message");
                     m_respFunc(errorPtr);
                 }
@@ -225,7 +225,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
                     {
                         if (self->m_respFunc)
                         {
-                            auto errorPtr = std::make_shared<Error>(
+                            auto errorPtr = BCOS_ERROR_PTR(
                                 CommonError::NetworkBandwidthOverFlow, e.what());
                             self->m_respFunc(errorPtr);
                         }
@@ -406,7 +406,7 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
                            << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
                            << LOG_KV("dstNodeID", _dstNodeID->hex());
 
-        auto errorPtr = std::make_shared<Error>(CommonError::NotFoundFrontServiceDispatchMsg,
+        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceDispatchMsg,
             "unable to find front service dispatch message to "
             "groupID:" +
                 _groupID + " ,nodeID:" + _dstNodeID->hex());

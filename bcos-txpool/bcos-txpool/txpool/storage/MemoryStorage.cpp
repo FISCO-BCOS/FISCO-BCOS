@@ -286,7 +286,7 @@ void MemoryStorage::notifyInvalidReceipt(
     txResult->setStatus((uint32_t)_status);
     std::stringstream errorMsg;
     errorMsg << _status;
-    _txSubmitCallback(std::make_shared<Error>((int32_t)_status, errorMsg.str()), txResult);
+    _txSubmitCallback(BCOS_ERROR_PTR((int32_t)_status, errorMsg.str()), txResult);
     TXPOOL_LOG(WARNING) << LOG_DESC("notifyReceipt: reject invalid tx")
                         << LOG_KV("tx", _txHash.abridged()) << LOG_KV("exception", _status);
 }

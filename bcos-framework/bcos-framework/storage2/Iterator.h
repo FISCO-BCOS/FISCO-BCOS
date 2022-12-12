@@ -10,7 +10,8 @@ template <class Impl>
 class IteratorBase
 {
 public:
-    task::Task<bool> next() { return impl().impl_next(); }
+    task::Task<bool> valid() { return impl().impl_valid(); }
+    task::Task<void> next() { return impl().impl_next(); }
     task::Task<storage::Entry> value() { return impl().impl_value(); }
 
 private:

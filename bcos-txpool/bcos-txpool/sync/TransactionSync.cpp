@@ -225,7 +225,7 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
                     << LOG_DESC("requestMissedTxs failed from the ledger for Transaction missing")
                     << LOG_KV("missedTxs", missedTxsSize);
                 _onVerifyFinished(
-                    std::make_shared<Error>(CommonError::TransactionsMissing,
+                    BCOS_ERROR_PTR(CommonError::TransactionsMissing,
                         "requestMissedTxs failed from the ledger for Transaction missing"),
                     false);
                 return;
@@ -390,7 +390,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                           << LOG_KV("peer", _nodeID->shortHex())
                           << LOG_KV("expectedType", TxsSyncPacketType::TxsResponsePacket)
                           << LOG_KV("recvType", txsResponse->type());
-        _onVerifyFinished(std::make_shared<Error>(
+        _onVerifyFinished(BCOS_ERROR_PTR(
                               CommonError::FetchTransactionsFailed, "FetchTransactionsFailed"),
             false);
         return;
@@ -415,7 +415,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1);
         // response to verify result
         _onVerifyFinished(
-            std::make_shared<Error>(CommonError::TransactionsMissing, "TransactionsMissing"),
+            BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
             false);
         // try to import the transactions even when verify failed
         importDownloadedTxs(_nodeID, transactions);
@@ -423,7 +423,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     }
     if (!importDownloadedTxs(_nodeID, transactions, _verifiedProposal))
     {
-        _onVerifyFinished(std::make_shared<Error>(CommonError::TxsSignatureVerifyFailed,
+        _onVerifyFinished(BCOS_ERROR_PTR(CommonError::TxsSignatureVerifyFailed,
                               "invalid transaction for invalid signature or nonce or blockLimit"),
             false);
         return;
@@ -433,7 +433,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     {
         if ((*_missedTxs)[i] != transactions->transaction(i)->hash())
         {
-            _onVerifyFinished(std::make_shared<Error>(CommonError::InconsistentTransactions,
+            _onVerifyFinished(BCOS_ERROR_PTR(CommonError::InconsistentTransactions,
                                   "InconsistentTransactions"),
                 false);
             return;

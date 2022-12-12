@@ -133,7 +133,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(block->blockHeaderConst()->number()) << errorMessage
                                << LOG_KV("version", block->version())
                                << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
-        _callback(std::make_shared<bcos::Error>(SchedulerError::InvalidBlockVersion, errorMessage),
+        _callback(BCOS_ERROR_PTR(SchedulerError::InvalidBlockVersion, errorMessage),
             nullptr, false);
         return;
     }
@@ -841,7 +841,7 @@ void SchedulerImpl::preExecuteBlock(
     {
         SCHEDULER_LOG(WARNING) << "preExeBlock exception: " << LOG_KV("code", e.errorCode())
                                << LOG_KV("message", e.errorMessage());
-        callback(std::make_shared<bcos::Error>(e.errorCode(), e.errorMessage()));
+        callback(BCOS_ERROR_PTR(e.errorCode(), e.errorMessage()));
     }
 }
 

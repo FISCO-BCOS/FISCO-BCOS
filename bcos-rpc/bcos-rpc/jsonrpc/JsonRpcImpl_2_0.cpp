@@ -471,7 +471,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                 if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
                 {
                     BOOST_THROW_EXCEPTION(
-                        bcos::Error(submitResult->status(), toString(submitResult->status())));
+                        BCOS_ERROR(submitResult->status(), toString(submitResult->status())));
                 }
 
                 toJsonResp(jResp, hexPreTxHash, (protocol::TransactionStatus)submitResult->status(),
@@ -495,7 +495,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             {
                 auto info = boost::diagnostic_information(e);
                 RPC_IMPL_LOG(WARNING) << "RPC common error: " << info;
-                respFunc(std::make_shared<bcos::Error>(-1, std::move(info)), jResp);
+                respFunc(BCOS_ERROR_PTR(-1, std::move(info)), jResp);
             }
         }(this, groupID, nodeName, data, requireProof, std::move(respFunc)));
 }

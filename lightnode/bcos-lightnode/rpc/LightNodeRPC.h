@@ -72,12 +72,12 @@ public:
         try
         {
             auto& bcosError = dynamic_cast<bcos::Error&>(error);
-            toErrorResp(std::make_shared<bcos::Error>(std::move(bcosError)), std::move(respFunc));
+            toErrorResp(std::make_shared<bcos ::Error>(std::move(bcosError)), std::move(respFunc));
         }
         catch ([[maybe_unused]] std::bad_cast&)
         {
             // no bcos error
-            auto bcosError = bcos::Error(-1, boost::diagnostic_information(error));
+            auto bcosError = BCOS_ERROR(-1, boost::diagnostic_information(error));
             toErrorResp(bcosError, std::move(respFunc));
         }
     }

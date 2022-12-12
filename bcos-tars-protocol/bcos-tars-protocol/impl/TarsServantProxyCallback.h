@@ -249,7 +249,7 @@ bool checkConnection(std::string const& _module, std::string const& _func, const
     {
         std::string errorMessage =
             _module + " calls interface " + _func + " failed for empty connection";
-        _errorCallback(std::make_shared<bcos::Error>(-1, errorMessage));
+        _errorCallback(BCOS_ERROR_PTR(-1, errorMessage));
     }
     return false;
 }

@@ -658,7 +658,7 @@ void FrontService::onMessageTimeout(const boost::system::error_code& _error,
         Callback::Ptr callback = getAndRemoveCallback(_uuid);
         if (callback)
         {
-            auto errorPtr = std::make_shared<Error>(CommonError::TIMEOUT, "timeout");
+            auto errorPtr = BCOS_ERROR_PTR(CommonError::TIMEOUT, "timeout");
             if (m_threadPool)
             {
                 m_threadPool->enqueue([_uuid, _nodeID, callback, errorPtr]() {

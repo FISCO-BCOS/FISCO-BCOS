@@ -278,7 +278,7 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
             if (_error)
             {
                 _callback(
-                    std::make_shared<bcos::Error>(_error->errorCode(), _error->errorMessage()),
+                    BCOS_ERROR_PTR(_error->errorCode(), _error->errorMessage()),
                     std::move(buffer));
             }
             else
@@ -302,7 +302,7 @@ void AMOPClient::asyncNotifyAMOPMessage(std::string const& _topic, bytesConstRef
         auto buffer = std::make_shared<bcos::bytes>();
         // Note: encode the message into buffer, response to the request-sdk
         responseMessage->encode(*buffer);
-        _callback(std::make_shared<Error>(CommonError::NotFoundClientByTopicDispatchMsg,
+        _callback(BCOS_ERROR_PTR(CommonError::NotFoundClientByTopicDispatchMsg,
                       "NotFoundClientByTopicDispatchMsg"),
             buffer);
         AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("asyncNotifyAMOPMessage: no client found")
