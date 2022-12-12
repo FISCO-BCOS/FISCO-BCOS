@@ -24,6 +24,7 @@
 #include <bcos-codec/bcos-codec/scale/Scale.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
+#include <bcos-crypto/merkle/Merkle.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_for_each.h>
@@ -72,6 +73,45 @@ public:
     std::shared_ptr<Child2ParentMap> getChild2Parent(
         const std::shared_ptr<Parent2ChildListMap>& _parent2Child);
 };
+
+template<size_t width = 2>
+class MerkleProofUtilityNew
+{
+public:
+    template <typename T>
+    void getMerkleProof(const crypto::HashType& _txHash, T _ts, crypto::CryptoSuite::Ptr _crypto,
+        std::shared_ptr<MerkleProof> merkleProof)
+    {
+        auto hashList = getHashList(_ts);
+        auto anyHasher = _crypto->hashImpl()->hasher();
+        std::visit(
+            [&_txHash, &hashList, &merkleProof](auto& hasher) {
+                using Hasher = std::remove_reference_t<decltype(hasher)>;
+                auto tempHash = _txHash.asBytes();
+                bcos::crypto::merkle::Merkle<Hasher, width> merkle;
+                merkle.generateMerkleProof(*hashList, tempHash, *merkleProof);
+            },
+            anyHasher);
+    }
+
+private:
+    template <typename T>
+    std::shared_ptr<std::vector<bytes>> getHashList(T _ts)
+    {
+        auto hashList = std::make_shared<std::vector<bytes>>();
+        hashList->resize(_ts.size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, hashList->size()),
+            [&_ts, hashList](const tbb::blocked_range<size_t>& _r) {
+                for (auto i = _r.begin(); i < _r.end(); ++i)
+                {
+                    crypto::HashType hash = ((_ts)[i])->hash();
+                    (*hashList)[i] = hash.asBytes();
+                }
+            });
+        return hashList;
+    }
+};
+
 
 
 }  // namespace bcos::ledger
