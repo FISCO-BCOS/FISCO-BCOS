@@ -364,7 +364,8 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
     try
     {
-        auto parentInfo = *blockHeader->parentInfo().begin();
+        auto view = blockHeader->parentInfo();
+        auto parentInfo = *view.begin();
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
                                 << "NextBlockHeader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())

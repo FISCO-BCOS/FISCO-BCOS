@@ -268,7 +268,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     blockHeader2->setNumber(2);
 
     parentInfos = {{{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    blockHeader2->setParentInfo(parentInfos);
     ledger->setBlockNumber(blockHeader2->number() - 1);
     blockHeader2->calculateHash(*cryptoSuite->hashImpl());
 

@@ -87,11 +87,9 @@ BlockHeaderImpl::parentInfo() const
 {
     return m_inner()->data.parentInfo |
            RANGES::views::transform([](const bcostars::ParentInfo& tarsParentInfo) {
-               bcos::protocol::ParentInfo parentInfo;
-               parentInfo.blockNumber = tarsParentInfo.blockNumber;
-               parentInfo.blockHash = bcos::crypto::HashType(
-                   (bcos::byte*)tarsParentInfo.blockHash.data(), tarsParentInfo.blockHash.size());
-               return parentInfo;
+               return bcos::protocol::ParentInfo{.blockNumber = tarsParentInfo.blockNumber,
+                   .blockHash = bcos::crypto::HashType((bcos::byte*)tarsParentInfo.blockHash.data(),
+                       tarsParentInfo.blockHash.size())};
            });
 }
 
@@ -134,13 +132,13 @@ bcos::u256 BlockHeaderImpl::gasUsed() const
 
 void BlockHeaderImpl::setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfos)
 {
-    auto* tarsParentInfo = m_inner();
-    tarsParentInfo->data.parentInfo.clear();
+    auto* inner = m_inner();
+    inner->data.parentInfo.clear();
     for (auto it : parentInfos)
     {
-        auto& parentInfo = tarsParentInfo->data.parentInfo.emplace_back();
-        parentInfo.blockNumber = it.blockNumber;
-        parentInfo.blockHash.assign(it.blockHash.begin(), it.blockHash.end());
+        auto& newParentInfo = inner->data.parentInfo.emplace_back();
+        newParentInfo.blockNumber = it.blockNumber;
+        newParentInfo.blockHash.assign(it.blockHash.begin(), it.blockHash.end());
     }
     clearDataHash();
 }
