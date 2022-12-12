@@ -45,7 +45,7 @@ public:
     using Ptr = std::shared_ptr<Message>;
 
 public:
-    virtual ~Message() {}
+    virtual ~Message() = default;
 
     virtual uint32_t length() const = 0;
     virtual uint32_t seq() const = 0;
@@ -62,22 +62,27 @@ public:
     virtual MessageExtAttributes::Ptr extAttributes() = 0;
 };
 
-//
-
 class MessageFactory
 {
 public:
     using Ptr = std::shared_ptr<MessageFactory>;
 
-public:
-    virtual ~MessageFactory() {}
+    MessageFactory() = default;
+    MessageFactory(const MessageFactory&) = delete;
+    MessageFactory(MessageFactory&&) = delete;
+    MessageFactory& operator=(const MessageFactory&) = delete;
+    MessageFactory&& operator=(MessageFactory&&) = delete;
+
+    virtual ~MessageFactory() = default;
     virtual Message::Ptr buildMessage() = 0;
 
+public:
     virtual uint32_t newSeq()
     {
         uint32_t seq = ++m_seq;
         return seq;
     }
+
     std::atomic<uint32_t> m_seq = {1};
 };
 
