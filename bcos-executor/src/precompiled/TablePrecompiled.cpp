@@ -523,12 +523,7 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     size_t condSize = 0;
     size_t cloumnSize = 0;
     bool _isNumericalOrder = false;
-    if (version < (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
-    {
-        codec.decode(data, conditions.cond, limit);
-        condSize = conditions.cond.size();
-    }
-    else
+    if (version >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
         codec.decode(data, conditions.cond_v320, limit);
         condSize = conditions.cond_v320.size();
@@ -537,6 +532,11 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
         desc(tableInfo, tableName, _executive, _callParameters);
         _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
         cloumnSize = std::get<2>(tableInfo.info_v320).size();
+    }
+    else
+    {
+        codec.decode(data, conditions.cond, limit);
+        condSize = conditions.cond.size();
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("tableName", tableName)
@@ -608,12 +608,7 @@ void TablePrecompiled::count(const std::string& tableName,
     size_t condSize = 0;
     size_t cloumnSize = 0;
     bool _isNumericalOrder = false;
-    if (version < (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
-    {
-        codec.decode(data, conditions.cond);
-        condSize = conditions.cond.size();
-    }
-    else
+    if (version >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
         codec.decode(data, conditions.cond_v320);
         condSize = conditions.cond_v320.size();
@@ -622,6 +617,11 @@ void TablePrecompiled::count(const std::string& tableName,
         desc(tableInfo, tableName, _executive, _callParameters);
         _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
         cloumnSize = std::get<2>(tableInfo.info_v320).size();
+    }
+    else
+    {
+        codec.decode(data, conditions.cond);
+        condSize = conditions.cond.size();
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
                            << LOG_KV("tableName", tableName) << LOG_KV("ConditionSize", condSize);

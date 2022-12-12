@@ -1,6 +1,7 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -16,7 +17,7 @@
 #include <random>
 #include <stdexcept>
 
-using HashType = std::array<std::byte, 32>;
+using HashType = std::array<uint8_t, 32>;
 
 namespace std
 {
@@ -31,10 +32,13 @@ std::ostream& operator<<(std::ostream& stream, const HashType& hash)
 }
 }  // namespace std
 
+
 namespace bcos::test
 {
 
 using namespace bcos::crypto::merkle;
+using MerkleProof = std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>;
+using MerkleProofPtr = std::shared_ptr<MerkleProof>;
 
 struct TestBinaryMerkleTrieFixture
 {
@@ -59,7 +63,7 @@ template <size_t width>
 void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashes)
 {
     HashType emptyHash;
-    emptyHash.fill(std::byte(0));
+    emptyHash.fill(0);
     auto seed = std::random_device{}();
 
     for (auto count = 0lu; count < RANGES::size(inputHashes); ++count)
@@ -135,6 +139,48 @@ BOOST_AUTO_TEST_CASE(merkle)
 {
     constexpr static size_t testCount = 16;
     loopWidthTest<testCount>(hashes);
+}
+
+template<typename Hasher>
+std::shared_ptr<std::string> calculateRootByMerkleProof(const bcos::bytes& _txHash, 
+    MerkleProofPtr merkleProof, Hasher& hasher)
+{
+    auto txHash = _txHash;
+    for(auto &oneLevel : *merkleProof)
+    {
+        auto& left = oneLevel.first;
+        auto& right = oneLevel.second;
+        // left
+        std::for_each(left.begin(), left.end(), 
+            [&hasher](const std::string& _hash) { hasher.update(*fromHexString(_hash)); });
+        hasher.update(txHash);
+        // right
+        std::for_each(right.begin(), right.end(), 
+            [&hasher](const std::string& _hash) { hasher.update(*fromHexString(_hash)); });
+        hasher.final(txHash);
+    }
+    return toHexString(txHash);
+}
+
+BOOST_AUTO_TEST_CASE(merkleForLedger)
+{
+    crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher hasher;
+    bcos::crypto::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, 2> trie;
+    std::vector<bcos::bytes> _hashes;
+    std::for_each(hashes.begin(), hashes.end(), [&_hashes](HashType& hash){
+        bcos::bytes _hash(hash.begin(), hash.end());
+        _hashes.emplace_back(std::move(_hash));
+    });
+    std::vector<bcos::bytes> merkle;
+    trie.generateMerkle(_hashes, merkle);
+    auto root = *toHexString(merkle.back());
+    for (auto& hash : _hashes)
+    {
+        auto proof = std::make_shared<MerkleProof>();
+        trie.generateMerkleProof(_hashes, hash, *proof);
+        auto _root = calculateRootByMerkleProof(hash, proof, hasher);
+        BOOST_CHECK(*_root == root);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(performance) {}
