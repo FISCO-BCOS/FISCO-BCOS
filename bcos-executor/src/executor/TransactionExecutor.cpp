@@ -365,13 +365,13 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
     try
     {
         auto view = blockHeader->parentInfo();
-        auto parentInfo = *view.begin();
+        auto parentInfoIt = view.begin();
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
                                 << "NextBlockHeader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())
                                 << LOG_KV("schedulerTermId", schedulerTermId)
                                 << LOG_KV("parentHash", blockHeader->number() > 0 ?
-                                                            parentInfo.blockHash.abridged() :
+                                                            (*parentInfoIt).blockHash.abridged() :
                                                             "null");
         m_blockVersion = blockHeader->version();
         {
@@ -449,13 +449,14 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         // cache parentHash
         if (blockHeader->number() > 0)
         {
-            m_ledgerCache->setBlockNumber2Hash(blockHeader->number() - 1, parentInfo.blockHash);
+            m_ledgerCache->setBlockNumber2Hash(
+                blockHeader->number() - 1, (*parentInfoIt).blockHash);
         }
 
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
                                 << LOG_KV("number", blockHeader->number())
                                 << LOG_KV("parentHash", blockHeader->number() > 0 ?
-                                                            parentInfo.blockHash.abridged() :
+                                                            (*parentInfoIt).blockHash.abridged() :
                                                             "null");
         callback(nullptr);
     }
