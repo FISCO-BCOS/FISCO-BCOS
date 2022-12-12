@@ -475,7 +475,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
-    blockHeader->setParentInfo({{0, h256(0)}});
+    blockHeader->setParentInfo(std::vector<protocol::ParentInfo>{{0, h256(0)}});
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
