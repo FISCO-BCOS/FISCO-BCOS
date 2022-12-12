@@ -669,7 +669,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
     }
 
     asyncBatchGetTransactions(
-        hexList, [this, callback = std::move(_onGetTx), _txHashList, _withProof](
+        hexList, [callback = std::move(_onGetTx), _txHashList, _withProof](
                      Error::Ptr&& error, std::vector<protocol::Transaction::Ptr>&& transactions) {
             if (error)
             {
@@ -685,39 +685,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
 
             if (_withProof)
             {
-                auto con_proofMap =
-                    std::make_shared<tbb::concurrent_unordered_map<std::string, MerkleProofPtr>>();
-                auto count = std::make_shared<std::atomic_uint64_t>(0);
-                auto counter = [_txList = results, _txHashList, count, con_proofMap,
-                                   callback = callback]() {
-                    count->fetch_add(1);
-                    if (count->load() == _txHashList->size())
-                    {
-                        auto proofMap = std::make_shared<std::map<std::string, MerkleProofPtr>>(
-                            con_proofMap->begin(), con_proofMap->end());
-                        LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
-                                          << LOG_KV("txHashListSize", _txHashList->size())
-                                          << LOG_KV("proofMapSize", proofMap->size());
-                        callback(nullptr, _txList, proofMap);
-                    }
-                };
-
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
-                    [this, _txHashList, counter, con_proofMap](
-                        const tbb::blocked_range<size_t>& range) {
-                        for (size_t i = range.begin(); i < range.end(); ++i)
-                        {
-                            auto txHash = _txHashList->at(i);
-                            getTxProof(txHash, [con_proofMap, txHash, counter](
-                                                   Error::Ptr _error, MerkleProofPtr _proof) {
-                                if (!_error && _proof)
-                                {
-                                    con_proofMap->insert(std::make_pair(txHash.hex(), _proof));
-                                }
-                                counter();
-                            });
-                        }
-                    });
+                // TODO: use Merkle.generateMerkleProof
             }
             else
             {
@@ -758,7 +726,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
 
             if (_withProof)
             {
-                //TODU
+                // TODO: use Merkle.generateMerkleProof
             }
             else
             {
@@ -1307,14 +1275,6 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
         });
     });
 }
-
-void Ledger::getTxProof(
-    const HashType& _txHash, std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof)
-{}
-
-void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
-    std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof)
-{}
 
 // sync method
 bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,

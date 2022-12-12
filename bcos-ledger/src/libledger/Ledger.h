@@ -125,12 +125,6 @@ private:
     void asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback);
 
-    void getTxProof(const crypto::HashType& _txHash,
-        std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
-
-    void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
-        std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
-
     void createFileSystemTables(uint32_t blockVersion);
 
     std::optional<storage::Table> buildDir(const std::string_view& _absoluteDir,
