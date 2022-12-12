@@ -16,7 +16,11 @@ public:
     void encode(bytes& _encodeData) const override {}
     void clear() override {}
     uint32_t version() const override { return 0; }
-    gsl::span<const protocol::ParentInfo> parentInfo() const override { return {}; }
+    RANGES::any_view<bcos::protocol::ParentInfo, RANGES::category::input | RANGES::category::sized>
+    parentInfo() const override
+    {
+        return {};
+    }
     crypto::HashType txsRoot() const override { return {}; }
     crypto::HashType receiptsRoot() const override { return {}; }
     crypto::HashType stateRoot() const override { return {}; }
@@ -29,8 +33,7 @@ public:
     gsl::span<const protocol::Signature> signatureList() const override { return {}; }
     gsl::span<const uint64_t> consensusWeights() const override { return {}; }
     void setVersion(uint32_t _version) override {}
-    void setParentInfo(const gsl::span<const protocol::ParentInfo>& _parentInfo) override {}
-    void setParentInfo(protocol::ParentInfoList&& _parentInfo) override {}
+    void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) override {}
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override {}
     void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) override {}
     void setStateRoot(bcos::crypto::HashType _stateRoot) override {}

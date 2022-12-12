@@ -35,7 +35,7 @@ public:
     FakeScheduler(FakeLedger::Ptr _ledger, BlockFactory::Ptr _blockFactory)
       : m_ledger(_ledger), m_blockFactory(_blockFactory)
     {}
-    ~FakeScheduler() override {}
+    ~FakeScheduler() override = default;
     void executeBlock(bcos::protocol::Block::Ptr _block, bool,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)>
             _callback) noexcept override
@@ -43,8 +43,8 @@ public:
         auto blockHeader = _block->blockHeader();
         if (m_blockFactory)
         {
-            blockHeader =
-                m_blockFactory->blockHeaderFactory()->populateBlockHeader(_block->blockHeader());
+            auto oldBlockHeader = _block->blockHeader();
+            blockHeader = m_blockFactory->blockHeaderFactory()->populateBlockHeader(oldBlockHeader);
             blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         }
         _callback(nullptr, std::move(blockHeader), false);

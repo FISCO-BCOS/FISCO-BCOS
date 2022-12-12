@@ -50,9 +50,8 @@ public:
     uint64_t transactionsMetaDataSize() const override { return 0; }
     uint64_t transactionsHashSize() const override { return Block::transactionsHashSize(); }
     uint64_t receiptsSize() const override { return 0; }
-    void setNonceList(const protocol::NonceList& _nonceList) override {}
-    void setNonceList(protocol::NonceList&& _nonceList) override {}
-    const protocol::NonceList& nonceList() const override { return m_nodelist; }
+    void setNonceList(RANGES::any_view<u256> nonces) override {}
+    RANGES::any_view<u256> nonceList() const override { return m_nodelist; }
 
 private:
     protocol::BlockHeader::Ptr m_blockHeader = std::make_shared<MockBlockHeader>(1);

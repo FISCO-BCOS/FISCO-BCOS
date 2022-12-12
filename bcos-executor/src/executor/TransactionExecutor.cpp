@@ -364,14 +364,15 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
     try
     {
+        auto view = blockHeader->parentInfo();
+        auto parentInfoIt = view.begin();
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
                                 << "NextBlockHeader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())
                                 << LOG_KV("schedulerTermId", schedulerTermId)
-                                << LOG_KV("parentHash",
-                                       blockHeader->number() > 0 ?
-                                           blockHeader->parentInfo()[0].blockHash.abridged() :
-                                           "null");
+                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
+                                                            (*parentInfoIt).blockHash.abridged() :
+                                                            "null");
         m_blockVersion = blockHeader->version();
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -449,15 +450,14 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         if (blockHeader->number() > 0)
         {
             m_ledgerCache->setBlockNumber2Hash(
-                blockHeader->number() - 1, blockHeader->parentInfo()[0].blockHash);
+                blockHeader->number() - 1, (*parentInfoIt).blockHash);
         }
 
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
                                 << LOG_KV("number", blockHeader->number())
-                                << LOG_KV("parentHash",
-                                       blockHeader->number() > 0 ?
-                                           blockHeader->parentInfo()[0].blockHash.abridged() :
-                                           "null");
+                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
+                                                            (*parentInfoIt).blockHash.abridged() :
+                                                            "null");
         callback(nullptr);
     }
     catch (std::exception& e)

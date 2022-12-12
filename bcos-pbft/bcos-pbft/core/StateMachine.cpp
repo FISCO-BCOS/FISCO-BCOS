@@ -83,7 +83,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
         ParentInfoList parentInfoList;
         ParentInfo parentInfo{_lastAppliedProposal->index(), _lastAppliedProposal->hash()};
         parentInfoList.push_back(parentInfo);
-        blockHeader->setParentInfo(std::move(parentInfoList));
+        blockHeader->setParentInfo(parentInfoList);
         CONSENSUS_LOG(DEBUG) << LOG_DESC("setParentInfo for the proposal")
                              << LOG_KV("proposalIndex", _proposal->index())
                              << LOG_KV("lastAppliedProposal", _lastAppliedProposal->index())

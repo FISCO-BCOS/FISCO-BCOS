@@ -24,6 +24,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcos::protocol
 {
@@ -54,7 +55,7 @@ public:
             parentInfo.blockHash = parentHeader->hash();
             parentInfoList.emplace_back(parentInfo);
         }
-        setParentInfo(std::move(parentInfoList));
+        setParentInfo(parentInfoList);
         setNumber(_number);
     }
 
@@ -72,7 +73,7 @@ public:
                                       "Invalid blockHeader for the size of sealerList "
                                       "is smaller than the size of signatureList"));
         }
-        for (auto signature : signatures)
+        for (const auto& signature : signatures)
         {
             auto sealerIndex = signature.index;
             auto signatureData = signature.signature;
@@ -98,7 +99,8 @@ public:
     // version returns the version of the blockHeader
     virtual uint32_t version() const = 0;
     // parentInfo returns the parent information, including (parentBlockNumber, parentHash)
-    virtual gsl::span<const ParentInfo> parentInfo() const = 0;
+    virtual RANGES::any_view<ParentInfo, RANGES::category::input | RANGES::category::sized>
+    parentInfo() const = 0;
     // txsRoot returns the txsRoot of the current block
     virtual bcos::crypto::HashType txsRoot() const = 0;
     // receiptsRoot returns the receiptsRoot of the current block
@@ -118,8 +120,7 @@ public:
     virtual gsl::span<const uint64_t> consensusWeights() const = 0;
 
     virtual void setVersion(uint32_t _version) = 0;
-    virtual void setParentInfo(gsl::span<const ParentInfo> const& _parentInfo) = 0;
-    virtual void setParentInfo(ParentInfoList&& _parentInfo) = 0;
+    virtual void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) = 0;
 
     virtual void setTxsRoot(bcos::crypto::HashType _txsRoot) = 0;
     virtual void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) = 0;

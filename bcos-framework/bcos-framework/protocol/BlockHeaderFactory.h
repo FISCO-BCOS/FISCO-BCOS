@@ -27,7 +27,7 @@ class BlockHeaderFactory
 public:
     using Ptr = std::shared_ptr<BlockHeaderFactory>;
     BlockHeaderFactory() = default;
-    virtual ~BlockHeaderFactory() {}
+    virtual ~BlockHeaderFactory() = default;
     virtual BlockHeader::Ptr createBlockHeader() = 0;
     virtual BlockHeader::Ptr createBlockHeader(bytes const& _data) = 0;
     virtual BlockHeader::Ptr createBlockHeader(bytesConstRef _data) = 0;

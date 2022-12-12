@@ -438,7 +438,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     std::vector<bcos::protocol::ParentInfo> parentInfoList;
     parentInfoList.emplace_back(parentInfo);
 
-    header->setParentInfo(std::move(parentInfoList));
+    header->setParentInfo(parentInfoList);
 
     bcos::bytes buffer;
     header->encode(buffer);
@@ -449,12 +449,12 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
     BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
-    for (auto i = 0u; i < decodedHeader->parentInfo().size(); ++i)
+    for (auto [originParentInfo, decodeParentInfo] :
+        RANGES::zip_view(header->parentInfo(), decodedHeader->parentInfo()))
     {
-        BOOST_CHECK_EQUAL(bcos::toString(header->parentInfo()[i].blockHash),
-            bcos::toString(decodedHeader->parentInfo()[i].blockHash));
         BOOST_CHECK_EQUAL(
-            header->parentInfo()[i].blockNumber, decodedHeader->parentInfo()[i].blockNumber);
+            bcos::toString(originParentInfo.blockHash), bcos::toString(decodeParentInfo.blockHash));
+        BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodeParentInfo.blockNumber);
     }
 
     BOOST_CHECK_NO_THROW(header->setExtraData(header->extraData().toBytes()));

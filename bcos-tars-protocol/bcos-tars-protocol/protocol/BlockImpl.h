@@ -102,13 +102,11 @@ public:
     // get receipts size
     uint64_t receiptsSize() const override { return m_inner->receipts.size(); }
 
-    void setNonceList(bcos::protocol::NonceList const& _nonceList) override;
-    void setNonceList(bcos::protocol::NonceList&& _nonceList) override;
-    bcos::protocol::NonceList const& nonceList() const override;
+    void setNonceList(RANGES::any_view<bcos::u256> nonces) override;
+    RANGES::any_view<bcos::u256> nonceList() const override;
 
     const bcostars::Block& inner() const { return *m_inner; }
-    void setInner(const bcostars::Block& inner) { *m_inner = inner; }
-    void setInner(bcostars::Block&& inner) { *m_inner = std::move(inner); }
+    void setInner(bcostars::Block inner) { *m_inner = std::move(inner); }
 
     bcos::crypto::HashType calculateTransactionRoot(
         const bcos::crypto::Hash& hashImpl) const override
@@ -186,7 +184,6 @@ public:
 
 private:
     std::shared_ptr<bcostars::Block> m_inner;
-    mutable bcos::protocol::NonceList m_nonceList;
     mutable bcos::SharedMutex x_blockHeader;
 };
 }  // namespace bcostars::protocol

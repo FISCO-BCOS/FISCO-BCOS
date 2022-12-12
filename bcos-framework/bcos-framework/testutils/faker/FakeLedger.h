@@ -285,6 +285,7 @@ public:
         for (auto index = _startNumber; index <= endNumber; index++)
         {
             auto nonces = m_ledger[index]->nonces();
+            std::cout << "Block nonces: " << nonces->size() << std::endl;
             nonceList->insert(std::make_pair(index, nonces));
         }
         _onGetList(nullptr, nonceList);
