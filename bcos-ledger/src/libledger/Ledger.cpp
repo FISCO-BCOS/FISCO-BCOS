@@ -1325,90 +1325,93 @@ void Ledger::getTxProof(
     const HashType& _txHash, std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof)
 {
     // txHash->receipt receipt->number number->txHash
-    asyncGetTransactionReceiptByHash(_txHash, false,
-        [this, _txHash, _onGetProof = std::move(_onGetProof)](
-            Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, const MerkleProofPtr&) {
-            if (_error || !_receipt)
-            {
-                LEDGER_LOG(DEBUG) << LOG_BADGE("getTxProof")
-                                  << LOG_DESC("getReceiptByTxHash from storage failed")
-                                  << LOG_KV("txHash", _txHash.hex());
-                _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
-                return;
-            }
-            asyncGetBlockTransactionHashes(_receipt->blockNumber(),
-                [this, _onGetProof, _txHash = std::move(_txHash)](
-                    Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
-                    if (_error || _hashList.empty())
-                    {
-                        LEDGER_LOG(DEBUG)
-                            << LOG_BADGE("getTxProof")
-                            << LOG_DESC("asyncGetBlockTransactionHashes from storage failed")
-                            << LOG_KV("txHash", _txHash.hex());
-                        _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
-                        return;
-                    }
-                    asyncBatchGetTransactions(std::make_shared<std::vector<std::string>>(_hashList),
-                        [cryptoSuite = m_blockFactory->cryptoSuite(), _onGetProof,
-                            _txHash = std::move(_txHash)](
-                            Error::Ptr&& _error, std::vector<Transaction::Ptr>&& _txList) {
-                            if (_error || _txList.empty())
-                            {
-                                LEDGER_LOG(DEBUG)
-                                    << LOG_BADGE("getTxProof") << LOG_DESC("getTxs callback failed")
-                                    << LOG_KV("code", _error->errorCode())
-                                    << LOG_KV("msg", _error->errorMessage());
-                                _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
-                                return;
-                            }
+    // asyncGetTransactionReceiptByHash(_txHash, false,
+    //     [this, _txHash, _onGetProof = std::move(_onGetProof)](
+    //         Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, const MerkleProofPtr&) {
+    //         if (_error || !_receipt)
+    //         {
+    //             LEDGER_LOG(DEBUG) << LOG_BADGE("getTxProof")
+    //                               << LOG_DESC("getReceiptByTxHash from storage failed")
+    //                               << LOG_KV("txHash", _txHash.hex());
+    //             _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
+    //             return;
+    //         }
+    //         asyncGetBlockTransactionHashes(_receipt->blockNumber(),
+    //             [this, _onGetProof, _txHash = std::move(_txHash)](
+    //                 Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
+    //                 if (_error || _hashList.empty())
+    //                 {
+    //                     LEDGER_LOG(DEBUG)
+    //                         << LOG_BADGE("getTxProof")
+    //                         << LOG_DESC("asyncGetBlockTransactionHashes from storage failed")
+    //                         << LOG_KV("txHash", _txHash.hex());
+    //                     _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
+    //                     return;
+    //                 }
+    //                 asyncBatchGetTransactions(std::make_shared<std::vector<std::string>>(_hashList),
+    //                     [cryptoSuite = m_blockFactory->cryptoSuite(), _onGetProof,
+    //                         _txHash = std::move(_txHash)](
+    //                         Error::Ptr&& _error, std::vector<Transaction::Ptr>&& _txList) {
+    //                         if (_error || _txList.empty())
+    //                         {
+    //                             LEDGER_LOG(DEBUG)
+    //                                 << LOG_BADGE("getTxProof") << LOG_DESC("getTxs callback
+    //                                 failed")
+    //                                 << LOG_KV("code", _error->errorCode())
+    //                                 << LOG_KV("msg", _error->errorMessage());
+    //                             _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
+    //                             return;
+    //                         }
 
-                            auto merkleProofPtr = std::make_shared<MerkleProof>();
-                            auto merkleProofUtility = std::make_shared<MerkleProofUtilityNew<2>>();
+    //                         auto merkleProofPtr = std::make_shared<MerkleProof>();
+    //                         auto merkleProofUtility =
+    //                         std::make_shared<MerkleProofUtilityNew<2>>();
 
-                            merkleProofUtility->getMerkleProof(_txHash,
-                                std::forward<decltype(_txList)>(_txList), cryptoSuite,
-                                merkleProofPtr);
-                            LEDGER_LOG(TRACE)
-                                << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
-                                << LOG_KV("txHash", _txHash.hex());
-                            _onGetProof(nullptr, std::move(merkleProofPtr));
-                        });
-                });
-        });
+    //                         merkleProofUtility->getMerkleProof(_txHash,
+    //                             std::forward<decltype(_txList)>(_txList), cryptoSuite,
+    //                             merkleProofPtr);
+    //                         LEDGER_LOG(TRACE)
+    //                             << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof
+    //                             success")
+    //                             << LOG_KV("txHash", _txHash.hex());
+    //                         _onGetProof(nullptr, std::move(merkleProofPtr));
+    //                     });
+    //             });
+    //     });
 }
 
 void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
     std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof)
 {
     // receipt->number number->txs txs->receipts
-    asyncGetBlockTransactionHashes(_receipt->blockNumber(),
-        [this, _onGetProof = std::move(_onGetProof), receiptHash = _receipt->hash()](
-            Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
-            if (_error)
-            {
-                _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
-                return;
-            }
+    // asyncGetBlockTransactionHashes(_receipt->blockNumber(),
+    //     [this, _onGetProof = std::move(_onGetProof), receiptHash = _receipt->hash()](
+    //         Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
+    //         if (_error)
+    //         {
+    //             _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
+    //             return;
+    //         }
 
-            asyncBatchGetReceipts(std::make_shared<std::vector<std::string>>(_hashList),
-                [cryptoSuite = this->m_blockFactory->cryptoSuite(), _onGetProof,
-                    receiptHash = receiptHash](Error::Ptr&& _error,
-                    std::vector<protocol::TransactionReceipt::Ptr>&& _receiptList) {
-                    if (_error || _receiptList.empty())
-                    {
-                        LEDGER_LOG(DEBUG) << LOG_BADGE("getReceiptProof")
-                                          << LOG_DESC("asyncBatchGetReceipts callback failed");
-                        _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
-                        return;
-                    }
-                    auto merkleProof = std::make_shared<MerkleProof>();
-                    auto merkleProofUtility = std::make_shared<MerkleProofUtilityNew<2>>();
-                    merkleProofUtility->getMerkleProof(receiptHash,
-                        std::forward<decltype(_receiptList)>(_receiptList), cryptoSuite,
-                        merkleProof);
-                    _onGetProof(nullptr, std::move(merkleProof));
-                });
-        });
+    //         asyncBatchGetReceipts(std::make_shared<std::vector<std::string>>(_hashList),
+    //             [cryptoSuite = this->m_blockFactory->cryptoSuite(), _onGetProof,
+    //                 receiptHash = receiptHash](Error::Ptr&& _error,
+    //                 std::vector<protocol::TransactionReceipt::Ptr>&& _receiptList) {
+    //                 if (_error || _receiptList.empty())
+    //                 {
+    //                     LEDGER_LOG(DEBUG) << LOG_BADGE("getReceiptProof")
+    //                                       << LOG_DESC("asyncBatchGetReceipts callback failed");
+    //                     _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
+    //                     return;
+    //                 }
+    //                 auto merkleProof = std::make_shared<MerkleProof>();
+    //                 auto merkleProofUtility = std::make_shared<MerkleProofUtilityNew<2>>();
+    //                 merkleProofUtility->getMerkleProof(receiptHash,
+    //                     std::forward<decltype(_receiptList)>(_receiptList), cryptoSuite,
+    //                     merkleProof);
+    //                 _onGetProof(nullptr, std::move(merkleProof));
+    //             });
+    //     });
 }
 
 // sync method

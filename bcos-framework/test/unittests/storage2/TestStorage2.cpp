@@ -20,6 +20,8 @@ public:
                 entry = it->second;
             }
         }
+
+        co_return;
     }
 
     task::Task<void> impl_setRows(
@@ -30,11 +32,15 @@ public:
             auto keyPair = std::make_tuple(std::string(tableName), std::string(key));
             m_values.insert(std::make_pair(keyPair, entry));
         }
+
+        co_return;
     }
 
-    template <Iterator IteratorType>
-    task::Task<IteratorType> impl_seek(std::string_view tableName, std::string_view key)
-    {}
+    // template <Iterator IteratorType>
+    // task::Task<IteratorType> impl_seek(std::string_view tableName, std::string_view key)
+    // {
+    //     co_return {};
+    // }
 
     std::map<std::tuple<std::string, std::string>, storage::Entry> m_values;
 };
