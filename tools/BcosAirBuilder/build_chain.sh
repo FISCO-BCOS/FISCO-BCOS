@@ -1671,7 +1671,7 @@ deploy_nodes()
             LOG_FATAL "fisco bcos binary exec ${binary_path} not exist, Must copy binary file ${binary_name} to ${binary_path}"
         fi
     fi
-    #check the lightnode bianry
+    #check the lightnode binary
     if [ -f "${lightnode_binary_path}" ] && [ "${download_lightnode_binary}" != "true" ];then
       LOG_INFO "Use lightnode binary ${lightnode_binary_path}"
     fi
