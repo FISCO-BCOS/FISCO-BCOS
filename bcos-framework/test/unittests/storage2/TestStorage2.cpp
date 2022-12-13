@@ -28,7 +28,6 @@ public:
             {
                 std::cout << "Found!" << std::endl;
                 entry.emplace(it->second);
-                // entry = it->second;
             }
         }
 
@@ -71,6 +70,12 @@ BOOST_AUTO_TEST_CASE(getSet)
     auto gotEntry = task::syncWait(mock.getRow("tableName!", "key!"));
     BOOST_CHECK(gotEntry);
     BOOST_CHECK_EQUAL(gotEntry->get(), content);
+
+    gotEntry = task::syncWait(mock.getRow("tableName!", "key2!"));
+    BOOST_CHECK(!gotEntry);
+
+    gotEntry = task::syncWait(mock.getRow("tableName2!", "key!"));
+    BOOST_CHECK(!gotEntry);
 }
 
 BOOST_AUTO_TEST_CASE(sigleView)
@@ -81,7 +86,6 @@ BOOST_AUTO_TEST_CASE(sigleView)
     auto mutableView = view | RANGES::views::transform([](int* number) -> int& { return *number; });
 
     mutableView[0] = 2;
-
     BOOST_CHECK_EQUAL(i, 2);
 }
 
