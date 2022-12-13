@@ -182,7 +182,8 @@ config_console "false"
 send_transactions ${txs_num}
 check_sync ${txs_num}
 stop_node
-LOG_INFO "======== check non-sm success ========"
+clear_node
+# LOG_INFO "======== check non-sm success ========"
 
 # TODO: support sm test
 # LOG_INFO "======== check sm case ========"
