@@ -112,8 +112,6 @@ public:
         m_txsCleanUpSwitch = _txsCleanUpSwitch;
     }
 
-    virtual bool preStoreTxs() const { return true; }
-
 protected:
     bcos::CallbackCollectionHandler<> m_onReady;
     // notify the sealer the latest unsealed txs

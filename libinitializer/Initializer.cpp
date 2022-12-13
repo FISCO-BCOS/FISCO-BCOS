@@ -192,14 +192,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
-    bool preStoreTxs = true;
     // Note: since tikv-storage store txs with transaction, batch writing is more efficient than
-    // writing one by one, disable preStoreTxs in max-node mode
+    // writing one by one
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
         executionMessageFactory =
             std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
-        preStoreTxs = false;
     }
     else
     {
@@ -212,8 +210,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
     // init the txpool
-    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
-        m_frontServiceInitializer->front(), ledger, preStoreTxs);
+    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
+        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
