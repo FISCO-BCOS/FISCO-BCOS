@@ -4,13 +4,21 @@
 
 namespace bcos::concepts::transaction_scheduler
 {
+
+template <class TransactionRangeType>
+concept TransactionRange = RANGES::range<TransactionRangeType>;
+
 // All auto interfaces is awaitable
 template <class Impl>
 class TransactionSchedulerBase
 {
 public:
     // Return awaitable block header
-    auto executeBlock(const protocol::Block& block) { return impl().impl_executeBlock(block); }
+    auto executeTransactions(
+        const protocol::BlockHeader& blockHeader, TransactionRange auto const& transactions)
+    {
+        return impl().impl_executeBlock(transactions);
+    }
 
     // Return awaitable string
     auto getCode(std::string_view contractAddress) { return impl().impl_getCode(contractAddress); }

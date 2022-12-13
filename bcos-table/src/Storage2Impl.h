@@ -2,7 +2,7 @@
 
 #include "bcos-concepts/Basic.h"
 #include "bcos-concepts/ByteBuffer.h"
-#include <bcos-concepts/storage/Storage2.h>
+#include <bcos-framework/storage2/Storage2.h>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
 #include <boost/multi_index/mem_fun.hpp>
@@ -11,27 +11,27 @@
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
 
-namespace bcos::storage
+namespace bcos::storage2
 {
 
 // TODO: Only for demo now
 template <bool withMRU>
-class StorageImpl : public concepts::storage::StorageBase<StorageImpl<withMRU>>
+class Storage2Impl : public storage2::Storage2Base<Storage2Impl<withMRU>>
 {
 public:
-    task::Task<void> impl_getRows(concepts::bytebuffer::ByteBuffer auto const& tableName,
-        concepts::storage::Keys auto const& keys, concepts::storage::Entries auto& entriesOut)
+    task::Task<void> impl_getRows(
+        std::string_view tableName, InputKeys auto const& keys, OutputEntries auto& out)
     {
-        concepts::resizeTo(entriesOut, RANGES::size(keys));
+        concepts::resizeTo(out, RANGES::size(keys));
         auto [bucket, lock] = getBucket(tableName);
         auto& index = bucket->container.template get<0>();
 
         for (auto const& [keyIt, outIt] :
-            RANGES::zip_view<decltype(keys), decltype(entriesOut)>(keys, entriesOut))
+            RANGES::zip_view<decltype(keys), decltype(out)>(keys, out))
         {
             auto keyView = concepts::bytebuffer::toView(keyIt);
             auto entryIt = index.find(std::make_tuple(tableName, keyView));
-            if (entryIt != index.end() && entryIt->entry.status() != Entry::DELETED)
+            if (entryIt != index.end() && entryIt->entry.status() != storage::Entry::DELETED)
             {
                 if constexpr (withMRU)
                 {
@@ -42,8 +42,8 @@ public:
         }
     }
 
-    task::Task<void> impl_setRows(concepts::bytebuffer::ByteBuffer auto const& tableName,
-        concepts::storage::Keys auto const& keys, concepts::storage::Entries auto const& entries)
+    task::Task<void> impl_setRows(
+        std::string_view tableName, InputKeys auto const& keys, InputEntries auto const& entries)
     {
         if (RANGES::size(keys) != RANGES::size(entries))
         {
@@ -90,7 +90,7 @@ private:
     {
         std::string_view tableName;
         std::string key;
-        Entry entry;
+        storage::Entry entry;
 
         std::tuple<std::string_view, std::string_view> view() const
         {
@@ -155,4 +155,4 @@ private:
     }
 };
 
-}  // namespace bcos::storage
+}  // namespace bcos::storage2

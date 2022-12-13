@@ -13,13 +13,14 @@ class TransactionExecutorBase
 {
 public:
     // Return awaitable receipts
-    auto execute(storage2::Storage auto& storage, const protocol::Transaction& transaction)
+    auto execute(const protocol::Transaction& transaction, storage2::Storage auto& storage)
     {
-        return impl().impl_execute(storage, transaction);
+        return impl().impl_execute(transaction, storage);
     }
 
 private:
     friend Impl;
+    TransactionExecutorBase() = default;
     auto& impl() { return static_cast<Impl&>(*this); }
 };
 }  // namespace bcos::transaction_executor
