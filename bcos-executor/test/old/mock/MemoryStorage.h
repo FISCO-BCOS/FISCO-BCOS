@@ -93,7 +93,7 @@ public:
         size_t total = 0;
         if (_tableInfos.size() != _tableDatas.size())
         {
-            auto error = std::make_shared<Error>(-1, "");
+            auto error = BCOS_ERROR_PTR(-1, "");
             return {0, error};
         }
         std::shared_ptr<TableFactoryInterface> stateTableFactory = nullptr;
@@ -105,7 +105,7 @@ public:
             }
             else
             {
-                return {0, std::make_shared<Error>(StorageErrorCode::StateCacheNotFound,
+                return {0, BCOS_ERROR_PTR(StorageErrorCode::StateCacheNotFound,
                                std::to_string(_number) + "state cache not found")};
             }
             auto stateData = stateTableFactory->exportData();
@@ -148,7 +148,7 @@ public:
     {
         auto keyList = getPrimaryKeys(_tableInfo, _condition);
         boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
+        auto error = BCOS_ERROR_PTR(0, "");
         _callback(error, keyList);
     }
 
@@ -157,7 +157,7 @@ public:
     {
         auto entry = getRow(_tableInfo, _key);
         boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
+        auto error = BCOS_ERROR_PTR(0, "");
         _callback(error, entry);
     }
     void asyncGetRows(const std::shared_ptr<TableInfo>& _tableInfo,
@@ -167,7 +167,7 @@ public:
     {
         auto rowMap = getRows(_tableInfo, *_keyList);
         boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
+        auto error = BCOS_ERROR_PTR(0, "");
         _callback(error, rowMap);
     }
 
@@ -179,7 +179,7 @@ public:
     {
         auto retPair = commitBlock(_number, *_tableInfo, *_tableMap);
         boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
+        auto error = BCOS_ERROR_PTR(0, "");
         _callback(error, retPair.first);
     }
 
@@ -200,7 +200,7 @@ public:
     {
         auto tableFactory = getStateCache(_blockNumber);
         boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
+        auto error = BCOS_ERROR_PTR(0, "");
         _callback(error, tableFactory);
     }
 
@@ -247,7 +247,7 @@ public:
         auto key = getKey(_columnFamily, _key);
         if (!m_key2Data.count(key))
         {
-            _callback(std::make_shared<Error>(StorageErrorCode::NotFound, "key NotFound"));
+            _callback(BCOS_ERROR_PTR(StorageErrorCode::NotFound, "key NotFound"));
             return;
         }
         m_key2Data.erase(key);
@@ -260,7 +260,7 @@ public:
         auto key = getKey(_columnFamily, _key);
         if (!m_key2Data.count(key))
         {
-            _callback(std::make_shared<Error>(StorageErrorCode::NotFound, "key NotFound"), "");
+            _callback(BCOS_ERROR_PTR(StorageErrorCode::NotFound, "key NotFound"), "");
             return;
         }
         _callback(nullptr, m_key2Data[key]);

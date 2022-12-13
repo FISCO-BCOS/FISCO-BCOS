@@ -571,7 +571,7 @@ void WsService::asyncSendMessageByEndPoint(const std::string& _endPoint,
     {
         if (_respFunc)
         {
-            auto error = std::make_shared<Error>(
+            auto error = BCOS_ERROR_PTR(
                 WsError::EndPointNotExist, "there has no connection of the endpoint exist");
             _respFunc(error, nullptr, nullptr);
         }
@@ -623,7 +623,7 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
         {
             if (ss.empty())
             {
-                auto error = std::make_shared<Error>(
+                auto error = BCOS_ERROR_PTR(
                     WsError::NoActiveCons, "there has no active connection available");
                 respFunc(error, nullptr, nullptr);
                 return;

@@ -62,7 +62,7 @@ void WsSession::drop(uint32_t _reason)
     auto self = std::weak_ptr<WsSession>(shared_from_this());
     // call callbacks
     {
-        auto error = std::make_shared<Error>(
+        auto error = BCOS_ERROR_PTR(
             WsError::SessionDisconnect, "the session has been disconnected");
 
         ReadGuard l(x_callback);
@@ -346,7 +346,7 @@ void WsSession::asyncSendMessage(
 
         if (_respFunc)
         {
-            auto error = std::make_shared<Error>(
+            auto error = BCOS_ERROR_PTR(
                 WsError::SessionDisconnect, "the session has been disconnected");
             _respFunc(error, nullptr, nullptr);
         }
@@ -359,7 +359,7 @@ void WsSession::asyncSendMessage(
     {
         if (_respFunc)
         {
-            auto error = std::make_shared<Error>(WsError::MessageOverflow, "Message size overflow");
+            auto error = BCOS_ERROR_PTR(WsError::MessageOverflow, "Message size overflow");
             _respFunc(error, nullptr, nullptr);
         }
 
@@ -378,7 +378,7 @@ void WsSession::asyncSendMessage(
         if (_respFunc)
         {
             auto error =
-                std::make_shared<Error>(WsError::MessageEncodeError, "Message encode failed");
+                BCOS_ERROR_PTR(WsError::MessageEncodeError, "Message encode failed");
             _respFunc(error, nullptr, nullptr);
         }
 
@@ -471,6 +471,6 @@ void WsSession::onRespTimeout(const boost::system::error_code& _error, const std
     WEBSOCKET_SESSION(WARNING) << LOG_BADGE("onRespTimeout") << LOG_KV("seq", _seq);
 
     auto error =
-        std::make_shared<Error>(WsError::TimeOut, "waiting for message response timed out");
+        BCOS_ERROR_PTR(WsError::TimeOut, "waiting for message response timed out");
     m_threadPool->enqueue([callback, error]() { callback->respCallBack(error, nullptr, nullptr); });
 }

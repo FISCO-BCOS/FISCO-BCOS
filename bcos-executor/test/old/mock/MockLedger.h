@@ -54,7 +54,7 @@ public:
         }
         else
         {
-            _callback(std::make_shared<Error>(-1, "failed"), nullptr);
+            _callback(BCOS_ERROR_PTR(-1, "failed"), nullptr);
         }
     }
 

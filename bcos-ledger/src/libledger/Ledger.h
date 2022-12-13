@@ -25,7 +25,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "utilities/MerkleProofUtility.h"
+#include "bcos-ledger/src/libledger/utilities/Common.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -124,12 +124,6 @@ private:
 
     void asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback);
-
-    void getTxProof(const crypto::HashType& _txHash,
-        std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
-
-    void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
-        std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
 
     void createFileSystemTables(uint32_t blockVersion);
 

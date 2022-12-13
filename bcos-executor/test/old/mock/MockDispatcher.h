@@ -50,7 +50,7 @@ public:
         auto latestBlock = m_blocks[m_blocks.size() - 1];
         if (_block->blockHeader()->number() != latestBlock->blockHeader()->number() + 1)
         {
-            _callback(std::make_shared<Error>(-1, "invalid block for not consistent"), nullptr);
+            _callback(BCOS_ERROR_PTR(-1, "invalid block for not consistent"), nullptr);
             return;
         }
         std::vector<ParentInfo> parentList;
@@ -69,7 +69,7 @@ public:
     {
         if (m_blocks.empty())
         {
-            _callback(std::make_shared<Error>(-1, "no new block"), nullptr);
+            _callback(BCOS_ERROR_PTR(-1, "no new block"), nullptr);
         }
         _callback(nullptr, m_blocks.front());
     }

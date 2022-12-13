@@ -28,29 +28,23 @@
 #include <memory>
 #include <string>
 
-#if 0
-#define BCOS_ERROR(errorCode, errorMessage) \
-    ::bcos::Error::buildError(BOOST_CURRENT_FUNCTION, __FILE__, __LINE__, errorCode, errorMessage)
-#define BCOS_ERROR_WITH_PREV(errorCode, errorMessage, prev) \
-    ::bcos::Error::buildError(                              \
-        BOOST_CURRENT_FUNCTION, __FILE__, __LINE__, errorCode, errorMessage, prev)
-#endif
-
 #define BCOS_ERROR(errorCode, errorMessage) \
     ::bcos::Error::buildError(BOOST_CURRENT_LOCATION.to_string(), errorCode, errorMessage)
 #define BCOS_ERROR_WITH_PREV(errorCode, errorMessage, prev) \
     ::bcos::Error::buildError(BOOST_CURRENT_LOCATION.to_string(), errorCode, errorMessage, prev)
 
-#define BCOS_ERROR_PTR(code, message) std::make_shared<Error>(BCOS_ERROR(code, message))
+#define BCOS_ERROR_PTR(code, message) std::make_shared<bcos::Error>(BCOS_ERROR(code, message))
 #define BCOS_ERROR_WITH_PREV_PTR(code, message, prev) \
-    std::make_shared<Error>(BCOS_ERROR_WITH_PREV(code, message, prev))
+    std::make_shared<bcos::Error>(BCOS_ERROR_WITH_PREV(code, message, prev))
 
-#define BCOS_ERROR_UNIQUE_PTR(code, message) std::make_unique<Error>(BCOS_ERROR(code, message))
+#define BCOS_ERROR_UNIQUE_PTR(code, message) \
+    std::make_unique<bcos::Error>(BCOS_ERROR(code, message))
 #define BCOS_ERROR_WITH_PREV_UNIQUE_PTR(code, message, prev) \
-    std::make_unique<Error>(BCOS_ERROR_WITH_PREV(code, message, prev))
+    std::make_unique<bcos::Error>(BCOS_ERROR_WITH_PREV(code, message, prev))
 
 namespace bcos
 {
+
 class Error : public bcos::Exception
 {
 public:
@@ -60,77 +54,66 @@ public:
     using UniquePtr = std::unique_ptr<Error>;
     using UniqueConstPtr = std::unique_ptr<const Error>;
 
-    using PrevStdError = boost::error_info<struct PrevErrorTag, std::string>;
-
-    static Error buildError(char const* func, char const* file, int line, int32_t errorCode,
-        const std::string& errorMessage)
-    {
-        Error error(errorCode, errorMessage);
-        error << boost::throw_function(func);
-        error << boost::throw_file(file);
-        error << boost::throw_line(line);
-
-        return error;
-    }
-
-    static Error buildError(char const* func, char const* file, int line, int32_t errorCode,
-        const std::string& errorMessage, const Error& prev)
-    {
-        auto error = buildError(func, file, line, errorCode, errorMessage);
-        error << PrevStdError(boost::diagnostic_information(prev));
-        return error;
-    }
-
-    static Error buildError(char const* func, char const* file, int line, int32_t errorCode,
-        const std::string& errorMessage, const std::exception& prev)
-    {
-        auto error = buildError(func, file, line, errorCode, errorMessage);
-        error << PrevStdError(boost::diagnostic_information(prev));
-        return error;
-    }
+    // using PrevStdError = boost::error_info<struct PrevErrorTag, std::string>;
+    using Context = boost::error_info<struct ErrorContext, std::string>;
+    using ErrorCode = boost::error_info<struct ErrorCodeTag, int64_t>;
+    using ErrorMessage = boost::error_info<struct ErrorMessageTag, std::string>;
+    using PrevError = boost::error_info<struct ErrorTag, Error>;
+    using STDError = boost::error_info<struct STDErrorTag, std::exception_ptr>;
+    using STDErrorMessage = boost::error_info<struct STDErrorTag, std::string>;
 
     static Error buildError(
-        const std::string& context, int32_t errorCode, const std::string& errorMessage)
+        std::string context, int32_t errorCode, std::string errorMessage, Error prev)
     {
-        Error error(errorCode, errorMessage);
-        error << boost::error_info<struct error_context, std::string>(context);
+        auto error = buildError(std::move(context), errorCode, std::move(errorMessage));
+        error << PrevError(std::move(prev));
         return error;
     }
 
-    static Error buildError(const std::string& context, int32_t errorCode,
-        const std::string& errorMessage, const Error& prev)
+    static Error buildError(std::string context, int32_t errorCode, std::string errorMessage,
+        const std::exception& prev)
     {
-        auto error = buildError(context, errorCode, errorMessage);
-        error << PrevStdError(boost::diagnostic_information(prev));
+        auto error = buildError(std::move(context), errorCode, std::move(errorMessage));
+        error << STDErrorMessage(prev.what());
+        error << STDError(std::make_exception_ptr(prev));
         return error;
     }
 
-    static Error buildError(const std::string& context, int32_t errorCode,
-        const std::string& errorMessage, const std::exception& prev)
+    static Error buildError(std::string context, int32_t errorCode, std::string errorMessage)
     {
-        auto error = buildError(context, errorCode, errorMessage);
-        error << PrevStdError(boost::diagnostic_information(prev));
+        Error error;
+        error << Context(std::move(context));
+        error << ErrorCode(errorCode);
+        error << ErrorMessage(std::move(errorMessage));
         return error;
     }
 
-    Error() = default;
-    Error(int64_t _errorCode, std::string _errorMessage)
-      : bcos::Exception(_errorMessage),
-        m_errorCode(_errorCode),
-        m_errorMessage(std::move(_errorMessage))
-    {}
-
-    virtual int64_t errorCode() const { return m_errorCode; }
-    virtual std::string const& errorMessage() const { return m_errorMessage; }
-
-    virtual void setErrorCode(int64_t _errorCode) { m_errorCode = _errorCode; }
-    virtual void setErrorMessage(std::string const& _errorMessage)
+    virtual int64_t errorCode() const
     {
-        m_errorMessage = _errorMessage;
+        const auto* ptr = boost::get_error_info<ErrorCode>(*this);
+        if (ptr != nullptr)
+        {
+            return *ptr;
+        }
+        return 0;
+    }
+    virtual std::string errorMessage() const
+    {
+        const auto* ptr = boost::get_error_info<ErrorMessage>(*this);
+        if (ptr != nullptr)
+        {
+            return *ptr;
+        }
+        return {};
+    }
+
+    virtual void setErrorCode(int64_t errorCode) { *this << ErrorCode(errorCode); }
+    virtual void setErrorMessage(std::string errorMessage)
+    {
+        *this << ErrorMessage(std::move(errorMessage));
     }
 
 private:
-    int64_t m_errorCode = 0;
-    std::string m_errorMessage;
+    Error() = default;
 };
 }  // namespace bcos

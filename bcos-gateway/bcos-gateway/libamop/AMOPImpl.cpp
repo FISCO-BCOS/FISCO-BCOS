@@ -319,7 +319,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
         {
             return;
         }
-        auto errorPtr = std::make_shared<Error>(CommonError::NotFoundPeerByTopicSendMsg,
+        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundPeerByTopicSendMsg,
             "there has no node subscribe this topic, topic: " + _topic);
         if (_respFunc)
         {
@@ -349,7 +349,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
         {
             if (m_nodeIDs.empty())
             {
-                auto errorPtr = std::make_shared<Error>(
+                auto errorPtr = BCOS_ERROR_PTR(
                     CommonError::AMOPSendMsgFailed, "unable to send message to peer by topic");
                 if (m_callback)
                 {
@@ -398,7 +398,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                                 "is online";
                             errorCode = -1;
                         }
-                        error = std::make_shared<Error>(errorCode, errorMessage);
+                        error = BCOS_ERROR_PTR(errorCode, errorMessage);
 
                         AMOP_LOG(INFO)
                             << LOG_DESC("asyncSendMessageByTopic error: receive responseData")
@@ -443,7 +443,7 @@ void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
                 "is online";
             errorCode = -1;
         }
-        error = std::make_shared<Error>(errorCode, errorMessage);
+        error = BCOS_ERROR_PTR(errorCode, errorMessage);
 
         AMOP_LOG(INFO) << LOG_DESC("asyncSendMessageByTopic error: receive responseData")
                        << LOG_KV("status", amopMsg->status()) << LOG_KV("msg", errorMessage);

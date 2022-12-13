@@ -572,7 +572,7 @@ void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytes
         {
             auto errorMsg =
                 "send message to " + _dstNodeID + " failed for no connection established";
-            _callback(std::make_shared<bcos::Error>(-1, errorMsg), 0, nullptr);
+            _callback(BCOS_ERROR_PTR(-1, errorMsg), 0, nullptr);
         }
         return;
     }

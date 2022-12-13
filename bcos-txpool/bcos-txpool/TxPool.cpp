@@ -121,7 +121,7 @@ bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
     txResult->setStatus((uint32_t)TransactionStatus::RequestNotBelongToTheGroup);
 
     auto errorMsg = "Do not send transactions to nodes that are not in the group";
-    _txSubmitCallback(std::make_shared<Error>((int32_t)txResult->status(), errorMsg), txResult);
+    _txSubmitCallback(BCOS_ERROR_PTR((int32_t)txResult->status(), errorMsg), txResult);
     TXPOOL_LOG(WARNING) << LOG_DESC(errorMsg);
     return false;
 }
@@ -177,7 +177,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
             {
                 if (_onVerifyFinished)
                 {
-                    _onVerifyFinished(std::make_shared<Error>(
+                    _onVerifyFinished(BCOS_ERROR_PTR(
                                           -1, "asyncVerifyBlock failed for lock txpool failed"),
                         false);
                 }
@@ -315,7 +315,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
         if (!txpool)
         {
             _onBlockFilled(
-                std::make_shared<Error>(CommonError::TransactionsMissing, "TransactionsMissing"),
+                BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
                 nullptr);
             return;
         }
@@ -329,7 +329,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
                         << LOG_KV("code", _error ? _error->errorCode() : 0)
                         << LOG_KV("msg", _error ? _error->errorMessage() : "fetchSucc")
                         << LOG_KV("verifyResult", _verifyResult);
-                    _onBlockFilled(std::make_shared<Error>(
+                    _onBlockFilled(BCOS_ERROR_PTR(
                                        CommonError::TransactionsMissing, "TransactionsMissing"),
                         nullptr);
                     return;
@@ -367,7 +367,7 @@ void TxPool::fillBlock(HashListPtr _txsHash,
         else
         {
             _onBlockFilled(
-                std::make_shared<Error>(CommonError::TransactionsMissing, "TransactionsMissing"),
+                BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
                 nullptr);
         }
         return;
