@@ -27,7 +27,7 @@ ca_cert_path=""
 output_dir="cert"
 sub_command=""
 input_params=''
-ip_param=""
+ip_params=""
 
 LOG_WARN() {
     local content=${1}
@@ -444,11 +444,11 @@ generate_multi_nodes_cert_impl()
     local type="${2}"
     local output="${3}"
 
-    if [[ -z ${ip_param}  ]];then
+    if [[ -z ${ip_params}  ]];then
         LOG_FALT "ip param is empty, please use \'-l\' command to set ip param."
     fi
 
-    local ip_array=(${ip_param//,/ })
+    local ip_array=(${ip_params//,/ })
     # check params
     for line in ${ip_array[*]}; do
         ip=${line%:*}
@@ -481,11 +481,11 @@ generate_multi_nodes_private_key_impl()
     local output="${1}"
     local nodeids_dir="${output}/nodeids"
 
-    if [[ -z ${ip_param}  ]];then
+    if [[ -z ${ip_params}  ]];then
         LOG_FALT "ip param is empty, please use \'-l\' command to set ip param."
     fi
 
-    local ip_array=(${ip_param//,/ })
+    local ip_array=(${ip_params//,/ })
     # check params
     for line in ${ip_array[*]}; do
         ip=${line%:*}
@@ -683,15 +683,13 @@ Usage:
                                                         - generate_node_cert
                                                         - generate_node_csr
                                                         - sign_node_csr
-                                                        - generate_multi_nodes_cert
                                                         - generate_sdk_cert
                                                         - generate_private_key
-                                                        - generate_multi_private_key
     -o <output dir>                     [Optional] output directory default ./cert
     -s <SM model>                       [Optional] SM SSL connection ,or not, default no
     -i <Input>                          [Optional] optional input params
     -d <ca cert path>                   [Optional] ca certificate path, specify ca certificate path to generate node/sdk certificate
-    -l <IP list>                        [Optional] list of ip for generate certificate or private key, working with generate_multi_nodes_cert/generate_multi_private_key
+    -l <IP list>                        [Optional] list of ip for generate certificate or private key, working with generate_node_cert/generate_private_key
     -O <OpenSSL path>                   [Optional] specify the OpenSSL path(Notice: OpenSSL 1.1.x is required), default download TASSL 1.1.1b to local dir ~/.fisco/tassl-1.1.1b
     -h Help
 EOF
@@ -722,7 +720,7 @@ parse_params() {
             fi
         ;;
         p) input_params="$OPTARG" ;;
-        l) ip_param="$OPTARG" ;;
+        l) ip_params="$OPTARG" ;;
         O) 
             OPENSSL_CMD="$OPTARG"
             check_openssl "${OPENSSL_CMD}"
@@ -783,7 +781,7 @@ generate_node_cert()
 
 generate_multi_nodes_cert() 
 {
-    LOG_INFO "generate multi nodes cert, ip param: ${ip_param}"
+    LOG_INFO "generate multi nodes cert, ip param: ${ip_params}"
     generate_multi_nodes_cert_impl "${ca_cert_path}" "ssl" "${output_dir}"
     LOG_INFO "generate multi nodes cert success"
 }
@@ -810,7 +808,7 @@ generate_cert_node_private_key()
 
 generate_multi_nodes_private_key() 
 {
-    LOG_INFO "generate multi nodes private key, sm_mode: ${sm_mode}, ip param: ${ip_param}"
+    LOG_INFO "generate multi nodes private key, sm_mode: ${sm_mode}, ip param: ${ip_params}"
     generate_multi_nodes_private_key_impl "${output_dir}"
     LOG_INFO "generate multi nodes private key success"
 }
@@ -829,7 +827,11 @@ main() {
     elif [[ "${sub_command}" == "generate_ca_cert" ]]; then
         generate_ca_cert
     elif [[ "${sub_command}" == "generate_node_cert" ]]; then
-        generate_node_cert
+        if [ -z ${ip_params}  ];then
+            generate_node_cert
+        else 
+            generate_multi_nodes_cert
+        fi
     elif [[ "${sub_command}" == "generate_node_csr" ]]; then
         generate_node_csr
     elif [[ "${sub_command}" == "sign_node_csr" ]]; then
@@ -837,11 +839,11 @@ main() {
     elif [[ "${sub_command}" == "generate_sdk_cert" ]]; then
         generate_sdk_cert
     elif [[ "${sub_command}" == "generate_private_key" ]]; then
-        generate_cert_node_private_key
-    elif [[ "${sub_command}" == "generate_multi_private_key" ]]; then
-        generate_multi_nodes_private_key
-    elif [[ "${sub_command}" == "generate_multi_nodes_cert" ]]; then
-        generate_multi_nodes_cert
+        if [ -z ${ip_params}  ];then
+            generate_cert_node_private_key
+        else
+            generate_multi_nodes_private_key
+        fi
     else
         LOG_FALT "Unsupported command"
     fi
