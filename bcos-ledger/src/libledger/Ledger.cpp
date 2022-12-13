@@ -27,7 +27,9 @@
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -1362,13 +1364,23 @@ void Ledger::getTxProof(
                                 _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
                                 return;
                             }
-
                             auto merkleProofPtr = std::make_shared<MerkleProof>();
-                            auto merkleProofUtility = std::make_shared<MerkleProofUtilityNew<2>>();
+                            auto anyHasher = cryptoSuite->hashImpl()->hasher();
+                            std::visit(
+                                [txHash = std::move(_txHash), &_txList, &merkleProofPtr](
+                                    auto&& hasher) {
+                                    using Hasher = std::remove_reference_t<decltype(hasher)>;
+                                    bcos::crypto::merkle::Merkle<Hasher> merkle;
+                                    auto hashesRange =
+                                        _txList | RANGES::views::transform(
+                                                      [](const Transaction::Ptr& transaction) {
+                                                          return transaction->hash();
+                                                      });
+                                    merkle.template generateMerkleProof(
+                                        hashesRange, txHash, *merkleProofPtr);
+                                },
+                                anyHasher);
 
-                            merkleProofUtility->getMerkleProof(_txHash,
-                                std::forward<decltype(_txList)>(_txList), cryptoSuite,
-                                merkleProofPtr);
                             LEDGER_LOG(TRACE)
                                 << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
                                 << LOG_KV("txHash", _txHash.hex());
@@ -1402,12 +1414,23 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                         _onGetProof(std::forward<decltype(_error)>(_error), nullptr);
                         return;
                     }
-                    auto merkleProof = std::make_shared<MerkleProof>();
-                    auto merkleProofUtility = std::make_shared<MerkleProofUtilityNew<2>>();
-                    merkleProofUtility->getMerkleProof(receiptHash,
-                        std::forward<decltype(_receiptList)>(_receiptList), cryptoSuite,
-                        merkleProof);
-                    _onGetProof(nullptr, std::move(merkleProof));
+                    auto merkleProofPtr = std::make_shared<MerkleProof>();
+                    auto anyHasher = cryptoSuite->hashImpl()->hasher();
+                    std::visit(
+                        [receiptHash = std::move(receiptHash), &_receiptList, &merkleProofPtr](
+                            auto&& hasher) {
+                            using Hasher = std::remove_reference_t<decltype(hasher)>;
+                            bcos::crypto::merkle::Merkle<Hasher> merkle;
+                            auto hashesRange =
+                                _receiptList | RANGES::views::transform(
+                                                   [](const TransactionReceipt::Ptr& receipt) {
+                                                       return receipt->hash();
+                                                   });
+                            merkle.template generateMerkleProof(
+                                hashesRange, std::move(receiptHash), *merkleProofPtr);
+                        },
+                        anyHasher);
+                    _onGetProof(nullptr, std::move(merkleProofPtr));
                 });
         });
 }
