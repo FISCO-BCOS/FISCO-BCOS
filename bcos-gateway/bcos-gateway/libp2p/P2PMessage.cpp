@@ -255,7 +255,7 @@ bool P2PMessage::tryToCompressPayload(std::shared_ptr<bytes> compressData)
     return true;
 }
 
-ssize_t P2PMessage::decodeHeader(bytesConstRef _buffer)
+int32_t P2PMessage::decodeHeader(bytesConstRef _buffer)
 {
     int32_t offset = 0;
 

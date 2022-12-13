@@ -4,6 +4,7 @@
  */
 
 #include "bcos-gateway/GatewayConfig.h"
+#include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
@@ -571,6 +572,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         auto sessionFactory = std::make_shared<SessionFactory>(pubHex);
         // KeyFactory
         auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+        // Session Callback manager
+        auto sessionCallbackManager = std::make_shared<SessionCallbackManagerBucket>();
 
         // init peer black list
         PeerBlackWhitelistInterface::Ptr peerBlacklist =
@@ -586,6 +589,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         host->setSSLContextPubHandler(m_sslContextPubHandler);
         host->setPeerBlacklist(peerBlacklist);
         host->setPeerWhitelist(peerWhitelist);
+        host->setSessionCallbackManager(sessionCallbackManager);
 
         // init Service
         auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();

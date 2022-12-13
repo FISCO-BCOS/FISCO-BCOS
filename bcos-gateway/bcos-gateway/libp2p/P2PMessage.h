@@ -59,7 +59,7 @@ public:
 public:
     P2PMessageOptions() { m_srcNodeID = std::make_shared<bytes>(); }
 
-    virtual ~P2PMessageOptions() {}
+    virtual ~P2PMessageOptions() = default;
 
     /// The maximum gateway transport protocol supported groupID length  65535
     const static size_t MAX_GROUPID_LENGTH = 65535;
@@ -91,7 +91,7 @@ protected:
     std::string m_groupID;
     std::shared_ptr<bytes> m_srcNodeID;
     std::vector<std::shared_ptr<bytes>> m_dstNodeIDs;
-    uint16_t m_moduleID;
+    uint16_t m_moduleID = 0;
 };
 
 /// Message format definition of gateway P2P network
@@ -127,7 +127,7 @@ public:
         m_options = std::make_shared<P2PMessageOptions>();
     }
 
-    ~P2PMessage() override {}
+    // ~P2PMessage() override = default;
 
 public:
     uint32_t length() const override
@@ -148,7 +148,7 @@ public:
         }
         return length;
     }
-    virtual void setLength(uint32_t length) { m_length = length; }
+    // virtual void setLength(uint32_t length) { m_length = length; }
 
     uint16_t version() const override { return m_version; }
     virtual void setVersion(uint16_t version) { m_version = version; }
@@ -197,11 +197,14 @@ public:
     std::string const& srcP2PNodeID() const override { return m_srcP2PNodeID; }
     std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }
 
-    virtual void setExtAttributes(MessageExtAttributes::Ptr _extAttr) { m_extAttr = _extAttr; }
+    virtual void setExtAttributes(MessageExtAttributes::Ptr _extAttr)
+    {
+        m_extAttr = std::move(_extAttr);
+    }
     MessageExtAttributes::Ptr extAttributes() override { return m_extAttr; }
 
 protected:
-    virtual ssize_t decodeHeader(bytesConstRef _buffer);
+    virtual int32_t decodeHeader(bytesConstRef _buffer);
     virtual bool encodeHeader(bytes& _buffer);
 
 protected:
@@ -227,17 +230,17 @@ class P2PMessageFactory : public MessageFactory
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageFactory>;
-    virtual ~P2PMessageFactory() {}
+    // virtual ~P2PMessageFactory() = default;
 
 public:
-    virtual Message::Ptr buildMessage()
+    Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessage>();
         return message;
     }
 };
 
-inline std::ostream& operator<<(std::ostream& _out, const P2PMessage _p2pMessage)
+inline std::ostream& operator<<(std::ostream& _out, const P2PMessage& _p2pMessage)
 {
     _out << "P2PMessage {"
          << " length: " << _p2pMessage.length() << " version: " << _p2pMessage.version()
@@ -246,7 +249,7 @@ inline std::ostream& operator<<(std::ostream& _out, const P2PMessage _p2pMessage
     return _out;
 }
 
-inline std::ostream& operator<<(std::ostream& _out, P2PMessage::Ptr _p2pMessage)
+inline std::ostream& operator<<(std::ostream& _out, P2PMessage::Ptr& _p2pMessage)
 {
     _out << (*_p2pMessage.get());
     return _out;

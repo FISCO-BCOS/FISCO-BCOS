@@ -7,6 +7,7 @@
 #pragma once
 
 #include <bcos-gateway/libnetwork/Common.h>
+#include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Timer.h>
@@ -47,12 +48,22 @@ public:
     virtual void setHost(std::weak_ptr<Host> host) { m_server = host; }
 
     std::shared_ptr<SocketFace> socket() override { return m_socket; }
-    virtual void setSocket(std::shared_ptr<SocketFace> socket) { m_socket = socket; }
+    virtual void setSocket(const std::shared_ptr<SocketFace>& socket) { m_socket = socket; }
 
     virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
-    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    virtual void setMessageFactory(const MessageFactory::Ptr& _messageFactory)
     {
         m_messageFactory = _messageFactory;
+    }
+
+    SessionCallbackManagerInterface::Ptr sessionCallbackManager()
+    {
+        return m_sessionCallbackManager;
+    }
+    void setSessionCallbackManager(
+        const SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
+    {
+        m_sessionCallbackManager = _sessionCallbackManager;
     }
 
     virtual std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler()
@@ -77,40 +88,10 @@ public:
     void setHostNodeID(std::string const& _hostNodeID) { m_hostNodeID = _hostNodeID; }
 
 protected:
-    virtual void addSeqCallback(uint32_t seq, ResponseCallback::Ptr callback)
-    {
-        RecursiveGuard l(x_seq2Callback);
-        m_seq2Callback->insert(std::make_pair(seq, callback));
-    }
-    virtual void removeSeqCallback(uint32_t seq)
-    {
-        RecursiveGuard l(x_seq2Callback);
-        m_seq2Callback->erase(seq);
-    }
-    virtual void clearSeqCallback()
-    {
-        RecursiveGuard l(x_seq2Callback);
-        m_seq2Callback->clear();
-    }
-
-    ResponseCallback::Ptr getCallbackBySeq(uint32_t seq)
-    {
-        RecursiveGuard l(x_seq2Callback);
-        auto it = m_seq2Callback->find(seq);
-        if (it != m_seq2Callback->end())
-        {
-            return it->second;
-        }
-        else
-        {
-            return NULL;
-        }
-    }
-
     virtual void checkNetworkStatus();
 
 private:
-    void send(std::shared_ptr<bytes> _msg);
+    void send(const std::shared_ptr<bytes>& _msg);
 
     void doRead();
     std::vector<byte> m_data;  ///< Buffer for ingress packet data.
@@ -158,9 +139,7 @@ private:
 
     bool m_actived = false;
 
-    ///< A call B, the function to call after the response is received by A.
-    mutable bcos::RecursiveMutex x_seq2Callback;
-    std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
+    SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
 
@@ -185,13 +164,15 @@ public:
     virtual ~SessionFactory(){};
 
     virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
-        std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr _messageFactory)
+        std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr _messageFactory,
+        SessionCallbackManagerInterface::Ptr _sessionCallbackManager)
     {
         std::shared_ptr<Session> session = std::make_shared<Session>();
         session->setHostNodeID(m_hostNodeID);
         session->setHost(_server);
         session->setSocket(_socket);
         session->setMessageFactory(_messageFactory);
+        session->setSessionCallbackManager(_sessionCallbackManager);
         return session;
     }
 

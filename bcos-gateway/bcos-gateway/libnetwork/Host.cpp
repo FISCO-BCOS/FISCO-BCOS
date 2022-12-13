@@ -153,7 +153,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
 
             std::string nodeID = boost::to_upper_copy(*nodeIDOut);
 
-            // If the node ID exists in the black and white lists at the same time, the black list takes precedence
+            // If the node ID exists in the black and white lists at the same time, the black list
+            // takes precedence
             if (nullptr != hostPtr->peerBlacklist() &&
                 true == hostPtr->peerBlacklist()->has(nodeID))
             {
@@ -350,8 +351,8 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
 {
     auto weakHost = std::weak_ptr<Host>(shared_from_this());
-    std::shared_ptr<SessionFace> ps =
-        m_sessionFactory->create_session(weakHost, socket, m_messageFactory);
+    std::shared_ptr<SessionFace> ps = m_sessionFactory->create_session(
+        weakHost, socket, m_messageFactory, m_sessionCallbackManager);
 
     auto connectionHandler = m_connectionHandler;
     m_threadPool->enqueue([ps, connectionHandler, p2pInfo]() {
