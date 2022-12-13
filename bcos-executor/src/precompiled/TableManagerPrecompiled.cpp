@@ -39,7 +39,8 @@ constexpr const char* const TABLE_METHOD_CREATE_KV = "createKVTable(string,strin
 constexpr const char* const TABLE_METHOD_APPEND = "appendColumns(string,string[])";
 constexpr const char* const TABLE_METHOD_OPEN = "openTable(string)";
 constexpr const char* const TABLE_METHOD_DESC = "desc(string)";
-constexpr const char* const TABLE_METHOD_CREATE_V320 = "createTable(string,(uint8,string,string[]))";
+constexpr const char* const TABLE_METHOD_CREATE_V320 =
+    "createTable(string,(uint8,string,string[]))";
 
 
 TableManagerPrecompiled::TableManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
@@ -61,18 +62,17 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());
- 
-    std::string tableMethodCreate = TABLE_METHOD_CREATE;    
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    if (func == name2Selector[TABLE_METHOD_CREATE])
     {
-        tableMethodCreate = TABLE_METHOD_CREATE_V320;
-    } 
-
-    if (func == name2Selector[tableMethodCreate])
-    {
-        /// createTable(string,(string,string[])) or 
-        /// createTable(string,(uint8,string,string[]))
+        /// createTable(string,(string,string[]))
         createTable(_executive, gasPricer, _callParameters);
+    }
+    else if (versionCompareTo(blockContext->blockVersion(), protocol::BlockVersion::V3_2_VERSION) >=
+                 0 &&
+             func == name2Selector[TABLE_METHOD_CREATE_V320])
+    {
+        /// createTable(string,(uint8,string,string[]))
+        createTableV32(_executive, gasPricer, _callParameters);
     }
     else if (func == name2Selector[TABLE_METHOD_CREATE_KV])
     {
@@ -109,73 +109,52 @@ void TableManagerPrecompiled::createTable(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
 {
+    // createTable(string,(string,string[]))
+    std::string tableName;
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+
+    TableInfoTuple tableInfo;
+    codec.decode(_callParameters->params(), tableName, tableInfo);
+    std::string keyField = std::get<0>(tableInfo);
+    auto& valueFields = std::get<1>(tableInfo);
+    std::string valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields);
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("TableManagerPrecompiled")
+                          << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
+                          << LOG_KV("valueField", valueField);
+    // here is a trick to set table key field info
+    valueField = keyField + "," + valueField;
+
+    externalCreateTable(_executive, gasPricer, _callParameters, tableName, codec, valueField);
+}
+
+void TableManagerPrecompiled::createTableV32(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
+{
     // createTable(string,(string,string[])) or createTable(string,(uint8,string,string[]))
     std::string tableName;
     std::string keyField;
     std::string valueField;
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
-    {
-        TableInfoTupleV320 tableInfo;
-        codec.decode(_callParameters->params(), tableName, tableInfo);
-        auto keyOrder = std::make_optional<uint8_t>(std::get<0>(tableInfo));
-        keyField = std::get<1>(tableInfo);
-        auto& valueFields = std::get<2>(tableInfo);        
-        valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields, keyOrder);
-        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("TableManagerPrecompiled")
-                            << LOG_KV("createTable", tableName) << LOG_KV("keyOrder", int(*keyOrder))
-                            << LOG_KV("keyField", keyField) << LOG_KV("valueField", valueField);
-        // Compatible with older versions (< v3.2) of table and KvTable
-        valueField = V320_TABLE_INFO_PREFIX + std::to_string(*keyOrder)  + "," + keyField + "," + valueField;
-    }
-    else
-    {
-        TableInfoTuple tableInfo;
-        codec.decode(_callParameters->params(), tableName, tableInfo);
-        keyField = std::get<0>(tableInfo);
-        auto& valueFields = std::get<1>(tableInfo);        
-        valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields);
-        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                            << LOG_BADGE("TableManagerPrecompiled")
-                            << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
-                            << LOG_KV("valueField", valueField);
-        // here is a trick to set table key field info
-        valueField = keyField + "," + valueField;
-    }
-    gasPricer->appendOperation(InterfaceOpcode::CreateTable);
-    // /tables + tableName
-    auto newTableName = getTableName(tableName);
-    auto table = _executive->storage().openTable(newTableName);
-    if (table)
-    {
-        // table already exist
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_TABLE_NAME_ALREADY_EXIST)));
-        return;
-    }
-    std::string tableManagerAddress =
-        blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
-    std::string tableAddress = blockContext->isWasm() ? TABLE_NAME : TABLE_ADDRESS;
 
-    std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
-    auto input = codec.encode(newTableName, codeString);
-    std::string abi = blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
-                          std::string(TABLE_ABI) :
-                          "";
-    auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
-        tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
-        _callParameters->m_gasLeft - gasPricer->calTotalGas(), false, std::move(abi));
+    TableInfoTupleV320 tableInfo;
+    codec.decode(_callParameters->params(), tableName, tableInfo);
+    auto keyOrder = std::make_optional<uint8_t>(std::get<0>(tableInfo));
+    keyField = std::get<1>(tableInfo);
+    auto& valueFields = std::get<2>(tableInfo);
+    valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields, keyOrder);
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+                          << LOG_BADGE("TableManagerPrecompiled")
+                          << LOG_KV("createTable", tableName) << LOG_KV("keyOrder", int(*keyOrder))
+                          << LOG_KV("keyField", keyField) << LOG_KV("valueField", valueField);
+    // Compatible with older versions (< v3.2) of table and KvTable
+    valueField =
+        V320_TABLE_INFO_PREFIX + std::to_string(*keyOrder) + "," + keyField + "," + valueField;
 
-    if (response->status != (int32_t)TransactionStatus::None)
-    {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
-                              << LOG_DESC("create table error") << LOG_KV("tableName", newTableName)
-                              << LOG_KV("valueField", valueField);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
-    }
-
-    _executive->storage().createTable(getActualTableName(newTableName), valueField);
-    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+    externalCreateTable(_executive, gasPricer, _callParameters, tableName, codec, valueField);
 }
 
 void TableManagerPrecompiled::createKVTable(
@@ -208,9 +187,10 @@ void TableManagerPrecompiled::createKVTable(
     std::string codeString = getDynamicPrecompiledCodeString(kvTableAddress, newTableName);
 
     auto input = codec.encode(newTableName, codeString);
-    std::string abi = blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
-                          std::string(KV_TABLE_ABI) :
-                          "";
+    std::string abi =
+        blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
+            std::string(KV_TABLE_ABI) :
+            "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
         _callParameters->m_gasLeft - gasPricer->calTotalGas(), false, std::move(abi));
@@ -354,7 +334,8 @@ void TableManagerPrecompiled::desc(
         if (keyAndValue.starts_with(V320_TABLE_INFO_PREFIX))
         {
             keyAndValue = keyAndValue.substr(V320_TABLE_INFO_PREFIX.length());
-            keyOrder = (uint8_t) boost::lexical_cast<int>(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
+            keyOrder = (uint8_t)boost::lexical_cast<int>(
+                keyAndValue.substr(0, keyAndValue.find_first_of(',')));
             keyAndValue = keyAndValue.substr(keyAndValue.find_first_of(',') + 1);
         }
         auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
@@ -368,7 +349,7 @@ void TableManagerPrecompiled::desc(
         _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
     }
     else
-    {   
+    {
         auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
         auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
         std::vector<std::string> values;
@@ -379,4 +360,46 @@ void TableManagerPrecompiled::desc(
         gasPricer->appendOperation(InterfaceOpcode::Select);
         _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
     }
+}
+
+void TableManagerPrecompiled::externalCreateTable(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters,
+    const std::string& tableName, const CodecWrapper& codec, const std::string& valueField) const
+{
+    auto blockContext = _executive->blockContext().lock();
+    gasPricer->appendOperation(InterfaceOpcode::CreateTable);
+    // /tables + tableName
+    auto newTableName = getTableName(tableName);
+    auto table = _executive->storage().openTable(newTableName);
+    if (table)
+    {
+        // table already exist
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_TABLE_NAME_ALREADY_EXIST)));
+        return;
+    }
+    std::string tableManagerAddress =
+        blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
+    std::string tableAddress = blockContext->isWasm() ? TABLE_NAME : TABLE_ADDRESS;
+
+    std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
+    auto input = codec.encode(newTableName, codeString);
+    std::string abi =
+        blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
+            std::string(TABLE_ABI) :
+            "";
+    auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
+        tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
+        _callParameters->m_gasLeft - gasPricer->calTotalGas(), false, std::move(abi));
+
+    if (response->status != (int32_t)TransactionStatus::None)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
+                              << LOG_DESC("create table error") << LOG_KV("tableName", newTableName)
+                              << LOG_KV("valueField", valueField);
+        BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
+    }
+
+    _executive->storage().createTable(getActualTableName(newTableName), valueField);
+    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }

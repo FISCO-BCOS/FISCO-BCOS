@@ -56,6 +56,9 @@ private:
     void count(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void countV32(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void insert(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
@@ -65,10 +68,16 @@ private:
     void updateByCondition(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void updateByConditionV32(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void removeByKey(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void removeByCondition(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void removeByConditionV32(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void buildKeyCondition(std::shared_ptr<storage::Condition>& keyCondition,

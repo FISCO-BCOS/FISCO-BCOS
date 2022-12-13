@@ -304,7 +304,14 @@ public:
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(int32_t(_errorCode)));
+            if (isWasm && versionCompareTo(m_blockVersion, BlockVersion::V3_2_VERSION) >= 0)
+            {
+                BOOST_CHECK(result4->data().toBytes() == codec->encode(int32_t(_errorCode)));
+            }
+            else
+            {
+                BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
+            }
         }
 
         commitBlock(_number);

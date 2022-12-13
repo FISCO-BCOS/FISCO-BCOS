@@ -43,6 +43,8 @@ public:
 private:
     void createTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void createTableV32(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void createKVTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void appendColumns(const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -51,5 +53,9 @@ private:
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void desc(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void externalCreateTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters,
+        const std::string& tableName, const CodecWrapper& codec,
+        const std::string& valueField) const;
 };
 }  // namespace bcos::precompiled
