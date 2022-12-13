@@ -144,17 +144,17 @@ struct Condition
         return true;
     }
 
-    enum class Comparator
+    enum class Comparator : uint8_t
     {
-        EQ,
-        NE,
-        GT,
-        GE,
-        LT,
-        LE,
-        STARTS_WITH,
-        ENDS_WITH,
-        CONTAINS
+        EQ = 0,
+        NE = 1,
+        GT = 2,
+        GE = 3,
+        LT = 4,
+        LE = 5,
+        STARTS_WITH = 6,
+        ENDS_WITH = 7,
+        CONTAINS = 8
     };
     struct cond
     {
