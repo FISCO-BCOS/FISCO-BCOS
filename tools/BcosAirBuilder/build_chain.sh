@@ -52,7 +52,7 @@ serial_mode="false"
 nodeids_dir=""
 # if the config.genesis path has been set, don't generate genesis file, use the config instead
 genesis_conf_path=""
-lightnode_exec=""
+lightnode_flag="false"
 download_timeout=240
 make_tar=
 default_group="group0"
@@ -370,10 +370,6 @@ download_bin()
 
 download_lightnode_bin()
 {
-    if [ ! -z "${lightnode_binary_path}" ];then
-        LOG_INFO "Use binary ${lightnode_binary_path}"
-        return
-    fi
     lightnode_binary_path="bin/${lightnode_binary_name}"
     light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
@@ -519,7 +515,7 @@ Usage:
     -I <chain id>                       [Optional] set the chain id, default: chain0
     -v <FISCO-BCOS binary version>      [Optional] Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -L <fisco bcos lightnode exec>      [Optional] fisco bcos light node executable
+    -L <fisco bcos lightnode exec>      [Optional] fisco bcos lightnode executable，input "download_binary" to download lightnode binary or assign correct lightnode binary path
     -e <fisco-bcos exec>                [Optional] fisco-bcos binary exec
     -t <mtail exec>                     [Optional] mtail binary exec
     -o <output dir>                     [Optional] output directory, default ./nodes
@@ -552,15 +548,18 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:v:i:I:M:k:zwDLshmn:ARa:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:ARa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
             use_ip_param="true"
             ;;
         L)
+            lightnode_flag="true"
             lightnode_binary_path="$OPTARG"
-            download_lightnode_binary="true"
+            if [ "${lightnode_binary_path}" == "download_binary" ]; then
+               download_lightnode_binary="true"
+            fi
             ;;
         o)
             output_dir="$OPTARG"
@@ -1672,13 +1671,18 @@ deploy_nodes()
             LOG_FATAL "fisco bcos binary exec ${binary_path} not exist, Must copy binary file ${binary_name} to ${binary_path}"
         fi
     fi
-    if [ -z "${lightnode_binary_path}" ] && [ "${download_lightnode_binary}" == "true" ];then
-        download_lightnode_bin
-        echo "lightnode_binary_path is ${lightnode_binary_path}"
-        if [[ ! -f "$lightnode_binary_path" ]]; then
-            LOG_FATAL "fisco bcos lightnode binary exec lightnode not exist, Must copy binary file ${lightnode_binary_name} to ${lightnode_binary_path}"
-        fi
+    #check the lightnode binary
+    if [ -f "${lightnode_binary_path}" ] && [ "${download_lightnode_binary}" != "true" ];then
+      LOG_INFO "Use lightnode binary ${lightnode_binary_path}"
     fi
+    if [ "${download_lightnode_binary}" == "true" ];then
+        download_lightnode_bin
+    fi
+    if [ "${lightnode_flag}" == "true" ] && [ ! -f "${lightnode_binary_path}" ] && [ "${download_lightnode_binary}" != "true" ];then
+      LOG_FATAL "please input \"download_binary\" or assign correct lightnode binary path"
+    fi
+
+
     if "${monitor_mode}" ;then
         download_monitor_bin
         if [[ ! -f "$mtail_binary_path" ]]; then
