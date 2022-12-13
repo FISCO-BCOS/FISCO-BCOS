@@ -133,6 +133,9 @@ send_transactions()
 {
     txs_num="${1}"
     cd ${current_path}/console/
+
+    bash console.sh getPeers
+
     LOG_INFO "Deploy HelloWorld..."
     for((i=1;i<=${txs_num};i++));
     do
