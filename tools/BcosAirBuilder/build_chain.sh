@@ -1679,7 +1679,7 @@ deploy_nodes()
         download_lightnode_bin
     fi
     if [ "${lightnode_flag}" == "true" ] && [ ! -f "${lightnode_binary_path}" ] && [ "${download_lightnode_binary}" != "true" ];then
-      LOG_FATAL "please use download lightnode binary or assign lightnode binary path"
+      LOG_FATAL "please input \"download_binary\" or assign correct lightnode binary path"
     fi
 
 
