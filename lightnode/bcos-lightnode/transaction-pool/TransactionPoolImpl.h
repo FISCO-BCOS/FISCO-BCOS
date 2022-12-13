@@ -5,7 +5,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include <bcos-concepts/transaction_pool/TransactionPool.h>
+#include <bcos-concepts/transaction-pool/TransactionPool.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
@@ -38,7 +38,7 @@ private:
     {
         TRANSACTIONPOOL_LOG(INFO) << "Submit transaction request";
 
-        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(m_cryptoSuite,
+        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(
             [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
 
         auto submitResult = co_await concepts::getRef(m_transactionPool)

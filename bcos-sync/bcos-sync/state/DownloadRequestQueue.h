@@ -20,6 +20,8 @@
  */
 #pragma once
 #include "bcos-sync/BlockSyncConfig.h"
+#include <queue>
+
 namespace bcos
 {
 namespace sync

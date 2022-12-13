@@ -81,15 +81,21 @@ public:
     MockStorage(std::shared_ptr<StorageInterface> prev)
       : storage::StateStorageInterface(prev), StateStorage(prev)
     {}
-    bcos::Error::Ptr setRows(std::string_view table, std::vector<std::string_view> keys,
-        std::vector<std::string_view> values) override
+    bcos::Error::Ptr setRows(std::string_view table,
+        const std::variant<const gsl::span<std::string_view const>,
+            const gsl::span<std::string const>>& keys,
+        std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>> values)
     {
-        for (size_t i = 0; i < keys.size(); ++i)
-        {
-            Entry e;
-            e.set(std::string(values[i]));
-            asyncSetRow(table, keys[i], e, [](Error::UniquePtr) {});
-        }
+        std::visit(
+            [&](auto&& keys, auto&& values) {
+                for (size_t i = 0; i < keys.size(); ++i)
+                {
+                    Entry e;
+                    e.set(std::string(values[i]));
+                    asyncSetRow(table, keys[i], e, [](Error::UniquePtr) {});
+                }
+            },
+            keys, values);
         return nullptr;
     }
 };
@@ -225,7 +231,8 @@ public:
                 auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
                 txDataList->push_back(txPointer);
                 txHashList->push_back(m_fakeBlocks->at(i)->transaction(j)->hash());
-                txList->push_back(m_blockFactory->transactionFactory()->createTransaction(txData));
+                txList->push_back(
+                    m_blockFactory->transactionFactory()->createTransaction(bcos::ref(txData)));
             }
 
             std::promise<bool> p1;
@@ -799,6 +806,16 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block->receiptsSize(), 0);
             p7.set_value(true);
         });
+    std::promise<bool> p8;
+    auto f8 = p8.get_future();
+    m_ledger->asyncGetBlockDataByNumber(
+        15, TRANSACTIONS_HASH, [=, &p8](Error::Ptr _error, Block::Ptr _block) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(_block->transactionsSize(), 0);
+            BOOST_CHECK_EQUAL(_block->receiptsSize(), 0);
+            BOOST_TEST(_block->transactionsMetaDataSize() != 0);
+            p8.set_value(true);
+        });
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(ff1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -807,6 +824,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     BOOST_CHECK_EQUAL(f5.get(), true);
     BOOST_CHECK_EQUAL(f6.get(), true);
     BOOST_CHECK_EQUAL(f7.get(), true);
+    BOOST_CHECK_EQUAL(f8.get(), true);
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionByHash)
@@ -1127,6 +1145,7 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     auto block = m_blockFactory->createBlock();
     auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(100);
+    blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
     block->setBlockHeader(blockHeader);
 

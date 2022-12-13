@@ -1,6 +1,5 @@
-include(Version)
-project(bcos-utilities VERSION ${VERSION})
 
+project(bcos-utilities VERSION ${VERSION})
 aux_source_directory(bcos-utilities SRCS)
 
 find_package(Boost REQUIRED COMPONENTS log filesystem chrono thread serialization)

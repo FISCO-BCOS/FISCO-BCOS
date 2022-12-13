@@ -25,10 +25,9 @@
 #include "TransactionMetaData.h"
 #include "TransactionReceipt.h"
 #include "TransactionReceiptFactory.h"
+#include <range/v3/view/transform.hpp>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 using HashList = std::vector<bcos::crypto::HashType>;
 using HashListPtr = std::shared_ptr<HashList>;
@@ -48,18 +47,18 @@ class Block
 public:
     using Ptr = std::shared_ptr<Block>;
     using ConstPtr = std::shared_ptr<Block const>;
-    Block(
-        TransactionFactory::Ptr _transactionFactory, TransactionReceiptFactory::Ptr _receiptFactory)
-      : m_transactionFactory(_transactionFactory), m_receiptFactory(_receiptFactory)
-    {}
-
-    virtual ~Block() {}
+    Block() = default;
+    Block(const Block&) = default;
+    Block(Block&&) = default;
+    Block& operator=(const Block&) = default;
+    Block& operator=(Block&&) = default;
+    virtual ~Block() = default;
 
     virtual void decode(bytesConstRef _data, bool _calculateHash, bool _checkSig) = 0;
     virtual void encode(bytes& _encodeData) const = 0;
 
-    virtual bcos::crypto::HashType calculateTransactionRoot() const = 0;
-    virtual bcos::crypto::HashType calculateReceiptRoot() const = 0;
+    virtual bcos::crypto::HashType calculateTransactionRoot(const crypto::Hash& hashImpl) const = 0;
+    virtual bcos::crypto::HashType calculateReceiptRoot(const crypto::Hash& hashImpl) const = 0;
 
     virtual int32_t version() const = 0;
     virtual void setVersion(int32_t _version) = 0;
@@ -81,7 +80,7 @@ public:
         {
             return txMetaData->hash();
         }
-        return bcos::crypto::HashType();
+        return {};
     }
 
     virtual void setBlockType(BlockType _blockType) = 0;
@@ -96,20 +95,6 @@ public:
     // set transaction metaData
     virtual void appendTransactionMetaData(TransactionMetaData::Ptr _txMetaData) = 0;
 
-    virtual NonceListPtr nonces() const
-    {
-        auto nonceList = std::make_shared<NonceList>();
-        if (transactionsSize() == 0)
-        {
-            return nonceList;
-        }
-        for (uint64_t i = 0; i < transactionsSize(); ++i)
-        {
-            nonceList->push_back(transaction(i)->nonce());
-        }
-        return nonceList;
-    }
-
     // get transactions size
     virtual uint64_t transactionsSize() const = 0;
     virtual uint64_t transactionsMetaDataSize() const = 0;
@@ -119,15 +104,19 @@ public:
     virtual uint64_t receiptsSize() const = 0;
 
     // for nonceList
-    virtual void setNonceList(NonceList const& _nonceList) = 0;
-    virtual void setNonceList(NonceList&& _nonceList) = 0;
-    virtual NonceList const& nonceList() const = 0;
+    virtual void setNonceList(RANGES::any_view<u256> nonces) = 0;
+    virtual RANGES::any_view<u256> nonceList() const = 0;
 
-protected:
-    TransactionFactory::Ptr m_transactionFactory;
-    TransactionReceiptFactory::Ptr m_receiptFactory;
+    virtual NonceListPtr nonces() const
+    {
+        return std::make_shared<NonceList>(RANGES::iota_view(0LU, transactionsSize()) |
+                                           RANGES::views::transform([this](uint64_t index) {
+                                               auto transaction = this->transaction(index);
+                                               return transaction->nonce();
+                                           }) |
+                                           RANGES::to<NonceList>());
+    }
 };
 using Blocks = std::vector<Block::Ptr>;
 using BlocksPtr = std::shared_ptr<Blocks>;
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

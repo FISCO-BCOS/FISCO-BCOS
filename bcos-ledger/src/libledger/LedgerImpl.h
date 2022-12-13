@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Log.h"
+#include "Ledger.h"
 #include "bcos-task/Task.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -35,12 +35,16 @@ struct NotFoundBlockHeader: public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
-class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>
+class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>,
+                   public Ledger
 {
     friend bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>;
 
 public:
-    LedgerImpl(Storage storage) : m_storage{std::move(storage)} {}
+    LedgerImpl(Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::storage::StorageInterface::Ptr storageInterface)
+      : Ledger(std::move(blockFactory), std::move(storageInterface)), m_storage{std::move(storage)}
+    {}
 
 private:
     template <bcos::concepts::ledger::DataFlag... Flags>
@@ -118,13 +122,16 @@ private:
         auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
         bcos::concepts::resizeTo(out, RANGES::size(hashes));
-        tbb::parallel_for(tbb::blocked_range<size_t>(0u, RANGES::size(entries)),
+        tbb::parallel_for(tbb::blocked_range<size_t>(0U, RANGES::size(entries)),
             [&entries, &out](const tbb::blocked_range<size_t>& range) {
                 for (auto index = range.begin(); index != range.end(); ++index)
                 {
-                    if (!entries[index]) [[unlikely]]
-                        BOOST_THROW_EXCEPTION(NotFoundTransaction{} << bcos::error::ErrorMessage{
-                                                  "Get transaction not found"});
+                    if (!entries[index])
+                    {
+                        [[unlikely]] BOOST_THROW_EXCEPTION(
+                            NotFoundTransaction{}
+                            << bcos::error::ErrorMessage{"Get transaction not found"});
+                    }
 
                     auto field = entries[index]->getField(0);
                     bcos::concepts::serialize::decode(field, out[index]);
@@ -142,13 +149,15 @@ private:
 
         bcos::concepts::ledger::Status status;
         auto entries = storage().getRows(SYS_CURRENT_STATE, keys);
-        for (auto i = 0u; i < RANGES::size(entries); ++i)
+        for (auto i = 0U; i < RANGES::size(entries); ++i)
         {
             auto& entry = entries[i];
 
             int64_t value = 0;
-            if (entry) [[likely]]
-                value = boost::lexical_cast<int64_t>(entry->getField(0));
+            if (entry)
+            {
+                [[likely]] value = boost::lexical_cast<int64_t>(entry->getField(0));
+            }
 
             switch (i)
             {
@@ -201,7 +210,7 @@ private:
     }
 
     template <bcos::concepts::ledger::Ledger LedgerType, bcos::concepts::block::Block BlockType>
-    task::Task<void> impl_sync(LedgerType& source, bool onlyHeader)
+    task::Task<size_t> impl_sync(LedgerType& source, bool onlyHeader)
     {
         auto& sourceLedger = bcos::concepts::getRef(source);
 
@@ -209,6 +218,7 @@ private:
         auto sourceStatus = co_await sourceLedger.getStatus();
 
         std::optional<BlockType> parentBlock;
+        size_t syncedBlock = 0;
         for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
              ++blockNumber)
         {
@@ -260,7 +270,10 @@ private:
             }
 
             parentBlock = std::move(block);
+            ++syncedBlock;
         }
+
+        co_return syncedBlock;
     }
 
     template <std::same_as<bcos::concepts::ledger::HEADER>>
@@ -373,10 +386,12 @@ private:
     {
         LEDGER_LOG(DEBUG) << "setBlockData header: " << blockNumberKey;
 
-        // current number
-        bcos::storage::Entry numberEntry;
-        numberEntry.importFields({std::string(blockNumberKey)});
-        storage().setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
+        // number 2 header
+        bcos::storage::Entry number2HeaderEntry;
+        std::vector<bcos::byte> number2HeaderBuffer;
+        bcos::concepts::serialize::encode(block.blockHeader, number2HeaderBuffer);
+        number2HeaderEntry.importFields({std::move(number2HeaderBuffer)});
+        storage().setRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey, std::move(number2HeaderEntry));
 
         // number 2 block hash
         bcos::storage::Entry hashEntry;
@@ -390,12 +405,10 @@ private:
             std::string_view{block.blockHeader.dataHash.data(), block.blockHeader.dataHash.size()},
             std::move(hash2NumberEntry));
 
-        // number 2 header
-        bcos::storage::Entry number2HeaderEntry;
-        std::vector<bcos::byte> number2HeaderBuffer;
-        bcos::concepts::serialize::encode(block.blockHeader, number2HeaderBuffer);
-        number2HeaderEntry.importFields({std::move(number2HeaderBuffer)});
-        storage().setRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey, std::move(number2HeaderEntry));
+        // current number
+        bcos::storage::Entry numberEntry;
+        numberEntry.importFields({std::string(blockNumberKey)});
+        storage().setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
 
         co_return;
     }

@@ -37,12 +37,24 @@ namespace precompiled
 #define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR][PRECOMPILED]"
 
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
+using TableInfoTupleV320 = std::tuple<uint8_t, std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
+using ConditionTupleV320 = std::tuple<uint8_t, uint32_t, std::string>;
 using LimitTuple = std::tuple<uint32_t, uint32_t>;
 using UpdateFieldTuple = std::tuple<std::string, std::string>;
 using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
 using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
+struct Conditions
+{
+    std::vector<ConditionTuple>     cond;
+    std::vector<ConditionTupleV320> cond_v320;
+};
+struct TableInfo
+{
+    TableInfoTuple     info;
+    TableInfoTupleV320 info_v320;
+};
 /// Precompiled reserved code field
 static constexpr const char* const PRECOMPILED_CODE_FIELD = "[PRECOMPILED]";
 static constexpr const int PRECOMPILED_CODE_FIELD_SIZE = 13;
@@ -50,6 +62,9 @@ static constexpr const int PRECOMPILED_CODE_FIELD_SIZE = 13;
 /// SYS_CONFIG table fields
 static constexpr size_t SYS_VALUE = 0;
 static constexpr const char* SYS_VALUE_FIELDS = "value";
+
+/// V320 Table Info Prefix
+static const std::string V320_TABLE_INFO_PREFIX = "__v320_table_info__";
 
 /// FileSystem path limit
 static const size_t FS_PATH_MAX_LENGTH = 56;
@@ -64,6 +79,7 @@ const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
 const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
 const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 const int USER_TABLE_MAX_LIMIT_COUNT = 500;
+const int USER_TABLE_MIN_LIMIT_COUNT = 50;  
 
 const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
@@ -155,13 +171,30 @@ enum PrecompiledErrorCode : int
     CODE_SUCCESS = 0
 };
 
-enum ContractStatus
+enum ContractStatus : uint8_t
 {
-    Available,
-    Frozen,
-    AddressNonExistent,
-    NotContractAddress,
-    Count
+    Available = 0,
+    Frozen = 1,
+    Abolish = 2,
+    AddressNonExistent = 3,
+    NotContractAddress = 4,
 };
+
+static constexpr inline ContractStatus StatusFromString(std::string_view _status) noexcept
+{
+    if (_status == executor::CONTRACT_NORMAL)
+    {
+        return ContractStatus::Available;
+    }
+    else if (_status == executor::CONTRACT_FROZEN)
+    {
+        return ContractStatus::Frozen;
+    }
+    else if (_status == executor::CONTRACT_ABOLISH)
+    {
+        return ContractStatus::Abolish;
+    }
+    return ContractStatus::Available;
+}
 }  // namespace precompiled
 }  // namespace bcos

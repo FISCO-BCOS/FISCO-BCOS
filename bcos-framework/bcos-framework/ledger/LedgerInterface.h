@@ -129,6 +129,14 @@ public:
             _callback) = 0;
 
     /**
+     * @brief async get current_state table to get total transaction count, archived block number
+     * and latest block number
+     * @param _callback callback totalTxCount, totalFailedTxCount, and latest block number
+     */
+    virtual void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) = 0;
+
+    /**
      * @brief async get system config by table key
      * @param _key the key of row, you can checkout all key in LedgerTypeDef.h
      * @param _onGetConfig callback when get config, <value, latest block number>

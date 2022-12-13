@@ -42,7 +42,7 @@ public:
         return bcos::crypto::HashType(
             hash(std::string_view((const char*)_data.data(), _data.size())));
     }
-    bcos::crypto::hasher::AnyHasher hasher() override
+    bcos::crypto::hasher::AnyHasher hasher() const override
     {
         return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
     }
@@ -141,11 +141,12 @@ struct TestRocksDBStorageFixture
         params1.primaryKey = testTableName + ":key0";
         auto start = std::chrono::system_clock::now();
         // prewrite
-        storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts, const std::string&) {
-            BOOST_CHECK_EQUAL(error.get(), nullptr);
-            BOOST_CHECK_EQUAL(ts, 0);
-            params1.timestamp = ts;
-        });
+        storage->asyncPrepare(
+            params1, *stateStorage, [&](Error::Ptr error, uint64_t ts, const std::string&) {
+                BOOST_CHECK_EQUAL(error.get(), nullptr);
+                BOOST_CHECK_EQUAL(ts, 0);
+                params1.timestamp = ts;
+            });
 
         // commit
         storage->asyncCommit(bcos::protocol::TwoPCParams(),
@@ -176,11 +177,12 @@ struct TestRocksDBStorageFixture
             testTable->setRow(key, std::move(entry));
         }
         params1.timestamp = 0;
-        storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts, const std::string&) {
-            BOOST_CHECK_EQUAL(error.get(), nullptr);
-            BOOST_CHECK_EQUAL(ts, 0);
-            params1.timestamp = ts;
-        });
+        storage->asyncPrepare(
+            params1, *stateStorage, [&](Error::Ptr error, uint64_t ts, const std::string&) {
+                BOOST_CHECK_EQUAL(error.get(), nullptr);
+                BOOST_CHECK_EQUAL(ts, 0);
+                params1.timestamp = ts;
+            });
         // commit
         storage->asyncCommit(bcos::protocol::TwoPCParams(),
             [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
@@ -433,8 +435,8 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
         table2Keys.push_back(key2);
     }
 
-    rocksDBStorage->asyncPrepare(
-        bcos::protocol::TwoPCParams(), *storage, [&](Error::Ptr error, uint64_t ts, const std::string&) {
+    rocksDBStorage->asyncPrepare(bcos::protocol::TwoPCParams(), *storage,
+        [&](Error::Ptr error, uint64_t ts, const std::string&) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
@@ -626,8 +628,8 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
 
     bcos::protocol::TwoPCParams params;
     params.number = 1;
-    rocksDBStorage->asyncPrepare(
-        params, *initState, [](Error::Ptr error, uint64_t, const std::string&) { BOOST_CHECK(!error); });
+    rocksDBStorage->asyncPrepare(params, *initState,
+        [](Error::Ptr error, uint64_t, const std::string&) { BOOST_CHECK(!error); });
     rocksDBStorage->asyncCommit(params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
 
     STORAGE_LOG(INFO) << "Init state finished";
@@ -683,8 +685,8 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
 
         bcos::protocol::TwoPCParams params;
         params.number = i;
-        rocksDBStorage->asyncPrepare(
-            params, *state, [](Error::Ptr error, uint64_t, const std::string&) { BOOST_CHECK(!error); });
+        rocksDBStorage->asyncPrepare(params, *state,
+            [](Error::Ptr error, uint64_t, const std::string&) { BOOST_CHECK(!error); });
         rocksDBStorage->asyncCommit(
             params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
     }

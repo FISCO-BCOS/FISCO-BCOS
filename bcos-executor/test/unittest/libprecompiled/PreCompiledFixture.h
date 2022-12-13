@@ -19,9 +19,11 @@
  */
 
 #pragma once
+#include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
@@ -253,20 +255,24 @@ public:
     }
 
     void nextBlock(
-        int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_1_VERSION)
+        int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_2_VERSION)
     {
         if (blockNumber < 0) [[unlikely]]
         {
             // for parallel test
             return;
         }
-        std::cout << "next block: " << blockNumber << std::endl;
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
-        blockHeader->setParentInfo({{blockNumber - 1, h256(blockNumber - 1)}});
+
+        std::vector<bcos::protocol::ParentInfo> parentInfos{
+            {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
+        blockHeader->setParentInfo(parentInfos);
+
         blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);
+        blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(
             0, blockHeader, [&](bcos::Error::Ptr&& error) { nextPromise.set_value(); });
@@ -280,7 +286,7 @@ public:
             // for parallel test
             return;
         }
-        std::cout << "commit block: " << blockNumber << std::endl;
+
         TwoPCParams commitParams{};
         commitParams.number = blockNumber;
 

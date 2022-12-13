@@ -121,6 +121,7 @@ BOOST_AUTO_TEST_CASE(prepareTest)
     // Generate Block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(9999);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     // Add Executor
     for (size_t i = 1; i <= 10; ++i)
@@ -161,6 +162,7 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest1)
     // Generate Block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(99);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     // Add Executor
     auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
     executorManager->addExecutor("executor1", executor1);
@@ -192,6 +194,7 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
     // Generate Block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(1024);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     // Add Executor
     auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
@@ -228,6 +231,7 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest1)
     // Generate Block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(999);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     // Add Executor
     auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
     executorManager->addExecutor("executor1", executor1);
@@ -260,6 +264,7 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest2)
     // Generate Block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(1024);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     // Add Executor
     for (size_t i = 1; i <= 10; ++i)
@@ -299,6 +304,7 @@ BOOST_AUTO_TEST_CASE(asyncNotify)
     // Generate block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(999);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     // Add Executor
     auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
     executorManager->addExecutor("executor1", executor1);
@@ -316,6 +322,7 @@ BOOST_AUTO_TEST_CASE(asyncNotify)
         //     hash, "contract" + boost::lexical_cast<std::string>((j + 1) % 10));
         block->appendTransaction(std::move(tx));
     }
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
 
@@ -341,6 +348,7 @@ BOOST_AUTO_TEST_CASE(dagTest)
     // Generate a test block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(100);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     for (size_t j = 0; j < 10; ++j)
     {
@@ -355,6 +363,7 @@ BOOST_AUTO_TEST_CASE(dagTest)
             hash, "contract" + boost::lexical_cast<std::string>((j + 1) % 10));
         metaTx->setAttribute(bcos::protocol::Transaction::Attribute::DAG);
         block->appendTransactionMetaData(std::move(metaTx));
+        block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     }
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
@@ -380,6 +389,7 @@ BOOST_AUTO_TEST_CASE(dagTest2)
     // Generate a test block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(1024);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     for (size_t j = 0; j < 10; ++j)
     {
@@ -419,6 +429,7 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     // Generate a test block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(100);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     for (size_t i = 0; i < 10; ++i)
     {
@@ -446,6 +457,7 @@ BOOST_AUTO_TEST_CASE(callTest)
     // Generate block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(999);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     // Generate call transaction
     std::string inputStr = "Hello world! request";
@@ -483,6 +495,7 @@ BOOST_AUTO_TEST_CASE(executeWithSystemError)
     // Generate block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(100);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto tx = blockFactory->transactionFactory()->createTransaction(
         3, "0xaabbccdd", {}, u256(1), 500, "chainId", "groupId", utcTime());

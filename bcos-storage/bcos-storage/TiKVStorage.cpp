@@ -61,8 +61,7 @@ std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
 
 TiKVStorage::TiKVStorage(
     std::shared_ptr<tikv_client::TransactionClient> _cluster, int32_t _commitTimeout)
-  : m_cluster(std::move(_cluster)),
-    m_commitTimeout(_commitTimeout)
+  : m_cluster(std::move(_cluster)), m_commitTimeout(_commitTimeout)
 {}
 
 void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
@@ -177,8 +176,9 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 }
 
 void TiKVStorage::asyncGetRows(std::string_view _table,
-    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
-        _keys,
+    RANGES::any_view<std::string_view,
+        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
 {
     try
@@ -191,46 +191,42 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
             return;
         }
         auto start = utcTime();
-        std::visit(
-            [&](auto const& keys) {
-                std::vector<std::optional<Entry>> entries(keys.size());
+        std::vector<std::optional<Entry>> entries(keys.size());
 
-                std::vector<std::string> realKeys(keys.size());
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
-                    [&](const tbb::blocked_range<size_t>& range) {
-                        for (size_t i = range.begin(); i != range.end(); ++i)
-                        {
-                            realKeys[i] = toDBKey(_table, keys[i]);
-                        }
-                    });
-                auto snap = m_cluster->snapshot();
-                auto result = snap->batch_get(realKeys);
-                auto end = utcTime();
-                size_t validCount = 0;
-                for (size_t i = 0; i < realKeys.size(); ++i)
+        std::vector<std::string> realKeys(keys.size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i != range.end(); ++i)
                 {
-                    auto node = result.extract(realKeys[i]);
-                    if (node.empty() || node.mapped().empty())
-                    {
-                        entries[i] = std::nullopt;
-                        STORAGE_TIKV_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
-                    }
-                    else
-                    {
-                        ++validCount;
-                        entries[i] = std::make_optional(Entry());
-                        entries[i]->set(std::move(node.mapped()));
-                    }
+                    realKeys[i] = toDBKey(_table, keys[i]);
                 }
-                auto decode = utcTime();
-                STORAGE_TIKV_LOG(DEBUG)
-                    << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
-                    << LOG_KV("count", entries.size()) << LOG_KV("validCount", validCount)
-                    << LOG_KV("read time(ms)", end - start)
-                    << LOG_KV("decode time(ms)", decode - end);
-                _callback(nullptr, std::move(entries));
-            },
-            _keys);
+            });
+        auto snap = m_cluster->snapshot();
+        auto result = snap->batch_get(realKeys);
+        auto end = utcTime();
+        size_t validCount = 0;
+        for (size_t i = 0; i < realKeys.size(); ++i)
+        {
+            auto node = result.extract(realKeys[i]);
+            if (node.empty() || node.mapped().empty())
+            {
+                entries[i] = std::nullopt;
+                STORAGE_TIKV_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
+            }
+            else
+            {
+                ++validCount;
+                entries[i] = std::make_optional(Entry());
+                entries[i]->set(std::move(node.mapped()));
+            }
+        }
+        auto decode = utcTime();
+        STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
+                                << LOG_KV("count", entries.size())
+                                << LOG_KV("validCount", validCount)
+                                << LOG_KV("read time(ms)", end - start)
+                                << LOG_KV("decode time(ms)", decode - end);
+        _callback(nullptr, std::move(entries));
     }
     catch (const std::exception& e)
     {
@@ -296,10 +292,11 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
                 << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
             auto start = utcTime();
-            tbb::spin_mutex writeMutex;
+            std::mutex writeMutex;
             atomic_bool isTableValid = true;
             std::atomic_uint64_t putCount{0};
             std::atomic_uint64_t deleteCount{0};
+            std::atomic_uint64_t dataSize{0};
             if (m_committer)
             {  // should wait for the previous committer to timeout
                 auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -328,16 +325,18 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 auto dbKey = toDBKey(table, key);
                 if (entry.status() == Entry::DELETED)
                 {
-                    tbb::spin_mutex::scoped_lock lock(writeMutex);
-                    m_committer->remove(dbKey);
                     ++deleteCount;
+                    dataSize += dbKey.size();
+                    std::lock_guard lock(writeMutex);
+                    m_committer->remove(dbKey);
                 }
                 else
                 {
                     std::string value = std::string(entry.get());
-                    tbb::spin_mutex::scoped_lock lock(writeMutex);
-                    m_committer->put(dbKey, value);
                     ++putCount;
+                    dataSize += dbKey.size() + value.size();
+                    std::lock_guard lock(writeMutex);
+                    m_committer->put(dbKey, value);
                 }
                 return true;
             });
@@ -356,14 +355,14 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 m_committer = nullptr;
                 if (params.timestamp == 0)
                 {
-                    STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare empty storage")
+                    STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncPrepare primary empty storage")
                                             << LOG_KV("blockNumber", params.number);
                     callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0, "");
                 }
                 else
                 {
-                    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncPrepare empty storage")
-                                            << LOG_KV("blockNumber", params.number);
+                    STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncPrepare secondary empty storage")
+                                           << LOG_KV("blockNumber", params.number);
                     callback(nullptr, 0, "");
                 }
                 return;
@@ -372,7 +371,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
 
             if (params.timestamp == 0)
             {
-                STORAGE_TIKV_LOG(INFO)
+                STORAGE_TIKV_LOG(DEBUG)
                     << LOG_DESC("asyncPrepare primary") << LOG_KV("blockNumber", params.number);
                 auto result = m_committer->prewrite_primary(primaryLock);
                 auto write = utcTime();
@@ -382,27 +381,27 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 STORAGE_TIKV_LOG(INFO)
                     << "asyncPrepare primary finished" << LOG_KV("blockNumber", params.number)
                     << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
-                    << LOG_KV("size", size) << LOG_KV("primaryLock", toHex(primaryLock))
+                    << LOG_KV("dataSize(B)", dataSize) << LOG_KV("primaryLock", toHex(primaryLock))
                     << LOG_KV("primary", toHex(result.first)) << LOG_KV("startTS", result.second)
-                    << LOG_KV("encode time(ms)", encode - start)
-                    << LOG_KV("prewrite time(ms)", write - encode)
-                    << LOG_KV("callback time(ms)", utcTime() - write);
+                    << LOG_KV("encodeTime(ms)", encode - start)
+                    << LOG_KV("prepareTime(ms)", write - encode)
+                    << LOG_KV("callbackTime(ms)", utcTime() - write);
             }
             else
             {
-                STORAGE_TIKV_LOG(INFO)
-                    << "asyncPrepare secondary" << LOG_KV("blockNumber", params.number)
-                    << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
-                    << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
-                    << LOG_KV("startTS", params.timestamp)
-                    << LOG_KV("encode time(ms)", encode - start);
+                STORAGE_TIKV_LOG(DEBUG)
+                    << "asyncPrepare secondary" << LOG_KV("blockNumber", params.number);
                 m_currentStartTS = params.timestamp;
                 m_committer->prewrite_secondary(primaryLock, m_currentStartTS);
                 auto write = utcTime();
                 // m_committer = nullptr;
                 STORAGE_TIKV_LOG(INFO)
                     << "asyncPrepare secondary finished" << LOG_KV("blockNumber", params.number)
-                    << LOG_KV("prewrite time(ms)", write - encode);
+                    << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
+                    << LOG_KV("dataSize(B)", dataSize) << LOG_KV("primaryLock", primaryLock)
+                    << LOG_KV("startTS", params.timestamp)
+                    << LOG_KV("encodeTime(ms)", encode - start)
+                    << LOG_KV("prepareTime(ms)", write - encode);
                 callback(nullptr, 0, primaryLock);
             }
         }
@@ -432,8 +431,7 @@ void TiKVStorage::asyncCommit(
         {
             STORAGE_TIKV_LOG(INFO)
                 << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
-                << LOG_KV("timestamp", params.timestamp)
-                << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
+                << LOG_KV("timestamp", params.timestamp);
             auto start = utcTime();
             uint64_t ts = 0;
             if (m_committer)
@@ -525,50 +523,110 @@ void TiKVStorage::asyncRollback(
     }
 }
 
-bcos::Error::Ptr TiKVStorage::setRows(std::string_view table, std::vector<std::string_view> keys,
-    std::vector<std::string_view> values) noexcept
+bcos::Error::Ptr TiKVStorage::setRows(std::string_view table,
+    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
+        _keys,
+    std::variant<gsl::span<const std::string_view>, gsl::span<std::string const>> _values) noexcept
 {
+    bcos::Error::Ptr err = nullptr;
     try
     {
-        if (table.empty())
-        {
-            STORAGE_TIKV_LOG(WARNING)
-                << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
-            return BCOS_ERROR_PTR(TableNotExists, "empty tableName");
-        }
-        if (keys.size() != values.size())
-        {
-            STORAGE_TIKV_LOG(WARNING)
-                << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("table", table)
-                << LOG_KV("keys", keys.size()) << LOG_KV("values", values.size());
-            return BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
-        }
-        if (keys.empty())
-        {
-            STORAGE_TIKV_LOG(WARNING) << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
-            return nullptr;
-        }
-        std::vector<std::string> realKeys(keys.size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
-            [&](const tbb::blocked_range<size_t>& range) {
-                for (size_t i = range.begin(); i != range.end(); ++i)
+        std::visit(
+            [&](auto&& keys, auto&& values) {
+                if (table.empty())
                 {
-                    realKeys[i] = toDBKey(table, keys[i]);
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
+                    err = BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+                    return;
                 }
-            });
-        auto txn = m_cluster->begin();
-        for (size_t i = 0; i < values.size(); ++i)
-        {
-            txn.put(std::string(realKeys[i]), std::string(values[i]));
-        }
-        txn.commit();
+                if (keys.size() != values.size())
+                {
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("setRows values size mismatch keys size")
+                        << LOG_KV("table", table) << LOG_KV("keys", keys.size())
+                        << LOG_KV("values", values.size());
+                    err = BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+                    return;
+                }
+                if (values.empty())
+                {
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
+                    return;
+                }
+                std::vector<std::string> realKeys(keys.size());
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+                    [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t i = range.begin(); i != range.end(); ++i)
+                        {
+                            realKeys[i] = toDBKey(table, keys[i]);
+                        }
+                    });
+                auto txn = m_cluster->begin();
+                for (size_t i = 0; i < keys.size(); ++i)
+                {
+                    txn.put(std::move(realKeys[i]), std::string(std::move(values[i])));
+                }
+                txn.commit();
+            },
+            _keys, _values);
     }
     catch (std::exception& e)
     {
         STORAGE_TIKV_LOG(WARNING) << LOG_DESC("setRows failed") << LOG_KV("what", e.what());
         return BCOS_ERROR_WITH_PREV_PTR(WriteError, "setRows failed! ", e);
     }
-    return nullptr;
+    return err;
+}
+
+bcos::Error::Ptr TiKVStorage::deleteRows(std::string_view table,
+    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
+        _keys) noexcept
+{
+    bcos::Error::Ptr err = nullptr;
+    try
+    {
+        std::visit(
+            [&](auto&& keys) {
+                if (table.empty())
+                {
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("deleteRows empty tableName") << LOG_KV("table", table);
+                    err = BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+                    return;
+                }
+                if (keys.empty())
+                {
+                    STORAGE_TIKV_LOG(WARNING)
+                        << LOG_DESC("deleteRows empty keys") << LOG_KV("table", table);
+                    return;
+                }
+                std::vector<std::string> realKeys(keys.size());
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+                    [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t i = range.begin(); i != range.end(); ++i)
+                        {
+                            realKeys[i] = toDBKey(table, keys[i]);
+                        }
+                    });
+                auto txn = m_cluster->begin();
+                for (size_t i = 0; i < keys.size(); ++i)
+                {
+                    txn.remove(std::string(std::move(realKeys[i])));
+                }
+                STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("deleteRows") << LOG_KV("table", table)
+                                        << LOG_KV("size", keys.size());
+                txn.commit();
+            },
+            _keys);
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("deleteRows failed") << LOG_KV("what", e.what());
+        return BCOS_ERROR_WITH_PREV_PTR(WriteError, "deleteRows failed! ", e);
+    }
+    return err;
 }
 
 void TiKVStorage::triggerSwitch()
@@ -579,4 +637,3 @@ void TiKVStorage::triggerSwitch()
         f_onNeedSwitchEvent();
     }
 }
-

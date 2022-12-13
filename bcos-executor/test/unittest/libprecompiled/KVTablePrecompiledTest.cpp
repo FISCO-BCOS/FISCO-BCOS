@@ -363,7 +363,7 @@ BOOST_AUTO_TEST_CASE(descTest)
     }
 
     auto result2 = desc(number++, "t_kv_test");
-    TableInfoTuple tableInfo = {"id", {"item_name"}};
+    TableInfoTupleV320 tableInfo = {0, "id", {"item_name"}};
     BOOST_CHECK(result2->data().toBytes() == codec->encode(tableInfo));
 }
 
@@ -379,7 +379,7 @@ BOOST_AUTO_TEST_CASE(descWasmTest)
     }
 
     auto result2 = desc(number++, "t_kv_test");
-    TableInfoTuple tableInfo = {"id", {"item_name"}};
+    TableInfoTupleV320 tableInfo = {0, "id", {"item_name"}};
     BOOST_CHECK(result2->data().toBytes() == codec->encode(tableInfo));
 }
 

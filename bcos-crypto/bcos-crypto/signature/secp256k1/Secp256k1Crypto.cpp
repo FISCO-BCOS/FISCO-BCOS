@@ -123,14 +123,14 @@ std::pair<bool, bytes> bcos::crypto::secp256k1Recover(Hash::Ptr _hashImpl, bytes
     return {false, {}};
 }
 
-bool Secp256k1Crypto::verify(
-    std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData)
+bool Secp256k1Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
+    bytesConstRef _signatureData) const
 {
     return secp256k1Verify(
         std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN, _pubKeyBytes), _hash, _signatureData);
 }
 
-KeyPairInterface::UniquePtr Secp256k1Crypto::createKeyPair(SecretPtr _secretKey)
+KeyPairInterface::UniquePtr Secp256k1Crypto::createKeyPair(SecretPtr _secretKey) const
 {
     return std::make_unique<Secp256k1KeyPair>(_secretKey);
 }

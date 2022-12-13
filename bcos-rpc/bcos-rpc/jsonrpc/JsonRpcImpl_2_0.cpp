@@ -109,11 +109,11 @@ void JsonRpcImpl_2_0::handleRpcRequest(
         }
         else
         {
-            BCOS_LOG(WARNING) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
-                              << LOG_DESC("unable to send response for session has been inactive")
-                              << LOG_KV("seq", seq) << LOG_KV("totalTime", total)
-                              << LOG_KV("endpoint", session->endPoint())
-                              << LOG_KV("refCount", session.use_count());
+            BCOS_LOG(TRACE) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
+                            << LOG_DESC("unable to send response for session has been inactive")
+                            << LOG_KV("seq", seq) << LOG_KV("totalTime", total)
+                            << LOG_KV("endpoint", session->endPoint())
+                            << LOG_KV("refCount", session.use_count());
         }
     });
 }
@@ -209,7 +209,7 @@ void JsonRpcImpl_2_0::parseRpcResponseJson(
         JsonRpcError::InvalidRequest, "The JSON sent is not a valid Response object."));
 }
 
-void JsonRpcImpl_2_0::toJsonResp(
+void bcos::rpc::toJsonResp(
     Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr)
 {
     // transaction version
@@ -238,12 +238,12 @@ void JsonRpcImpl_2_0::toJsonResp(
     jResp["signature"] = toHexStringWithPrefix(_transactionPtr->signatureData());
 }
 
-void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
+void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
+    protocol::TransactionStatus status,
     bcos::protocol::TransactionReceipt const& transactionReceipt, bool _isWasm,
     crypto::Hash& hashImpl)
 {
     jResp["version"] = transactionReceipt.version();
-
     std::string contractAddress = string(transactionReceipt.contractAddress());
 
     if (!contractAddress.empty() && !_isWasm)
@@ -276,7 +276,16 @@ void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     jResp["output"] = toHexStringWithPrefix(transactionReceipt.output());
     jResp["message"] = transactionReceipt.message();
     jResp["transactionHash"] = std::string(_txHash);
-    jResp["hash"] = transactionReceipt.hash().hexPrefixed();
+
+    if (status == protocol::TransactionStatus::None)
+    {
+        jResp["hash"] = transactionReceipt.hash().hexPrefixed();
+    }
+    else
+    {
+        jResp["hash"] = "0x";
+    }
+
     jResp["logEntries"] = Json::Value(Json::arrayValue);
     for (const auto& logEntry : transactionReceipt.logEntries())
     {
@@ -293,8 +302,7 @@ void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, std::string_view _txHash,
 }
 
 
-void JsonRpcImpl_2_0::toJsonResp(
-    Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr)
+void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr)
 {
     if (!_blockHeaderPtr)
     {
@@ -345,17 +353,11 @@ void JsonRpcImpl_2_0::toJsonResp(
     jResp["signatureList"] = jSignList;
 }
 
-void JsonRpcImpl_2_0::toJsonResp(
-    Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash)
+void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, bool _onlyTxHash)
 {
-    if (!_blockPtr)
-    {
-        return;
-    }
-
     // header
-    toJsonResp(jResp, _blockPtr->blockHeader());
-    auto txSize = _blockPtr->transactionsSize();
+    toJsonResp(jResp, block.blockHeader());
+    auto txSize = _onlyTxHash ? block.transactionsMetaDataSize() : block.transactionsSize();
 
     Json::Value jTxs(Json::arrayValue);
     for (std::size_t index = 0; index < txSize; ++index)
@@ -365,11 +367,11 @@ void JsonRpcImpl_2_0::toJsonResp(
         {
             // Note: should not call transactionHash for in the common cases transactionHash maybe
             // empty
-            jTx = toHexStringWithPrefix(_blockPtr->transaction(index)->hash());
+            jTx = toHexStringWithPrefix(block.transactionMetaData(index)->hash());
         }
         else
         {
-            toJsonResp(jTx, _blockPtr->transaction(index));
+            toJsonResp(jTx, block.transaction(index));
         }
         jTxs.append(jTx);
     }
@@ -385,8 +387,8 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
 
     auto nodeService = getNodeService(_groupID, _nodeName, "call");
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
-    auto transaction =
-        transactionFactory->createTransaction(0, _to, decodeData(_data), u256(0), 0, "", "", 0);
+    auto transaction = transactionFactory->createTransaction(
+        0, std::string(_to), decodeData(_data), u256(0), 0, std::string(), std::string(), 0);
     nodeService->scheduler()->call(std::move(transaction),
         [m_to = std::string(_to), m_respFunc = std::move(_respFunc)](
             Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
@@ -434,23 +436,23 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             auto isWasm = groupInfo->wasm();
             auto transactionData = decodeData(data);
             auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
-                transactionData, false);
+                bcos::ref(transactionData), false);
 
             RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
                                 << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
-            auto start = utcTime();
+            auto start = utcSteadyTime();
             auto sendTxTimeout = self->m_sendTxTimeout;
 
             Json::Value jResp;
             try
             {
+                co_await txpool->broadcastPushTransaction(*transaction);
                 auto submitResult = co_await txpool->submitTransaction(transaction);
 
                 auto txHash = submitResult->txHash();
                 auto hexPreTxHash = txHash.hexPrefixed();
 
-                auto end = utcTime();
-                auto totalTime = end - start;  // ms
+                auto totalTime = utcSteadyTime() - start;  // ms
                 if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
                 {
                     RPC_IMPL_LOG(WARNING)
@@ -468,14 +470,14 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
                 if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
                 {
-                    std::stringstream errorMsg;
-                    errorMsg << (bcos::protocol::TransactionStatus)(submitResult->status());
-                    jResp["errorMessage"] = errorMsg.str();
+                    BOOST_THROW_EXCEPTION(
+                        bcos::Error(submitResult->status(), toString(submitResult->status())));
                 }
 
-                toJsonResp(jResp, hexPreTxHash, *(submitResult->transactionReceipt()), isWasm,
+                toJsonResp(jResp, hexPreTxHash, (protocol::TransactionStatus)submitResult->status(),
+                    *(submitResult->transactionReceipt()), isWasm,
                     *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
-                jResp["to"] = string(submitResult->to());
+                jResp["to"] = submitResult->to();
                 jResp["from"] = toHexStringWithPrefix(submitResult->sender());
 
                 // TODO: check if needed
@@ -486,7 +488,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             catch (bcos::Error& e)
             {
                 auto info = boost::diagnostic_information(e);
-                RPC_IMPL_LOG(WARNING) << "RPC bcos error: " << info;
+                RPC_IMPL_LOG(WARNING) << "RPC bcos error: " << e.errorCode() << " " << info;
                 respFunc(std::make_shared<bcos::Error>(std::move(e)), jResp);
             }
             catch (std::exception& e)
@@ -500,36 +502,36 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
 
 void JsonRpcImpl_2_0::addProofToResponse(
-    Json::Value& jResp, std::string_view _key, ledger::MerkleProofPtr _merkleProofPtr)
+    Json::Value& jResp, const std::string& _key, ledger::MerkleProofPtr _merkleProofPtr)
 {
     // Nothing to do!
-    // if (!_merkleProofPtr)
-    // {
-    //     return;
-    // }
+    if (!_merkleProofPtr)
+    {
+        return;
+    }
 
-    // RPC_IMPL_LOG(TRACE) << LOG_DESC("addProofToResponse") << LOG_KV("key", _key)
-    //                     << LOG_KV("key", _key) << LOG_KV("merkleProofPtr",
-    //                     _merkleProofPtr->size());
+    RPC_IMPL_LOG(TRACE) << LOG_DESC("addProofToResponse") << LOG_KV("key", _key)
+                        << LOG_KV("key", _key) << LOG_KV("merkleProofPtr",
+                        _merkleProofPtr->size());
 
-    // uint32_t index = 0;
-    // for (const auto& merkleItem : *_merkleProofPtr)
-    // {
-    //     jResp[_key][index]["left"] = Json::arrayValue;
-    //     jResp[_key][index]["right"] = Json::arrayValue;
-    //     const auto& left = merkleItem.first;
-    //     for (const auto& item : left)
-    //     {
-    //         jResp[_key][index]["left"].append(item);
-    //     }
+    uint32_t index = 0;
+    for (const auto& merkleItem : *_merkleProofPtr)
+    {
+        jResp[_key][index]["left"] = Json::arrayValue;
+        jResp[_key][index]["right"] = Json::arrayValue;
+        const auto& left = merkleItem.first;
+        for (const auto& item : left)
+        {
+            jResp[_key][index]["left"].append(item);
+        }
 
-    //     const auto& right = merkleItem.second;
-    //     for (const auto& item : right)
-    //     {
-    //         jResp[_key][index]["right"].append(item);
-    //     }
-    //     ++index;
-    // }
+        const auto& right = merkleItem.second;
+        for (const auto& item : right)
+        {
+            jResp[_key][index]["right"].append(item);
+        }
+        ++index;
+    }
 }
 
 void JsonRpcImpl_2_0::getTransaction(std::string_view _groupID, std::string_view _nodeName,
@@ -635,7 +637,8 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
                 return;
             }
 
-            toJsonResp(jResp, hash.hexPrefixed(), *_transactionReceiptPtr, isWasm, *hashImpl);
+            toJsonResp(jResp, hash.hexPrefixed(), protocol::TransactionStatus::None,
+                *_transactionReceiptPtr, isWasm, *hashImpl);
 
             RPC_IMPL_LOG(TRACE) << LOG_DESC("getTransactionReceipt") << LOG_KV("txHash", m_txHash)
                                 << LOG_KV("requireProof", _requireProof)
@@ -718,8 +721,11 @@ void JsonRpcImpl_2_0::getBlockByNumber(std::string_view _groupID, std::string_vi
     auto nodeService = getNodeService(_groupID, _nodeName, "getBlockByNumber");
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
-    ledger->asyncGetBlockDataByNumber(_blockNumber,
-        _onlyHeader ? bcos::ledger::HEADER : bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS,
+    auto flag = _onlyHeader ?
+                    bcos::ledger::HEADER :
+                    (_onlyTxHash ? bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH :
+                                   bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
+    ledger->asyncGetBlockDataByNumber(_blockNumber, flag,
         [_blockNumber, _onlyHeader, _onlyTxHash, m_respFunc = std::move(_respFunc)](
             Error::Ptr _error, protocol::Block::Ptr _block) {
             Json::Value jResp;
@@ -739,7 +745,7 @@ void JsonRpcImpl_2_0::getBlockByNumber(std::string_view _groupID, std::string_vi
                 }
                 else
                 {
-                    toJsonResp(jResp, _block, _onlyTxHash);
+                    toJsonResp(jResp, *_block, _onlyTxHash);
                 }
             }
             m_respFunc(_error, jResp);
@@ -879,7 +885,7 @@ void JsonRpcImpl_2_0::getABI(std::string_view _groupID, std::string_view _nodeNa
                     << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success")
                     << LOG_KV("contractAddress", lowerAddress);
             }
-            Json::Value jResp = std::move(_abi);
+            Json::Value jResp = _abi;
             callback(_error, jResp);
         });
 }

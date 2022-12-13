@@ -30,7 +30,11 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+
+#ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
+#endif
+
 #include "BlockContext.h"
 #include "ExecutiveFactory.h"
 #include "bcos-codec/abi/ContractABICodec.h"
@@ -419,6 +423,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         return {nullptr, std::move(callParameters)};
     }
 
+#ifdef WITH_WASM
     if (blockContext->isWasm())
     {
         // Liquid
@@ -471,6 +476,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
 
         extraData->data = std::move(params);
     }
+#endif
 
     auto hostContext =
         std::make_unique<HostContext>(std::move(callParameters), shared_from_this(), tableName);
@@ -621,11 +627,25 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 evmcMessage.input_data = hostContext.data().data();
                 evmcMessage.input_size = hostContext.data().size();
 
-                auto myAddressBytes = boost::algorithm::unhex(std::string(hostContext.myAddress()));
-                auto callerBytes = boost::algorithm::unhex(std::string(hostContext.caller()));
+                if (hostContext.myAddress().size() < sizeof(evmcMessage.destination) * 2)
+                {
+                    std::uninitialized_fill_n(
+                        evmcMessage.destination.bytes, sizeof(evmcMessage.destination), 0);
+                }
+                else
+                {
+                    boost::algorithm::unhex(hostContext.myAddress(), evmcMessage.destination.bytes);
+                }
 
-                evmcMessage.destination = toEvmC(myAddressBytes);
-                evmcMessage.sender = toEvmC(callerBytes);
+                if (hostContext.caller().size() < sizeof(evmcMessage.sender) * 2)
+                {
+                    std::uninitialized_fill_n(
+                        evmcMessage.sender.bytes, sizeof(evmcMessage.sender), 0);
+                }
+                else
+                {
+                    boost::algorithm::unhex(hostContext.caller(), evmcMessage.sender.bytes);
+                }
             }
 
             return evmcMessage;
@@ -753,36 +773,32 @@ CallParameters::UniquePtr TransactionExecutive::go(
             }
 
             assert(extraData != nullptr);
-            hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->abi);
-            if (!blockContext->isWasm())
+
+            if (outputRef.empty())
             {
-                if (outputRef.empty())
+                callResults->type = CallParameters::REVERT;
+                callResults->status = (int32_t)TransactionStatus::Unknown;
+                callResults->message = "Create contract with empty code, wrong code input.";
+                EXECUTIVE_LOG(WARNING)
+                    << "Revert transaction: " << LOG_DESC("deploy failed code empty")
+                    << LOG_KV("message", callResults->message);
+                // Clear the creation flag
+                callResults->create = false;
+                // Clear the data
+                if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                 {
-                    callResults->type = CallParameters::REVERT;
-                    callResults->status = (int32_t)TransactionStatus::Unknown;
-                    callResults->message = "Create contract with empty code, wrong code input.";
-                    EXECUTIVE_LOG(WARNING)
-                        << "Revert transaction: " << LOG_DESC("deploy failed code empty")
-                        << LOG_KV("message", callResults->message);
-                    // Clear the creation flag
-                    callResults->create = false;
-                    // Clear the data
-                    if (versionCompareTo(
-                            blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
-                    {
-                        writeErrInfoToOutput(
-                            "Create contract with empty code, invalid code input.", *callResults);
-                    }
-                    else if (versionCompareTo(
-                                 blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
-                    {
-                        callResults->data.clear();
-                    }
-                    revert();
-                    return callResults;
+                    writeErrInfoToOutput(
+                        "Create contract with empty code, invalid code input.", *callResults);
                 }
-                hostContext.setCode(outputRef.toBytes());
+                else if (versionCompareTo(
+                             blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
+                {
+                    callResults->data.clear();
+                }
+                revert();
+                return callResults;
             }
+            hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->abi);
 
             callResults->gas -= outputRef.size() * hostContext.vmSchedule().createDataGas;
             callResults->newEVMContractAddress = callResults->codeAddress;
@@ -798,7 +814,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
         else
         {
             auto codeEntry = hostContext.code();
-            if (!codeEntry.has_value())
+            if (!codeEntry)
             {
                 revert();
                 auto callResult = hostContext.takeCallParameters();
@@ -1346,12 +1362,23 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
         // if call contract, then
         //      check contract available
         //      check exec auth
-        if (!checkContractAvailable(callParameters))
+        auto contractStatus = checkContractAvailable(callParameters);
+        if (contractStatus != static_cast<uint8_t>(ContractStatus::Available))
         {
             callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Contract is frozen";
-            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0)
+            {
+                if (contractStatus == static_cast<uint8_t>(ContractStatus::Abolish))
+                {
+                    callParameters->status = (int32_t)TransactionStatus::ContractAbolished;
+                    callParameters->message = "Contract is abolished";
+                    writeErrInfoToOutput("Contract is abolished.", *callParameters);
+                }
+            }
+            else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >=
+                     0)
             {
                 writeErrInfoToOutput("Contract is frozen.", *callParameters);
             }
@@ -1401,19 +1428,18 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
         blockContext->isWasm() ? precompiled::AUTH_MANAGER_NAME : precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
-    std::string address = callParameters->origin;
-    auto path = callParameters->receiveAddress;
-    EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", path)
+    EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", callParameters->receiveAddress)
                          << LOG_KV("isCreate", callParameters->create)
-                         << LOG_KV("originAddress", address);
+                         << LOG_KV("originAddress", callParameters->origin);
     bool result = true;
     if (callParameters->create)
     {
         /// external call authMgrAddress to check deploy auth
         auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-        auto input = blockContext->isWasm() ?
-                         codec.encodeWithSig("hasDeployAuth(string)", address) :
-                         codec.encodeWithSig("hasDeployAuth(address)", Address(address));
+        auto input =
+            blockContext->isWasm() ?
+                codec.encodeWithSig("hasDeployAuth(string)", callParameters->origin) :
+                codec.encodeWithSig("hasDeployAuth(address)", Address(callParameters->origin));
         auto response = externalRequest(shared_from_this(), ref(input), callParameters->origin,
             callParameters->receiveAddress, authMgrAddress, false, false, callParameters->gas);
         codec.decode(ref(response->data), result);
@@ -1421,27 +1447,39 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     else
     {
         bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-        result = contractAuthPrecompiled->checkMethodAuth(shared_from_this(), path, func, address);
+        result = contractAuthPrecompiled->checkMethodAuth(
+            shared_from_this(), callParameters->receiveAddress, func, callParameters->origin);
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
+            callParameters->origin != callParameters->senderAddress)
+        {
+            auto senderCheck = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
+                callParameters->receiveAddress, func, callParameters->senderAddress);
+            result = result && senderCheck;
+        }
     }
-    EXECUTIVE_LOG(TRACE) << "check auth finished" << LOG_KV("codeAddress", path)
+    EXECUTIVE_LOG(TRACE) << "check auth finished"
+                         << LOG_KV("codeAddress", callParameters->receiveAddress)
                          << LOG_KV("result", result);
     return result;
 }
 
-bool TransactionExecutive::checkContractAvailable(const CallParameters::UniquePtr& callParameters)
+int32_t TransactionExecutive::checkContractAvailable(
+    const CallParameters::UniquePtr& callParameters)
 {
     // precompiled always available
     if (isPrecompiled(callParameters->receiveAddress) ||
         c_systemTxsAddress.contains(callParameters->receiveAddress))
     {
-        return true;
+        return 0;
     }
     auto blockContext = m_blockContext.lock();
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
-    auto path = callParameters->receiveAddress;
-
-    return contractAuthPrecompiled->getContractStatus(shared_from_this(), std::move(path)) != 0;
+    // if status is normal, then return 0; else if status is abnormal, then return else
+    // if return <0, it means status row not exist, check pass by default in this case
+    auto status = contractAuthPrecompiled->getContractStatus(
+        shared_from_this(), callParameters->receiveAddress);
+    return status < 0 ? 0 : status;
 }
 
 uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::UniquePtr& callParameters)

@@ -1,17 +1,22 @@
-include(Version)
+
 project(bcos-crypto VERSION ${VERSION})
 
-file(GLOB_RECURSE SRCS bcos-crypto/*.cpp)
+file(GLOB_RECURSE ALL_SRCS bcos-crypto/*.cpp)
+set(LIB_LIST OpenSSL::SSL OpenSSL::Crypto wedprcrypto::crypto wedprcrypto::zkp bcos-utilities bcos-concepts TBB::tbb SDF)
 
 find_package(OpenSSL REQUIRED)
 find_package(TBB REQUIRED)
 find_package(wedprcrypto REQUIRED)
 
-add_library(bcos-crypto STATIC ${SRCS})
-target_include_directories(bcos-crypto PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/bcos-crypto>)
-target_link_libraries(bcos-crypto PUBLIC OpenSSL::SSL OpenSSL::Crypto wedprcrypto::crypto wedprcrypto::zkp bcos-utilities bcos-concepts TBB::tbb)
+if(NOT WITH_HSM)
+    list(FILTER ALL_SRCS EXCLUDE REGEX bcos-crypto/signature/hsmSM2/*)
+    list(FILTER ALL_SRCS EXCLUDE REGEX bcos-crypto/encrypt/Hsm*)
+    list(FILTER LIB_LIST EXCLUDE REGEX SDF*)
+    message("exclude hsmSM2 ${ALL_SRCS}")
+endif()
+
+add_library(bcos-crypto STATIC ${ALL_SRCS})
+target_link_libraries(bcos-crypto PUBLIC ${LIB_LIST})
 
 if(TESTS)
     enable_testing()

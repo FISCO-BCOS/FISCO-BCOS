@@ -6,6 +6,8 @@
 
 #include <bcos-gateway/libnetwork/Common.h>   // for  NodeIP...
 #include <bcos-gateway/libnetwork/Message.h>  // for Message
+#include <bcos-gateway/libnetwork/PeerBlacklist.h>
+#include <bcos-gateway/libnetwork/PeerWhitelist.h>
 #include <bcos-utilities/Common.h>            // for Guard, Mutex
 #include <bcos-utilities/ThreadPool.h>
 #include <openssl/x509.h>
@@ -105,6 +107,11 @@ public:
     virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
     virtual P2PInfo p2pInfo();
 
+    virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist) { m_peerBlacklist = _peerBlacklist; }
+    virtual PeerBlackWhitelistInterface::Ptr peerBlacklist() { return m_peerBlacklist; }
+    virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist) { m_peerWhitelist = _peerWhitelist; }
+    virtual PeerBlackWhitelistInterface::Ptr peerWhitelist() { return m_peerWhitelist; }
+
 private:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
@@ -174,6 +181,10 @@ private:
     bool m_run = false;
 
     P2PInfo m_p2pInfo;
+
+    // Peer black list
+    PeerBlackWhitelistInterface::Ptr m_peerBlacklist{ nullptr };
+    PeerBlackWhitelistInterface::Ptr m_peerWhitelist{ nullptr };
 };
 }  // namespace gateway
 

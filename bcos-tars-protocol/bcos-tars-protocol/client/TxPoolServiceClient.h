@@ -28,7 +28,7 @@ public:
         bcos::protocol::BlockFactory::Ptr _blockFactory)
       : m_proxy(_proxy), m_cryptoSuite(_cryptoSuite), m_blockFactory(_blockFactory)
     {}
-    ~TxPoolServiceClient() override {}
+    ~TxPoolServiceClient() override = default;
 
     bcos::task::Task<bcos::protocol::TransactionSubmitResult::Ptr> submitTransaction(
         bcos::protocol::Transaction::Ptr transaction) override
@@ -96,6 +96,56 @@ public:
         auto awaitable = Awaitable{.m_callback = tarsCallback.release(),
             .m_transaction = std::move(transaction),
             .m_proxy = m_proxy};
+
+        co_return co_await awaitable;
+    }
+
+    bcos::task::Task<void> broadcastPushTransaction(
+        [[maybe_unused]] const bcos::protocol::Transaction& transaction) override
+    {
+        struct TarsCallback : public bcostars::TxPoolServicePrxCallback
+        {
+            void callback_broadcastPushTransaction(const bcostars::Error& ret) override
+            {
+                m_error = toBcosError(ret);
+                m_handle.resume();
+            }
+            void callback_submit_exception(tars::Int32 ret) override
+            {
+                m_error = toBcosError(ret);
+                m_handle.resume();
+            }
+
+            CO_STD::coroutine_handle<> m_handle;
+            bcos::Error::Ptr m_error;
+        };
+
+        struct Awaitable
+        {
+            constexpr bool await_ready() const { return false; }
+            void await_suspend(CO_STD::coroutine_handle<> handle)
+            {
+                m_callback->m_handle = handle;
+                m_proxy->tars_set_timeout(600000)->async_broadcastPushTransaction(m_callback,
+                    dynamic_cast<const bcostars::protocol::TransactionImpl&>(m_transaction)
+                        .inner());  // tars take the m_callback ownership
+            }
+            void await_resume() const
+            {
+                if (m_callback->m_error)
+                {
+                    BOOST_THROW_EXCEPTION(*m_callback->m_error);
+                }
+            }
+
+            TarsCallback* m_callback = nullptr;
+            const bcos::protocol::Transaction& m_transaction;
+            bcostars::TxPoolServicePrx m_proxy;
+        };
+
+        auto tarsCallback = std::make_unique<TarsCallback>();
+        auto awaitable = Awaitable{
+            .m_callback = tarsCallback.release(), .m_transaction = transaction, .m_proxy = m_proxy};
 
         co_return co_await awaitable;
     }
@@ -237,7 +287,7 @@ public:
                 for (auto&& it : *mutableFilled)
                 {
                     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-                        m_cryptoSuite, [m_tx = std::move(it)]() mutable { return &m_tx; });
+                        [m_tx = std::move(it)]() mutable { return &m_tx; });
                     txs->push_back(tx);
                 }
                 m_callback(toBcosError(ret), txs);

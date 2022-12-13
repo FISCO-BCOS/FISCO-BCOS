@@ -19,9 +19,9 @@
  * @date 2021-05-24
  */
 #pragma once
-#include "bcos-sync/utilities/Common.h"
 #include "bcos-sync/interfaces/BlockSyncMsgInterface.h"
 #include "bcos-sync/protocol/proto/BlockSync.pb.h"
+#include "bcos-sync/utilities/Common.h"
 #include <bcos-protocol/Common.h>
 namespace bcos
 {
@@ -46,11 +46,19 @@ public:
     bcos::protocol::BlockNumber number() const override { return m_syncMessage->number(); }
     int32_t packetType() const override { return m_syncMessage->packettype(); }
 
-
     void setVersion(int32_t _version) override { m_syncMessage->set_version(_version); }
     void setNumber(bcos::protocol::BlockNumber _number) override
     {
         m_syncMessage->set_number(_number);
+    }
+
+    bcos::protocol::BlockNumber archivedBlockNumber() const override
+    {
+        return m_syncMessage->archived_number();
+    }
+    void setArchivedNumber(bcos::protocol::BlockNumber _number) override
+    {
+        m_syncMessage->set_archived_number(_number);
     }
 
     void setPacketType(int32_t packetType) override { m_syncMessage->set_packettype(packetType); }

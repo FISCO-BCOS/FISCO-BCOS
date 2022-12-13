@@ -21,6 +21,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <iterator>
 #include <mutex>
 #include <thread>
@@ -40,10 +41,11 @@ BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* 
     m_schedulerTermId(scheduler->getSchedulerTermId()),
     m_startContextID(startContextID),
     m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
-    m_blockFactory(_blockFactory),
-    m_txPool(_txPool),
+    m_blockFactory(std::move(_blockFactory)),
+    m_txPool(std::move(_txPool)),
     m_staticCall(staticCall)
 {
+    m_hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
     start();
 }
 
@@ -274,7 +276,6 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
             {
                 auto tx = m_block->transaction(i);
                 m_executiveResults[i].transactionHash = tx->hash();
-                m_executiveResults[i].source = tx->source();
 
                 auto contextID = i + m_startContextID;
                 auto& [to, message, enableDAG] = results[i];
@@ -445,6 +446,7 @@ void BlockExecutive::asyncExecute(
                         return;
                     }
                     auto blockHeader = m_block->blockHeader();
+                    blockHeader->calculateHash(*m_hashImpl);
                     SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("DAGExecute success")
                                         << LOG_KV("createMsgT", createMsgT)
                                         << LOG_KV("dagExecuteT", (utcTime() - startT))
@@ -987,6 +989,12 @@ void BlockExecutive::DMCExecute(
         callback(
             std::make_unique<bcos::Error>(e.errorCode(), e.errorMessage()), nullptr, m_isSysBlock);
     }
+    catch (std::exception& e)
+    {
+        DMC_LOG(WARNING) << "DMCExecute exception " << boost::diagnostic_information(e);
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, "DMCExecute exception"),
+            nullptr, m_isSysBlock);
+    }
     catch (...)
     {
         DMC_LOG(WARNING) << "DMCExecute exception. ";
@@ -1086,8 +1094,9 @@ void BlockExecutive::onExecuteFinish(
                 m_blockFactory->blockHeaderFactory()->populateBlockHeader(m_block->blockHeader());
             executedBlockHeader->setStateRoot(hash);
             executedBlockHeader->setGasUsed(m_gasUsed);
-            executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot());
-            executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
+            executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot(*m_hashImpl));
+            executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot(*m_hashImpl));
+            executedBlockHeader->calculateHash(*m_hashImpl);
 
             m_result = executedBlockHeader;
             callback(nullptr, m_result, m_isSysBlock);
@@ -1491,8 +1500,9 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         m_dmcExecutors.emplace(contractAddress, dmcExecutor);
 
         // register functions
-        dmcExecutor->setSchedulerOutHandler(
-            [this](ExecutiveState::Ptr executiveState) { scheduleExecutive(executiveState); });
+        dmcExecutor->setSchedulerOutHandler([this](ExecutiveState::Ptr executiveState) {
+            scheduleExecutive(std::move(executiveState));
+        });
 
         dmcExecutor->setOnTxFinishedHandler(
             [this](bcos::protocol::ExecutionMessage::UniquePtr output) {
@@ -1500,6 +1510,7 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             });
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
+        // TODO: Slow wait!
         dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
             auto executor = m_scheduler->executorManager()->dispatchExecutor(address);
             if (!executor)
@@ -1508,30 +1519,28 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
                                      << LOG_KV("address", address);
                 return bcos::bytes();
             }
-            else
-            {
-                // getCode from executor
-                std::promise<bcos::bytes> codeFuture;
-                executor->getCode(
-                    address, [&codeFuture, this](bcos::Error::Ptr error, bcos::bytes codes) {
-                        if (error)
-                        {
-                            SCHEDULER_LOG(ERROR)
-                                << "Could not getCode from correspond executor. Trigger switch."
-                                << LOG_KV("code", error->errorCode())
-                                << LOG_KV("message", error->errorMessage());
-                            triggerSwitch();
-                            codeFuture.set_value(bcos::bytes());
-                        }
-                        else
-                        {
-                            codeFuture.set_value(std::move(codes));
-                        }
-                    });
-                bcos::bytes codes = codeFuture.get_future().get();
 
-                return codes;
-            }
+            // getCode from executor
+            std::promise<bcos::bytes> codeFuture;
+            executor->getCode(
+                address, [&codeFuture, this](bcos::Error::Ptr error, bcos::bytes codes) {
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR)
+                            << "Could not getCode from correspond executor. Trigger switch."
+                            << LOG_KV("code", error->errorCode())
+                            << LOG_KV("message", error->errorMessage());
+                        triggerSwitch();
+                        codeFuture.set_value(bcos::bytes());
+                    }
+                    else
+                    {
+                        codeFuture.set_value(std::move(codes));
+                    }
+                });
+            bcos::bytes codes = codeFuture.get_future().get();
+
+            return codes;
         });
 
         return dmcExecutor;
@@ -1540,33 +1549,32 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
 
 void BlockExecutive::scheduleExecutive(ExecutiveState::Ptr executiveState)
 {
-    auto to = std::string(executiveState->message->to());
-
-    DmcExecutor::Ptr dmcExecutor = registerAndGetDmcExecutor(to);
-
-    dmcExecutor->scheduleIn(executiveState);
+    DmcExecutor::Ptr dmcExecutor =
+        registerAndGetDmcExecutor(std::string(executiveState->message->to()));
+    dmcExecutor->scheduleIn(std::move(executiveState));
 }
 
 void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output)
 {
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
-    if (bcos::precompiled::c_systemTxsAddress.count({output->from().data(), output->from().size()}))
+    if (bcos::precompiled::c_systemTxsAddress.find(output->from()) !=
+        bcos::precompiled::c_systemTxsAddress.end())
     {
         txGasUsed = 0;
     }
     m_gasUsed += txGasUsed;
     auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
-        output->newEVMContractAddress(),
-        std::make_shared<std::vector<bcos::protocol::LogEntry>>(output->takeLogEntries()),
-        output->status(), output->takeData(), m_block->blockHeaderConst()->number());
+        std::string(output->newEVMContractAddress()), output->takeLogEntries(), output->status(),
+        output->data(), m_block->blockHeaderConst()->number());
+
     // write receipt in results
-    m_executiveResults[output->contextID() - m_startContextID].receipt = receipt;
     SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
                          << " -> contextID:" << output->contextID() - m_startContextID
                          << ", receipt: " << receipt->hash() << ", gasUsed: " << receipt->gasUsed()
                          << ", version: " << receipt->version()
                          << ", status: " << receipt->status();
+    m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
 }
 
 
@@ -1577,21 +1585,20 @@ void BlockExecutive::serialPrepareExecutor()
     // m_dmcExecutors must be prepared in contractAddress less<> serial order
 
     /// Handle normal message
-    bool hasScheduleOutMessage;
+    bool hasScheduleOutMessage = false;
     do
     {
         hasScheduleOutMessage = false;
-
         // dump current DmcExecutor (m_dmcExecutors may be modified during traversing)
         std::set<std::string, std::less<>> currentExecutors;
-        for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
+        for (auto& it : m_dmcExecutors)
         {
-            it->second->releaseOutdatedLock();  // release last round's lock
-            currentExecutors.insert(it->first);
+            it.second->releaseOutdatedLock();  // release last round's lock
+            currentExecutors.insert(it.first);
         }
 
         // for each current DmcExecutor
-        for (auto& address : currentExecutors)
+        for (const auto& address : currentExecutors)
         {
             DMC_LOG(TRACE) << " 0.Pre-DmcExecutor: \t----------------- addr:" << address
                            << " | number:" << m_block->blockHeaderConst()->number()
@@ -1608,9 +1615,9 @@ void BlockExecutive::serialPrepareExecutor()
     // try to unlock some locked tx
     bool needDetectDeadlock = true;
     bool allFinished = true;
-    for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
+    for (auto& it : m_dmcExecutors)
     {
-        auto& address = it->first;
+        const auto& address = it.first;
         auto dmcExecutor = m_dmcExecutors[address];
         if (dmcExecutor->hasFinished())
         {
@@ -1630,9 +1637,9 @@ void BlockExecutive::serialPrepareExecutor()
     {
         bool needRevert = false;
         // detect deadlock and revert the first tx TODO: revert many tx in one DMC round
-        for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
+        for (auto& it : m_dmcExecutors)
         {
-            auto& address = it->first;
+            const auto& address = it.first;
             DMC_LOG(TRACE) << " --detect--revert-- " << address << " | "
                            << m_block->blockHeaderConst()->number() << " -----------------";
             if (m_dmcExecutors[address]->detectLockAndRevert())

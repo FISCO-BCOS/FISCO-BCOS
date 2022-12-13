@@ -111,6 +111,7 @@ public:
         auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
         blockHeader->populateEmptyBlock(_index, _sealerId);
         blockHeader->setVersion(_proposalVersion);
+        blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         block->setBlockHeader(blockHeader);
         auto encodedData = std::make_shared<bytes>();
         block->encode(*encodedData);

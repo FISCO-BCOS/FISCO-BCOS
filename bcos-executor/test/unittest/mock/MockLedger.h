@@ -103,6 +103,10 @@ public:
         BOOST_CHECK(false);  // Need implementations
     };
 
+    void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) override
+    {}
+
 
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> _onGetConfig) override

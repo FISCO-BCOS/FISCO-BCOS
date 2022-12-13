@@ -32,35 +32,11 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     //  whenQueueFront() -> afterFront()
     //  beforeBack() -> whenQueueBack()
 
+    bcos::protocol::BlockNumber currentNumber = getCurrentBlockNumber();
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-
-    // refresh block cache
-    bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
-    // note that genesis sysBlock is blockNumber 0, we need to ignore it
-    while (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() && currentNumber != 0)
-    {
-        SCHEDULER_LOG(DEBUG) << "Remove committed block on handleBlockQueue : "
-                             << m_blocks->front()->number() << " success";
-        m_blocks->pop_front();
-    }
 
     try
     {
-        /*
-        if (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() &&
-            currentNumber != 0)
-        {
-            SCHEDULER_LOG(DEBUG)
-                << "Doesn't receive block commit success callback but block has committed"
-                << LOG_KV("cacheFrontNumber", m_blocks->front()->number())
-                << LOG_KV("currentNumber", currentNumber);
-
-            triggerSwitch();
-            BOOST_THROW_EXCEPTION(std::runtime_error(
-                "Doesn't receive block commit success callback but block has committed"));
-            return;
-        }
-         */
 
         if (m_blocks->empty())
         {
@@ -140,7 +116,7 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     catch (std::exception const& e)
     {
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "handleBlockQueue exception"
-                             << e.what();
+                             << boost::diagnostic_information(e);
         blocksLock.unlock();
         whenException(e);
     }
@@ -343,6 +319,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                 Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool _sysBlock) {
                 if (!m_isRunning)
                 {
+                    executeLock->unlock();
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
                         nullptr, false);
@@ -355,7 +332,10 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                                          << "executeBlock error: " << error->what();
                     {
                         std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-                        m_blocks->pop_back();
+                        if (!m_blocks->empty() && m_blocks->back()->number() == requestBlockNumber)
+                        {
+                            m_blocks->pop_back();
+                        }
                         blocksLock.unlock();
                     }
                     executeLock->unlock();
@@ -505,14 +485,25 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             if (error)
             {
                 SCHEDULER_LOG(ERROR) << "CommitBlock error, " << error->errorMessage();
-
+                {
+                    std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                    // refresh block cache
+                    bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
+                    // note that genesis sysBlock is blockNumber 0, we need to ignore it
+                    while (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() &&
+                           currentNumber != 0)
+                    {
+                        SCHEDULER_LOG(DEBUG) << "Remove committed block on commit failed : "
+                                             << m_blocks->front()->number() << " success";
+                        m_blocks->pop_front();
+                    }
+                }
                 commitLock->unlock();
                 callback(BCOS_ERROR_UNIQUE_PTR(
                              error->errorCode(), "CommitBlock error: " + error->errorMessage()),
                     nullptr);
                 return;
             }
-
             {
                 std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
                 auto number = block->blockHeaderConst()->number();
@@ -640,6 +631,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     // Create temp block
     auto block = m_blockFactory->createBlock();
     block->blockHeader()->setNumber(blockNumber);
+    block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
     block->appendTransaction(std::move(tx));
 
     // Create temp executive
@@ -860,7 +852,7 @@ struct overloaded : Ts...
 };
 // explicit deduction guide (not needed as of C++20)
 template <class... Ts>
-overloaded(Ts...) -> overloaded<Ts...>;
+overloaded(Ts...)->overloaded<Ts...>;
 
 void SchedulerImpl::asyncGetLedgerConfig(
     std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback)
@@ -876,13 +868,6 @@ void SchedulerImpl::asyncGetLedgerConfig(
                              std::tuple<int, std::string, bcos::protocol::BlockNumber>,
                              bcos::protocol::BlockNumber, bcos::crypto::HashType>&&
                              result) mutable {
-        if (!m_isRunning)
-        {
-            (*callback)(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
-                nullptr);
-            return;
-        }
-
         auto& [total, success, failed] = *summary;
 
         if (error)
@@ -950,6 +935,14 @@ void SchedulerImpl::asyncGetLedgerConfig(
         // Collect done
         if (success + failed == total)
         {
+            if (!m_isRunning)
+            {
+                (*callback)(
+                    BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "Scheduler is not running"),
+                    nullptr);
+                return;
+            }
+
             if (failed > 0)
             {
                 SCHEDULER_LOG(ERROR) << "Get ledger config with error: " << failed;
@@ -1029,8 +1022,5 @@ bcos::protocol::BlockNumber SchedulerImpl::getCurrentBlockNumber()
         blocksLock.unlock();
         return getBlockNumberFromStorage();
     }
-    else
-    {
-        return m_blocks->front()->number() - 1;
-    }
+    return m_blocks->front()->number() - 1;
 }

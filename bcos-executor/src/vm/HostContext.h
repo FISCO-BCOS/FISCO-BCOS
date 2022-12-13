@@ -25,6 +25,7 @@
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
 #include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/Table.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <evmc/evmc.h>
@@ -50,13 +51,7 @@ public:
     /// Full constructor.
     HostContext(CallParameters::UniquePtr callParameters,
         std::shared_ptr<TransactionExecutive> executive, std::string tableName);
-    virtual ~HostContext(){
-        // auto total = utcTimeUs() - m_startTime;
-        // EXECUTIVE_LOG(DEBUG) << LOG_DESC("TxExecution time(us)") << LOG_KV("total", total)
-        //                      << LOG_KV("storageTimeProportion",
-        //                             (m_getTimeUsed + m_setTimeUsed) / (double)total)
-        //                      << LOG_KV("get", m_getTimeUsed) << LOG_KV("set", m_setTimeUsed);
-    };
+    virtual ~HostContext() noexcept = default;
 
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
@@ -67,34 +62,18 @@ public:
 
     void set(const std::string_view& _key, std::string _value);
 
-    bool registerAsset(const std::string& _assetName, const std::string_view& _issuer,
-        bool _fungible, uint64_t _total, const std::string& _description);
-    bool issueFungibleAsset(
-        const std::string_view& _to, const std::string& _assetName, uint64_t _amount);
-    uint64_t issueNotFungibleAsset(
-        const std::string_view& _to, const std::string& _assetName, const std::string& _uri);
-    std::string getNotFungibleAssetInfo(
-        const std::string_view& _owner, const std::string& _assetName, uint64_t _id);
-    bool transferAsset(const std::string_view& _to, const std::string& _assetName,
-        uint64_t _amountOrID, bool _fromSelf);
-
-    // if NFT return counts, else return value
-    uint64_t getAssetBanlance(const std::string_view& _account, const std::string& _assetName);
-
-    std::vector<uint64_t> getNotFungibleAssetIDs(
-        const std::string_view& _account, const std::string& _assetName);
-
     /// Read storage location.
-    u256 store(const u256& _n);
+    evmc_bytes32 store(const evmc_bytes32* key);
 
     /// Write a value in storage.
-    void setStore(const u256& _n, const u256& _v);
+    // void setStore(const u256& _n, const u256& _v);
+    void setStore(const evmc_bytes32* key, const evmc_bytes32* value);
 
     /// Create a new contract.
     evmc_result externalRequest(const evmc_message* _msg);
 
-    evmc_status_code toEVMStatus(std::unique_ptr<CallParameters> const& _response,
-        evmc_result _result, std::shared_ptr<BlockContext> _blockContext);
+    evmc_status_code toEVMStatus(
+        std::unique_ptr<CallParameters> const& response, const BlockContext& blockContext);
 
     evmc_result callBuiltInPrecompiled(
         std::unique_ptr<CallParameters> const& _request, bool _isEvmPrecompiled);
@@ -103,9 +82,9 @@ public:
 
     void setCodeAndAbi(bytes code, std::string abi);
 
-    size_t codeSizeAt(const std::string_view& _a);
+    size_t codeSizeAt(const std::string_view& address);
 
-    h256 codeHashAt(const std::string_view& _a);
+    h256 codeHashAt(const std::string_view& address);
 
     /// Does the account exist?
     bool exists(const std::string_view&) { return true; }
@@ -117,7 +96,7 @@ public:
     h256 blockHash(int64_t _number) const;
     int64_t blockNumber() const;
     uint32_t blockVersion() const;
-    int64_t timestamp() const;
+    uint64_t timestamp() const;
     int64_t blockGasLimit() const
     {
         if (m_executive->blockContext().lock()->blockVersion() >=
@@ -173,16 +152,13 @@ public:
         return std::move(m_callParameters);
     }
 
-    static crypto::Hash::Ptr hashImpl() { return GlobalHashImpl::g_hashImpl; }
-
-    uint64_t getStorageTimeUsed() { return m_getTimeUsed; }
-    uint64_t setStorageTimeUsed() { return m_setTimeUsed; }
+    static crypto::Hash::Ptr& hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
     bool isWasm();
 
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
-    virtual bcos::bytes externalCodeRequest(const std::string_view& _a);
+    virtual bcos::bytes externalCodeRequest(const std::string_view& address);
 
 private:
     void depositFungibleAsset(
@@ -198,9 +174,6 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
-    std::atomic_uint64_t m_getTimeUsed = {0};  // microsecond
-    std::atomic_uint64_t m_setTimeUsed = {0};  // microsecond
-    std::atomic_uint64_t m_startTime = {0};    // microsecond
 };
 
 }  // namespace executor

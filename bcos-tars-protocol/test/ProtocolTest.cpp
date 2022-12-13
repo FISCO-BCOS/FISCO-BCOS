@@ -78,12 +78,12 @@ BOOST_AUTO_TEST_CASE(transaction)
     auto tx = factory.createTransaction(0, to, input, nonce, 100, "testChain", "testGroup", 1000,
         cryptoSuite->signatureImpl()->generateKeyPair());
 
-    tx->verify();
+    tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
     BOOST_CHECK(!tx->sender().empty());
     bcos::bytes buffer;
     tx->encode(buffer);
 
-    auto decodedTx = factory.createTransaction(buffer, true);
+    auto decodedTx = factory.createTransaction(bcos::ref(buffer), true);
 
     BOOST_CHECK_EQUAL(tx->hash(), decodedTx->hash());
     BOOST_CHECK_EQUAL(tx->version(), 0);
@@ -154,8 +154,8 @@ BOOST_AUTO_TEST_CASE(transactionReceipt)
     bcos::bytes output(bcos::asBytes("Output!"));
 
     bcostars::protocol::TransactionReceiptFactoryImpl factory(cryptoSuite);
-    auto receipt = factory.createReceipt(gasUsed, contractAddress,
-        std::make_shared<std::vector<bcos::protocol::LogEntry>>(*logEntries), 50, output, 888);
+    auto receipt =
+        factory.createReceipt(gasUsed, contractAddress, *logEntries, 50, bcos::ref(output), 888);
 
     bcos::bytes buffer;
     receipt->encode(buffer);
@@ -211,6 +211,7 @@ BOOST_AUTO_TEST_CASE(block)
 
     header->setSealerList(gsl::span<const bcos::bytes>(sealerList));
     BOOST_CHECK(header->sealerList().size() == 4);
+    header->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto signatureList = std::make_shared<std::vector<bcos::protocol::Signature>>();
     for (int64_t i = 0; i < 2; i++)
@@ -223,7 +224,6 @@ BOOST_AUTO_TEST_CASE(block)
     }
     header->setSignatureList(*signatureList);
     BOOST_CHECK(header->signatureList().size() == 2);
-    header->hash();
     BOOST_CHECK(header->signatureList().size() == 2);
 
     for (size_t i = 0; i < 100; ++i)
@@ -261,8 +261,8 @@ BOOST_AUTO_TEST_CASE(block)
             transaction->hash(), transaction->hash().abridged());
         block->appendTransactionMetaData(txMetaData);
 
-        auto receipt = transactionReceiptFactory->createReceipt(1000, contractAddress,
-            std::make_shared<std::vector<bcos::protocol::LogEntry>>(*logEntries), 50, output, i);
+        auto receipt = transactionReceiptFactory->createReceipt(
+            1000, contractAddress, *logEntries, 50, bcos::ref(output), i);
         block->appendReceipt(receipt);
     }
 
@@ -309,7 +309,8 @@ BOOST_AUTO_TEST_CASE(block)
             // check if transaction hash re-encode
             bcos::bytes reencodeBuffer;
             rhs->encode(reencodeBuffer);
-            auto redecodeBlock = transactionFactory->createTransaction(reencodeBuffer, false);
+            auto redecodeBlock =
+                transactionFactory->createTransaction(bcos::ref(reencodeBuffer), false);
             BOOST_CHECK_EQUAL(redecodeBlock->hash().hex(), lhs->hash().hex());
 
             BOOST_CHECK_EQUAL(lhs->hash().hex(), rhs->hash().hex());
@@ -437,7 +438,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     std::vector<bcos::protocol::ParentInfo> parentInfoList;
     parentInfoList.emplace_back(parentInfo);
 
-    header->setParentInfo(std::move(parentInfoList));
+    header->setParentInfo(parentInfoList);
 
     bcos::bytes buffer;
     header->encode(buffer);
@@ -448,12 +449,12 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
     BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
-    for (auto i = 0u; i < decodedHeader->parentInfo().size(); ++i)
+    for (auto [originParentInfo, decodeParentInfo] :
+        RANGES::zip_view(header->parentInfo(), decodedHeader->parentInfo()))
     {
-        BOOST_CHECK_EQUAL(bcos::toString(header->parentInfo()[i].blockHash),
-            bcos::toString(decodedHeader->parentInfo()[i].blockHash));
         BOOST_CHECK_EQUAL(
-            header->parentInfo()[i].blockNumber, decodedHeader->parentInfo()[i].blockNumber);
+            bcos::toString(originParentInfo.blockHash), bcos::toString(decodeParentInfo.blockHash));
+        BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodeParentInfo.blockNumber);
     }
 
     BOOST_CHECK_NO_THROW(header->setExtraData(header->extraData().toBytes()));

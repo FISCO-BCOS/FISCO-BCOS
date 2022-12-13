@@ -40,6 +40,7 @@ public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
     constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
+    constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
 
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
@@ -48,11 +49,11 @@ public:
     virtual ~NodeConfig() = default;
 
     virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
-        bool enforceChainConfig = false)
+        bool enforceChainConfig = false, bool enforceGroupId = true)
     {
         boost::property_tree::ptree iniConfig;
         boost::property_tree::read_ini(_configPath, iniConfig);
-        loadConfig(iniConfig, _enforceMemberID, enforceChainConfig);
+        loadConfig(iniConfig, _enforceMemberID, enforceChainConfig, enforceGroupId);
     }
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
@@ -92,7 +93,7 @@ public:
     }
 
     virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
-        bool _enforceChainConfig = false);
+        bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
     // the txpool configurations
@@ -107,6 +108,10 @@ public:
     size_t blockLimit() const { return m_blockLimit; }
 
     std::string const& privateKeyPath() const { return m_privateKeyPath; }
+    bool const& hsmEnable() const { return m_hsmEnable; }
+    std::string const& hsmLibPath() const { return m_hsmLibPath; }
+    int const& keyIndex() const { return m_keyIndex; }
+    std::string const& password() const { return m_password; }
 
     size_t minSealTime() const { return m_minSealTime; }
     size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
@@ -120,6 +125,9 @@ public:
     std::string const& pdKeyPath() const { return m_pdKeyPath; }
     std::string const& storageDBName() const { return m_storageDBName; }
     std::string const& stateDBName() const { return m_stateDBName; }
+    bool enableArchive() const { return m_enableArchive; }
+    std::string const& archiveListenIP() const { return m_archiveListenIP; }
+    uint16_t archiveListenPort() const { return m_archiveListenPort; }
 
     bcos::crypto::KeyFactory::Ptr keyFactory() { return m_keyFactory; }
 
@@ -217,7 +225,7 @@ public:
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
 protected:
-    virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayConfig(boost::property_tree::ptree const& _pt);
     virtual void loadCertConfig(boost::property_tree::ptree const& _pt);
@@ -273,6 +281,10 @@ private:
 
     // for security
     std::string m_privateKeyPath;
+    bool m_hsmEnable;
+    std::string m_hsmLibPath;
+    int m_keyIndex;
+    std::string m_password;
 
     // storage security configuration
     bool m_storageSecurityEnable;
@@ -294,6 +306,9 @@ private:
     std::string m_pdCaPath;
     std::string m_pdCertPath;
     std::string m_pdKeyPath;
+    bool m_enableArchive = false;
+    std::string m_archiveListenIP;
+    uint16_t m_archiveListenPort = 0;
 
     std::string m_storageDBName = "storage";
     std::string m_stateDBName = "state";
@@ -360,5 +375,6 @@ private:
 
     // others config
     int m_sendTxTimeout = -1;
+    int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
 };
 }  // namespace bcos::tool

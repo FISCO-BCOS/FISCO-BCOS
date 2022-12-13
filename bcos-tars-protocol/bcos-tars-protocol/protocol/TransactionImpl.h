@@ -21,26 +21,27 @@
 
 #pragma once
 
+#include "../impl/TarsHashable.h"
+
+#include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
+#include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <memory>
 
-namespace bcostars
+namespace bcostars::protocol
 {
-namespace protocol
-{
+
 class TransactionImpl : public bcos::protocol::Transaction
 {
 public:
-    explicit TransactionImpl(
-        bcos::crypto::CryptoSuite::Ptr _cryptoSuite, std::function<bcostars::Transaction*()> inner)
-      : bcos::protocol::Transaction(_cryptoSuite), m_inner(inner)
+    explicit TransactionImpl(std::function<bcostars::Transaction*()> inner)
+      : m_inner(std::move(inner))
     {}
-
-    ~TransactionImpl() {}
+    ~TransactionImpl() override = default;
 
     friend class TransactionFactoryImpl;
 
@@ -49,7 +50,14 @@ public:
     void decode(bcos::bytesConstRef _txData) override;
     void encode(bcos::bytes& txData) const override;
 
-    bcos::crypto::HashType hash(bool _useCache = true) const override;
+    bcos::crypto::HashType hash() const override;
+    
+    template <bcos::crypto::hasher::Hasher Hasher>
+    void calculateHash()
+    {
+        bcos::concepts::hash::calculate<Hasher>(*m_inner(), m_inner()->dataHash);
+    }
+
     int32_t version() const override { return m_inner()->data.version; }
     std::string_view chainId() const override { return m_inner()->data.chainID; }
     std::string_view groupId() const override { return m_inner()->data.groupID; }
@@ -62,12 +70,12 @@ public:
     void setImportTime(int64_t _importTime) override { m_inner()->importTime = _importTime; }
     bcos::bytesConstRef signatureData() const override
     {
-        return bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(m_inner()->signature.data()),
-            m_inner()->signature.size());
+        return {reinterpret_cast<const bcos::byte*>(m_inner()->signature.data()),
+            m_inner()->signature.size()};
     }
     std::string_view sender() const override
     {
-        return std::string_view(m_inner()->sender.data(), m_inner()->sender.size());
+        return {m_inner()->sender.data(), m_inner()->sender.size()};
     }
     void forceSender(bcos::bytes _sender) const override
     {
@@ -79,22 +87,15 @@ public:
         m_inner()->signature.assign(signature.begin(), signature.end());
     }
 
-    uint32_t attribute() const override { return m_inner()->attribute; }
-    void setAttribute(uint32_t attribute) override { m_inner()->attribute = attribute; }
-
-    std::string_view source() const override { return m_inner()->source; }
-    void setSource(std::string const& source) override { m_inner()->source = source; }
+    int32_t attribute() const override { return m_inner()->attribute; }
+    void setAttribute(int32_t attribute) override { m_inner()->attribute = attribute; }
 
     const bcostars::Transaction& inner() const { return *m_inner(); }
+    bcostars::Transaction& mutableInner() { return *m_inner(); }
     void setInner(bcostars::Transaction inner) { *m_inner() = std::move(inner); }
-
-    std::function<bcostars::Transaction*()> const& innerGetter() { return m_inner; }
-
 
 private:
     std::function<bcostars::Transaction*()> m_inner;
-    mutable bcos::SharedMutex x_hash;
     mutable bcos::u256 m_nonce;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

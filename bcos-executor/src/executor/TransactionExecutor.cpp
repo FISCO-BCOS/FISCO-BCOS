@@ -48,7 +48,12 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+#include "bcos-executor/src/precompiled/CastPrecompiled.h"
+
+#ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
+#endif
+
 #include "ExecuteOutputs.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
@@ -133,7 +138,9 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
+#ifdef WITH_WASM
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
+#endif
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
     if (m_isWasm)
@@ -212,11 +219,17 @@ void TransactionExecutor::initEvmEnvironment()
     if (m_isAuthCheck)
     {
         m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
-            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, m_isWasm)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
-            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
 
+
+    if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_2_VERSION)
+    {
+        m_constantPrecompiled->insert(
+            {CAST_ADDRESS, std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl)});
+    }
     if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
         m_constantPrecompiled->insert(
@@ -268,19 +281,23 @@ void TransactionExecutor::initWasmEnvironment()
     m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {BFS_NAME, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl)});
-
     m_constantPrecompiled->insert(
         {GROUP_SIG_NAME, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {RING_SIG_NAME, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
     if (m_isAuthCheck)
     {
-        m_constantPrecompiled->insert(
-            {AUTH_MANAGER_NAME, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({AUTH_MANAGER_NAME,
+            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, m_isWasm)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
-            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
 
+    if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_2_VERSION)
+    {
+        m_constantPrecompiled->insert(
+            {CAST_NAME, std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl)});
+    }
     if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
         m_constantPrecompiled->insert(
@@ -347,14 +364,15 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
     try
     {
+        auto view = blockHeader->parentInfo();
+        auto parentInfoIt = view.begin();
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
                                 << "NextBlockHeader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())
                                 << LOG_KV("schedulerTermId", schedulerTermId)
-                                << LOG_KV("parentHash",
-                                       blockHeader->number() > 0 ?
-                                           blockHeader->parentInfo()[0].blockHash.abridged() :
-                                           "null");
+                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
+                                                            (*parentInfoIt).blockHash.abridged() :
+                                                            "null");
         m_blockVersion = blockHeader->version();
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -432,15 +450,14 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         if (blockHeader->number() > 0)
         {
             m_ledgerCache->setBlockNumber2Hash(
-                blockHeader->number() - 1, blockHeader->parentInfo()[0].blockHash);
+                blockHeader->number() - 1, (*parentInfoIt).blockHash);
         }
 
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
                                 << LOG_KV("number", blockHeader->number())
-                                << LOG_KV("parentHash",
-                                       blockHeader->number() > 0 ?
-                                           blockHeader->parentInfo()[0].blockHash.abridged() :
-                                           "null");
+                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
+                                                            (*parentInfoIt).blockHash.abridged() :
+                                                            "null");
         callback(nullptr);
     }
     catch (std::exception& e)
@@ -2419,7 +2436,7 @@ void TransactionExecutor::removeCommittedState()
         return;
     }
 
-    bcos::protocol::BlockNumber number;
+    bcos::protocol::BlockNumber number = 0;
     bcos::storage::StateStorageInterface::Ptr storage;
 
     {

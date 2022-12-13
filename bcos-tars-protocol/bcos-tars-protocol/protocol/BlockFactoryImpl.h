@@ -28,9 +28,7 @@
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class BlockFactoryImpl : public bcos::protocol::BlockFactory
 {
@@ -39,16 +37,13 @@ public:
         bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory,
         bcos::protocol::TransactionFactory::Ptr transactionFactory,
         bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory)
-      : m_cryptoSuite(cryptoSuite),
-        m_blockHeaderFactory(blockHeaderFactory),
-        m_transactionFactory(transactionFactory),
-        m_receiptFactory(receiptFactory){};
+      : m_cryptoSuite(std::move(cryptoSuite)),
+        m_blockHeaderFactory(std::move(blockHeaderFactory)),
+        m_transactionFactory(std::move(transactionFactory)),
+        m_receiptFactory(std::move(receiptFactory)){};
 
-    ~BlockFactoryImpl() override {}
-    bcos::protocol::Block::Ptr createBlock() override
-    {
-        return std::make_shared<BlockImpl>(m_transactionFactory, m_receiptFactory);
-    }
+    ~BlockFactoryImpl() override = default;
+    bcos::protocol::Block::Ptr createBlock() override { return std::make_shared<BlockImpl>(); }
 
     bcos::protocol::Block::Ptr createBlock(
         bcos::bytes const& _data, bool _calculateHash = true, bool _checkSig = true) override
@@ -59,7 +54,7 @@ public:
     bcos::protocol::Block::Ptr createBlock(
         bcos::bytesConstRef _data, bool _calculateHash = true, bool _checkSig = true) override
     {
-        auto block = std::make_shared<BlockImpl>(m_transactionFactory, m_receiptFactory);
+        auto block = std::make_shared<BlockImpl>();
         block->decode(_data, _calculateHash, _checkSig);
 
         return block;
@@ -101,5 +96,4 @@ private:
     bcos::protocol::TransactionFactory::Ptr m_transactionFactory;
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

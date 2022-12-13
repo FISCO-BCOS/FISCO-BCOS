@@ -17,9 +17,7 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
 project(bcos-sync VERSION ${VERSION})
 
 # proto generation

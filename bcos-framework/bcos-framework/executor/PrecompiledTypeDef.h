@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-utilities/Common.h>
 
 namespace bcos
@@ -46,11 +47,12 @@ constexpr const char* const GROUP_SIG_NAME = "/sys/group_sig";
 constexpr const char* const RING_SIG_NAME = "/sys/ring_sig";
 constexpr const char* const DISCRETE_ZKP_NAME = "/sys/discrete_zkp";
 constexpr const char* const ACCOUNT_MANAGER_NAME = "/sys/account_manager";
-constexpr static const uint8_t BFS_SYS_SUBS_COUNT = 13;
+constexpr const char* const CAST_NAME = "/sys/cast_tools";
+constexpr static const uint8_t BFS_SYS_SUBS_COUNT = 14;
 constexpr static const std::array<std::string_view, BFS_SYS_SUBS_COUNT> BFS_SYS_SUBS = {
     SYS_CONFIG_NAME, TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_NAME, AUTH_MANAGER_NAME,
     KV_TABLE_NAME, CRYPTO_NAME, DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME,
-    DISCRETE_ZKP_NAME, ACCOUNT_MANAGER_NAME};
+    DISCRETE_ZKP_NAME, ACCOUNT_MANAGER_NAME, CAST_NAME};
 
 /// precompiled contract for solidity
 /// precompiled address should range in [0x1000, 0x20000)
@@ -64,6 +66,7 @@ constexpr const char* const CRYPTO_ADDRESS = "0000000000000000000000000000000000
 constexpr const char* const WORKING_SEALER_MGR_ADDRESS = "000000000000000000000000000000000000100b";
 constexpr const char* const DAG_TRANSFER_ADDRESS = "000000000000000000000000000000000000100c";
 constexpr const char* const BFS_ADDRESS = "000000000000000000000000000000000000100e";
+constexpr const char* const CAST_ADDRESS = "000000000000000000000000000000000000100f";
 constexpr const char* const SYS_ADDRESS_PREFIX = "00000000000000000000000000000000000";
 
 // Contract address related to privacy computing
@@ -96,16 +99,17 @@ constexpr static const std::array<std::pair<std::string_view,std::string_view>, 
     {GROUP_SIG_NAME, GROUP_SIG_ADDRESS},
     {RING_SIG_NAME, RING_SIG_ADDRESS},
     {DISCRETE_ZKP_NAME, DISCRETE_ZKP_ADDRESS},
-    {ACCOUNT_MANAGER_NAME, ACCOUNT_MGR_ADDRESS}
+    {ACCOUNT_MANAGER_NAME, ACCOUNT_MGR_ADDRESS},
+    {CAST_NAME, CAST_ADDRESS}
 };
 // clang-format on
 
-const std::set<std::string> c_systemTxsAddress = {bcos::precompiled::SYS_CONFIG_ADDRESS,
-    bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
-    bcos::precompiled::SYS_CONFIG_NAME, bcos::precompiled::CONSENSUS_NAME,
-    bcos::precompiled::AUTH_COMMITTEE_ADDRESS, bcos::precompiled::AUTH_MANAGER_ADDRESS,
-    bcos::precompiled::ACCOUNT_ADDRESS, bcos::precompiled::ACCOUNT_MGR_ADDRESS,
-    bcos::precompiled::ACCOUNT_MANAGER_NAME};
+const std::set<std::string, std::less<>> c_systemTxsAddress = {
+    bcos::precompiled::SYS_CONFIG_ADDRESS, bcos::precompiled::CONSENSUS_ADDRESS,
+    bcos::precompiled::WORKING_SEALER_MGR_ADDRESS, bcos::precompiled::SYS_CONFIG_NAME,
+    bcos::precompiled::CONSENSUS_NAME, bcos::precompiled::AUTH_COMMITTEE_ADDRESS,
+    bcos::precompiled::AUTH_MANAGER_ADDRESS, bcos::precompiled::ACCOUNT_ADDRESS,
+    bcos::precompiled::ACCOUNT_MGR_ADDRESS, bcos::precompiled::ACCOUNT_MANAGER_NAME};
 
 /// for testing
 // CpuHeavy test: 0x5200 ~ (0x5200 + 128)

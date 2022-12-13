@@ -55,25 +55,25 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(_keyFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {}
 
-void NodeConfig::loadConfig(
-    boost::property_tree::ptree const& _pt, bool _enforceMemberID, bool _enforceChainConfig)
+void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID,
+    bool _enforceChainConfig, bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig ||
         (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
             m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
-        loadChainConfig(_pt);
+        loadChainConfig(_pt, _enforceGroupId);
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
     loadGatewayConfig(_pt);
+    loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
     loadStorageSecurityConfig(_pt);
 
     loadFailOverConfig(_pt, _enforceMemberID);
     loadSecurityConfig(_pt);
-    loadSealerConfig(_pt);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
     loadOthersConfig(_pt);
@@ -87,7 +87,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        loadChainConfig(_genesisConfig);
+        loadChainConfig(_genesisConfig, true);
     }
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
@@ -485,30 +485,41 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
     if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
-    {
-        NodeConfig_LOG(WARNING)
-            << LOG_DESC(
-                   "loadTxPoolConfig: the configured txs_expiration_time is smaller than default "
-                   "consensus time, reset to the consensus time")
-            << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
-            << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
-        m_txsExpirationTime = DEFAULT_MIN_CONSENSUS_TIME_MS;
-    }
-    else
-    {
-        m_txsExpirationTime = txsExpirationTime * 1000;
-    }
+        [[unlikely]]
+        {
+            NodeConfig_LOG(WARNING) << LOG_DESC(
+                                           "loadTxPoolConfig: the configured txs_expiration_time "
+                                           "is smaller than default "
+                                           "consensus time, reset to the consensus time")
+                                    << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
+                                    << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
+        }
+    m_txsExpirationTime = std::max(
+        {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
                          << LOG_KV("notifierWorkers", m_notifyWorkerNum)
                          << LOG_KV("verifierWorkers", m_verifierWorkerNum)
                          << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime);
 }
 
-void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
+void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId)
 {
-    m_smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
-    m_groupId = _pt.get<std::string>("chain.group_id", "group");
-    m_chainId = _pt.get<std::string>("chain.chain_id", "chain");
+    try
+    {
+        m_smCryptoType = _pt.get<bool>("chain.sm_crypto");
+        if (_enforceGroupId)
+        {
+            m_groupId = _pt.get<std::string>("chain.group_id");
+        }
+        m_chainId = _pt.get<std::string>("chain.chain_id");
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "config.genesis chain.sm_crypto/chain.group_id/chain.chain_id is "
+                                  "null, please set it!"));
+    }
     if (!isalNumStr(m_chainId))
     {
         BOOST_THROW_EXCEPTION(
@@ -529,17 +540,29 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
-    NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig")
+    m_hsmEnable = _pt.get<bool>("security.enable_hsm", false);
+    if (m_hsmEnable)
+    {
+        m_hsmLibPath =
+            _pt.get<std::string>("security.hsm_lib_path", "/usr/local/lib/libgmt0018.so");
+        m_keyIndex = _pt.get<int>("security.key_index");
+        m_password = _pt.get<std::string>("security.password", "");
+        NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig HSM")
+                             << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("key_index", m_keyIndex)
+                             << LOG_KV("password", m_password);
+    }
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_hsmEnable)
                          << LOG_KV("privateKeyPath", m_privateKeyPath);
 }
 
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 {
     m_minSealTime = checkAndGetValue(_pt, "consensus.min_seal_time", "500");
-    if (m_minSealTime <= 0 || m_minSealTime > 3000)
+    if (m_minSealTime <= 0 || m_minSealTime > DEFAULT_MAX_SEAL_TIME_MS)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set consensus.min_seal_time between 1 and 3000!"));
+                                  "Please set consensus.min_seal_time between 1 and 600000!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
 }
@@ -591,19 +614,28 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
-
-    if (m_keyPageSize < 4096 || m_keyPageSize > (1 << 25))
+    m_enableArchive = _pt.get<bool>("storage.enable_archive", false);
+    if (m_enableArchive)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("Please set storage.key_page_size in 4K~32M"));
+        m_archiveListenIP = _pt.get<std::string>("storage.archive_ip");
+        m_archiveListenPort = _pt.get<uint16_t>("storage.archive_port");
     }
+
+    // if (m_keyPageSize < 4096 || m_keyPageSize > (1 << 25))
+    // {
+    //     BOOST_THROW_EXCEPTION(
+    //         InvalidConfig() << errinfo_comment("Please set storage.key_page_size in 4K~32M"));
+    // }
     auto pd_addrs = _pt.get<std::string>("storage.pd_addrs", "127.0.0.1:2379");
     boost::split(m_pd_addrs, pd_addrs, boost::is_any_of(","));
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
                          << LOG_KV("KeyPage", m_keyPageSize) << LOG_KV("storageType", m_storageType)
-                         << LOG_KV("pd_addrs", pd_addrs)
+                         << LOG_KV("pdAddrs", pd_addrs) << LOG_KV("pdCaPath", m_pdCaPath)
+                         << LOG_KV("enableArchive", m_enableArchive)
+                         << LOG_KV("archiveListenIP", m_archiveListenIP)
+                         << LOG_KV("archiveListenPort", m_archiveListenPort)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
@@ -665,10 +697,17 @@ void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig)
 {
     // consensus type
-    m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type", "pbft");
+    try
+    {
+        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type");
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "consensus.consensus_type is null， please set it!"));
+    }
     // blockTxCountLimit
-    auto blockTxCountLimit =
-        checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
+    auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit");
     if (blockTxCountLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -676,7 +715,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     }
     m_ledgerConfig->setBlockTxCountLimit(blockTxCountLimit);
     // txGasLimit
-    auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit", "3000000000");
+    auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit");
     if (txGasLimit <= TX_GAS_LIMIT_MIN)
     {
         BOOST_THROW_EXCEPTION(
@@ -686,8 +725,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
-        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>("version.compatibility_version");
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
@@ -699,7 +737,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     m_ledgerConfig->setConsensusNodeList(*consensusNodeList);
 
     // leaderSwitchPeriod
-    auto consensusLeaderPeriod = checkAndGetValue(_genesisConfig, "consensus.leader_period", "1");
+    auto consensusLeaderPeriod = checkAndGetValue(_genesisConfig, "consensus.leader_period");
     if (consensusLeaderPeriod <= 0)
     {
         BOOST_THROW_EXCEPTION(
@@ -814,9 +852,18 @@ void NodeConfig::generateGenesisData()
 
 void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisConfig)
 {
-    m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
-    m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
-    m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute", false);
+    try
+    {
+        m_isWasm = _genesisConfig.get<bool>("executor.is_wasm");
+        m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check");
+        m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute");
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "executor.is_wasm/executor.is_auth_check/"
+                                  "executor.is_serial_execute is null, please set it!"));
+    }
     if (m_isWasm && !m_isSerialExecute)
     {
         if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
@@ -841,8 +888,19 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                                 << LOG_DESC(
                                        "loadExecutorConfig wasm auth is not supported for now");
     }
-
-    m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account", "");
+    try
+    {
+        m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
+    }
+    catch (std::exception const& e)
+    {
+        if (m_isAuthCheck)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
+                                                   "please set correct auth_admin_account"));
+        }
+    }
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
                          << LOG_KV("authAdminAccount", m_authAdminAddress)
@@ -863,6 +921,22 @@ int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt,
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Invalid value " + value + " for configuration " + _key +
                                   ", please set the value with a valid number"));
+    }
+}
+
+int64_t NodeConfig::checkAndGetValue(
+    boost::property_tree::ptree const& _pt, std::string const& _key)
+{
+    try
+    {
+        auto value = _pt.get<std::string>(_key);
+        return boost::lexical_cast<int64_t>(value);
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Invalid value for configuration " + _key +
+                                               ", please set the value with a valid number"));
     }
 }
 

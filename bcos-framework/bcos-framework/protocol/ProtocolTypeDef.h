@@ -31,7 +31,7 @@ using BytesListPtr = std::shared_ptr<BytesList>;
 
 struct ParentInfo
 {
-    BlockNumber blockNumber;
+    BlockNumber blockNumber = 0;
     bcos::crypto::HashType blockHash;
 
     bool operator==(const ParentInfo& rhs) const

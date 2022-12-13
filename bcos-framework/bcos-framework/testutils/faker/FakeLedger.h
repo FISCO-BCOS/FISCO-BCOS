@@ -115,6 +115,7 @@ public:
             rootHash, rootHash, rootHash, _blockNumber, gasUsed, _timestamp, 0, m_sealerList,
             bytes(), signatureList, false);
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
+        blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         signatureList = fakeSignatureList(sigImpl, m_keyPairVec, blockHeader->hash());
         blockHeader->setSignatureList(signatureList);
         block->setBlockHeader(blockHeader);
@@ -124,6 +125,7 @@ public:
     Block::Ptr populateFromHeader(BlockHeader::Ptr _blockHeader)
     {
         auto block = m_blockFactory->createBlock();
+        block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         block->setBlockHeader(_blockHeader);
         return block;
     }
@@ -232,6 +234,12 @@ public:
         _callback(nullptr, m_totalTxCount, 0, m_ledgerConfig->blockNumber());
     }
 
+    void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) override
+    {
+        _callback(nullptr, {});
+    }
+
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, BlockNumber)> _onGetConfig) override
     {
@@ -277,6 +285,7 @@ public:
         for (auto index = _startNumber; index <= endNumber; index++)
         {
             auto nonces = m_ledger[index]->nonces();
+            std::cout << "Block nonces: " << nonces->size() << std::endl;
             nonceList->insert(std::make_pair(index, nonces));
         }
         _onGetList(nullptr, nonceList);

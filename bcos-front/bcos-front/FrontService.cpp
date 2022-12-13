@@ -357,7 +357,7 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
     message->setPayload(_data);
 
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
 
     m_gatewayInterface->asyncSendBroadcastMessage(
         _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));

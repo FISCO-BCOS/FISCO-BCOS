@@ -23,6 +23,7 @@
  * @date 2021-10-14
  */
 #pragma once
+#include "bcos-storage/bcos-storage/TiKVStorage.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/convenience.h"
 #include "rocksdb/write_batch.h"
@@ -36,11 +37,9 @@ namespace bcos::initializer
 class StorageInitializer
 {
 public:
-    static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
-        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt,
-        [[maybe_unused]] size_t keyPageSize = 0)
+    static auto createRocksDB(const std::string& _path)
     {
-        boost::filesystem::create_directories(_storagePath);
+        boost::filesystem::create_directories(_path);
         rocksdb::DB* db;
         rocksdb::Options options;
         // Note: This option will increase much memory
@@ -55,24 +54,30 @@ public:
         options.max_open_files = 512;
         // options.min_blob_size = 1024;
 
-        if (boost::filesystem::space(_storagePath).available < 1024 * 1024 * 100)
+        if (boost::filesystem::space(_path).available < 1024 * 1024 * 100)
         {
             BCOS_LOG(INFO) << "available disk space is less than 100MB";
             throw std::runtime_error("available disk space is less than 100MB");
         }
 
         // open DB
-        rocksdb::Status s = rocksdb::DB::Open(options, _storagePath, &db);
-        if (!s.ok())
+        rocksdb::Status status = rocksdb::DB::Open(options, _path, &db);
+        if (!status.ok())
         {
-            BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", s.ToString());
-            throw std::runtime_error("open rocksDB failed, err:" + s.ToString());
+            BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", status.ToString());
+            throw std::runtime_error("open rocksDB failed, err:" + status.ToString());
         }
-        auto unique_db = std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>(
+        return std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>(
             db, [](rocksdb::DB* db) {
                 CancelAllBackgroundWork(db, true);
                 delete db;
             });
+    }
+    static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
+        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt,
+        [[maybe_unused]] size_t keyPageSize = 0)
+    {
+        auto unique_db = createRocksDB(_storagePath);
         return std::make_shared<bcos::storage::RocksDBStorage>(std::move(unique_db), _dataEncrypt);
     }
 

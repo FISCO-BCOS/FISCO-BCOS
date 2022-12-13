@@ -28,6 +28,10 @@
 using namespace bcostars;
 using namespace bcostars::protocol;
 
+struct EmptyReceiptHash : public bcos::error::Exception
+{
+};
+
 void TransactionReceiptImpl::decode(bcos::bytesConstRef _receiptData)
 {
     bcos::concepts::serialize::decode(_receiptData, *m_inner());
@@ -38,25 +42,16 @@ void TransactionReceiptImpl::encode(bcos::bytes& _encodedData) const
     bcos::concepts::serialize::encode(*m_inner(), _encodedData);
 }
 
-// Note: not thread-safe
 bcos::crypto::HashType TransactionReceiptImpl::hash() const
 {
-    if (!m_inner()->dataHash.empty())
+    if (m_inner()->dataHash.empty())
     {
-        return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->dataHash.data()));
+        BOOST_THROW_EXCEPTION(EmptyReceiptHash{});
     }
-    auto hashImpl = m_cryptoSuite->hashImpl();
-    auto anyHasher = hashImpl->hasher();
 
-    bcos::crypto::HashType hashResult;
-    std::visit(
-        [this, &hashResult](auto& hasher) {
-            using Hasher = std::remove_cvref_t<decltype(hasher)>;
-            bcos::concepts::hash::calculate<Hasher>(*m_inner(), hashResult);
+    bcos::crypto::HashType hashResult(
+        (bcos::byte*)m_inner()->dataHash.data(), m_inner()->dataHash.size());
 
-            m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
-        },
-        anyHasher);
     return hashResult;
 }
 

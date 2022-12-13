@@ -13,7 +13,7 @@ void DuplicateTransactionFactory::multiBuild(
     bcos::crypto::KeyPairInterface::Ptr keyPair, int64_t num,
     std::function<void(bcos::protocol::Transaction::Ptr)> onTxBuild)
 {
-    auto seedTx = transactionFactory->createTransaction(seedTxData, false);
+    auto seedTx = transactionFactory->createTransaction(bcos::ref(seedTxData), false);
     int32_t version = seedTx->version();
     const std::string_view to = seedTx->to();
     const bytes input = seedTx->input().toBytes();
@@ -29,8 +29,8 @@ void DuplicateTransactionFactory::multiBuild(
             seedBlockLimit + sentNum.fetch_add(1) / 10000;  //  maybe this block limit is not so
                                                             //  fast nor so slow
         int64_t importTime = utcTime();
-        Transaction::Ptr tx = transactionFactory->createTransaction(
-            version, to, input, nonce, blockLimit, chainId, groupId, importTime, keyPair);
+        Transaction::Ptr tx = transactionFactory->createTransaction(version, std::string(to), input,
+            nonce, blockLimit, chainId, groupId, importTime, keyPair);
 
         onTxBuild(tx);
     } while (num > sentNum);

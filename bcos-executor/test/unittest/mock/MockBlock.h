@@ -7,7 +7,7 @@ namespace bcos::test
 class MockBlock : public bcos::protocol::Block
 {
 public:
-    MockBlock() : bcos::protocol::Block(nullptr, nullptr) {}
+    MockBlock() {}
     ~MockBlock() override {}
 
     void setBlockHeader(protocol::BlockHeader::Ptr blockHeader) override
@@ -16,8 +16,14 @@ public:
     }
     void decode(bytesConstRef _data, bool _calculateHash, bool _checkSig) override {}
     void encode(bytes& _encodeData) const override {}
-    crypto::HashType calculateTransactionRoot() const override { return bcos::crypto::HashType(); }
-    crypto::HashType calculateReceiptRoot() const override { return bcos::crypto::HashType(); }
+    crypto::HashType calculateTransactionRoot(const crypto::Hash& hashImpl) const override
+    {
+        return {};
+    }
+    crypto::HashType calculateReceiptRoot(const crypto::Hash& hashImpl) const override
+    {
+        return {};
+    }
     int32_t version() const override { return m_blockHeader->version(); }
     void setVersion(int32_t _version) override { m_blockHeader->setVersion(_version); }
     protocol::BlockType blockType() const override { return protocol::WithTransactionsHash; }
@@ -44,9 +50,8 @@ public:
     uint64_t transactionsMetaDataSize() const override { return 0; }
     uint64_t transactionsHashSize() const override { return Block::transactionsHashSize(); }
     uint64_t receiptsSize() const override { return 0; }
-    void setNonceList(const protocol::NonceList& _nonceList) override {}
-    void setNonceList(protocol::NonceList&& _nonceList) override {}
-    const protocol::NonceList& nonceList() const override { return m_nodelist; }
+    void setNonceList(RANGES::any_view<u256> nonces) override {}
+    RANGES::any_view<u256> nonceList() const override { return m_nodelist; }
 
 private:
     protocol::BlockHeader::Ptr m_blockHeader = std::make_shared<MockBlockHeader>(1);

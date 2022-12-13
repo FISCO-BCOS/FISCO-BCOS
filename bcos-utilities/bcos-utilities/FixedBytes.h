@@ -708,6 +708,7 @@ inline Address toAddress(std::string const& _address)
     }
     BOOST_THROW_EXCEPTION(InvalidAddress());
 }
+
 }  // namespace bcos
 
 namespace std

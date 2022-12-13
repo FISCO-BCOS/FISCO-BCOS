@@ -19,16 +19,15 @@
  * @date 2021-05-07
  */
 #pragma once
+
 #include "bcos-txpool/TxPoolConfig.h"
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <tbb/task_group.h>
-#define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
-#include <tbb/concurrent_set.h>
-namespace bcos
-{
-namespace txpool
+#include <tbb/concurrent_unordered_set.h>
+#include <boost/thread/pthread/shared_mutex.hpp>
+
+namespace bcos::txpool
 {
 class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
@@ -36,19 +35,19 @@ class MemoryStorage : public TxPoolStorageInterface,
 public:
     // the default txsExpirationTime is 10 minutes
     explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
-        int64_t _txsExpirationTime = 10 * 60 * 1000, bool _preStoreTxs = false);
+        int64_t _txsExpirationTime = 10 * 60 * 1000);
     ~MemoryStorage() override = default;
 
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override;
 
-    bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) override;
+    bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
 
-    bcos::protocol::Transaction::ConstPtr remove(bcos::crypto::HashType const& _txHash) override;
+    bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) override;
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
-    bcos::protocol::Transaction::ConstPtr removeSubmittedTx(
+    bcos::protocol::Transaction::Ptr removeSubmittedTx(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) override;
 
     bcos::protocol::TransactionsPtr fetchTxs(
@@ -60,8 +59,9 @@ public:
 
     bool exist(bcos::crypto::HashType const& _txHash) override
     {
-        ReadGuard l(x_txpoolMutex);
-        return m_txsTable.count(_txHash);
+        ReadGuard lock(x_txpoolMutex);
+        auto it = m_txsTable.find(_txHash);
+        return it != m_txsTable.end();
     }
     size_t size() const override
     {
@@ -95,33 +95,31 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) override;
 
-    bool preStoreTxs() const override { return m_preStoreTxs; }
-
 protected:
-    bcos::protocol::TransactionStatus insertWithoutLock(bcos::protocol::Transaction::ConstPtr _tx);
+    bcos::protocol::TransactionStatus insertWithoutLock(
+        bcos::protocol::Transaction::Ptr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
     bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
-        bcos::protocol::Transaction::Ptr _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback,
-        bool _checkPoolLimit, bool _lock);
+        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
+        bool checkPoolLimit, bool lock);
     size_t unSealedTxsSizeWithoutLock();
-    bcos::protocol::TransactionStatus txpoolStorageCheck(bcos::protocol::Transaction::ConstPtr _tx);
+    bcos::protocol::TransactionStatus txpoolStorageCheck(
+        const bcos::protocol::Transaction& transaction);
 
-    virtual bcos::protocol::Transaction::ConstPtr removeWithoutLock(
+    virtual bcos::protocol::Transaction::Ptr removeWithoutLock(
         bcos::crypto::HashType const& _txHash);
-    virtual bcos::protocol::Transaction::ConstPtr removeSubmittedTxWithoutLock(
+    virtual bcos::protocol::Transaction::Ptr removeSubmittedTxWithoutLock(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult, bool _notify = true);
 
     virtual void notifyInvalidReceipt(bcos::crypto::HashType const& _txHash,
         bcos::protocol::TransactionStatus _status,
         bcos::protocol::TxSubmitCallback _txSubmitCallback);
 
-    virtual void notifyTxResult(bcos::protocol::Transaction const& _tx,
-        bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult);
+    virtual void notifyTxResult(bcos::protocol::Transaction& transaction,
+        bcos::protocol::TransactionSubmitResult::Ptr txSubmitResult);
 
-    virtual void removeInvalidTxs();
-
-    virtual void preCommitTransaction(bcos::protocol::Transaction::ConstPtr _tx);
+    virtual void removeInvalidTxs(bool lock);
 
     virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
     virtual void cleanUpExpiredTransactions();
@@ -132,19 +130,18 @@ protected:
 
 protected:
     TxPoolConfig::Ptr m_config;
-    ThreadPool::Ptr m_notifier;
-    ThreadPool::Ptr m_worker;
 
-    tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::ConstPtr,
+    tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
         std::hash<bcos::crypto::HashType>>
         m_txsTable;
-
     mutable SharedMutex x_txpoolMutex;
 
-    tbb::concurrent_set<bcos::crypto::HashType> m_invalidTxs;
-    tbb::concurrent_set<bcos::protocol::NonceType> m_invalidNonces;
-
-    tbb::concurrent_set<bcos::crypto::HashType> m_missedTxs;
+    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
+        m_invalidTxs;
+    tbb::concurrent_unordered_set<bcos::protocol::NonceType, std::hash<bcos::crypto::HashType>>
+        m_invalidNonces;
+    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
+        m_missedTxs;
     mutable SharedMutex x_missedTxs;
     std::atomic<size_t> m_sealedTxsSize = {0};
 
@@ -152,7 +149,7 @@ protected:
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     std::atomic_bool m_printed = {false};
-    int64_t m_blockNumberUpdatedTime;
+    uint64_t m_blockNumberUpdatedTime;
 
     // the txs expiration time, default is 10 minutes
     int64_t m_txsExpirationTime = 10 * 60 * 1000;
@@ -163,10 +160,7 @@ protected:
     uint64_t c_maxTraverseTxsNum = 10000;
 
     // for tps stat
-    std::atomic<int64_t> m_tpsStatstartTime = {0};
-    std::atomic<int64_t> m_onChainTxsCount = {0};
-
-    bool m_preStoreTxs = {true};
+    std::atomic_uint64_t m_tpsStatstartTime = {0};
+    std::atomic_uint64_t m_onChainTxsCount = {0};
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

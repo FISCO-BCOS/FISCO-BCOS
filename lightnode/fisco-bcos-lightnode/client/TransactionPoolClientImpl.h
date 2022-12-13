@@ -3,7 +3,7 @@
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
 #include "P2PClientImpl.h"
-#include <bcos-concepts/transaction_pool/TransactionPool.h>
+#include <bcos-concepts/transaction-pool/TransactionPool.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <bcos-utilities/FixedBytes.h>

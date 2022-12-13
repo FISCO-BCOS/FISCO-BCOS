@@ -29,8 +29,8 @@ public:
         bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr)
       : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName), m_dataEncrypt(_dataEncrypt)
     {
-        initCert2PubHexHandler();
         initSSLContextPubHexHandler();
+        initCert2PubHexHandler();
     }
 
     virtual ~GatewayFactory() = default;

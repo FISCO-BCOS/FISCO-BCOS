@@ -47,16 +47,8 @@ void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _las
 void StateMachine::asyncPreApply(
     ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished)
 {
-    auto self = weak_from_this();
-    // Note: async here to increase performance, trigger preExecuteBlock
-    m_schedulerWorker->enqueue([self, _proposal, _onPreApplyFinished]() {
-        auto stateMachine = self.lock();
-        if (!stateMachine)
-        {
-            return;
-        }
-        stateMachine->preApply(_proposal, _onPreApplyFinished);
-    });
+    // TODO: deal with preexec and exec, fix txpool
+    preApply(std::move(_proposal), std::move(_onPreApplyFinished));
 }
 
 void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedProposal,
@@ -91,7 +83,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
         ParentInfoList parentInfoList;
         ParentInfo parentInfo{_lastAppliedProposal->index(), _lastAppliedProposal->hash()};
         parentInfoList.push_back(parentInfo);
-        blockHeader->setParentInfo(std::move(parentInfoList));
+        blockHeader->setParentInfo(parentInfoList);
         CONSENSUS_LOG(DEBUG) << LOG_DESC("setParentInfo for the proposal")
                              << LOG_KV("proposalIndex", _proposal->index())
                              << LOG_KV("lastAppliedProposal", _lastAppliedProposal->index())
@@ -103,6 +95,8 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
                              << LOG_KV("lastAppliedIndex", _lastAppliedProposal->index())
                              << LOG_KV("proposal", _proposal->index());
     }
+    blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+
     // calls dispatcher to execute the block
     auto startT = utcTime();
     m_scheduler->executeBlock(block, false,

@@ -44,8 +44,14 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     transaction.data.chainID = _chainId;
     transaction.data.groupID = _groupId;
     transaction.data.abi = _abi;
-    auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(_cryptoSuite,
+    auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+    std::visit(
+        [&pbTransaction](
+            auto&& hasher) { pbTransaction->calculateHash<std::decay_t<decltype(hasher)>>(); },
+        _cryptoSuite->hashImpl()->hasher());
+
+
     auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->setSignatureData(*signData);
     pbTransaction->forceSender(_keyPair->address(_cryptoSuite->hashImpl()).asBytes());
@@ -98,7 +104,7 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     std::cout << "### to:" << *toHexString(pbTransaction->to()) << std::endl;
 #endif
     // decode
-    auto decodedTransaction = factory->createTransaction(encodedData, true);
+    auto decodedTransaction = factory->createTransaction(bcos::ref(encodedData), true);
     checkTransaction(pbTransaction, decodedTransaction);
     return decodedTransaction;
 }
