@@ -64,27 +64,6 @@ evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 }
 }  // namespace
 
-HostContext::HostContext(CallParameters::UniquePtr callParameters,
-    std::shared_ptr<TransactionExecutive> executive, std::string tableName)
-  : evmc_host_context(),
-    m_callParameters(std::move(callParameters)),
-    m_executive(std::move(executive)),
-    m_tableName(std::move(tableName))
-{
-    interface = getHostInterface();
-    wasm_interface = getWasmHostInterface();
-
-    hash_fn = evm_hash_fn;
-    version = m_executive->blockContext().lock()->blockVersion();
-    isSMCrypto = false;
-
-    if (hashImpl() && hashImpl()->getHashImplType() == crypto::HashImplType::Sm3Hash)
-    {
-        isSMCrypto = true;
-    }
-    metrics = &ethMetrics;
-}
-
 std::string HostContext::get(const std::string_view& _key)
 {
     auto entry = m_executive->storage().getRow(m_tableName, _key);

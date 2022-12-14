@@ -21,10 +21,13 @@
 
 #pragma once
 
+#include "../CallParameters.h"
+#include "../Common.h"
+#include "../Executive.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-framework/storage/Table.h"
-#include <bcos-framework/protocol/Protocol.h>
+#include <bcos-framework/storage2/Storage2.h>
+#include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
@@ -33,12 +36,17 @@
 #include <map>
 #include <memory>
 
-namespace bcos
+namespace bcos::transaction_executor
 {
-namespace executor
-{
-class TransactionExecutive;
 
+evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
+{
+    // TODO: add hash impl
+    // return toEvmC(HostContext::hashImpl()->hash(bytesConstRef(data, size)));
+    return {};
+}
+
+template <class CallParametersType, storage2::Storage Storage>
 class HostContext : public evmc_host_context
 {
 public:
@@ -46,8 +54,20 @@ public:
     using UniqueConstPtr = std::unique_ptr<const HostContext>;
 
     /// Full constructor.
-    HostContext(CallParameters::UniquePtr callParameters,
-        std::shared_ptr<TransactionExecutive> executive, std::string tableName);
+    HostContext(CallParametersType& callParameters, Storage& storage, std::string tableName)
+      : m_callParameters(callParameters), m_storage(storage), m_tableName(std::move(tableName))
+    {
+        hash_fn = evm_hash_fn;
+        // version = m_executive->blockContext().lock()->blockVersion();
+        isSMCrypto = false;
+        if (hashImpl() && hashImpl()->getHashImplType() == crypto::HashImplType::Sm3Hash)
+        {
+            isSMCrypto = true;
+        }
+
+        constexpr static evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
+        metrics = &ethMetrics;
+    }
     virtual ~HostContext() noexcept = default;
 
     HostContext(HostContext const&) = delete;
@@ -55,33 +75,144 @@ public:
     HostContext(HostContext&&) = delete;
     HostContext& operator=(HostContext&&) = delete;
 
-    std::string get(const std::string_view& _key);
-
-    void set(const std::string_view& _key, std::string _value);
-
     /// Read storage location.
-    evmc_bytes32 store(const evmc_bytes32* key);
+    evmc_bytes32 store(const evmc_bytes32* key)
+    {
+        auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+
+        auto entry = task::syncWait(
+            m_storage.getRow(m_tableName, keyView));  // Use syncWait because evm doesn't know task
+
+        evmc_bytes32 result;
+        if (entry)
+        {
+            auto field = entry->getField(0);
+            std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
+        }
+        else
+        {
+            std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
+        }
+        return result;
+    }
 
     /// Write a value in storage.
     // void setStore(const u256& _n, const u256& _v);
-    void setStore(const evmc_bytes32* key, const evmc_bytes32* value);
+    void setStore(const evmc_bytes32* key, const evmc_bytes32* value)
+    {
+        auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+        bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
+
+        storage::Entry entry;
+        entry.importFields({std::move(valueBytes)});
+        task::syncWait(m_storage.setRow(
+            m_tableName, keyView, std::move(entry)));  // Use syncWait because evm doesn't know task
+    }
 
     /// Create a new contract.
-    evmc_result externalRequest(const evmc_message* _msg);
+    evmc_result externalRequest(const evmc_message* _msg)
+    {
+        // Convert evmc_message to CallParameters
+        auto request = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+
+        request->senderAddress = myAddress();
+        request->origin = origin();
+        request->status = 0;
+
+        switch (_msg->kind)
+        {
+        case EVMC_CREATE2:
+            request->createSalt = fromEvmC(_msg->create2_salt);
+            break;
+        case EVMC_CALL:
+            if (m_executive->blockContext().lock()->isWasm())
+            {
+                request->receiveAddress.assign((char*)_msg->destination_ptr, _msg->destination_len);
+            }
+            else
+            {
+                request->receiveAddress = evmAddress2String(_msg->destination);
+            }
+
+            request->codeAddress = request->receiveAddress;
+            request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+            break;
+        case EVMC_DELEGATECALL:
+        case EVMC_CALLCODE:
+        {
+            if (!m_executive->blockContext().lock()->isWasm())
+            {
+                if (blockContext->blockVersion() >=
+                    (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+                {
+                    request->delegateCall = true;
+                    request->codeAddress = evmAddress2String(_msg->destination);
+                    request->delegateCallSender = evmAddress2String(_msg->sender);
+                    request->receiveAddress = codeAddress();
+                    request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+                    break;
+                }
+            }
+
+            // old logic
+            evmc_result result;
+            result.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION);
+            result.release = nullptr;  // no output to release
+            result.gas_left = 0;
+            return result;
+        }
+        case EVMC_CREATE:
+            request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+            request->create = true;
+            break;
+        }
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        {
+            request->logEntries = std::move(m_callParameters->logEntries);
+        }
+        request->gas = _msg->gas;
+        // if (built in precompiled) then execute locally
+
+        if (m_executive->isBuiltInPrecompiled(request->receiveAddress))
+        {
+            return callBuiltInPrecompiled(request, false);
+        }
+        if (!blockContext->isWasm() && m_executive->isEthereumPrecompiled(request->receiveAddress))
+        {
+            return callBuiltInPrecompiled(request, true);
+        }
+
+        request->staticCall = m_callParameters->staticCall;
+
+        auto response = m_executive->externalCall(std::move(request));
+
+        // Convert CallParameters to evmc_resultx
+        evmc_result result{.status_code = toEVMStatus(response, *blockContext),
+            .gas_left = response->gas,
+            .output_data = response->data.data(),
+            .output_size = response->data.size(),
+            .release = nullptr,  // TODO: check if the response data need to release
+            .create_address = toEvmC(boost::algorithm::unhex(response->newEVMContractAddress)),
+            .padding = {}};
+
+        // Put response to store in order to avoid data lost
+        m_responseStore.emplace_back(std::move(response));
+
+        return result;
+    }
 
     evmc_status_code toEVMStatus(
-        std::unique_ptr<CallParameters> const& response, const BlockContext& blockContext);
+        CallParametersType const& response, const BlockContext& blockContext);
 
-    evmc_result callBuiltInPrecompiled(
-        std::unique_ptr<CallParameters> const& _request, bool _isEvmPrecompiled);
+    evmc_result callBuiltInPrecompiled(CallParametersType const& _request, bool _isEvmPrecompiled);
 
-    virtual bool setCode(bytes code);
+    bool setCode(bytes code);
 
     void setCodeAndAbi(bytes code, std::string abi);
 
-    size_t codeSizeAt(const std::string_view& address);
+    size_t codeSizeAt(std::string_view address);
 
-    h256 codeHashAt(const std::string_view& address);
+    h256 codeHashAt(std::string_view address);
 
     /// Does the account exist?
     bool exists(const std::string_view&) { return true; }
@@ -134,7 +265,7 @@ public:
         }
     }
 
-    CallParameters::UniquePtr&& takeCallParameters()
+    CallParametersType takeCallParameters()
     {
         if (m_executive->blockContext().lock()->blockVersion() >=
             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
@@ -154,7 +285,7 @@ public:
     bool isWasm();
 
 protected:
-    const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
+    const CallParametersType& getCallParameters() const { return m_callParameters; }
     virtual bcos::bytes externalCodeRequest(const std::string_view& address);
 
 private:
@@ -163,15 +294,14 @@ private:
     void depositNotFungibleAsset(const std::string_view& _to, const std::string& _assetName,
         uint64_t _assetID, const std::string& _uri);
 
-    CallParameters::UniquePtr m_callParameters;
-    std::shared_ptr<TransactionExecutive> m_executive;
+    CallParametersType& m_callParameters;
+    Storage& m_storage;
     std::string m_tableName;
 
     u256 m_salt;     ///< Values used in new address construction by CREATE2
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
-    std::list<CallParameters::UniquePtr> m_responseStore;
+    std::list<CallParametersType> m_responseStore;
 };
 
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::transaction_executor

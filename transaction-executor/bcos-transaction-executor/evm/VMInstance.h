@@ -20,88 +20,13 @@
  */
 
 #pragma once
+#include "../Common.h"
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 
 namespace bcos::transaction_executor
 {
 class HostContext;
-
-struct VMSchedule
-{
-    VMSchedule() : tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}) {}
-    VMSchedule(bool _efcd, bool _hdc, unsigned const& _txCreateGas)
-      : tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}),
-        exceptionalFailedCodeDeposit(_efcd),
-        haveDelegateCall(_hdc),
-        txCreateGas(_txCreateGas)
-    {}
-
-    std::array<unsigned, 8> tierStepGas;
-    bool exceptionalFailedCodeDeposit = true;
-    bool haveDelegateCall = false;
-    constexpr static bool eip150Mode = true;
-    constexpr static bool eip158Mode = true;
-    constexpr static bool haveBitwiseShifting = false;
-    constexpr static bool haveRevert = true;
-    constexpr static bool haveReturnData = true;
-    constexpr static bool haveStaticCall = true;
-    constexpr static bool haveCreate2 = true;
-    constexpr static bool haveExtcodehash = false;
-    constexpr static bool enableIstanbul = false;
-    constexpr static bool enableLondon = false;
-    /// gas cost for specified calculation
-    /// exp gas cost
-    constexpr static unsigned expGas = 10;
-    constexpr static unsigned expByteGas = 10;
-    /// sha3 gas cost
-    constexpr static unsigned sha3Gas = 30;
-    constexpr static unsigned sha3WordGas = 6;
-    /// load/store gas cost
-    constexpr static unsigned sloadGas = 50;
-    constexpr static unsigned sstoreSetGas = 20000;
-    constexpr static unsigned sstoreResetGas = 5000;
-    constexpr static unsigned sstoreRefundGas = 15000;
-    /// jump gas cost
-    constexpr static unsigned jumpdestGas = 1;
-    /// log gas cost
-    constexpr static unsigned logGas = 375;
-    constexpr static unsigned logDataGas = 8;
-    constexpr static unsigned logTopicGas = 375;
-    /// creat contract gas cost
-    constexpr static unsigned createGas = 32000;
-    /// call function of contract gas cost
-    constexpr static unsigned callGas = 40;
-    constexpr static unsigned callStipend = 2300;
-    constexpr static unsigned callValueTransferGas = 9000;
-    constexpr static unsigned callNewAccountGas = 25000;
-
-    constexpr static unsigned suicideRefundGas = 24000;
-    constexpr static unsigned memoryGas = 3;
-    constexpr static unsigned quadCoeffDiv = 512;
-    constexpr static unsigned createDataGas = 20;
-    /// transaction related gas
-    constexpr static unsigned txGas = 21000;
-    unsigned txCreateGas = 53000;
-    constexpr static unsigned txDataZeroGas = 4;
-    constexpr static unsigned txDataNonZeroGas = 68;
-    constexpr static unsigned copyGas = 3;
-    /// extra code related gas
-    constexpr static unsigned extcodesizeGas = 20;
-    constexpr static unsigned extcodecopyGas = 20;
-    constexpr static unsigned extcodehashGas = 400;
-    constexpr static unsigned balanceGas = 20;
-    constexpr static unsigned suicideGas = 0;
-    constexpr static unsigned blockhashGas = 20;
-    unsigned maxCodeSize = unsigned(-1);
-
-    // boost::optional<u256> blockRewardOverwrite;
-
-    static bool staticCallDepthLimit() { return !eip150Mode; }
-    static bool suicideChargesNewAccountGas() { return eip150Mode; }
-    static bool emptinessIsNonexistence() { return eip158Mode; }
-    static bool zeroValueTransferChargesNewAccountGas() { return !eip158Mode; }
-};
 
 class Result : public evmc_result
 {
@@ -175,7 +100,7 @@ public:
         }
     }
 
-    ~VMInstance() { m_instance->destroy(m_instance); }
+    ~VMInstance() noexcept { m_instance->destroy(m_instance); }
 
     VMInstance(VMInstance const&) = delete;
     VMInstance& operator=(VMInstance) = delete;
