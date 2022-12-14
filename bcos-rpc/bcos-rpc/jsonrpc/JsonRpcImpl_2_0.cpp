@@ -556,7 +556,9 @@ void JsonRpcImpl_2_0::getTransaction(std::string_view _groupID, std::string_view
                 if (_requireProof && _transactionProofsPtr && !_transactionProofsPtr->empty())
                 {
                     auto transactionProofPtr = _transactionProofsPtr->begin()->second;
-                    addProofToResponse(jResp, "transactionProof", transactionProofPtr);
+                    // for compatibility
+                    addProofToResponse(jResp, "transactionProof", std::make_shared<ledger::MerkleProof>());
+                    addProofToResponse(jResp, "txProof", transactionProofPtr);
                 }
             }
             else
@@ -630,7 +632,9 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
 
             if (_requireProof && _merkleProofPtr)
             {
-                addProofToResponse(jResp, "receiptProof", _merkleProofPtr);
+                addProofToResponse(jResp, "receiptProof", std::make_shared<ledger::MerkleProof>());
+                // for compatibility
+                addProofToResponse(jResp, "txReceiptProof", _merkleProofPtr);
             }
 
             // fetch transaction proof
