@@ -662,6 +662,7 @@ void SchedulerImpl::registerExecutor(std::string name,
     bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
     std::function<void(Error::Ptr&&)> callback)
 {
+    // TODO: to be removed, it should not be called
     try
     {
         SCHEDULER_LOG(INFO) << "registerExecutor request: " << LOG_KV("name", name);
