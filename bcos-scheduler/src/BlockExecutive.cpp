@@ -87,7 +87,7 @@ void BlockExecutive::prepare()
 
     SCHEDULER_LOG(INFO) << METRIC << LOG_BADGE("prepareBlockExecutive") << BLOCK_NUMBER(number())
                         << LOG_KV("blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
-                        << LOG_KV("meta tx count", m_block->transactionsMetaDataSize())
+                        << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
                         << LOG_KV("timeCost", (utcTime() - startT));
 }
 
@@ -264,7 +264,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
     SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number())
                         << "BlockExecutive prepare: buildExecutivesFromNormalTransaction"
                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                        << LOG_KV("tx count", m_block->transactionsSize());
+                        << LOG_KV("txCount", m_block->transactionsSize());
 
     m_executiveResults.resize(m_block->transactionsSize());
     std::vector<std::tuple<std::string, protocol::ExecutionMessage::UniquePtr, bool>> results(
