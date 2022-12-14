@@ -504,34 +504,18 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 void JsonRpcImpl_2_0::addProofToResponse(
     Json::Value& jResp, const std::string& _key, ledger::MerkleProofPtr _merkleProofPtr)
 {
-    // Nothing to do!
     if (!_merkleProofPtr)
     {
         return;
     }
 
     RPC_IMPL_LOG(TRACE) << LOG_DESC("addProofToResponse") << LOG_KV("key", _key)
-                        << LOG_KV("key", _key) << LOG_KV("merkleProofPtr",
-                        _merkleProofPtr->size());
+                        << LOG_KV("key", _key) << LOG_KV("merkleProofPtr", _merkleProofPtr->size());
 
     uint32_t index = 0;
-    for (const auto& merkleItem : *_merkleProofPtr)
-    {
-        jResp[_key][index]["left"] = Json::arrayValue;
-        jResp[_key][index]["right"] = Json::arrayValue;
-        const auto& left = merkleItem.first;
-        for (const auto& item : left)
-        {
-            jResp[_key][index]["left"].append(item);
-        }
-
-        const auto& right = merkleItem.second;
-        for (const auto& item : right)
-        {
-            jResp[_key][index]["right"].append(item);
-        }
-        ++index;
-    }
+    jResp[_key] = Json::arrayValue;
+    std::for_each(_merkleProofPtr->begin(), _merkleProofPtr->end(),
+        [&jResp, &_key](const auto& item) { jResp[_key].append(item.hex()); });
 }
 
 void JsonRpcImpl_2_0::getTransaction(std::string_view _groupID, std::string_view _nodeName,
