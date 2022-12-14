@@ -62,7 +62,6 @@ evmc_storage_status setStorage(evmc_host_context* context,
     [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key, const evmc_bytes32* value)
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
-
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
     auto status = EVMC_STORAGE_MODIFIED;
