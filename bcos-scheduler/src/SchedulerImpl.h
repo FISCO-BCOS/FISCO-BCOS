@@ -110,6 +110,10 @@ public:
 
     inline void fetchGasLimit(protocol::BlockNumber _number = -1)
     {
+        if (m_gasLimit > 0)
+        {
+            return;
+        }
         SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
                             << LOG_KV("requestBlockNumber", _number);
         if (_number == -1)
@@ -233,7 +237,7 @@ private:
 
     std::atomic_int64_t m_calledContextID = 1;
 
-    uint64_t m_gasLimit = TRANSACTION_GAS;
+    uint64_t m_gasLimit = 0;
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;

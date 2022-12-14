@@ -37,7 +37,6 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
 
     try
     {
-
         if (m_blocks->empty())
         {
             bcos::protocol::BlockNumber number = currentNumber;
@@ -166,8 +165,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     SCHEDULER_LOG(INFO) << METRIC << BLOCK_NUMBER(requestBlockNumber) << "ExecuteBlock request"
                         << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("verify", verify)
                         << LOG_KV("signatureSize", signature.size())
-                        << LOG_KV("tx count", block->transactionsSize())
-                        << LOG_KV("meta tx count", block->transactionsMetaDataSize())
+                        << LOG_KV("txCount", block->transactionsSize())
+                        << LOG_KV("metaTxCount", block->transactionsMetaDataSize())
                         << LOG_KV("version", (bcos::protocol::BlockVersion)(block->version()))
                         << LOG_KV("waitT", waitT);
 
@@ -498,6 +497,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                         m_blocks->pop_front();
                     }
                 }
+                fetchGasLimit();
                 commitLock->unlock();
                 callback(BCOS_ERROR_UNIQUE_PTR(
                              error->errorCode(), "CommitBlock error: " + error->errorMessage()),
@@ -796,7 +796,7 @@ void SchedulerImpl::preExecuteBlock(
     auto startT = utcTime();
     SCHEDULER_LOG(INFO) << BLOCK_NUMBER(block->blockHeaderConst()->number())
                         << "preExeBlock request"
-                        << LOG_KV("tx count",
+                        << LOG_KV("txCount",
                                block->transactionsSize() + block->transactionsMetaDataSize())
                         << LOG_KV("startT(ms)", startT);
 
