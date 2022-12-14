@@ -11,10 +11,10 @@ class ServiceCommandImpl:
         self.service_controller = ServiceController(
             config, service_type, node_type, output_dir)
 
-    def gen_service_config(self, is_build_opr = False):
+    def gen_service_config(self):
         utilities.print_split_info()
         utilities.print_badge("generate service config")
-        ret = self.service_controller.gen_all_service_config(is_build_opr)
+        ret = self.service_controller.gen_all_service_config()
         if ret is True:
             utilities.print_badge("generate service config success")
         else:
