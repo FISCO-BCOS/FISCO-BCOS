@@ -34,7 +34,7 @@ public:
     {
         m_nodeAliveDetector =
             std::make_shared<Timer>(c_tarsAdminRefreshTimeInterval, "nodeUpdater");
-        m_nodeAliveDetector->registerTimeoutHandler([this]() { DetectNodeAlive(); });
+        m_nodeAliveDetector->registerTimeoutHandler([this]() { detectNodeAlive(); });
     }
 
     void start() override
@@ -50,13 +50,13 @@ public:
     bool updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
 
 private:
-    virtual void DetectNodeAlive();
+    virtual void detectNodeAlive();
 
 private:
     std::shared_ptr<Timer> m_nodeAliveDetector;
-    // Note: since tars need at-least 1min to update the endpoint info, we schedule DetectNodeAlive
+    // Note: since tars need at-least 1min to update the endpoint info, we schedule detectNodeAlive
     // every 1min
-    uint64_t c_tarsAdminRefreshTimeInterval = 60 * 1000;
+    uint64_t c_tarsAdminRefreshTimeInterval = 30 * 1000;
 };
 }  // namespace gateway
 }  // namespace bcos
