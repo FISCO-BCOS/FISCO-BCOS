@@ -596,7 +596,7 @@ void TransactionSync::maintainTransactions()
         m_newTransactions = false;
         return;
     }
-    broadcastTxsFromRpc(connectedNodeList, consensusNodeList, txs);
+    broadcastTxsFromRpc(consensusNodeList, txs);
     forwardTxsFromP2P(connectedNodeList, consensusNodeList, txs);
 }
 
@@ -683,7 +683,7 @@ NodeIDListPtr TransactionSync::selectPeers(Transaction::ConstPtr _tx,
     return selectedPeers;
 }
 
-void TransactionSync::broadcastTxsFromRpc(NodeIDSet const& _connectedPeers,
+void TransactionSync::broadcastTxsFromRpc(
     ConsensusNodeList const& _consensusNodeList, ConstTransactionsPtr _txs)
 {
     auto block = m_config->blockFactory()->createBlock();
@@ -696,10 +696,6 @@ void TransactionSync::broadcastTxsFromRpc(NodeIDSet const& _connectedPeers,
         }
         for (auto const& node : _consensusNodeList)
         {
-            if (!_connectedPeers.contains(node->nodeID()))
-            {
-                continue;
-            }
             tx->appendKnownNode(node->nodeID());
         }
         block->appendTransaction(std::const_pointer_cast<Transaction>(tx));
