@@ -8,7 +8,7 @@
 #include <bcos-gateway/libnetwork/Message.h>  // for Message
 #include <bcos-gateway/libnetwork/PeerBlacklist.h>
 #include <bcos-gateway/libnetwork/PeerWhitelist.h>
-#include <bcos-utilities/Common.h>            // for Guard, Mutex
+#include <bcos-utilities/Common.h>  // for Guard, Mutex
 #include <bcos-utilities/ThreadPool.h>
 #include <openssl/x509.h>
 #include <boost/asio/deadline_timer.hpp>  // for deadline_timer
@@ -96,6 +96,18 @@ public:
         m_sslContextPubHandler = _sslContextPubHandler;
     }
 
+    virtual std::function<bool(X509* x509, std::string& pubHex)>
+    sslContextPubHandlerWithoutExtInfo()
+    {
+        return m_sslContextPubHandlerWithoutExtInfo;
+    }
+
+    virtual void setSSLContextPubHandlerWithoutExtInfo(
+        std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo)
+    {
+        m_sslContextPubHandlerWithoutExtInfo = _sslContextPubHandlerWithoutExtInfo;
+    }
+
     virtual std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
     virtual void setThreadPool(std::shared_ptr<bcos::ThreadPool> threadPool)
     {
@@ -107,9 +119,15 @@ public:
     virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
     virtual P2PInfo p2pInfo();
 
-    virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist) { m_peerBlacklist = _peerBlacklist; }
+    virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist)
+    {
+        m_peerBlacklist = _peerBlacklist;
+    }
     virtual PeerBlackWhitelistInterface::Ptr peerBlacklist() { return m_peerBlacklist; }
-    virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist) { m_peerWhitelist = _peerWhitelist; }
+    virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist)
+    {
+        m_peerWhitelist = _peerWhitelist;
+    }
     virtual PeerBlackWhitelistInterface::Ptr peerWhitelist() { return m_peerWhitelist; }
 
 private:
@@ -177,14 +195,15 @@ private:
 
     // get the hex public key of the peer from the the SSL connection
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandler;
+    std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
 
     bool m_run = false;
 
     P2PInfo m_p2pInfo;
 
     // Peer black list
-    PeerBlackWhitelistInterface::Ptr m_peerBlacklist{ nullptr };
-    PeerBlackWhitelistInterface::Ptr m_peerWhitelist{ nullptr };
+    PeerBlackWhitelistInterface::Ptr m_peerBlacklist{nullptr};
+    PeerBlackWhitelistInterface::Ptr m_peerWhitelist{nullptr};
 };
 }  // namespace gateway
 

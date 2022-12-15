@@ -30,19 +30,27 @@ public:
       : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName), m_dataEncrypt(_dataEncrypt)
     {
         initSSLContextPubHexHandler();
+        initSSLContextPubHexHandlerWithoutExtInfo();
         initCert2PubHexHandler();
     }
 
     virtual ~GatewayFactory() = default;
 
-    // init the function calc public hex from the cert
-    void initCert2PubHexHandler();
     // init the function calc public key from the ssl context
     void initSSLContextPubHexHandler();
+    // init the function calc public key from the ssl context
+    void initSSLContextPubHexHandlerWithoutExtInfo();
+    // init the function calc public hex from the cert
+    void initCert2PubHexHandler();
 
     std::function<bool(X509* cert, std::string& pubHex)> sslContextPubHandler()
     {
         return m_sslContextPubHandler;
+    }
+
+    std::function<bool(X509* cert, std::string& pubHex)> sslContextPubHandlerWithoutExtInfo()
+    {
+        return m_sslContextPubHandlerWithoutExtInfo;
     }
 
     std::function<bool(const std::string& priKey, std::string& pubHex)> certPubHexHandler()
@@ -115,6 +123,7 @@ protected:
 
 private:
     std::function<bool(X509* cert, std::string& pubHex)> m_sslContextPubHandler;
+    std::function<bool(X509* cert, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
 
     std::function<bool(const std::string& priKey, std::string& pubHex)> m_certPubHexHandler;
 

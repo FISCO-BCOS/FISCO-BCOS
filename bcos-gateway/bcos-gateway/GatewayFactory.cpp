@@ -143,6 +143,29 @@ void GatewayFactory::initCert2PubHexHandler()
 void GatewayFactory::initSSLContextPubHexHandler()
 {
     auto handler = [](X509* x509, std::string& _pubHex) -> bool {
+        ASN1_BIT_STRING* pubKey =
+            X509_get0_pubkey_bitstr(x509);  // csc->current_cert is an X509 struct
+        if (pubKey == NULL)
+        {
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_DESC("initSSLContextPubHexHandler X509_get0_pubkey_bitstr error");
+            return false;
+        }
+
+        auto hex = bcos::toHexString(pubKey->data, pubKey->data + pubKey->length, "");
+        _pubHex = *hex.get();
+
+        GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("[NEW]SSLContext pubHex: " + _pubHex);
+        return true;
+    };
+
+    m_sslContextPubHandler = handler;
+}
+
+// register the function fetch public key from the ssl context
+void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
+{
+    auto handler = [](X509* x509, std::string& _pubHex) -> bool {
         EVP_PKEY* pKey = X509_get_pubkey(x509);
         if (nullptr == pKey)
         {
@@ -221,7 +244,7 @@ void GatewayFactory::initSSLContextPubHexHandler()
         return true;
     };
 
-    m_sslContextPubHandler = handler;
+    m_sslContextPubHandlerWithoutExtInfo = handler;
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
@@ -584,6 +607,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         host->setHostPort(_config->listenIP(), _config->listenPort());
         host->setThreadPool(std::make_shared<ThreadPool>("P2P", _config->threadPoolSize()));
         host->setSSLContextPubHandler(m_sslContextPubHandler);
+        host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
         host->setPeerBlacklist(peerBlacklist);
         host->setPeerWhitelist(peerWhitelist);
 
