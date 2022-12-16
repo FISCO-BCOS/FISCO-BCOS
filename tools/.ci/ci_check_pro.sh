@@ -27,7 +27,6 @@ stop_node()
     LOG_INFO "exit_node >>>>>>> stop all pro nodes <<<<<<<<<<<"
     if [ -z "$(bash ${output_dir}/127.0.0.1/stop_all.sh |grep 'Exceed waiting time')" ];then
       LOG_ERROR "Stop success"
-      exit 1
     else
       LOG_ERROR "Could not stop the node"
       exit 1
