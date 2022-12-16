@@ -762,9 +762,14 @@ void BlockSync::broadcastSyncStatus()
                        << LOG_KV("number", statusMsg->number())
                        << LOG_KV("genesisHash", statusMsg->genesisHash().abridged())
                        << LOG_KV("currentHash", statusMsg->hash().abridged());
-    m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
-        ModuleID::BlockSync, ref(*encodedData));
+    // Note: only send status to the observers/sealers, but the OUTSIDE_GROUP node node maybe
+    // observer/sealer before sync to the highest here can't use asyncSendBroadcastMessage
+    auto const& groupNodeList = m_config->groupNodeList();
+    for (auto const& nodeID : groupNodeList)
+    {
+        m_config->frontService()->asyncSendMessageByNodeID(
+            ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+    }
 }
 
 bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)
