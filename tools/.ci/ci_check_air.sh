@@ -14,12 +14,23 @@ LOG_INFO() {
     echo -e "\033[32m ${content}\033[0m"
 }
 
+LOG_WARN() {
+    local content=${1}
+    echo -e "\033[31m[ERROR] ${content}\033[0m"
+}
+
 stop_node()
 {
     cd ${current_path}
     LOG_INFO "exit_node >>>>>>> stop all nodes <<<<<<<<<<<"
-    bash nodes/127.0.0.1/stop_all.sh
+    if [ -z "$(bash nodes/127.0.0.1/stop_all.sh |grep 'Exceed waiting time')" ];then
+        LOG_ERROR "Stop success"
+    else
+        LOG_ERROR "Could not stop the node"
+        exit 1
+    fi
 }
+
 exit_node()
 {
     cd ${current_path}
@@ -37,6 +48,19 @@ exit_node()
     exit 1
 }
 
+wait_and_start()
+{
+    LOG_INFO "Try to start all"
+    if [ -z "$(bash start_all.sh | grep 'Exceed waiting time')" ]; then
+        LOG_INFO "Start all success"
+    else
+        bash stop_all.sh
+        LOG_WARN "Another testing is running. Waiting 20s and re-try to start all."
+        sleep 20
+        wait_and_start
+    fi
+}
+
 init() 
 {
     sm_option="${1}"
@@ -45,7 +69,7 @@ init()
     ${fisco_bcos_path} -v
     rm -rf nodes
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
-    cd nodes/127.0.0.1 && bash start_all.sh
+    cd nodes/127.0.0.1 && wait_and_start
 }
 
 check_consensus()
