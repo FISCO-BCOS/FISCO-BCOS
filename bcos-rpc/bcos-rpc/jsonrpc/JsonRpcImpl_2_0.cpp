@@ -470,8 +470,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
                 if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
                 {
-                    BOOST_THROW_EXCEPTION(
-                        bcos::Error(submitResult->status(), toString(submitResult->status())));
+                    BOOST_THROW_EXCEPTION(bcos::Error(submitResult->status(),
+                        toString((protocol::TransactionStatus)submitResult->status())));
                 }
 
                 toJsonResp(jResp, hexPreTxHash, (protocol::TransactionStatus)submitResult->status(),
@@ -557,7 +557,8 @@ void JsonRpcImpl_2_0::getTransaction(std::string_view _groupID, std::string_view
                 {
                     auto transactionProofPtr = _transactionProofsPtr->begin()->second;
                     // for compatibility
-                    addProofToResponse(jResp, "transactionProof", std::make_shared<ledger::MerkleProof>());
+                    addProofToResponse(
+                        jResp, "transactionProof", std::make_shared<ledger::MerkleProof>());
                     addProofToResponse(jResp, "txProof", transactionProofPtr);
                 }
             }
