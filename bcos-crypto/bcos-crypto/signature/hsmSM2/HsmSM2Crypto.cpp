@@ -18,8 +18,8 @@
  * @date 2022.10.07
  * @author lucasli
  */
-#include "CryptoProvider.h"
-#include "sdf/SDFCryptoProvider.h"
+#include "hsm-crypto/hsm/CryptoProvider.h"
+#include "hsm-crypto/hsm/SDFCryptoProvider.h"
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
@@ -28,7 +28,6 @@
 using namespace bcos;
 using namespace bcos::crypto;
 using namespace hsm;
-using namespace hsm::sdf;
 
 #define SDR_OK 0x0
 #define SDR_BASE 0x01000000
@@ -102,14 +101,15 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     return signatureData;
 }
 
-bool HsmSM2Crypto::verify(
-    std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData) const
+bool HsmSM2Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
+    bytesConstRef _signatureData) const
 {
     return verify(
         std::make_shared<KeyImpl>(HSM_SM2_PUBLIC_KEY_LEN, _pubKeyBytes), _hash, _signatureData);
 }
 
-bool HsmSM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
+bool HsmSM2Crypto::verify(
+    PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
     // get provider
     CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);

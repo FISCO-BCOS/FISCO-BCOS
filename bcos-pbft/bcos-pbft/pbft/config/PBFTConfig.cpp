@@ -248,12 +248,11 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
         return false;
     }
     // Note: must register m_faultyDiscriminator before start the PBFTEngine
-    if (nodeList.contains(leaderNodeInfo->nodeID()) &&
-        !m_faultyDiscriminator(leaderNodeInfo->nodeID()))
+    if (!m_faultyDiscriminator(leaderNodeInfo->nodeID()))
     {
         return false;
     }
-    PBFT_LOG(INFO) << LOG_DESC("tryTriggerFastViewChange for the leader disconnect")
+    PBFT_LOG(INFO) << LOG_DESC("tryTriggerFastViewChange for the faulty leader")
                    << LOG_KV("leaderIndex", _leaderIndex)
                    << LOG_KV("leader", leaderNodeInfo->nodeID()->shortHex()) << printCurrentState();
     m_fastViewChangeHandler();

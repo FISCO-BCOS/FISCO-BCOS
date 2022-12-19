@@ -76,6 +76,7 @@ void SerialBlockExecutive::asyncExecute(
         callback(BCOS_ERROR_UNIQUE_PTR(
                      SchedulerError::ExecutorNotEstablishedError, "The executor has not started!"),
             nullptr, m_isSysBlock);
+        return;
     }
     m_currentTimePoint = std::chrono::system_clock::now();
 

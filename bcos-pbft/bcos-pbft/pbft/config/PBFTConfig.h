@@ -346,6 +346,8 @@ public:
     {
         WriteGuard l(x_connectedNodeList);
         *m_connectedNodeList = std::move(_connectedNodeList);
+        PBFT_LOG(INFO) << LOG_DESC("setConnectedNodeList")
+                       << LOG_KV("size", m_connectedNodeList->size());
     }
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet const& _connectedNodeList)
     {

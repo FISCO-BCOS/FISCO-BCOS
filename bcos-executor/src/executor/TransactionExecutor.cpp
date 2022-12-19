@@ -32,6 +32,7 @@
 #include "../executive/ExecutiveStackFlow.h"
 #include "../executive/TransactionExecutive.h"
 #include "../precompiled/BFSPrecompiled.h"
+#include "../precompiled/CastPrecompiled.h"
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/KVTablePrecompiled.h"
@@ -48,7 +49,6 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
-#include "bcos-executor/src/precompiled/CastPrecompiled.h"
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"

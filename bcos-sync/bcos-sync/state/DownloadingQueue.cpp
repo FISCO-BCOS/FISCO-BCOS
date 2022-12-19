@@ -496,60 +496,22 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
         return;
     }
     // commit transaction firstly
-    auto txsData = std::make_shared<std::vector<bytesConstPtr>>();
-    auto txsSize = _block->transactionsSize();
-    auto txsHashList = std::make_shared<HashList>();
-
-    txsData->resize(txsSize);
-    txsHashList->resize(txsSize);
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, txsSize), [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); ++i)
-            {
-                // maintain lifetime for tx
-                auto tx = _block->transaction(i);
-                bcos::bytes encodeData;
-                tx->encode(encodeData);
-                (*txsData)[i] = std::make_shared<bytes>(std::move(encodeData));
-                (*txsHashList)[i] = tx->hash();
-            }
-        });
     auto startT = utcTime();
     auto self = weak_from_this();
-    m_config->ledger()->asyncStoreTransactions(
-        txsData, txsHashList, [self, startT, _block, blockHeader](Error::Ptr _error) {
-            try
-            {
-                auto downloadingQueue = self.lock();
-                if (!downloadingQueue)
-                {
-                    return;
-                }
-                // store transaction failed
-                if (_error)
-                {
-                    BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock: store transactions failed")
-                                         << LOG_KV("number", blockHeader->number())
-                                         << LOG_KV("hash", blockHeader->hash().abridged())
-                                         << LOG_KV("txsSize", _block->transactionsSize())
-                                         << LOG_KV("code", _error->errorCode())
-                                         << LOG_KV("message", _error->errorMessage());
-                    downloadingQueue->onCommitFailed(_error, _block);
-                    return;
-                }
-                BLKSYNC_LOG(INFO) << METRIC << LOG_DESC("commitBlock: store transactions success")
-                                  << LOG_KV("number", blockHeader->number())
-                                  << LOG_KV("hash", blockHeader->hash().abridged())
-                                  << LOG_KV("txsSize", _block->transactionsSize())
-                                  << LOG_KV("storeTxsTimeCost", (utcTime() - startT));
-                downloadingQueue->commitBlockState(_block);
-            }
-            catch (std::exception const& e)
-            {
-                BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock exception")
-                                     << LOG_KV("error", boost::diagnostic_information(e));
-            }
-        });
+    try
+    {
+        auto downloadingQueue = self.lock();
+        if (!downloadingQueue)
+        {
+            return;
+        }
+        downloadingQueue->commitBlockState(_block);
+    }
+    catch (std::exception const& e)
+    {
+        BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock exception")
+                             << LOG_KV("error", boost::diagnostic_information(e));
+    }
 }
 
 void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)

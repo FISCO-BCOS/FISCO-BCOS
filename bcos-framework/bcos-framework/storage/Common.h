@@ -69,9 +69,18 @@ struct Condition
     // string compare, "12" < "2"
     void LT(const std::string& value) { m_conditions.emplace_back(Comparator::LT, value); }
     void LE(const std::string& value) { m_conditions.emplace_back(Comparator::LE, value); }
-    void STARTS_WITH(const std::string& value) { m_conditions.emplace_back(Comparator::STARTS_WITH, value); }
-    void ENDS_WITH(const std::string& value) { m_conditions.emplace_back(Comparator::ENDS_WITH, value); }
-    void CONTAINS(const std::string& value) { m_conditions.emplace_back(Comparator::CONTAINS, value); }
+    void STARTS_WITH(const std::string& value)
+    {
+        m_conditions.emplace_back(Comparator::STARTS_WITH, value);
+    }
+    void ENDS_WITH(const std::string& value)
+    {
+        m_conditions.emplace_back(Comparator::ENDS_WITH, value);
+    }
+    void CONTAINS(const std::string& value)
+    {
+        m_conditions.emplace_back(Comparator::CONTAINS, value);
+    }
     void limit(size_t start, size_t count) { m_limit = std::pair<size_t, size_t>(start, count); }
 
     std::pair<size_t, size_t> getLimit() const { return m_limit; }
@@ -144,17 +153,17 @@ struct Condition
         return true;
     }
 
-    enum class Comparator
+    enum class Comparator : uint8_t
     {
-        EQ,
-        NE,
-        GT,
-        GE,
-        LT,
-        LE,
-        STARTS_WITH,
-        ENDS_WITH,
-        CONTAINS
+        GT = 0,
+        GE = 1,
+        LT = 2,
+        LE = 3,
+        EQ = 4,
+        NE = 5,
+        STARTS_WITH = 6,
+        ENDS_WITH = 7,
+        CONTAINS = 8
     };
     struct cond
     {
@@ -193,7 +202,7 @@ struct Condition
                 break;
             case Comparator::CONTAINS:
                 cmpStr = "CONTAINS";
-                break;                
+                break;
             }
             return cmpStr + " " + value;
         }

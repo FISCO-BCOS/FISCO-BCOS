@@ -25,7 +25,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-ledger/src/libledger/utilities/Common.h"
+#include "utilities/Common.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/ThreadPool.h>

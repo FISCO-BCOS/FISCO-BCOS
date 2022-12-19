@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/consensus/ConsensusNodeInterface.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-utilities/Log.h>
 namespace bcos
 {
 namespace sync
@@ -96,12 +97,16 @@ public:
     {
         WriteGuard l(x_connectedNodeList);
         *m_connectedNodeList = _connectedNodeList;
+        BCOS_LOG(INFO) << LOG_DESC("SyncConfig: setConnectedNodeList")
+                       << LOG_KV("size", m_connectedNodeList->size());
     }
 
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet&& _connectedNodeList)
     {
         WriteGuard l(x_connectedNodeList);
         *m_connectedNodeList = std::move(_connectedNodeList);
+        BCOS_LOG(INFO) << LOG_DESC("SyncConfig: setConnectedNodeList")
+                       << LOG_KV("size", m_connectedNodeList->size());
     }
 
     virtual bool existsInGroup()

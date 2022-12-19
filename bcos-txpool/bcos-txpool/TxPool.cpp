@@ -98,8 +98,8 @@ task::Task<void> TxPool::onReceivePushTransaction(
     }
     catch (std::exception& e)
     {
-        TXPOOL_LOG(INFO) << "Submit transaction failed from p2p. "
-                         << boost::diagnostic_information(e);
+        TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
+                          << boost::diagnostic_information(e);
     }
 }
 
@@ -219,8 +219,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                     // Note: here storeVerifiedBlock will block m_verifier and decrease the
                     // proposal-verify-perf, so we async the storeVerifiedBlock here using
                     // m_txsPreStore
-                    if (!txpoolStorage->preStoreTxs() && !verifyError && verifyRet && block &&
-                        block->blockHeader())
+                    if (!verifyError && verifyRet && block && block->blockHeader())
                     {
                         txpool->m_txsPreStore->enqueue(
                             [txpool, block]() { txpool->storeVerifiedBlock(block); });

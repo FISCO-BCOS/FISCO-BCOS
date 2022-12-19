@@ -27,12 +27,12 @@ using namespace bcostars::protocol;
 void ProtocolInfoCodecImpl::encode(
     bcos::protocol::ProtocolInfo::ConstPtr _protocol, bcos::bytes& _encodeData) const
 {
-    bcostars::ProtocolInfo tarsProtcolInfo;
-    tarsProtcolInfo.moduleID = _protocol->protocolModuleID();
-    tarsProtcolInfo.minVersion = _protocol->minVersion();
-    tarsProtcolInfo.maxVersion = _protocol->maxVersion();
+    bcostars::ProtocolInfo tarsProtocolInfo;
+    tarsProtocolInfo.moduleID = _protocol->protocolModuleID();
+    tarsProtocolInfo.minVersion = (int32_t)_protocol->minVersion();
+    tarsProtocolInfo.maxVersion = (int32_t)_protocol->maxVersion();
     tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
-    tarsProtcolInfo.writeTo(output);
+    tarsProtocolInfo.writeTo(output);
     output.getByteBuffer().swap(_encodeData);
 }
 
@@ -40,12 +40,12 @@ bcos::protocol::ProtocolInfo::Ptr ProtocolInfoCodecImpl::decode(bcos::bytesConst
 {
     tars::TarsInputStream<tars::BufferReader> input;
     input.setBuffer((const char*)_data.data(), _data.size());
-    bcostars::ProtocolInfo tarsProtcolInfo;
-    tarsProtcolInfo.readFrom(input);
+    bcostars::ProtocolInfo tarsProtocolInfo;
+    tarsProtocolInfo.readFrom(input);
 
     auto protocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>();
-    protocolInfo->setProtocolModuleID((bcos::protocol::ProtocolModuleID)tarsProtcolInfo.moduleID);
-    protocolInfo->setMinVersion(tarsProtcolInfo.minVersion);
-    protocolInfo->setMaxVersion(tarsProtcolInfo.maxVersion);
+    protocolInfo->setProtocolModuleID((bcos::protocol::ProtocolModuleID)tarsProtocolInfo.moduleID);
+    protocolInfo->setMinVersion(tarsProtocolInfo.minVersion);
+    protocolInfo->setMaxVersion(tarsProtocolInfo.maxVersion);
     return protocolInfo;
 }
