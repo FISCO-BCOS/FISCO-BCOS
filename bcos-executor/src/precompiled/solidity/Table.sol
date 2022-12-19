@@ -22,7 +22,7 @@ struct UpdateField {
 enum ConditionOP {GT, GE, LT, LE, EQ, NE, STARTS_WITH, ENDS_WITH, CONTAINS}
 struct Condition {
     ConditionOP op;
-    uint32 field;
+    string field;
     string value;
 }
 
