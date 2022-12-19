@@ -38,7 +38,7 @@ public:
     {
         if (RANGES::size(keys) != RANGES::size(out))
         {
-            BOOST_THROW_EXCEPTION(UnmatchKeyEntries{});
+            concepts::resizeTo(out, RANGES::size(keys));
         }
 
         return impl().impl_getRows(tableName, keys, out);

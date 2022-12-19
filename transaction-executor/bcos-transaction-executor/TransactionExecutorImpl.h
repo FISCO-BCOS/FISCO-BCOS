@@ -16,9 +16,7 @@ public:
 
     task::Task<std::unique_ptr<protocol::TransactionReceipt>> impl_execute(
         const protocol::Transaction& transaction)
-    {
-        
-    }
+    {}
 
 private:
     protocol::BlockHeader const& m_blockHeader;

@@ -22,7 +22,7 @@
 #pragma once
 
 #include "../Common.h"
-#include "../Executive.h"
+#include "EVMHostInterface.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -50,11 +50,19 @@ class HostContext : public evmc_host_context
 {
 public:
     /// Full constructor.
-    HostContext(const protocol::BlockHeader& blockHeader, const evmc_message* message,
-        Storage& storage, std::string tableName)
-      : m_message(message), m_storage(storage), m_tableName(std::move(tableName))
+    HostContext(const protocol::BlockHeader& blockHeader, const evmc_message& message,
+        Storage& storage, std::string tableName,
+        std::function<task::Task<evmc_result>(const evmc_message&)> callMethod,
+        std::function<task::Task<h256>(int64_t)> getBlockHashMethod)
+      : evmc_host_context(),
+        m_message(message),
+        m_storage(storage),
+        m_tableName(std::move(tableName)),
+        m_callMethod(std::move(callMethod)),
+        m_getBlockHashMethod(std::move(getBlockHashMethod))
     {
-        // Set the interfaces
+        // TODO: Set the interfaces
+        interface = getHostInterface();
 
         hash_fn = evm_hash_fn;
         // version = m_executive->blockContext().lock()->blockVersion();
@@ -68,7 +76,7 @@ public:
         constexpr static evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
         metrics = &ethMetrics;
     }
-    virtual ~HostContext() noexcept = default;
+    ~HostContext() noexcept = default;
 
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
@@ -76,12 +84,10 @@ public:
     HostContext& operator=(HostContext&&) = delete;
 
     // Read storage location.
-    evmc_bytes32 store(const evmc_bytes32* key)
+    task::Task<evmc_bytes32> store(const evmc_bytes32* key)
     {
         auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
-
-        auto entry = task::syncWait(
-            m_storage.getRow(m_tableName, keyView));  // Use syncWait because evm doesn't know task
+        auto entry = co_await m_storage.getRow(m_tableName, keyView);
 
         evmc_bytes32 result;
         if (entry)
@@ -93,136 +99,142 @@ public:
         {
             std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
         }
-        return result;
+        co_return result;
     }
 
     // Write a value in storage.
-    void setStore(const evmc_bytes32* key, const evmc_bytes32* value)
+    task::Task<void> setStore(const evmc_bytes32* key, const evmc_bytes32* value)
     {
-        auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
-        bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
+        std::string_view keyView((char*)key->bytes, sizeof(key->bytes));
+        std::string_view valueView((char*)value->bytes, sizeof(value->bytes));
 
         storage::Entry entry;
-        entry.importFields({std::move(valueBytes)});
-        task::syncWait(m_storage.setRow(
-            m_tableName, keyView, std::move(entry)));  // Use syncWait because evm doesn't know task
+        entry.set(valueView);
+        co_await m_storage.setRow(m_tableName, keyView, std::move(entry));
     }
 
     // call
-    evmc_result call(const evmc_message* message)
+    task::Task<evmc_result> call(const evmc_message& message)
     {
-        auto result = m_externalCall(message);
+        auto result = co_await m_callMethod(message);
 
         // TODO: Store the log
-        return result;
+        co_return result;
     }
 
-    evmc_result callBuiltInPrecompiled(const evmc_message* message, bool _isEvmPrecompiled)
+    task::Task<evmc_result> callBuiltInPrecompiled(
+        const evmc_message* message, bool _isEvmPrecompiled)
     {
         //
     }
 
-    void setCode(crypto::HashType codeHash, bytes code)
+    task::Task<void> setCode(crypto::HashType codeHash, bytes code)
     {
         storage::Entry codeHashEntry;
         codeHashEntry.importFields({std::move(codeHash)});
 
         storage::Entry codeEntry;
         codeEntry.importFields({std::move(code)});
+
         if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
         {
             // Query the code table first
             auto oldCodeEntry =
-                m_storage.getRow(bcos::ledger::SYS_CODE_BINARY, codeHashEntry.get());
+                co_await m_storage.getRow(bcos::ledger::SYS_CODE_BINARY, codeHashEntry.get());
             if (!oldCodeEntry)
             {
-                m_storage.setRow(bcos::ledger::SYS_CODE_BINARY, codeHash, std::move(codeEntry));
+                co_await m_storage.setRow(
+                    bcos::ledger::SYS_CODE_BINARY, codeHash, std::move(codeEntry));
             }
-            m_storage.setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+            co_await m_storage.setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
 
-            return;
+            co_return;
         }
 
         // old logic
-        m_storage.setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
-        m_storage.setRow(m_tableName, ACCOUNT_CODE, std::move(codeEntry));
+        co_await m_storage.setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+        co_await m_storage.setRow(m_tableName, ACCOUNT_CODE, std::move(codeEntry));
     }
-    void setCode(bytes code) { setCode(GlobalHashImpl::g_hashImpl->hash(code), std::move(code)); }
-    void setCodeAndABI(bytes code, std::string abi)
+
+    task::Task<void> setCode(bytes code)
+    {
+        co_await setCode(GlobalHashImpl::g_hashImpl->hash(code), std::move(code));
+    }
+
+    task::Task<void> setCodeAndABI(bytes code, std::string abi)
     {
         auto codeHash = GlobalHashImpl::g_hashImpl->hash(code);
-        setCode(codeHash, std::move(code));
+        co_await setCode(codeHash, std::move(code));
 
         storage::Entry abiEntry;
         abiEntry.importFields({std::move(abi)});
         if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
         {
-            auto oldABIEntry = m_storage.getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
+            auto oldABIEntry = co_await m_storage.getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
             if (oldABIEntry)
             {
-                m_storage.setRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
+                co_await m_storage.setRow(
+                    bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
             }
 
-            return;
+            co_return;
         }
-        m_storage.setRow(m_tableName, ACCOUNT_ABI, std::move(abiEntry));
+        co_await m_storage.setRow(m_tableName, ACCOUNT_ABI, std::move(abiEntry));
     }
 
-    size_t codeSizeAt(std::string_view address)
+    task::Task<size_t> codeSizeAt(std::string_view address)
     {
         if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             // TODO: Check is precompiled
             std::string contractAddress(address);  // TODO: add address prefix
-            auto codeEntry = m_storage.getRow(contractAddress, bcos::ledger::SYS_CODE_BINARY);
+            auto codeEntry =
+                co_await m_storage.getRow(contractAddress, bcos::ledger::SYS_CODE_BINARY);
             if (codeEntry)
             {
-                return codeEntry->length();
+                co_return codeEntry->length();
             }
-            return 0;
+            co_return 0;
         }
-        return 1;
+        co_return 1;
     }
 
-    h256 codeHashAt(std::string_view address)
+    task::Task<h256> codeHashAt(std::string_view address)
     {
         if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             // TODO: check is precompiled
             std::string contractAddress(address);  // TODO: add address prefix
-            auto codeHashEntry = m_storage.getRow(contractAddress, ACCOUNT_CODE_HASH);
+            auto codeHashEntry = co_await m_storage.getRow(contractAddress, ACCOUNT_CODE_HASH);
             if (codeHashEntry)
             {
                 auto view = codeHashEntry->get();
                 h256 codeHash(view.begin(), view.end());
-                return codeHash;
+                co_return codeHash;
             }
         }
-        return {};
+        co_return {};
     }
 
     /// Does the account exist?
-    bool exists(const std::string_view&) { return true; }
+    task::Task<bool> exists([[maybe_unused]] const std::string_view& address) { co_return true; }
 
     /// Return the EVM gas-price schedule for this execution context.
-    VMSchedule const& vmSchedule() const {}
+    VMSchedule const& vmSchedule() const { return DefaultSchedule; }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
-    h256 blockHash(int64_t number) const
-    {
-        // TODO: use depends on scheduler
-        return m_blockHash(number);
-    }
+    task::Task<h256> blockHash(int64_t number) const { co_return m_getBlockHashMethod(number); }
     int64_t blockNumber() const { return m_blockHeader.number(); }
     uint32_t blockVersion() const { return m_blockHeader.version(); }
     uint64_t timestamp() const { return m_blockHeader.timestamp(); }
     int64_t blockGasLimit() const
     {
-        if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-        {
-            // FISCO BCOS only has tx Gas limit. We use it as block gas limit
-            return m_executive->blockContext().lock()->txGasLimit();
-        }
+        // TODO: add version check
+        // if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        // {
+        //     // FISCO BCOS only has tx Gas limit. We use it as block gas limit
+        //     return m_executive->blockContext().lock()->txGasLimit();
+        // }
         return 3000000000;  // TODO: add config
     }
 
@@ -231,42 +243,34 @@ public:
 
     /// ------ get interfaces related to HostContext------
     std::string_view myAddress() const;
-    std::string_view caller() const { return fromEvmC(m_message->sender); }  // no call?
+    std::string_view caller() const { return fromEvmC(m_message.sender); }  // no call?
     std::string_view origin() const { return m_origin; }
     std::string_view codeAddress() const { return m_origin; }  // no call?
-    bytesConstRef data() const { return {m_message->input_data, m_message->input_size}; }
+    bytesConstRef data() const { return {m_message.input_data, m_message.input_size}; }
 
-    std::optional<storage::Entry> code() { return {}; }
     h256 codeHash() const;
 
-    bool isCodeHasPrefix(std::string_view _prefix) const;
-    u256 salt() const { return fromEvmC(m_message->create2_salt); }
-    bool isCreate() const
-    {  // TODO: check to
-    }
-    bool staticCall() const { return m_callParameters->staticCall; }
-    int64_t gas() const { return m_callParameters->gas; }
+    u256 salt() const { return fromEvmC(m_message.create2_salt); }
+    int64_t gas() const { return m_message.gas; }
     void suicide()
     {
-        if (m_executive->blockContext().lock()->blockVersion() >=
-            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            m_executive->blockContext().lock()->suicide(m_tableName);
+            suicide(m_tableName);
         }
     }
 
-    bool isWasm();
-    const evmc_message* getMessage() const { return m_message; }
+    const evmc_message& getMessage() const { return m_message; }
 
 private:
     const protocol::BlockHeader& m_blockHeader;
-    const evmc_message* m_message;
+    const evmc_message& m_message;
     Storage& m_storage;
     std::string m_tableName;
     std::string m_origin;
 
-    std::function<evmc_result(const evmc_message*)> m_externalCall;
-    std::function<h256(int64_t)> m_blockHash;
+    std::function<task::Task<evmc_result>(const evmc_message&)> m_callMethod;
+    std::function<task::Task<h256>(int64_t)> m_getBlockHashMethod;
 };
 
 }  // namespace bcos::transaction_executor

@@ -23,6 +23,7 @@
 
 #include "../Common.h"
 #include "HostContext.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
@@ -42,7 +43,7 @@ bool accountExists(evmc_host_context* context, const evmc_address* _addr) noexce
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
     auto addr = fromEvmC(*_addr);
-    return hostContext.exists(addr);
+    return task::syncWait(hostContext.exists(addr));
 }
 
 template <class HostContextType>
@@ -54,7 +55,7 @@ evmc_bytes32 getStorage(
     // programming assert for debug
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
-    return hostContext.store(key);
+    return task::syncWait(hostContext.store(key));
 }
 
 template <class HostContextType>
@@ -70,7 +71,7 @@ evmc_storage_status setStorage(evmc_host_context* context,
         status = EVMC_STORAGE_DELETED;
         hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
     }
-    hostContext.setStore(key, value);  // Interface uses native endianness
+    task::syncWait(hostContext.setStore(key, value));  // Interface uses native endianness
     return status;
 }
 
@@ -210,23 +211,25 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
 
 const evmc_host_interface* getHostInterface()
 {
-    evmc_host_interface const fnTable = {
-        accountExists,
-        getStorage,
-        setStorage,
-        getBalance,
-        getCodeSize,
-        getCodeHash,
-        copyCode,
-        selfdestruct,
-        call,
-        getTxContext,
-        getBlockHash,
-        log,
-        access_account,
-        access_storage,
-    };
-    return &fnTable;
+    // TODO: Use type
+    return nullptr;
+    // evmc_host_interface const fnTable = {
+    //     accountExists,
+    //     getStorage,
+    //     setStorage,
+    //     getBalance,
+    //     getCodeSize,
+    //     getCodeHash,
+    //     copyCode,
+    //     selfdestruct,
+    //     call,
+    //     getTxContext,
+    //     getBlockHash,
+    //     log,
+    //     access_account,
+    //     access_storage,
+    // };
+    // return &fnTable;
 }
 
 }  // namespace bcos::transaction_executor

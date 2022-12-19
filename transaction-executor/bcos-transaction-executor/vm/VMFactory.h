@@ -15,8 +15,8 @@
  *
  * @brief factory of vm
  * @file VMFactory.h
- * @author: xingqiangbai
- * @date: 2021-05-24
+ * @author: ancelmo
+ * @date: 2022-12-15
  */
 
 #pragma once
@@ -28,7 +28,6 @@
 
 namespace bcos::transaction_executor
 {
-class VMInstance;
 enum class VMKind
 {
     evmone,
@@ -45,7 +44,7 @@ public:
     {
         switch (kind)
         {
-        default:
+        case VMKind::evmone:
             return VMInstance{evmc_create_evmone()};
         }
     }
