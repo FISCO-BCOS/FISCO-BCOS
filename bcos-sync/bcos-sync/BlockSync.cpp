@@ -747,35 +747,8 @@ void BlockSync::maintainPeersConnection()
     {
         m_syncStatus->deletePeer(node);
     }
-    // Add new peers
-    auto groupNodeList = m_config->groupNodeList();
-    for (auto node : groupNodeList)
-    {
-        // skip the node-self
-        if (node->data() == m_config->nodeID()->data())
-        {
-            continue;
-        }
-        // not send request to the nodes disconnected
-        if (!m_config->connected(node))
-        {
-            continue;
-        }
-        // create a peer
-        auto newPeerStatus = m_config->msgFactory()->createBlockSyncStatusMsg(
-            m_config->blockNumber(), m_config->hash(), m_config->genesisHash(),
-            static_cast<int32_t>(BlockSyncMsgVersion::v2), m_config->archiveBlockNumber());
-        m_syncStatus->updatePeerStatus(m_config->nodeID(), newPeerStatus);
-        BLKSYNC_LOG(TRACE) << LOG_BADGE("Status") << LOG_DESC("Send current status to peer")
-                           << LOG_KV("number", newPeerStatus->number())
-                           << LOG_KV("genesisHash", newPeerStatus->genesisHash().abridged())
-                           << LOG_KV("currentHash", newPeerStatus->hash().abridged())
-                           << LOG_KV("peer", node->shortHex())
-                           << LOG_KV("node", m_config->nodeID()->shortHex());
-        auto encodedData = newPeerStatus->encode();
-        m_config->frontService()->asyncSendMessageByNodeID(
-            ModuleID::BlockSync, node, ref(*encodedData), 0, nullptr);
-    }
+    // create a peer
+    broadcastSyncStatus();
 }
 
 void BlockSync::broadcastSyncStatus()
@@ -783,18 +756,25 @@ void BlockSync::broadcastSyncStatus()
     auto statusMsg = m_config->msgFactory()->createBlockSyncStatusMsg(m_config->blockNumber(),
         m_config->hash(), m_config->genesisHash(), static_cast<int32_t>(BlockSyncMsgVersion::v2),
         m_config->archiveBlockNumber());
+    m_syncStatus->updatePeerStatus(m_config->nodeID(), statusMsg);
     auto encodedData = statusMsg->encode();
     BLKSYNC_LOG(TRACE) << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatus")
                        << LOG_KV("number", statusMsg->number())
                        << LOG_KV("genesisHash", statusMsg->genesisHash().abridged())
                        << LOG_KV("currentHash", statusMsg->hash().abridged());
-    m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
-        ModuleID::BlockSync, ref(*encodedData));
+    // Note: only send status to the observers/sealers, but the OUTSIDE_GROUP node node maybe
+    // observer/sealer before sync to the highest here can't use asyncSendBroadcastMessage
+    auto const& groupNodeList = m_config->groupNodeList();
+    for (auto const& nodeID : groupNodeList)
+    {
+        m_config->frontService()->asyncSendMessageByNodeID(
+            ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+    }
 }
 
 bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)
 {
+    // if the node is down, it has no peer information
     if (!m_syncStatus->hasPeer(_nodeID))
     {
         return true;

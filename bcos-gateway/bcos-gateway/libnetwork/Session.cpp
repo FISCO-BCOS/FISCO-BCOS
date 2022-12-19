@@ -7,6 +7,7 @@
  * @date 2018
  */
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOIn...
 #include <bcos-gateway/libnetwork/Common.h>         // for SESSIO...
 #include <bcos-gateway/libnetwork/Host.h>           // for Host
@@ -25,7 +26,6 @@ Session::Session(size_t _bufferSize) : bufferSize(_bufferSize)
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this;
     m_recvBuffer.resize(bufferSize);
-    m_seq2Callback = std::make_shared<std::unordered_map<uint32_t, ResponseCallback::Ptr>>();
     m_idleCheckTimer = std::make_shared<bcos::Timer>(m_idleTimeInterval, "idleChecker");
     m_idleCheckTimer->registerTimeoutHandler([this]() { checkNetworkStatus(); });
 }
@@ -117,10 +117,17 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
             handler->timeoutHandler = timeoutHandler;
             handler->m_startTime = utcSteadyTime();
         }
-        addSeqCallback(message->seq(), handler);
+
+        m_sessionCallbackManager->addCallback(message->seq(), handler);
     }
-    SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
-                       << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq());
+
+    if (c_fileLogLevel <= LogLevel::TRACE)
+    {
+        SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
+                           << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq())
+                           << LOG_KV("packetType", message->packetType())
+                           << LOG_KV("resp", message->isRespPacket());
+    }
 
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
@@ -128,7 +135,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     send(p_buffer);
 }
 
-void Session::send(std::shared_ptr<bytes> _msg)
+void Session::send(const std::shared_ptr<bytes>& _msg)
 {
     if (!actived())
     {
@@ -136,11 +143,13 @@ void Session::send(std::shared_ptr<bytes> _msg)
     }
 
     if (!m_socket->isConnected())
+    {
         return;
+    }
 
     // SESSION_LOG(TRACE) << "send" << LOG_KV("writeQueue size", m_writeQueue.size());
     {
-        Guard l(x_writeQueue);
+        Guard lockGuard(x_writeQueue);
 
         m_writeQueue.push(make_pair(_msg, u256(utcTime())));
     }
@@ -263,7 +272,9 @@ void Session::drop(DisconnectReason _reason)
 {
     auto server = m_server.lock();
     if (!m_actived)
+    {
         return;
+    }
     m_actived = false;
 
     int errorCode = P2PExceptionType::Disconnect;
@@ -275,27 +286,7 @@ void Session::drop(DisconnectReason _reason)
     }
 
     SESSION_LOG(INFO) << "drop, call and erase all callback in this session!"
-                      << LOG_KV("endpoint", nodeIPEndpoint());
-    RecursiveGuard l(x_seq2Callback);
-    for (auto& it : *m_seq2Callback)
-    {
-        if (it.second->timeoutHandler)
-        {
-            it.second->timeoutHandler->cancel();
-        }
-        if (it.second->callback)
-        {
-            SESSION_LOG(TRACE) << "drop, call callback by seq" << LOG_KV("seq", it.first);
-            if (server)
-            {
-                auto callback = it.second;
-                server->threadPool()->enqueue([callback, errorCode, errorMsg]() {
-                    callback->callback(NetworkException(errorCode, errorMsg), Message::Ptr());
-                });
-            }
-        }
-    }
-    clearSeqCallback();
+                      << LOG_KV("this", this) << LOG_KV("endpoint", nodeIPEndpoint());
 
     if (server && m_messageHandler)
     {
@@ -530,7 +521,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
         try
         {
             // the forwarding message
-            if (message->dstP2PNodeID().size() > 0 &&
+            if (!message->dstP2PNodeID().empty() &&
                 message->dstP2PNodeID() != session->m_hostNodeID)
             {
                 session->m_messageHandler(e, session, message);
@@ -542,20 +533,32 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             {
                 return;
             }
-            auto callbackPtr = session->getCallbackBySeq(message->seq());
-            // without callback, call default handler
-            if (!callbackPtr || !message->isRespPacket())
+
+            if (!message->isRespPacket())
             {
                 session->m_messageHandler(e, session, message);
                 return;
             }
+
+            auto callbackManager = session->sessionCallbackManager();
+            auto callbackPtr = callbackManager->getCallback(message->seq(), true);
+            // without callback, call default handler
+            if (!callbackPtr)
+            {
+                SESSION_LOG(WARNING)
+                    << LOG_BADGE("onMessage")
+                    << LOG_DESC("callback not found, maybe the callback timeout")
+                    << LOG_KV("endpoint", session->nodeIPEndpoint())
+                    << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
+                return;
+            }
+
             // with callback
             if (callbackPtr->timeoutHandler)
             {
                 callbackPtr->timeoutHandler->cancel();
             }
             auto callback = callbackPtr->callback;
-            session->removeSeqCallback(message->seq());
             if (!callback)
             {
                 return;
@@ -564,7 +567,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
         }
         catch (std::exception const& e)
         {
-            SESSION_LOG(WARNING) << LOG_DESC("onMessage exception")
+            SESSION_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_DESC("onMessage exception")
                                  << LOG_KV("msg", boost::diagnostic_information(e));
         }
     });
@@ -574,20 +577,23 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
 {
     if (error)
     {
-        SESSION_LOG(TRACE) << "timer cancel" << error;
+        // SESSION_LOG(TRACE) << "timer cancel" << error;
         return;
     }
 
     auto server = m_server.lock();
     if (!server)
+    {
         return;
-    ResponseCallback::Ptr callbackPtr = getCallbackBySeq(seq);
-    if (!callbackPtr)
+    }
+    ResponseCallback::Ptr callback = m_sessionCallbackManager->getCallback(seq, true);
+    if (!callback)
+    {
         return;
-    server->threadPool()->enqueue([=, this]() {
+    }
+    server->threadPool()->enqueue([callback]() {
         NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
-        callbackPtr->callback(e, Message::Ptr());
-        removeSeqCallback(seq);
+        callback->callback(e, Message::Ptr());
     });
 }
 

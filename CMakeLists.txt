@@ -43,9 +43,8 @@ if(FULLNODE)
         include(ProjectBCOSWASM)
     endif()
     include(ProjectGroupSig)
-    if(WITH_HSM)
-        include(ProjectSDF)
-    endif()
+    include(ProjectSDF)
+
 
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)

@@ -22,10 +22,10 @@
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 
-#include "CryptoProvider.h"
-#include "sdf/SDFCryptoProvider.h"
+#include "hsm-crypto/hsm/CryptoProvider.h"
+#include "hsm-crypto/hsm/SDFCryptoProvider.h"
+
 using namespace hsm;
-using namespace hsm::sdf;
 using namespace bcos;
 using namespace bcos::crypto;
 

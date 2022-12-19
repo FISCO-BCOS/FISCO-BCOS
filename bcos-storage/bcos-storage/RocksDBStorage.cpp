@@ -445,10 +445,11 @@ void RocksDBStorage::asyncCommit(
     }
     auto end = utcSteadyTime();
     callback(nullptr, 0);
+
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit finished")
                               << LOG_KV("blockNumber", params.number)
                               << LOG_KV("startTS", params.timestamp)
-                              << LOG_KV("time(ms)", utcSteadyTime() - start)
+                              << LOG_KV("time(ms)", end - start)
                               << LOG_KV("callback time(ms)", utcSteadyTime() - end)
                               << LOG_KV("count", count);
 }

@@ -12,7 +12,7 @@ find_program(CARGO_COMMAND NAMES cargo REQUIRED PATHS "${USER_HOME}\\.cargo\\bin
 ExternalProject_Add(tikv_client_project
   PREFIX ${CMAKE_SOURCE_DIR}/deps
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git
-  GIT_TAG        20634f10560b9cf528ccff4c941ac0c4ef4c8ed2
+  GIT_TAG        534fd25539f3971250a124bcc1eb5649b57248d9
   BUILD_IN_SOURCE true
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   CONFIGURE_COMMAND ${CARGO_COMMAND} install cxxbridge-cmd@1.0.75
