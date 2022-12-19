@@ -161,15 +161,15 @@ uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
     }
     auto lastUpdateNumber = boost::lexical_cast<BlockNumber>(std::string(lastUpdateEntry->get()));
     auto blockContext = _executive->blockContext().lock();
-    std::string_view statusStr;
+    std::string statusStr;
     if (blockContext->number() > lastUpdateNumber) [[likely]]
     {
-        statusStr = entry->get();
+        statusStr = std::string(entry->get());
     }
     else [[unlikely]]
     {
         auto lastStatusEntry = _executive->storage().getRow(accountTable, ACCOUNT_LAST_STATUS);
-        statusStr = lastStatusEntry->get();
+        statusStr = std::string(lastStatusEntry->get());
     }
 
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled")

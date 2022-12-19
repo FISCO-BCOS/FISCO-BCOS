@@ -221,7 +221,7 @@ bool LocalRouterTable::eraseUnreachableNodes()
             }
             pFrontService++;
         }
-        if (nodesInfo.size() == 0)
+        if (nodesInfo.empty())
         {
             UpgradeGuard ul(l);
             it = m_nodeList.erase(it);

@@ -34,8 +34,8 @@ using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum,
-    int64_t _txsExpirationTime, bool _preStoreTxs)
+MemoryStorage::MemoryStorage(
+    TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, int64_t _txsExpirationTime)
   : m_config(std::move(_config)), m_txsExpirationTime(_txsExpirationTime)
 {
     m_blockNumberUpdatedTime = utcTime();
@@ -44,8 +44,7 @@ MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum,
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
-                     << LOG_KV("txsExpirationTime", m_txsExpirationTime)
-                     << LOG_KV("preStoreTxs", "false");
+                     << LOG_KV("txsExpirationTime", m_txsExpirationTime);
 }
 
 void MemoryStorage::start()
@@ -97,7 +96,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 
                 if (result != TransactionStatus::None)
                 {
-                    TXPOOL_LOG(ERROR) << "Submit transaction error! " << result;
+                    TXPOOL_LOG(DEBUG) << "Submit transaction error! " << result;
                     m_submitResult.emplace<Error::Ptr>(
                         BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
                     handle.resume();
@@ -532,13 +531,14 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
 
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
-    if (c_fileLogLevel <= TRACE) [[unlikely]]
-    {
-        for (auto const& tx : _missedTxs)
+    if (c_fileLogLevel <= TRACE)
+        [[unlikely]]
         {
-            TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
+            for (auto const& tx : _missedTxs)
+            {
+                TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
+            }
         }
-    }
     return fetchedTxs;
 }
 

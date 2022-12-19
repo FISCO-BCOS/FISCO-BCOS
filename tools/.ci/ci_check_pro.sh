@@ -15,12 +15,22 @@ LOG_INFO() {
     echo -e "\033[32m ${content}\033[0m"
 }
 
+LOG_WARN() {
+    local content=${1}
+    echo -e "\033[31m[ERROR] ${content}\033[0m"
+}
+
 stop_node()
 {
     cd ${current_path}
 
     LOG_INFO "exit_node >>>>>>> stop all pro nodes <<<<<<<<<<<"
-    bash ${output_dir}/127.0.0.1/stop_all.sh
+    if [ -z "$(bash ${output_dir}/127.0.0.1/stop_all.sh |grep 'Exceed waiting time')" ];then
+      LOG_INFO "Stop success"
+    else
+      LOG_ERROR "Could not stop the node"
+      exit 1
+    fi
 }
 
 exit_node()
@@ -40,6 +50,19 @@ exit_node()
     stop_node
     LOG_ERROR "exit_node ######### exit for ${1}"
     exit 1
+}
+
+wait_and_start()
+{
+    LOG_INFO "Try to start all"
+    if [ -z "$(bash start_all.sh | grep 'Exceed waiting time')" ]; then
+        LOG_INFO "Start all success"
+    else
+        bash stop_all.sh
+        LOG_WARN "Another testing is running. Waiting 20s and re-try to start all."
+        sleep 20
+        wait_and_start
+    fi
 }
 
 init() 
@@ -70,7 +93,7 @@ init()
     python3  build_chain.py build -c conf/config-build-example.toml -O ${current_path}/${output_dir}
     cd ${current_path}
 
-    cd ${output_dir}/127.0.0.1 && bash start_all.sh
+    cd ${output_dir}/127.0.0.1 && wait_and_start
 }
 
 check_consensus()
@@ -133,6 +156,9 @@ send_transactions()
 {
     txs_num="${1}"
     cd ${current_path}/console/
+
+    bash console.sh getPeers
+
     LOG_INFO "Deploy HelloWorld..."
     for((i=1;i<=${txs_num};i++));
     do
@@ -182,7 +208,8 @@ config_console "false"
 send_transactions ${txs_num}
 check_sync ${txs_num}
 stop_node
-LOG_INFO "======== check non-sm success ========"
+clear_node
+# LOG_INFO "======== check non-sm success ========"
 
 # TODO: support sm test
 # LOG_INFO "======== check sm case ========"

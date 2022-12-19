@@ -3,6 +3,8 @@
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hasher/Hasher.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
@@ -79,6 +81,23 @@ public:
         return true;
     }
 
+    void generateMerkleProof(HashRange auto const& originHashes,
+        bcos::concepts::bytebuffer::Hash auto const& hash, ProofRange auto& out) const
+    {
+        // Find the hash in originHashes first
+        auto it = RANGES::find(originHashes, hash);
+        if (it == RANGES::end(originHashes)) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash!"});
+        }
+
+        std::vector<HashType> merkle;
+        generateMerkle(originHashes, merkle);
+
+        generateMerkleProof(
+            originHashes, merkle, RANGES::distance(RANGES::begin(originHashes), it), out);
+    }
+
     void generateMerkleProof(HashRange auto const& originHashes, MerkleRange auto const& merkle,
         bcos::concepts::bytebuffer::Hash auto const& hash, ProofRange auto& out) const
     {
@@ -111,7 +130,7 @@ public:
         auto [merkleNodes, merkleLevels] = getMerkleSize(RANGES::size(originHashes));
         if (merkleNodes != RANGES::size(merkle))
         {
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle size mismitch!"});
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle size mismatch!"});
         }
 
         index = indexAlign(index);
@@ -137,10 +156,10 @@ public:
                 break;
             }
 
-            auto count = std::min((size_t)(levelLength - index), (size_t)width);
+            auto nextCount = std::min((size_t)(levelLength - index), (size_t)width);
 
-            setNumberToHash(count, out.emplace_back());
-            for (auto it = inputIt + index; it < inputIt + index + count; ++it)
+            setNumberToHash(nextCount, out.emplace_back());
+            for (auto it = inputIt + index; it < inputIt + index + nextCount; ++it)
             {
                 bcos::concepts::bytebuffer::assignTo(*it, out.emplace_back());
             }
@@ -181,8 +200,8 @@ public:
             nextNodes = getNextLevelSize(nextNodes);
 
             setNumberToHash(nextNodes, *(it++));
-            auto outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
-            calculateLevelHashes(inputRange, outputRange);
+            auto nextOutputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
+            calculateLevelHashes(inputRange, nextOutputRange);
 
             assert(it <= RANGES::end(out));
         }

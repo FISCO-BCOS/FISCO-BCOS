@@ -162,27 +162,6 @@ std::shared_ptr<std::string> calculateRootByMerkleProof(
     return toHexString(txHash);
 }
 
-// BOOST_AUTO_TEST_CASE(merkleForLedger)
-// {
-//     crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher hasher;
-//     bcos::crypto::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, 2> trie;
-//     std::vector<bcos::bytes> _hashes;
-//     std::for_each(hashes.begin(), hashes.end(), [&_hashes](HashType& hash){
-//         bcos::bytes _hash(hash.begin(), hash.end());
-//         _hashes.emplace_back(std::move(_hash));
-//     });
-//     std::vector<bcos::bytes> merkle;
-//     trie.generateMerkle(_hashes, merkle);
-//     auto root = *toHexString(merkle.back());
-//     for (auto& hash : _hashes)
-//     {
-//         auto proof = std::make_shared<MerkleProof>();
-//         trie.generateMerkleProof(_hashes, hash, *proof);
-//         auto _root = calculateRootByMerkleProof(hash, proof, hasher);
-//         BOOST_CHECK(*_root == root);
-//     }
-// }
-
 BOOST_AUTO_TEST_CASE(performance) {}
 
 BOOST_AUTO_TEST_SUITE_END()

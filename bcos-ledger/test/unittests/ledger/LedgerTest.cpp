@@ -24,6 +24,7 @@
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
@@ -310,6 +311,7 @@ public:
     std::shared_ptr<Ledger> m_ledger = nullptr;
     LedgerConfig::Ptr m_param;
     BlocksPtr m_fakeBlocks;
+    bcos::crypto::merkle::Merkle<crypto::hasher::openssl::OpenSSL_Keccak256_Hasher> merkleUtility;
 };
 
 BOOST_FIXTURE_TEST_SUITE(LedgerTest, LedgerFixture)
@@ -852,8 +854,24 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
 
-            // BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) !=
-            // nullptr);
+            auto hash = m_fakeBlocks->at(3)->transaction(0)->hash();
+            BOOST_CHECK(_proof->at(hash.hex()) != nullptr);
+            auto ret = merkleUtility.verifyMerkleProof(
+                *_proof->at(hash.hex()), hash, m_fakeBlocks->at(3)->blockHeader()->txsRoot());
+            BOOST_CHECK(ret);
+
+            hash = m_fakeBlocks->at(3)->transaction(1)->hash();
+            BOOST_CHECK(_proof->at(hash.hex()) != nullptr);
+            ret = merkleUtility.verifyMerkleProof(
+                *_proof->at(hash.hex()), hash, m_fakeBlocks->at(3)->blockHeader()->txsRoot());
+            BOOST_CHECK(ret);
+
+            hash = m_fakeBlocks->at(4)->transaction(0)->hash();
+            BOOST_CHECK(_proof->at(hash.hex()) != nullptr);
+            ret = merkleUtility.verifyMerkleProof(
+                *_proof->at(hash.hex()), hash, m_fakeBlocks->at(4)->blockHeader()->txsRoot());
+            BOOST_CHECK(ret);
+
             p1.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
@@ -866,8 +884,15 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
 
-            // BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) !=
-            // nullptr);
+            for (auto& hash : *fullHashList)
+            {
+                BOOST_CHECK(_proof->at(hash.hex()) != nullptr);
+                auto ret = merkleUtility.verifyMerkleProof(
+                    *_proof->at(hash.hex()), hash, m_fakeBlocks->at(3)->blockHeader()->txsRoot());
+                BOOST_CHECK(ret);
+            }
+
+            BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
             p2.set_value(true);
         });
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -927,7 +952,13 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
             BOOST_CHECK_EQUAL(
                 _receipt->hash().hex(), m_fakeBlocks->at(3)->receipt(0)->hash().hex());
 
-            // BOOST_CHECK(_proof != nullptr);
+            auto hash = _receipt->hash();
+            BOOST_CHECK(_proof != nullptr);
+            auto ret = merkleUtility.verifyMerkleProof(
+                *_proof, hash, m_fakeBlocks->at(3)->blockHeader()->receiptsRoot());
+            BOOST_CHECK(ret);
+
+            BOOST_CHECK(_proof != nullptr);
             p1.set_value(true);
         });
 
