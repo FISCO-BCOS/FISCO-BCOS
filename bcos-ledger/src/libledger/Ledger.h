@@ -122,6 +122,12 @@ private:
         std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)>
             callback);
 
+    void getTxProof(const crypto::HashType& _txHash,
+        std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
+
+    void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
+        std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
+
     void asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback);
 

@@ -3,11 +3,8 @@
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hasher/Hasher.h>
-<<<<<<< HEAD
-=======
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
->>>>>>> upstream/release-3.2.0
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>

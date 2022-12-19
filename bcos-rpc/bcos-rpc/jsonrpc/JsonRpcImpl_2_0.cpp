@@ -470,7 +470,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
                 if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
                 {
-                    BOOST_THROW_EXCEPTION(bcos::Error(submitResult->status(),
+                    BOOST_THROW_EXCEPTION(BCOS_ERROR(submitResult->status(),
                         toString((protocol::TransactionStatus)submitResult->status())));
                 }
 
