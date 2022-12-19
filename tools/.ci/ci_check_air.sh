@@ -24,7 +24,7 @@ stop_node()
     cd ${current_path}
     LOG_INFO "exit_node >>>>>>> stop all nodes <<<<<<<<<<<"
     if [ -z "$(bash nodes/127.0.0.1/stop_all.sh |grep 'Exceed waiting time')" ];then
-        LOG_ERROR "Stop success"
+        LOG_INFO "Stop success"
     else
         LOG_ERROR "Could not stop the node"
         exit 1
