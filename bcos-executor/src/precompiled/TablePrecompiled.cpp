@@ -84,7 +84,7 @@ static std::string toNumericalOrder(std::string_view lexicographicKey)
 
 static std::string toLexicographicOrder(std::string_view numericalKey)
 {
-    uint64_t number = boost::lexical_cast<uint64_t>(numericalKey);
+    auto number = boost::lexical_cast<uint64_t>(numericalKey);
     int64_t offset = std::numeric_limits<int64_t>::max();
     // map uint64 to int64 ([UINT64_MIN, UINT64_MAX] --> [INT64_MIN, INT64_MAX])
     int64_t _number = number > (uint64_t)offset ? (int64_t)((number - offset) - 1) :
@@ -104,16 +104,17 @@ bool TablePrecompiled::isNumericalOrder(const TableInfoTupleV320& tableInfo)
     return keyOrder == 1;
 }
 
-bool TablePrecompiled::isNumericalOrder(std::shared_ptr<executor::TransactionExecutive> _executive,
-    PrecompiledExecResult::Ptr _callParameters, const std::string& _tableName)
+bool TablePrecompiled::isNumericalOrder(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters, const std::string& _tableName)
 {
     precompiled::TableInfo tableInfo;
     // external call table manager desc
-    desc(tableInfo, _tableName, _executive, _callParameters);
+    desc(tableInfo, _tableName, _executive, _callParameters, true);
     return isNumericalOrder(tableInfo.info_v320);
 }
 
-static size_t selectByValueCond(std::shared_ptr<executor::TransactionExecutive> _executive,
+static size_t selectByValueCond(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string& tableName, const std::vector<std::string>& tableKeyList,
     std::vector<EntryTuple>& entries, std::optional<precompiled::Condition> valueCondition,
     bool toLexicographic = false)
@@ -155,8 +156,9 @@ static size_t selectByValueCond(std::shared_ptr<executor::TransactionExecutive> 
 }
 
 template <typename Functor>
-static void processEntryByValueCond(std::shared_ptr<executor::TransactionExecutive> _executive,
-    const std::string& tableName, std::optional<storage::Condition> keyCondition,
+static void processEntryByValueCond(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& tableName,
+    std::optional<storage::Condition> keyCondition,
     std::optional<precompiled::Condition> valueCondition, Functor&& processEntry)
 {
     size_t totalCount = 0;
@@ -269,13 +271,12 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
         auto& [minVersion, execFunc] = selector->second;
         if (versionCompareTo(blockContext->blockVersion(), minVersion) >= 0)
         {
-            execFunc(tableName, _executive, data, gasPricer, _callParameters);
-
             if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
             {
                 PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call function")
                                        << LOG_KV("func", func) << LOG_KV("minVersion", minVersion);
             }
+            execFunc(tableName, _executive, data, gasPricer, _callParameters);
             gasPricer->updateMemUsed(_callParameters->m_execResult.size());
             _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
             return _callParameters;
@@ -288,14 +289,15 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
 
 void TablePrecompiled::desc(precompiled::TableInfo& _tableInfo, const std::string& _tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const PrecompiledExecResult::Ptr& _callParameters) const
+    const PrecompiledExecResult::Ptr& _callParameters, bool withKeyOrder) const
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    auto tableName = _tableName.substr(0, 2) == "u_" ? _tableName.substr(2) : _tableName;
+    auto tableName = _tableName.starts_with("u_") ? _tableName.substr(2) : _tableName;
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("TablePrecompiled desc") << LOG_KV("tableName", tableName);
 
-    auto input = codec.encodeWithSig("desc(string)", tableName);
+    auto input = withKeyOrder ? codec.encodeWithSig("descWithKeyOrder(string)", tableName) :
+                                codec.encodeWithSig("desc(string)", tableName);
     std::string tableManagerAddress =
         blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
 
@@ -304,7 +306,8 @@ void TablePrecompiled::desc(precompiled::TableInfo& _tableInfo, const std::strin
         _callParameters->m_codeAddress, tableManagerAddress, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gasLeft);
 
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION &&
+        withKeyOrder)
     {
         codec.decode(ref(response->data), _tableInfo.info_v320);
     }
@@ -524,7 +527,7 @@ void TablePrecompiled::selectByConditionV32(const std::string& tableName,
     condSize = conditions.cond_v320.size();
     precompiled::TableInfo tableInfo;
     // external call table manager desc
-    desc(tableInfo, tableName, _executive, _callParameters);
+    desc(tableInfo, tableName, _executive, _callParameters, true);
     _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
     columnSize = std::get<2>(tableInfo.info_v320).size();
 
@@ -647,7 +650,7 @@ void TablePrecompiled::countV32(const std::string& tableName,
     size_t condSize = conditions.cond_v320.size();
     precompiled::TableInfo tableInfo;
     // external call table manager desc
-    desc(tableInfo, tableName, _executive, _callParameters);
+    desc(tableInfo, tableName, _executive, _callParameters, true);
     bool _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
     size_t columnSize = std::get<2>(tableInfo.info_v320).size();
 
@@ -706,10 +709,10 @@ void TablePrecompiled::insert(const std::string& tableName,
 
     precompiled::TableInfo tableInfo;
     // external call table manager desc
-    desc(tableInfo, tableName, _executive, _callParameters);
     std::vector<std::string> columns;
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
+        desc(tableInfo, tableName, _executive, _callParameters, true);
         if (isNumericalOrder(tableInfo.info_v320))
         {
             key = toNumericalOrder(key);
@@ -718,6 +721,7 @@ void TablePrecompiled::insert(const std::string& tableName,
     }
     else
     {
+        desc(tableInfo, tableName, _executive, _callParameters, false);
         columns = std::get<1>(tableInfo.info);
     }
 
@@ -770,11 +774,11 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
 
     precompiled::TableInfo tableInfo;
     // external call table manager desc
-    desc(tableInfo, tableName, _executive, _callParameters);
     std::string keyField;
     std::vector<std::string> columns;
     if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
+        desc(tableInfo, tableName, _executive, _callParameters, true);
         if (isNumericalOrder(tableInfo.info_v320))
         {
             key = toNumericalOrder(key);
@@ -784,6 +788,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
     }
     else
     {
+        desc(tableInfo, tableName, _executive, _callParameters, false);
         keyField = std::get<0>(tableInfo.info);
         columns = std::get<1>(tableInfo.info);
     }
@@ -866,7 +871,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
 
     precompiled::TableInfo tableInfo;
     // external call table manager desc
-    desc(tableInfo, tableName, _executive, _callParameters);
+    desc(tableInfo, tableName, _executive, _callParameters, false);
     auto keyField = std::get<0>(tableInfo.info);
     auto columns = std::get<1>(tableInfo.info);
 
@@ -940,7 +945,7 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
 
     precompiled::TableInfo tableInfo;
     // external call table manager desc
-    desc(tableInfo, tableName, _executive, _callParameters);
+    desc(tableInfo, tableName, _executive, _callParameters, true);
     std::string keyField = std::get<1>(tableInfo.info_v320);
     std::vector<std::string> columns = std::get<2>(tableInfo.info_v320);
     bool _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
@@ -1131,7 +1136,7 @@ void TablePrecompiled::removeByConditionV32(const std::string& tableName,
     codec.decode(data, conditions.cond_v320, limitTuple);
     precompiled::TableInfo tableInfo;
     // external call table manager desc
-    desc(tableInfo, tableName, _executive, _callParameters);
+    desc(tableInfo, tableName, _executive, _callParameters, true);
     bool _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
     size_t condSize = conditions.cond_v320.size();
     size_t columnSize = std::get<2>(tableInfo.info_v320).size();
