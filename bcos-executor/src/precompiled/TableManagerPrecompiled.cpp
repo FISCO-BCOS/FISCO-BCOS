@@ -39,6 +39,7 @@ constexpr const char* const TABLE_METHOD_CREATE_KV = "createKVTable(string,strin
 constexpr const char* const TABLE_METHOD_APPEND = "appendColumns(string,string[])";
 constexpr const char* const TABLE_METHOD_OPEN = "openTable(string)";
 constexpr const char* const TABLE_METHOD_DESC = "desc(string)";
+constexpr const char* const TABLE_METHOD_DESC_V32 = "descWithKeyOrder(string)";
 constexpr const char* const TABLE_METHOD_CREATE_V320 =
     "createTable(string,(uint8,string,string[]))";
 
@@ -46,12 +47,38 @@ constexpr const char* const TABLE_METHOD_CREATE_V320 =
 TableManagerPrecompiled::TableManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
   : Precompiled(_hashImpl)
 {
-    name2Selector[TABLE_METHOD_CREATE] = getFuncSelector(TABLE_METHOD_CREATE, _hashImpl);
-    name2Selector[TABLE_METHOD_APPEND] = getFuncSelector(TABLE_METHOD_APPEND, _hashImpl);
-    name2Selector[TABLE_METHOD_CREATE_KV] = getFuncSelector(TABLE_METHOD_CREATE_KV, _hashImpl);
-    name2Selector[TABLE_METHOD_OPEN] = getFuncSelector(TABLE_METHOD_OPEN, _hashImpl);
-    name2Selector[TABLE_METHOD_DESC] = getFuncSelector(TABLE_METHOD_DESC, _hashImpl);
-    name2Selector[TABLE_METHOD_CREATE_V320] = getFuncSelector(TABLE_METHOD_CREATE_V320, _hashImpl);
+    registerFunc(getFuncSelector(TABLE_METHOD_CREATE),
+        [this](auto&& executive, auto&& pricer, auto&& params) {
+            createTable(executive, pricer, params);
+        });
+    registerFunc(getFuncSelector(TABLE_METHOD_APPEND),
+        [this](auto&& executive, auto&& pricer, auto&& params) {
+            appendColumns(executive, pricer, params);
+        });
+    registerFunc(getFuncSelector(TABLE_METHOD_CREATE_KV),
+        [this](auto&& executive, auto&& pricer, auto&& params) {
+            createKVTable(executive, pricer, params);
+        });
+    registerFunc(
+        getFuncSelector(TABLE_METHOD_OPEN), [this](auto&& executive, auto&& pricer, auto&& params) {
+            openTable(executive, pricer, params);
+        });
+    registerFunc(
+        getFuncSelector(TABLE_METHOD_DESC), [this](auto&& executive, auto&& pricer, auto&& params) {
+            desc(executive, pricer, params);
+        });
+    registerFunc(
+        getFuncSelector(TABLE_METHOD_DESC_V32),
+        [this](auto&& executive, auto&& pricer, auto&& params) {
+            descWithKeyOrder(executive, pricer, params);
+        },
+        protocol::BlockVersion::V3_2_VERSION);
+    registerFunc(
+        getFuncSelector(TABLE_METHOD_CREATE_V320),
+        [this](auto&& executive, auto&& pricer, auto&& params) {
+            createTableV32(executive, pricer, params);
+        },
+        protocol::BlockVersion::V3_2_VERSION);
 }
 
 std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
@@ -62,47 +89,30 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());
-    if (func == name2Selector[TABLE_METHOD_CREATE])
+
+    auto selector = selector2Func.find(func);
+    if (selector != selector2Func.end())
     {
-        /// createTable(string,(string,string[]))
-        createTable(_executive, gasPricer, _callParameters);
+        if (blockContext->isWasm() && func == name2Selector[TABLE_METHOD_OPEN])
+        {}
+        auto& [minVersion, execFunc] = selector->second;
+        if (versionCompareTo(blockContext->blockVersion(), minVersion) >= 0)
+        {
+            execFunc(_executive, gasPricer, _callParameters);
+
+            if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+            {
+                PRECOMPILED_LOG(TRACE)
+                    << LOG_BADGE("TableManagerPrecompiled") << LOG_DESC("call function")
+                    << LOG_KV("func", func) << LOG_KV("minVersion", minVersion);
+            }
+            gasPricer->updateMemUsed(_callParameters->m_execResult.size());
+            _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
+            return _callParameters;
+        }
     }
-    else if (versionCompareTo(blockContext->blockVersion(), protocol::BlockVersion::V3_2_VERSION) >=
-                 0 &&
-             func == name2Selector[TABLE_METHOD_CREATE_V320])
-    {
-        /// createTable(string,(uint8,string,string[]))
-        createTableV32(_executive, gasPricer, _callParameters);
-    }
-    else if (func == name2Selector[TABLE_METHOD_CREATE_KV])
-    {
-        /// createKVTable(string,string,string)
-        createKVTable(_executive, gasPricer, _callParameters);
-    }
-    else if (func == name2Selector[TABLE_METHOD_APPEND])
-    {
-        /// appendColumns(string,string[])
-        appendColumns(_executive, gasPricer, _callParameters);
-    }
-    else if (func == name2Selector[TABLE_METHOD_DESC])
-    {
-        /// desc(string)
-        desc(_executive, gasPricer, _callParameters);
-    }
-    else if (!_executive->blockContext().lock()->isWasm() &&
-             func == name2Selector[TABLE_METHOD_OPEN])
-    {
-        /// only solidity: openTable(string) => address
-        openTable(_executive, gasPricer, _callParameters);
-    }
-    else
-    {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManager") << LOG_DESC("call undefined function!");
-        BOOST_THROW_EXCEPTION(PrecompiledError("TableManager call undefined function!"));
-    }
-    gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
-    return _callParameters;
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManager") << LOG_DESC("call undefined function!");
+    BOOST_THROW_EXCEPTION(PrecompiledError("TableManager call undefined function!"));
 }
 
 void TableManagerPrecompiled::createTable(
@@ -277,6 +287,11 @@ void TableManagerPrecompiled::openTable(
     /// only solidity: openTable(string) => address
     std::string tableName;
     auto blockContext = _executive->blockContext().lock();
+    if (blockContext->isWasm())
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManager") << LOG_DESC("call undefined function!");
+        BOOST_THROW_EXCEPTION(PrecompiledError("TableManager call undefined function!"));
+    }
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
@@ -327,39 +342,56 @@ void TableManagerPrecompiled::desc(
         return;
     }
     auto keyAndValue = sysEntry->get();
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
+    auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
+    std::vector<std::string> values;
+    boost::split(values, std::move(valueFields), boost::is_any_of(","));
+
+    TableInfoTuple tableInfo = {std::move(keyField), std::move(values)};
+
+    gasPricer->appendOperation(InterfaceOpcode::Select);
+    _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
+}
+
+void TableManagerPrecompiled::descWithKeyOrder(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters)
+{
+    /// descWithKeyOrder(string)
+    std::string tableName;
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    codec.decode(_callParameters->params(), tableName);
+
+    tableName = getActualTableName(getTableName(tableName));
+    PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table desc") << LOG_KV("tableName", tableName);
+
+    auto sysEntry = _executive->storage().getRow(storage::StorageInterface::SYS_TABLES, tableName);
+    if (!sysEntry)
     {
-        uint8_t keyOrder = 0;
-        // Compatible with older versions (< v3.2) of table and KVTable
-        if (keyAndValue.starts_with(V320_TABLE_INFO_PREFIX))
-        {
-            keyAndValue = keyAndValue.substr(V320_TABLE_INFO_PREFIX.length());
-            keyOrder = (uint8_t)boost::lexical_cast<int>(
-                keyAndValue.substr(0, keyAndValue.find_first_of(',')));
-            keyAndValue = keyAndValue.substr(keyAndValue.find_first_of(',') + 1);
-        }
-        auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
-        auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
-        std::vector<std::string> values;
-        boost::split(values, std::move(valueFields), boost::is_any_of(","));
-
-        TableInfoTupleV320 tableInfo = {keyOrder, std::move(keyField), std::move(values)};
-
-        gasPricer->appendOperation(InterfaceOpcode::Select);
+        TableInfoTuple tableInfo = {};
         _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
+        return;
     }
-    else
+    auto keyAndValue = sysEntry->get();
+
+    uint8_t keyOrder = 0;
+    if (keyAndValue.starts_with(V320_TABLE_INFO_PREFIX))
     {
-        auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
-        auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
-        std::vector<std::string> values;
-        boost::split(values, std::move(valueFields), boost::is_any_of(","));
-
-        TableInfoTuple tableInfo = {std::move(keyField), std::move(values)};
-
-        gasPricer->appendOperation(InterfaceOpcode::Select);
-        _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
+        keyAndValue = keyAndValue.substr(V320_TABLE_INFO_PREFIX.length());
+        keyOrder = (uint8_t)boost::lexical_cast<int>(
+            keyAndValue.substr(0, keyAndValue.find_first_of(',')));
+        keyAndValue = keyAndValue.substr(keyAndValue.find_first_of(',') + 1);
     }
+    auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
+    auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
+    std::vector<std::string> values;
+    boost::split(values, std::move(valueFields), boost::is_any_of(","));
+
+    TableInfoTupleV320 tableInfo = {keyOrder, std::move(keyField), std::move(values)};
+
+    gasPricer->appendOperation(InterfaceOpcode::Select);
+    _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
 }
 
 void TableManagerPrecompiled::externalCreateTable(

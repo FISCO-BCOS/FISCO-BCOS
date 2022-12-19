@@ -88,9 +88,9 @@ private:
         uint32_t version, size_t columnSize, bool isNumericalOrder) const;
     void desc(precompiled::TableInfo& _tableInfo, const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters) const;
-    bool isNumericalOrder(std::shared_ptr<executor::TransactionExecutive> _executive,
-        PrecompiledExecResult::Ptr _callParameters, const std::string& _tableName);
+        PrecompiledExecResult::Ptr const& _callParameters, bool withKeyOrder) const;
+    bool isNumericalOrder(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, const std::string& _tableName);
     static bool isNumericalOrder(const TableInfoTupleV320& tableInfo);
 
     inline void registerFunc(uint32_t _selector, CRUDParams _func,

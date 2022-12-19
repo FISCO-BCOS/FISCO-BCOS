@@ -155,12 +155,12 @@ struct Condition
 
     enum class Comparator : uint8_t
     {
-        EQ = 0,
-        NE = 1,
-        GT = 2,
-        GE = 3,
-        LT = 4,
-        LE = 5,
+        GT = 0,
+        GE = 1,
+        LT = 2,
+        LE = 3,
+        EQ = 4,
+        NE = 5,
         STARTS_WITH = 6,
         ENDS_WITH = 7,
         CONTAINS = 8
