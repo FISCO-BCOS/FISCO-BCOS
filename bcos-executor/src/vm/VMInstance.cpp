@@ -30,7 +30,7 @@ namespace executor
 namespace
 {
 /// The list of EVM-C options stored as pairs of (name, value).
-std::vector<std::pair<std::string, std::string>> s_evmcOptions;
+std::vector<std::pair<std::string, std::string>> s_evmcOptions{{"advanced", ""}};
 
 }  // namespace
 
@@ -68,18 +68,6 @@ evmc_revision toRevision(VMSchedule const& _schedule)
 {
     if (_schedule.enableLondon)
         return EVMC_LONDON;
-    if (_schedule.enableIstanbul)
-        return EVMC_ISTANBUL;
-    if (_schedule.haveCreate2)
-        return EVMC_CONSTANTINOPLE;
-    if (_schedule.haveRevert)
-        return EVMC_BYZANTIUM;
-    if (_schedule.eip158Mode)
-        return EVMC_SPURIOUS_DRAGON;
-    if (_schedule.eip150Mode)
-        return EVMC_TANGERINE_WHISTLE;
-    if (_schedule.haveDelegateCall)
-        return EVMC_HOMESTEAD;
     return EVMC_FRONTIER;
 }
 }  // namespace executor
