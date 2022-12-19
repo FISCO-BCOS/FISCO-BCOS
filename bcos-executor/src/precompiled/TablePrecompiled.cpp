@@ -47,12 +47,12 @@ constexpr const char* const TABLE_METHOD_REMOVE_CON = "remove((uint8,string)[],(
 
 /// v3.2.0 new interfaces
 constexpr const char* const TABLE_METHOD_SELECT_CON_V320 =
-    "select((uint8,uint32,string)[],(uint32,uint32))";
-constexpr const char* const TABLE_METHOD_COUNT_V320 = "count((uint8,uint32,string)[])";
+    "select((uint8,string,string)[],(uint32,uint32))";
+constexpr const char* const TABLE_METHOD_COUNT_V320 = "count((uint8,string,string)[])";
 constexpr const char* const TABLE_METHOD_UPDATE_CON_V320 =
-    "update((uint8,uint32,string)[],(uint32,uint32),(string,string)[])";
+    "update((uint8,string,string)[],(uint32,uint32),(string,string)[])";
 constexpr const char* const TABLE_METHOD_REMOVE_CON_V320 =
-    "remove((uint8,uint32,string)[],(uint32,uint32))";
+    "remove((uint8,string,string)[],(uint32,uint32))";
 
 static std::string toNumericalOrder(std::string_view lexicographicKey)
 {
@@ -361,7 +361,7 @@ void TablePrecompiled::buildKeyCondition(std::shared_ptr<storage::Condition>& ke
 
 bool TablePrecompiled::buildConditions(std::optional<precompiled::Condition>& valueCondition,
     const precompiled::Conditions& conditions, const LimitTuple& limit, uint32_t version,
-    size_t columnSize, bool isNumericalOrder) const
+    precompiled::TableInfoTupleV320& tableInfo) const
 {
     if (version < (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
@@ -383,20 +383,31 @@ bool TablePrecompiled::buildConditions(std::optional<precompiled::Condition>& va
         BOOST_THROW_EXCEPTION(PrecompiledError("Condition is empty"));
     }
 
+    auto& keyField = std::get<1>(tableInfo);
+    auto& columns = std::get<2>(tableInfo);
+
     bool isRangeSelect = true;
-    for (const auto& [cmp, field_idx, field_value] : conditions.cond_v320)
+    for (const auto& [cmp, field, field_value] : conditions.cond_v320)
     {
-        auto value = field_value;
-        if (field_idx > columnSize)
+        uint32_t field_idx = 0;
+        auto const it = std::find(columns.begin(), columns.end(), field);
+        if (it == columns.end() && field != keyField)
         {
-            PRECOMPILED_LOG(INFO) << LOG_DESC("The field index is greater than the size of fields");
-            BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError(
-                "The field index is greater than the size of fields"));
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("TablePrecompiled")
+                << LOG_DESC("Table condition field not found") << LOG_KV("field", field);
+            BOOST_THROW_EXCEPTION(PrecompiledError("Table condition fields not found"));
         }
+        if(field != keyField)
+        {
+            field_idx = std::distance(columns.begin(), it) + 1;
+        }
+
+        auto value = field_value;
 
         if (field_idx == 0)
         {
-            if (isNumericalOrder && (cmp < 6 || cmp > 8))
+            if (isNumericalOrder(tableInfo) && (cmp < 6 || cmp > 8))
             {
                 value = toNumericalOrder(value);
             }
@@ -520,7 +531,6 @@ void TablePrecompiled::selectByConditionV32(const std::string& tableName,
     auto version = blockContext->blockVersion();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     size_t condSize = 0;
-    size_t columnSize = 0;
     bool _isNumericalOrder = false;
 
     codec.decode(data, conditions.cond_v320, limit);
@@ -529,7 +539,6 @@ void TablePrecompiled::selectByConditionV32(const std::string& tableName,
     // external call table manager desc
     desc(tableInfo, tableName, _executive, _callParameters, true);
     _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
-    columnSize = std::get<2>(tableInfo.info_v320).size();
 
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
                            << LOG_KV("tableName", tableName) << LOG_KV("ConditionSize", condSize)
@@ -538,7 +547,7 @@ void TablePrecompiled::selectByConditionV32(const std::string& tableName,
 
     auto valueCondition = std::make_optional<precompiled::Condition>();
     auto useValueCond = buildConditions(
-        valueCondition, std::move(conditions), limit, version, columnSize, _isNumericalOrder);
+        valueCondition, std::move(conditions), limit, version, tableInfo.info_v320);
 
     std::vector<EntryTuple> entries({});
     // when limitcount==0, skip select operation directly
@@ -651,15 +660,13 @@ void TablePrecompiled::countV32(const std::string& tableName,
     precompiled::TableInfo tableInfo;
     // external call table manager desc
     desc(tableInfo, tableName, _executive, _callParameters, true);
-    bool _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
-    size_t columnSize = std::get<2>(tableInfo.info_v320).size();
 
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
                            << LOG_KV("tableName", tableName) << LOG_KV("ConditionSize", condSize);
 
     auto valueCondition = std::make_optional<precompiled::Condition>();
     bool useValueCond = buildConditions(valueCondition, conditions, {0, USER_TABLE_MAX_LIMIT_COUNT},
-        version, columnSize, _isNumericalOrder);
+        version, tableInfo.info_v320);
     auto keyCondition = valueCondition->at(0);
     uint32_t totalCount = 0;
     uint32_t singleCount = 0;
@@ -948,12 +955,11 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
     desc(tableInfo, tableName, _executive, _callParameters, true);
     std::string keyField = std::get<1>(tableInfo.info_v320);
     std::vector<std::string> columns = std::get<2>(tableInfo.info_v320);
-    bool _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
 
     auto valueCondition = std::make_optional<precompiled::Condition>();
     // will throw exception when wrong condition cmp or limit count overflow
     bool useValueCond = buildConditions(valueCondition, std::move(conditions), limitTuple, version,
-        columns.size(), _isNumericalOrder);
+        tableInfo.info_v320);
     auto keyCondition = valueCondition->at(0);
 
     if (c_fileLogLevel <= LogLevel::TRACE)
@@ -1137,9 +1143,7 @@ void TablePrecompiled::removeByConditionV32(const std::string& tableName,
     precompiled::TableInfo tableInfo;
     // external call table manager desc
     desc(tableInfo, tableName, _executive, _callParameters, true);
-    bool _isNumericalOrder = isNumericalOrder(tableInfo.info_v320);
     size_t condSize = conditions.cond_v320.size();
-    size_t columnSize = std::get<2>(tableInfo.info_v320).size();
 
     PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
                           << LOG_KV("tableName", tableName) << LOG_KV("ConditionSize", condSize)
@@ -1149,7 +1153,7 @@ void TablePrecompiled::removeByConditionV32(const std::string& tableName,
     auto valueCondition = std::make_optional<precompiled::Condition>();
     // will throw exception when wrong condition cmp or limit count overflow
     bool useValueCond = buildConditions(
-        valueCondition, std::move(conditions), limitTuple, version, columnSize, _isNumericalOrder);
+        valueCondition, std::move(conditions), limitTuple, version, tableInfo.info_v320);
     auto keyCondition = valueCondition->at(0);
 
     if (c_fileLogLevel <= LogLevel::TRACE)
