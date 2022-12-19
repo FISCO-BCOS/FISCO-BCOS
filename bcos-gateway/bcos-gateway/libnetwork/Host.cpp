@@ -126,6 +126,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 return preverified;
             }
 
+            // For compatibility, p2p communication between nodes still uses the old public key analysis method
             if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
                 return preverified;
@@ -151,6 +152,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
 
             BASIC_CONSTRAINTS_free(basic);
 
+            // The new public key analysis method is used for black and white lists
             std::string nodeIDOutWithoutExtInfo;
             if (!hostPtr->sslContextPubHandlerWithoutExtInfo()(cert, nodeIDOutWithoutExtInfo))
             {
