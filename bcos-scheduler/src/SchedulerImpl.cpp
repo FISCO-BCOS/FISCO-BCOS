@@ -826,7 +826,7 @@ void SchedulerImpl::preExecuteBlock(
         // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this, 0,
         //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
         //     verify);
-
+        fetchGasLimit();
         blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
             m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
 
