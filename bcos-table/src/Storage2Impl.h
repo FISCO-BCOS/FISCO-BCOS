@@ -19,6 +19,8 @@ template <bool withMRU>
 class StorageImpl : public storage2::Storage2Base<StorageImpl<withMRU>>
 {
 public:
+    StorageImpl() : m_buckets(std::thread::hardware_concurrency()) {}
+
     task::Task<void> impl_getRows(
         std::string_view tableName, InputKeys auto const& keys, OutputEntries auto& out)
     {
@@ -26,18 +28,17 @@ public:
         auto [bucket, lock] = getBucket(tableName);
         auto& index = bucket->container.template get<0>();
 
-        for (auto [key, outIt] : RANGES::zip_view(
-                 keys, out | RANGES::views::transform([](auto& item) { return &item; })))
+        for (auto const& [key, value] : RANGES::zip_view(keys, out))
         {
             auto keyView = concepts::bytebuffer::toView(key);
             auto entryIt = index.find(std::make_tuple(tableName, keyView));
-            if (entryIt != index.end() && entryIt->entry.status() != storage::Entry::DELETED)
+            if (entryIt != index.end())
             {
+                value.emplace(entryIt->entry);
                 if constexpr (withMRU)
                 {
                     updateMRUAndCheck(*bucket, entryIt);
                 }
-                *outIt = entryIt->entry;
             }
         }
 
@@ -52,29 +53,26 @@ public:
         auto& index = bucket->container.template get<0>();
 
         auto intputTablNameView = concepts::bytebuffer::toView(tableName);
-        std::string_view tableNameView;
-        auto tableNameIt = tableNames.find(intputTablNameView);
-        if (tableNameIt == tableNames.end())
+        auto tableNameIt = tableNames.lower_bound(intputTablNameView);
+        if (tableNameIt == tableNames.end() || *tableNameIt != intputTablNameView)
         {
-            tableNameIt = tableNames.emplace(std::string(intputTablNameView)).first;
+            tableNameIt = tableNames.emplace_hint(tableNameIt, std::string(intputTablNameView));
         }
-        tableNameView = *tableNameIt;
+        auto tableNameView = *tableNameIt;
 
         for (auto const& [keyIt, valueIt] : RANGES::zip_view(keys, entries))
         {
             auto keyView = concepts::bytebuffer::toView(keyIt);
-            auto entryIt = index.find(std::make_tuple(tableName, keyView));
+            auto combineKey = std::make_tuple(tableName, keyView);
+            auto entryIt = index.lower_bound(combineKey);
 
-            if (entryIt != index.end())
+            if (entryIt == index.end() || entryIt->view() != combineKey)
             {
-                auto& value = valueIt;
-                bucket->container.modify(entryIt, [&value](Data& data) { data.entry = value; });
-
-                if constexpr (withMRU)
-                {
-                    updateMRUAndCheck(*bucket, entryIt);
-                }
+                entryIt = index.emplace_hint(entryIt,
+                    Data{.tableName = tableNameView, .key = std::string(keyView), .entry = {}});
             }
+            auto& value = valueIt;
+            bucket->container.modify(entryIt, [&value](Data& data) { data.entry = value; });
         }
 
         co_return;
