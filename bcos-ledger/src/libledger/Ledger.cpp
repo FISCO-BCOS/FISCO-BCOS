@@ -671,7 +671,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
     }
 
     asyncBatchGetTransactions(
-        hexList, [callback = std::move(_onGetTx), _txHashList, _withProof](
+        hexList, [this, callback = std::move(_onGetTx), _txHashList, _withProof](
                      Error::Ptr&& error, std::vector<protocol::Transaction::Ptr>&& transactions) {
             if (error)
             {
@@ -687,12 +687,47 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
 
             if (_withProof)
             {
-                // TODO: use Merkle.generateMerkleProof
+                auto con_proofMap =
+                    std::make_shared<tbb::concurrent_unordered_map<std::string, MerkleProofPtr>>();
+                auto count = std::make_shared<std::atomic_uint64_t>(0);
+                auto counter = [_txList = results, _txHashList, count, con_proofMap,
+                                   callback = callback]() {
+                    count->fetch_add(1);
+                    if (count->load() == _txHashList->size())
+                    {
+                        auto proofMap = std::make_shared<std::map<std::string, MerkleProofPtr>>(
+                            con_proofMap->begin(), con_proofMap->end());
+                        LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
+                                          << LOG_KV("txHashListSize", _txHashList->size())
+                                          << LOG_KV("proofMapSize", proofMap->size());
+                        callback(nullptr, _txList, proofMap);
+                    }
+                };
+
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
+                    [this, _txHashList, counter, con_proofMap](
+                        const tbb::blocked_range<size_t>& range) {
+                        for (size_t i = range.begin(); i < range.end(); ++i)
+                        {
+                            auto txHash = _txHashList->at(i);
+                            getTxProof(txHash, [con_proofMap, txHash, counter](
+                                                   Error::Ptr _error, MerkleProofPtr _proof) {
+                                if (!_error && _proof)
+                                {
+                                    con_proofMap->insert(std::make_pair(txHash.hex(), _proof));
+                                }
+                                counter();
+                            });
+                        }
+                    });
             }
-            LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
-                              << LOG_KV("txHashListSize", _txHashList->size())
-                              << LOG_KV("withProof", _withProof);
-            callback(nullptr, results, nullptr);
+            else
+            {
+                LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
+                                  << LOG_KV("txHashListSize", _txHashList->size())
+                                  << LOG_KV("withProof", _withProof);
+                callback(nullptr, results, nullptr);
+            }
         });
 }
 
@@ -725,9 +760,25 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
 
             if (_withProof)
             {
-                // TODO: use Merkle.generateMerkleProof
+                getReceiptProof(receipt,
+                    [receipt, _onGetTx = callback](Error::Ptr _error, MerkleProofPtr _proof) {
+                        if (_error)
+                        {
+                            LEDGER_LOG(DEBUG) << "GetTransactionReceiptByHash"
+                                              << LOG_KV("code", _error->errorCode())
+                                              << LOG_KV("msg", _error->errorMessage())
+                                              << boost::diagnostic_information(_error);
+                            _onGetTx(std::move(_error), receipt, nullptr);
+                            return;
+                        }
+
+                        _onGetTx(nullptr, receipt, std::move(_proof));
+                    });
             }
-            callback(nullptr, receipt, nullptr);
+            else
+            {
+                callback(nullptr, receipt, nullptr);
+            }
         });
 }
 
