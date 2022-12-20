@@ -60,8 +60,8 @@ BOOST_AUTO_TEST_CASE(viewEqual)
 
 BOOST_AUTO_TEST_CASE(copyFrom)
 {
-    auto entry1 = std::make_shared<Entry>(tableInfo);
-    auto entry2 = std::make_shared<Entry>(tableInfo);
+    auto entry1 = std::make_shared<Entry>();
+    auto entry2 = std::make_shared<Entry>();
     BOOST_CHECK_EQUAL(entry1->dirty(), false);
     entry1->setField(0, "value");
     BOOST_TEST(entry1->dirty() == true);
@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(copyFrom)
 
 BOOST_AUTO_TEST_CASE(functions)
 {
-    auto entry = std::make_shared<Entry>(tableInfo);
+    auto entry = std::make_shared<Entry>();
     BOOST_TEST(entry->dirty() == false);
     BOOST_TEST(entry->status() == Entry::Status::EMPTY);
     entry->setStatus(Entry::Status::DELETED);

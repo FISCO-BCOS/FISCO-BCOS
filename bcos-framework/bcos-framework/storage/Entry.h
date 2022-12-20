@@ -51,8 +51,6 @@ public:
         std::shared_ptr<std::vector<unsigned char>>, std::shared_ptr<std::vector<char>>>;
 
     Entry() = default;
-    explicit Entry([[maybe_unused]] TableInfo::ConstPtr tableInfo) {}
-
     Entry(const Entry&) = default;
     Entry(Entry&&) noexcept = default;
     bcos::storage::Entry& operator=(const Entry&) = default;
