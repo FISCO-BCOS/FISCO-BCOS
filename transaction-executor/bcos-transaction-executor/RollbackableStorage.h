@@ -6,8 +6,9 @@
 namespace bcos::transaction_executor
 {
 
-template <storage2::Storage PrevStorage>
-class RollbackableStorage : public storage2::Storage2Base<RollbackableStorage<PrevStorage>>
+template <storage2::Storage<storage::Entry> PrevStorage>
+class RollbackableStorage
+  : public storage2::Storage2Base<RollbackableStorage<PrevStorage>, storage::Entry>
 {
 public:
     RollbackableStorage(PrevStorage& prev) : m_prev(prev) {}

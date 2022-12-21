@@ -42,23 +42,22 @@ public:
         return impl().impl_getRows(tableName, keys, out);
     }
 
-    enum class Status
+    enum class OperationType
     {
         INSERT,
         UPDATE,
-        REPLACE,
         DELETE
     };
 
     task::Task<void> setRows(std::string_view tableName, InputKeys auto const& keys,
-        InputEntries auto const& entries, Status status)
+        InputEntries auto const& entries, OperationType type)
     {
         if (RANGES::size(keys) != RANGES::size(entries))
         {
             BOOST_THROW_EXCEPTION(UnmatchKeyEntries{});
         }
 
-        return impl().impl_setRows(tableName, keys, entries, status);
+        return impl().impl_setRows(tableName, keys, entries, type);
     }
 
     template <Iterator IteratorType>
