@@ -45,7 +45,7 @@ evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
     return toEvmC(GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-template <storage2::Storage Storage>
+template <storage2::Storage<storage::Entry> Storage>
 class HostContext : public evmc_host_context
 {
 public:
@@ -131,7 +131,7 @@ public:
     task::Task<void> setCode(crypto::HashType codeHash, bytes code)
     {
         storage::Entry codeHashEntry;
-        codeHashEntry.importFields({std::move(codeHash)});
+        codeHashEntry.importFields({codeHash});
 
         storage::Entry codeEntry;
         codeEntry.importFields({std::move(code)});
