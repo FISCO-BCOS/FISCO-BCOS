@@ -113,7 +113,8 @@ public:
         *this << ErrorMessage(std::move(errorMessage));
     }
 
-private:
     Error() = default;
+
+private:
 };
 }  // namespace bcos

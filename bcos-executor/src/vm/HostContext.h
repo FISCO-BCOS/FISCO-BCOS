@@ -121,7 +121,6 @@ public:
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
     bytesConstRef data() const { return ref(m_callParameters->data); }
     virtual std::optional<storage::Entry> code();
-    bool isCodeHasPrefix(std::string_view _prefix) const;
     h256 codeHash();
     u256 salt() const { return m_salt; }
     SubState& sub() { return m_sub; }

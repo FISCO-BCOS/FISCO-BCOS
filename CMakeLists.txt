@@ -69,6 +69,8 @@ if(FULLNODE)
     add_subdirectory(concepts)
     add_subdirectory(libtask)
 
+    add_subdirectory(transaction-executor)
+
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
     endif()

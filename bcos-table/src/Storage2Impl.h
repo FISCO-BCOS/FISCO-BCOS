@@ -2,7 +2,7 @@
 
 #include "bcos-concepts/Basic.h"
 #include "bcos-concepts/ByteBuffer.h"
-#include <bcos-concepts/storage/Storage2.h>
+#include <bcos-framework/storage2/Storage2.h>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
 #include <boost/multi_index/mem_fun.hpp>
@@ -10,76 +10,72 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/view/transform.hpp>
 
-namespace bcos::storage
+namespace bcos::storage2
 {
 
-// TODO: Only for demo now
-template <bool withMRU>
-class StorageImpl : public concepts::storage::StorageBase<StorageImpl<withMRU>>
+template <bool withMRU, class Entry>
+class StorageImpl : public storage2::Storage2Base<StorageImpl<withMRU, Entry>, Entry>
 {
 public:
-    task::Task<void> impl_getRows(concepts::bytebuffer::ByteBuffer auto const& tableName,
-        concepts::storage::Keys auto const& keys, concepts::storage::Entries auto& entriesOut)
+    StorageImpl() : m_buckets(std::thread::hardware_concurrency()) {}
+
+    task::Task<void> impl_getRows(
+        std::string_view tableName, InputKeys auto const& keys, OutputEntries auto& out)
     {
-        concepts::resizeTo(entriesOut, RANGES::size(keys));
+        concepts::resizeTo(out, RANGES::size(keys));
         auto [bucket, lock] = getBucket(tableName);
         auto& index = bucket->container.template get<0>();
 
-        for (auto const& [keyIt, outIt] :
-            RANGES::zip_view<decltype(keys), decltype(entriesOut)>(keys, entriesOut))
+        for (auto const& [key, value] : RANGES::zip_view(keys, out))
         {
-            auto keyView = concepts::bytebuffer::toView(keyIt);
+            auto keyView = concepts::bytebuffer::toView(key);
             auto entryIt = index.find(std::make_tuple(tableName, keyView));
-            if (entryIt != index.end() && entryIt->entry.status() != Entry::DELETED)
+            if (entryIt != index.end())
             {
+                value.emplace(entryIt->entry);
                 if constexpr (withMRU)
                 {
                     updateMRUAndCheck(*bucket, entryIt);
                 }
-                outIt = entryIt->entry;
             }
         }
+
+        co_return;
     }
 
-    task::Task<void> impl_setRows(concepts::bytebuffer::ByteBuffer auto const& tableName,
-        concepts::storage::Keys auto const& keys, concepts::storage::Entries auto const& entries)
+    task::Task<void> impl_setRows(
+        std::string_view tableName, InputKeys auto const& keys, InputEntries auto const& entries)
     {
-        if (RANGES::size(keys) != RANGES::size(entries))
-        {
-            BOOST_THROW_EXCEPTION(1);
-        }
-
         auto [bucket, lock] = getBucket(tableName);
         auto& tableNames = bucket->tableNames;
         auto& index = bucket->container.template get<0>();
 
         auto intputTablNameView = concepts::bytebuffer::toView(tableName);
-        std::string_view tableNameView;
-        auto tableNameIt = tableNames.find(intputTablNameView);
-        if (tableNameIt == tableNames.end())
+        auto tableNameIt = tableNames.lower_bound(intputTablNameView);
+        if (tableNameIt == tableNames.end() || *tableNameIt != intputTablNameView)
         {
-            tableNameIt = tableNames.emplace(std::string(intputTablNameView));
+            tableNameIt = tableNames.emplace_hint(tableNameIt, std::string(intputTablNameView));
         }
-        tableNameView = *tableNameIt;
+        auto tableNameView = *tableNameIt;
 
-        for (auto const& [keyIt, valueIt] :
-            RANGES::zip_view<decltype(keys), decltype(entries)>(keys, entries))
+        for (auto const& [keyIt, valueIt] : RANGES::zip_view(keys, entries))
         {
             auto keyView = concepts::bytebuffer::toView(keyIt);
-            auto entryIt = index.find(std::make_tuple(tableName, keyView));
+            auto combineKey = std::make_tuple(tableName, keyView);
+            auto entryIt = index.lower_bound(combineKey);
 
-            if (entryIt != index.end())
+            if (entryIt == index.end() || entryIt->view() != combineKey)
             {
-                auto& value = *valueIt;
-                bucket->container.modify(entryIt, [&value](Data& data) { data.entry = value; });
-
-                if constexpr (withMRU)
-                {
-                    updateMRUAndCheck(*bucket, entryIt);
-                }
+                entryIt = index.emplace_hint(entryIt,
+                    Data{.tableName = tableNameView, .key = std::string(keyView), .entry = {}});
             }
+            auto& value = valueIt;
+            bucket->container.modify(entryIt, [&value](Data& data) { data.entry = value; });
         }
+
+        co_return;
     }
 
 private:
@@ -90,7 +86,7 @@ private:
     {
         std::string_view tableName;
         std::string key;
-        Entry entry;
+        storage::Entry entry;
 
         std::tuple<std::string_view, std::string_view> view() const
         {
@@ -110,7 +106,7 @@ private:
 
     struct Bucket
     {
-        std::set<std::string> tableNames;
+        std::set<std::string, std::less<>> tableNames;
         Container container;
         int32_t capacity = 0;
 
@@ -123,7 +119,7 @@ private:
     {
         constexpr static std::hash<std::string_view> hasher;
 
-        auto hash = hasher(toView(tableName));
+        auto hash = hasher(concepts::bytebuffer::toView(tableName));
         auto index = hash % m_buckets.size();
 
         auto& bucket = m_buckets[index];
@@ -155,4 +151,4 @@ private:
     }
 };
 
-}  // namespace bcos::storage
+}  // namespace bcos::storage2

@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
 
-
 project(bcos-executor VERSION ${VERSION})
 
 find_package(TBB CONFIG REQUIRED)

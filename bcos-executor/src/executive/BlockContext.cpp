@@ -126,7 +126,7 @@ void BlockContext::killSuicides()
 
             // delete binary
             bcos::storage::Entry emptyCodeEntry;
-            emptyCodeEntry.importFields({std::move("")});
+            emptyCodeEntry.importFields({""});
             contractTable->setRow(ACCOUNT_CODE, std::move(emptyCodeEntry));
         }
 

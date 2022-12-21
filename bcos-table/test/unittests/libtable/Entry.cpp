@@ -60,8 +60,8 @@ BOOST_AUTO_TEST_CASE(viewEqual)
 
 BOOST_AUTO_TEST_CASE(copyFrom)
 {
-    auto entry1 = std::make_shared<Entry>(tableInfo);
-    auto entry2 = std::make_shared<Entry>(tableInfo);
+    auto entry1 = std::make_shared<Entry>();
+    auto entry2 = std::make_shared<Entry>();
     BOOST_CHECK_EQUAL(entry1->dirty(), false);
     entry1->setField(0, "value");
     BOOST_TEST(entry1->dirty() == true);
@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(copyFrom)
 
 BOOST_AUTO_TEST_CASE(functions)
 {
-    auto entry = std::make_shared<Entry>(tableInfo);
+    auto entry = std::make_shared<Entry>();
     BOOST_TEST(entry->dirty() == false);
     BOOST_TEST(entry->status() == Entry::Status::EMPTY);
     entry->setStatus(Entry::Status::DELETED);
@@ -165,6 +165,17 @@ BOOST_AUTO_TEST_CASE(largeObject)
     BOOST_CHECK_EQUAL(entry.getField(0), std::string(1024, 'a'));
 }
 
+BOOST_AUTO_TEST_CASE(stringView)
+{
+    Entry entry;
+    std::string_view a(
+        "Hello world! fisco bcos! fisco bcos! fisco bcos! fisco bcos! larger than 32");
+    entry.set(a);
+
+    Entry entry2 = entry;
+    BOOST_CHECK_EQUAL(entry2.get(), a);
+}
+
 BOOST_AUTO_TEST_CASE(entryHash)
 {
     auto data = "Hello world!"s;
@@ -181,7 +192,8 @@ BOOST_AUTO_TEST_CASE(entryHash)
     BOOST_CHECK_EQUAL(oldHash, oldExpect);
 
     entry.setStatus(Entry::DELETED);
-    auto deletedHash = entry.hash(table, key, sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    auto deletedHash =
+        entry.hash(table, key, sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
     auto anyHasher = sm3->hasher();
     auto deletedExpect = std::visit(
@@ -198,7 +210,8 @@ BOOST_AUTO_TEST_CASE(entryHash)
 
     entry.setStatus(Entry::MODIFIED);
     entry.setField(0, data);
-    auto modifyHash = entry.hash(table, key, sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    auto modifyHash =
+        entry.hash(table, key, sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     anyHasher = sm3->hasher();
     auto modifyExpect = std::visit(
         [&](auto& hasher) {
@@ -214,7 +227,8 @@ BOOST_AUTO_TEST_CASE(entryHash)
     BOOST_CHECK_EQUAL(modifyHash, modifyExpect);
 
     entry.setStatus(Entry::NORMAL);
-    auto normalHash = entry.hash(table, key, sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    auto normalHash =
+        entry.hash(table, key, sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     BOOST_CHECK_EQUAL(normalHash, bcos::crypto::HashType{});
 }
 

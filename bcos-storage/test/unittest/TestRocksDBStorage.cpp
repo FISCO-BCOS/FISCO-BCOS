@@ -100,7 +100,7 @@ struct TestRocksDBStorageFixture
         for (size_t i = 0; i < 1000; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            Entry entry(testTableInfo);
+            Entry entry;
             entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
             rocksDBStorage->asyncSetRow(testTableName, key, entry,
                 [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
@@ -112,7 +112,7 @@ struct TestRocksDBStorageFixture
         for (size_t i = 0; i < 1000; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            Entry entry(testTableInfo);
+            Entry entry;
             entry.setStatus(Entry::DELETED);
 
             rocksDBStorage->asyncSetRow(testTableName, key, entry,
@@ -131,7 +131,7 @@ struct TestRocksDBStorageFixture
         for (size_t i = 0; i < tableEntries; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            Entry entry(testTableInfo);
+            Entry entry;
             entry.importFields({"value_delete"});
             testTable->setRow(key, std::move(entry));
         }
@@ -276,7 +276,7 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     for (size_t i = 1000; i < 2000; ++i)
     {
         std::string key = "newkey" + boost::lexical_cast<std::string>(i);
-        auto entry = Entry(tableInfo);
+        auto entry = Entry();
         entry.importFields({"value12345"});
 
         rocksDBStorage->asyncSetRow(tableInfo->name(), key, entry,

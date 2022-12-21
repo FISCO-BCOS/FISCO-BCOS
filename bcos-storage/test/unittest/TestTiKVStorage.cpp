@@ -76,7 +76,7 @@ struct TestTiKVStorageFixture
         for (size_t i = 0; i < total; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            Entry entry(testTableInfo);
+            Entry entry;
             entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
             storage->asyncSetRow(testTableName, key, entry,
                 [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
@@ -88,7 +88,7 @@ struct TestTiKVStorageFixture
         for (size_t i = 0; i < total; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            Entry entry(testTableInfo);
+            Entry entry;
             entry.setStatus(Entry::DELETED);
 
             storage->asyncSetRow(testTableName, key, entry,
@@ -105,7 +105,7 @@ struct TestTiKVStorageFixture
         for (size_t i = 0; i < tableEntries; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            Entry entry(testTableInfo);
+            Entry entry;
             entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
             testTable->setRow(key, std::move(entry));
         }
@@ -260,7 +260,7 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     for (size_t i = 1000; i < 1000 + total; ++i)
     {
         std::string key = "newkey" + boost::lexical_cast<std::string>(i);
-        auto entry = Entry(tableInfo);
+        auto entry = Entry();
         entry.importFields({"value12345"});
 
         storage->asyncSetRow(tableInfo->name(), key, entry,
@@ -549,7 +549,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     for (size_t i = 0; i < total; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
-        Entry entry(testTableInfo);
+        Entry entry;
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
@@ -756,7 +756,7 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
     for (size_t i = 0; i < total; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
-        Entry entry(testTableInfo);
+        Entry entry;
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
@@ -850,7 +850,7 @@ BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
     for (size_t i = 0; i < total; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
-        Entry entry(testTableInfo);
+        Entry entry;
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
@@ -922,7 +922,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     for (size_t i = 0; i < total; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
-        Entry entry(testTableInfo);
+        Entry entry;
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
@@ -1147,7 +1147,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     for (size_t i = 0; i < total; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
-        Entry entry(testTableInfo);
+        Entry entry;
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
