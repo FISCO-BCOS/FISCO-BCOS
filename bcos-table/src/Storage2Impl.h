@@ -15,8 +15,8 @@
 namespace bcos::storage2
 {
 
-template <bool withMRU>
-class StorageImpl : public storage2::Storage2Base<StorageImpl<withMRU>>
+template <bool withMRU, class Entry>
+class StorageImpl : public storage2::Storage2Base<StorageImpl<withMRU, Entry>, Entry>
 {
 public:
     StorageImpl() : m_buckets(std::thread::hardware_concurrency()) {}

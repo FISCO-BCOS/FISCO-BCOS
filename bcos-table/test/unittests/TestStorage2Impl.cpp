@@ -2,7 +2,6 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage2.h"
 #include <bcos-task/Wait.h>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <range/v3/view/transform.hpp>
 
@@ -20,7 +19,7 @@ BOOST_FIXTURE_TEST_SUITE(TestStorage2, Storage2ImplFixture)
 BOOST_AUTO_TEST_CASE(set)
 {
     task::syncWait([]() -> task::Task<void> {
-        storage2::StorageImpl<false> storage;
+        storage2::StorageImpl<false, storage::Entry> storage;
         std::string_view table = "table";
         for (auto i : RANGES::iota_view<int, int>(0, 100))
         {

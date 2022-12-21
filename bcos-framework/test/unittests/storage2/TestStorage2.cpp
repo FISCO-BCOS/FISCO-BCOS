@@ -9,7 +9,7 @@
 using namespace bcos;
 using namespace bcos::storage2;
 
-class MockStorage : public bcos::storage2::Storage2Base<MockStorage>
+class MockStorage : public bcos::storage2::Storage2Base<MockStorage, storage::Entry>
 {
 public:
     task::Task<void> impl_getRows(
