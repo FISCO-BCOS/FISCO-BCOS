@@ -28,7 +28,7 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     LedgerCache::Ptr ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
 
     BlockContext::Ptr blockContext = std::make_shared<bcos::executor::BlockContext>(
-        nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+        nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
 
     h256 blockhash = blockContext->hash();
     EXECUTOR_LOG(DEBUG) << blockhash;

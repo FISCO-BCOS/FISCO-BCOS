@@ -3,9 +3,9 @@
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-utilities/Ranges.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/endian.hpp>
@@ -81,61 +81,21 @@ public:
         return true;
     }
 
-    void generateMerkleProof(HashRange auto const& originHashes, bcos::concepts::bytebuffer::Hash auto const& hash, 
-        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& out) const
+    void generateMerkleProof(HashRange auto const& originHashes,
+        bcos::concepts::bytebuffer::Hash auto const& hash, ProofRange auto& out) const
     {
-        
-        if (RANGES::empty(originHashes)) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
-        }
-        
         // Find the hash in originHashes first
-        auto _it = RANGES::find(originHashes, hash);
-        if (_it == RANGES::end(originHashes)) [[unlikely]]
+        auto it = RANGES::find(originHashes, hash);
+        if (it == RANGES::end(originHashes)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash!"});
         }
 
-        if (RANGES::size(originHashes) == 1)
-        {
-            return;
-        }
+        std::vector<HashType> merkle;
+        generateMerkle(originHashes, merkle);
 
-
-        auto index = RANGES::distance(RANGES::begin(originHashes), _it);
-        auto indexAligned = indexAlign(index);
-        pushResult(originHashes, indexAligned, index, out);
-
-        std::vector<bcos::bytes> merkle;
-        [[maybe_unused]] auto [merkleNodes, merkleLevels] =
-            getMerkleSize(RANGES::size(originHashes));
-        bcos::concepts::resizeTo(merkle, merkleNodes);
-
-        // Calculate first level from originHashes
-        auto it = RANGES::begin(merkle);
-        auto nextNodes = getNextLevelSize(RANGES::size(originHashes));
-        setNumberToHash(nextNodes, *(it++));
-        auto outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
-        calculateLevelHashes(originHashes, outputRange);
-
-        while (nextNodes > 1)  // Calculate next level from out, ignore only root
-        {
-            index = indexAligned / width;
-            indexAligned = indexAlign(index);
-            pushResult(outputRange, indexAligned, index, out);
-
-            auto inputRange = outputRange;
-
-            RANGES::advance(it, nextNodes);
-            nextNodes = getNextLevelSize(nextNodes);
-
-            setNumberToHash(nextNodes, *(it++));
-            outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
-            calculateLevelHashes(inputRange, outputRange);
-
-            assert(it <= RANGES::end(merkle));
-        }
+        generateMerkleProof(
+            originHashes, merkle, RANGES::distance(RANGES::begin(originHashes), it), out);
     }
 
     void generateMerkleProof(HashRange auto const& originHashes, MerkleRange auto const& merkle,
@@ -170,7 +130,7 @@ public:
         auto [merkleNodes, merkleLevels] = getMerkleSize(RANGES::size(originHashes));
         if (merkleNodes != RANGES::size(merkle))
         {
-            BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle size mismitch!"});
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"Merkle size mismatch!"});
         }
 
         index = indexAlign(index);
@@ -196,10 +156,10 @@ public:
                 break;
             }
 
-            auto count = std::min((size_t)(levelLength - index), (size_t)width);
+            auto nextCount = std::min((size_t)(levelLength - index), (size_t)width);
 
-            setNumberToHash(count, out.emplace_back());
-            for (auto it = inputIt + index; it < inputIt + index + count; ++it)
+            setNumberToHash(nextCount, out.emplace_back());
+            for (auto it = inputIt + index; it < inputIt + index + nextCount; ++it)
             {
                 bcos::concepts::bytebuffer::assignTo(*it, out.emplace_back());
             }
@@ -240,8 +200,8 @@ public:
             nextNodes = getNextLevelSize(nextNodes);
 
             setNumberToHash(nextNodes, *(it++));
-            auto outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
-            calculateLevelHashes(inputRange, outputRange);
+            auto nextOutputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
+            calculateLevelHashes(inputRange, nextOutputRange);
 
             assert(it <= RANGES::end(out));
         }
@@ -299,35 +259,6 @@ private:
                 }
             });
     }
-
-    static void pushResult(HashRange auto const& originHashes, std::integral auto start, std::integral auto index, 
-        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof)
-    {
-        auto count = std::min((size_t)(RANGES::size(originHashes) - start), (size_t)width);
-        
-        // leftPath = [it, middle)
-        std::vector<std::string> leftPath{};
-        // rightPath = (middle, it + count]
-        std::vector<std::string> rightPath{};
-        
-        auto _begin = RANGES::begin(originHashes) + start;
-        auto _middle = RANGES::begin(originHashes) + index;
-        auto _end = _begin + count;
-        
-        for (auto _it = _begin; _it < _middle; ++_it)
-        {
-            leftPath.emplace_back(*toHexString(*_it));
-        }
-
-        for (auto _it = _middle + 1; _it < _end; ++_it)
-        {
-            rightPath.emplace_back(*toHexString(*_it));
-        }
-
-        auto singleTree = std::make_pair(std::move(leftPath), std::move(rightPath));
-        merkleProof.emplace_back(singleTree);
-    }
-    
 };
 
 }  // namespace bcos::crypto::merkle

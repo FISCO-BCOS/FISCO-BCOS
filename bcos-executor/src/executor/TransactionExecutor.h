@@ -310,7 +310,7 @@ protected:
     bool m_isWasm = false;
     uint32_t m_blockVersion = 0;
     size_t m_keyPageSize = 0;
-    VMSchedule m_schedule = FiscoBcosScheduleV4;
+    VMSchedule m_schedule = FiscoBcosSchedule;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;

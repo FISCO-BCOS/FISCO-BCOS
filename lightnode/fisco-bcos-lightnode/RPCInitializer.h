@@ -111,6 +111,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             auto protocol = bcos::protocol::ProtocolInfo();
             protocol.setMinVersion(4);
             protocol.setMaxVersion(1);
+            protocol.setVersion(nodeConfig->compatibilityVersion());
             nodeInfo->setNodeProtocol(std::move(protocol));
             nodeInfo->setNodeType(bcos::protocol::NodeType::None);
             groupInfo->appendNodeInfo(std::move(nodeInfo));

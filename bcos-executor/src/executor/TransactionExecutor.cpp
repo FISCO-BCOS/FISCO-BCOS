@@ -32,6 +32,7 @@
 #include "../executive/ExecutiveStackFlow.h"
 #include "../executive/TransactionExecutive.h"
 #include "../precompiled/BFSPrecompiled.h"
+#include "../precompiled/CastPrecompiled.h"
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/KVTablePrecompiled.h"
@@ -48,7 +49,6 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
-#include "bcos-executor/src/precompiled/CastPrecompiled.h"
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -158,7 +158,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 
 void TransactionExecutor::initEvmEnvironment()
 {
-    m_schedule = FiscoBcosScheduleV4;
+    m_schedule = FiscoBcosSchedule;
 
     auto fillZero = [](int _num) -> std::string {
         std::stringstream stream;
@@ -474,7 +474,7 @@ void TransactionExecutor::dmcExecuteTransaction(bcos::protocol::ExecutionMessage
 {
     EXECUTOR_NAME_LOG(TRACE) << "ExecuteTransaction request"
                              << LOG_KV("ContextID", input->contextID())
-                             << LOG_KV("seq", input->seq()) << LOG_KV("message type", input->type())
+                             << LOG_KV("seq", input->seq()) << LOG_KV("messageType", (int32_t)input->type())
                              << LOG_KV("to", input->to()) << LOG_KV("create", input->create());
 
     if (!m_isRunning)
@@ -652,7 +652,7 @@ void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::U
 {
     EXECUTOR_NAME_LOG(TRACE) << "ExecuteTransaction request"
                              << LOG_KV("ContextID", input->contextID())
-                             << LOG_KV("seq", input->seq()) << LOG_KV("message type", input->type())
+                             << LOG_KV("seq", input->seq()) << LOG_KV("messageType", (int32_t)input->type())
                              << LOG_KV("to", input->to()) << LOG_KV("create", input->create());
 
     if (!m_isRunning)

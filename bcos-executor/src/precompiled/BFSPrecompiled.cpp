@@ -209,7 +209,7 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
         absolutePath, FS_TYPE_DIR, _callParameters->m_gasLeft);
     auto result = codec.encode(response);
     if (blockContext->isWasm() &&
-        protocol::versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION))
+        protocol::versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0)
     {
         result = codec.encode((int32_t)response);
     }

@@ -627,14 +627,14 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 evmcMessage.input_data = hostContext.data().data();
                 evmcMessage.input_size = hostContext.data().size();
 
-                if (hostContext.myAddress().size() < sizeof(evmcMessage.destination) * 2)
+                if (hostContext.myAddress().size() < sizeof(evmcMessage.recipient) * 2)
                 {
                     std::uninitialized_fill_n(
-                        evmcMessage.destination.bytes, sizeof(evmcMessage.destination), 0);
+                        evmcMessage.recipient.bytes, sizeof(evmcMessage.recipient), 0);
                 }
                 else
                 {
-                    boost::algorithm::unhex(hostContext.myAddress(), evmcMessage.destination.bytes);
+                    boost::algorithm::unhex(hostContext.myAddress(), evmcMessage.recipient.bytes);
                 }
 
                 if (hostContext.caller().size() < sizeof(evmcMessage.sender) * 2)
@@ -647,6 +647,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     boost::algorithm::unhex(hostContext.caller(), evmcMessage.sender.bytes);
                 }
             }
+            evmcMessage.code_address = evmcMessage.recipient;
 
             return evmcMessage;
         };
@@ -1069,7 +1070,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_REVERT:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_REVERT") << LOG_KV("to", callResults->receiveAddress)
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM_REVERT") << LOG_KV("to", callResults->receiveAddress)
                             << LOG_KV("gasLeft", callResults->gas);
         // FIXME: Copy the output for now, but copyless version possible.
         callResults->gas = _result.gasLeft();

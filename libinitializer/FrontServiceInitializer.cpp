@@ -174,7 +174,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
             _txpool->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _blockSync->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _pbft->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
-            FRONTSERVICE_LOG(DEBUG)
+            FRONTSERVICE_LOG(INFO)
                 << LOG_DESC("notifyGroupNodeInfo") << LOG_KV("connectedNodeSize", nodeIdSet.size());
         });
     FRONTSERVICE_LOG(INFO) << LOG_DESC("registerGroupNodeInfoNotification success");

@@ -356,6 +356,7 @@ public:
             });
 
         auto result = executePromise.get_future().get();
+        BOOST_CHECK_EQUAL((int32_t)result->type(), (int32_t)ExecutionMessage::MESSAGE);
 
         result->setSeq(1001);
         /// call precompiled to get deploy auth
@@ -368,7 +369,7 @@ public:
             });
 
         auto result2 = executePromise2.get_future().get();
-
+        BOOST_CHECK_EQUAL((int32_t)result2->type(), (int32_t)ExecutionMessage::FINISHED);
         result2->setSeq(1000);
         /// callback get deploy committeeManager context
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
@@ -379,6 +380,7 @@ public:
                 executePromise3.set_value(std::move(result));
             });
 
+        // result3 is the contract deploy contract request
         auto result3 = executePromise3.get_future().get();
 
         BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::MESSAGE);

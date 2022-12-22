@@ -40,7 +40,7 @@ const char* const GROUP_SIG_METHOD_SET_STR = "groupSigVerify(string,string,strin
 
 GroupSigPrecompiled::GroupSigPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
-    name2Selector[GROUP_SIG_METHOD_SET_STR] = getFuncSelector(GROUP_SIG_METHOD_SET_STR);
+    name2Selector[GROUP_SIG_METHOD_SET_STR] = getFuncSelector(GROUP_SIG_METHOD_SET_STR, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(

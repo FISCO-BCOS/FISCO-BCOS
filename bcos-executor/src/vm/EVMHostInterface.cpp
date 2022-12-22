@@ -70,7 +70,7 @@ evmc_storage_status setStorage(evmc_host_context* context,
     auto& hostContext = static_cast<HostContext&>(*context);
 
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
-
+    // TODO: use evmc_storage_status 5-8
     auto status = EVMC_STORAGE_MODIFIED;
     if (value == 0)  // TODO: Should use 32 bytes 0
     {
@@ -124,7 +124,7 @@ size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_
 }
 
 
-void selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
+bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     const evmc_address* _beneficiary) noexcept
 {
     (void)_addr;
@@ -132,6 +132,7 @@ void selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     auto& hostContext = static_cast<HostContext&>(*_context);
 
     hostContext.suicide();  // FISCO BCOS has no _beneficiary
+    return false;
 }
 
 
@@ -181,7 +182,7 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 
     memset(result.tx_gas_price.bytes, 0, 32);
     memset(result.block_coinbase.bytes, 0, 20);
-    memset(result.block_difficulty.bytes, 0, 32);
+    memset(result.block_prev_randao.bytes, 0, 32);
     memset(result.chain_id.bytes, 0, 32);
     return result;
 }

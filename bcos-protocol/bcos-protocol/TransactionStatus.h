@@ -65,13 +65,6 @@ enum class TransactionStatus : int32_t
     TransactionPoolTimeout = 10010
 };
 
-inline std::string toString(protocol::TransactionStatus const& _i)
-{
-    std::stringstream stream;
-    stream << "0x" << std::hex << static_cast<int>(_i);
-    return stream.str();
-}
-
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
 {
     switch (_er)
@@ -160,5 +153,13 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     }
     return _out;
 }
+
+inline std::string toString(protocol::TransactionStatus const& _i)
+{
+    std::stringstream stream;
+    stream << _i;
+    return stream.str();
+}
+
 }  // namespace protocol
 }  // namespace bcos

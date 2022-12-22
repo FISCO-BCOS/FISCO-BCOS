@@ -80,7 +80,7 @@ public:
     void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) override;
 
-    void registerExecutor(std::string name,
+    [[deprecated("Use SchedulerImpl::registerExecutor")]] void registerExecutor(std::string name,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         std::function<void(Error::Ptr&&)> callback) override;
 
@@ -110,6 +110,10 @@ public:
 
     inline void fetchGasLimit(protocol::BlockNumber _number = -1)
     {
+        if (m_gasLimit > 0)
+        {
+            return;
+        }
         SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
                             << LOG_KV("requestBlockNumber", _number);
         if (_number == -1)
@@ -233,7 +237,7 @@ private:
 
     std::atomic_int64_t m_calledContextID = 1;
 
-    uint64_t m_gasLimit = TRANSACTION_GAS;
+    uint64_t m_gasLimit = 0;
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
