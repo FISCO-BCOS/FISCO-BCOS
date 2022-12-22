@@ -24,46 +24,31 @@ template <class EntriesType>
 concept OutputEntries = RANGES::output_range<EntriesType, OptionalEntry>;
 
 // The class Impl only need impl_getRows and impl_setRows
-template <class Impl, class Entry>
+template <class Impl, class Key, class Value>
 class Storage2Base
 {
 public:
     static constexpr std::string_view SYS_TABLES{"s_tables"};
-    enum class SetOperationType
-    {
-        INSERT,
-        UPDATE,
-        DELETE
-    };
 
-    using SelectOperation = std::tuple<std::string_view, std::string_view>;
-    using InsertOperation = std::tuple<std::string_view, std::string_view, Entry>;
-    using UpdateOperation = std::tuple<std::string_view, std::string_view, Entry>;
-    using DeleteOperation = std::tuple<std::string_view, std::string_view>;
+    using SelectOperation = std::tuple<Key>;
+    using InsertOperation = std::tuple<Key>;
+    using UpdateOperation = std::tuple<Key, Value>;
+    using DeleteOperation = std::tuple<Key>;
     using Operation = std::variant<InsertOperation, UpdateOperation, DeleteOperation>;
 
-    // BEGIN: Pure interfaces
-    task::Task<void> getRows(
-        std::string_view tableName, InputKeys auto const& keys, OutputEntries auto& out)
-    {
-        if (RANGES::size(keys) != RANGES::size(out))
-        {
-            concepts::resizeTo(out, RANGES::size(keys));
-        }
+    using SelectResult = std::tuple<Value>;
 
-        return impl().impl_getRows(tableName, keys, out);
+    // BEGIN: Pure interfaces
+    task::Task<void> read(RANGES::range auto const& keys) requires
+        std::constructible_from<RANGES::range_value_t<decltype(keys)>, Key>
+    {
+        return impl().impl_read(keys);
     }
 
 
-    task::Task<void> setRows(std::string_view tableName, InputKeys auto const& keys,
-        InputEntries auto const& entries, SetOperationType type)
+    task::Task<void> write(RANGES::range auto operations)
     {
-        if (RANGES::size(keys) != RANGES::size(entries))
-        {
-            BOOST_THROW_EXCEPTION(UnmatchKeyEntries{});
-        }
-
-        return impl().impl_setRows(tableName, keys, entries, type);
+        return impl().impl_write(tableName, keys, entries, type);
     }
 
     template <Iterator IteratorType>
