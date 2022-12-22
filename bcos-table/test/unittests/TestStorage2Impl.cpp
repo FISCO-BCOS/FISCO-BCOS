@@ -2,11 +2,11 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage2.h"
 #include <bcos-task/Wait.h>
+#include <boost/function.hpp>
 #include <boost/test/unit_test.hpp>
 #include <range/v3/view/transform.hpp>
 
 using namespace bcos;
-
 struct Storage2ImplFixture
 {
     Storage2ImplFixture() {}

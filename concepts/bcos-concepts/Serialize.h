@@ -7,7 +7,6 @@
 
 namespace bcos::concepts::serialize
 {
-
 namespace detail
 {
 
@@ -39,6 +38,10 @@ struct encode
         {
             impl_encode(object, out);
         }
+        else
+        {
+            static_assert(sizeof(ObjectType*), "Not found member function or adl!");
+        }
     }
 };
 
@@ -48,7 +51,7 @@ struct decode
     {
         using ObjectType = std::remove_cvref_t<decltype(object)>;
         using BufferType = std::remove_cvref_t<decltype(input)>;
-        
+
         if constexpr (HasMemberFunc<ObjectType, BufferType>)
         {
             object.decode(input);
@@ -59,7 +62,7 @@ struct decode
         }
         else
         {
-            static_assert(!sizeof(object), "Not found member function or adl!");
+            static_assert(!sizeof(ObjectType*), "Not found member function or adl!");
         }
     }
 };
@@ -69,11 +72,6 @@ constexpr inline detail::encode encode{};
 constexpr inline detail::decode decode{};
 
 template <class Object>
-concept Serializable = requires(
-    Object object, std::vector<char> output, const std::vector<char>& input)
-{
-    encode(object, output);
-    decode(input, object);
-};
+concept Serializable = true;
 
 }  // namespace bcos::concepts::serialize

@@ -29,6 +29,18 @@ class Storage2Base
 {
 public:
     static constexpr std::string_view SYS_TABLES{"s_tables"};
+    enum class SetOperationType
+    {
+        INSERT,
+        UPDATE,
+        DELETE
+    };
+
+    using SelectOperation = std::tuple<std::string_view, std::string_view>;
+    using InsertOperation = std::tuple<std::string_view, std::string_view, Entry>;
+    using UpdateOperation = std::tuple<std::string_view, std::string_view, Entry>;
+    using DeleteOperation = std::tuple<std::string_view, std::string_view>;
+    using Operation = std::variant<InsertOperation, UpdateOperation, DeleteOperation>;
 
     // BEGIN: Pure interfaces
     task::Task<void> getRows(
@@ -42,15 +54,9 @@ public:
         return impl().impl_getRows(tableName, keys, out);
     }
 
-    enum class OperationType
-    {
-        INSERT,
-        UPDATE,
-        DELETE
-    };
 
     task::Task<void> setRows(std::string_view tableName, InputKeys auto const& keys,
-        InputEntries auto const& entries, OperationType type)
+        InputEntries auto const& entries, SetOperationType type)
     {
         if (RANGES::size(keys) != RANGES::size(entries))
         {
@@ -77,7 +83,6 @@ public:
             RANGES::views::transform([](OptionalEntry* ptr) -> OptionalEntry& { return *ptr; });
 
         co_await impl().impl_getRows(tableName, keysView, valuesView);
-
         co_return entry;
     }
 
