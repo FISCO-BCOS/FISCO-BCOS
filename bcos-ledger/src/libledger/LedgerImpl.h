@@ -11,7 +11,10 @@
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
+#include <bcos-executor/src/Common.h>
+#include <bcos-tool/bcos-tool/VersionConverter.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
@@ -19,6 +22,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
+#include <future>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -43,8 +47,10 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
 public:
     LedgerImpl(Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storageInterface)
-      : Ledger(std::move(blockFactory), std::move(storageInterface)), m_storage{std::move(storage)}
+      : Ledger(std::move(blockFactory), storageInterface), m_backupStorage(storageInterface), m_storage{std::move(storage)}
     {}
+
+    void setKeyPageSize(size_t keyPageSize){m_keyPageSize = keyPageSize;}
 
 private:
     template <bcos::concepts::ledger::DataFlag... Flags>
@@ -108,6 +114,59 @@ private:
 
         auto hashStr = entry->getField(0);
         bcos::concepts::bytebuffer::assignTo(hashStr, hash);
+    }
+
+    task::Task<std::string> impl_getABI(std::string _contractAddress){
+        //try to get compatibilityVersion
+        std::string  contractTableName = getContractTableName(_contractAddress);
+        auto versionEntry = storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
+        auto [compatibilityVersionStr, number] = versionEntry->template getObject<SystemConfigEntry>();
+        LEDGER_LOG(INFO) << "getABI SystemConfigEntry value is: " << compatibilityVersionStr << " , number is " << number;
+        if (!versionEntry)
+        {
+            LEDGER_LOG(WARNING) << "Not found compatibilityVersion: ";
+            co_return "error";
+        }
+        m_compatibilityVersion = bcos::tool::toVersionNumber(compatibilityVersionStr);
+
+        LEDGER_LOG(INFO) << "getABI contractAddress is: " << _contractAddress << ", contractTableName is: "
+                         << contractTableName <<", m_compatibilityVersion is " << m_compatibilityVersion;
+
+        //create keyPageStorage
+        LEDGER_LOG(INFO) << "begin create stateStorage.";
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(m_keyPageSize);
+        LEDGER_LOG(INFO) << "begin setKeyPage " << LOG_KV("m_keyPageSize", m_keyPageSize);
+        auto stateStorage =  stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion);
+        LEDGER_LOG(INFO) << "create stateStorage success.";
+
+        //try to get codeHash
+        auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");
+        //auto codeHashEntry = storage().getRow(contractTableName, "codeHash");
+
+        if(!codeHashEntry.second)[[unlikely]]
+        {
+            LEDGER_LOG(WARNING) << "Not found codeHash contractAddress:" << _contractAddress;
+            co_return "error";
+        }
+        auto codeHash = codeHashEntry.second->getField(0);
+        //auto codeHash = codeHashEntry->getField(0);
+        LEDGER_LOG(INFO) << "contractAddress is: " << _contractAddress << ", codeHash size is: " << codeHash.size()
+                         << ", codeHash is " << toHexString(codeHash) << "，codeHash is " << std::string(codeHash);
+
+        //according to codeHash get abi
+        auto entry = stateStorage->getRow(SYS_CONTRACT_ABI, codeHash);
+        //auto entry = storage().getRow(SYS_CONTRACT_ABI, codeHash);
+        if(!entry.second)[[unlikely]]
+        {
+            LEDGER_LOG(WARNING) << "Not found contractAddress abi:" << _contractAddress;
+            co_return "error";
+        }
+
+        std::string abiStr = std::string(entry.second->getField(0));
+
+        LEDGER_LOG(INFO) << "contractAddress is " << _contractAddress << "ledger impl get abi is: " << abiStr;
+
+        co_return abiStr;
     }
 
     task::Task<void> impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
@@ -592,8 +651,11 @@ private:
 
     auto& storage() { return bcos::concepts::getRef(m_storage); }
 
+    bcos::storage::StorageInterface::Ptr m_backupStorage;
     Storage m_storage;
     crypto::merkle::Merkle<Hasher> m_merkle;  // Use the default width 2
+    uint32_t m_compatibilityVersion;
+    size_t m_keyPageSize;
 };
 
 }  // namespace bcos::ledger

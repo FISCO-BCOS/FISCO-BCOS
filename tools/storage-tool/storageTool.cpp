@@ -36,6 +36,7 @@
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-table/src/StateStorageFactory.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -122,13 +123,13 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables(
             std::string(ledger::SYS_NUMBER_2_TXS),
             std::string(ledger::SYS_HASH_2_TX),
             std::string(ledger::SYS_HASH_2_RECEIPT),
-            std::string(ledger::FS_ROOT),
-            std::string(ledger::FS_APPS),
-            std::string(ledger::FS_USER),
-            std::string(ledger::FS_SYS_BIN),
-            std::string(ledger::FS_USER_TABLE),
-            std::string(ledger::SYS_CONTRACT_ABI),
-            std::string(ledger::SYS_CODE_BINARY),
+            std::string(storage::FS_ROOT),
+            std::string(storage::FS_APPS),
+            std::string(storage::FS_USER),
+            std::string(storage::FS_SYS_BIN),
+            std::string(storage::FS_USER_TABLE),
+            std::string(storage::SYS_CONTRACT_ABI),
+            std::string(storage::SYS_CODE_BINARY),
             storage::StorageInterface::SYS_TABLES,
         });
     if (version >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)

@@ -24,6 +24,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include <bcos-table/src/CacheStorageFactory.h>
+#include <bcos-table/src/StateStorageFactory.h>
 
 
 namespace bcos
@@ -40,22 +41,23 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
+        storage::StateStorageFactory::Ptr stateStorageFactory,
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
         std::string name = "executor-" + std::to_string(utcTime()))
     {  // only for test
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             std::initializer_list<std::set<std::string, std::less<>>::value_type>{
                 std::string(ledger::SYS_CONFIG),
                 std::string(ledger::SYS_CONSENSUS),
-                ledger::FS_ROOT,
-                ledger::FS_APPS,
-                ledger::FS_USER,
-                ledger::FS_SYS_BIN,
-                ledger::FS_USER_TABLE,
+                storage::FS_ROOT,
+                storage::FS_APPS,
+                storage::FS_USER,
+                storage::FS_SYS_BIN,
+                storage::FS_USER_TABLE,
                 storage::StorageInterface::SYS_TABLES,
             });
         return std::make_shared<TransactionExecutor>(ledger, txpool, cachedStorage, backendStorage,
-            executionMessageFactory, hashImpl, isWasm, isAuthCheck, keyPageSize,
+            executionMessageFactory, stateStorageFactory,  hashImpl, isWasm, isAuthCheck,
             keyPageIgnoreTables, name);
     }
 
@@ -63,13 +65,14 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::CacheStorageFactory::Ptr cacheFactory,
         storage::TransactionalStorageInterface::Ptr storage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
+        storage::StateStorageFactory::Ptr stateStorageFactory,
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
         std::string name)
       : m_name(name),
-        m_keyPageSize(keyPageSize),
         m_ledger(ledger),
         m_txpool(txpool),
         m_cacheFactory(cacheFactory),
+        m_stateStorageFactory(stateStorageFactory),
         m_storage(storage),
         m_executionMessageFactory(executionMessageFactory),
         m_hashImpl(hashImpl),
@@ -80,11 +83,11 @@ public:
             std::initializer_list<std::set<std::string, std::less<>>::value_type>{
                 std::string(ledger::SYS_CONFIG),
                 std::string(ledger::SYS_CONSENSUS),
-                ledger::FS_ROOT,
-                ledger::FS_APPS,
-                ledger::FS_USER,
-                ledger::FS_SYS_BIN,
-                ledger::FS_USER_TABLE,
+                storage::FS_ROOT,
+                storage::FS_APPS,
+                storage::FS_USER,
+                storage::FS_SYS_BIN,
+                storage::FS_USER_TABLE,
                 storage::StorageInterface::SYS_TABLES,
             });
     }
@@ -93,7 +96,7 @@ public:
     {
         auto executor = std::make_shared<TransactionExecutor>(m_ledger, m_txpool,
             m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
-            m_executionMessageFactory, m_hashImpl, m_isWasm, m_isAuthCheck, m_keyPageSize,
+            m_executionMessageFactory, m_stateStorageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,
             m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
         if (f_onNeedSwitchEvent)
         {
@@ -106,11 +109,11 @@ public:
 
 private:
     std::string m_name;
-    size_t m_keyPageSize;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::CacheStorageFactory::Ptr m_cacheFactory;
+    storage::StateStorageFactory::Ptr m_stateStorageFactory;
     storage::TransactionalStorageInterface::Ptr m_storage;
     protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
