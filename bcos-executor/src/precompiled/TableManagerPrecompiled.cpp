@@ -342,6 +342,11 @@ void TableManagerPrecompiled::desc(
         return;
     }
     auto keyAndValue = sysEntry->get();
+    // for compatibility
+    if (keyAndValue.starts_with(V320_TABLE_INFO_PREFIX))
+    {
+        keyAndValue = keyAndValue.substr(keyAndValue.find_first_of(',') + 1);
+    }
     auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
     auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
     std::vector<std::string> values;
