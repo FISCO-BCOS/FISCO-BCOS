@@ -48,6 +48,9 @@ DERIVE_BCOS_EXCEPTION(InvalidEncoding);
 
 namespace executor
 {
+
+using bytes_view = std::basic_string_view<uint8_t>;
+
 #define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
 #define EXECUTOR_BLK_LOG(LEVEL, number) EXECUTOR_LOG(LEVEL) << BLOCK_NUMBER(number)
 #define EXECUTOR_NAME_LOG(LEVEL) \
@@ -163,7 +166,9 @@ struct VMSchedule
     unsigned sstoreRefundGas = 15000;
     unsigned suicideRefundGas = 24000;
     unsigned createDataGas = 20;
-    unsigned maxCodeSize = 0x40000;
+    unsigned maxEvmCodeSize = 0x40000;
+    unsigned maxWasmCodeSize = 0xF00000;  // 15MB
+
 };
 
 static const VMSchedule FiscoBcosSchedule = [] {
@@ -171,11 +176,11 @@ static const VMSchedule FiscoBcosSchedule = [] {
     return schedule;
 }();
 
-static const VMSchedule BCOSWASMSchedule = [] {
-    VMSchedule schedule = FiscoBcosSchedule;
-    schedule.maxCodeSize = 0xF00000;  // 15MB
-    // Ensure that zero bytes are not subsidised and are charged the same as
-    // non-zero bytes.
+static const VMSchedule FiscoBcosScheduleV320 = [] {
+    VMSchedule schedule = VMSchedule();
+    schedule.enablePairs = true;
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
+    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
     return schedule;
 }();
 

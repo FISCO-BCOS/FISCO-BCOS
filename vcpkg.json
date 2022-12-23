@@ -22,6 +22,7 @@
     "boost-iostreams",
     "boost-thread",
     "boost-test",
+    "boost-compute",
     "boost-multiprecision",
     "boost-program-options",
     "ms-gsl",

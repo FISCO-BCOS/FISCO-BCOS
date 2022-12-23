@@ -660,7 +660,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
         if (hostContext.isCreate())
         {
-            auto mode = toRevision(hostContext.vmSchedule());
             auto evmcMessage = getEVMCMessage(*blockContext, hostContext);
 
             auto code = hostContext.data();
@@ -670,10 +669,10 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 vmKind = VMKind::BcosWasm;
             }
-
-            auto vm = VMFactory::create(vmKind);
-
-            auto ret = vm.exec(hostContext, mode, &evmcMessage, code.data(), code.size());
+            auto revision = toRevision(hostContext.vmSchedule());
+            // the code evm uses to deploy is not runtime code, so create can not use cache
+            auto vm = blockContext->getVMFactory()->create(vmKind, revision, crypto::HashType(), code, true);
+            auto ret = vm.execute(hostContext, &evmcMessage);
 
             auto callResults = hostContext.takeCallParameters();
             // clear unnecessary logs
@@ -709,15 +708,16 @@ CallParameters::UniquePtr TransactionExecutive::go(
             }
 
             auto outputRef = ret.output();
-            if (outputRef.size() > hostContext.vmSchedule().maxCodeSize)
+            auto maxCodeSize = blockContext->isWasm() ? blockContext->vmSchedule().maxWasmCodeSize :
+                                                        hostContext.vmSchedule().maxEvmCodeSize;
+            if (outputRef.size() > maxCodeSize)
             {
                 revert();
                 callResults->type = CallParameters::REVERT;
                 callResults->status = (int32_t)TransactionStatus::OutOfGas;
                 callResults->message =
                     "Code is too large: " + boost::lexical_cast<std::string>(outputRef.size()) +
-                    " limit: " +
-                    boost::lexical_cast<std::string>(hostContext.vmSchedule().maxCodeSize);
+                    " limit: " + boost::lexical_cast<std::string>(maxCodeSize);
                 if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                 {
                     writeErrInfoToOutput("Deploy code is too large.", *callResults);
@@ -813,7 +813,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             return callResults;
         }
         else
-        {
+        {  // execute
             auto codeEntry = hostContext.code();
             if (!codeEntry)
             {
@@ -843,12 +843,11 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 vmKind = VMKind::BcosWasm;
             }
-            auto vm = VMFactory::create(vmKind);
-
-            auto mode = toRevision(hostContext.vmSchedule());
+            auto revision = toRevision(hostContext.vmSchedule());
+            auto vm = blockContext->getVMFactory()->create(vmKind, revision, hostContext.codeHash(),
+                bytes_view((uint8_t*)code.data(), code.size()));
             auto evmcMessage = getEVMCMessage(*blockContext, hostContext);
-            auto ret = vm.exec(hostContext, mode, &evmcMessage,
-                reinterpret_cast<const byte*>(code.data()), code.size());
+            auto ret = vm.execute(hostContext, &evmcMessage);
 
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
