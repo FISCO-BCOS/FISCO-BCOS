@@ -557,6 +557,7 @@ public:
         auto result14 = executePromise14.get_future().get();
 
         result14->setSeq(1006);
+        BOOST_CHECK_EQUAL((int32_t)result14->type(), (int32_t)ExecutionMessage::FINISHED);
 
         // committee callback to voteComputer
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise15;
@@ -567,6 +568,7 @@ public:
                 executePromise15.set_value(std::move(result));
             });
         auto result15 = executePromise15.get_future().get();
+        BOOST_CHECK_EQUAL((int32_t)result15->type(), (int32_t)ExecutionMessage::FINISHED);
 
         result15->setSeq(1004);
 
@@ -581,7 +583,7 @@ public:
 
         auto result16 = executePromise16.get_future().get();
 
-        BOOST_CHECK_EQUAL(result16->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL((int32_t)result16->type(), (int32_t)ExecutionMessage::FINISHED);
         BOOST_CHECK_EQUAL(result16->contextID(), 99);
         BOOST_CHECK_EQUAL(result16->seq(), 1004);
         BOOST_CHECK_EQUAL(result16->create(), false);

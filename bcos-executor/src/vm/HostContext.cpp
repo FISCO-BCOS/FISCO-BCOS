@@ -560,13 +560,13 @@ std::optional<storage::Entry> HostContext::code()
     return m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
 }
 
-h256 HostContext::codeHash()
+crypto::HashType HostContext::codeHash()
 {
     auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
     if (entry)
     {
         auto code = entry->getField(0);
-        return h256(code, h256::StringDataType::FromBinary);
+        return crypto::HashType(code, crypto::HashType::StringDataType::FromBinary);
     }
 
     return {};
