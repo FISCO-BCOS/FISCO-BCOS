@@ -89,7 +89,7 @@ struct WasmExecutorFixture
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
         executor = bcos::executor::TransactionExecutorFactory::build(
-            ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
+            ledger, txpool, nullptr, backend, executionResultFactory, nullptr, hashImpl, true, false, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();

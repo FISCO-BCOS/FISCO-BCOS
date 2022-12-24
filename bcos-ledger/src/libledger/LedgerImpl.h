@@ -36,6 +36,7 @@ struct UnexpectedRowIndex : public bcos::error::Exception {};
 struct MismatchTransactionCount : public bcos::error::Exception {};
 struct MismatchParentHash: public bcos::error::Exception {};
 struct NotFoundBlockHeader: public bcos::error::Exception {};
+struct GetABIError : public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
@@ -121,51 +122,42 @@ private:
         std::string  contractTableName = getContractTableName(_contractAddress);
         auto versionEntry = storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
         auto [compatibilityVersionStr, number] = versionEntry->template getObject<SystemConfigEntry>();
-        LEDGER_LOG(INFO) << "getABI SystemConfigEntry value is: " << compatibilityVersionStr << " , number is " << number;
         if (!versionEntry)
         {
             LEDGER_LOG(WARNING) << "Not found compatibilityVersion: ";
-            co_return "error";
+            BOOST_THROW_EXCEPTION(GetABIError{}
+                                  << bcos::error::ErrorMessage{"get compatibilityVersion not found"});
         }
         m_compatibilityVersion = bcos::tool::toVersionNumber(compatibilityVersionStr);
-
-        LEDGER_LOG(INFO) << "getABI contractAddress is: " << _contractAddress << ", contractTableName is: "
+        LEDGER_LOG(TRACE) << "getABI contractAddress is: " << _contractAddress << ", contractTableName is: "
                          << contractTableName <<", m_compatibilityVersion is " << m_compatibilityVersion;
 
         //create keyPageStorage
-        LEDGER_LOG(INFO) << "begin create stateStorage.";
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(m_keyPageSize);
-        LEDGER_LOG(INFO) << "begin setKeyPage " << LOG_KV("m_keyPageSize", m_keyPageSize);
         auto stateStorage =  stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion);
-        LEDGER_LOG(INFO) << "create stateStorage success.";
 
         //try to get codeHash
         auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");
-        //auto codeHashEntry = storage().getRow(contractTableName, "codeHash");
-
         if(!codeHashEntry.second)[[unlikely]]
         {
             LEDGER_LOG(WARNING) << "Not found codeHash contractAddress:" << _contractAddress;
-            co_return "error";
+            BOOST_THROW_EXCEPTION(GetABIError{}
+                                  << bcos::error::ErrorMessage{"Get CodeHash not found"});
         }
         auto codeHash = codeHashEntry.second->getField(0);
-        //auto codeHash = codeHashEntry->getField(0);
-        LEDGER_LOG(INFO) << "contractAddress is: " << _contractAddress << ", codeHash size is: " << codeHash.size()
-                         << ", codeHash is " << toHexString(codeHash) << "，codeHash is " << std::string(codeHash);
 
         //according to codeHash get abi
         auto entry = stateStorage->getRow(SYS_CONTRACT_ABI, codeHash);
-        //auto entry = storage().getRow(SYS_CONTRACT_ABI, codeHash);
         if(!entry.second)[[unlikely]]
         {
             LEDGER_LOG(WARNING) << "Not found contractAddress abi:" << _contractAddress;
-            co_return "error";
+            BOOST_THROW_EXCEPTION(
+                GetABIError{}
+                    << bcos::error::ErrorMessage{"Get Abi not found"});
         }
 
         std::string abiStr = std::string(entry.second->getField(0));
-
-        LEDGER_LOG(INFO) << "contractAddress is " << _contractAddress << "ledger impl get abi is: " << abiStr;
-
+        LEDGER_LOG(TRACE) << "contractAddress is " << _contractAddress << "ledger impl get abi is: " << abiStr;
         co_return abiStr;
     }
 

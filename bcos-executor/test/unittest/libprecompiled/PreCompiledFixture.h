@@ -99,7 +99,7 @@ public:
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-            storage, executionResultFactory, hashImpl, _isWasm, _isCheckAuth, false);
+            storage, executionResultFactory, nullptr, hashImpl, _isWasm, _isCheckAuth, false);
 
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
