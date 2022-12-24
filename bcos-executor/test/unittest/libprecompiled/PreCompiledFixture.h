@@ -41,6 +41,7 @@
 #include <bcos-framework/storage/Table.h>
 #include <bcos-tars-protocol/testutil/FakeBlock.h>
 #include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+#include "bcos-table/src/StateStorageFactory.h"
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <libinitializer/AuthInitializer.h>
@@ -97,9 +98,9 @@ public:
         ledger->setBlockNumber(header->number() - 1);
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-
+        auto stateStorageFactory = std::make_shared<StateStorgeFactory>();
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-            storage, executionResultFactory, nullptr, hashImpl, _isWasm, _isCheckAuth, false);
+            storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth, false);
 
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();

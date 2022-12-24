@@ -28,6 +28,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StateStorageFactory.h"
 #include "bcos-tars-protocol/testutil/FakeBlockHeader.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -81,9 +82,9 @@ struct TransactionExecutorFixture
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
         auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
-
+        auto stateStorageFactory = std::make_shared<StateStorgeFactory>();
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-            backend, executionResultFactory, nullptr, hashImpl, false, false, false);
+            backend, executionResultFactory, stateStorageFactory, hashImpl, false, false, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
