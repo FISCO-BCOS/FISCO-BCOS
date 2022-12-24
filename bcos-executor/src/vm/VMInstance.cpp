@@ -21,8 +21,8 @@
 
 #include "VMInstance.h"
 #include "HostContext.h"
-#include "evmone/advanced_execution.hpp"
 #include "evmone/advanced_analysis.hpp"
+#include "evmone/advanced_execution.hpp"
 
 using namespace std;
 namespace bcos::executor
@@ -43,8 +43,8 @@ VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view cod
     }
 }
 
-VMInstance::VMInstance(std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis> analysis,
-    evmc_revision revision, bytes_view code) noexcept
+VMInstance::VMInstance(
+    std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision, bytes_view code) noexcept
   : m_analysis(analysis), m_revision(revision), m_code(code)
 {
     assert(m_analysis != nullptr);
@@ -57,9 +57,15 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
         return Result(m_instance->execute(m_instance, _hostContext.interface, &_hostContext,
             m_revision, _msg, m_code.data(), m_code.size()));
     }
-    // TODO: state also could be reused
     auto state = std::make_unique<evmone::advanced::AdvancedExecutionState>(
         *_msg, m_revision, *_hostContext.interface, &_hostContext, m_code);
+    {  // baseline
+
+        // auto vm = evmc_create_evmone();
+        // return Result(evmone::baseline::execute(*static_cast<evmone::VM*>(vm), *state,
+        // *m_analysis));
+    }
+    // advanced, TODO: state also could be reused
     return Result(evmone::advanced::execute(*state, *m_analysis));
 }
 
