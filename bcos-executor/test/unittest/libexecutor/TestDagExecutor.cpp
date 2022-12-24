@@ -198,7 +198,7 @@ BOOST_FIXTURE_TEST_SUITE(TestDagExecutor, DagExecutorFixture)
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<StateStorgeFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory,  hashImpl, true, false, false);
 
@@ -433,7 +433,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<StateStorgeFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false, false);
 
@@ -663,7 +663,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<StateStorgeFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false, false);
 
@@ -910,7 +910,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<StateStorgeFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false, false);
 

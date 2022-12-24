@@ -82,7 +82,7 @@ struct TransactionExecutorFixture
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
         auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
-        auto stateStorageFactory = std::make_shared<StateStorgeFactory>();
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
             backend, executionResultFactory, stateStorageFactory, hashImpl, false, false, false);
 

@@ -98,7 +98,7 @@ public:
         ledger->setBlockNumber(header->number() - 1);
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        auto stateStorageFactory = std::make_shared<StateStorgeFactory>();
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
             storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth, false);
 

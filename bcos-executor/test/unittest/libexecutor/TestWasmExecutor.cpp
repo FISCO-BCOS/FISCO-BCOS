@@ -88,7 +88,7 @@ struct WasmExecutorFixture
         backend = std::make_shared<MockTransactionalStorage>(hashImpl);
         ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        auto stateStorageFactory = std::make_shared<StateStorgeFactory>();
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
         executor = bcos::executor::TransactionExecutorFactory::build(
             ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false, false);
 
