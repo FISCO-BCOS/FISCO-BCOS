@@ -106,6 +106,7 @@ struct P2PInfo
     P2PInfo() = default;
     ~P2PInfo() {}
     std::string p2pID;
+    std::string p2pIDWithoutExtInfo;
     std::string agencyName;
     std::string nodeName;
     NodeIPEndpoint nodeIPEndpoint;

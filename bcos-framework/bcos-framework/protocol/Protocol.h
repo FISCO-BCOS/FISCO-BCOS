@@ -130,7 +130,8 @@ const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_1_VERSION;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
-inline int versionCompareTo(std::variant<uint32_t, BlockVersion> _v1, BlockVersion const& _v2)
+[[nodiscard]] inline int versionCompareTo(
+    std::variant<uint32_t, BlockVersion> _v1, BlockVersion const& _v2)
 {
     int flag = 0;
     std::visit(

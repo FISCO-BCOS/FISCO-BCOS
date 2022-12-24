@@ -32,6 +32,7 @@
 #include "../executive/ExecutiveStackFlow.h"
 #include "../executive/TransactionExecutive.h"
 #include "../precompiled/BFSPrecompiled.h"
+#include "../precompiled/CastPrecompiled.h"
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/KVTablePrecompiled.h"
@@ -48,7 +49,6 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
-#include "bcos-executor/src/precompiled/CastPrecompiled.h"
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -133,7 +133,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_isAuthCheck(isAuthCheck),
     m_isWasm(isWasm),
     m_keyPageIgnoreTables(std::move(keyPageIgnoreTables)),
-    m_ledgerCache(std::make_shared<LedgerCache>(ledger))
+    m_ledgerCache(std::make_shared<LedgerCache>(ledger)),
+    m_vmFactory(std::make_shared<VMFactory>(c_EVMONE_CACHE_SIZE))
 {
     assert(m_backendStorage);
     m_ledgerCache->fetchCompatibilityVersion();
@@ -160,8 +161,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 
 void TransactionExecutor::initEvmEnvironment()
 {
-    m_schedule = FiscoBcosScheduleV4;
-
     auto fillZero = [](int _num) -> std::string {
         std::stringstream stream;
         stream << std::setfill('0') << std::setw(40) << std::hex << _num;
@@ -259,8 +258,6 @@ void TransactionExecutor::initEvmEnvironment()
 
 void TransactionExecutor::initWasmEnvironment()
 {
-    m_schedule = BCOSWASMSchedule;
-
     m_builtInPrecompiled = std::make_shared<std::set<std::string>>();
     m_constantPrecompiled =
         std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
@@ -329,8 +326,9 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
     storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        currentHeader, m_schedule, m_isWasm, m_isAuthCheck, m_keyPageIgnoreTables);
-
+        currentHeader, getVMSchedule((uint32_t)currentHeader->version()), m_isWasm, m_isAuthCheck,
+        m_keyPageIgnoreTables);
+    context->setVMFactory(m_vmFactory);
     if (f_onNeedSwitchEvent)
     {
         context->registerNeedSwitchEvent(f_onNeedSwitchEvent);
@@ -344,8 +342,9 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        blockNumber, blockHash, timestamp, blockVersion, m_schedule, m_isWasm, m_isAuthCheck);
-
+        blockNumber, blockHash, timestamp, blockVersion, getVMSchedule((uint32_t)blockVersion),
+        m_isWasm, m_isAuthCheck);
+    context->setVMFactory(m_vmFactory);
     return context;
 }
 
@@ -476,7 +475,8 @@ void TransactionExecutor::dmcExecuteTransaction(bcos::protocol::ExecutionMessage
 {
     EXECUTOR_NAME_LOG(TRACE) << "ExecuteTransaction request"
                              << LOG_KV("ContextID", input->contextID())
-                             << LOG_KV("seq", input->seq()) << LOG_KV("message type", input->type())
+                             << LOG_KV("seq", input->seq())
+                             << LOG_KV("messageType", (int32_t)input->type())
                              << LOG_KV("to", input->to()) << LOG_KV("create", input->create());
 
     if (!m_isRunning)
@@ -654,7 +654,8 @@ void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::U
 {
     EXECUTOR_NAME_LOG(TRACE) << "ExecuteTransaction request"
                              << LOG_KV("ContextID", input->contextID())
-                             << LOG_KV("seq", input->seq()) << LOG_KV("message type", input->type())
+                             << LOG_KV("seq", input->seq())
+                             << LOG_KV("messageType", (int32_t)input->type())
                              << LOG_KV("to", input->to()) << LOG_KV("create", input->create());
 
     if (!m_isRunning)

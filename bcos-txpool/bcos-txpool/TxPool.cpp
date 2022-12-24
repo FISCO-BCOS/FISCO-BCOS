@@ -98,8 +98,8 @@ task::Task<void> TxPool::onReceivePushTransaction(
     }
     catch (std::exception& e)
     {
-        TXPOOL_LOG(INFO) << "Submit transaction failed from p2p. "
-                         << boost::diagnostic_information(e);
+        TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
+                          << boost::diagnostic_information(e);
     }
 }
 

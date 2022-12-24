@@ -119,7 +119,7 @@ public:
     virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
-    bytesConstRef data() const { return ref(m_callParameters->data); }
+    bytes_view data() const { return bytes_view(m_callParameters->data.data(), m_callParameters->data.size()); }
     virtual std::optional<storage::Entry> code();
     bool isCodeHasPrefix(std::string_view _prefix) const;
     h256 codeHash();

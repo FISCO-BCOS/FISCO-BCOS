@@ -56,6 +56,9 @@ private:
     void count(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void countV32(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void insert(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
@@ -65,10 +68,16 @@ private:
     void updateByCondition(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void updateByConditionV32(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void removeByKey(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void removeByCondition(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void removeByConditionV32(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void buildKeyCondition(std::shared_ptr<storage::Condition>& keyCondition,
@@ -76,12 +85,12 @@ private:
         const precompiled::LimitTuple& limit) const;
     bool buildConditions(std::optional<precompiled::Condition>& valueCondition,
         const precompiled::Conditions& conditions, const precompiled::LimitTuple& limit,
-        uint32_t version, size_t columnSize, bool isNumericalOrder) const;
+        uint32_t version, precompiled::TableInfoTupleV320& tableInfo) const;
     void desc(precompiled::TableInfo& _tableInfo, const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters) const;
-    bool isNumericalOrder(std::shared_ptr<executor::TransactionExecutive> _executive,
-        PrecompiledExecResult::Ptr _callParameters, const std::string& _tableName);
+        PrecompiledExecResult::Ptr const& _callParameters, bool withKeyOrder) const;
+    bool isNumericalOrder(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, const std::string& _tableName);
     static bool isNumericalOrder(const TableInfoTupleV320& tableInfo);
 
     inline void registerFunc(uint32_t _selector, CRUDParams _func,

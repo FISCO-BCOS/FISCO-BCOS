@@ -23,6 +23,7 @@
 
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
+#include "../vm/VMFactory.h"
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"

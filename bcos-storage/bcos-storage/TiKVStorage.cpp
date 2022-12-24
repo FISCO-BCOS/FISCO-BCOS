@@ -533,6 +533,7 @@ bcos::Error::Ptr TiKVStorage::setRows(std::string_view table,
     {
         std::visit(
             [&](auto&& keys, auto&& values) {
+                auto start = utcTime();
                 if (table.empty())
                 {
                     STORAGE_TIKV_LOG(WARNING)
@@ -563,12 +564,20 @@ bcos::Error::Ptr TiKVStorage::setRows(std::string_view table,
                             realKeys[i] = toDBKey(table, keys[i]);
                         }
                     });
+                int64_t dataSize = 0;
                 auto txn = m_cluster->begin();
                 for (size_t i = 0; i < keys.size(); ++i)
                 {
+                    dataSize += realKeys[i].size() + values[i].size();
                     txn.put(std::move(realKeys[i]), std::string(std::move(values[i])));
                 }
+                auto encode = utcTime();
                 txn.commit();
+                auto end = utcTime();
+                STORAGE_TIKV_LOG(INFO)
+                    << LOG_DESC("setRows finished") << LOG_KV("put", keys.size())
+                    << LOG_KV("encode(ms)", encode - start) << LOG_KV("dataSize", dataSize)
+                    << LOG_KV("time(ms)", end - start);
             },
             _keys, _values);
     }
