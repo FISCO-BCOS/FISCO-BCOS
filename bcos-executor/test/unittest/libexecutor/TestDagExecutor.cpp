@@ -29,6 +29,7 @@
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
+#include "../mock/MockStateStorageFactory.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
@@ -87,6 +88,7 @@ struct DagExecutorFixture
         txpool = std::make_shared<MockTxPool>();
         backend = std::make_shared<MockTransactionalStorage>(hashImpl);
         ledger = std::make_shared<MockLedger>();
+        stateStorageFactory = std::make_shared<MockStateStorageFactory>(8192)
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),
@@ -198,7 +200,6 @@ BOOST_FIXTURE_TEST_SUITE(TestDagExecutor, DagExecutorFixture)
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory,  hashImpl, true, false, false);
 
@@ -433,7 +434,6 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false, false);
 
@@ -663,7 +663,6 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false, false);
 
@@ -910,7 +909,6 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false, false);
 
