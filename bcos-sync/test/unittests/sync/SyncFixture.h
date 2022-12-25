@@ -110,8 +110,9 @@ public:
 
         // create FakeScheduler
         m_scheduler = std::make_shared<FakeScheduler>(m_ledger, m_blockFactory);
-        auto blockSyncFactory = std::make_shared<FakeBlockSyncFactory>(m_keyPair->publicKey(),
-            m_blockFactory, m_ledger, m_frontService, m_scheduler, m_consensus, m_nodeTimeMaintenance);
+        auto blockSyncFactory =
+            std::make_shared<FakeBlockSyncFactory>(m_keyPair->publicKey(), m_blockFactory, m_ledger,
+                m_frontService, m_scheduler, m_consensus, m_nodeTimeMaintenance);
         m_sync = std::dynamic_pointer_cast<FakeBlockSync>(blockSyncFactory->createBlockSync());
         if (_fakeGateWay)
         {
@@ -152,6 +153,7 @@ public:
             nodeIdSet.insert(node->nodeID());
         }
         m_sync->config()->setConnectedNodeList(nodeIdSet);
+        m_frontService->setNodeIDList(m_sync->config()->connectedNodeList());
     }
 
     void init() { m_sync->init(); }

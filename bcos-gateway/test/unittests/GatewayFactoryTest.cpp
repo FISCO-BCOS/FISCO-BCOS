@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(test_certPubHexHandler)
         auto r = factory->certPubHexHandler()(cert, pubHex);
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(boost::to_lower_copy(pubHex),
-            R"(5a0d065954bbc96dba0e9eea163d970a9187c3e5f1a6329daf2898acb888ac2d668f4e3b34b538dcd1be7839d86a0869ca6478913cfd4e46c1517586f9c0b3c0)");
+            R"(045a0d065954bbc96dba0e9eea163d970a9187c3e5f1a6329daf2898acb888ac2d668f4e3b34b538dcd1be7839d86a0869ca6478913cfd4e46c1517586f9c0b3c0)");
     }
 
     {

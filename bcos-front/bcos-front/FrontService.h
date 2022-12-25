@@ -226,7 +226,7 @@ public:
         std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
     };
     // lock m_callback
-    mutable bcos::RecursiveMutex x_callback;
+    mutable bcos::Mutex x_callback;
     // uuid to callback
     std::unordered_map<std::string, Callback::Ptr> m_callback;
 
@@ -238,7 +238,7 @@ public:
         Callback::Ptr callback = nullptr;
 
         {
-            RecursiveGuard l(x_callback);
+            Guard guard(x_callback);
             auto it = m_callback.find(_uuid);
             if (it != m_callback.end())
             {
@@ -252,7 +252,7 @@ public:
 
     void addCallback(const std::string& _uuid, Callback::Ptr _callback)
     {
-        RecursiveGuard l(x_callback);
+        Guard guard(x_callback);
         m_callback[_uuid] = _callback;
     }
 

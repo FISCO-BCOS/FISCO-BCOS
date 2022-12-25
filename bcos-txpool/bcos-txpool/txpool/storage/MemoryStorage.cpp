@@ -96,7 +96,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 
                 if (result != TransactionStatus::None)
                 {
-                    TXPOOL_LOG(ERROR) << "Submit transaction error! " << result;
+                    TXPOOL_LOG(DEBUG) << "Submit transaction error! " << result;
                     m_submitResult.emplace<Error::Ptr>(
                         BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
                     handle.resume();

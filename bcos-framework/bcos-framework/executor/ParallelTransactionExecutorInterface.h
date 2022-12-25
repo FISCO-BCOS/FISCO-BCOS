@@ -47,9 +47,9 @@ public:
             callback)
     {
         // TODO: use pure virtual function
-        auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
-        status->setSeq(m_seq);
-        callback(nullptr, std::move(status));
+        auto executorStatus = std::make_unique<bcos::protocol::ExecutorStatus>();
+        executorStatus->setSeq(m_seq);
+        callback(nullptr, std::move(executorStatus));
     };
 
     virtual void nextBlockHeader(int64_t schedulerTermId,

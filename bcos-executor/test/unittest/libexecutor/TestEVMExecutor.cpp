@@ -503,7 +503,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result2->from(), std::string(address));
     BOOST_CHECK(result2->to().empty());
     BOOST_CHECK_LT(result2->gasAvailable(), gas);
-    BOOST_CHECK_EQUAL(result2->keyLocks().size(), 1);
+    BOOST_CHECK_EQUAL(result2->keyLocks().size(), 2); // code,codeHash
     BOOST_CHECK_EQUAL(result2->keyLocks()[0], "code");
 
     // --------------------------------
@@ -1596,7 +1596,7 @@ contract DelegateCallTest {
     BOOST_CHECK_EQUAL(result->delegateCall(), true);
     BOOST_CHECK_EQUAL(result->delegateCallAddress(), "0000000000000000000000000000000000001001");
     BOOST_CHECK_EQUAL(result->delegateCallSender(), sender);
-    BOOST_CHECK(result->keyLocks().empty());
+    BOOST_CHECK_EQUAL(result->keyLocks().size(), 1);
 }
 
 BOOST_AUTO_TEST_CASE(selfdestruct)

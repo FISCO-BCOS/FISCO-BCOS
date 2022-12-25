@@ -24,7 +24,7 @@
 
 namespace bcos::ledger
 {
-using MerkleProof = std::vector<std::pair<std::vector<std::string>, std::vector<std::string> > >;
+using MerkleProof = std::vector<crypto::HashType>;
 using MerkleProofPtr = std::shared_ptr<const MerkleProof>;
 
 // get block flag

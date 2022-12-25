@@ -126,6 +126,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 return preverified;
             }
 
+            // For compatibility, p2p communication between nodes still uses the old public key analysis method
             if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
                 return preverified;
@@ -151,23 +152,29 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
 
             BASIC_CONSTRAINTS_free(basic);
 
-            std::string nodeID = boost::to_upper_copy(*nodeIDOut);
+            // The new public key analysis method is used for black and white lists
+            std::string nodeIDOutWithoutExtInfo;
+            if (!hostPtr->sslContextPubHandlerWithoutExtInfo()(cert, nodeIDOutWithoutExtInfo))
+            {
+                return preverified;
+            }
+            nodeIDOutWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
 
             // If the node ID exists in the black and white lists at the same time, the black list
             // takes precedence
             if (nullptr != hostPtr->peerBlacklist() &&
-                true == hostPtr->peerBlacklist()->has(nodeID))
+                true == hostPtr->peerBlacklist()->has(nodeIDOutWithoutExtInfo))
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
-                               << LOG_KV("nodeID", NodeID(nodeID).abridged());
+                               << LOG_KV("nodeID", NodeID(nodeIDOutWithoutExtInfo).abridged());
                 return false;
             }
 
             if (nullptr != hostPtr->peerWhitelist() &&
-                false == hostPtr->peerWhitelist()->has(nodeID))
+                false == hostPtr->peerWhitelist()->has(nodeIDOutWithoutExtInfo))
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
-                               << LOG_KV("nodeID", NodeID(nodeID).abridged());
+                               << LOG_KV("nodeID", NodeID(nodeIDOutWithoutExtInfo).abridged());
                 return false;
             }
 
@@ -177,6 +184,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             /// get issuer name
             const char* issuerName = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
             /// format: {nodeID}#{issuer-name}#{cert-name}
+            nodeIDOut->append("#");
+            nodeIDOut->append(nodeIDOutWithoutExtInfo);
             nodeIDOut->append("#");
             nodeIDOut->append(issuerName);
             nodeIDOut->append("#");
@@ -219,6 +228,14 @@ P2PInfo Host::p2pInfo()
                 m_p2pInfo.p2pID = boost::to_upper_copy(nodeIDOut);
                 HOST_LOG(INFO) << LOG_DESC("Get node information from cert")
                                << LOG_KV("p2pid", m_p2pInfo.p2pID);
+            }
+
+            std::string nodeIDOutWithoutExtInfo;
+            if (m_sslContextPubHandlerWithoutExtInfo(cert, nodeIDOutWithoutExtInfo))
+            {
+                m_p2pInfo.p2pIDWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
+                HOST_LOG(INFO) << LOG_DESC("Get node information without ext info from cert")
+                               << LOG_KV("p2pid without ext info", m_p2pInfo.p2pIDWithoutExtInfo);
             }
 
             /// fill in the node informations
@@ -280,11 +297,15 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
     }
     if (node_info_vec.size() > 1)
     {
-        info.agencyName = obtainCommonNameFromSubject(node_info_vec[1]);
+        info.p2pIDWithoutExtInfo = node_info_vec[1];
     }
     if (node_info_vec.size() > 2)
     {
-        info.nodeName = obtainCommonNameFromSubject(node_info_vec[2]);
+        info.agencyName = obtainCommonNameFromSubject(node_info_vec[2]);
+    }
+    if (node_info_vec.size() > 3)
+    {
+        info.nodeName = obtainCommonNameFromSubject(node_info_vec[3]);
     }
 
     HOST_LOG(INFO) << "obtainP2pInfo " << LOG_KV("node_info", node_info)

@@ -39,7 +39,7 @@ struct RingSigPrecompiledFixture
         m_ringSigPrecompiled = std::make_shared<RingSigPrecompiled>(m_hashImpl);
         m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
         m_blockContext = std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_hashImpl, 0,
-            h256(), utcTime(), 0, FiscoBcosScheduleV4, false, false);
+            h256(), utcTime(), 0, FiscoBcosSchedule, false, false);
         std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
         m_executive = std::make_shared<TransactionExecutive>(
             std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, gasInjector);

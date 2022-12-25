@@ -19,10 +19,10 @@ struct UpdateField {
 }
 
 // 筛选条件，大于、大于等于、小于、小于等于
-enum ConditionOP {EQ, NE, GT, GE, LT, LE, STARTS_WITH, ENDS_WITH, CONTAINS}
+enum ConditionOP {GT, GE, LT, LE, EQ, NE, STARTS_WITH, ENDS_WITH, CONTAINS}
 struct Condition {
     ConditionOP op;
-    uint32 field;
+    string field;
     string value;
 }
 
@@ -49,7 +49,7 @@ abstract contract TableManager {
     function appendColumns(string memory path, string[] memory newColumns) public virtual returns (int32);
 
     // 获取表信息
-    function desc(string memory tableName) public view virtual returns (TableInfo memory);
+    function descWithKeyOrder(string memory tableName) public view virtual returns (TableInfo memory);
 }
 
 // 表合约，是动态Precompiled，TableManager创建时指定地址

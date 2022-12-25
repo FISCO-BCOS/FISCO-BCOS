@@ -26,6 +26,7 @@
 
 #include "../Common.h"
 #include "../dag/CriticalFields.h"
+#include "bcos-executor/src/vm/VMFactory.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -83,6 +84,8 @@ class ClockCache;
 class StateStorageFactory;
 struct FunctionAbi;
 struct CallParameters;
+
+size_t const c_EVMONE_CACHE_SIZE = 1024;
 
 using executionCallback = std::function<void(
     const Error::ConstPtr&, std::vector<protocol::ExecutionMessage::UniquePtr>&)>;
@@ -313,7 +316,6 @@ protected:
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
     uint32_t m_blockVersion = 0;
-    VMSchedule m_schedule = FiscoBcosScheduleV4;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;
@@ -322,10 +324,18 @@ protected:
     void initEvmEnvironment();
     void initWasmEnvironment();
     void initTestPrecompiledTable(storage::StorageInterface::Ptr storage);
-
+    VMSchedule getVMSchedule(uint32_t currentVersion) const
+    {
+        if (currentVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+        {
+            return FiscoBcosScheduleV320;
+        }
+        return FiscoBcosSchedule;
+    }
     std::function<void()> f_onNeedSwitchEvent;
 
     LedgerCache::Ptr m_ledgerCache;
+    std::shared_ptr<VMFactory> m_vmFactory;
 };
 
 }  // namespace executor
