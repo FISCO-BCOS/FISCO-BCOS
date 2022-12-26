@@ -21,11 +21,11 @@
 
 #pragma once
 #include "../Common.h"
+#include "VMInstance.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include <evmc/loader.h>
 #include <evmone/evmone.h>
 #include <boost/compute/detail/lru_cache.hpp>
-#include <evmone/advanced_analysis.hpp>
 #include <memory>
 #include <shared_mutex>
 #include <string>
@@ -52,19 +52,17 @@ public:
         bytes_view code, bool isCreate = false);
 
     /// @brief Gets an anvanced EVM analysis from the cache. if not found return nullptr
-    std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis> get(
+    std::shared_ptr<evmoneCodeAnalysis> get(
         const crypto::HashType& key, evmc_revision revision) noexcept;
 
     // TODO: add lock for put
-    void put(const crypto::HashType& key,
-        const std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis>& analysis,
+    void put(const crypto::HashType& key, const std::shared_ptr<evmoneCodeAnalysis>& analysis,
         evmc_revision revision) noexcept;
 
 private:
-    boost::compute::detail::lru_cache<crypto::HashType,
-        std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis>>
+    boost::compute::detail::lru_cache<crypto::HashType, std::shared_ptr<evmoneCodeAnalysis>>
         m_cache;
-    evmc_revision m_revision = EVMC_LONDON;
-    mutable std::shared_mutex m_cacheMutex;
+    evmc_revision m_revision = EVMC_PARIS;
+    std::mutex m_cacheMutex;
 };
 }  // namespace bcos::executor
