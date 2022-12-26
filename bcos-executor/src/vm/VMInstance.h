@@ -22,13 +22,18 @@
 #pragma once
 #include "../Common.h"
 #include <bcos-utilities/Common.h>
-#include <evmone/advanced_analysis.hpp>
 #include <evmc/evmc.h>
+#include <evmone/vm.hpp>
+#include <evmone/advanced_analysis.hpp>
+#include <evmone/baseline.hpp>
 
 namespace bcos
 {
 namespace executor
 {
+
+using evmoneCodeAnalysis = evmone::advanced::AdvancedCodeAnalysis;
+// using evmoneCodeAnalysis = evmone::baseline::CodeAnalysis;
 class HostContext;
 class Result : public evmc_result
 {
@@ -61,7 +66,8 @@ class VMInstance
 {
 public:
     explicit VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view code) noexcept;
-    explicit VMInstance(std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis> analysis, evmc_revision revision, bytes_view code) noexcept;
+    explicit VMInstance(std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision,
+        bytes_view code) noexcept;
     ~VMInstance()
     {
         if (m_instance)
@@ -74,11 +80,12 @@ public:
     VMInstance& operator=(VMInstance) = delete;
 
     Result execute(HostContext& _hostContext, evmc_message* _msg);
+    Result execute(evmone::VM* vm,HostContext& _hostContext, evmc_message* _msg);
 
 private:
     /// The VM instance created with VMInstance-C <prefix>_create() function.
     evmc_vm* m_instance = nullptr;
-    std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis> m_analysis = nullptr;
+    std::shared_ptr<evmoneCodeAnalysis> m_analysis = nullptr;
     evmc_revision m_revision;
     bytes_view m_code;
 };
