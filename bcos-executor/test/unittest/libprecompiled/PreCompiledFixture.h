@@ -30,7 +30,6 @@
 #include "executor/TransactionExecutorFactory.h"
 #include "mock/MockKeyPageStorage.h"
 #include "mock/MockLedger.h"
-#include "mock/MockStateStorageFactory.h"
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
 #include "precompiled/extension/UserPrecompiled.h"
@@ -99,9 +98,9 @@ public:
         ledger->setBlockNumber(header->number() - 1);
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        auto stateStorageFactory = std::make_shared<MockStateStorageFactory>(8192);
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-            storage, executionResultFactory, nullptr, hashImpl, _isWasm, _isCheckAuth);
+            storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth);
 
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();

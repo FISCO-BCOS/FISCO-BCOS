@@ -22,7 +22,6 @@
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-#include "../mock/MockStateStorageFactory.h"
 // #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
@@ -83,9 +82,9 @@ struct TransactionExecutorFixture
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
         auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
-        auto stateStorageFactory = std::make_shared<MockStateStorageFactory>(8192);
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-            backend, executionResultFactory, nullptr, hashImpl, false, false);
+            backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();

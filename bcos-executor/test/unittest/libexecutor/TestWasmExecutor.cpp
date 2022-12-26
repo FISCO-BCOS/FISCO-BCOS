@@ -31,7 +31,6 @@
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-#include "../mock/MockStateStorageFactory.h"
 // #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
@@ -89,9 +88,9 @@ struct WasmExecutorFixture
         backend = std::make_shared<MockTransactionalStorage>(hashImpl);
         ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        auto stateStorageFactory = std::make_shared<MockStateStorageFactory>(8192);
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
         executor = bcos::executor::TransactionExecutorFactory::build(
-            ledger, txpool, nullptr, backend, executionResultFactory, nullptr, hashImpl, true, false);
+            ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
