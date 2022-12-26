@@ -128,8 +128,8 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables(
             std::string(storage::FS_USER),
             std::string(storage::FS_SYS_BIN),
             std::string(storage::FS_USER_TABLE),
-            std::string(storage::SYS_CONTRACT_ABI),
-            std::string(storage::SYS_CODE_BINARY),
+            std::string(ledger::SYS_CONTRACT_ABI),
+            std::string(ledger::SYS_CODE_BINARY),
             storage::StorageInterface::SYS_TABLES,
         });
     if (version >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
@@ -741,7 +741,7 @@ int main(int argc, const char* argv[])
             if (params.count("stateSize") || params.count("S"))
             {  // calculate contract data size
                 auto* db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
-                getTableSize(db, ledger::FS_APPS);
+                getTableSize(db, storage::FS_APPS);
             }
         }
         else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
