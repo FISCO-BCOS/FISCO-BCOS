@@ -92,6 +92,9 @@ public:
     virtual std::string_view abi() const = 0;
     virtual std::string_view source() const = 0;
     virtual void setSource(std::string const& _source) = 0;
+    
+    virtual std::string_view extraData() const = 0;
+    virtual void setExtraData(std::string const& _extraData) = 0;
 
     virtual std::string_view sender() const
     {
