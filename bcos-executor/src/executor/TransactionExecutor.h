@@ -38,6 +38,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StateStorageFactory.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-executor/src/executive/LedgerCache.h>
@@ -80,6 +81,7 @@ class BlockContext;
 class PrecompiledContract;
 template <typename T, typename V>
 class ClockCache;
+class StateStorageFactory;
 struct FunctionAbi;
 struct CallParameters;
 
@@ -99,7 +101,8 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
+        storage::StateStorageFactory::Ptr stateStorageFactory,
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
         std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name);
 
     ~TransactionExecutor() override = default;
@@ -249,6 +252,7 @@ protected:
     storage::MergeableStorageInterface::Ptr m_cachedStorage;
     std::shared_ptr<storage::TransactionalStorageInterface> m_backendStorage;
     protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
+    storage::StateStorageFactory::Ptr m_stateStorageFactory;
     std::shared_ptr<BlockContext> m_blockContext;
     crypto::Hash::Ptr m_hashImpl;
     bool m_isAuthCheck = false;
@@ -312,7 +316,6 @@ protected:
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
     uint32_t m_blockVersion = 0;
-    size_t m_keyPageSize = 0;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;

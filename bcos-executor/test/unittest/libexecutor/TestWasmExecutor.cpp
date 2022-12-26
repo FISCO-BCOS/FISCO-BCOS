@@ -36,6 +36,7 @@
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StateStorageFactory.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -87,9 +88,9 @@ struct WasmExecutorFixture
         backend = std::make_shared<MockTransactionalStorage>(hashImpl);
         ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
         executor = bcos::executor::TransactionExecutorFactory::build(
-            ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
+            ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();

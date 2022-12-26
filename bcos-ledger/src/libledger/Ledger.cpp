@@ -1756,7 +1756,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
     rootSubEntry.importFields({asString(codec::scale::encode(rootSubMap))});
     std::promise<Error::UniquePtr> setPromise;
     m_storage->asyncSetRow(
-        FS_ROOT, FS_KEY_SUB, std::move(rootSubEntry), [&setPromise](auto&& error) {
+        bcos::tool::FS_ROOT, FS_KEY_SUB, std::move(rootSubEntry), [&setPromise](auto&& error) {
             setPromise.set_value(std::forward<decltype(error)>(error));
         });
     auto setError = setPromise.get_future().get();

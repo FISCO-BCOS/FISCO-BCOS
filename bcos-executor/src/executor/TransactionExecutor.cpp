@@ -69,6 +69,7 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StateStorageFactory.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework/executor/ExecuteError.h>
@@ -117,7 +118,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize = 0,
+    storage::StateStorageFactory::Ptr stateStorageFactory,
+    bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
     std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
     std::string name = "default-executor-name")
   : m_name(std::move(name)),
@@ -126,10 +128,10 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_cachedStorage(std::move(cachedStorage)),
     m_backendStorage(std::move(backendStorage)),
     m_executionMessageFactory(std::move(executionMessageFactory)),
+    m_stateStorageFactory(stateStorageFactory),
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
     m_isWasm(isWasm),
-    m_keyPageSize(keyPageSize),
     m_keyPageIgnoreTables(std::move(keyPageIgnoreTables)),
     m_ledgerCache(std::make_shared<LedgerCache>(ledger)),
     m_vmFactory(std::make_shared<VMFactory>(c_EVMONE_CACHE_SIZE))
@@ -2670,25 +2672,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorage(
     bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist)
 {
-    if (m_keyPageSize > 0)
-    {
-        if (m_blockVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
-        {
-            if (m_keyPageIgnoreTables->contains(tool::FS_ROOT))
-            {
-                for (const auto& _sub : tool::FS_ROOT_SUBS)
-                {
-                    std::string sub(_sub);
-                    m_keyPageIgnoreTables->erase(sub);
-                }
-            }
-            m_keyPageIgnoreTables->insert(
-                {std::string(ledger::SYS_CODE_BINARY), std::string(ledger::SYS_CONTRACT_ABI)});
-        }
-        return std::make_shared<bcos::storage::KeyPageStorage>(
-            storage, m_keyPageSize, m_blockVersion, m_keyPageIgnoreTables, ignoreNotExist);
-    }
-    return std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage = m_stateStorageFactory->createStateStorage(storage, m_blockVersion);
+    return stateStorage;
 }
 
 protocol::BlockNumber TransactionExecutor::getBlockNumberInStorage()

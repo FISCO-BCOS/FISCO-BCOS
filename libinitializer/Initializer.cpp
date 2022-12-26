@@ -53,8 +53,11 @@
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
+#include "bcos-tool/BfsFileFactory.h"
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-table/src/StateStorageFactory.h>
 #include <util/tc_clientsocket.h>
 #include <vector>
 
@@ -274,11 +277,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         // Note: ensure that there has at least one executor before pbft/sync execute block
 
+        auto storageFactory = std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
         std::string executorName = "executor-local";
         auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
             m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
-            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(),
+            executionMessageFactory, storageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
+            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(),
             executorName);
         auto switchExecutorManager =
             std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
@@ -365,6 +369,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             auto ledger =
                 std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(
                     std::move(storageWrapper), m_protocolInitializer->blockFactory(), storage);
+            ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
 
             auto txpool = m_txpoolInitializer->txpool();
             auto transactionPool =

@@ -36,6 +36,7 @@
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-table/src/StateStorageFactory.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -122,11 +123,11 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables(
             std::string(ledger::SYS_NUMBER_2_TXS),
             std::string(ledger::SYS_HASH_2_TX),
             std::string(ledger::SYS_HASH_2_RECEIPT),
-            std::string(ledger::FS_ROOT),
-            std::string(ledger::FS_APPS),
-            std::string(ledger::FS_USER),
-            std::string(ledger::FS_SYS_BIN),
-            std::string(ledger::FS_USER_TABLE),
+            std::string(storage::FS_ROOT),
+            std::string(storage::FS_APPS),
+            std::string(storage::FS_USER),
+            std::string(storage::FS_SYS_BIN),
+            std::string(storage::FS_USER_TABLE),
             std::string(ledger::SYS_CONTRACT_ABI),
             std::string(ledger::SYS_CODE_BINARY),
             storage::StorageInterface::SYS_TABLES,
@@ -740,7 +741,7 @@ int main(int argc, const char* argv[])
             if (params.count("stateSize") || params.count("S"))
             {  // calculate contract data size
                 auto* db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
-                getTableSize(db, ledger::FS_APPS);
+                getTableSize(db, storage::FS_APPS);
             }
         }
         else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
