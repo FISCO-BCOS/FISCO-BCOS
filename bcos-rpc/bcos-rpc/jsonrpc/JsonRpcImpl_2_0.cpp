@@ -234,6 +234,8 @@ void bcos::rpc::toJsonResp(
     jResp["groupID"] = std::string(_transactionPtr->groupId());
     // the abi
     jResp["abi"] = std::string(_transactionPtr->abi());
+    // extraData
+    jResp["extraData"] = std::string(_transactionPtr->extraData());
     // the signature
     jResp["signature"] = toHexStringWithPrefix(_transactionPtr->signatureData());
 }
@@ -442,6 +444,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                                 << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
             auto start = utcSteadyTime();
             auto sendTxTimeout = self->m_sendTxTimeout;
+            std::string extraData = std::string(transaction->extraData());
 
             Json::Value jResp;
             try
@@ -479,6 +482,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                     *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
                 jResp["to"] = submitResult->to();
                 jResp["from"] = toHexStringWithPrefix(submitResult->sender());
+                jResp["extraData"] = extraData;
 
                 // TODO: check if needed
                 // jResp["input"] = toHexStringWithPrefix(transaction->input());
@@ -662,6 +666,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
                     m_jResp["input"] = _jTx["input"];
                     m_jResp["from"] = _jTx["from"];
                     m_jResp["to"] = _jTx["to"];
+                    m_jResp["extraData"] = _jTx["extraData"];
                     m_jResp["transactionProof"] = _jTx["transactionProof"];
 
                     m_respFunc(nullptr, m_jResp);
