@@ -13,14 +13,13 @@ class MockStateStorageFactory  : public bcos::storage::StateStorageFactory
 {
 public:
     using Ptr = std::shared_ptr<MockStateStorageFactory>;
-    MockStateStorageFactory(size_t keyPageSize) : StateSTorageFactory(size_t keyPageSize) {}
+    MockStateStorageFactory(size_t keyPageSize) : StateStorageFactory(keyPageSize) {}
     virtual ~MockStateStorageFactory() {};
 
     storage::StateStorageInterface::Ptr createStateStorage (
-        bcos::storage::StorageInterface::Ptr, uint32_t )override
-    {}
+        bcos::storage::StorageInterface::Ptr, uint32_t ) override
+    { return nullptr;}
 
-private:
-    size_t m_keyPageSize = 0;
+
 };
 }
