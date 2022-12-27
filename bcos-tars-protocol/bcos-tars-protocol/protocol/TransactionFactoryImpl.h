@@ -46,8 +46,15 @@ public:
     {
         auto transaction = std::make_shared<TransactionImpl>(
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
-
         transaction->decode(txData);
+
+        auto anyHasher = m_cryptoSuite->hashImpl()->hasher();
+        std::visit(
+            [&transaction](auto& hasher) {
+                transaction->calculateHash<std::remove_cvref_t<decltype(hasher)>>();
+            },
+            anyHasher);
+
         if (checkSig)
         {
             transaction->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
