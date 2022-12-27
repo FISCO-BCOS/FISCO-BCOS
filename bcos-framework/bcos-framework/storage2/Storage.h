@@ -20,6 +20,7 @@ concept Iterator = requires(IteratorType iterator)
     typename IteratorType::Key;
     typename IteratorType::Value;
 
+    std::convertible_to<task::AwaiterReturnType<decltype(iterator.hasValue())>, bool>;
     std::convertible_to<task::AwaiterReturnType<decltype(iterator.next())>, bool>;
     std::same_as<typename task::AwaiterReturnType<decltype(iterator.key())>,
         typename IteratorType::Key>;
@@ -27,25 +28,23 @@ concept Iterator = requires(IteratorType iterator)
         typename IteratorType::Value>;
 };
 
-template <class Impl, class KeyType, class ValueType>
+template <class Impl>
 class StorageBase
 {
 public:
     static constexpr std::string_view SYS_TABLES{"s_tables"};
-    using Key = KeyType;
-    using Value = ValueType;
 
     // *** Pure interfaces
-    task::Task<void> read(RANGES::input_range auto const& keys,
-        RANGES::output_range<std::optional<Value>> auto&& outputs)
+    template <class ImplClass = Impl>
+    task::Task<typename ImplClass::ReadIterator> read(RANGES::input_range auto const& keys)
     {
-        co_return co_await impl().impl_read(keys, std::forward<decltype(outputs)>(outputs));
+        co_return co_await impl().impl_read(keys);
     }
 
-    template <Iterator IteratorType>
-    task::Task<IteratorType> seek(auto const& key)
+    template <class ImplClass = Impl>
+    task::Task<typename ImplClass::SeekIterator> seek(auto const& key)
     {
-        co_return co_await impl().template impl_seek<IteratorType>(key);
+        co_return co_await impl().impl_seek(key);
     }
 
     task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
@@ -60,17 +59,23 @@ public:
     }
     // *** Pure interfaces
 
-    task::Task<std::optional<Value>> readOne(auto const& key)
+    template <class ImplClass = Impl>
+    task::Task<std::optional<typename ImplClass::ReadIterator::Value>> readOne(auto const& key)
     {
-        std::optional<Value> value;
-        co_await read(RANGES::single_view(std::addressof(key)) |
-                          RANGES::views::transform([](auto const* ptr) { return *ptr; }),
-            RANGES::single_view(&value) |
-                RANGES::views::transform([](auto* ptr) -> auto& { return *ptr; }));
+        using ValueType = typename ImplClass::ReadIterator::Value;
+        std::optional<ValueType> value;
+        auto it = co_await read(RANGES::single_view(std::addressof(key)) |
+                                RANGES::views::transform([](auto const* ptr) { return *ptr; }));
+        co_await it.next();
+        if (co_await it.hasValue())
+        {
+            value.emplace(std::move(co_await it.value()));
+        }
+
         co_return value;
     }
 
-    task::Task<void> writeOne(auto&& key, Value&& value)
+    task::Task<void> writeOne(auto&& key, auto&& value)
     {
         using WriteKeyType = decltype(key);
         if constexpr (std::is_lvalue_reference_v<WriteKeyType>)
@@ -82,7 +87,7 @@ public:
                 RANGES::single_view(std::forward<decltype(value)>(value)));
         }
         co_return co_await write(RANGES::single_view(std::forward<WriteKeyType>(key)),
-            RANGES::single_view(std::move(value)));
+            RANGES::single_view(std::forward<decltype(value)>(value)));
     }
 
     task::Task<void> removeOne(auto const& key)
@@ -98,7 +103,7 @@ private:
     StorageBase() = default;
 };
 
-template <class Impl, class Key, class Value>
-concept Storage = std::derived_from<Impl, StorageBase<Impl, Key, Value>>;
+template <class Impl>
+concept Storage = std::derived_from<Impl, StorageBase<Impl>>;
 
 }  // namespace bcos::storage2

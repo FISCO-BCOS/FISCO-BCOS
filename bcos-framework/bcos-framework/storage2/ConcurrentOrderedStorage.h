@@ -91,7 +91,7 @@ public:
     private:
         typename Container::iterator m_it;
         typename Container::iterator m_end;
-        std::unique_lock<std::mutex> m_lock;
+        std::unique_lock<std::mutex> m_bucketLock;
     };
 
     task::Task<void> impl_read(RANGES::input_range auto const& keys,

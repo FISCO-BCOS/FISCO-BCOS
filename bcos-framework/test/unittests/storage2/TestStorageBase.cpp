@@ -11,45 +11,72 @@
 using namespace bcos;
 using namespace bcos::storage2;
 
-class MockIterator
+class MockStorage : public StorageBase<MockStorage>
 {
 public:
-    using Key = std::tuple<std::string_view, std::string_view>;
-    using Value = const storage::Entry*;
+    using Key = std::tuple<std::string, std::string>;
+    using Value = storage::Entry;
 
-    task::Task<bool> next() { co_return (++m_it) != m_end; }
-    task::Task<Key> key() const { co_return m_it->first; }
-    task::Task<Value> value() const { co_return &(m_it->second); }
-
-    std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator m_it;
-    std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator m_end;
-};
-
-class MockStorage
-  : public StorageBase<MockStorage, std::tuple<std::string, std::string>, storage::Entry>
-{
-public:
-    task::Task<void> impl_read(
-        RANGES::range auto const& keys, RANGES::output_range<std::optional<Value>> auto&& outputs)
+    struct SeekIterator
     {
-        for (auto&& [keyPair, output] : RANGES::zip_view(keys, outputs))
+        using Key = std::tuple<std::string_view, std::string_view>;
+        using Value = const storage::Entry*;
+
+        static task::Task<bool> hasValue() { co_return true; }
+        task::Task<bool> next() { co_return (++m_it) != m_end; }
+        task::Task<Key> key() const { co_return m_it->first; }
+        task::Task<Value> value() const { co_return &(m_it->second); }
+
+        std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator m_it;
+        std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator m_end;
+    };
+
+    struct ReadIterator
+    {
+        using Key = std::tuple<std::string_view, std::string_view>;
+        using Value = const storage::Entry*;
+
+        task::Task<bool> hasValue() const { co_return *m_listIt != m_end; }
+        task::Task<bool> next() { co_return (++m_listIt) != m_valueIts.end(); }
+        task::Task<Key> key() const { co_return (*m_listIt)->first; }
+        task::Task<Value> value() const { co_return std::addressof(((*m_listIt)->second)); }
+
+        std::vector<std::map<std::tuple<std::string, std::string>,
+            storage::Entry>::iterator>::iterator m_listIt;
+        std::vector<std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator>
+            m_valueIts;
+        std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator m_end;
+    };
+
+    task::Task<ReadIterator> impl_read(RANGES::range auto const& keys)
+    {
+        ReadIterator readIt;
+        readIt.m_valueIts.reserve(RANGES::size(keys));
+
+        for (auto&& keyPair : keys)
         {
             auto const& [tableName, key] = keyPair;
             auto it = m_values.find(keyPair);
             if (it != m_values.end())
             {
-                output.emplace(it->second);
+                readIt.m_valueIts.emplace_back(it);
+            }
+            else
+            {
+                readIt.m_valueIts.emplace_back(m_values.end());
             }
         }
+        readIt.m_listIt = readIt.m_valueIts.begin();
+        --readIt.m_listIt;
+        readIt.m_end = m_values.end();
 
-        co_return;
+        co_return readIt;
     }
 
-    template <std::same_as<MockIterator> Iterator>
-    task::Task<Iterator> impl_seek(std::tuple<std::string_view, std::string_view> key)
+    task::Task<SeekIterator> impl_seek(std::tuple<std::string_view, std::string_view> key)
     {
         auto it = m_values.lower_bound(key);
-        co_return Iterator{--it, m_values.end()};
+        co_return SeekIterator{--it, m_values.end()};
     }
 
     task::Task<void> impl_write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
@@ -109,7 +136,7 @@ BOOST_AUTO_TEST_CASE(seek)
                     return entry;
                 })));
 
-        auto it = co_await mock.seek<MockIterator>(std::tuple{"table", "key:20"});
+        auto it = co_await mock.seek(std::tuple{"table", "key:20"});
         int count = 0;
         while (co_await it.next())
         {
@@ -142,7 +169,7 @@ BOOST_AUTO_TEST_CASE(insert)
             co_await mock.readOne(std::tuple<std::string_view, std::string_view>("table", "key2"));
 
         BOOST_REQUIRE(result);
-        BOOST_CHECK_EQUAL(result->get(), "fine!");
+        BOOST_CHECK_EQUAL((*result)->get(), "fine!");
     }());
 }
 
@@ -165,7 +192,7 @@ BOOST_AUTO_TEST_CASE(update)
             co_await mock.readOne(std::tuple<std::string_view, std::string_view>("table", "key"));
 
         BOOST_REQUIRE(result);
-        BOOST_CHECK_EQUAL(result->get(), "fine!");
+        BOOST_CHECK_EQUAL((*result)->get(), "fine!");
     }());
 }
 
