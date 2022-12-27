@@ -19,7 +19,7 @@ BOOST_FIXTURE_TEST_SUITE(TestStorage2, Storage2ImplFixture)
 BOOST_AUTO_TEST_CASE(set)
 {
     task::syncWait([]() -> task::Task<void> {
-        storage2::StorageImpl<false, storage::Entry> storage;
+        storage2::ConcurrentStorage<false, storage::Entry> storage;
         std::string_view table = "table";
         for (auto i : RANGES::iota_view<int, int>(0, 100))
         {

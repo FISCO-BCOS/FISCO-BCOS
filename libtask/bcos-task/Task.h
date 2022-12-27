@@ -88,7 +88,7 @@ public:
         m_handle = task.m_handle;
         task.m_handle = nullptr;
     }
-    ~TaskBase() = default;
+    ~TaskBase() noexcept = default;
 
     constexpr void run() { m_handle.resume(); }
 
@@ -96,19 +96,13 @@ private:
     CO_STD::coroutine_handle<promise_type> m_handle;
 };
 
-enum class Type
-{
-    LAZY,
-    EAGER
-};
-
-template <class Value, Type type = Type::LAZY>
-class Task : public TaskBase<Task<Value, type>, Value>
+template <class Value>
+class Task : public TaskBase<Task<Value>, Value>
 {
 public:
-    using TaskBase<Task<Value, type>, Value>::TaskBase;
-    using typename TaskBase<Task<Value, type>, Value>::ReturnType;
-    using typename TaskBase<Task<Value, type>, Value>::promise_type;
+    using TaskBase<Task<Value>, Value>::TaskBase;
+    using typename TaskBase<Task<Value>, Value>::ReturnType;
+    using typename TaskBase<Task<Value>, Value>::promise_type;
 
     struct Awaitable
     {
@@ -119,10 +113,7 @@ public:
         Awaitable& operator=(Awaitable&&) noexcept = default;
         ~Awaitable() = default;
 
-        constexpr bool await_ready() const noexcept
-        {
-            return type == Type::EAGER || !m_handle || m_handle.done();
-        }
+        constexpr bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
 
         template <class Promise>
         auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
@@ -153,8 +144,6 @@ public:
         CO_STD::coroutine_handle<promise_type> m_handle;
     };
     Awaitable operator co_await() { return Awaitable(*static_cast<Task*>(this)); }
-
-    constexpr bool lazy() const { return type == Type::LAZY; }
 
     friend Awaitable;
 };
