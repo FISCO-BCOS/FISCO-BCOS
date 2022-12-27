@@ -48,6 +48,7 @@ public:
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
         transaction->decode(txData);
 
+        transaction->mutableInner().dataHash.clear();
         auto anyHasher = m_cryptoSuite->hashImpl()->hasher();
         std::visit(
             [&transaction](auto& hasher) {
