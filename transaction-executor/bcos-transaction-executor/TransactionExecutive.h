@@ -17,7 +17,7 @@ struct NotFoundCode: public bcos::Error {};
 // clang-format on
 
 // Per call
-template <storage2::Storage Storage>
+template <storage2::Storage<storage::Entry> Storage>
 class TransactionExecutive
 {
 public:

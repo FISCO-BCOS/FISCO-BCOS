@@ -7,6 +7,7 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/Overloaded.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
@@ -132,8 +133,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(block->blockHeaderConst()->number()) << errorMessage
                                << LOG_KV("version", block->version())
                                << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
-        _callback(BCOS_ERROR_PTR(SchedulerError::InvalidBlockVersion, errorMessage),
-            nullptr, false);
+        _callback(
+            BCOS_ERROR_PTR(SchedulerError::InvalidBlockVersion, errorMessage), nullptr, false);
         return;
     }
     uint64_t waitT = 0;
@@ -845,15 +846,6 @@ void SchedulerImpl::preExecuteBlock(
         callback(BCOS_ERROR_PTR(e.errorCode(), e.errorMessage()));
     }
 }
-
-template <class... Ts>
-struct overloaded : Ts...
-{
-    using Ts::operator()...;
-};
-// explicit deduction guide (not needed as of C++20)
-template <class... Ts>
-overloaded(Ts...)->overloaded<Ts...>;
 
 void SchedulerImpl::asyncGetLedgerConfig(
     std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback)
