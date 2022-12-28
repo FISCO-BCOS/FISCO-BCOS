@@ -85,8 +85,6 @@ class StateStorageFactory;
 struct FunctionAbi;
 struct CallParameters;
 
-size_t const c_EVMONE_CACHE_SIZE = 1024;
-
 using executionCallback = std::function<void(
     const Error::ConstPtr&, std::vector<protocol::ExecutionMessage::UniquePtr>&)>;
 
@@ -101,8 +99,8 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        storage::StateStorageFactory::Ptr stateStorageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
+        storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
+        bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
         std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name);
 
     ~TransactionExecutor() override = default;

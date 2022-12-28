@@ -119,7 +119,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     storage::StateStorageFactory::Ptr stateStorageFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
+    bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,std::shared_ptr<VMFactory> vmFactory,
     std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
     std::string name = "default-executor-name")
   : m_name(std::move(name)),
@@ -134,7 +134,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_isWasm(isWasm),
     m_keyPageIgnoreTables(std::move(keyPageIgnoreTables)),
     m_ledgerCache(std::make_shared<LedgerCache>(ledger)),
-    m_vmFactory(std::make_shared<VMFactory>(c_EVMONE_CACHE_SIZE))
+    m_vmFactory(std::move(vmFactory))
 {
     assert(m_backendStorage);
     m_ledgerCache->fetchCompatibilityVersion();

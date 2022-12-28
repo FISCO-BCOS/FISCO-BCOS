@@ -33,6 +33,7 @@
 
 namespace bcos::executor
 {
+size_t const c_EVMONE_CACHE_SIZE = 1024;
 
 class VMInstance;
 enum class VMKind
@@ -45,7 +46,7 @@ enum class VMKind
 class VMFactory
 {
 public:
-    VMFactory(size_t cache_size = 1024) : m_cache(cache_size) {}
+    VMFactory(size_t cache_size = c_EVMONE_CACHE_SIZE) : m_cache(cache_size) {}
 
     /// Creates a VM instance of the kind provided.
     VMInstance create(VMKind _kind, evmc_revision revision, const crypto::HashType& codeHash,

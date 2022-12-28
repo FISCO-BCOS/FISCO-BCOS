@@ -20,9 +20,11 @@
  */
 
 #include "VMInstance.h"
+
 #include "HostContext.h"
 #include "evmone/advanced_analysis.hpp"
 #include "evmone/advanced_execution.hpp"
+#include <utility>
 
 using namespace std;
 namespace bcos::executor
@@ -45,7 +47,7 @@ VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view cod
 
 VMInstance::VMInstance(
     std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision, bytes_view code) noexcept
-  : m_analysis(analysis), m_revision(revision), m_code(code)
+  : m_analysis(std::move(analysis)), m_revision(revision), m_code(code)
 {
     assert(m_analysis != nullptr);
 }
@@ -72,9 +74,9 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
 evmc_revision toRevision(VMSchedule const& _schedule)
 {
     if (_schedule.enablePairs)
+    {
         return EVMC_PARIS;
-    else if (_schedule.enableLondon)
-        return EVMC_LONDON;
-    return EVMC_FRONTIER;
+    }
+    return EVMC_LONDON;
 }
 }  // namespace bcos::executor
