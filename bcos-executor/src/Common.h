@@ -61,6 +61,7 @@ static constexpr std::string_view USER_TABLE_PREFIX = "/tables/";
 static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
 static constexpr std::string_view USER_SYS_PREFIX = "/sys/";
 static constexpr std::string_view USER_USR_PREFIX = "/usr/";
+static constexpr std::string_view SHARD_PREFIX = "/shards/";
 
 static const char* const STORAGE_VALUE = "value";
 static const char* const ACCOUNT_CODE_HASH = "codeHash";
