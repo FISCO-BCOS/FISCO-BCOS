@@ -18,7 +18,7 @@ jobs:
     runs-on: macos-12
     # if: startsWith(github.ref,'v2')
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 5
       - name: install rust language
@@ -118,7 +118,7 @@ jobs:
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           clean: false
 
