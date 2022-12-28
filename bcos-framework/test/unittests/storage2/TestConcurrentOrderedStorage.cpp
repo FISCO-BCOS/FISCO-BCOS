@@ -44,8 +44,8 @@ BOOST_AUTO_TEST_CASE(writeReadRemove)
                 return entry;
             }));
 
-        auto it =
-            co_await storage.read(RANGES::iota_view(0, count) | RANGES::views::transform([](int i) {
+        auto it = co_await storage.read(
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int i) {
                 return std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             }));
@@ -67,15 +67,15 @@ BOOST_AUTO_TEST_CASE(writeReadRemove)
         BOOST_CHECK_EQUAL(i, count);
         it.release();
 
-        BOOST_CHECK_NO_THROW(
-            co_await storage.remove(RANGES::iota_view(10, 20) | RANGES::views::transform([](int i) {
+        BOOST_CHECK_NO_THROW(co_await storage.remove(
+            RANGES::iota_view<int, int>(10, 20) | RANGES::views::transform([](int i) {
                 return std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             })));
 
         // Check if records had erased
-        it =
-            co_await storage.read(RANGES::iota_view(0, count) | RANGES::views::transform([](int i) {
+        it = co_await storage.read(
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int i) {
                 return std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             }));
