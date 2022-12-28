@@ -156,7 +156,7 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
         m_txpool, cacheFactory, storage, executionMessageFactory, stateStorageFactory,
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),m_nodeConfig->vmCacheSize(),
         m_nodeConfig->isAuthCheck(), "executor");
 
     m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);

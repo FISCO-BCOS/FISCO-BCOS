@@ -35,6 +35,7 @@
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
+#include "bcos-tool/BfsFileFactory.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -50,14 +51,13 @@
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
+#include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
-#include "bcos-tool/BfsFileFactory.h"
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
-#include <bcos-table/src/KeyPageStorage.h>
-#include <bcos-table/src/StateStorageFactory.h>
 #include <util/tc_clientsocket.h>
 #include <vector>
 
@@ -277,13 +277,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         // Note: ensure that there has at least one executor before pbft/sync execute block
 
-        auto storageFactory = std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
+        auto storageFactory =
+            std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
         std::string executorName = "executor-local";
         auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
             m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
-            executionMessageFactory, storageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(),
-            executorName);
+            executionMessageFactory, storageFactory,
+            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
+            m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName);
         auto switchExecutorManager =
             std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
         executorManager->addExecutor(executorName, switchExecutorManager);

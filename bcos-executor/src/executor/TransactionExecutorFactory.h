@@ -26,6 +26,8 @@
 #include <bcos-table/src/CacheStorageFactory.h>
 #include <bcos-table/src/StateStorageFactory.h>
 
+#include <utility>
+
 
 namespace bcos
 {
@@ -41,9 +43,8 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        storage::StateStorageFactory::Ptr stateStorageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
-        std::string name = "executor-" + std::to_string(utcTime()))
+        storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
+        bool isWasm, bool isAuthCheck, std::string name = "executor-" + std::to_string(utcTime()))
     {  // only for test
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             std::initializer_list<std::set<std::string, std::less<>>::value_type>{
@@ -57,27 +58,27 @@ public:
                 storage::StorageInterface::SYS_TABLES,
             });
         return std::make_shared<TransactionExecutor>(ledger, txpool, cachedStorage, backendStorage,
-            executionMessageFactory, stateStorageFactory,  hashImpl, isWasm, isAuthCheck,
-            keyPageIgnoreTables, name);
+            executionMessageFactory, stateStorageFactory, hashImpl, isWasm, isAuthCheck,
+            std::make_shared<VMFactory>(), keyPageIgnoreTables, name);
     }
 
     TransactionExecutorFactory(bcos::ledger::LedgerInterface::Ptr ledger,
         txpool::TxPoolInterface::Ptr txpool, storage::CacheStorageFactory::Ptr cacheFactory,
         storage::TransactionalStorageInterface::Ptr storage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        storage::StateStorageFactory::Ptr stateStorageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,
-        std::string name)
-      : m_name(name),
-        m_ledger(ledger),
-        m_txpool(txpool),
-        m_cacheFactory(cacheFactory),
+        storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
+        bool isWasm, size_t vmCacheSize, bool isAuthCheck, std::string name)
+      : m_name(std::move(name)),
+        m_ledger(std::move(ledger)),
+        m_txpool(std::move(txpool)),
+        m_cacheFactory(std::move(cacheFactory)),
         m_stateStorageFactory(stateStorageFactory),
-        m_storage(storage),
-        m_executionMessageFactory(executionMessageFactory),
-        m_hashImpl(hashImpl),
+        m_storage(std::move(storage)),
+        m_executionMessageFactory(std::move(executionMessageFactory)),
+        m_hashImpl(std::move(hashImpl)),
         m_isWasm(isWasm),
-        m_isAuthCheck(isAuthCheck)
+        m_isAuthCheck(isAuthCheck),
+        m_vmFactory(std::make_shared<VMFactory>(vmCacheSize))
     {
         m_keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             std::initializer_list<std::set<std::string, std::less<>>::value_type>{
@@ -97,7 +98,7 @@ public:
         auto executor = std::make_shared<TransactionExecutor>(m_ledger, m_txpool,
             m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
             m_executionMessageFactory, m_stateStorageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,
-            m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
+            m_vmFactory, m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
         if (f_onNeedSwitchEvent)
         {
             executor->registerNeedSwitchEvent(f_onNeedSwitchEvent);
@@ -120,6 +121,7 @@ private:
     bool m_isWasm;
     bool m_isAuthCheck;
     std::function<void()> f_onNeedSwitchEvent;
+    std::shared_ptr<VMFactory> m_vmFactory;
 };
 
 }  // namespace executor
