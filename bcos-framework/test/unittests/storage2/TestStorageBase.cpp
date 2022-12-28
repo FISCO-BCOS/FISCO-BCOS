@@ -126,11 +126,12 @@ BOOST_AUTO_TEST_CASE(seek)
         MockStorage mock;
         BOOST_REQUIRE_NO_THROW(
             // Write 100 keyvalues
-            co_await mock.write(RANGES::iota_view(0, 100) | RANGES::views::transform([](auto num) {
-                return std::tuple<std::string, std::string>(
-                    "table", "key:" + boost::lexical_cast<std::string>(num));
-            }),
-                RANGES::iota_view(0, 100) | RANGES::views::transform([](auto num) {
+            co_await mock.write(
+                RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](auto num) {
+                    return std::tuple<std::string, std::string>(
+                        "table", "key:" + boost::lexical_cast<std::string>(num));
+                }),
+                RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](auto num) {
                     storage::Entry entry;
                     entry.set("Hello world! " + boost::lexical_cast<std::string>(num));
                     return entry;
