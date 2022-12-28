@@ -11,7 +11,7 @@
 using namespace bcos;
 using namespace bcos::storage2;
 
-class MockStorage : public StorageBase<MockStorage>
+class MockStorage : public Storage<MockStorage>
 {
 public:
     using Key = std::tuple<std::string, std::string>;
