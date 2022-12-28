@@ -36,13 +36,15 @@ public:
 
     // *** Pure interfaces
     template <class ImplClass = Impl>
-    task::Task<typename ImplClass::ReadIterator> read(RANGES::input_range auto const& keys)
+    task::Task<typename ImplClass::ReadIterator> read(
+        RANGES::input_range auto const& keys) requires Iterator<typename ImplClass::ReadIterator>
     {
         co_return co_await impl().impl_read(keys);
     }
 
     template <class ImplClass = Impl>
-    task::Task<typename ImplClass::SeekIterator> seek(auto const& key)
+    task::Task<typename ImplClass::SeekIterator> seek(
+        auto const& key) requires Iterator<typename ImplClass::ReadIterator>
     {
         co_return co_await impl().impl_seek(key);
     }
@@ -97,7 +99,35 @@ private:
     Storage() = default;
 };
 
-// template <class Impl>
-// concept Storage = std::derived_from<Impl, StorageBase<Impl>>;
+enum class OperationType
+{
+    WRITE,
+    REMOVE
+};
+template <class IteratorType>
+concept ExportableIterator = requires(IteratorType iterator)
+{
+    Iterator<IteratorType>;
+    std::convertible_to<task::AwaitableReturnType<decltype(iterator.type())>, OperationType>;
+};
+
+template <class Impl>
+class ExportableStorage : public virtual Storage<Impl>
+{
+public:
+    template <class ImplClass = Impl>
+    task::Task<typename ImplClass::ExportIterator> changes() requires
+        ExportableIterator<typename ImplClass::ExportIterator>
+    {
+        co_return co_await impl().impl_changes();
+    }
+
+private:
+    friend Impl;
+    auto& impl() { return static_cast<Impl&>(*this); }
+
+    ExportableStorage() = default;
+};
+
 
 }  // namespace bcos::storage2
