@@ -12,7 +12,9 @@
 #include <functional>
 #include <range/v3/view/transform.hpp>
 #include <set>
+#include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace bcos::storage2::concurrent_ordered_storage
 {
@@ -32,10 +34,14 @@ private:
     constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets, enough?
     constexpr static unsigned DEFAULT_CAPACITY = 32L * 1024 * 1024;
 
+    struct Empty
+    {
+    };
+
     struct Data
     {
         KeyType key;
-        ValueType value;
+        [[no_unique_address]] ValueType value;
     };
 
     using OrderedContainer = boost::multi_index_container<Data,
@@ -50,13 +56,12 @@ private:
     struct Bucket
     {
         Container container;
-        int64_t capacity = 0;
-
         std::mutex mutex;
+        [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> capacity = {};
     };
 
-    int64_t m_maxCapacity = DEFAULT_CAPACITY;
     std::vector<Bucket> m_buckets;
+    [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> m_maxCapacity = {};
 
     std::tuple<std::reference_wrapper<Bucket>, std::unique_lock<std::mutex>> getBucket(
         auto const& key)
@@ -88,18 +93,18 @@ private:
         size_t clearCount = 0;
         while (bucket.capacity > m_maxCapacity && !bucket.container.empty())
         {
-            auto& item = index.front();
-            bucket.capacity -= item.entry.size();
+            auto const& item = index.front();
+            bucket.capacity -= getSize(item.value);
 
             index.pop_front();
             ++clearCount;
         }
     }
 
-    static int64_t getSize(auto&& object)
+    static int64_t getSize(auto const& object)
     {
         using ObjectType = std::remove_cvref_t<decltype(object)>;
-        if (HasMemberSize<ObjectType>)
+        if constexpr (HasMemberSize<ObjectType>)
         {
             return object.size();
         }
@@ -109,8 +114,15 @@ private:
     }
 
 public:
-    ConcurrentOrderedStorage()
-      : m_buckets(std::min(std::thread::hardware_concurrency(), MAX_BUCKETS))
+    ConcurrentOrderedStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(
+        !withMRU)
+      : m_buckets(std::min(buckets, MAX_BUCKETS))
+    {}
+
+    ConcurrentOrderedStorage(unsigned buckets = std::thread::hardware_concurrency(),
+        int64_t capacityPerBucket = DEFAULT_CAPACITY) requires withMRU
+      : m_buckets(std::min(buckets, MAX_BUCKETS)),
+        m_maxCapacity(capacityPerBucket)
     {}
 
     class ReadIterator
@@ -121,16 +133,30 @@ public:
         using Value = std::reference_wrapper<const ValueType>;
 
         task::Task<bool> hasValue() { co_return *m_it != nullptr; }
-        task::Task<bool> next() { co_return (++m_it) != m_iterators.end(); }
+        task::Task<bool> next()
+        {
+            if (!m_started)
+            {
+                m_started = true;
+                co_return m_it != m_iterators.end();
+            }
+            co_return (++m_it) != m_iterators.end();
+        }
         task::Task<Key> key() const { co_return std::cref((*m_it)->key); }
         task::Task<Value> value() const { co_return std::cref((*m_it)->value); }
 
-        void release() { m_bucketLocks.clear(); }
+        void release()
+        {
+            m_iterators.clear();
+            m_it = m_iterators.end();
+            m_bucketLocks.clear();
+        }
 
     private:
         typename std::vector<const Data*>::iterator m_it;
         std::vector<const Data*> m_iterators;
         std::forward_list<std::unique_lock<std::mutex>> m_bucketLocks;
+        bool m_started = false;
     };
 
     class SeekIterator
@@ -141,7 +167,15 @@ public:
         using Value = std::reference_wrapper<const ValueType>;
 
         task::Task<bool> hasValue() { co_return true; }
-        task::Task<bool> next() { co_return (++m_it) != m_end; }
+        task::Task<bool> next()
+        {
+            if (!m_started)
+            {
+                m_started = true;
+                co_return m_it != m_end;
+            }
+            co_return (++m_it) != m_end;
+        }
         task::Task<Key> key() const { co_return std::cref(m_it->key); }
         task::Task<Value> value() const { co_return std::cref(m_it->value); }
 
@@ -151,6 +185,7 @@ public:
         typename Container::iterator m_it;
         typename Container::iterator m_end;
         std::unique_lock<std::mutex> m_bucketLock;
+        bool m_started = false;
     };
 
     task::Task<ReadIterator> impl_read(RANGES::input_range auto const& keys)
@@ -189,7 +224,6 @@ public:
             }
         }
         output.m_it = output.m_iterators.begin();
-        --output.m_it;
 
         co_return output;
     }
@@ -197,10 +231,15 @@ public:
     task::Task<SeekIterator> impl_seek(auto const& key)
     {
         auto [bucket, lock] = getBucket(key);
-        auto const& index = bucket.container.template get<0>();
+        auto const& index = bucket.get().container.template get<0>();
 
         auto it = index.lower_bound(key);
-        co_return {--it, index.end(), std::move(lock)};
+
+        SeekIterator seekIt;
+        seekIt.m_it = it;
+        seekIt.m_end = index.end();
+        seekIt.m_bucketLock = std::move(lock);
+        co_return seekIt;
     }
 
     task::Task<void> impl_write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
@@ -211,12 +250,20 @@ public:
             auto [bucket, lock] = getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
 
-            int64_t updatedCapacity = getSize(value);
+            std::conditional_t<withMRU, int64_t, Empty> updatedCapacity;
+            if constexpr (withMRU)
+            {
+                updatedCapacity = getSize(value);
+            }
+
             auto it = index.lower_bound(key);
             if (it != index.end() && it->key == key)
             {
                 auto& existsValue = it->value;
-                updatedCapacity -= getSize(existsValue);
+                if constexpr (withMRU)
+                {
+                    updatedCapacity -= getSize(existsValue);
+                }
 
                 auto&& newValue = value;
                 bucket.get().container.modify(
@@ -226,10 +273,15 @@ public:
             {
                 auto&& newKey = key;
                 auto&& newValue = value;
-                bucket.get().container.emplace_hint(
+                it = bucket.get().container.emplace_hint(
                     it, Data{.key = std::move(newKey), .value = std::move(newValue)});
             }
-            bucket.get().capacity += updatedCapacity;
+
+            if constexpr (withMRU)
+            {
+                bucket.get().capacity += updatedCapacity;
+                updateMRUAndCheck(bucket.get(), it);
+            }
         }
 
         co_return;
@@ -246,15 +298,16 @@ public:
             if (it != index.end())
             {
                 auto& existsValue = it->value;
-                bucket.get().capacity -= getSize(existsValue);
+                if constexpr (withMRU)
+                {
+                    bucket.get().capacity -= getSize(existsValue);
+                }
                 bucket.get().container.erase(it);
             }
         }
 
         co_return;
     }
-
-    task::Task<void> import() { co_return; }
 };
 
 }  // namespace bcos::storage2::concurrent_ordered_storage

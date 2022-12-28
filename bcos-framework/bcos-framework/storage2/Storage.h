@@ -20,11 +20,11 @@ concept Iterator = requires(IteratorType iterator)
     typename IteratorType::Key;
     typename IteratorType::Value;
 
-    std::convertible_to<task::AwaiterReturnType<decltype(iterator.hasValue())>, bool>;
-    std::convertible_to<task::AwaiterReturnType<decltype(iterator.next())>, bool>;
-    std::same_as<typename task::AwaiterReturnType<decltype(iterator.key())>,
+    std::convertible_to<task::AwaitableReturnType<decltype(iterator.hasValue())>, bool>;
+    std::convertible_to<task::AwaitableReturnType<decltype(iterator.next())>, bool>;
+    std::same_as<typename task::AwaitableReturnType<decltype(iterator.key())>,
         typename IteratorType::Key>;
-    std::same_as<typename task::AwaiterReturnType<decltype(iterator.value())>,
+    std::same_as<typename task::AwaitableReturnType<decltype(iterator.value())>,
         typename IteratorType::Value>;
 };
 
