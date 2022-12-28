@@ -680,11 +680,12 @@ void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool
 
 void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 {
-    //
     m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
+    m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig")
-                         << LOG_KV("sendTxTimeout", m_sendTxTimeout);
+                         << LOG_KV("sendTxTimeout", m_sendTxTimeout)
+                         << LOG_KV("vmCacheSize", m_vmCacheSize);
 }
 
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
