@@ -45,11 +45,6 @@ using UpdateFieldTuple = std::tuple<std::string, std::string>;
 using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
 using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
-struct Conditions
-{
-    std::vector<ConditionTuple>     cond;
-    std::vector<ConditionTupleV320> cond_v320;
-};
 struct TableInfo
 {
     TableInfoTuple     info;
