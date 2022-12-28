@@ -61,5 +61,19 @@ private:
         const std::string& _absoluteDir);
     std::set<std::string> BfsTypeSet;
     void buildSysSubs(const std::shared_ptr<executor::TransactionExecutive>& _executive) const;
+
+protected:
+    void makeDirImpl(const std::string& _absolutePath,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void linkImpl(const std::string& _absolutePath, const std::string& _contractAddress,
+        const std::string& _contractAbi,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+
+    inline bool isShardPath(const std::string& _path)
+    {
+        return _path.starts_with(executor::SHARD_PREFIX);
+    }
 };
 }  // namespace bcos::precompiled

@@ -182,6 +182,7 @@ int BFSPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
     return CODE_SUCCESS;
 }
 
+
 void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 
@@ -191,14 +192,37 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath);
+
+    // Normal BFS link could not operate shard
+    if (isShardPath(absolutePath))
+    {
+        PRECOMPILED_LOG(DEBUG)
+            << LOG_BADGE("BFSPrecompiled")
+            << LOG_DESC(
+                   "check mkDir params failed, normal BFS operation could not mkdir a shard dir")
+            << LOG_KV("absolutePath", absolutePath);
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH)));
+        return;
+    }
+
+    makeDirImpl(absolutePath, _executive, _callParameters);
+}
+
+void BFSPrecompiled::makeDirImpl(const std::string& _absolutePath,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    PrecompiledExecResult::Ptr const& _callParameters)
+{
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("BFSPrecompiled")
-                          << LOG_KV("mkdir", absolutePath);
-    auto table = _executive->storage().openTable(absolutePath);
+                          << LOG_KV("mkdir", _absolutePath);
+    auto table = _executive->storage().openTable(_absolutePath);
     if (table)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled")
                                << LOG_DESC("BFS file name already exists, please check")
-                               << LOG_KV("absolutePath", absolutePath);
+                               << LOG_KV("absolutePath", _absolutePath);
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_ALREADY_EXIST)));
         return;
     }
@@ -206,7 +230,7 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
     const auto* bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        absolutePath, FS_TYPE_DIR, _callParameters->m_gasLeft);
+        _absolutePath, FS_TYPE_DIR, _callParameters->m_gasLeft);
     auto result = codec.encode(response);
     if (blockContext->isWasm() &&
         protocol::versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0)
@@ -467,22 +491,47 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath, contractAddress, contractAbi);
+
+    // Normal BFS link could not operate shard
+    if (isShardPath(absolutePath))
+    {
+        PRECOMPILED_LOG(DEBUG)
+            << LOG_BADGE("BFSPrecompiled")
+            << LOG_DESC(
+                   "check link params failed, normal BFS operation could not link to a shard dir")
+            << LOG_KV("absolutePath", absolutePath) << LOG_KV("contractAddress", contractAddress);
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH)));
+        return;
+    }
+
+    linkImpl(absolutePath, contractAddress, contractAbi, _executive, _callParameters);
+}
+
+void BFSPrecompiled::linkImpl(const std::string& _absolutePath, const std::string& _contractAddress,
+    const std::string& _contractAbi,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    PrecompiledExecResult::Ptr const& _callParameters)
+{
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+
+    std::string contractAddress = _contractAddress;
     if (!blockContext->isWasm())
     {
         contractAddress = trimHexPrefix(contractAddress);
     }
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("BFSPrecompiled")
-                          << LOG_DESC("link") << LOG_KV("absolutePath", absolutePath)
+                          << LOG_DESC("link") << LOG_KV("absolutePath", _absolutePath)
                           << LOG_KV("contractAddress", contractAddress)
-                          << LOG_KV("contractAbiSize", contractAbi.size());
-    auto linkTableName = getContractTableName(absolutePath);
+                          << LOG_KV("contractAbiSize", _contractAbi.size());
+    auto linkTableName = getContractTableName(_absolutePath);
 
     if (!checkPathValid(linkTableName))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled")
                                << LOG_DESC("check link params failed, invalid path name")
-                               << LOG_KV("absolutePath", absolutePath)
+                               << LOG_KV("absolutePath", _absolutePath)
                                << LOG_KV("contractAddress", contractAddress);
         _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH)));
         return;
@@ -496,12 +545,12 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
         {
             // contract name and version exist, overwrite address and abi
-            tool::BfsFileFactory::buildLink(linkTable.value(), contractAddress, contractAbi);
+            tool::BfsFileFactory::buildLink(linkTable.value(), contractAddress, _contractAbi);
             _callParameters->setExecResult(codec.encode(s256((int)CODE_SUCCESS)));
             return;
         }
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("File already exists.")
-                               << LOG_KV("absolutePath", absolutePath);
+                               << LOG_KV("absolutePath", _absolutePath);
         _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_ALREADY_EXIST)));
         return;
     }
@@ -514,13 +563,13 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
                               << LOG_DESC("external build link file metadata failed")
-                              << LOG_KV("absolutePath", absolutePath);
+                              << LOG_KV("absolutePath", _absolutePath);
         _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_BUILD_DIR_FAILED)));
         return;
     }
     auto newLinkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
     // set link info to link table
-    tool::BfsFileFactory::buildLink(newLinkTable.value(), contractAddress, contractAbi);
+    tool::BfsFileFactory::buildLink(newLinkTable.value(), contractAddress, _contractAbi);
     _callParameters->setExecResult(codec.encode(s256((int)CODE_SUCCESS)));
 }
 
