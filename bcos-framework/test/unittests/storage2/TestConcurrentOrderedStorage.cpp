@@ -2,6 +2,7 @@
 #include <bcos-framework/storage2/ConcurrentOrderedStorage.h>
 #include <bcos-task/Wait.h>
 #include <boost/function.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <range/v3/view/transform.hpp>
 
@@ -25,7 +26,7 @@ struct std::hash<std::tuple<std::string, std::string>>
 
 BOOST_FIXTURE_TEST_SUITE(TestStorage2, Storage2ImplFixture)
 
-BOOST_AUTO_TEST_CASE(setGet)
+BOOST_AUTO_TEST_CASE(writeReadRemove)
 {
     task::syncWait([]() -> task::Task<void> {
         constexpr static int count = 100;
@@ -43,8 +44,8 @@ BOOST_AUTO_TEST_CASE(setGet)
                 return entry;
             }));
 
-        auto it =
-            co_await storage.read(RANGES::iota_view(0, count) | RANGES::views::transform([](int i) {
+        auto it = co_await storage.read(
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int i) {
                 return std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             }));
@@ -61,6 +62,44 @@ BOOST_AUTO_TEST_CASE(setGet)
 
             BOOST_CHECK_EQUAL((co_await it.value()).get().get(),
                 "Hello world!" + boost::lexical_cast<std::string>(i));
+            ++i;
+        }
+        BOOST_CHECK_EQUAL(i, count);
+        it.release();
+
+        BOOST_CHECK_NO_THROW(co_await storage.remove(
+            RANGES::iota_view<int, int>(10, 20) | RANGES::views::transform([](int i) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(i));
+            })));
+
+        // Check if records had erased
+        it = co_await storage.read(
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int i) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(i));
+            }));
+
+        i = 0;
+        while (co_await it.next())
+        {
+            if (i >= 10 && i < 20)
+            {
+                BOOST_REQUIRE(!(co_await it.hasValue()));
+            }
+            else
+            {
+                BOOST_REQUIRE(co_await it.hasValue());
+                auto exceptKey = std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(i));
+
+                auto key = co_await it.key();
+                BOOST_CHECK_EQUAL(std::get<0>(key.get()), std::get<0>(exceptKey));
+                BOOST_CHECK_EQUAL(std::get<1>(key.get()), std::get<1>(exceptKey));
+
+                BOOST_CHECK_EQUAL((co_await it.value()).get().get(),
+                    "Hello world!" + boost::lexical_cast<std::string>(i));
+            }
             ++i;
         }
         BOOST_CHECK_EQUAL(i, count);

@@ -29,7 +29,7 @@ concept Iterator = requires(IteratorType iterator)
 };
 
 template <class Impl>
-class StorageBase
+class Storage
 {
 public:
     static constexpr std::string_view SYS_TABLES{"s_tables"};
@@ -64,8 +64,7 @@ public:
     {
         using ValueType = typename ImplClass::ReadIterator::Value;
         std::optional<ValueType> value;
-        auto it = co_await read(RANGES::single_view(std::addressof(key)) |
-                                RANGES::views::transform([](auto const* ptr) { return *ptr; }));
+        auto it = co_await read(singleReferenceView(key));
         co_await it.next();
         if (co_await it.hasValue())
         {
@@ -77,33 +76,28 @@ public:
 
     task::Task<void> writeOne(auto&& key, auto&& value)
     {
-        using WriteKeyType = decltype(key);
-        if constexpr (std::is_lvalue_reference_v<WriteKeyType>)
-        {
-            // Treat lvalue as const&
-            co_return co_await write(
-                RANGES::single_view(std::addressof(key)) |
-                    RANGES::views::transform([](auto const* ptr) { return *ptr; }),
-                RANGES::single_view(std::forward<decltype(value)>(value)));
-        }
-        co_return co_await write(RANGES::single_view(std::forward<WriteKeyType>(key)),
-            RANGES::single_view(std::forward<decltype(value)>(value)));
+        co_return co_await write(singleReferenceView(key), singleReferenceView(value));
     }
 
     task::Task<void> removeOne(auto const& key)
     {
-        co_return co_await remove(RANGES::single_view(std::addressof(key)) |
-                                  RANGES::views::transform([](auto const* ptr) { return *ptr; }));
+        co_return co_await remove(singleReferenceView(key));
     }
 
 private:
     friend Impl;
     auto& impl() { return static_cast<Impl&>(*this); }
 
-    StorageBase() = default;
+    auto singleReferenceView(auto& value)
+    {
+        return RANGES::single_view(std::ref(value)) |
+               RANGES::views::transform([](auto&& input) -> auto& { return input.get(); });
+    }
+
+    Storage() = default;
 };
 
-template <class Impl>
-concept Storage = std::derived_from<Impl, StorageBase<Impl>>;
+// template <class Impl>
+// concept Storage = std::derived_from<Impl, StorageBase<Impl>>;
 
 }  // namespace bcos::storage2

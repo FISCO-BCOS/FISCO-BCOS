@@ -8,6 +8,7 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
+#include <forward_list>
 #include <functional>
 #include <range/v3/view/transform.hpp>
 #include <set>
@@ -25,10 +26,11 @@ concept HasMemberSize = requires(Object object)
 };
 template <bool withMRU, class KeyType, class ValueType>
 class ConcurrentOrderedStorage
-  : public storage2::StorageBase<ConcurrentOrderedStorage<withMRU, KeyType, ValueType>>
+  : public storage2::Storage<ConcurrentOrderedStorage<withMRU, KeyType, ValueType>>
 {
 private:
-    constexpr static int64_t DEFAULT_CAPACITY = 32L * 1024 * 1024;
+    constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets, enough?
+    constexpr static unsigned DEFAULT_CAPACITY = 32L * 1024 * 1024;
 
     struct Data
     {
@@ -59,12 +61,21 @@ private:
     std::tuple<std::reference_wrapper<Bucket>, std::unique_lock<std::mutex>> getBucket(
         auto const& key)
     {
-        using InputKeyType = std::remove_cvref_t<decltype(key)>;
-        auto hash = std::hash<InputKeyType>{}(key);
-        auto index = hash % m_buckets.size();
+        auto index = getBucketIndex(key);
 
         auto& bucket = m_buckets[index];
         return std::make_tuple(std::ref(bucket), std::unique_lock<std::mutex>(bucket.mutex));
+    }
+
+    std::reference_wrapper<Bucket> getBucketByIndex(size_t index)
+    {
+        return std::ref(m_buckets[index]);
+    }
+
+    size_t getBucketIndex(auto const& key) const
+    {
+        auto hash = std::hash<std::remove_cvref_t<decltype(key)>>{}(key);
+        return hash % m_buckets.size();
     }
 
     void updateMRUAndCheck(Bucket& bucket,
@@ -98,7 +109,9 @@ private:
     }
 
 public:
-    ConcurrentOrderedStorage() : m_buckets(std::thread::hardware_concurrency()) {}
+    ConcurrentOrderedStorage()
+      : m_buckets(std::min(std::thread::hardware_concurrency(), MAX_BUCKETS))
+    {}
 
     class ReadIterator
     {
@@ -112,10 +125,12 @@ public:
         task::Task<Key> key() const { co_return std::cref((*m_it)->key); }
         task::Task<Value> value() const { co_return std::cref((*m_it)->value); }
 
+        void release() { m_bucketLocks.clear(); }
+
     private:
         typename std::vector<const Data*>::iterator m_it;
         std::vector<const Data*> m_iterators;
-        std::unique_lock<std::mutex> m_bucketLock;
+        std::forward_list<std::unique_lock<std::mutex>> m_bucketLocks;
     };
 
     class SeekIterator
@@ -129,6 +144,8 @@ public:
         task::Task<bool> next() { co_return (++m_it) != m_end; }
         task::Task<Key> key() const { co_return std::cref(m_it->key); }
         task::Task<Value> value() const { co_return std::cref(m_it->value); }
+
+        void release() { m_bucketLock.unlock(); }
 
     private:
         typename Container::iterator m_it;
@@ -144,9 +161,17 @@ public:
             output.m_iterators.reserve(RANGES::size(keys));
         }
 
+        std::bitset<MAX_BUCKETS> locks;
         for (auto&& key : keys)
         {
-            auto [bucket, lock] = getBucket(key);
+            auto bucketIndex = getBucketIndex(key);
+            auto bucket = getBucketByIndex(bucketIndex);
+            if (!locks[bucketIndex])
+            {
+                locks[bucketIndex] = true;
+                output.m_bucketLocks.emplace_front(std::unique_lock(bucket.get().mutex));
+            }
+
             auto const& index = bucket.get().container.template get<0>();
 
             auto it = index.find(key);
@@ -165,7 +190,6 @@ public:
         }
         output.m_it = output.m_iterators.begin();
         --output.m_it;
-        // output.m_bucketLock = std::move(lock);  // TODO
 
         co_return output;
     }
