@@ -125,12 +125,6 @@ void Rpc::checkSyncStatus(int _groupID)
     // Refuse transaction if far syncing
     auto syncModule = ledgerManager()->sync(_groupID);
     checkLedgerStatus(syncModule, "sync", "checkSyncStatus");
-
-    if (syncModule->blockNumberFarBehind())
-    {
-        BOOST_THROW_EXCEPTION(
-            TransactionRefused() << errinfo_comment("ImportResult::NodeIsSyncing"));
-    }
 }
 
 std::string Rpc::getSystemConfigByKey(int _groupID, const std::string& key)
