@@ -1,3 +1,4 @@
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <tbb/task_group.h>
@@ -50,15 +51,12 @@ Task<void> level1()
 
 BOOST_AUTO_TEST_CASE(normalTask)
 {
-    // auto task = nothingTask();
-
     bool finished = false;
 
-    bcos::task::wait(
-        level1(), [&finished]([[maybe_unused]] std::exception_ptr exception = nullptr) {
-            std::cout << "Callback called!" << std::endl;
-            finished = true;
-        });
+    bcos::task::wait(level1(), [&finished](auto result) noexcept {
+        std::cout << "Callback called!" << std::endl;
+        finished = true;
+    });
     BOOST_CHECK_EQUAL(finished, true);
 
     auto num = bcos::task::syncWait(level2());
@@ -121,17 +119,13 @@ BOOST_AUTO_TEST_CASE(asyncTask)
     auto num = bcos::task::syncWait(asyncLevel1(taskGroup));
     BOOST_CHECK_EQUAL(num, 200);
 
-    bcos::task::wait(asyncLevel1(taskGroup), [](auto&& result) {
-        using ResultType = std::remove_cvref_t<decltype(result)>;
-        if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-        {
-            // nothing to do
-        }
-        else
-        {
-            BOOST_CHECK_EQUAL(result, 200);
-            std::cout << "Got async result" << std::endl;
-        }
+    bcos::task::wait(asyncLevel1(taskGroup), [](auto result) noexcept {
+        std::visit(bcos::overloaded{[](int& num) {
+                                        BOOST_CHECK_EQUAL(num, 200);
+                                        std::cout << "Got async result" << std::endl;
+                                    },
+                       [](std::exception_ptr& ptr) { BOOST_FAIL("Unexcept exception"); }},
+            result);
     });
     std::cout << "Top task destroyed" << std::endl;
 

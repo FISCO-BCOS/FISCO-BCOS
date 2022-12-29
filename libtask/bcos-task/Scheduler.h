@@ -1,5 +1,6 @@
 #pragma once
 #include "Coroutine.h"
+#include <functional>
 
 namespace bcos::task
 {
@@ -7,7 +8,8 @@ namespace bcos::task
 class Scheduler
 {
 public:
-    virtual ~Scheduler() = default;
+    virtual ~Scheduler() noexcept = default;
     virtual void execute(CO_STD::coroutine_handle<> handle) = 0;
 };
+
 }  // namespace bcos::task
