@@ -78,13 +78,10 @@ public:
 
     task::Task<void> writeOne(auto&& key, auto&& value)
     {
-        co_return co_await write(singleReferenceView(key), singleReferenceView(value));
+        co_await write(singleReferenceView(key), singleReferenceView(value));
     }
 
-    task::Task<void> removeOne(auto const& key)
-    {
-        co_return co_await remove(singleReferenceView(key));
-    }
+    task::Task<void> removeOne(auto const& key) { co_await remove(singleReferenceView(key)); }
 
 private:
     friend Impl;

@@ -9,5 +9,7 @@ class RollbackableStorage : public Storage<RollbackableStorage<KeyType, ValueTyp
 {
 private:
     std::map<KeyType, ValueType> m_data;
+
+public:
 };
 }  // namespace bcos::storage2::rollbackable_storage

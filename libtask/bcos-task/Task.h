@@ -4,8 +4,10 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <concepts>
+#include <coroutine>
 #include <exception>
 #include <future>
+#include <optional>
 #include <type_traits>
 #include <variant>
 
@@ -19,31 +21,42 @@ struct NoReturnValue : public bcos::error::Exception {};
 template <class TaskImpl, class Value>
 class TaskBase
 {
+    // 如果Task没有配置调度器，每个Task将在彻底结束（清理栈之前）前恢复上一个Task的执行，导致Task的协程栈增长，一旦Task中有大量循环或深层次的协程co_await调用，将会导致协程栈溢出
+    // If Task does not have a scheduler configured, each Task will resume the execution of the
+    // previous Task before completely ending (before cleaning up the stack), causing the Task's
+    // coroutine stack to grow, and once there are a large number of loops or deep coroutine
+    // co_await calls in the Task, it will cause the coroutine stack to overflow
+
 public:
     friend TaskImpl;
-
     using ReturnType = Value;
-
     struct PromiseVoid;
     struct PromiseValue;
     using promise_type = std::conditional_t<std::is_same_v<Value, void>, PromiseVoid, PromiseValue>;
+
+    using ValueType =
+        std::conditional_t<std::is_void_v<Value>, std::variant<std::monostate, std::exception_ptr>,
+            std::variant<std::monostate, Value, std::exception_ptr>>;
 
     template <class PromiseImpl>
     struct PromiseBase
     {
         constexpr CO_STD::suspend_always initial_suspend() const noexcept { return {}; }
-        constexpr auto final_suspend() const noexcept
+        constexpr auto final_suspend() noexcept
         {
             struct FinalAwaitable
             {
                 constexpr bool await_ready() const noexcept { return false; }
-                void await_suspend(CO_STD::coroutine_handle<PromiseImpl> handle) noexcept
+                void await_suspend(CO_STD::coroutine_handle<PromiseImpl> handle) const noexcept
                 {
-                    if (handle.promise().m_continuationHandle)
-                    {
-                        handle.promise().m_continuationHandle.resume();
-                    }
+                    CO_STD::coroutine_handle<> continuationHandle =
+                        handle.promise().m_continuationHandle;
                     handle.destroy();
+
+                    if (continuationHandle)
+                    {
+                        continuationHandle.resume();
+                    }
                 }
                 constexpr void await_resume() noexcept {}
             };
@@ -57,13 +70,14 @@ public:
         }
         void unhandled_exception()
         {
-            m_value.template emplace<std::exception_ptr>(std::current_exception());
+            if (m_value)
+            {
+                m_value->template emplace<std::exception_ptr>(std::current_exception());
+            }
         }
 
         CO_STD::coroutine_handle<> m_continuationHandle;
-        std::conditional_t<std::is_void_v<Value>, std::variant<std::monostate, std::exception_ptr>,
-            std::variant<std::monostate, Value, std::exception_ptr>>
-            m_value;
+        ValueType* m_value = nullptr;
     };
     struct PromiseVoid : public PromiseBase<PromiseVoid>
     {
@@ -74,8 +88,11 @@ public:
         template <class ReturnValue>
         void return_value(ReturnValue&& value)
         {
-            PromiseBase<PromiseValue>::m_value.template emplace<Value>(
-                std::forward<ReturnValue>(value));
+            if (PromiseBase<PromiseValue>::m_value)
+            {
+                PromiseBase<PromiseValue>::m_value->template emplace<Value>(
+                    std::forward<ReturnValue>(value));
+            }
         }
     };
 
@@ -94,6 +111,7 @@ public:
 
 private:
     CO_STD::coroutine_handle<promise_type> m_handle;
+    ValueType m_promiseValue;  // Use to receive promise's value
 };
 
 template <class Value>
@@ -103,6 +121,7 @@ public:
     using TaskBase<Task<Value>, Value>::TaskBase;
     using typename TaskBase<Task<Value>, Value>::ReturnType;
     using typename TaskBase<Task<Value>, Value>::promise_type;
+    using typename TaskBase<Task<Value>, Value>::ValueType;
 
     struct Awaitable
     {
@@ -119,11 +138,13 @@ public:
         auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
         {
             m_handle.promise().m_continuationHandle = handle;
+            m_handle.promise().m_value = &m_value;
             return m_handle;
         }
         constexpr Value await_resume()
         {
-            auto& value = m_handle.promise().m_value;
+            // auto& value = m_handle.promise().m_value;
+            auto& value = m_value;
             if (std::holds_alternative<std::exception_ptr>(value))
             {
                 std::rethrow_exception(std::get<std::exception_ptr>(value));
@@ -142,6 +163,7 @@ public:
         }
 
         CO_STD::coroutine_handle<promise_type> m_handle;
+        ValueType m_value;
     };
     Awaitable operator co_await() { return Awaitable(*static_cast<Task*>(this)); }
 

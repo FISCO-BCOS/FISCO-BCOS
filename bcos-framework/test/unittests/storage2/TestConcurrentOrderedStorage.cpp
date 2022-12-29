@@ -14,7 +14,6 @@ struct Storage2ImplFixture
 {
 };
 
-
 template <>
 struct std::hash<std::tuple<std::string, std::string>>
 {
@@ -24,7 +23,6 @@ struct std::hash<std::tuple<std::string, std::string>>
         return hash;
     }
 };
-
 BOOST_FIXTURE_TEST_SUITE(TestStorage2, Storage2ImplFixture)
 
 BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
