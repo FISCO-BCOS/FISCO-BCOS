@@ -480,7 +480,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
     m_currentTimePoint = std::chrono::system_clock::now();
     SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
 
-    m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_blockTxs, m_block,
+    m_scheduler->m_ledger->asyncPrewriteBlock(
+        stateStorage, m_blockTxs, m_block,
         [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
             if (error)
             {
@@ -498,7 +499,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             }
 
             auto status = std::make_shared<CommitStatus>();
-            status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
+            // self + ledger(txs receipts) + executors = 1 + 1 + executors
+            status->total = 2 + m_scheduler->m_executorManager->size();
             status->checkAndCommit = [this, callback](const CommitStatus& status) {
                 if (!m_isRunning)
                 {
@@ -631,7 +633,29 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                         });
                     }
                 });
-        });
+            // write transactions and receipts in another DB txn
+            auto err = m_scheduler->m_ledger->storeTransactionsAndReceipts(m_blockTxs, m_block);
+            {
+                WriteGuard lock(status->x_lock);
+                if (err)
+                {
+                    ++status->failed;
+                    SCHEDULER_LOG(ERROR)
+                        << BLOCK_NUMBER(number()) << "write txs and receipts failed: "
+                        << LOG_KV("message", err->errorMessage());
+                }
+                else
+                {
+                    ++status->success;
+                }
+                if (status->success + status->failed < status->total)
+                {
+                    return;
+                }
+            }
+            status->checkAndCommit(*status);
+        },
+        false);
 }
 
 void BlockExecutive::asyncNotify(

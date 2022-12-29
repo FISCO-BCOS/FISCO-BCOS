@@ -853,7 +853,7 @@ struct overloaded : Ts...
 };
 // explicit deduction guide (not needed as of C++20)
 template <class... Ts>
-overloaded(Ts...)->overloaded<Ts...>;
+overloaded(Ts...) -> overloaded<Ts...>;
 
 void SchedulerImpl::asyncGetLedgerConfig(
     std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback)

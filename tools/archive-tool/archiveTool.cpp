@@ -14,9 +14,9 @@
  *  limitations under the License.
  *
  * @brief the tool to read and modify data of storage
- * @file storageTool.cpp
+ * @file archiveTool.cpp
  * @author: xingqiangbai
- * @date 2022-07-13
+ * @date 2022-11-08
  */
 
 #include "bcos-framework/ledger/LedgerTypeDef.h"

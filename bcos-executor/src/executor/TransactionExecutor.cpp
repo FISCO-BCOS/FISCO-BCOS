@@ -118,8 +118,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-    storage::StateStorageFactory::Ptr stateStorageFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck,std::shared_ptr<VMFactory> vmFactory,
+    storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
+    bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
     std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
     std::string name = "default-executor-name")
   : m_name(std::move(name)),
@@ -2483,6 +2483,7 @@ void TransactionExecutor::removeCommittedState()
                                  << LOG_KV("commitNumber", number)
                                  << LOG_KV("erasedStorage", it->number)
                                  << LOG_KV("stateStorageSize", m_stateStorages.size());
+
         it = m_stateStorages.erase(it);
         if (it != m_stateStorages.end())
         {
