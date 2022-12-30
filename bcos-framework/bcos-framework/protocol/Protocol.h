@@ -111,6 +111,7 @@ enum ProtocolVersion : uint32_t
 
 enum class BlockVersion : uint32_t
 {
+    V3_3_VERSION = 0x03030000,
     V3_2_VERSION = 0x03020000,
     V3_1_VERSION = 0x03010000,
     V3_0_VERSION = 0x03000000,
@@ -122,10 +123,11 @@ const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string V3_0_VERSION_STR = "3.0.0";
 const std::string V3_1_VERSION_STR = "3.1.0";
 const std::string V3_2_VERSION_STR = "3.2.0";
+const std::string V3_3_VERSION_STR = "3.3.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
-const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_1_VERSION;
+const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_3_VERSION;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
@@ -158,6 +160,9 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion
         break;
     case bcos::protocol::BlockVersion::V3_2_VERSION:
         _out << V3_2_VERSION_STR;
+        break;
+    case bcos::protocol::BlockVersion::V3_3_VERSION:
+        _out << V3_3_VERSION_STR;
         break;
     default:
         _out << "Unknown";
