@@ -20,11 +20,11 @@ concept Iterator = requires(IteratorType iterator)
     typename IteratorType::Key;
     typename IteratorType::Value;
 
-    std::convertible_to<task::AwaiterReturnType<decltype(iterator.hasValue())>, bool>;
-    std::convertible_to<task::AwaiterReturnType<decltype(iterator.next())>, bool>;
-    std::same_as<typename task::AwaiterReturnType<decltype(iterator.key())>,
+    std::convertible_to<task::AwaitableReturnType<decltype(iterator.hasValue())>, bool>;
+    std::convertible_to<task::AwaitableReturnType<decltype(iterator.next())>, bool>;
+    std::same_as<typename task::AwaitableReturnType<decltype(iterator.key())>,
         typename IteratorType::Key>;
-    std::same_as<typename task::AwaiterReturnType<decltype(iterator.value())>,
+    std::same_as<typename task::AwaitableReturnType<decltype(iterator.value())>,
         typename IteratorType::Value>;
 };
 
@@ -36,13 +36,15 @@ public:
 
     // *** Pure interfaces
     template <class ImplClass = Impl>
-    task::Task<typename ImplClass::ReadIterator> read(RANGES::input_range auto const& keys)
+    task::Task<typename ImplClass::ReadIterator> read(
+        RANGES::input_range auto const& keys) requires Iterator<typename ImplClass::ReadIterator>
     {
         co_return co_await impl().impl_read(keys);
     }
 
     template <class ImplClass = Impl>
-    task::Task<typename ImplClass::SeekIterator> seek(auto const& key)
+    task::Task<typename ImplClass::SeekIterator> seek(
+        auto const& key) requires Iterator<typename ImplClass::ReadIterator>
     {
         co_return co_await impl().impl_seek(key);
     }
@@ -76,13 +78,10 @@ public:
 
     task::Task<void> writeOne(auto&& key, auto&& value)
     {
-        co_return co_await write(singleReferenceView(key), singleReferenceView(value));
+        co_await write(singleReferenceView(key), singleReferenceView(value));
     }
 
-    task::Task<void> removeOne(auto const& key)
-    {
-        co_return co_await remove(singleReferenceView(key));
-    }
+    task::Task<void> removeOne(auto const& key) { co_await remove(singleReferenceView(key)); }
 
 private:
     friend Impl;
@@ -97,7 +96,35 @@ private:
     Storage() = default;
 };
 
-// template <class Impl>
-// concept Storage = std::derived_from<Impl, StorageBase<Impl>>;
+enum class OperationType
+{
+    WRITE,
+    REMOVE
+};
+template <class IteratorType>
+concept ExportableIterator = requires(IteratorType iterator)
+{
+    Iterator<IteratorType>;
+    std::convertible_to<task::AwaitableReturnType<decltype(iterator.type())>, OperationType>;
+};
+
+template <class Impl>
+class ExportableStorage : public virtual Storage<Impl>
+{
+public:
+    template <class ImplClass = Impl>
+    task::Task<typename ImplClass::ExportIterator> changes() requires
+        ExportableIterator<typename ImplClass::ExportIterator>
+    {
+        co_return co_await impl().impl_changes();
+    }
+
+private:
+    friend Impl;
+    auto& impl() { return static_cast<Impl&>(*this); }
+
+    ExportableStorage() = default;
+};
+
 
 }  // namespace bcos::storage2

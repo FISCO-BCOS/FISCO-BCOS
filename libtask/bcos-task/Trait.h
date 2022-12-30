@@ -5,49 +5,48 @@
 namespace bcos::task
 {
 
-template <class Awaitable>
-concept HasADLCoAwait = requires(Awaitable&& awaitable)
+template <class Task>
+concept HasADLCoAwait = requires(Task&& task)
 {
-    operator co_await(awaitable);
+    operator co_await(task);
 };
-template <class Awaitable>
-concept HasMemberCoAwait = requires(Awaitable&& awaitable)
+template <class Task>
+concept HasMemberCoAwait = requires(Task&& task)
 {
-    awaitable.operator co_await();
+    task.operator co_await();
 };
 
-auto getAwaiter(auto&& awaitable)
+auto getAwaitable(auto&& task)
 {
-    using AwaitableType = std::remove_cvref_t<decltype(awaitable)>;
-    if constexpr (HasADLCoAwait<AwaitableType>)
+    using TaskType = std::remove_cvref_t<decltype(task)>;
+    if constexpr (HasADLCoAwait<TaskType>)
     {
-        return operator co_await(awaitable);
+        return operator co_await(task);
     }
-    else if constexpr (HasMemberCoAwait<AwaitableType>)
+    else if constexpr (HasMemberCoAwait<TaskType>)
     {
-        return awaitable.operator co_await();
+        return task.operator co_await();
     }
     else
     {
-        static_assert(
-            !sizeof(AwaitableType*), "Not a valid awaitable or an await_transform awaitable!");
+        static_assert(!sizeof(TaskType*), "Not a valid task or an await_transform task!");
     }
 }
-template <class Awaitable>
-requires HasADLCoAwait<Awaitable> || HasMemberCoAwait<Awaitable>
-struct AwaiterTrait
+template <class Task>
+requires HasADLCoAwait<Task> || HasMemberCoAwait<Task>
+struct AwaitableTrait
 {
-    using type = std::remove_cvref_t<decltype(getAwaiter(std::declval<Awaitable>()))>;
+    using type = std::remove_cvref_t<decltype(getAwaitable(std::declval<Task>()))>;
 };
-template <class Awaitable>
-using AwaiterType = typename AwaiterTrait<Awaitable>::type;
+template <class Task>
+using AwaitableType = typename AwaitableTrait<Task>::type;
 
-template <class Awaitable>
-struct AwaiterReturnTrait
+template <class Task>
+struct AwaitableReturnTrait
 {
-    using type = decltype(std::declval<AwaiterType<Awaitable>>().await_resume());
+    using type = decltype(std::declval<AwaitableType<Task>>().await_resume());
 };
-template <class Awaitable>
-using AwaiterReturnType = typename AwaiterReturnTrait<Awaitable>::type;
+template <class Task>
+using AwaitableReturnType = typename AwaitableReturnTrait<Task>::type;
 
 }  // namespace bcos::task

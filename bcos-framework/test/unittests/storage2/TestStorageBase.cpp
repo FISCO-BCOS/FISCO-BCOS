@@ -142,8 +142,7 @@ BOOST_AUTO_TEST_CASE(seek)
         while (co_await it.next())
         {
             auto const& [table, key] = co_await it.key();
-            std::cout << "Table:" << table << " Key: " << key
-                      << " Value: " << (co_await it.value())->get() << std::endl;
+            BOOST_CHECK_EQUAL(table, "table");
             ++count;
         }
 
