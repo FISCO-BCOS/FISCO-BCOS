@@ -152,7 +152,7 @@ void AccountManagerPrecompiled::setAccountStatus(
     auto table = _executive->storage().openTable(accountTableName);
     if (!table)
     {
-        auto appsAccountTableName = getContractTableName(account.hex());
+        auto appsAccountTableName = getContractTableName(executor::USER_APPS_PREFIX, account.hex());
         auto appsTable = _executive->storage().openTable(appsAccountTableName);
         if (appsTable)
         {

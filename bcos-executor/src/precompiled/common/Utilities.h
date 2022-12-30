@@ -23,8 +23,8 @@
 #include "Common.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-tool/BfsFileFactory.h"
@@ -92,9 +92,11 @@ void checkNameValidate(std::string_view tableName, std::string_view _keyField,
 void checkLengthValidate(std::string_view field_value, int32_t max_length, int32_t errorCode);
 
 std::string checkCreateTableParam(const std::string_view& _tableName, std::string& _keyField,
-    const std::variant<std::string, std::vector<std::string>>& _valueField, std::optional<uint8_t> keyOrder = std::nullopt);
+    const std::variant<std::string, std::vector<std::string>>& _valueField,
+    std::optional<uint8_t> keyOrder = std::nullopt);
 
-uint32_t getFuncSelector(std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl= executor::GlobalHashImpl::g_hashImpl);
+uint32_t getFuncSelector(std::string const& _functionName,
+    const crypto::Hash::Ptr& _hashImpl = executor::GlobalHashImpl::g_hashImpl);
 // for ut
 void clearName2SelectCache();
 uint32_t getParamFunc(bytesConstRef _param);
@@ -139,6 +141,6 @@ executor::CallParameters::UniquePtr externalRequest(
     bool _isCreate, int64_t gasLeft, bool _isInternalCall = false, std::string const& _abi = "");
 
 s256 externalTouchNewFile(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    std::string_view _origin, std::string_view _sender, std::string_view _filePath,
-    std::string_view _fileType, int64_t gasLeft);
+    std::string_view _origin, std::string_view _sender, std::string_view _to,
+    std::string_view _filePath, std::string_view _fileType, int64_t gasLeft);
 }  // namespace bcos::precompiled
