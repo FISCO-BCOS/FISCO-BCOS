@@ -1,5 +1,6 @@
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/ConcurrentOrderedStorage.h>
+#include <bcos-task/TBBScheduler.h>
 #include <bcos-task/Wait.h>
 #include <tbb/blocked_range.h>
 #include <tbb/enumerable_thread_specific.h>
@@ -66,25 +67,28 @@ void testStorage2BatchWrite(std::vector<std::tuple<std::string, storage::Entry>>
 
 void testStorage2SingleWrite(std::vector<std::tuple<std::string, storage::Entry>> const& dataSet)
 {
-    task::syncWait([&dataSet]() -> task::Task<void> {
-        storage2::concurrent_ordered_storage::ConcurrentOrderedStorage<false,
-            std::tuple<std::string, std::string>, storage::Entry>
-            storage;
+    task::TBBScheduler tbbScheduler;
+    task::syncWait(
+        [&dataSet]() -> task::Task<void> {
+            storage2::concurrent_ordered_storage::ConcurrentOrderedStorage<false,
+                std::tuple<std::string, std::string>, storage::Entry>
+                storage;
 
-        auto now = std::chrono::steady_clock::now();
-        for (const auto& item : dataSet)
-        {
-            co_await storage.writeOne(
-                std::tuple<std::string, std::string>(std::string("table"), std::get<0>(item)),
-                std::get<1>(item));
-        }
-        auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - now)
-                           .count();
+            auto now = std::chrono::steady_clock::now();
+            for (const auto& item : dataSet)
+            {
+                co_await storage.writeOne(
+                    std::tuple<std::string, std::string>(std::string("table"), std::get<0>(item)),
+                    std::get<1>(item));
+            }
+            auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - now)
+                               .count();
 
-        std::cout << "Storage2 singleWrite elpased: " << elpased << std::endl;
-        co_return;
-    }());
+            std::cout << "Storage2 singleWrite elpased: " << elpased << std::endl;
+            co_return;
+        }(),
+        &tbbScheduler);
 }
 
 void testKeyPageBatchWrite(

@@ -19,6 +19,12 @@ namespace bcos::task
 struct NoReturnValue : public bcos::error::Exception {};
 // clang-format on
 
+template <class Promise>
+concept HasMemberScheduler = requires(Promise promise)
+{
+    promise.m_scheduler;
+};
+
 template <class Value>
 class Task
 {
@@ -34,7 +40,7 @@ public:
 
     struct Awaitable
     {
-        Awaitable(Task const& task) : m_handle(task.m_handle), m_scheduler(task.m_scheduler){};
+        Awaitable(Task const& task) : m_handle(task.m_handle){};
         Awaitable(const Awaitable&) = delete;
         Awaitable(Awaitable&&) noexcept = default;
         Awaitable& operator=(const Awaitable&) = delete;
@@ -43,10 +49,23 @@ public:
 
         bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
 
-        auto await_suspend(CO_STD::coroutine_handle<> handle)
+        template <class Promise>
+        auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
         {
+            // 如果co_await来自有scheduler的task，沿用它的scheduler，并且使用该scheduler来执行handle
+            // If the co_await comes from a task with a scheduler, its scheduler is inherited and
+            // the handle is executed using that scheduler
+            if constexpr (HasMemberScheduler<Promise>)
+            {
+                if (handle.promise().m_scheduler)
+                {
+                    m_handle.promise().m_scheduler = handle.promise().m_scheduler;
+                }
+            }
+
             m_handle.promise().m_continuationHandle = handle;
             m_handle.promise().m_awaitable = this;
+
             return m_handle;
         }
         Value await_resume()
@@ -70,7 +89,6 @@ public:
         }
 
         CO_STD::coroutine_handle<promise_type> m_handle;
-        Scheduler* m_scheduler;
         ValueType m_value;
     };
 
@@ -98,9 +116,9 @@ public:
                         // Task's coroutine stack to grow, and once there are a large number of
                         // loops or deep coroutine co_await calls in the Task, it will cause the
                         // coroutine stack to overflow
-                        if (m_awaitable != nullptr && m_awaitable->m_scheduler != nullptr)
+                        if (m_scheduler != nullptr)
                         {
-                            m_awaitable->m_scheduler->execute(continuationHandle);
+                            m_scheduler->execute(continuationHandle);
                         }
                         else
                         {
@@ -111,9 +129,9 @@ public:
                 }
                 constexpr void await_resume() noexcept {}
 
-                Awaitable* m_awaitable;
+                Scheduler* m_scheduler = nullptr;
             };
-            return FinalAwaitable{.m_awaitable = m_awaitable};
+            return FinalAwaitable{.m_scheduler = m_scheduler};
         }
         constexpr Task get_return_object()
         {
@@ -130,6 +148,7 @@ public:
         }
 
         CO_STD::coroutine_handle<> m_continuationHandle;
+        Scheduler* m_scheduler = nullptr;
         Awaitable* m_awaitable = nullptr;
     };
     struct PromiseVoid : public PromiseBase<PromiseVoid>
@@ -161,11 +180,10 @@ public:
     ~Task() noexcept = default;
 
     auto handle() noexcept { return m_handle; }
-    void setScheduler(Scheduler* scheduler) noexcept { m_scheduler = scheduler; }
+    void setScheduler(Scheduler* scheduler) noexcept { m_handle.promise().m_scheduler = scheduler; }
 
 private:
     CO_STD::coroutine_handle<promise_type> m_handle;
-    Scheduler* m_scheduler = nullptr;
 };
 
 }  // namespace bcos::task
