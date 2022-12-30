@@ -77,26 +77,19 @@ void importTransactionsNew(
     }
 
     // Test parallel submit
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, transactions.size()), [&txpool, &transactions](auto& range) {
-            for (auto i = range.begin(); i < range.end(); ++i)
-            {
-                auto& transaction = transactions[i];
-                task::wait(txpool->submitTransaction(transaction), [](auto&& result) {
-                    using ResultType = std::decay_t<decltype(result)>;
-                    if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-                    {
-                        std::rethrow_exception(result);
-                    }
-                    else
-                    {
-                        BOOST_CHECK_EQUAL(result->status(), 0);
-                    }
-
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, transactions.size()), [&txpool, &transactions](
+                                                                              auto& range) {
+        for (auto i = range.begin(); i < range.end(); ++i)
+        {
+            auto& transaction = transactions[i];
+            task::wait(
+                [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
+                    auto result = co_await txpool->submitTransaction(transaction);
+                    BOOST_CHECK_EQUAL(result->status(), 0);
                     TXPOOL_LOG(DEBUG) << "Submit transaction successed";
-                });
-            }
-        });
+                }(txpool, transaction));
+        }
+    });
 
     auto startT = utcTime();
     while (txpool->txpoolStorage()->size() < _txsNum && (utcTime() - startT <= 10000))

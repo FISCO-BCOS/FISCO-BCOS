@@ -18,14 +18,6 @@ public:
         m_taskGroup.run([handle]() { handle.resume(); });
     }
 
-    template <class Task>
-    requires std::is_rvalue_reference_v<Task>
-    typename Task::ReturnType run(Task&& task)
-    {
-        task.setScheduler(this);
-        m_taskGroup.run([m_task = std::forward<Task>(task)]() { m_task.run(); });
-    }
-
     tbb::task_group m_taskGroup;
 };
 

@@ -5,11 +5,10 @@
 #include "DuplicateTransactionFactory.h"
 #include "JsonRpcImpl_2_0.h"
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/Overloaded.h>
 #include <exception>
 
-namespace bcos
-{
-namespace rpc
+namespace bcos::rpc
 {
 class DupTestTxJsonRpcImpl_2_0 : public JsonRpcImpl_2_0
 {
@@ -79,25 +78,18 @@ public:
             [submitCallback = std::move(submitCallback), txpool](
                 bcos::protocol::Transaction::Ptr tx) {
                 // std::cout << "sendtx: " << tx->nonce() << std::endl;
-                task::wait(txpool->submitTransaction(std::move(tx)),
-                    [m_submitCallback = std::move(submitCallback)](auto&& result) {
-                        using ResultType = std::decay_t<decltype(result)>;
-                        if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-                        {
-                            try
-                            {
-                                std::rethrow_exception(result);
-                            }
-                            catch (bcos::Error& e)
-                            {
-                                m_submitCallback(std::make_shared<bcos::Error>(e), nullptr);
-                            }
-                        }
-                        else
-                        {
-                            m_submitCallback(nullptr, result);
-                        }
-                    });
+                task::wait([](decltype(txpool) txpool, decltype(tx) tx,
+                               decltype(submitCallback) submitCallback) -> task::Task<void> {
+                    try
+                    {
+                        auto submitResult = co_await txpool->submitTransaction(std::move(tx));
+                        submitCallback(nullptr, submitResult);
+                    }
+                    catch (bcos::Error& e)
+                    {
+                        submitCallback(std::make_shared<bcos::Error>(std::move(e)), nullptr);
+                    }
+                }(txpool, std::move(tx), std::move(submitCallback)));
             });
     }
 
@@ -105,5 +97,4 @@ public:
 };
 
 
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc

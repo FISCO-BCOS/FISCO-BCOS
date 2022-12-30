@@ -41,16 +41,15 @@ public:
         Awaitable& operator=(Awaitable&&) noexcept = default;
         ~Awaitable() = default;
 
-        constexpr bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
+        bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
 
-        template <class Promise>
-        auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
+        auto await_suspend(CO_STD::coroutine_handle<> handle)
         {
             m_handle.promise().m_continuationHandle = handle;
             m_handle.promise().m_awaitable = this;
             return m_handle;
         }
-        constexpr Value await_resume()
+        Value await_resume()
         {
             auto& value = m_value;
             if (std::holds_alternative<std::exception_ptr>(value))
@@ -99,7 +98,7 @@ public:
                         // Task's coroutine stack to grow, and once there are a large number of
                         // loops or deep coroutine co_await calls in the Task, it will cause the
                         // coroutine stack to overflow
-                        if (m_awaitable != nullptr)
+                        if (m_awaitable != nullptr && m_awaitable->m_scheduler != nullptr)
                         {
                             m_awaitable->m_scheduler->execute(continuationHandle);
                         }
@@ -135,7 +134,7 @@ public:
     };
     struct PromiseVoid : public PromiseBase<PromiseVoid>
     {
-        void return_void() {}
+        constexpr void return_void() noexcept {}
     };
     struct PromiseValue : public PromiseBase<PromiseValue>
     {
@@ -161,7 +160,7 @@ public:
     }
     ~Task() noexcept = default;
 
-    auto handle() { return m_handle; }
+    auto handle() noexcept { return m_handle; }
     void setScheduler(Scheduler* scheduler) noexcept { m_scheduler = scheduler; }
 
 private:

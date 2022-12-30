@@ -227,38 +227,36 @@ public:
             }(remoteLedger(), std::string(txHash), std::move(respFunc)));
     }
 
-    void getBlockByHash([[maybe_unused]] std::string_view _groupID,
-        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view blockHash,
-        bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc) override
+    void getBlockByHash([[maybe_unused]] std::string_view groupID,
+        [[maybe_unused]] std::string_view nodeName, [[maybe_unused]] std::string_view blockHash,
+        bool onlyHeader, bool onlyTxHash, RespFunc respFunc) override
     {
-        auto blockNumber = std::make_unique<int64_t>(-1);
-        auto hash = std::make_unique<std::array<std::byte, Hasher::HASH_SIZE>>();
-        hex2Bin(blockHash, *hash);
-
-        auto& hashRef = *hash;
-        auto& blockNumberRef = *blockNumber;
-        bcos::task::wait(localLedger().getBlockNumberByHash(hashRef, blockNumberRef),
-            [this, m_hash = std::move(hash), m_blockNumber = std::move(blockNumber),
-                m_onlyHeader = _onlyHeader, m_respFunc = std::move(_respFunc),
-                m_groupID = std::string(_groupID), m_nodeName = std::string(_nodeName),
-                m_onlyTxHash = _onlyTxHash](std::exception_ptr error = {}) mutable {
-                if (error)
-                {
-                    toErrorResp(error, m_respFunc);
-                    return;
-                }
+        bcos::task::wait([](decltype(this) self, std::string groupID, std::string nodeName,
+                             std::string blockHash, bool onlyHeader, bool onlyTxHash,
+                             RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                auto blockNumber = int64_t(-1);
+                auto hash = std::array<std::byte, Hasher::HASH_SIZE>();
+                hex2Bin(blockHash, hash);
+                co_await self->localLedger().getBlockNumberByHash(hash, blockNumber);
 
                 LIGHTNODE_LOG(INFO)
-                    << "RPC get block by hash request: 0x" << *m_blockNumber << " " << m_onlyHeader;
-                if (*m_blockNumber < 0)
+                    << "RPC get block by hash request: 0x" << blockNumber << " " << onlyHeader;
+                if (blockNumber < 0)
                 {
                     BOOST_THROW_EXCEPTION(std::runtime_error{"Unable to find block hash!"});
                 }
 
-                getBlockByNumber(m_groupID, m_nodeName, *m_blockNumber, m_onlyHeader, m_onlyTxHash,
-                    std::move(m_respFunc));
-            });
-        ;
+                self->getBlockByNumber(
+                    groupID, nodeName, blockNumber, onlyHeader, onlyTxHash, std::move(respFunc));
+            }
+            catch (bcos::Error& error)
+            {
+                self->toErrorResp(error, respFunc);
+            }
+        }(this, std::string(groupID), std::string(nodeName), std::string(blockHash), onlyHeader,
+                                                    onlyTxHash, std::move(respFunc)));
     }
 
     void getBlockByNumber([[maybe_unused]] std::string_view groupID,
@@ -349,43 +347,41 @@ public:
     {
         LIGHTNODE_LOG(INFO) << "RPC get block hash by number request: " << blockNumber;
 
-        auto hash = std::make_unique<bcos::h256>();
-        auto& hashRef = *hash;
-        bcos::task::wait(localLedger().getBlockHashByNumber(blockNumber, hashRef),
-            [this, m_hash = std::move(hash), m_respFunc = std::move(respFunc)](
-                std::exception_ptr error = {}) mutable {
-                if (error)
+        task::wait(
+            [](decltype(this) self, int64_t blockNumber, RespFunc respFunc) -> task::Task<void> {
+                try
                 {
-                    this->toErrorResp(error, m_respFunc);
-                    return;
+                    auto hash = bcos::h256();
+                    co_await self->localLedger().getBlockHashByNumber(blockNumber, hash);
+                    Json::Value resp = bcos::toHexStringWithPrefix(hash);
+                    respFunc(nullptr, resp);
                 }
-                Json::Value resp = bcos::toHexStringWithPrefix(*m_hash);
-
-                m_respFunc(nullptr, resp);
-            });
+                catch (bcos::Error& error)
+                {
+                    self->toErrorResp(error, respFunc);
+                }
+            }(this, blockNumber, std::move(respFunc)));
     }
 
     void getBlockNumber(
-        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override
+        std::string_view groupID, std::string_view nodeName, RespFunc respFunc) override
     {
         LIGHTNODE_LOG(INFO) << "RPC get block number request";
 
-        bcos::task::wait(localLedger().getStatus(),
-            [this, m_respFunc = std::move(_respFunc)](auto&& result) mutable {
-                using ResultType = std::remove_cvref_t<decltype(result)>;
-                if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-                {
-                    this->toErrorResp(result, m_respFunc);
-                    return;
-                }
-                else
-                {
-                    Json::Value resp = result.blockNumber;
+        task::wait([](decltype(this) self, RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                auto status = co_await self->localLedger().getStatus();
+                LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << status.blockNumber;
 
-                    LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << result.blockNumber;
-                    m_respFunc(nullptr, resp);
-                }
-            });
+                Json::Value resp = status.blockNumber;
+                respFunc(nullptr, resp);
+            }
+            catch (bcos::Error& error)
+            {
+                self->toErrorResp(error, respFunc);
+            }
+        }(this, std::move(respFunc)));
     }
 
     void getCode(std::string_view _groupID, std::string_view _nodeName,
@@ -491,26 +487,24 @@ public:
         _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
 
-    void getGroupBlockNumber(RespFunc _respFunc) override
+    void getGroupBlockNumber(RespFunc respFunc) override
     {
         LIGHTNODE_LOG(INFO) << "RPC get group block number request";
 
-        bcos::task::wait(localLedger().getStatus(),
-            [this, m_respFunc = std::move(_respFunc)](auto&& result) mutable {
-                using ResultType = std::remove_cvref_t<decltype(result)>;
-                if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-                {
-                    this->toErrorResp(result, m_respFunc);
-                    return;
-                }
-                else
-                {
-                    Json::Value resp = result.blockNumber;
+        task::wait([](decltype(this) self, RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                auto status = co_await self->localLedger().getStatus();
+                Json::Value resp = status.blockNumber;
 
-                    LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << result.blockNumber;
-                    m_respFunc(nullptr, resp);
-                }
-            });
+                LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << status.blockNumber;
+                respFunc(nullptr, resp);
+            }
+            catch (bcos::Error& error)
+            {
+                self->toErrorResp(error, respFunc);
+            }
+        }(this, std::move(respFunc)));
     }
 
 private:
