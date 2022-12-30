@@ -36,6 +36,7 @@
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/KVTablePrecompiled.h"
+#include "../precompiled/ShardingPrecompiled.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableManagerPrecompiled.h"
 #include "../precompiled/TablePrecompiled.h"
@@ -135,7 +136,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 {
     assert(m_backendStorage);
     m_ledgerCache->fetchCompatibilityVersion();
-    m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
+
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
 #ifdef WITH_WASM
@@ -143,6 +144,26 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 #endif
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
+    setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
+    assert(!m_constantPrecompiled->empty());
+    assert(m_builtInPrecompiled);
+    start();
+}
+
+void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
+{
+    if (m_blockVersion != blockVersion)
+    {
+        m_blockVersion = blockVersion;
+
+        resetEnvironment();  // should not be called concurrently, if called, there's a bug in
+                             // caller
+    }
+}
+
+void TransactionExecutor::resetEnvironment()
+{
+    WriteGuard l(x_resetEnvironmentLock);
     if (m_isWasm)
     {
         initWasmEnvironment();
@@ -151,9 +172,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     {
         initEvmEnvironment();
     }
-    assert(!m_constantPrecompiled->empty());
-    assert(m_builtInPrecompiled);
-    start();
 }
 
 void TransactionExecutor::initEvmEnvironment()
@@ -224,6 +242,11 @@ void TransactionExecutor::initEvmEnvironment()
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
 
+    if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_3_VERSION)
+    {
+        m_constantPrecompiled->insert({SHARDING_PRECOMPILED_ADDRESS,
+            std::make_shared<precompiled::ShardingPrecompiled>(GlobalHashImpl::g_hashImpl)});
+    }
 
     if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_2_VERSION)
     {
@@ -293,6 +316,11 @@ void TransactionExecutor::initWasmEnvironment()
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm)});
     }
 
+    if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_3_VERSION)
+    {
+        m_constantPrecompiled->insert({SHARDING_PRECOMPILED_NAME,
+            std::make_shared<precompiled::ShardingPrecompiled>(GlobalHashImpl::g_hashImpl)});
+    }
     if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_2_VERSION)
     {
         m_constantPrecompiled->insert(
@@ -373,7 +401,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                                 << LOG_KV("parentHash", blockHeader->number() > 0 ?
                                                             (*parentInfoIt).blockHash.abridged() :
                                                             "null");
-        m_blockVersion = blockHeader->version();
+        setBlockVersion(blockHeader->version());
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
             bcos::storage::StateStorageInterface::Ptr stateStorage;
@@ -1819,8 +1847,8 @@ void TransactionExecutor::commit(
 
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
         m_ledgerCache->fetchCompatibilityVersion();
-        m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
 
+        setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
         removeCommittedState();
 
         callback(nullptr);
@@ -1930,7 +1958,7 @@ void TransactionExecutor::getCode(
         }
     }
 
-    std::string contractTableName = getContractTableName(contract);
+    std::string contractTableName = getContractTableName(executor::USER_APPS_PREFIX, contract);
 
     auto getCodeFromContractTable = [stateStorage, this](std::string_view contractTableName,
                                         decltype(callback) _callback) {
@@ -2049,7 +2077,7 @@ void TransactionExecutor::getABI(
     }
 
 
-    std::string contractTableName = getContractTableName(contract);
+    std::string contractTableName = getContractTableName(executor::USER_APPS_PREFIX, contract);
     auto getAbiFromContractTable = [stateStorage, this](std::string_view contractTableName,
                                        decltype(callback) _callback) {
         stateStorage->asyncGetRow(contractTableName, ACCOUNT_ABI,

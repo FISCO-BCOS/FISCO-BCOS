@@ -61,7 +61,7 @@ static constexpr std::string_view USER_TABLE_PREFIX = "/tables/";
 static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
 static constexpr std::string_view USER_SYS_PREFIX = "/sys/";
 static constexpr std::string_view USER_USR_PREFIX = "/usr/";
-static constexpr std::string_view SHARD_PREFIX = "/shards/";
+static constexpr std::string_view USER_SHARD_PREFIX = "/shards/";
 
 static const char* const STORAGE_VALUE = "value";
 static const char* const ACCOUNT_CODE_HASH = "codeHash";
@@ -410,9 +410,9 @@ inline bytes toBytes(const std::string_view& _addr)
     return {(char*)_addr.data(), (char*)(_addr.data() + _addr.size())};
 }
 
-inline std::string getContractTableName(const std::string_view& _address)
+inline std::string getContractTableName(
+    const std::string_view& prefix, const std::string_view& _address)
 {
-    constexpr static std::string_view prefix("/apps/");
     std::string out;
     if (_address[0] == '/')
     {

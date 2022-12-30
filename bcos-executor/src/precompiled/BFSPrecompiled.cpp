@@ -136,7 +136,7 @@ int BFSPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
     boost::trim(_contractName);
     boost::trim(_contractVersion);
     // check the status of the contract(only print the error message to the log)
-    std::string tableName = getContractTableName(_contractAddress);
+    std::string tableName = getContractTableName(getLinkRootDir(), _contractAddress);
     ContractStatus contractStatus = getContractStatus(_executive, tableName);
 
     if (contractStatus != ContractStatus::Available)
@@ -193,8 +193,9 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath);
 
-    // Normal BFS link could not operate shard
-    if (isShardPath(absolutePath))
+
+    if (isShardPath(absolutePath) &&
+        blockContext->blockVersion() >= (uint32_t)(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         PRECOMPILED_LOG(DEBUG)
             << LOG_BADGE("BFSPrecompiled")
@@ -227,10 +228,11 @@ void BFSPrecompiled::makeDirImpl(const std::string& _absolutePath,
         return;
     }
 
-    const auto* bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
+    const auto* bfsAddress = getMyAddress(blockContext->isWasm());
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        _absolutePath, FS_TYPE_DIR, _callParameters->m_gasLeft);
+        getMyAddress(blockContext->isWasm()), _absolutePath, FS_TYPE_DIR,
+        _callParameters->m_gasLeft);
     auto result = codec.encode(response);
     if (blockContext->isWasm() &&
         protocol::versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0)
@@ -492,18 +494,6 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), absolutePath, contractAddress, contractAbi);
 
-    // Normal BFS link could not operate shard
-    if (isShardPath(absolutePath))
-    {
-        PRECOMPILED_LOG(DEBUG)
-            << LOG_BADGE("BFSPrecompiled")
-            << LOG_DESC(
-                   "check link params failed, normal BFS operation could not link to a shard dir")
-            << LOG_KV("absolutePath", absolutePath) << LOG_KV("contractAddress", contractAddress);
-        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH)));
-        return;
-    }
-
     linkImpl(absolutePath, contractAddress, contractAbi, _executive, _callParameters);
 }
 
@@ -525,7 +515,7 @@ void BFSPrecompiled::linkImpl(const std::string& _absolutePath, const std::strin
                           << LOG_DESC("link") << LOG_KV("absolutePath", _absolutePath)
                           << LOG_KV("contractAddress", contractAddress)
                           << LOG_KV("contractAbiSize", _contractAbi.size());
-    auto linkTableName = getContractTableName(_absolutePath);
+    auto linkTableName = getContractTableName(getLinkRootDir(), _absolutePath);
 
     if (!checkPathValid(linkTableName))
     {
@@ -555,10 +545,11 @@ void BFSPrecompiled::linkImpl(const std::string& _absolutePath, const std::strin
         return;
     }
     // table not exist, mkdir -p /apps/contractName first
-    std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
+    std::string bfsAddress = getMyAddress(blockContext->isWasm());
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        linkTableName, FS_TYPE_LINK, _callParameters->m_gasLeft);
+        getMyAddress(blockContext->isWasm()), linkTableName, FS_TYPE_LINK,
+        _callParameters->m_gasLeft);
     if (response != 0)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
@@ -630,10 +621,11 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
         return;
     }
     // table not exist, mkdir -p /apps/contractName first
-    std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
+    std::string bfsAddress = getMyAddress(blockContext->isWasm());
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        linkTableName, FS_TYPE_LINK, _callParameters->m_gasLeft);
+        getMyAddress(blockContext->isWasm()), linkTableName, FS_TYPE_LINK,
+        _callParameters->m_gasLeft);
     if (response != 0)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
@@ -723,7 +715,9 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_TYPE)));
         return;
     }
-    if (!absolutePath.starts_with(USER_APPS_PREFIX) && !absolutePath.starts_with(USER_TABLE_PREFIX))
+    if (!absolutePath.starts_with(USER_APPS_PREFIX) &&
+        !absolutePath.starts_with(USER_TABLE_PREFIX) &&
+        !absolutePath.starts_with(USER_SHARD_PREFIX))
     {
         if (blockContext->blockVersion() >=
                 (uint32_t)(bcos::protocol::BlockVersion::V3_1_VERSION) &&

@@ -79,7 +79,7 @@ public:
 
     /// must set isWasm
     void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true,
-        protocol::BlockVersion version = BlockVersion::V3_1_VERSION)
+        protocol::BlockVersion version = DEFAULT_VERSION)
     {
         isWasm = _isWasm;
         if (_isKeyPage)
@@ -254,8 +254,7 @@ public:
         }
     }
 
-    void nextBlock(
-        int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_2_VERSION)
+    void nextBlock(int64_t blockNumber, protocol::BlockVersion version = protocol::DEFAULT_VERSION)
     {
         if (blockNumber < 0) [[unlikely]]
         {
@@ -702,6 +701,6 @@ protected:
     int64_t gas = MockLedger::TX_GAS_LIMIT;
     bool isWasm = false;
     std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";
-    protocol::BlockVersion m_blockVersion = protocol::BlockVersion::V3_1_VERSION;
+    protocol::BlockVersion m_blockVersion = protocol::DEFAULT_VERSION;
 };
 }  // namespace bcos::test
