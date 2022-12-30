@@ -134,7 +134,8 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
 {
     if (keyOrder && (*keyOrder != 0 && *keyOrder != 1))
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(std::to_string(int(*keyOrder)) + " KeyOrder not exist!"));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError(std::to_string(int(*keyOrder)) + " KeyOrder not exist!"));
     }
     std::vector<std::string> fieldNameList;
     if (_valueField.index() == 1)
@@ -378,16 +379,15 @@ executor::CallParameters::UniquePtr precompiled::externalRequest(
 
 s256 precompiled::externalTouchNewFile(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, std::string_view _origin,
-    std::string_view _sender, std::string_view _filePath, std::string_view _fileType,
-    int64_t gasLeft)
+    std::string_view _sender, std::string_view _to, std::string_view _filePath,
+    std::string_view _fileType, int64_t gasLeft)
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
     auto codecResult =
         codec.encodeWithSig("touch(string,string)", std::string(_filePath), std::string(_fileType));
-    auto response = externalRequest(
-        _executive, ref(codecResult), _origin, _sender, bfsAddress, false, false, gasLeft);
+    auto response =
+        externalRequest(_executive, ref(codecResult), _origin, _sender, _to, false, false, gasLeft);
     int32_t result = 0;
     if (response->status == (int32_t)TransactionStatus::None)
     {

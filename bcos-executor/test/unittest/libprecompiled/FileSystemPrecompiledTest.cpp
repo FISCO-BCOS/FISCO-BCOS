@@ -1243,19 +1243,6 @@ BOOST_AUTO_TEST_CASE(mkdirTest_3_0)
     }
 }
 
-BOOST_AUTO_TEST_CASE(couldNotMakeShardTest)
-{
-    init(false, protocol::BlockVersion::V3_0_VERSION);
-    BlockNumber _number = 3;
-    // must could not mkShard shard in normal BFS precompiled
-    {
-        auto result = mkdir(_number++, "/shards/hello", CODE_FILE_INVALID_PATH, true);
-        s256 m;
-        codec->decode(result->data(), m);
-        BOOST_TEST(m == (int)CODE_FILE_INVALID_PATH);
-    }
-}
-
 BOOST_AUTO_TEST_CASE(linkTest)
 {
     init(false);
@@ -1507,39 +1494,6 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
         }
         link(false, number++, contractName, errorVersion.str(), addressString, contractAbi,
             CODE_FILE_INVALID_PATH, true);
-    }
-}
-
-BOOST_AUTO_TEST_CASE(couldNotLinkShardTest)
-{
-    init(false);
-    BlockNumber number = 3;
-    deployHelloContract(number++, addressString);
-
-    std::string contractName = "/shards/hello";
-    std::string contractVersion;  // must empty
-    std::string contractAbi =
-        "[{\"constant\":false,\"inputs\":[{\"name\":"
-        "\"num\",\"type\":\"uint256\"}],\"name\":"
-        "\"trans\",\"outputs\":[],\"payable\":false,"
-        "\"type\":\"function\"},{\"constant\":true,"
-        "\"inputs\":[],\"name\":\"get\",\"outputs\":[{"
-        "\"name\":\"\",\"type\":\"uint256\"}],"
-        "\"payable\":false,\"type\":\"function\"},{"
-        "\"inputs\":[],\"payable\":false,\"type\":"
-        "\"constructor\"}]";
-
-    // link overflow
-    std::string overflowVersion130 =
-        "012345678901234567890123456789012345678901234567890123456789"
-        "0123456789012345678901234567890123456789012345678901234567890123456789";
-    // must could not link shard in normal BFS precompiled
-    {
-        auto result = link(false, number++, contractName, contractVersion, addressString,
-            contractAbi, CODE_FILE_INVALID_PATH, true);
-        s256 m;
-        codec->decode(result->data(), m);
-        BOOST_TEST(m == (int)CODE_FILE_INVALID_PATH);
     }
 }
 

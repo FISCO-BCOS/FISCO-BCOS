@@ -1294,8 +1294,10 @@ bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::stri
     /// you should create locally, after external call successfully
     EXECUTIVE_LOG(TRACE) << LOG_DESC("build BFS metadata") << LOG_KV("absoluteDir", _absoluteDir)
                          << LOG_KV("type", _type);
-    auto response =
-        externalTouchNewFile(shared_from_this(), _origin, _sender, _absoluteDir, _type, gasLeft);
+    auto blockContext = m_blockContext.lock();
+    const auto* to = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
+    auto response = externalTouchNewFile(
+        shared_from_this(), _origin, _sender, to, _absoluteDir, _type, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
 }
 
