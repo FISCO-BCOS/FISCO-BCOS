@@ -1,6 +1,5 @@
 #pragma once
 #include "Coroutine.h"
-#include <functional>
 
 namespace bcos::task
 {

@@ -1,13 +1,9 @@
 #pragma once
 #include "Scheduler.h"
 #include "Task.h"
-#include "bcos-utilities/Overloaded.h"
-#include <boost/exception/diagnostic_information.hpp>
 #include <coroutine>
 #include <exception>
-#include <iostream>
-#include <type_traits>
-#include <variant>
+#include <future>
 
 namespace bcos::task
 {

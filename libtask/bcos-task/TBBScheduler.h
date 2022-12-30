@@ -1,9 +1,6 @@
 #pragma once
 #include "Scheduler.h"
-#include "Wait.h"
 #include <tbb/task_group.h>
-#include <queue>
-#include <type_traits>
 
 namespace bcos::task
 {
