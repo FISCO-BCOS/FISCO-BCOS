@@ -20,6 +20,8 @@
  */
 #include "BlockSyncConfig.h"
 #include "bcos-sync/utilities/Common.h"
+#include <future>
+
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::crypto;

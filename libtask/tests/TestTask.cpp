@@ -1,3 +1,5 @@
+#include "bcos-utilities/Overloaded.h"
+#include <bcos-task/TBBScheduler.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <tbb/task_group.h>
@@ -50,15 +52,15 @@ Task<void> level1()
 
 BOOST_AUTO_TEST_CASE(normalTask)
 {
-    // auto task = nothingTask();
-
     bool finished = false;
 
-    bcos::task::wait(
-        level1(), [&finished]([[maybe_unused]] std::exception_ptr exception = nullptr) {
-            std::cout << "Callback called!" << std::endl;
-            finished = true;
-        });
+    bcos::task::wait([](bool& finished) -> Task<void> {
+        co_await level1();
+        std::cout << "Callback called!" << std::endl;
+        finished = true;
+
+        co_return;
+    }(finished));
     BOOST_CHECK_EQUAL(finished, true);
 
     auto num = bcos::task::syncWait(level2());
@@ -121,22 +123,30 @@ BOOST_AUTO_TEST_CASE(asyncTask)
     auto num = bcos::task::syncWait(asyncLevel1(taskGroup));
     BOOST_CHECK_EQUAL(num, 200);
 
-    bcos::task::wait(asyncLevel1(taskGroup), [](auto&& result) {
-        using ResultType = std::remove_cvref_t<decltype(result)>;
-        if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-        {
-            // nothing to do
-        }
-        else
-        {
-            BOOST_CHECK_EQUAL(result, 200);
-            std::cout << "Got async result" << std::endl;
-        }
-    });
+    bcos::task::wait([](decltype(taskGroup)& taskGroup) -> Task<void> {
+        auto result = co_await asyncLevel1(taskGroup);
+
+        BOOST_CHECK_EQUAL(result, 200);
+        std::cout << "Got async result" << std::endl;
+    }(taskGroup));
+
     std::cout << "Top task destroyed" << std::endl;
 
     taskGroup.wait();
     std::cout << "asyncTask test over" << std::endl;
+}
+
+BOOST_AUTO_TEST_CASE(tbbScheduler)
+{
+    TBBScheduler tbbScheduler;
+
+    bcos::task::syncWait(
+        []() -> Task<void> {
+            auto num = co_await level2();
+            co_await level3();
+            co_return;
+        }(),
+        &tbbScheduler);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
