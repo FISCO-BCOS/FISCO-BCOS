@@ -12,7 +12,7 @@ public:
 
     void execute(CO_STD::coroutine_handle<> handle) override
     {
-        m_taskGroup.run([handle]() { handle.resume(); });
+        m_taskGroup.run([handle]() mutable { handle.resume(); });
     }
 
     tbb::task_group m_taskGroup;
