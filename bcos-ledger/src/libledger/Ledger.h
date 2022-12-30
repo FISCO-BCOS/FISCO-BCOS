@@ -40,7 +40,9 @@ class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledge
 public:
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage)
-      : m_blockFactory(std::move(_blockFactory)), m_storage(std::move(_storage))
+      : m_blockFactory(std::move(_blockFactory)),
+        m_storage(std::move(_storage)),
+        m_threadPool(std::make_shared<ThreadPool>("WriteReceipts", 1))
     {}
 
     ~Ledger() override = default;
@@ -150,5 +152,6 @@ private:
     bcos::storage::StorageInterface::Ptr m_storage;
 
     mutable RecursiveMutex m_mutex;
+    std::shared_ptr<bcos::ThreadPool> m_threadPool;
 };
 }  // namespace bcos::ledger

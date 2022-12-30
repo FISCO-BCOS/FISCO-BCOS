@@ -391,73 +391,85 @@ Ledger::needStoreUnsavedTxs(
 bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block)
 {
-    if (!blockTxs)
+    // node commit synced block will give empty blockTxs, the block will never be null
+    if (!block)
     {
-        return nullptr;
+        return BCOS_ERROR_PTR(LedgerError::ErrorArgument, "empty block");
     }
     auto start = utcTime();
-    tbb::task_group g;
-    bcos::Error::Ptr err = nullptr;
     bcos::Error::Ptr error = nullptr;
-    if (block)
-    {
-        std::vector<std::string> txsHash(block->receiptsSize());
-        std::vector<bytes> receipts(block->receiptsSize());
-        std::vector<std::string_view> receiptsView(block->receiptsSize());
+    auto txSize = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
 
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize()),
-            [&blockTxs, &block, &txsHash, &receipts, &receiptsView](
-                const tbb::blocked_range<size_t>& range) {
-                for (size_t i = range.begin(); i < range.end(); ++i)
-                {
-                    auto hash = blockTxs->at(i)->hash();
-                    txsHash[i] = std::string((char*)hash.data(), hash.size());
-                    auto receipt = block->receipt(i);
-                    receipt->encode(receipts[i]);
-                    receiptsView[i] = bcos::concepts::bytebuffer::toView(receipts[i]);
-                }
-            });
-        g.run([&, txsHash = std::move(txsHash), receiptsView = std::move(receiptsView)] {
-            err =
-                m_storage->setRows(SYS_HASH_2_RECEIPT, std::move(txsHash), std::move(receiptsView));
-        });  // spawn a parallel task
-    }
-    RecursiveGuard l(m_mutex);
-    auto txsToSaveResult = needStoreUnsavedTxs(blockTxs, block);
-    bool shouldStoreTxs = std::get<0>(txsToSaveResult);
-
-    auto blockTxsSize = blockTxs->size();
-    auto unstoredTxsHash = std::get<1>(txsToSaveResult);
-    auto unstoredTxs = std::get<2>(txsToSaveResult);
-
+    std::vector<std::string> txsHash(txSize);
+    std::vector<bytes> receipts(txSize);
+    std::vector<std::string_view> receiptsView(txSize);
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, txSize),
+        [&blockTxs, &block, &txsHash, &receipts, &receiptsView](
+            const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); ++i)
+            {
+                auto hash = blockTxs ? blockTxs->at(i)->hash() : block->transaction(i)->hash();
+                txsHash[i] = std::string((char*)hash.data(), hash.size());
+                auto receipt = block->receipt(i);
+                receipt->encode(receipts[i]);
+                receiptsView[i] = std::string_view((char*)receipts[i].data(), receipts[i].size());
+            }
+        });
+    std::promise<bcos::Error::Ptr> promise;
+    m_threadPool->enqueue([storage = m_storage, &promise, keys = std::move(txsHash),
+                              values = std::move(receiptsView)]() mutable {
+        auto err = storage->setRows(SYS_HASH_2_RECEIPT, std::move(keys), std::move(values));
+        promise.set_value(err);
+    });
+    auto txsToStore = std::make_shared<std::vector<bytes>>();
+    txsToStore->reserve(txSize);
+    auto txsToStoreHash = std::make_shared<HashList>();
+    txsToStoreHash->reserve(txSize);
+    std::vector<std::string_view> keys;
+    keys.reserve(txSize);
+    std::vector<std::string_view> values;
+    values.reserve(txSize);
     auto blockNumber = block->blockHeaderConst()->number();
-    if (shouldStoreTxs)
+
+    RecursiveGuard guard(m_mutex);
+    size_t unstoredTxs = 0;
+    for (size_t i = 0; i < txSize; i++)
     {
-        auto total = unstoredTxs->size();
-        std::vector<std::string_view> keys(total);
-        std::vector<std::string_view> values(total);
-        for (auto i = 0U; i < unstoredTxs->size(); ++i)
+        auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
+        if (blockTxs && tx->storeToBackend())
         {
-            keys[i] = bcos::concepts::bytebuffer::toView((*unstoredTxsHash)[i]);
-            values[i] = bcos::concepts::bytebuffer::toView((*(*unstoredTxs)[i]));
+            continue;
         }
+        bcos::bytes encodeData;
+        tx->encode(encodeData);
+        txsToStoreHash->emplace_back(tx->hash());
+        txsToStore->emplace_back(std::move(encodeData));
+        keys.push_back(bcos::concepts::bytebuffer::toView((*txsToStoreHash)[unstoredTxs]));
+        values.push_back(bcos::concepts::bytebuffer::toView((*txsToStore)[unstoredTxs]));
+        ++unstoredTxs;
+    }
+    if (!keys.empty())
+    {
         // asyncPreStoreBlockTxs also write txs to DB, needStoreUnsavedTxs is out of lock, so
         // the transactions may be write twice
         error = m_storage->setRows(SYS_HASH_2_TX, std::move(keys), std::move(values));
+        if (error)
+        {
+            LEDGER_LOG(ERROR) << LOG_DESC("ledger write transactions failed")
+                              << LOG_KV("code", error->errorCode())
+                              << LOG_KV("message", error->errorMessage());
+            return error;
+        }
+        // set the flag when store success
+        if (blockTxs)
+        {
+            for (size_t i = 0; i < block->transactionsSize(); i++)
+            {
+                blockTxs->at(i)->setStoreToBackend(true);
+            }
+        }
     }
-    g.wait();  // wait for parallel task(s) to finish
-    if (error)
-    {
-        LEDGER_LOG(ERROR) << LOG_DESC("ledger write transactions failed")
-                          << LOG_KV("code", error->errorCode())
-                          << LOG_KV("message", error->errorMessage());
-        return error;
-    }
-    // set the flag when store success
-    for (auto const& tx : *blockTxs)
-    {
-        tx->setStoreToBackend(true);
-    }
+    auto err = promise.get_future().get();
     if (err)
     {
         LEDGER_LOG(ERROR) << LOG_DESC("ledger write receipts failed")
@@ -468,8 +480,8 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     auto writeReceiptsTime = utcTime();
 
     LEDGER_LOG(INFO) << LOG_DESC("storeTransactionsAndReceipts finished")
-                     << LOG_KV("blockNumber", blockNumber) << LOG_KV("blockTxsSize", blockTxsSize)
-                     << LOG_KV("unStoredTxs", (unstoredTxsHash ? unstoredTxsHash->size() : 0))
+                     << LOG_KV("blockNumber", blockNumber) << LOG_KV("blockTxsSize", txSize)
+                     << LOG_KV("unStoredTxs", unstoredTxs)
                      << LOG_KV("timeCost", (utcTime() - start));
     return nullptr;
 }
@@ -1310,7 +1322,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                     if (!entry.has_value())
                     {
                         LEDGER_LOG(TRACE)
-                            << "Get transaction failed: " << (*hashes)[i] << " not found";
+                            << "Get transaction failed: " << LOG_KV("txHash", toHex((*hashes)[i]));
                     }
                     else
                     {

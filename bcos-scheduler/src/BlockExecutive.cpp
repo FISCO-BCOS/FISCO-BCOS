@@ -634,7 +634,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     }
                 });
             // write transactions and receipts in another DB txn
-            auto err = m_scheduler->m_ledger->storeTransactionsAndReceipts(m_blockTxs, m_block);
+            auto err = m_scheduler->m_ledger->storeTransactionsAndReceipts(
+                m_blockTxs, std::const_pointer_cast<const bcos::protocol::Block>(m_block));
             {
                 WriteGuard lock(status->x_lock);
                 if (err)
