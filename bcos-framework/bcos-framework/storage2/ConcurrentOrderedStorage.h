@@ -10,8 +10,10 @@
 #include <boost/throw_exception.hpp>
 #include <forward_list>
 #include <functional>
+#include <mutex>
 #include <range/v3/view/transform.hpp>
 #include <set>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <variant>
