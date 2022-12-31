@@ -1,3 +1,4 @@
+#include "bcos-task/SequenceScheduler.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/ConcurrentOrderedStorage.h>
 #include <bcos-task/TBBScheduler.h>
@@ -5,6 +6,7 @@
 #include <tbb/blocked_range.h>
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/parallel_for.h>
+#include <boost/lexical_cast.hpp>
 #include <chrono>
 #include <iostream>
 #include <random>
@@ -60,14 +62,14 @@ void testStorage2BatchWrite(std::vector<std::tuple<std::string, storage::Entry>>
             std::chrono::steady_clock::now() - now)
                            .count();
 
-        std::cout << "Storage2 batchWrite elpased: " << elpased << std::endl;
+        std::cout << "Storage2 batchWrite elpased: " << elpased << "ms" << std::endl;
         co_return;
     }());
 }
 
 void testStorage2SingleWrite(std::vector<std::tuple<std::string, storage::Entry>> const& dataSet)
 {
-    task::TBBScheduler tbbScheduler;
+    task::SequenceScheduler<false> scheduler;
     task::syncWait(
         [&dataSet]() -> task::Task<void> {
             storage2::concurrent_ordered_storage::ConcurrentOrderedStorage<false,
@@ -85,20 +87,35 @@ void testStorage2SingleWrite(std::vector<std::tuple<std::string, storage::Entry>
                 std::chrono::steady_clock::now() - now)
                                .count();
 
-            std::cout << "Storage2 singleWrite elpased: " << elpased << std::endl;
+            std::cout << "Storage2 singleWrite elpased: " << elpased << "ms" << std::endl;
             co_return;
         }(),
-        &tbbScheduler);
+        &scheduler);
 }
 
 void testKeyPageBatchWrite(
     std::vector<std::tuple<std::string, storage::Entry>> const& dataSet, size_t keyPageSize)
 {}
 
-int main()
+int main(int argc, char* argv[])
 {
-    auto dataSet = generatRandomData(100000);
+    if (argc < 3)
+    {
+        std::cout << "Usage: " << argv[0] << " type[0-batch,1-single] count" << std::endl;
+        return 1;
+    }
 
-    testStorage2BatchWrite(dataSet);
-    testStorage2SingleWrite(dataSet);
+    auto type = boost::lexical_cast<int>(argv[1]);
+    auto count = boost::lexical_cast<int>(argv[2]);
+
+    auto dataSet = generatRandomData(count);
+
+    if (type == 0)
+    {
+        testStorage2BatchWrite(dataSet);
+    }
+    else
+    {
+        testStorage2SingleWrite(dataSet);
+    }
 }

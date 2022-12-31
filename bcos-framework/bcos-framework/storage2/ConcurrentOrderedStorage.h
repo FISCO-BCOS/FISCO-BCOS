@@ -147,12 +147,7 @@ public:
         task::Task<Key> key() const { co_return std::cref((*m_it)->key); }
         task::Task<Value> value() const { co_return std::cref((*m_it)->value); }
 
-        void release()
-        {
-            m_iterators.clear();
-            m_it = m_iterators.end();
-            m_bucketLocks.clear();
-        }
+        void release() { m_bucketLocks.clear(); }
 
     private:
         typename std::vector<const Data*>::iterator m_it;
@@ -168,7 +163,6 @@ public:
         using Key = std::reference_wrapper<const KeyType>;
         using Value = std::reference_wrapper<const ValueType>;
 
-        task::Task<bool> hasValue() { co_return true; }
         task::Task<bool> next()
         {
             if (!m_started)

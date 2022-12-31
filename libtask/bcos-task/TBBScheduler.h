@@ -13,11 +13,12 @@ public:
     void execute(CO_STD::coroutine_handle<> handle) override
     {
         m_taskGroup.run([handle]() {
-            auto copyHandle = handle;
-            copyHandle.resume();
+            auto executeHandle = handle;
+            executeHandle.resume();
         });
     }
 
+private:
     tbb::task_group m_taskGroup;
 };
 

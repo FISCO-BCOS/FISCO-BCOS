@@ -1,8 +1,10 @@
 #pragma once
 #include "Scheduler.h"
+#include "SequenceScheduler.h"
 #include "Task.h"
 #include <exception>
 #include <future>
+#include <iostream>
 
 namespace bcos::task
 {

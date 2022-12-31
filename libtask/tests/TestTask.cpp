@@ -48,6 +48,7 @@ Task<void> level1()
     BOOST_CHECK_EQUAL(num2, 10000);
 
     std::cout << "Level1 execute finished" << std::endl;
+    co_return;
 }
 
 BOOST_AUTO_TEST_CASE(normalTask)
