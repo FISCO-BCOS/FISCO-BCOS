@@ -171,7 +171,7 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
             m_logPath = _pt.get<std::string>("log.log_path", "log");
         }
 
-        auto enableRotateByHour = _pt.get<bool>("log.enable_rotate_by_hour", false);
+        auto enableRotateByHour = _pt.get<bool>("log.enable_rotate_by_hour", true);
         boost::shared_ptr<sink_t> sink = nullptr;
         if (enableRotateByHour)
         {
