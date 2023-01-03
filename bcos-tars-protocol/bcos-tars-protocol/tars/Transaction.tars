@@ -18,5 +18,6 @@ module bcostars {
         5 optional int attribute;
         // 6 optional string source;
         7 optional vector<byte> sender;
+        8 optional string extraData;
     };
 };
