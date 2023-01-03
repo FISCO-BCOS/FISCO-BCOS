@@ -7,6 +7,7 @@
 #include <bcos-task/Trait.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
+#include <functional>
 #include <optional>
 #include <range/v3/view/transform.hpp>
 #include <type_traits>
@@ -55,6 +56,7 @@ public:
         co_return co_await impl().impl_seek(key);
     }
 
+    template <class ImplClass = Impl>
     task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
         co_return co_await impl().impl_write(
@@ -68,15 +70,30 @@ public:
     // *** Pure interfaces
 
     template <class ImplClass = Impl>
-    task::Task<std::optional<typename ImplClass::ReadIterator::Value>> readOne(auto const& key)
+    task::Task<std::optional<typename std::conditional_t<
+        std::is_reference_v<typename ImplClass::ReadIterator::Value>,
+        std::reference_wrapper<std::remove_reference_t<typename ImplClass::ReadIterator::Value>>,
+        typename ImplClass::ReadIterator::Value>>>
+    readOne(auto const& key)
     {
-        using ValueType = typename ImplClass::ReadIterator::Value;
+        using ValueType = typename std::conditional_t<
+            std::is_reference_v<typename ImplClass::ReadIterator::Value>,
+            std::reference_wrapper<
+                std::remove_reference_t<typename ImplClass::ReadIterator::Value>>,
+            typename ImplClass::ReadIterator::Value>;
         std::optional<ValueType> value;
         auto it = co_await read(singleReferenceView(key));
         co_await it.next();
         if (co_await it.hasValue())
         {
-            value.emplace(std::move(co_await it.value()));
+            if constexpr (std::is_reference_v<typename ImplClass::ReadIterator::Value>)
+            {
+                value.emplace(co_await it.value());
+            }
+            else
+            {
+                value.emplace(std::move(co_await it.value()));
+            }
         }
 
         co_return value;

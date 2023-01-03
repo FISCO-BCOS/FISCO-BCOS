@@ -15,6 +15,11 @@ concept HasMemberCoAwait = requires(Task&& task)
 {
     task.operator co_await();
 };
+template <class Awaitable>
+concept IsAwaitable = requires(Awaitable&& awaitable)
+{
+    awaitable.await_resume();
+};
 
 auto getAwaitable(auto&& task)
 {
@@ -27,13 +32,17 @@ auto getAwaitable(auto&& task)
     {
         return task.operator co_await();
     }
+    else if constexpr (IsAwaitable<TaskType>)
+    {
+        return task;
+    }
     else
     {
         static_assert(!sizeof(TaskType*), "Not a valid task or an await_transform task!");
     }
 }
 template <class Task>
-requires HasADLCoAwait<Task> || HasMemberCoAwait<Task>
+requires HasADLCoAwait<Task> || HasMemberCoAwait<Task> || IsAwaitable<Task>
 struct AwaitableTrait
 {
     using type = std::remove_cvref_t<decltype(getAwaitable(std::declval<Task>()))>;

@@ -6,6 +6,7 @@
 #include <boost/throw_exception.hpp>
 #include <concepts>
 #include <exception>
+#include <functional>
 #include <type_traits>
 #include <variant>
 
@@ -54,7 +55,7 @@ public:
         bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
 
         template <class Promise>
-        auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
+        void await_suspend(CO_STD::coroutine_handle<Promise> handle)
         {
             // 如果co_await来自有scheduler的task，沿用它的scheduler，结束时由该Scheduler执行continuation
             // If the co_await comes from a task with a scheduler, its scheduler is inherited and
@@ -63,15 +64,26 @@ public:
             {
                 if (handle.promise().m_scheduler)
                 {
-                    m_handle.promise().m_scheduler = handle.promise().m_scheduler;
-                    m_handle.promise().m_fromScheduler = true;
+                    if (m_handle.promise().m_scheduler == nullptr)
+                    {
+                        m_handle.promise().m_scheduler = handle.promise().m_scheduler;
+                    }
                 }
             }
 
             m_handle.promise().m_continuationHandle = handle;
             m_handle.promise().m_awaitable = this;
 
-            return m_handle;
+            if (m_handle.promise().m_scheduler)
+            {
+                m_handle.promise().m_scheduler->execute(m_handle);
+            }
+            else
+            {
+                m_handle.resume();
+            }
+
+            // return m_handle;
         }
         Value await_resume()
         {
@@ -111,12 +123,11 @@ public:
                 void await_suspend(CO_STD::coroutine_handle<PromiseImpl> handle) const noexcept
                 {
                     auto continuationHandle = handle.promise().m_continuationHandle;
-
                     if (continuationHandle)
                     {
-                        if (m_scheduler != nullptr && m_fromScheduler)
+                        if (m_promise.m_scheduler)
                         {
-                            m_scheduler->execute(continuationHandle);
+                            m_promise.m_scheduler->execute(continuationHandle);
                         }
                         else
                         {
@@ -127,10 +138,9 @@ public:
                 }
                 constexpr void await_resume() noexcept {}
 
-                Scheduler* m_scheduler = nullptr;
-                bool m_fromScheduler = false;
+                PromiseBase& m_promise;
             };
-            return FinalAwaitable{.m_scheduler = m_scheduler, .m_fromScheduler = m_fromScheduler};
+            return FinalAwaitable{.m_promise = *this};
         }
         constexpr Task get_return_object()
         {
@@ -149,7 +159,6 @@ public:
         CO_STD::coroutine_handle<> m_continuationHandle;
         Awaitable* m_awaitable = nullptr;
         Scheduler* m_scheduler = nullptr;
-        bool m_fromScheduler = false;
     };
     struct PromiseVoid : public PromiseBase<PromiseVoid>
     {
@@ -184,6 +193,27 @@ public:
 
 private:
     CO_STD::coroutine_handle<promise_type> m_handle;
+};
+
+template <class Value>
+struct ValueAwaitable
+{
+    ValueAwaitable() requires std::is_void_v<Value>
+    = default;
+    ValueAwaitable(Value&& value) requires(!std::is_void_v<Value>)
+      : m_value(std::forward<Value>(value))
+    {}
+    constexpr bool await_ready() const noexcept { return true; }
+    constexpr bool await_suspend(CO_STD::coroutine_handle<> handle) const noexcept { return false; }
+    constexpr Value await_resume() noexcept
+    {
+        if constexpr (!std::is_void_v<Value>)
+        {
+            return std::move(m_value);
+        }
+    }
+
+    [[no_unique_address]] std::conditional_t<std::is_void_v<Value>, std::monostate, Value> m_value;
 };
 
 }  // namespace bcos::task

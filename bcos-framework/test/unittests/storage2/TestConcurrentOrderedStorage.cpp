@@ -56,11 +56,11 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
             auto exceptKey = std::tuple<std::string, std::string>(
                 "table", "key:" + boost::lexical_cast<std::string>(i));
             auto key = co_await it.key();
-            BOOST_CHECK_EQUAL(std::get<0>(key.get()), std::get<0>(exceptKey));
-            BOOST_CHECK_EQUAL(std::get<1>(key.get()), std::get<1>(exceptKey));
+            BOOST_CHECK_EQUAL(std::get<0>(key), std::get<0>(exceptKey));
+            BOOST_CHECK_EQUAL(std::get<1>(key), std::get<1>(exceptKey));
 
-            BOOST_CHECK_EQUAL((co_await it.value()).get().get(),
-                "Hello world!" + boost::lexical_cast<std::string>(i));
+            BOOST_CHECK_EQUAL(
+                (co_await it.value()).get(), "Hello world!" + boost::lexical_cast<std::string>(i));
             ++i;
         }
         BOOST_CHECK_EQUAL(i, count);
@@ -104,16 +104,16 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
                     "table", "key:" + boost::lexical_cast<std::string>(i));
 
                 auto key = co_await it.key();
-                BOOST_CHECK_EQUAL(std::get<0>(key.get()), std::get<0>(exceptKey));
-                BOOST_CHECK_EQUAL(std::get<1>(key.get()), std::get<1>(exceptKey));
+                BOOST_CHECK_EQUAL(std::get<0>(key), std::get<0>(exceptKey));
+                BOOST_CHECK_EQUAL(std::get<1>(key), std::get<1>(exceptKey));
 
                 if (i == 5)
                 {
-                    BOOST_CHECK_EQUAL((co_await it.value()).get().get(), "Hello map!");
+                    BOOST_CHECK_EQUAL((co_await it.value()).get(), "Hello map!");
                 }
                 else
                 {
-                    BOOST_CHECK_EQUAL((co_await it.value()).get().get(),
+                    BOOST_CHECK_EQUAL((co_await it.value()).get(),
                         "Hello world!" + boost::lexical_cast<std::string>(i));
                 }
             }
@@ -168,7 +168,7 @@ BOOST_AUTO_TEST_CASE(mru)
         while (co_await seekIt.next())
         {
             auto key = co_await seekIt.key();
-            BOOST_CHECK_EQUAL(key.get(), i + 1);
+            BOOST_CHECK_EQUAL(key, i + 1);
             ++i;
         }
         BOOST_CHECK_EQUAL(i, 10);

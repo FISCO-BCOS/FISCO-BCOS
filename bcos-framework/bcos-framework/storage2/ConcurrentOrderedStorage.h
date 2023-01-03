@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Storage.h"
+#include "bcos-task/Task.h"
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
 #include <boost/multi_index/mem_fun.hpp>
@@ -131,21 +132,21 @@ public:
     {
     public:
         friend class ConcurrentOrderedStorage;
-        using Key = std::reference_wrapper<const KeyType>;
-        using Value = std::reference_wrapper<const ValueType>;
+        using Key = const KeyType&;
+        using Value = const ValueType&;
 
-        task::Task<bool> hasValue() { co_return *m_it != nullptr; }
-        task::Task<bool> next()
+        task::ValueAwaitable<bool> hasValue() { return {*m_it != nullptr}; }
+        task::ValueAwaitable<bool> next()
         {
             if (!m_started)
             {
                 m_started = true;
-                co_return m_it != m_iterators.end();
+                return {m_it != m_iterators.end()};
             }
-            co_return (++m_it) != m_iterators.end();
+            return {(++m_it) != m_iterators.end()};
         }
-        task::Task<Key> key() const { co_return std::cref((*m_it)->key); }
-        task::Task<Value> value() const { co_return std::cref((*m_it)->value); }
+        task::ValueAwaitable<Key> key() const { return {(*m_it)->key}; }
+        task::ValueAwaitable<Value> value() const { return {(*m_it)->value}; }
 
         void release() { m_bucketLocks.clear(); }
 
@@ -160,20 +161,20 @@ public:
     {
     public:
         friend class ConcurrentOrderedStorage;
-        using Key = std::reference_wrapper<const KeyType>;
-        using Value = std::reference_wrapper<const ValueType>;
+        using Key = const KeyType&;
+        using Value = const ValueType&;
 
-        task::Task<bool> next()
+        task::ValueAwaitable<bool> next()
         {
             if (!m_started)
             {
                 m_started = true;
-                co_return m_it != m_end;
+                return {m_it != m_end};
             }
-            co_return (++m_it) != m_end;
+            return {(++m_it) != m_end};
         }
-        task::Task<Key> key() const { co_return std::cref(m_it->key); }
-        task::Task<Value> value() const { co_return std::cref(m_it->value); }
+        task::ValueAwaitable<Key> key() const { return {m_it->key}; }
+        task::ValueAwaitable<Value> value() const { return {m_it->value}; }
 
         void release() { m_bucketLock.unlock(); }
 
@@ -267,10 +268,7 @@ public:
             }
             else
             {
-                auto&& newKey = key;
-                auto&& newValue = value;
-                it = bucket.get().container.emplace_hint(
-                    it, Data{.key = std::move(newKey), .value = std::move(newValue)});
+                it = bucket.get().container.emplace_hint(it, Data{.key = key, .value = value});
             }
 
             if constexpr (withMRU)
