@@ -85,6 +85,9 @@ public:
     std::string_view source() const override { return m_inner()->source; }
     void setSource(std::string const& source) override { m_inner()->source = source; }
 
+    std::string_view extraData() const override { return m_inner()->extraData; }
+    void setExtraData(std::string const& _extraData) override { m_inner()->extraData = _extraData; }
+
     const bcostars::Transaction& inner() const { return *m_inner(); }
     void setInner(bcostars::Transaction inner) { *m_inner() = std::move(inner); }
 
