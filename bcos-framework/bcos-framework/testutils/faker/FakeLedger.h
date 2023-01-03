@@ -160,14 +160,13 @@ public:
         bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) override
     {
         WriteGuard l(x_txsHashToData);
-        size_t i = 0;
-        for (auto const& tx : *blockTxs)
+        for (size_t i = 0; i < block->transactionsSize(); i++)
         {
+            auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
             auto txHash = tx->hash();
             std::shared_ptr<bcos::bytes> txData;
             tx->encode(*txData);
             m_txsHashToData[txHash] = txData;
-            i++;
         }
         return nullptr;
     }

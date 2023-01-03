@@ -27,6 +27,7 @@
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/ConsensusNode.h"
@@ -1185,7 +1186,8 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
         0, "to", input, 200, 300, "chainid", "groupid", 800, keyPair);
 
     block->appendTransaction(tx);
-
+    auto blockTxs = std::make_shared<Transactions>();
+    blockTxs->push_back(tx);
     auto txs = std::make_shared<std::vector<bytesConstPtr>>();
     auto hashList = std::make_shared<crypto::HashList>();
     bcos::bytes encoded;
@@ -1196,10 +1198,8 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     initFixture();
     auto transactions = std::make_shared<Transactions>();
     transactions->push_back(tx);
-    auto err = m_ledger->storeTransactionsAndReceipts(transactions, block);
-    BOOST_CHECK(!err);
     m_ledger->asyncPrewriteBlock(
-        m_storage, nullptr, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
+        m_storage, blockTxs, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
 
     m_ledger->asyncGetBlockDataByNumber(
         100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {
