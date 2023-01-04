@@ -196,8 +196,9 @@ private:
 };
 
 template <class Value>
-struct AwaitableValue
+class AwaitableValue
 {
+public:
     AwaitableValue(Value&& value) : m_value(std::forward<Value>(value)) {}
     constexpr bool await_ready() const noexcept { return true; }
     constexpr bool await_suspend(CO_STD::coroutine_handle<> handle) const noexcept { return false; }
@@ -212,6 +213,7 @@ struct AwaitableValue
     const Value& value() const { return m_value; }
     Value& value() { return m_value; }
 
+private:
     Value m_value;
 };
 template <>

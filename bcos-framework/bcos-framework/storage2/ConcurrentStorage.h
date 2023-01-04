@@ -30,16 +30,17 @@ concept HasMemberSize = requires(Object object)
     { object.size() } -> std::integral;
     // clang-format on
 };
-template <class KeyType, class ValueType, bool ordered = false, bool withMRU = false>
+
+struct Empty
+{
+};
+
+template <class KeyType, class ValueType = Empty, bool ordered = false, bool withMRU = false>
 class ConcurrentStorage
 {
 private:
     constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets, enough?
-    constexpr static unsigned DEFAULT_CAPACITY = 32L * 1024 * 1024;
-
-    struct Empty
-    {
-    };
+    constexpr static unsigned DEFAULT_CAPACITY = 32L * 1024 * 1024;  // For mru
 
     struct Data
     {
@@ -78,7 +79,7 @@ private:
 
     size_t getBucketIndex(auto const& key) const
     {
-        auto hash = std::hash<std::remove_cvref_t<decltype(key)>>{}(key);
+        auto hash = boost::hash<std::remove_cvref_t<decltype(key)>>{}(key);
         return hash % m_buckets.size();
     }
 
@@ -251,7 +252,15 @@ public:
                 updatedCapacity = getSize(value);
             }
 
-            auto it = index.lower_bound(key);
+            typename Container::iterator it;
+            if constexpr (ordered)
+            {
+                it = index.lower_bound(key);
+            }
+            else
+            {
+                it = index.find(key);
+            }
             if (it != index.end() && it->key == key)
             {
                 auto& existsValue = it->value;

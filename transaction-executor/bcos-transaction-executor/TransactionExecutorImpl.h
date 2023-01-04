@@ -24,7 +24,9 @@ public:
 
     task::Task<std::unique_ptr<protocol::TransactionReceipt>> execute(
         const protocol::Transaction& transaction)
-    {}
+    {
+        
+    }
 
 private:
     protocol::BlockHeader const& m_blockHeader;
