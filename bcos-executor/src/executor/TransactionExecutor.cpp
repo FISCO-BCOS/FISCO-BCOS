@@ -146,6 +146,32 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 #endif
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
+    setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
+    assert(!m_constantPrecompiled->empty());
+    assert(m_builtInPrecompiled);
+    start();
+}
+
+void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
+{
+    if (m_blockVersion == blockVersion)
+    {
+        return;
+    }
+
+    RecursiveGuard l(x_resetEnvironmentLock);
+    if (m_blockVersion != blockVersion)
+    {
+        m_blockVersion = blockVersion;
+
+        resetEnvironment();  // should not be called concurrently, if called, there's a bug in
+        // caller
+    }
+}
+
+void TransactionExecutor::resetEnvironment()
+{
+    RecursiveGuard l(x_resetEnvironmentLock);
     if (m_isWasm)
     {
         initWasmEnvironment();
@@ -154,9 +180,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     {
         initEvmEnvironment();
     }
-    assert(!m_constantPrecompiled->empty());
-    assert(m_builtInPrecompiled);
-    start();
 }
 
 void TransactionExecutor::initEvmEnvironment()
@@ -374,7 +397,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                                  << LOG_KV("parentHash", blockHeader->number() > 0 ?
                                                              (*parentInfoIt).blockHash.abridged() :
                                                              "null");
-        m_blockVersion = blockHeader->version();
+        setBlockVersion(blockHeader->version());
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
             bcos::storage::StateStorageInterface::Ptr stateStorage;
@@ -1822,8 +1845,8 @@ void TransactionExecutor::commit(
 
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
         m_ledgerCache->fetchCompatibilityVersion();
-        m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
 
+        setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
         removeCommittedState();
 
         callback(nullptr);
