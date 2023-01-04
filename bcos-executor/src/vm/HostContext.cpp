@@ -386,6 +386,14 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
     }
 }
 
+
+// only called when contract create contract
+void HostContext::setShardParent(const std::string_view& parentTableName)
+{
+    (void)parentTableName;
+    // TODO: implement this with version no lesser than 3.3.0
+}
+
 bcos::bytes HostContext::externalCodeRequest(const std::string_view& address)
 {
     auto request = std::make_unique<CallParameters>(CallParameters::MESSAGE);

@@ -160,6 +160,7 @@ enum PrecompiledErrorCode : int
     CODE_TABLE_AGENT_ROW_NOT_EXIST = -51000,
 
     // Common error code among all precompiled contracts -50199 ~ -50100
+    CODE_SENDER_ERROR = -50106,
     CODE_TABLE_OPEN_ERROR = -50105,
     CODE_TABLE_CREATE_ERROR = -50104,
     CODE_TABLE_SET_ROW_ERROR = -50103,
