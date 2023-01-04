@@ -138,7 +138,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 {
     assert(m_backendStorage);
     m_ledgerCache->fetchCompatibilityVersion();
-    m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
+
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
 #ifdef WITH_WASM
