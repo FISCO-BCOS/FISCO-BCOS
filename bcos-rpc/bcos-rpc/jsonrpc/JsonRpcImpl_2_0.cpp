@@ -454,27 +454,16 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
                 auto txHash = submitResult->txHash();
                 auto hexPreTxHash = txHash.hexPrefixed();
+                auto status = submitResult->status();
 
                 auto totalTime = utcSteadyTime() - start;  // ms
-                if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
-                {
-                    RPC_IMPL_LOG(WARNING)
-                        << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback timeout")
-                        << LOG_KV("hexPreTxHash", hexPreTxHash)
-                        << LOG_KV("requireProof", requireProof) << LOG_KV("txCostTime", totalTime);
-                }
-                else
+                if (c_fileLogLevel <= TRACE)
                 {
                     RPC_IMPL_LOG(TRACE)
                         << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback")
                         << LOG_KV("hexPreTxHash", hexPreTxHash)
+                        << LOG_KV("status", status)
                         << LOG_KV("requireProof", requireProof) << LOG_KV("txCostTime", totalTime);
-                }
-
-                if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
-                {
-                    BOOST_THROW_EXCEPTION(bcos::Error(submitResult->status(),
-                        toString((protocol::TransactionStatus)submitResult->status())));
                 }
 
                 toJsonResp(jResp, hexPreTxHash, (protocol::TransactionStatus)submitResult->status(),
