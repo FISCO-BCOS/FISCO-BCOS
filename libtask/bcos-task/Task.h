@@ -198,11 +198,7 @@ private:
 template <class Value>
 struct ValueAwaitable
 {
-    ValueAwaitable() requires std::is_void_v<Value>
-    = default;
-    ValueAwaitable(Value&& value) requires(!std::is_void_v<Value>)
-      : m_value(std::forward<Value>(value))
-    {}
+    ValueAwaitable(Value&& value) : m_value(std::forward<Value>(value)) {}
     constexpr bool await_ready() const noexcept { return true; }
     constexpr bool await_suspend(CO_STD::coroutine_handle<> handle) const noexcept { return false; }
     constexpr Value await_resume() noexcept
@@ -213,7 +209,21 @@ struct ValueAwaitable
         }
     }
 
-    [[no_unique_address]] std::conditional_t<std::is_void_v<Value>, std::monostate, Value> m_value;
+    const Value& value() const { return m_value; }
+    Value& value() { return m_value; }
+
+    Value m_value;
+};
+template <>
+struct ValueAwaitable<void>
+{
+    ValueAwaitable() = default;
+    static constexpr bool await_ready() noexcept { return true; }
+    static constexpr bool await_suspend(CO_STD::coroutine_handle<> handle) noexcept
+    {
+        return false;
+    }
+    constexpr void await_resume() noexcept {}
 };
 
 }  // namespace bcos::task

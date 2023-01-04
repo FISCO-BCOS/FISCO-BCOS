@@ -1,5 +1,6 @@
 #include "bcos-framework/storage/Entry.h"
 #include <bcos-framework/storage2/ConcurrentOrderedStorage.h>
+#include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
 #include <boost/function.hpp>
 #include <boost/test/tools/old/interface.hpp>
@@ -69,13 +70,16 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
         // modify
         storage::Entry newEntry;
         newEntry.set("Hello map!");
-        co_await storage.writeOne(
-            std::tuple<std::string, std::string>("table", "key:5"), std::move(newEntry));
+        co_await storage.write(
+            storage2::single(std::tuple<std::string, std::string>("table", "key:5")),
+            storage2::single(std::move(newEntry)));
 
-        auto result =
-            co_await storage.readOne(std::tuple<std::string, std::string>("table", "key:5"));
-        BOOST_REQUIRE(result);
-        BOOST_CHECK_EQUAL(result->get().get(), "Hello map!");
+        auto result = co_await storage.read(
+            storage2::single(std::tuple<std::string, std::string>("table", "key:5")));
+        co_await result.next();
+        BOOST_REQUIRE(co_await result.hasValue());
+        BOOST_CHECK_EQUAL((co_await result.value()).get(), "Hello map!");
+        result.release();
 
         BOOST_CHECK_NO_THROW(co_await storage.remove(
             RANGES::iota_view<int, int>(10, 20) | RANGES::views::transform([](int i) {
@@ -147,9 +151,11 @@ BOOST_AUTO_TEST_CASE(mru)
         it.release();
 
         // ensure 0 is erased
-        co_await storage.writeOne(10, entry);
-        auto notExists = co_await storage.readOne(0);
-        BOOST_REQUIRE(!notExists);
+        co_await storage.write(storage2::single(10), storage2::single(entry));
+        auto notExists = co_await storage.read(storage2::single(0));
+        co_await notExists.next();
+        BOOST_REQUIRE(!co_await notExists.hasValue());
+        notExists.release();
 
         // ensure another still exists
         auto it2 = co_await storage.read(RANGES::iota_view<int, int>(1, 11));

@@ -31,7 +31,6 @@ concept HasMemberSize = requires(Object object)
 };
 template <bool withMRU, class KeyType, class ValueType>
 class ConcurrentOrderedStorage
-  : public storage2::Storage<ConcurrentOrderedStorage<withMRU, KeyType, ValueType>>
 {
 private:
     constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets, enough?
@@ -185,9 +184,10 @@ public:
         bool m_started = false;
     };
 
-    task::Task<ReadIterator> impl_read(RANGES::input_range auto const& keys)
+    task::ValueAwaitable<ReadIterator> read(RANGES::input_range auto const& keys)
     {
-        ReadIterator output;
+        task::ValueAwaitable<ReadIterator> outputAwaitable(ReadIterator{});
+        ReadIterator& output = outputAwaitable.value();
         if constexpr (RANGES::sized_range<std::remove_cvref_t<decltype(keys)>>)
         {
             output.m_iterators.reserve(RANGES::size(keys));
@@ -222,24 +222,26 @@ public:
         }
         output.m_it = output.m_iterators.begin();
 
-        co_return output;
+        return outputAwaitable;
     }
 
-    task::Task<SeekIterator> impl_seek(auto const& key)
+    task::ValueAwaitable<SeekIterator> seek(auto const& key)
     {
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
 
         auto it = index.lower_bound(key);
 
-        SeekIterator seekIt;
+        task::ValueAwaitable<SeekIterator> output({});
+        auto& seekIt = output.value();
         seekIt.m_it = it;
         seekIt.m_end = index.end();
         seekIt.m_bucketLock = std::move(lock);
-        co_return seekIt;
+        return output;
     }
 
-    task::Task<void> impl_write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    task::ValueAwaitable<void> write(
+        RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
         for (auto&& [key, value] : RANGES::zip_view(
                  std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
@@ -278,10 +280,10 @@ public:
             }
         }
 
-        co_return;
+        return {};
     }
 
-    task::Task<void> impl_remove(RANGES::input_range auto const& keys)
+    task::Task<void> remove(RANGES::input_range auto const& keys)
     {
         for (auto&& key : keys)
         {

@@ -70,21 +70,19 @@ void testStorage2BatchWrite(auto& storage, RANGES::range auto const& dataSet)
 
 void testStorage2SingleWrite(auto& storage, RANGES::range auto const& dataSet)
 {
-    task::SequenceScheduler<false> scheduler;
-    task::syncWait(
-        [](decltype(storage)& storage, decltype(dataSet)& dataSet) -> task::Task<void> {
-            auto now = std::chrono::steady_clock::now();
-            for (const auto& item : dataSet)
-            {
-                co_await storage.writeOne(std::get<0>(item), std::get<1>(item));
-            }
-            auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - now)
-                               .count();
-            std::cout << "Storage2 singleWrite elpased: " << elpased << "ms" << std::endl;
-            co_return;
-        }(storage, dataSet),
-        &scheduler);
+    task::syncWait([](decltype(storage)& storage, decltype(dataSet)& dataSet) -> task::Task<void> {
+        auto now = std::chrono::steady_clock::now();
+        for (const auto& item : dataSet)
+        {
+            co_await storage.write(
+                storage2::single(std::get<0>(item)), storage2::single(std::get<1>(item)));
+        }
+        auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - now)
+                           .count();
+        std::cout << "Storage2 singleWrite elpased: " << elpased << "ms" << std::endl;
+        co_return;
+    }(storage, dataSet));
 }
 
 void testStorage2BatchRead(auto& storage, RANGES::range auto const& keySet)

@@ -6,6 +6,7 @@
 #include <bcos-task/Task.h>
 #include <bcos-task/Trait.h>
 #include <bcos-utilities/Ranges.h>
+#include <boost/graph/graph_concepts.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <optional>
@@ -35,118 +36,21 @@ concept ReadIterator = requires(IteratorType iterator)
 };
 
 
-template <class Impl>
-class Storage
+template <class StorageImpl, class KeyType, class ValueType>
+concept Storage = requires(StorageImpl&& impl, KeyType&& key)
 {
-public:
-    static constexpr std::string_view SYS_TABLES{"s_tables"};
-
-    // *** Pure interfaces
-    template <class ImplClass = Impl>
-    task::Task<typename ImplClass::ReadIterator> read(RANGES::input_range auto const& keys) requires
-        ReadIterator<typename ImplClass::ReadIterator>
-    {
-        co_return co_await impl().impl_read(keys);
-    }
-
-    template <class ImplClass = Impl>
-    task::Task<typename ImplClass::SeekIterator> seek(
-        auto const& key) requires SeekIterator<typename ImplClass::ReadIterator>
-    {
-        co_return co_await impl().impl_seek(key);
-    }
-
-    template <class ImplClass = Impl>
-    task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
-    {
-        co_return co_await impl().impl_write(
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
-    }
-
-    task::Task<void> remove(RANGES::input_range auto const& keys)
-    {
-        co_return co_await impl().impl_remove(keys);
-    }
-    // *** Pure interfaces
-
-    template <class ImplClass = Impl>
-    task::Task<std::optional<typename std::conditional_t<
-        std::is_reference_v<typename ImplClass::ReadIterator::Value>,
-        std::reference_wrapper<std::remove_reference_t<typename ImplClass::ReadIterator::Value>>,
-        typename ImplClass::ReadIterator::Value>>>
-    readOne(auto const& key)
-    {
-        using ValueType = typename std::conditional_t<
-            std::is_reference_v<typename ImplClass::ReadIterator::Value>,
-            std::reference_wrapper<
-                std::remove_reference_t<typename ImplClass::ReadIterator::Value>>,
-            typename ImplClass::ReadIterator::Value>;
-        std::optional<ValueType> value;
-        auto it = co_await read(singleReferenceView(key));
-        co_await it.next();
-        if (co_await it.hasValue())
-        {
-            if constexpr (std::is_reference_v<typename ImplClass::ReadIterator::Value>)
-            {
-                value.emplace(co_await it.value());
-            }
-            else
-            {
-                value.emplace(std::move(co_await it.value()));
-            }
-        }
-
-        co_return value;
-    }
-
-    task::Task<void> writeOne(auto&& key, auto&& value)
-    {
-        co_await write(singleReferenceView(key), singleReferenceView(value));
-    }
-
-    task::Task<void> removeOne(auto const& key) { co_await remove(singleReferenceView(key)); }
-
-private:
-    friend Impl;
-    auto& impl() { return static_cast<Impl&>(*this); }
-
-    auto singleReferenceView(auto& value)
-    {
-        return RANGES::single_view(std::ref(value)) |
-               RANGES::views::transform([](auto&& input) -> auto& { return input.get(); });
-    }
-
-    Storage() = default;
+    ReadIterator<task::AwaitableReturnType<decltype(impl.read(RANGES::any_view<KeyType>()))>>;
+    std::is_void_v<task::AwaitableReturnType<decltype(impl.write(
+        RANGES::any_view<KeyType>(), RANGES::any_view<ValueType>()))>>;
+    SeekIterator<task::AwaitableReturnType<decltype(impl.seek(key))>>;
+    std::is_void_v<task::AwaitableReturnType<decltype(impl.remove(RANGES::any_view<KeyType>()))>>;
 };
 
-enum class OperationType
+auto single(auto&& value)
 {
-    WRITE,
-    REMOVE
-};
-template <class IteratorType>
-concept ExportableIterator = requires(IteratorType iterator)
-{
-    SeekIterator<IteratorType>;
-    std::convertible_to<task::AwaitableReturnType<decltype(iterator.type())>, OperationType>;
-};
-template <class Impl>
-class ExportableStorage
-{
-public:
-    template <class ImplClass = Impl>
-    task::Task<typename ImplClass::ExportIterator> changes() requires
-        ExportableIterator<typename ImplClass::ExportIterator>
-    {
-        co_return co_await impl().impl_changes();
-    }
-
-private:
-    friend Impl;
-    auto& impl() { return static_cast<Impl&>(*this); }
-
-    ExportableStorage() = default;
-};
+    return RANGES::single_view(std::ref(value)) |
+           RANGES::views::transform([](auto&& input) -> auto& { return input.get(); });
+}
 
 
 }  // namespace bcos::storage2
