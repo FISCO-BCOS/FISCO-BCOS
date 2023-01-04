@@ -106,9 +106,9 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
         // setValueByKey(string,string)
         if (blockContext->isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
         {
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
-                                  << LOG_DESC("sender is not from sys")
-                                  << LOG_KV("sender", _callParameters->m_sender);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
+                << LOG_KV("sender", _callParameters->m_sender);
             _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
         }
         else
@@ -157,7 +157,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
         auto valueNumberPair = getSysConfigByKey(_executive, configKey);
         _callParameters->setExecResult(codec.encode(valueNumberPair.first, valueNumberPair.second));
     }
-    else
+    else [[unlikely]]
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
@@ -233,8 +233,8 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
             return {value, enableNumber};
         }
 
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
-                              << LOG_DESC("get sys config failed") << LOG_KV("configKey", _key);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
+                               << LOG_DESC("get sys config failed") << LOG_KV("configKey", _key);
         return {"", -1};
     }
     catch (std::exception const& e)
