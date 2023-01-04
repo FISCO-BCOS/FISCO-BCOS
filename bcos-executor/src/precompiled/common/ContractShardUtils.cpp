@@ -91,7 +91,6 @@ std::string ContractShardUtils::getContractShard(
     {
         if (entry)
         {
-            auto field0 = entry->getField(0);
             tableName = removePrefix(entry->getField(0), INHERENT_PREFIX);
         }
         entry = getShard(storage, tableName);
