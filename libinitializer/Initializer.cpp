@@ -400,7 +400,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     // notify blockNumber
     schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
-            INITIALIZER_LOG(INFO) << "Notify blocknumber: " << number;
+            INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
             // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });

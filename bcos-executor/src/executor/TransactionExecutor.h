@@ -319,8 +319,12 @@ protected:
     int64_t m_schedulerTermId = -1;
 
     bcos::ThreadPool::Ptr m_threadPool;
+    mutable RecursiveMutex x_resetEnvironmentLock;
+
+    void setBlockVersion(uint32_t blockVersion);
     void initEvmEnvironment();
     void initWasmEnvironment();
+    void resetEnvironment();
     void initTestPrecompiledTable(storage::StorageInterface::Ptr storage);
     VMSchedule getVMSchedule(uint32_t currentVersion) const
     {
