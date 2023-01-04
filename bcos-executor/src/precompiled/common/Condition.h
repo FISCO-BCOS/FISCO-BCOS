@@ -74,7 +74,7 @@ public:
         {
             if (cond.first > values.size())
             {
-                PRECOMPILED_LOG(INFO)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_DESC("The field index is greater than the size of fields");
                 BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError(
                     "The field index is greater than the size of fields"));

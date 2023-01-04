@@ -23,8 +23,8 @@
 #include "Common.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-tool/BfsFileFactory.h"
@@ -92,9 +92,11 @@ void checkNameValidate(std::string_view tableName, std::string_view _keyField,
 void checkLengthValidate(std::string_view field_value, int32_t max_length, int32_t errorCode);
 
 std::string checkCreateTableParam(const std::string_view& _tableName, std::string& _keyField,
-    const std::variant<std::string, std::vector<std::string>>& _valueField, std::optional<uint8_t> keyOrder = std::nullopt);
+    const std::variant<std::string, std::vector<std::string>>& _valueField,
+    std::optional<uint8_t> keyOrder = std::nullopt);
 
-uint32_t getFuncSelector(std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl= executor::GlobalHashImpl::g_hashImpl);
+uint32_t getFuncSelector(std::string const& _functionName,
+    const crypto::Hash::Ptr& _hashImpl = executor::GlobalHashImpl::g_hashImpl);
 // for ut
 void clearName2SelectCache();
 uint32_t getParamFunc(bytesConstRef _param);
@@ -111,7 +113,8 @@ inline bytesConstRef getParamData(bytesConstRef _param)
 }
 
 
-bool checkPathValid(std::string const& _absolutePath);
+bool checkPathValid(
+    std::string_view _absolutePath, std::variant<uint32_t, protocol::BlockVersion> version);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
 
