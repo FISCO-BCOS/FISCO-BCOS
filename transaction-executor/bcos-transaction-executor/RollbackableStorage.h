@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework/storage2/Storage2.h>
+#include <bcos-framework/storage2/Storage.h>
 #include <forward_list>
 
 namespace bcos::transaction_executor

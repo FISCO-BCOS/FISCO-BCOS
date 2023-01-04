@@ -1,5 +1,5 @@
 #include "bcos-framework/storage/Entry.h"
-#include <bcos-framework/storage2/ConcurrentOrderedStorage.h>
+#include <bcos-framework/storage2/ConcurrentStorage.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
 #include <boost/function.hpp>
@@ -9,7 +9,7 @@
 #include <range/v3/view/transform.hpp>
 
 using namespace bcos;
-using namespace bcos::storage2::concurrent_ordered_storage;
+using namespace bcos::storage2::concurrent_storage;
 
 struct Storage2ImplFixture
 {
@@ -31,8 +31,7 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
     task::syncWait([]() -> task::Task<void> {
         constexpr static int count = 100;
 
-        ConcurrentOrderedStorage<false, std::tuple<std::string, std::string>, storage::Entry>
-            storage;
+        ConcurrentStorage<std::tuple<std::string, std::string>, storage::Entry, true> storage;
         co_await storage.write(
             RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
                 return std::tuple<std::string, std::string>(
@@ -132,7 +131,7 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
 BOOST_AUTO_TEST_CASE(mru)
 {
     task::syncWait([]() -> task::Task<void> {
-        ConcurrentOrderedStorage<true, int, storage::Entry> storage(1, 1000);
+        ConcurrentStorage<int, storage::Entry, true, true> storage(1, 1000);
 
         // write 10 100byte value
         storage::Entry entry;

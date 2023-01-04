@@ -87,27 +87,24 @@ void testStorage2SingleWrite(auto& storage, RANGES::range auto const& dataSet)
 
 void testStorage2BatchRead(auto& storage, RANGES::range auto const& keySet)
 {
-    task::SequenceScheduler<false> scheduler;
-    task::syncWait(
-        [](decltype(storage)& storage, decltype(keySet)& keySet) -> task::Task<void> {
-            auto now = std::chrono::steady_clock::now();
+    task::syncWait([](decltype(storage)& storage, decltype(keySet)& keySet) -> task::Task<void> {
+        auto now = std::chrono::steady_clock::now();
 
-            auto it = co_await storage.read(keySet);
-            while (co_await it.next())
-            {
-                assert(co_await it.hasValue());
-                [[maybe_unused]] auto key = co_await it.key();
-                [[maybe_unused]] auto value = co_await it.value();
+        auto it = co_await storage.read(keySet);
+        while (co_await it.next())
+        {
+            assert(co_await it.hasValue());
+            [[maybe_unused]] auto key = co_await it.key();
+            [[maybe_unused]] auto value = co_await it.value();
 
-                // some operator of key and value
-            }
-            auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - now)
-                               .count();
-            std::cout << "Storage2 batchRead elpased: " << elpased << "ms" << std::endl;
-            co_return;
-        }(storage, keySet),
-        &scheduler);
+            // some operator of key and value
+        }
+        auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - now)
+                           .count();
+        std::cout << "Storage2 batchRead elpased: " << elpased << "ms" << std::endl;
+        co_return;
+    }(storage, keySet));
 }
 
 int main(int argc, char* argv[])

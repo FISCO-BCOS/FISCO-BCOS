@@ -1,26 +1,19 @@
 #pragma once
 
 #include "../protocol/Transaction.h"
-#include "../storage2/Storage2.h"
-#include <bcos-task/Task.h>
+#include "../protocol/TransactionReceipt.h"
+#include <bcos-task/Trait.h>
 
 namespace bcos::transaction_executor
 {
 
-// All auto interfaces is awaitable
-template <class Impl>
-class TransactionExecutorBase
+template <class TransactionExecutorType>
+concept TransactionExecutor = requires(
+    TransactionExecutorType executor, const protocol::Transaction& transaction)
 {
-public:
-    // Return awaitable receipts
-    auto execute(const protocol::Transaction& transaction, storage2::Storage auto& storage)
-    {
-        return impl().impl_execute(transaction, storage);
-    }
-
-private:
-    friend Impl;
-    TransactionExecutorBase() = default;
-    auto& impl() { return static_cast<Impl&>(*this); }
+    std::same_as<typename task::AwaitableReturnType<decltype(executor.execute(transaction))>,
+        protocol::TransactionReceipt>;
 };
+
+// All auto interfaces is awaitable
 }  // namespace bcos::transaction_executor

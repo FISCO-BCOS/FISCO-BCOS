@@ -35,9 +35,8 @@ concept ReadIterator = requires(IteratorType iterator)
     std::convertible_to<task::AwaitableReturnType<decltype(iterator.hasValue())>, bool>;
 };
 
-
-template <class StorageImpl, class KeyType, class ValueType>
-concept Storage = requires(StorageImpl&& impl, KeyType&& key)
+template <class StorageType, class KeyType, class ValueType>
+concept Storage = requires(StorageType&& impl, KeyType&& key)
 {
     ReadIterator<task::AwaitableReturnType<decltype(impl.read(RANGES::any_view<KeyType>()))>>;
     std::is_void_v<task::AwaitableReturnType<decltype(impl.write(

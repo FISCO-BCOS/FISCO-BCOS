@@ -2,6 +2,7 @@
 
 #include "Storage.h"
 #include "bcos-task/Task.h"
+#include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
 #include <boost/multi_index/mem_fun.hpp>
@@ -19,7 +20,7 @@
 #include <utility>
 #include <variant>
 
-namespace bcos::storage2::concurrent_ordered_storage
+namespace bcos::storage2::concurrent_storage
 {
 
 template <class Object>
@@ -29,8 +30,8 @@ concept HasMemberSize = requires(Object object)
     { object.size() } -> std::integral;
     // clang-format on
 };
-template <bool withMRU, class KeyType, class ValueType>
-class ConcurrentOrderedStorage
+template <class KeyType, class ValueType, bool ordered = false, bool withMRU = false>
+class ConcurrentStorage
 {
 private:
     constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets, enough?
@@ -46,14 +47,13 @@ private:
         [[no_unique_address]] ValueType value;
     };
 
-    using OrderedContainer = boost::multi_index_container<Data,
-        boost::multi_index::indexed_by<boost::multi_index::ordered_unique<
-            boost::multi_index::member<Data, KeyType, &Data::key>>>>;
-    using MRUOrderedContainer = boost::multi_index_container<Data,
-        boost::multi_index::indexed_by<boost::multi_index::ordered_unique<
-                                           boost::multi_index::member<Data, KeyType, &Data::key>>,
-            boost::multi_index::sequenced<>>>;
-    using Container = std::conditional_t<withMRU, MRUOrderedContainer, OrderedContainer>;
+    using IndexType = std::conditional_t<ordered,
+        boost::multi_index::ordered_unique<boost::multi_index::member<Data, KeyType, &Data::key>>,
+        boost::multi_index::hashed_unique<boost::multi_index::member<Data, KeyType, &Data::key>>>;
+    using Container = std::conditional_t<withMRU,
+        boost::multi_index_container<Data,
+            boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
+        boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
 
     struct Bucket
     {
@@ -74,10 +74,7 @@ private:
         return std::make_tuple(std::ref(bucket), std::unique_lock<std::mutex>(bucket.mutex));
     }
 
-    std::reference_wrapper<Bucket> getBucketByIndex(size_t index)
-    {
-        return std::ref(m_buckets[index]);
-    }
+    Bucket& getBucketByIndex(size_t index) { return m_buckets[index]; }
 
     size_t getBucketIndex(auto const& key) const
     {
@@ -116,12 +113,11 @@ private:
     }
 
 public:
-    ConcurrentOrderedStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(
-        !withMRU)
+    ConcurrentStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(!withMRU)
       : m_buckets(std::min(buckets, MAX_BUCKETS))
     {}
 
-    ConcurrentOrderedStorage(unsigned buckets = std::thread::hardware_concurrency(),
+    ConcurrentStorage(unsigned buckets = std::thread::hardware_concurrency(),
         int64_t capacityPerBucket = DEFAULT_CAPACITY) requires withMRU
       : m_buckets(std::min(buckets, MAX_BUCKETS)),
         m_maxCapacity(capacityPerBucket)
@@ -130,12 +126,12 @@ public:
     class ReadIterator
     {
     public:
-        friend class ConcurrentOrderedStorage;
+        friend class ConcurrentStorage;
         using Key = const KeyType&;
         using Value = const ValueType&;
 
-        task::ValueAwaitable<bool> hasValue() { return {*m_it != nullptr}; }
-        task::ValueAwaitable<bool> next()
+        task::AwaitableValue<bool> hasValue() { return {*m_it != nullptr}; }
+        task::AwaitableValue<bool> next()
         {
             if (!m_started)
             {
@@ -144,8 +140,8 @@ public:
             }
             return {(++m_it) != m_iterators.end()};
         }
-        task::ValueAwaitable<Key> key() const { return {(*m_it)->key}; }
-        task::ValueAwaitable<Value> value() const { return {(*m_it)->value}; }
+        task::AwaitableValue<Key> key() const { return {(*m_it)->key}; }
+        task::AwaitableValue<Value> value() const { return {(*m_it)->value}; }
 
         void release() { m_bucketLocks.clear(); }
 
@@ -159,11 +155,11 @@ public:
     class SeekIterator
     {
     public:
-        friend class ConcurrentOrderedStorage;
+        friend class ConcurrentStorage;
         using Key = const KeyType&;
         using Value = const ValueType&;
 
-        task::ValueAwaitable<bool> next()
+        task::AwaitableValue<bool> next()
         {
             if (!m_started)
             {
@@ -172,8 +168,8 @@ public:
             }
             return {(++m_it) != m_end};
         }
-        task::ValueAwaitable<Key> key() const { return {m_it->key}; }
-        task::ValueAwaitable<Value> value() const { return {m_it->value}; }
+        task::AwaitableValue<Key> key() const { return {m_it->key}; }
+        task::AwaitableValue<Value> value() const { return {m_it->value}; }
 
         void release() { m_bucketLock.unlock(); }
 
@@ -184,9 +180,9 @@ public:
         bool m_started = false;
     };
 
-    task::ValueAwaitable<ReadIterator> read(RANGES::input_range auto const& keys)
+    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto const& keys)
     {
-        task::ValueAwaitable<ReadIterator> outputAwaitable(ReadIterator{});
+        task::AwaitableValue<ReadIterator> outputAwaitable(ReadIterator{});
         ReadIterator& output = outputAwaitable.value();
         if constexpr (RANGES::sized_range<std::remove_cvref_t<decltype(keys)>>)
         {
@@ -197,14 +193,14 @@ public:
         for (auto&& key : keys)
         {
             auto bucketIndex = getBucketIndex(key);
-            auto bucket = getBucketByIndex(bucketIndex);
+            auto& bucket = getBucketByIndex(bucketIndex);
             if (!locks[bucketIndex])
             {
                 locks[bucketIndex] = true;
-                output.m_bucketLocks.emplace_front(std::unique_lock(bucket.get().mutex));
+                output.m_bucketLocks.emplace_front(std::unique_lock(bucket.mutex));
             }
 
-            auto const& index = bucket.get().container.template get<0>();
+            auto const& index = bucket.container.template get<0>();
 
             auto it = index.find(key);
             if (it != index.end())
@@ -225,14 +221,14 @@ public:
         return outputAwaitable;
     }
 
-    task::ValueAwaitable<SeekIterator> seek(auto const& key)
+    task::AwaitableValue<SeekIterator> seek(auto const& key) requires(ordered)
     {
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
 
         auto it = index.lower_bound(key);
 
-        task::ValueAwaitable<SeekIterator> output({});
+        task::AwaitableValue<SeekIterator> output({});
         auto& seekIt = output.value();
         seekIt.m_it = it;
         seekIt.m_end = index.end();
@@ -240,7 +236,7 @@ public:
         return output;
     }
 
-    task::ValueAwaitable<void> write(
+    task::AwaitableValue<void> write(
         RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
         for (auto&& [key, value] : RANGES::zip_view(
@@ -306,4 +302,4 @@ public:
     }
 };
 
-}  // namespace bcos::storage2::concurrent_ordered_storage
+}  // namespace bcos::storage2::concurrent_storage

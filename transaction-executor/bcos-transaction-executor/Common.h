@@ -28,6 +28,7 @@
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-protocol/TransactionStatus.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <evmc/instructions.h>
@@ -40,14 +41,11 @@ DERIVE_BCOS_EXCEPTION(InternalVMError);
 DERIVE_BCOS_EXCEPTION(InvalidInputSize);
 DERIVE_BCOS_EXCEPTION(InvalidEncoding);
 
-#define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
-#define EXECUTOR_BLK_LOG(LEVEL, number) EXECUTOR_LOG(LEVEL) << BLOCK_NUMBER(number)
-#define EXECUTOR_NAME_LOG(LEVEL) \
-    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR:" + std::to_string(m_schedulerTermId))
-#define COROUTINE_TRACE_LOG(LEVEL, contextID, seq) \
-    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR") << "[" << (contextID) << "," << (seq) << "]"
-#define PARA_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARA") << LOG_BADGE(utcTime())
-
+inline auto getLogger(LogLevel level)
+{
+    BOOST_LOG_SEV(bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(level));
+    return bcos::FileLoggerHandler;
+}
 
 static constexpr std::string_view USER_TABLE_PREFIX = "/tables/";
 static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
