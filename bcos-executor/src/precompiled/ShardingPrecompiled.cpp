@@ -48,29 +48,31 @@ ShardingPrecompiled::ShardingPrecompiled(crypto::Hash::Ptr _hashImpl) : BFSPreco
     name2Selector[FILE_SYSTEM_METHOD_LINK] = getFuncSelector(FILE_SYSTEM_METHOD_LINK, _hashImpl);
 }
 
-inline bool isFromSDK(PrecompiledExecResult::Ptr _callParameters)
+inline bool isFromThisOrSDK(
+    PrecompiledExecResult::Ptr _callParameters, const std::string& thisAddress)
 {
-    return _callParameters->m_origin == _callParameters->m_sender;
+    return _callParameters->m_origin == _callParameters->m_sender ||
+           _callParameters->m_sender == thisAddress;
 }
 
 std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    if (!isFromSDK(_callParameters))
+    auto blockContext = _executive->blockContext().lock();
+    if (!isFromThisOrSDK(_callParameters, getThisAddress(blockContext->isWasm())))
     {
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled")
                                  << LOG_DESC("call: request should only call from SDK")
                                  << LOG_KV("origin", _callParameters->m_origin)
                                  << LOG_KV("sender", _callParameters->m_sender);
-        auto blockContext = _executive->blockContext().lock();
         auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
         _callParameters->setExecResult(codec.encode(int32_t(CODE_SENDER_ERROR)));
         return _callParameters;
     }
 
     uint32_t func = getParamFunc(_callParameters->input());
-    uint32_t version = _executive->blockContext().lock()->blockVersion();
+    uint32_t version = blockContext->blockVersion();
 
     if (func == name2Selector[FILE_SYSTEM_METHOD_MK_SHARD])
     {
