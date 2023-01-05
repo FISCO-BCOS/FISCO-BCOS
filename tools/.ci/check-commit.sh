@@ -74,7 +74,7 @@ function check_PR_limit() {
     #     LOG_ERROR "modify ${files} files, limit is ${file_limit}"
     #     exit 1
     # fi
-    local need_check_files=$(git diff --numstat HEAD^ |awk '{if ($1!=0) print $0;}'|sed "s/{.*> //g" |sed "s/}//g" |awk '{print $3}' |grep -vE 'test|tools\/|fisco-bcos\/|.github\/')
+    local need_check_files=$(git diff --numstat HEAD^ |awk '{if ($1!=0) print $0;}'|sed "s/{.*> //g" |sed "s/}//g" |awk '{print $3}' |grep -vE 'benchmark\/|test|tools\/|fisco-bcos\/|.github\/')
     echo "need check files:"
     echo "${need_check_files}"
 

@@ -6,6 +6,7 @@
 #include <boost/throw_exception.hpp>
 #include <concepts>
 #include <exception>
+#include <functional>
 #include <type_traits>
 #include <variant>
 
@@ -22,6 +23,13 @@ concept HasMemberScheduler = requires(Promise promise)
     promise.m_scheduler;
 };
 
+// Task可以在没有配置调度器的情况下自我调度，但这样的话每个Task将在彻底结束（清理协程栈之前）前恢复上一个Task的执行，导致Task的协程栈增长，一旦Task中有大量循环或深层次的协程co_await调用，将会导致协程栈溢出
+// Tasks can be self-scheduled without a scheduler configured, but in this
+// way, each Task will resume the execution of the previous Task before
+// completely ending (before cleaning up the coroutine stack), causing the
+// Task's coroutine stack to grow, and once there are a large number of
+// loops or deep coroutine co_await calls in the Task, it will cause the
+// coroutine stack to overflow
 template <class Value>
 class Task
 {
@@ -47,23 +55,35 @@ public:
         bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
 
         template <class Promise>
-        auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
+        void await_suspend(CO_STD::coroutine_handle<Promise> handle)
         {
-            // 如果co_await来自有scheduler的task，沿用它的scheduler，并且使用该scheduler来执行handle
+            // 如果co_await来自有scheduler的task，沿用它的scheduler，结束时由该Scheduler执行continuation
             // If the co_await comes from a task with a scheduler, its scheduler is inherited and
             // the handle is executed using that scheduler
             if constexpr (HasMemberScheduler<Promise>)
             {
                 if (handle.promise().m_scheduler)
                 {
-                    m_handle.promise().m_scheduler = handle.promise().m_scheduler;
+                    if (m_handle.promise().m_scheduler == nullptr)
+                    {
+                        m_handle.promise().m_scheduler = handle.promise().m_scheduler;
+                    }
                 }
             }
 
             m_handle.promise().m_continuationHandle = handle;
             m_handle.promise().m_awaitable = this;
 
-            return m_handle;
+            if (m_handle.promise().m_scheduler)
+            {
+                m_handle.promise().m_scheduler->execute(m_handle);
+            }
+            else
+            {
+                m_handle.resume();
+            }
+
+            // return m_handle;
         }
         Value await_resume()
         {
@@ -103,19 +123,11 @@ public:
                 void await_suspend(CO_STD::coroutine_handle<PromiseImpl> handle) const noexcept
                 {
                     auto continuationHandle = handle.promise().m_continuationHandle;
-
                     if (continuationHandle)
                     {
-                        // Task可以在没有配置调度器的情况下自我调度，但这样的话每个Task将在彻底结束（清理协程栈之前）前恢复上一个Task的执行，导致Task的协程栈增长，一旦Task中有大量循环或深层次的协程co_await调用，将会导致协程栈溢出
-                        // Tasks can be self-scheduled without a scheduler configured, but in this
-                        // way, each Task will resume the execution of the previous Task before
-                        // completely ending (before cleaning up the coroutine stack), causing the
-                        // Task's coroutine stack to grow, and once there are a large number of
-                        // loops or deep coroutine co_await calls in the Task, it will cause the
-                        // coroutine stack to overflow
-                        if (m_scheduler != nullptr)
+                        if (m_promise.m_scheduler)
                         {
-                            m_scheduler->execute(continuationHandle);
+                            m_promise.m_scheduler->execute(continuationHandle);
                         }
                         else
                         {
@@ -126,9 +138,9 @@ public:
                 }
                 constexpr void await_resume() noexcept {}
 
-                Scheduler* m_scheduler = nullptr;
+                PromiseBase& m_promise;
             };
-            return FinalAwaitable{.m_scheduler = m_scheduler};
+            return FinalAwaitable{.m_promise = *this};
         }
         constexpr Task get_return_object()
         {
@@ -145,8 +157,8 @@ public:
         }
 
         CO_STD::coroutine_handle<> m_continuationHandle;
-        Scheduler* m_scheduler = nullptr;
         Awaitable* m_awaitable = nullptr;
+        Scheduler* m_scheduler = nullptr;
     };
     struct PromiseVoid : public PromiseBase<PromiseVoid>
     {
@@ -181,6 +193,39 @@ public:
 
 private:
     CO_STD::coroutine_handle<promise_type> m_handle;
+};
+
+template <class Value>
+class AwaitableValue
+{
+public:
+    AwaitableValue(Value&& value) : m_value(std::forward<Value>(value)) {}
+    constexpr bool await_ready() const noexcept { return true; }
+    constexpr bool await_suspend(CO_STD::coroutine_handle<> handle) const noexcept { return false; }
+    constexpr Value await_resume() noexcept
+    {
+        if constexpr (!std::is_void_v<Value>)
+        {
+            return std::move(m_value);
+        }
+    }
+
+    const Value& value() const { return m_value; }
+    Value& value() { return m_value; }
+
+private:
+    Value m_value;
+};
+template <>
+struct AwaitableValue<void>
+{
+    AwaitableValue() = default;
+    static constexpr bool await_ready() noexcept { return true; }
+    static constexpr bool await_suspend(CO_STD::coroutine_handle<> handle) noexcept
+    {
+        return false;
+    }
+    constexpr void await_resume() noexcept {}
 };
 
 }  // namespace bcos::task

@@ -1,5 +1,6 @@
 #include "bcos-framework/storage/Entry.h"
-#include <bcos-framework/storage2/ConcurrentOrderedStorage.h>
+#include <bcos-framework/storage2/ConcurrentStorage.h>
+#include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
 #include <boost/function.hpp>
 #include <boost/test/tools/old/interface.hpp>
@@ -8,7 +9,7 @@
 #include <range/v3/view/transform.hpp>
 
 using namespace bcos;
-using namespace bcos::storage2::concurrent_ordered_storage;
+using namespace bcos::storage2::concurrent_storage;
 
 struct Storage2ImplFixture
 {
@@ -30,8 +31,7 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
     task::syncWait([]() -> task::Task<void> {
         constexpr static int count = 100;
 
-        ConcurrentOrderedStorage<false, std::tuple<std::string, std::string>, storage::Entry>
-            storage;
+        ConcurrentStorage<std::tuple<std::string, std::string>, storage::Entry, true> storage;
         co_await storage.write(
             RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
                 return std::tuple<std::string, std::string>(
@@ -56,11 +56,11 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
             auto exceptKey = std::tuple<std::string, std::string>(
                 "table", "key:" + boost::lexical_cast<std::string>(i));
             auto key = co_await it.key();
-            BOOST_CHECK_EQUAL(std::get<0>(key.get()), std::get<0>(exceptKey));
-            BOOST_CHECK_EQUAL(std::get<1>(key.get()), std::get<1>(exceptKey));
+            BOOST_CHECK_EQUAL(std::get<0>(key), std::get<0>(exceptKey));
+            BOOST_CHECK_EQUAL(std::get<1>(key), std::get<1>(exceptKey));
 
-            BOOST_CHECK_EQUAL((co_await it.value()).get().get(),
-                "Hello world!" + boost::lexical_cast<std::string>(i));
+            BOOST_CHECK_EQUAL(
+                (co_await it.value()).get(), "Hello world!" + boost::lexical_cast<std::string>(i));
             ++i;
         }
         BOOST_CHECK_EQUAL(i, count);
@@ -69,13 +69,16 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
         // modify
         storage::Entry newEntry;
         newEntry.set("Hello map!");
-        co_await storage.writeOne(
-            std::tuple<std::string, std::string>("table", "key:5"), std::move(newEntry));
+        co_await storage.write(
+            storage2::single(std::tuple<std::string, std::string>("table", "key:5")),
+            storage2::single(std::move(newEntry)));
 
-        auto result =
-            co_await storage.readOne(std::tuple<std::string, std::string>("table", "key:5"));
-        BOOST_REQUIRE(result);
-        BOOST_CHECK_EQUAL(result->get().get(), "Hello map!");
+        auto result = co_await storage.read(
+            storage2::single(std::tuple<std::string, std::string>("table", "key:5")));
+        co_await result.next();
+        BOOST_REQUIRE(co_await result.hasValue());
+        BOOST_CHECK_EQUAL((co_await result.value()).get(), "Hello map!");
+        result.release();
 
         BOOST_CHECK_NO_THROW(co_await storage.remove(
             RANGES::iota_view<int, int>(10, 20) | RANGES::views::transform([](int i) {
@@ -104,16 +107,16 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
                     "table", "key:" + boost::lexical_cast<std::string>(i));
 
                 auto key = co_await it.key();
-                BOOST_CHECK_EQUAL(std::get<0>(key.get()), std::get<0>(exceptKey));
-                BOOST_CHECK_EQUAL(std::get<1>(key.get()), std::get<1>(exceptKey));
+                BOOST_CHECK_EQUAL(std::get<0>(key), std::get<0>(exceptKey));
+                BOOST_CHECK_EQUAL(std::get<1>(key), std::get<1>(exceptKey));
 
                 if (i == 5)
                 {
-                    BOOST_CHECK_EQUAL((co_await it.value()).get().get(), "Hello map!");
+                    BOOST_CHECK_EQUAL((co_await it.value()).get(), "Hello map!");
                 }
                 else
                 {
-                    BOOST_CHECK_EQUAL((co_await it.value()).get().get(),
+                    BOOST_CHECK_EQUAL((co_await it.value()).get(),
                         "Hello world!" + boost::lexical_cast<std::string>(i));
                 }
             }
@@ -128,7 +131,8 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
 BOOST_AUTO_TEST_CASE(mru)
 {
     task::syncWait([]() -> task::Task<void> {
-        ConcurrentOrderedStorage<true, int, storage::Entry> storage(1, 1000);
+        ConcurrentStorage<int, storage::Entry, true, true, true> storage(1);
+        storage.setMaxCapacity(1000);
 
         // write 10 100byte value
         storage::Entry entry;
@@ -147,9 +151,11 @@ BOOST_AUTO_TEST_CASE(mru)
         it.release();
 
         // ensure 0 is erased
-        co_await storage.writeOne(10, entry);
-        auto notExists = co_await storage.readOne(0);
-        BOOST_REQUIRE(!notExists);
+        co_await storage.write(storage2::single(10), storage2::single(entry));
+        auto notExists = co_await storage.read(storage2::single(0));
+        co_await notExists.next();
+        BOOST_REQUIRE(!co_await notExists.hasValue());
+        notExists.release();
 
         // ensure another still exists
         auto it2 = co_await storage.read(RANGES::iota_view<int, int>(1, 11));
@@ -168,7 +174,7 @@ BOOST_AUTO_TEST_CASE(mru)
         while (co_await seekIt.next())
         {
             auto key = co_await seekIt.key();
-            BOOST_CHECK_EQUAL(key.get(), i + 1);
+            BOOST_CHECK_EQUAL(key, i + 1);
             ++i;
         }
         BOOST_CHECK_EQUAL(i, 10);

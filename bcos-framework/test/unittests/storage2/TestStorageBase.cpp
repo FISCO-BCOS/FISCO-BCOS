@@ -11,7 +11,7 @@
 using namespace bcos;
 using namespace bcos::storage2;
 
-class MockStorage : public Storage<MockStorage>
+class MockStorage
 {
 public:
     using Key = std::tuple<std::string, std::string>;
@@ -48,7 +48,7 @@ public:
         std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator m_end;
     };
 
-    task::Task<ReadIterator> impl_read(RANGES::range auto const& keys)
+    task::Task<ReadIterator> read(RANGES::range auto const& keys)
     {
         ReadIterator readIt;
         readIt.m_valueIts.reserve(RANGES::size(keys));
@@ -73,13 +73,13 @@ public:
         co_return readIt;
     }
 
-    task::Task<SeekIterator> impl_seek(std::tuple<std::string_view, std::string_view> key)
+    task::Task<SeekIterator> seek(std::tuple<std::string_view, std::string_view> key)
     {
         auto it = m_values.lower_bound(key);
         co_return SeekIterator{--it, m_values.end()};
     }
 
-    task::Task<void> impl_write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
         for (auto&& [key, entry] : RANGES::zip_view(keys, values))
         {
@@ -97,7 +97,7 @@ public:
         co_return;
     }
 
-    task::Task<void> impl_remove(RANGES::input_range auto const& keys)
+    task::Task<void> remove(RANGES::input_range auto const& keys)
     {
         for (auto&& key : keys)
         {
@@ -157,19 +157,20 @@ BOOST_AUTO_TEST_CASE(insert)
         newEntry.set("Hello world!");
 
         MockStorage mock;
-        co_await mock.writeOne(
-            std::tuple<std::string, std::string>("table", "key"), std::move(newEntry));
+        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
+            storage2::single(std::move(newEntry)));
 
         storage::Entry newEntry2;
         newEntry2.set("fine!");
-        co_await mock.writeOne(
-            std::tuple<std::string, std::string>("table", "key2"), std::move(newEntry2));
+        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key2")),
+            storage2::single(std::move(newEntry2)));
 
-        auto result =
-            co_await mock.readOne(std::tuple<std::string_view, std::string_view>("table", "key2"));
+        auto result = co_await mock.read(
+            storage2::single(std::tuple<std::string_view, std::string_view>("table", "key2")));
 
-        BOOST_REQUIRE(result);
-        BOOST_CHECK_EQUAL((*result)->get(), "fine!");
+        co_await result.next();
+        BOOST_REQUIRE(co_await result.hasValue());
+        BOOST_CHECK_EQUAL((co_await result.value())->get(), "fine!");
     }());
 }
 
@@ -180,19 +181,20 @@ BOOST_AUTO_TEST_CASE(update)
         newEntry.set("Hello world!");
 
         MockStorage mock;
-        co_await mock.writeOne(
-            std::tuple<std::string, std::string>("table", "key"), std::move(newEntry));
+        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
+            storage2::single(std::move(newEntry)));
 
         storage::Entry newEntry2;
         newEntry2.set("fine!");
-        co_await mock.writeOne(
-            std::tuple<std::string, std::string>("table", "key"), std::move(newEntry2));
+        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
+            storage2::single(std::move(newEntry2)));
 
-        auto result =
-            co_await mock.readOne(std::tuple<std::string_view, std::string_view>("table", "key"));
+        auto result = co_await mock.read(
+            storage2::single(std::tuple<std::string_view, std::string_view>("table", "key")));
 
-        BOOST_REQUIRE(result);
-        BOOST_CHECK_EQUAL((*result)->get(), "fine!");
+        co_await result.next();
+        BOOST_REQUIRE(co_await result.hasValue());
+        BOOST_CHECK_EQUAL((co_await result.value())->get(), "fine!");
     }());
 }
 
@@ -203,15 +205,17 @@ BOOST_AUTO_TEST_CASE(remove)
         newEntry.set("Hello world!");
 
         MockStorage mock;
-        co_await mock.writeOne(
-            std::tuple<std::string, std::string>("table", "key"), std::move(newEntry));
+        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
+            storage2::single((std::move(newEntry))));
 
-        co_await mock.removeOne(std::tuple<std::string_view, std::string_view>("table", "key"));
+        co_await mock.remove(
+            storage2::single((std::tuple<std::string_view, std::string_view>("table", "key"))));
 
-        auto result =
-            co_await mock.readOne(std::tuple<std::string_view, std::string_view>("table", "key"));
+        auto result = co_await mock.read(
+            storage2::single((std::tuple<std::string_view, std::string_view>("table", "key"))));
 
-        BOOST_REQUIRE(!result);
+        co_await result.next();
+        BOOST_REQUIRE(!co_await result.hasValue());
     }());
 }
 
