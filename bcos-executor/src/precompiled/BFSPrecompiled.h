@@ -71,7 +71,7 @@ protected:
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
 
-    virtual const char* getMyAddress(bool _isWasm) { return _isWasm ? BFS_NAME : BFS_ADDRESS; }
+    virtual const char* getThisAddress(bool _isWasm) { return _isWasm ? BFS_NAME : BFS_ADDRESS; }
     virtual std::string_view getLinkRootDir() { return executor::USER_APPS_PREFIX; }
 
     inline bool isShardPath(const std::string& _path)

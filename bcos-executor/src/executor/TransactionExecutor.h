@@ -316,7 +316,7 @@ protected:
     int64_t m_schedulerTermId = -1;
 
     bcos::ThreadPool::Ptr m_threadPool;
-    mutable SharedMutex x_resetEnvironmentLock;
+    mutable RecursiveMutex x_resetEnvironmentLock;
 
     void setBlockVersion(uint32_t blockVersion);
     void initEvmEnvironment();

@@ -40,7 +40,7 @@ private:
     void linkShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
 
-    const char* getMyAddress(bool _isWasm) override
+    const char* getThisAddress(bool _isWasm) override
     {
         return _isWasm ? SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS;
     }
