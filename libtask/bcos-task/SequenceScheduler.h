@@ -16,8 +16,7 @@ private:
     std::queue<CO_STD::coroutine_handle<>> m_queue;
     bool m_running = false;
 
-    using Lock = std::conditional_t<withMutex, std::unique_lock<std::mutex>, utilities::NullLock>;
-    [[no_unique_address]] std::conditional_t<withMutex, std::mutex, std::monostate> m_mutex;
+    using Lock = std::conditional_t<withMutex, std::unique_lock<std::mutex>, utilities::NullLock>; [[no_unique_address]] std::conditional_t<withMutex, std::mutex, std::monostate> m_mutex;
 
 public:
     ~SequenceScheduler() noexcept override = default;
@@ -25,9 +24,7 @@ public:
     void execute(CO_STD::coroutine_handle<> handle) override
     {
         {
-            Lock lock(m_mutex);
-            m_queue.push(handle);
-            if (m_running)
+            Lock lock(m_mutex); m_queue.push(handle); if (m_running)
             {
                 return;
             }
@@ -39,13 +36,10 @@ public:
             Lock lock(m_mutex);
             if (m_queue.empty())
             {
-                m_running = false;
-                break;
+                m_running = false; break;
             }
 
-            auto executeHandle = m_queue.front();
-            m_queue.pop();
-            lock.unlock();
+            auto executeHandle = m_queue.front(); m_queue.pop(); lock.unlock();
 
             executeHandle.resume();
         }

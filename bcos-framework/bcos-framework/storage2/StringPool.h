@@ -52,12 +52,10 @@ static std::string_view query(StringID stringID)
 }
 
 constexpr static size_t DEFAULT_STRING_LENGTH = 62;
-template <size_t stringLength = DEFAULT_STRING_LENGTH>
-class StringPool
+template <size_t stringLength = DEFAULT_STRING_LENGTH> class StringPool
 {
 private:
-    using StringType = boost::static_string<stringLength>;
-    concurrent_storage::ConcurrentStorage<StringType> m_storage;
+    using StringType = boost::static_string<stringLength>; concurrent_storage::ConcurrentStorage<StringType> m_storage;
 
 public:
     using StringID = const StringType*;
@@ -70,22 +68,13 @@ public:
 
         while (true)
         {
-            auto itAwaitable = m_storage.read(single(str));
-            auto& it = itAwaitable.value();
-            it.next();
-
-            auto existsAwaitable = it.hasValue();
-            auto exists = existsAwaitable.value();
-            if (exists)
+            auto itAwaitable = m_storage.read(single(str)); auto& it = itAwaitable.value(); it.next(); auto existsAwaitable = it.hasValue();
+            auto exists = existsAwaitable.value(); if (exists)
             {
-                auto keyAwaitable = it.key();
-                const auto& key = keyAwaitable.value();
-                return std::addressof(key);
+                auto keyAwaitable = it.key(); const auto& key = keyAwaitable.value(); return std::addressof(key);
             }
 
-            it.release();
-            m_storage.write(
-                single(StringType(str.begin(), str.end())), single(concurrent_storage::Empty{}));
+            it.release(); m_storage.write(single(StringType(str.begin(), str.end())), single(concurrent_storage::Empty{}));
         }
     }
 };
