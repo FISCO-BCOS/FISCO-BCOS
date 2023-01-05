@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Scheduler.h"
+#include <bcos-utilities/NullLock.h>
 #include <mutex>
 #include <queue>
 #include <variant>
@@ -12,20 +13,11 @@ template <bool withMutex = false>
 class SequenceScheduler : public Scheduler
 {
 private:
-    struct NullMutex
-    {
-    };
-    struct NullLock
-    {
-        NullLock(NullMutex const& /*unused*/) {}
-        void unlock() const {}
-    };
-
     std::queue<CO_STD::coroutine_handle<>> m_queue;
     bool m_running = false;
 
-    using Lock = std::conditional_t<withMutex, std::unique_lock<std::mutex>, NullLock>;
-    [[no_unique_address]] std::conditional_t<withMutex, std::mutex, NullMutex> m_mutex;
+    using Lock = std::conditional_t<withMutex, std::unique_lock<std::mutex>, utilities::NullLock>;
+    [[no_unique_address]] std::conditional_t<withMutex, std::mutex, std::monostate> m_mutex;
 
 public:
     ~SequenceScheduler() noexcept override = default;

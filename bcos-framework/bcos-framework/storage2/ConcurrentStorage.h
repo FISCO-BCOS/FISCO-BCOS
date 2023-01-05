@@ -19,6 +19,7 @@
 #include <thread>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace bcos::storage2::concurrent_storage
 {
@@ -31,9 +32,7 @@ concept HasMemberSize = requires(Object object)
     // clang-format on
 };
 
-struct Empty
-{
-};
+using Empty = std::monostate;
 
 template <class KeyType, class ValueType = Empty, bool ordered = false, bool concurrent = false,
     bool mru = false>
