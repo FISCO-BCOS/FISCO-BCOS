@@ -27,7 +27,11 @@ ca_cert_path=""
 output_dir="cert"
 sub_command=""
 input_params=''
-ip_params=""
+ip_param=""
+
+# for modifying multipy ca node
+modify_node_path=""
+multi_ca_path=""
 
 LOG_WARN() {
     local content=${1}
@@ -79,6 +83,12 @@ check_name() {
         LOG_FALT "$name name [$value] invalid, it should match regex: ^[a-zA-Z0-9._-]+\$"
     }
 }
+
+generate_random_num(){
+    num=`${OPENSSL_CMD} rand -hex 4`
+    echo $num
+}
+randNum=$(generate_random_num)
 
 generate_sm_sm2_param() {
     local output=$1
@@ -263,7 +273,7 @@ gen_chain_cert() {
     dir_must_exists "$chaindir"
 
     ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}"
-    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt
+    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt
     if [ ! -f "${chaindir}/cert.cnf" ];then
         mv "${cert_conf}" "${chaindir}"
     fi
@@ -285,7 +295,7 @@ gen_rsa_node_private_and_csr() {
     dir_must_exists "${ndpath}"
 
     ${OPENSSL_CMD} genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2> /dev/null
-    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config ${cert_conf} -out "$ndpath"/"${type}".csr
+    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config ${cert_conf} -out "$ndpath"/"${type}".csr
 
     ${OPENSSL_CMD} pkcs8 -topk8 -in "$ndpath"/"$type".key -out "$ndpath"/pkcs8_node.key -nocrypt
 
@@ -342,7 +352,7 @@ gen_rsa_node_cert() {
     dir_must_exists "${ndpath}"
 
     ${OPENSSL_CMD} genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2> /dev/null
-    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
+    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
     ${OPENSSL_CMD} x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
         -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req -extfile "$capath"/cert.cnf 2>/dev/null
 
@@ -371,7 +381,7 @@ gen_sm_chain_cert() {
     dir_must_exists "$chaindir"
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$chaindir/sm_ca.key"
-    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt"
+    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt"
     if [ ! -f "${chaindir}/${sm_cert_conf}" ];then
         cp "${sm_cert_conf}" "${chaindir}"
     fi
@@ -390,7 +400,7 @@ gen_sm_node_private_and_csr() {
     mkdir -p "$ndpath"
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$ndpath/sm_${type}.key"
-    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=${type}" -key "$ndpath/sm_${type}.key" -config "${sm_cert_conf}" -out "$ndpath/sm_${type}.csr"
+    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$ndpath/sm_${type}.key" -config "${sm_cert_conf}" -out "$ndpath/sm_${type}.csr"
 
     # nodeid is pubkey
     "$OPENSSL_CMD" ec -in "$ndpath/sm_${type}.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}' | cat > "$ndpath/sm_${type}.nodeid"
@@ -427,7 +437,7 @@ gen_sm_node_cert_with_ext() {
     file_must_not_exists "$ndpath/sm_${type}.key"
 
     "$OPENSSL_CMD" genpkey -paramfile "$capath/${sm2_params}" -out "$certpath/sm_${type}.key"
-    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr"
+    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr"
 
     echo "use $(basename "$capath") to sign $(basename $certpath) ${type}"
     "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions"
@@ -691,13 +701,14 @@ Usage:
     -d <ca cert path>                   [Optional] ca certificate path, specify ca certificate path to generate node/sdk certificate
     -l <IP list>                        [Optional] list of ip for generate certificate or private key, working with generate_node_cert/generate_private_key
     -O <OpenSSL path>                   [Optional] specify the OpenSSL path(Notice: OpenSSL 1.1.x is required), default download TASSL 1.1.1b to local dir ~/.fisco/tassl-1.1.1b
-    -h Help
+    -n <node path>                      [Optional] set the path of the node modified to multi ca mode
+    -m <multi ca path>                  [Optional] set the path of another ca for multi ca mode
 EOF
     exit 0
 }
 
 parse_params() {
-    while getopts "p:o:O:d:c:sl:h" option; do
+    while getopts "p:o:O:d:c:sl:hn:m:" option; do
         case $option in
         c) sub_command="$OPTARG";;
         d) 
@@ -725,6 +736,18 @@ parse_params() {
             OPENSSL_CMD="$OPTARG"
             check_openssl "${OPENSSL_CMD}"
             LOG_INFO "The OpenSSL path is specified: ${OPENSSL_CMD}"
+            ;;
+        n)
+            modify_node_path=$OPTARG
+            dir_must_exists "${modify_node_path}"
+            ;; 
+        m)
+            multi_ca_path="$OPTARG"
+            local last_char=${multi_ca_path: -1}
+            if [ ${last_char} == "/" ]; then
+                multi_ca_path=${OPTARG%/*}
+            fi
+            file_must_exists "${multi_ca_path}"
             ;;
         h) help ;;
         *) help ;;
@@ -813,6 +836,39 @@ generate_multi_nodes_private_key()
     LOG_INFO "generate multi nodes private key success"
 }
 
+modify_node_ca_setting(){
+    dir_must_not_exists "${modify_node_path}/conf/mulCaPath"
+    file_must_exists "${multi_ca_path}"
+    mkdir ${modify_node_path}/conf/mulCaPath 2>/dev/null
+    cp ${multi_ca_path} ${modify_node_path}/conf/mulCaPath/${1}.0 2>/dev/null
+    sed -i "s/; mul_ca_path=mulCaPath/mul_ca_path=mulCaPath/g" ${modify_node_path}/config.ini
+
+    LOG_INFO "Modify node ca setting success"
+}
+
+modify_sm_node_ca_setting(){
+    dir_must_not_exists "${modify_node_path}/conf/sm_mulCaPath"
+    file_must_exists "${multi_ca_path}"
+    mkdir ${modify_node_path}/conf/sm_mulCaPath 2>/dev/null
+    cp ${multi_ca_path} ${modify_node_path}/conf/sm_mulCaPath/${1}.0 2>/dev/null
+    sed -i "s/; sm_mul_ca_path=sm_mulCaPath/sm_mul_ca_path=sm_mulCaPath/g" ${modify_node_path}/config.ini
+
+    LOG_INFO "Modify sm node ca setting success"
+}
+
+modify_multiple_ca_node(){
+    check_and_install_tassl
+    subject_hash=`${OPENSSL_CMD} x509 -hash -noout -in ${multi_ca_path} 2>/dev/null`
+    if [[ ! "${multi_ca_path}" || ! "${modify_node_path}" ]];then
+        LOG_FATAL "multi_ca_path/modify_node_path must not be empty!"
+    fi
+    if [ ${sm_mode} == "false" ]; then
+        modify_node_ca_setting "${subject_hash}"
+    else
+        modify_sm_node_ca_setting "${subject_hash}"
+    fi
+}
+
 main() {
     parse_params "$@"
     # FIXME: use openssl 1.1 to generate gm certificates
@@ -844,6 +900,8 @@ main() {
         else
             generate_multi_nodes_private_key
         fi
+    elif [[ "${sub_command}" == "modify_multiple_ca_node" ]]; then
+        modify_multiple_ca_node
     else
         LOG_FALT "Unsupported command"
     fi

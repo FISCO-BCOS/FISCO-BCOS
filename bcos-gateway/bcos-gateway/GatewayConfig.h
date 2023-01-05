@@ -31,6 +31,7 @@ public:
         std::string caCert;
         std::string nodeKey;
         std::string nodeCert;
+        std::string mulCaPath;
     };
 
     // cert for sm ssl connection
@@ -41,6 +42,7 @@ public:
         std::string nodeKey;
         std::string enNodeCert;
         std::string enNodeKey;
+        std::string mulCaPath;
     };
 
     // config for redis
