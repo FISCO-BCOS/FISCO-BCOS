@@ -34,8 +34,7 @@ concept HasMemberSize = requires(Object object)
 
 using Empty = std::monostate;
 
-template <class KeyType, class ValueType = Empty, bool ordered = false, bool concurrent = false,
-    bool mru = false>
+template <class KeyType, class ValueType = Empty, bool ordered = false, bool concurrent = false, bool mru = false>
 class ConcurrentStorage
 {
 private:
@@ -56,14 +55,13 @@ private:
         boost::multi_index::ordered_unique<boost::multi_index::member<Data, KeyType, &Data::key>>,
         boost::multi_index::hashed_unique<boost::multi_index::member<Data, KeyType, &Data::key>>>;
     using Container = std::conditional_t<mru,
-        boost::multi_index_container<Data,
-            boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
+        boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
 
     struct Bucket
     {
         Container container;
-        [[no_unique_address]] Mutex mutex;  // For concurrent
+        [[no_unique_address]] Mutex mutex;                                            // For concurrent
         [[no_unique_address]] std::conditional_t<mru, int64_t, Empty> capacity = {};  // For mru
     };
     using Buckets = std::conditional_t<concurrent, std::vector<Bucket>, std::array<Bucket, 1>>;
@@ -96,8 +94,8 @@ private:
         return hash % m_buckets.size();
     }
 
-    void updateMRUAndCheck(Bucket& bucket,
-        typename Container::template nth_index<0>::type::iterator entryIt) requires mru
+    void updateMRUAndCheck(
+        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt) requires mru
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
@@ -166,8 +164,7 @@ public:
     private:
         typename std::vector<const Data*>::iterator m_it;
         std::vector<const Data*> m_iterators;
-        [[no_unique_address]] std::conditional_t<concurrent, std::forward_list<Lock>, Empty>
-            m_bucketLocks;
+        [[no_unique_address]] std::conditional_t<concurrent, std::forward_list<Lock>, Empty> m_bucketLocks;
         bool m_started = false;
     };
 
@@ -260,11 +257,10 @@ public:
         return output;
     }
 
-    task::AwaitableValue<void> write(
-        RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    task::AwaitableValue<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, value] : RANGES::zip_view(
-                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
+        for (auto&& [key, value] :
+            RANGES::zip_view(std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
         {
             auto [bucket, lock] = getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
@@ -293,8 +289,7 @@ public:
                 }
 
                 auto&& newValue = value;
-                bucket.get().container.modify(
-                    it, [&newValue](Data& data) { data.value = std::move(newValue); });
+                bucket.get().container.modify(it, [&newValue](Data& data) { data.value = std::move(newValue); });
             }
             else
             {
