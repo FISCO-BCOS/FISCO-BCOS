@@ -205,13 +205,19 @@ public:
             timer()->incChangeCycle(1);
         }
         // drop in view change status, set consensus timeout as min seal time
-        setConsensusTimeout(std::max(m_consensusTimeout.load(), (uint64_t)m_minSealTime.load()));
+        // NOTE: if consensusTimeout == minSealTime, and all nodes use same long minSealTime
+        // leader will use minSealTime to seal a proposal, and follower will be timeout after
+        // consensusTimeout, it will cause never reach consensus.
+        setConsensusTimeout(
+            std::max(m_consensusTimeout.load(), (uint64_t)m_minSealTime.load() + 1));
         // start the timer again(the timer here must be restarted)
         timer()->restart();
     }
 
     virtual void resetNewViewState(ViewType _view)
     {
+        PBFT_LOG(INFO) << LOG_DESC("resetNewViewState") << LOG_KV("m_view", m_view)
+                       << LOG_KV("_view", _view);
         if (m_view > _view)
         {
             return;
@@ -223,7 +229,10 @@ public:
         // reset the timer when reach a new-view
         m_timeoutState.store(false);
         // reach new view, consensus time recovery to normal
-        setConsensusTimeout(s_consensusTimeout);
+        // NOTE: should not recover when reach new view
+        // if all nodes reach new view, and set consensusTimeout to 3000
+        // and all nodes minSealTime > 3000, it will cause consensus always be timeout
+        //        setConsensusTimeout(s_consensusTimeout);
         freshTimer();
         // update the changeCycle
         timer()->resetChangeCycle();
