@@ -82,6 +82,9 @@ public:
 
     void setCodeAndAbi(bytes code, std::string abi);
 
+    // only called when contract create contract
+    void setShardParent(const std::string_view& parentTableName);
+
     size_t codeSizeAt(const std::string_view& address);
 
     h256 codeHashAt(const std::string_view& address);

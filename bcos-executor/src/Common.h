@@ -71,6 +71,7 @@ static const char* const ACCOUNT_ABI = "abi";
 static const char* const ACCOUNT_NONCE = "nonce";
 static const char* const ACCOUNT_ALIVE = "alive";
 static const char* const ACCOUNT_FROZEN = "frozen";
+static const char* const ACCOUNT_SHARD = "shard";
 
 /// auth
 static constexpr const std::string_view CONTRACT_SUFFIX = "_accessAuth";

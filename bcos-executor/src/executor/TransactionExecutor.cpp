@@ -152,6 +152,12 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 
 void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
 {
+    if (m_blockVersion == blockVersion)
+    {
+        return;
+    }
+
+    RecursiveGuard l(x_resetEnvironmentLock);
     if (m_blockVersion != blockVersion)
     {
         m_blockVersion = blockVersion;
@@ -163,7 +169,7 @@ void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
 
 void TransactionExecutor::resetEnvironment()
 {
-    WriteGuard l(x_resetEnvironmentLock);
+    RecursiveGuard l(x_resetEnvironmentLock);
     if (m_isWasm)
     {
         initWasmEnvironment();

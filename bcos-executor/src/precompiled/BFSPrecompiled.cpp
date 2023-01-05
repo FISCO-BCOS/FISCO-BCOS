@@ -228,10 +228,10 @@ void BFSPrecompiled::makeDirImpl(const std::string& _absolutePath,
         return;
     }
 
-    const auto* bfsAddress = getMyAddress(blockContext->isWasm());
+    const auto* bfsAddress = getThisAddress(blockContext->isWasm());
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        getMyAddress(blockContext->isWasm()), _absolutePath, FS_TYPE_DIR,
+        getThisAddress(blockContext->isWasm()), _absolutePath, FS_TYPE_DIR,
         _callParameters->m_gasLeft);
     auto result = codec.encode(response);
     if (blockContext->isWasm() &&
@@ -545,10 +545,10 @@ void BFSPrecompiled::linkImpl(const std::string& _absolutePath, const std::strin
         return;
     }
     // table not exist, mkdir -p /apps/contractName first
-    std::string bfsAddress = getMyAddress(blockContext->isWasm());
+    std::string bfsAddress = getThisAddress(blockContext->isWasm());
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        getMyAddress(blockContext->isWasm()), linkTableName, FS_TYPE_LINK,
+        getThisAddress(blockContext->isWasm()), linkTableName, FS_TYPE_LINK,
         _callParameters->m_gasLeft);
     if (response != 0)
     {
@@ -621,10 +621,10 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
         return;
     }
     // table not exist, mkdir -p /apps/contractName first
-    std::string bfsAddress = getMyAddress(blockContext->isWasm());
+    std::string bfsAddress = getThisAddress(blockContext->isWasm());
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
-        getMyAddress(blockContext->isWasm()), linkTableName, FS_TYPE_LINK,
+        getThisAddress(blockContext->isWasm()), linkTableName, FS_TYPE_LINK,
         _callParameters->m_gasLeft);
     if (response != 0)
     {
