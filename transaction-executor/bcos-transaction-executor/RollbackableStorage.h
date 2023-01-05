@@ -1,76 +1,98 @@
 #pragma once
 
-#include <bcos-framework/storage2/Storage.h>
-#include <forward_list>
+#include "bcos-task/Trait.h"
+#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 
 namespace bcos::transaction_executor
 {
 
-template <storage2::Storage<storage::Entry> PrevStorage>
-class RollbackableStorage
-  : public storage2::Storage2Base<RollbackableStorage<PrevStorage>, storage::Entry>
+// Rollbackable crtp base
+template <storage2::Storage<StateKey, StateValue> Storage>
+class Rollbackable : public Storage
 {
-public:
-    RollbackableStorage(PrevStorage& prev) : m_prev(prev) {}
-
-    task::Task<void> impl_getRows(std::string_view tableName, storage2::InputKeys auto const& keys,
-        storage2::OutputEntries auto& out)
-    {
-        return m_prev.getRows(tableName, keys, out);
-    }
-
-    task::Task<void> impl_setRows(std::string_view tableName, storage2::InputKeys auto const& keys,
-        storage2::InputEntries auto const& entries)
-    {
-        // Check the tableNames
-        auto tableNameIt = m_tableNames.lower_bound(tableName);
-        if (tableNameIt == m_tableNames.end() || *tableNameIt != tableName)
-        {
-            tableNameIt = m_tableNames.emplace_hint(tableNameIt, std::string(tableName));
-        }
-
-        for (auto const& [key, entry] : RANGES::zip_view(keys, entries))
-        {
-            auto keyView = concepts::bytebuffer::toView(key);
-            // Try find old value
-            auto record = m_records.emplace_front();
-            record.tableName = *tableNameIt;
-            record.key = std::string(keyView);
-
-            auto tableKey = std::make_tuple(tableName, keyView);
-            auto entryIt = m_writeValues.lower_bound(tableKey);
-            if (entryIt != m_writeValues.end() && entryIt.first == tableKey)
-            {
-                record.oldValue.emplace(entryIt->second);
-                entryIt->second = &record;
-            }
-            else
-            {
-                m_writeValues.emplace_hint(entryIt, std::make_pair(tableKey, &record));
-            }
-        }
-
-        return m_prev.setRows(tableName, keys, entries);
-    }
-
-    void rollback()
-    {
-        for (auto& it : m_records)
-        {}
-    }
-
 private:
     struct Record
     {
-        std::string_view tableName;
-        std::string key;
-        storage2::OptionalEntry oldValue;
+        StateKey key;
+        std::optional<StateValue> value;
     };
-
     std::forward_list<Record> m_records;
-    std::set<std::string, std::less<>> m_tableNames;
-    std::map<std::tuple<std::string_view, std::string_view>, Record*, std::less<>> m_writeValues;
-    PrevStorage& m_prev;
+
+public:
+    using Savepoint = typename std::forward_list<Record>::const_iterator;
+    using Storage::Storage;
+
+    Savepoint current() const { return m_records.cbegin(); }
+    task::Task<void> rollback(Savepoint savepoint)
+    {
+        auto it = m_records.begin();
+        while (it != savepoint)
+        {
+            auto& record = *it;
+            if (record.value)
+            {
+                co_await Storage::write(
+                    storage2::single(record.key), storage2::single(*record.value));
+            }
+            else
+            {
+                co_await Storage::remove(storage2::single(record.key));
+            }
+            m_records.pop_front();
+            it = m_records.begin();
+        }
+        co_return;
+    }
+
+    auto write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+        -> task::Task<task::AwaitableReturnType<decltype(Storage::write(
+            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))>>
+    {
+        // Store values to history
+        {
+            auto storageIt = co_await Storage::read(keys);
+            auto keyIt = RANGES::begin(keys);
+            while (co_await storageIt.next())
+            {
+                auto& record = m_records.emplace_front();
+                record.key = *(keyIt++);
+                if (co_await storageIt.hasValue())
+                {
+                    // Update exists value, store the old value
+                    record.value = {co_await storageIt.value()};
+                }
+                else
+                {
+                    record.value = {};
+                }
+            }
+        }
+
+        co_return co_await Storage::write(
+            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
+    }
+
+    auto remove(RANGES::input_range auto const& keys)
+        -> task::Task<task::AwaitableReturnType<decltype(Storage::remove(keys))>>
+    {
+        // Store values to history
+        {
+            auto storageIt = co_await Storage::read(keys);
+            auto keyIt = RANGES::begin(keys);
+            while (co_await storageIt.next())
+            {
+                auto& record = m_records.emplace_front();
+                record.key = *(keyIt++);
+                if (co_await storageIt.hasValue())
+                {
+                    // Update exists value, store the old value
+                    record.value = {co_await storageIt.value()};
+                }
+            }
+        }
+
+        co_return co_await Storage::remove(keys);
+    }
 };
 
 }  // namespace bcos::transaction_executor

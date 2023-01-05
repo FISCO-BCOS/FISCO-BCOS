@@ -3,36 +3,17 @@
 #include "ConcurrentStorage.h"
 #include <bcos-utilities/Error.h>
 #include <boost/functional/hash.hpp>
+#include <boost/static_string.hpp>
+#include <boost/throw_exception.hpp>
 #include <functional>
-#include <memory>
 #include <string_view>
 
-namespace bcos::storage2::string_pool
+template <size_t n>
+struct boost::hash<boost::static_string<n>>
 {
-
-struct OutOfRange : bcos::Error
-{
-};
-
-struct Item
-{
-    std::string_view view() const noexcept { return {str.data(), size}; }
-    bool operator==(std::string_view lhs) const noexcept { return lhs == view(); }
-    bool operator==(const Item& rhs) const noexcept { return view() == rhs.view(); }
-    operator std::string_view() const noexcept { return view(); }
-
-    std::array<char, 63> str;
-    uint8_t size;
-};
-using StringID = const Item*;
-}  // namespace bcos::storage2::string_pool
-
-template <>
-struct boost::hash<bcos::storage2::string_pool::Item>
-{
-    std::size_t operator()(const bcos::storage2::string_pool::Item& item) const noexcept
+    std::size_t operator()(const boost::static_string<n>& str) const noexcept
     {
-        return boost::hash<std::string_view>{}(item.view());
+        return boost::hash<boost::string_view>{}(str);
     }
     std::size_t operator()(std::string_view view) const noexcept
     {
@@ -40,36 +21,53 @@ struct boost::hash<bcos::storage2::string_pool::Item>
     }
 };
 
-template <>
-struct std::equal_to<bcos::storage2::string_pool::Item>
+template <size_t n>
+struct std::equal_to<boost::static_string<n>>
 {
-    bool operator()(
-        const bcos::storage2::string_pool::Item& item, std::string_view view) const noexcept
+    bool operator()(const boost::static_string<n>& str, std::string_view view) const noexcept
     {
-        return item.view() == view;
+        return std::string_view(str.data(), str.size()) == view;
+    }
+    bool operator()(std::string_view view, const boost::static_string<n>& str) const noexcept
+    {
+        return std::string_view(str.data(), str.size()) == view;
     }
     bool operator()(
-        std::string_view view, const bcos::storage2::string_pool::Item& item) const noexcept
+        const boost::static_string<n>& lhs, const boost::static_string<n>& rhs) const noexcept
     {
-        return item.view() == view;
-    }
-    bool operator()(const bcos::storage2::string_pool::Item& lhs,
-        const bcos::storage2::string_pool::Item& rhs) const noexcept
-    {
-        return lhs.view() == rhs.view();
+        return lhs == rhs;
     }
 };
 
 namespace bcos::storage2::string_pool
 {
+struct OutOfRange : bcos::Error
+{
+};
+
+template <class StringID>
+static std::string_view query(StringID stringID)
+{
+    return {stringID->data(), stringID->size()};
+}
+
+constexpr static size_t DEFAULT_STRING_LENGTH = 62;
+template <size_t stringLength = DEFAULT_STRING_LENGTH>
 class StringPool
 {
 private:
-    concurrent_storage::ConcurrentStorage<Item> m_storage;
+    using StringType = boost::static_string<stringLength>;
+    concurrent_storage::ConcurrentStorage<StringType> m_storage;
 
 public:
+    using StringID = const StringType*;
     StringID add(std::string_view str)
     {
+        if (str.size() > stringLength)
+        {
+            BOOST_THROW_EXCEPTION(OutOfRange{});
+        }
+
         while (true)
         {
             auto itAwaitable = m_storage.read(single(str));
@@ -85,16 +83,11 @@ public:
                 return std::addressof(key);
             }
 
-            // Write item into storage
             it.release();
-            Item newItem;
-            newItem.size = str.size();
-            std::uninitialized_copy_n(str.begin(), str.size(), newItem.str.begin());
-            m_storage.write(single(newItem), single(concurrent_storage::Empty{}));
+            m_storage.write(
+                single(StringType(str.begin(), str.end())), single(concurrent_storage::Empty{}));
         }
     }
-
-    static std::string_view query(StringID stringID) { return stringID->view(); }
 };
 
 }  // namespace bcos::storage2::string_pool

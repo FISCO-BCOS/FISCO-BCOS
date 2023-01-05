@@ -13,5 +13,5 @@ target_link_libraries(transaction-executor INTERFACE ${CODEC_TARGET} ${CRYPTO_TA
 
 if (TESTS)
     enable_testing()
-    # add_subdirectory(tests)
+    add_subdirectory(tests)
 endif()

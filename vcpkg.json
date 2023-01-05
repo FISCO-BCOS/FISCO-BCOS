@@ -24,6 +24,7 @@
     "boost-test",
     "boost-multiprecision",
     "boost-program-options",
+    "boost-static-string",
     "ms-gsl",
     "zstd",
     "tbb",

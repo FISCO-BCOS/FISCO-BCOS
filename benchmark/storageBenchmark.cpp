@@ -1,6 +1,6 @@
 #include "bcos-task/SequenceScheduler.h"
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/storage2/ConcurrentOrderedStorage.h>
+#include <bcos-framework/storage2/ConcurrentStorage.h>
 #include <bcos-task/TBBScheduler.h>
 #include <bcos-task/Wait.h>
 #include <tbb/blocked_range.h>
@@ -119,7 +119,7 @@ int main(int argc, char* argv[])
     auto count = boost::lexical_cast<int>(argv[2]);
     auto dataSet = generatRandomData(count);
 
-    storage2::concurrent_ordered_storage::ConcurrentOrderedStorage<false, TableKey, storage::Entry>
+    storage2::concurrent_storage::ConcurrentStorage<TableKey, storage::Entry, true, true, false>
         storage;
     if (type == 0)
     {

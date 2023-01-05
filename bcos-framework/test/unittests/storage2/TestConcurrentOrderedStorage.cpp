@@ -131,7 +131,8 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
 BOOST_AUTO_TEST_CASE(mru)
 {
     task::syncWait([]() -> task::Task<void> {
-        ConcurrentStorage<int, storage::Entry, true, true> storage(1, 1000);
+        ConcurrentStorage<int, storage::Entry, true, true, true> storage(1);
+        storage.setMaxCapacity(1000);
 
         // write 10 100byte value
         storage::Entry entry;
