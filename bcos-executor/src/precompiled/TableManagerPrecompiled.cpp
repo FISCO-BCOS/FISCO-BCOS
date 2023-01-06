@@ -374,7 +374,7 @@ void TableManagerPrecompiled::descWithKeyOrder(
     auto sysEntry = _executive->storage().getRow(storage::StorageInterface::SYS_TABLES, tableName);
     if (!sysEntry)
     {
-        TableInfoTuple tableInfo = {};
+        TableInfoTupleV320 tableInfo = {};
         _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
         return;
     }
