@@ -19,7 +19,7 @@ BOOST_AUTO_TEST_CASE(rollback)
 {
     task::syncWait([]() -> task::Task<void> {
         string_pool::StringPool<> pool;
-        Rollbackable<memory_storage::MemoryStorage<StateKey, StateValue, true>> rollbackableStorage;
+        Rollbackable<memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED>> rollbackableStorage;
 
         const auto* tableID = pool.add("table1");
         auto point = rollbackableStorage.current();

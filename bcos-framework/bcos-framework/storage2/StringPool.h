@@ -53,7 +53,7 @@ class StringPool
 {
 private:
     using StringType = boost::static_string<stringLength>;
-    memory_storage::MemoryStorage<StringType> m_storage;
+    memory_storage::MemoryStorage<StringType, memory_storage::Empty, memory_storage::CONCURRENT> m_storage;
 
 public:
     using StringID = const StringType*;

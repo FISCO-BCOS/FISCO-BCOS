@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
     task::syncWait([]() -> task::Task<void> {
         constexpr static int count = 100;
 
-        MemoryStorage<std::tuple<std::string, std::string>, storage::Entry, true> storage;
+        MemoryStorage<std::tuple<std::string, std::string>, storage::Entry, ORDERED> storage;
         co_await storage.write(RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
             return std::tuple<std::string, std::string>("table", "key:" + boost::lexical_cast<std::string>(num));
         }),
@@ -121,7 +121,7 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
 BOOST_AUTO_TEST_CASE(mru)
 {
     task::syncWait([]() -> task::Task<void> {
-        MemoryStorage<int, storage::Entry, true, true, true> storage(1);
+        MemoryStorage<int, storage::Entry, Attribute(ORDERED | CONCURRENT | MRU)> storage(1);
         storage.setMaxCapacity(1000);
 
         // write 10 100byte value

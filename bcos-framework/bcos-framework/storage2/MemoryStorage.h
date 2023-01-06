@@ -33,16 +33,27 @@ concept HasMemberSize = requires(Object object)
 
 using Empty = std::monostate;
 
-template <class KeyType, class ValueType = Empty, bool ordered = false, bool concurrent = false, bool mru = false>
+enum Attribute : int
+{
+    NONE = 0x0,
+    ORDERED = 0x1,
+    CONCURRENT = 0x2,
+    MRU = 0x4
+};
+
+template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE>
 class MemoryStorage
 {
 private:
+    constexpr static bool withOrdered = (attribute & Attribute::ORDERED) != 0;
+    constexpr static bool withConcurrent = (attribute & Attribute::CONCURRENT) != 0;
+    constexpr static bool withMRU = (attribute & Attribute::MRU) != 0;
     constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets for concurrent, enough?
-    constexpr unsigned getBucketSize() { return concurrent ? MAX_BUCKETS : 1; }
+    constexpr unsigned getBucketSize() { return withConcurrent ? MAX_BUCKETS : 1; }
 
     constexpr static unsigned DEFAULT_CAPACITY = 32L * 1024 * 1024;  // For mru
-    using Mutex = std::conditional_t<concurrent, std::mutex, Empty>;
-    using Lock = std::conditional_t<concurrent, std::unique_lock<std::mutex>, utilities::NullLock>;
+    using Mutex = std::conditional_t<withConcurrent, std::mutex, Empty>;
+    using Lock = std::conditional_t<withConcurrent, std::unique_lock<std::mutex>, utilities::NullLock>;
 
     struct Data
     {
@@ -50,27 +61,27 @@ private:
         [[no_unique_address]] ValueType value;
     };
 
-    using IndexType = std::conditional_t<ordered,
+    using IndexType = std::conditional_t<withOrdered,
         boost::multi_index::ordered_unique<boost::multi_index::member<Data, KeyType, &Data::key>>,
         boost::multi_index::hashed_unique<boost::multi_index::member<Data, KeyType, &Data::key>>>;
-    using Container = std::conditional_t<mru,
+    using Container = std::conditional_t<withMRU,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
 
     struct Bucket
     {
         Container container;
-        [[no_unique_address]] Mutex mutex;                                            // For concurrent
-        [[no_unique_address]] std::conditional_t<mru, int64_t, Empty> capacity = {};  // For mru
+        [[no_unique_address]] Mutex mutex;                                                // For concurrent
+        [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> capacity = {};  // For mru
     };
-    using Buckets = std::conditional_t<concurrent, std::vector<Bucket>, std::array<Bucket, 1>>;
+    using Buckets = std::conditional_t<withConcurrent, std::vector<Bucket>, std::array<Bucket, 1>>;
 
     Buckets m_buckets;
-    [[no_unique_address]] std::conditional_t<mru, int64_t, Empty> m_maxCapacity = {};
+    [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> m_maxCapacity = {};
 
     std::tuple<std::reference_wrapper<Bucket>, Lock> getBucket(auto const& key)
     {
-        if constexpr (!concurrent)
+        if constexpr (!withConcurrent)
         {
             return std::make_tuple(std::ref(m_buckets[0]), Lock(Empty{}));
         }
@@ -85,7 +96,7 @@ private:
 
     size_t getBucketIndex(auto const& key) const
     {
-        if constexpr (!concurrent)
+        if constexpr (!withConcurrent)
         {
             return 0;
         }
@@ -94,7 +105,7 @@ private:
     }
 
     void updateMRUAndCheck(
-        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt) requires mru
+        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt) requires withMRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
@@ -124,13 +135,13 @@ private:
     }
 
 public:
-    MemoryStorage(unsigned buckets = 0) requires(!concurrent) {}
+    MemoryStorage(unsigned buckets = 0) requires(!withConcurrent) {}
 
-    MemoryStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(concurrent)
+    MemoryStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(withConcurrent)
       : m_buckets(std::min(buckets, getBucketSize()))
     {}
 
-    void setMaxCapacity(int64_t capacity) requires mru { m_maxCapacity = capacity; }
+    void setMaxCapacity(int64_t capacity) requires withMRU { m_maxCapacity = capacity; }
 
     class ReadIterator
     {
@@ -154,7 +165,7 @@ public:
 
         void release()
         {
-            if constexpr (concurrent)
+            if constexpr (withConcurrent)
             {
                 m_bucketLocks.clear();
             }
@@ -163,7 +174,7 @@ public:
     private:
         typename std::vector<const Data*>::iterator m_it;
         std::vector<const Data*> m_iterators;
-        [[no_unique_address]] std::conditional_t<concurrent, std::forward_list<Lock>, Empty> m_bucketLocks;
+        [[no_unique_address]] std::conditional_t<withConcurrent, std::forward_list<Lock>, Empty> m_bucketLocks;
         bool m_started = false;
     };
 
@@ -204,13 +215,13 @@ public:
             output.m_iterators.reserve(RANGES::size(keys));
         }
 
-        std::conditional_t<concurrent, std::bitset<MAX_BUCKETS>, Empty> locks;
+        std::conditional_t<withConcurrent, std::bitset<MAX_BUCKETS>, Empty> locks;
         for (auto&& key : keys)
         {
             auto bucketIndex = getBucketIndex(key);
             auto& bucket = getBucketByIndex(bucketIndex);
 
-            if constexpr (concurrent)
+            if constexpr (withConcurrent)
             {
                 if (!locks[bucketIndex])
                 {
@@ -224,7 +235,7 @@ public:
             auto it = index.find(key);
             if (it != index.end())
             {
-                if constexpr (mru)
+                if constexpr (withMRU)
                 {
                     updateMRUAndCheck(bucket, it);
                 }
@@ -240,7 +251,7 @@ public:
         return outputAwaitable;
     }
 
-    task::AwaitableValue<SeekIterator> seek(auto const& key) requires(ordered)
+    task::AwaitableValue<SeekIterator> seek(auto const& key) requires(withOrdered)
     {
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
@@ -264,14 +275,14 @@ public:
             auto [bucket, lock] = getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
 
-            std::conditional_t<mru, int64_t, Empty> updatedCapacity;
-            if constexpr (mru)
+            std::conditional_t<withMRU, int64_t, Empty> updatedCapacity;
+            if constexpr (withMRU)
             {
                 updatedCapacity = getSize(value);
             }
 
             typename Container::iterator it;
-            if constexpr (ordered)
+            if constexpr (withOrdered)
             {
                 it = index.lower_bound(key);
             }
@@ -282,7 +293,7 @@ public:
             if (it != index.end() && it->key == key)
             {
                 auto& existsValue = it->value;
-                if constexpr (mru)
+                if constexpr (withMRU)
                 {
                     updatedCapacity -= getSize(existsValue);
                 }
@@ -295,7 +306,7 @@ public:
                 it = bucket.get().container.emplace_hint(it, Data{.key = key, .value = value});
             }
 
-            if constexpr (mru)
+            if constexpr (withMRU)
             {
                 bucket.get().capacity += updatedCapacity;
                 updateMRUAndCheck(bucket.get(), it);
@@ -316,7 +327,7 @@ public:
             if (it != index.end())
             {
                 auto& existsValue = it->value;
-                if constexpr (mru)
+                if constexpr (withMRU)
                 {
                     bucket.get().capacity -= getSize(existsValue);
                 }

@@ -13,6 +13,7 @@
 #include <range/v3/view/transform.hpp>
 
 using namespace bcos;
+using namespace bcos::storage2::memory_storage;
 
 template <>
 struct std::hash<std::tuple<std::string, std::string>>
@@ -113,7 +114,7 @@ int main(int argc, char* argv[])
     auto count = boost::lexical_cast<int>(argv[2]);
     auto dataSet = generatRandomData(count);
 
-    storage2::memory_storage::MemoryStorage<TableKey, storage::Entry, true, true, false> storage;
+    storage2::memory_storage::MemoryStorage<TableKey, storage::Entry, Attribute(ORDERED | CONCURRENT)> storage;
     testStorage2BatchWrite(storage, dataSet);
     testStorage2BatchRead(
         storage, dataSet | RANGES::views::transform([](auto& item) -> auto& { return std::get<0>(item); }));
