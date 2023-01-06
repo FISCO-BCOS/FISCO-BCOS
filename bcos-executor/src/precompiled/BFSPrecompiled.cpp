@@ -683,8 +683,7 @@ void BFSPrecompiled::readLink(const std::shared_ptr<executor::TransactionExecuti
         return;
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled")
-                           << LOG_DESC("link file not exist, return empty address")
-                           << LOG_KV("path", absolutePath);
+                           << LOG_DESC("link file not exist, return empty address");
     _callParameters->setExecResult(emptyResult);
 }
 

@@ -21,6 +21,7 @@
 
 #include "TransactionExecutive.h"
 #include "../precompiled/BFSPrecompiled.h"
+#include "../precompiled/common/ContractShardUtils.h"
 #include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
@@ -405,6 +406,14 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         {
             // Create auth table
             creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress);
+        }
+
+        if (blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_3_VERSION))
+        {
+            auto parentTableName =
+                getContractTableName(callParameters->senderAddress, blockContext->isWasm());
+            precompiled::ContractShardUtils::setContractShardByParent(
+                *m_storageWrapper, parentTableName, tableName);
         }
     }
     catch (exception const& e)

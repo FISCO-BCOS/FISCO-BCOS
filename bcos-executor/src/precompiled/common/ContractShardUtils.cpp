@@ -26,7 +26,7 @@ using namespace bcos::precompiled;
 using namespace bcos::storage;
 using namespace bcos::executor;
 
-void ContractShardUtils::setContractShard(std::shared_ptr<bcos::storage::StorageWrapper> storage,
+void ContractShardUtils::setContractShard(bcos::storage::StorageWrapper& storage,
     const std::string_view& contractTableName, const std::string_view& shard)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractShard") << "setContractShard "
@@ -37,13 +37,12 @@ void ContractShardUtils::setContractShard(std::shared_ptr<bcos::storage::Storage
 }
 
 std::optional<bcos::storage::Entry> ContractShardUtils::getShard(
-    std::shared_ptr<bcos::storage::StorageWrapper> storage,
-    const std::string_view& contractTableName)
+    bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractShard") << "getContractShard "
                            << LOG_KV("contractTableName", contractTableName);
 
-    auto contractTable = storage->openTable(contractTableName);
+    auto contractTable = storage.openTable(contractTableName);
 
     if (!contractTable)
     {
@@ -54,13 +53,13 @@ std::optional<bcos::storage::Entry> ContractShardUtils::getShard(
     }
 
 
-    return storage->getRow(contractTableName, ACCOUNT_SHARD);
+    return storage.getRow(contractTableName, ACCOUNT_SHARD);
 }
 
-void ContractShardUtils::setShard(std::shared_ptr<bcos::storage::StorageWrapper> storage,
+void ContractShardUtils::setShard(bcos::storage::StorageWrapper& storage,
     const std::string_view& contractTableName, const std::string_view& shard)
 {
-    auto contractTable = storage->openTable(contractTableName);
+    auto contractTable = storage.openTable(contractTableName);
 
     if (!contractTable)
     {
@@ -74,13 +73,12 @@ void ContractShardUtils::setShard(std::shared_ptr<bcos::storage::StorageWrapper>
 
     Entry shardEntry;
     shardEntry.importFields({std::string(shard)});
-    storage->setRow(contractTableName, ACCOUNT_SHARD, std::move(shardEntry));
+    storage.setRow(contractTableName, ACCOUNT_SHARD, std::move(shardEntry));
     return;
 }
 
 std::string ContractShardUtils::getContractShard(
-    std::shared_ptr<bcos::storage::StorageWrapper> storage,
-    const std::string_view& contractTableName)
+    bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractShard") << "getContractShard "
                            << LOG_KV("contractTableName", contractTableName);
@@ -91,7 +89,8 @@ std::string ContractShardUtils::getContractShard(
     {
         if (entry)
         {
-            tableName = removePrefix(entry->getField(0), INHERENT_PREFIX);
+            tableName = entry->getField(0);
+            tableName.remove_prefix(INHERENT_PREFIX.length());
         }
         entry = getShard(storage, tableName);
 
@@ -99,15 +98,16 @@ std::string ContractShardUtils::getContractShard(
 
     if (entry)
     {
-        return std::string(removePrefix(entry->getField(0), SHARD_ROOT_PREFIX));
+        auto shardName = entry->getField(0);
+        shardName.remove_prefix(SHARD_ROOT_PREFIX.length());
+        return std::string(shardName);
     }
 
     return {};
 }
 
-void ContractShardUtils::setContractShardByParent(
-    std::shared_ptr<bcos::storage::StorageWrapper> storage, const std::string_view& parentTableName,
-    const std::string_view& contractTableName)
+void ContractShardUtils::setContractShardByParent(bcos::storage::StorageWrapper& storage,
+    const std::string_view& parentTableName, const std::string_view& contractTableName)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractShard") << "setContractShardByParent "
                            << LOG_KV("contractTableName", contractTableName)
