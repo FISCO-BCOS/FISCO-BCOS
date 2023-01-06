@@ -36,7 +36,7 @@ public:
     TransactionFactory& operator=(TransactionFactory&&) = default;
     virtual ~TransactionFactory() = default;
 
-    virtual Transaction::Ptr createTransaction(bytesConstRef txData, bool checkSig = true) = 0;
+    virtual Transaction::Ptr createTransaction(bytesConstRef txData, bool checkSig = true, bool checkHash = false) = 0;
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bytes const& _input, u256 const& _nonce, int64_t blockLimit, std::string _chainId,
         std::string _groupId, int64_t _importTime) = 0;
