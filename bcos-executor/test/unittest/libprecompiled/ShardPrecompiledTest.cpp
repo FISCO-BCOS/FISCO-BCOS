@@ -516,6 +516,16 @@ public:
                 executePromise1.set_value(std::move(result));
             });
         auto result2 = executePromise1.get_future().get();
+        if (_errorCode != 0)
+        {
+            s256 codeCmp;
+            std::string msg;
+            codec->decode(result2->data(), codeCmp, msg);
+            BOOST_CHECK_EQUAL(codeCmp, s256(int32_t(_errorCode)));
+            BOOST_CHECK_EQUAL(msg, "");
+            return result2;
+        }
+
         result2->setSeq(1001);
 
         // getShardInternal
@@ -536,16 +546,6 @@ public:
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
-
-        if (_errorCode != 0)
-        {
-            s256 codeCmp;
-            std::string msg;
-            codec->decode(result4->data(), codeCmp, msg);
-            BOOST_CHECK_EQUAL(codeCmp, s256(int32_t(_errorCode)));
-            BOOST_CHECK_EQUAL(msg, "");
-        }
-
         commitBlock(_number);
         return result4;
     };
@@ -980,6 +980,21 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
         codec->decode(result->data(), code);
         BOOST_TEST(code == (int)CODE_FILE_INVALID_TYPE);
     }
+}
+
+BOOST_AUTO_TEST_CASE(getContractShardErrorTest)
+{
+    init(false);
+    BlockNumber number = 3;
+    // invalid contract address
+    {
+        auto shardInfo = getContractShard(number++, "kkkkk", CODE_FILE_INVALID_PATH);
+        s256 code;
+        std::string shardCmp;
+        codec->decode(shardInfo->data(), code, shardCmp);
+        BOOST_CHECK_EQUAL(code, s256(int(CODE_FILE_INVALID_PATH)));
+        BOOST_CHECK_EQUAL("", shardCmp);
+    }
 
     // error contract address
     {
@@ -988,17 +1003,7 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
         s256 code;
         std::string shardCmp;
         codec->decode(shardInfo->data(), code, shardCmp);
-        BOOST_CHECK_EQUAL("", shardCmp);
-    }
-
-
-    // invalid contract address
-    {
-        auto shardInfo = getContractShard(number++, "kkkkk", CODE_FILE_INVALID_PATH);
-        s256 code;
-        std::string shardCmp;
-        codec->decode(shardInfo->data(), code, shardCmp);
-        BOOST_CHECK_EQUAL(code, s256(int(CODE_FILE_INVALID_PATH)));
+        BOOST_CHECK_EQUAL(code, s256(int(CODE_SUCCESS)));
         BOOST_CHECK_EQUAL("", shardCmp);
     }
 }
