@@ -30,7 +30,8 @@ public:
     using Ptr = std::shared_ptr<ShardingPrecompiled>;
     ShardingPrecompiled(crypto::Hash::Ptr _hashImpl);
     ~ShardingPrecompiled() override = default;
-    std::shared_ptr<PrecompiledExecResult> call(std::shared_ptr<executor::TransactionExecutive> _executive,
+    std::shared_ptr<PrecompiledExecResult> call(
+        std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
@@ -50,8 +51,8 @@ private:
     void handleSetContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);  // only for internal call
 
-    std::string getContractAbi(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string_view& contractTableName);
+    std::string getContractAbi(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string_view& contractTableName);
 
 private:
     const char* getThisAddress(bool _isWasm) override

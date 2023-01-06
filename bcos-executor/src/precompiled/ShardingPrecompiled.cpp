@@ -41,35 +41,42 @@ using namespace bcos::protocol;
 
 constexpr const char* const FILE_SYSTEM_METHOD_MK_SHARD = "makeShard(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_LINK_SHARD = "linkShard(string,string)";
-constexpr const char* const FILE_SYSTEM_SET_CONTRACT_SHARD_INTERNAL = "setShardInternal(string,string)";
+constexpr const char* const FILE_SYSTEM_SET_CONTRACT_SHARD_INTERNAL =
+    "setShardInternal(string,string)";
 constexpr const char* const FILE_SYSTEM_GET_CONTRACT_SHARD = "getContractShard(string)";
 constexpr const char* const FILE_SYSTEM_GET_CONTRACT_SHARD_INTERNAL = "getShardInternal(string)";
 
 ShardingPrecompiled::ShardingPrecompiled(crypto::Hash::Ptr _hashImpl) : BFSPrecompiled(_hashImpl)
 {
-    name2Selector[FILE_SYSTEM_METHOD_MK_SHARD] = getFuncSelector(FILE_SYSTEM_METHOD_MK_SHARD, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_LINK_SHARD] = getFuncSelector(FILE_SYSTEM_METHOD_LINK_SHARD, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_MK_SHARD] =
+        getFuncSelector(FILE_SYSTEM_METHOD_MK_SHARD, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_LINK_SHARD] =
+        getFuncSelector(FILE_SYSTEM_METHOD_LINK_SHARD, _hashImpl);
     name2Selector[FILE_SYSTEM_SET_CONTRACT_SHARD_INTERNAL] =
         getFuncSelector(FILE_SYSTEM_SET_CONTRACT_SHARD_INTERNAL, _hashImpl);
-    name2Selector[FILE_SYSTEM_GET_CONTRACT_SHARD] = getFuncSelector(FILE_SYSTEM_GET_CONTRACT_SHARD, _hashImpl);
+    name2Selector[FILE_SYSTEM_GET_CONTRACT_SHARD] =
+        getFuncSelector(FILE_SYSTEM_GET_CONTRACT_SHARD, _hashImpl);
     name2Selector[FILE_SYSTEM_GET_CONTRACT_SHARD_INTERNAL] =
         getFuncSelector(FILE_SYSTEM_GET_CONTRACT_SHARD_INTERNAL, _hashImpl);
 }
 
-inline bool isFromThisOrSDK(PrecompiledExecResult::Ptr _callParameters, const std::string& thisAddress)
+inline bool isFromThisOrSDK(
+    PrecompiledExecResult::Ptr _callParameters, const std::string& thisAddress)
 {
-    return _callParameters->m_origin == _callParameters->m_sender || _callParameters->m_sender == thisAddress ||
-           _callParameters->m_staticCall;
+    return _callParameters->m_origin == _callParameters->m_sender ||
+           _callParameters->m_sender == thisAddress || _callParameters->m_staticCall;
     // return true;  // TODO: remove this test code
 }
 
 std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive, PrecompiledExecResult::Ptr _callParameters)
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters)
 {
     auto blockContext = _executive->blockContext().lock();
     if (!isFromThisOrSDK(_callParameters, getThisAddress(blockContext->isWasm())))
     {
-        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("call: request should only call from SDK")
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled")
+                                 << LOG_DESC("call: request should only call from SDK")
                                  << LOG_KV("origin", _callParameters->m_origin)
                                  << LOG_KV("sender", _callParameters->m_sender);
         auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
@@ -108,7 +115,8 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
 }
 
 
-void ShardingPrecompiled::makeShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+void ShardingPrecompiled::makeShard(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 
 {
@@ -121,7 +129,8 @@ void ShardingPrecompiled::makeShard(const std::shared_ptr<executor::TransactionE
     if (shardName.find("/") != std::string::npos)
     {
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled")
-                                 << LOG_DESC("makeShard: Shard name should not be a path, please check")
+                                 << LOG_DESC(
+                                        "makeShard: Shard name should not be a path, please check")
                                  << LOG_KV("shardName", shardName);
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_TYPE)));
         return;
@@ -135,7 +144,8 @@ void ShardingPrecompiled::makeShard(const std::shared_ptr<executor::TransactionE
     BFSPrecompiled::makeDirImpl(absolutePath, _executive, _callParameters);
 }
 
-void ShardingPrecompiled::linkShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+void ShardingPrecompiled::linkShard(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     // linkShard(string,string,string)
@@ -152,7 +162,8 @@ void ShardingPrecompiled::linkShard(const std::shared_ptr<executor::TransactionE
     if (shardName.find("/") != std::string::npos)
     {
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled")
-                                 << LOG_DESC("linkShard: Shard name should not be a path, please check")
+                                 << LOG_DESC(
+                                        "linkShard: Shard name should not be a path, please check")
                                  << LOG_KV("shardName", shardName);
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_TYPE)));
         return;
@@ -160,7 +171,8 @@ void ShardingPrecompiled::linkShard(const std::shared_ptr<executor::TransactionE
 
     if (!checkContractAddressValid(blockContext->isWasm(), contractAddress))
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("linkShard: invalid contract address")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardPrecompiled")
+                               << LOG_DESC("linkShard: invalid contract address")
                                << LOG_KV("contractAddress", contractAddress);
 
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
@@ -174,7 +186,8 @@ void ShardingPrecompiled::linkShard(const std::shared_ptr<executor::TransactionE
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardPrecompiled")
                                << LOG_DESC("linkShard: contract has already belongs to a shard")
-                               << LOG_KV("contractAddress", contractAddress) << LOG_KV("historyShard", historyShard);
+                               << LOG_KV("contractAddress", contractAddress)
+                               << LOG_KV("historyShard", historyShard);
 
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_ALREADY_EXIST)));
         return;
@@ -197,12 +210,15 @@ void ShardingPrecompiled::linkShard(const std::shared_ptr<executor::TransactionE
                           << LOG_KV("contractAddress", contractAddress)
                           << LOG_KV("contractAbiSize", contractAbi.size());
 
-    setContractShard(_executive, contractAddress, shardName, _callParameters);  // will throw exception if failed
+    setContractShard(
+        _executive, contractAddress, shardName, _callParameters);  // will throw exception if failed
 
-    BFSPrecompiled::linkImpl(absolutePath, contractAddress, contractAbi, _executive, _callParameters);
+    BFSPrecompiled::linkImpl(
+        absolutePath, contractAddress, contractAbi, _executive, _callParameters);
 }
 
-void ShardingPrecompiled::getContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+void ShardingPrecompiled::getContractShard(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr const& _callParameters)
 {
     // (errorCode, shardName) = getContractShard(string)
@@ -222,25 +238,29 @@ void ShardingPrecompiled::getContractShard(const std::shared_ptr<executor::Trans
                                << LOG_DESC("getContractShard: invalid contract address")
                                << LOG_KV("contractAddress", contractAddress);
 
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH), ""));
+        _callParameters->setExecResult(
+            codec.encode(int32_t(CODE_FILE_INVALID_PATH), std::string()));
         return;
     }
 
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("ShardPrecompiled")
-                           << "getContractShard internalCall request" << LOG_KV("contractAddress", contractAddress);
+                           << "getContractShard internalCall request"
+                           << LOG_KV("contractAddress", contractAddress);
     // externalRequest
     bytes params = codec.encodeWithSig(FILE_SYSTEM_GET_CONTRACT_SHARD_INTERNAL, contractAddress);
     auto thisAddress = std::string(getThisAddress(blockContext->isWasm()));
     auto internalCallParams = codec.encode(thisAddress, params);
 
-    auto response = externalRequest(_executive, ref(internalCallParams), _callParameters->m_origin, thisAddress,
-        contractAddress, _callParameters->m_staticCall, false, _callParameters->m_gasLeft, true);
+    auto response = externalRequest(_executive, ref(internalCallParams), _callParameters->m_origin,
+        thisAddress, contractAddress, _callParameters->m_staticCall, false,
+        _callParameters->m_gasLeft, true);
 
     _callParameters->setExternalResult(std::move(response));
 }
 
 
-void ShardingPrecompiled::handleGetContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+void ShardingPrecompiled::handleGetContractShard(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr const& _callParameters)
 {
     // getContractShard(string)
@@ -255,7 +275,8 @@ void ShardingPrecompiled::handleGetContractShard(const std::shared_ptr<executor:
     }
 
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("ShardPrecompiled")
-                           << "handleGetContractShard" << LOG_KV("contractAddress", contractAddress);
+                           << "handleGetContractShard"
+                           << LOG_KV("contractAddress", contractAddress);
 
     auto tableName = getContractTableName(BFSPrecompiled::getLinkRootDir(), contractAddress);
 
@@ -264,28 +285,32 @@ void ShardingPrecompiled::handleGetContractShard(const std::shared_ptr<executor:
 }
 
 // only for internal call
-void ShardingPrecompiled::setContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+void ShardingPrecompiled::setContractShard(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string_view& contractAddress, const std::string_view& shardName,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     auto blockContext = _executive->blockContext().lock();
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("ShardPrecompiled")
-                          << "setContractShard internalCall request" << LOG_KV("contractAddress", contractAddress)
+                          << "setContractShard internalCall request"
+                          << LOG_KV("contractAddress", contractAddress)
                           << LOG_KV("shardName", shardName);
     // externalRequest
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
 
-    bytes params = codec.encodeWithSig(
-        FILE_SYSTEM_SET_CONTRACT_SHARD_INTERNAL, std::string(contractAddress), std::string(shardName));
+    bytes params = codec.encodeWithSig(FILE_SYSTEM_SET_CONTRACT_SHARD_INTERNAL,
+        std::string(contractAddress), std::string(shardName));
     auto thisAddress = std::string(getThisAddress(blockContext->isWasm()));
     auto internalCallParams = codec.encode(thisAddress, params);
 
-    auto response = externalRequest(_executive, ref(internalCallParams), _callParameters->m_origin, thisAddress,
-        contractAddress, _callParameters->m_staticCall, false, _callParameters->m_gasLeft, true);
+    auto response = externalRequest(_executive, ref(internalCallParams), _callParameters->m_origin,
+        thisAddress, contractAddress, _callParameters->m_staticCall, false,
+        _callParameters->m_gasLeft, true);
 
     _callParameters->setExternalResult(std::move(response));
 }
-void ShardingPrecompiled::handleSetContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+void ShardingPrecompiled::handleSetContractShard(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr const& _callParameters)
 {
     // setContractShard(string,string)
@@ -304,7 +329,8 @@ void ShardingPrecompiled::handleSetContractShard(const std::shared_ptr<executor:
 }
 
 std::string ShardingPrecompiled::getContractAbi(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string_view& contractAddress)
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const std::string_view& contractAddress)
 {
     auto& storage = _executive->storage();
     auto tableName = getContractTableName(BFSPrecompiled::getLinkRootDir(), contractAddress);
@@ -313,7 +339,8 @@ std::string ShardingPrecompiled::getContractAbi(
 
     if (!table)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled") << "getContractAbi: contract table not found"
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled")
+                               << "getContractAbi: contract table not found"
                                << LOG_KV("tableName", tableName);
         return {};
     }
@@ -322,21 +349,24 @@ std::string ShardingPrecompiled::getContractAbi(
     auto codeEntry = storage.getRow(tableName, ACCOUNT_CODE_HASH);
     auto codeHash = codeEntry->getField(0);
 
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ShardingPrecompiled") << "getContractAbi" << LOG_KV("tableName", tableName)
-                           << LOG_KV("codeHash", toHex(codeHash));
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ShardingPrecompiled") << "getContractAbi"
+                           << LOG_KV("tableName", tableName) << LOG_KV("codeHash", toHex(codeHash));
 
 
     auto abiEntry = storage.getRow(bcos::ledger::SYS_CONTRACT_ABI, toHex(codeHash));
 
     if (!abiEntry)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled") << "getContractAbi: contract abi not found"
-                               << LOG_KV("tableName", tableName) << LOG_KV("codeHash", toHex(codeHash));
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled")
+                               << "getContractAbi: contract abi not found"
+                               << LOG_KV("tableName", tableName)
+                               << LOG_KV("codeHash", toHex(codeHash));
         return {};
     }
     std::string abi = std::string(abiEntry->getField(0));
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled") << "getContractAbi" << LOG_KV("tableName", tableName)
-                           << LOG_KV("codeHash", toHex(codeHash)) << LOG_KV("abi.size()", abi.size());
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled") << "getContractAbi"
+                           << LOG_KV("tableName", tableName) << LOG_KV("codeHash", toHex(codeHash))
+                           << LOG_KV("abi.size()", abi.size());
 
 
     return abi;
@@ -345,7 +375,8 @@ std::string ShardingPrecompiled::getContractAbi(
 bool ShardingPrecompiled::checkPathPrefixValid(
     const std::string_view& path, uint32_t blockVersion, const std::string_view& type)
 {
-    if (blockVersion >= (uint32_t)(bcos::protocol::BlockVersion::V3_3_VERSION) && path.starts_with(USER_SHARD_PREFIX))
+    if (blockVersion >= (uint32_t)(bcos::protocol::BlockVersion::V3_3_VERSION) &&
+        path.starts_with(USER_SHARD_PREFIX))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled")
                                << LOG_DESC("touch " + std::string(USER_SHARD_PREFIX) + " file")
@@ -355,9 +386,10 @@ bool ShardingPrecompiled::checkPathPrefixValid(
 
     if (!BFSPrecompiled::checkPathPrefixValid(path, blockVersion, type))
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled")
-                               << LOG_DESC("only support touch file under the system dir /apps/, /tables/, /shards/")
-                               << LOG_KV("absolutePath", path) << LOG_KV("type", type);
+        PRECOMPILED_LOG(DEBUG)
+            << LOG_BADGE("ShardingPrecompiled")
+            << LOG_DESC("only support touch file under the system dir /apps/, /tables/, /shards/")
+            << LOG_KV("absolutePath", path) << LOG_KV("type", type);
         return false;
     }
     return true;
