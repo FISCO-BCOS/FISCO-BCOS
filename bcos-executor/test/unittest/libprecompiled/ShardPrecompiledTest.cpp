@@ -43,8 +43,7 @@ public:
     {
         setIsWasm(_isWasm, false, true, version);
         bfsAddress = _isWasm ? precompiled::BFS_NAME : BFS_ADDRESS;
-        shardingPrecompiledAddress =
-            _isWasm ? precompiled::SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS;
+        shardingPrecompiledAddress = _isWasm ? precompiled::SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS;
         tableAddress = _isWasm ? precompiled::KV_TABLE_NAME : KV_TABLE_ADDRESS;
         tableTestAddress1 = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
         tableTestAddress2 = Address("0x420f853b49838bd3e9466c85a4cc3428c9601234").hex();
@@ -136,9 +135,8 @@ public:
         // --------------------------------
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-        executor->dmcExecuteTransaction(
-            std::move(params), [&](bcos::Error::UniquePtr&& error,
-                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(std::move(params),
+            [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise.set_value(std::move(result));
             });
@@ -155,13 +153,12 @@ public:
         BOOST_CHECK_EQUAL(result->from(), address);
     }
 
-    ExecutionMessage::UniquePtr creatKVTable(protocol::BlockNumber _number,
-        const std::string& tableName, const std::string& key, const std::string& value,
-        const std::string& solidityAddress, int _errorCode = 0, bool errorInTableManager = false)
+    ExecutionMessage::UniquePtr creatKVTable(protocol::BlockNumber _number, const std::string& tableName,
+        const std::string& key, const std::string& value, const std::string& solidityAddress, int _errorCode = 0,
+        bool errorInTableManager = false)
     {
         nextBlock(_number, m_blockVersion);
-        bytes in =
-            codec->encodeWithSig("createKVTable(string,string,string)", tableName, key, value);
+        bytes in = codec->encodeWithSig("createKVTable(string,string,string)", tableName, key, value);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -181,8 +178,8 @@ public:
 
         // call precompiled
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
@@ -204,8 +201,8 @@ public:
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
             });
@@ -214,8 +211,8 @@ public:
         result3->setSeq(1002);
         // external call bfs
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->dmcExecuteTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result3), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
@@ -225,8 +222,8 @@ public:
         result4->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise5;
-        executor->dmcExecuteTransaction(std::move(result4),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result4), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise5.set_value(std::move(result));
             });
@@ -236,8 +233,8 @@ public:
         result5->setSeq(1000);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise6;
-        executor->dmcExecuteTransaction(std::move(result5),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result5), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise6.set_value(std::move(result));
             });
@@ -251,8 +248,8 @@ public:
         return result6;
     };
 
-    ExecutionMessage::UniquePtr makeShard(protocol::BlockNumber _number,
-        std::string const& shardName, int _errorCode = 0, bool errorInPrecompiled = false)
+    ExecutionMessage::UniquePtr makeShard(protocol::BlockNumber _number, std::string const& shardName,
+        int _errorCode = 0, bool errorInPrecompiled = false)
     {
         bytes in = codec->encodeWithSig("makeShard(string)", shardName);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
@@ -274,8 +271,8 @@ public:
         nextBlock(_number, m_blockVersion);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
@@ -288,8 +285,8 @@ public:
         // call precompiled
         result2->setSeq(1001);
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
             });
@@ -297,8 +294,8 @@ public:
 
         result3->setSeq(1000);
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->dmcExecuteTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result3), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
@@ -320,8 +317,8 @@ public:
         return result4;
     };
 
-    ExecutionMessage::UniquePtr mkdir(protocol::BlockNumber _number, std::string const& path,
-        int _errorCode = 0, bool errorInPrecompiled = false)
+    ExecutionMessage::UniquePtr mkdir(
+        protocol::BlockNumber _number, std::string const& path, int _errorCode = 0, bool errorInPrecompiled = false)
     {
         bytes in = codec->encodeWithSig("mkdir(string)", path);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
@@ -343,8 +340,8 @@ public:
         nextBlock(_number, m_blockVersion);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
@@ -357,8 +354,8 @@ public:
         // call precompiled
         result2->setSeq(1001);
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
             });
@@ -366,8 +363,8 @@ public:
 
         result3->setSeq(1000);
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->dmcExecuteTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result3), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
@@ -390,9 +387,9 @@ public:
     };
 
 
-    ExecutionMessage::UniquePtr linkShard([[maybe_unused]] bool _isWasm,
-        protocol::BlockNumber _number, std::string const& name, std::string const& address,
-        std::string const& abi, int _errorCode = 0, bool _isCover = false)
+    ExecutionMessage::UniquePtr linkShard([[maybe_unused]] bool _isWasm, protocol::BlockNumber _number,
+        std::string const& name, std::string const& address, std::string const& abi, int _errorCode = 0,
+        bool _isCover = false)
     {
         bytes in;
 
@@ -418,8 +415,8 @@ public:
 
         // linkShard
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
@@ -442,8 +439,8 @@ public:
 
         // touch
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
             });
@@ -453,8 +450,8 @@ public:
 
         // linkShard ret
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->dmcExecuteTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result3), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
@@ -463,8 +460,8 @@ public:
 
         // internalCall
         std::promise<ExecutionMessage::UniquePtr> executePromise5;
-        executor->dmcExecuteTransaction(std::move(result4),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result4), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise5.set_value(std::move(result));
             });
@@ -473,8 +470,8 @@ public:
 
         // internalCall ret
         std::promise<ExecutionMessage::UniquePtr> executePromise6;
-        executor->dmcExecuteTransaction(std::move(result5),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result5), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise6.set_value(std::move(result));
             });
@@ -513,8 +510,8 @@ public:
 
         // getContractShard
         std::promise<ExecutionMessage::UniquePtr> executePromise1;
-        executor->dmcExecuteTransaction(std::move(params1),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params1), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise1.set_value(std::move(result));
             });
@@ -523,8 +520,8 @@ public:
 
         // getShardInternal
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
             });
@@ -533,8 +530,8 @@ public:
 
         // getShardInternal ret
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->dmcExecuteTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result3), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
@@ -542,7 +539,11 @@ public:
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(int32_t(_errorCode), ""));
+            s256 codeCmp;
+            std::string msg;
+            codec->decode(result4->data(), codeCmp, msg);
+            BOOST_CHECK_EQUAL(codeCmp, s256(int32_t(_errorCode)));
+            BOOST_CHECK_EQUAL(msg, "");
         }
 
         commitBlock(_number);
@@ -550,8 +551,8 @@ public:
     };
 
     ExecutionMessage::UniquePtr link([[maybe_unused]] bool _isWasm, protocol::BlockNumber _number,
-        std::string const& name, std::string const& version, std::string const& address,
-        std::string const& abi, int _errorCode = 0, bool _isCover = false)
+        std::string const& name, std::string const& version, std::string const& address, std::string const& abi,
+        int _errorCode = 0, bool _isCover = false)
     {
         bytes in;
         if (version.empty())
@@ -560,8 +561,7 @@ public:
         }
         else
         {
-            in = codec->encodeWithSig(
-                "link(string,string,string,string)", name, version, address, abi);
+            in = codec->encodeWithSig("link(string,string,string,string)", name, version, address, abi);
         }
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -582,8 +582,8 @@ public:
         nextBlock(_number, m_blockVersion);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
@@ -605,8 +605,8 @@ public:
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
             });
@@ -615,8 +615,8 @@ public:
         result3->setSeq(1000);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->dmcExecuteTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result3), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
@@ -631,8 +631,7 @@ public:
         return result4;
     };
 
-    ExecutionMessage::UniquePtr readlink(
-        protocol::BlockNumber _number, std::string const& _path, int _errorCode = 0)
+    ExecutionMessage::UniquePtr readlink(protocol::BlockNumber _number, std::string const& _path, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("readlink(string)", _path);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
@@ -654,8 +653,8 @@ public:
         nextBlock(_number, m_blockVersion);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
@@ -674,8 +673,8 @@ public:
     {
         bytes in = codec->encodeWithSig("rebuildBfs(uint256,uint256)", from, to);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
-        Address newSender = Address(isWasm ? std::string(precompiled::SYS_CONFIG_NAME) :
-                                             std::string(precompiled::SYS_CONFIG_ADDRESS));
+        Address newSender =
+            Address(isWasm ? std::string(precompiled::SYS_CONFIG_NAME) : std::string(precompiled::SYS_CONFIG_ADDRESS));
         tx->forceSender(newSender.asBytes());
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -695,8 +694,8 @@ public:
         nextBlock(_number, m_blockVersion);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
@@ -713,8 +712,8 @@ public:
     ExecutionMessage::UniquePtr rebuildBfsBySysConfig(
         protocol::BlockNumber _number, std::string version, int _errorCode = 0)
     {
-        bytes in = codec->encodeWithSig("setValueByKey(string,string)",
-            std::string(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), version);
+        bytes in = codec->encodeWithSig(
+            "setValueByKey(string,string)", std::string(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), version);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         Address newSender = Address(std::string(precompiled::AUTH_COMMITTEE_ADDRESS));
         tx->forceSender(newSender.asBytes());
@@ -736,8 +735,8 @@ public:
         nextBlock(_number, m_blockVersion);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
@@ -747,8 +746,8 @@ public:
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
             });
@@ -758,8 +757,8 @@ public:
         result3->setSeq(1000);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->dmcExecuteTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(result3), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
@@ -774,11 +773,10 @@ public:
         return result4;
     };
 
-    ExecutionMessage::UniquePtr listPage(protocol::BlockNumber _number, std::string const& path,
-        uint32_t offset, uint32_t count, int _errorCode = 0)
+    ExecutionMessage::UniquePtr listPage(
+        protocol::BlockNumber _number, std::string const& path, uint32_t offset, uint32_t count, int _errorCode = 0)
     {
-        bytes in =
-            codec->encodeWithSig("list(string,uint256,uint256)", path, u256(offset), u256(count));
+        bytes in = codec->encodeWithSig("list(string,uint256,uint256)", path, u256(offset), u256(count));
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -798,8 +796,8 @@ public:
         nextBlock(_number, m_blockVersion);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+        executor->dmcExecuteTransaction(
+            std::move(params2), [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
@@ -976,8 +974,8 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
     // error link shard
     {
         std::string errorShardName = "hello/world";
-        auto result = linkShard(false, number++, errorShardName, addressString, contractAbi,
-            CODE_FILE_INVALID_TYPE, true);
+        auto result =
+            linkShard(false, number++, errorShardName, addressString, contractAbi, CODE_FILE_INVALID_TYPE, true);
         s256 code;
         codec->decode(result->data(), code);
         BOOST_TEST(code == (int)CODE_FILE_INVALID_TYPE);
