@@ -31,8 +31,7 @@ public:
             auto& record = *it;
             if (record.value)
             {
-                co_await Storage::write(
-                    storage2::single(record.key), storage2::single(*record.value));
+                co_await Storage::write(storage2::single(record.key), storage2::single(*record.value));
             }
             else
             {
@@ -68,8 +67,7 @@ public:
             }
         }
 
-        co_return co_await Storage::write(
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
+        co_return co_await Storage::write(std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
     }
 
     auto remove(RANGES::input_range auto const& keys)

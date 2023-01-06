@@ -14,14 +14,13 @@
 #include <forward_list>
 #include <functional>
 #include <mutex>
-#include <range/v3/view/transform.hpp>
 #include <set>
 #include <thread>
 #include <type_traits>
 #include <utility>
 #include <variant>
 
-namespace bcos::storage2::concurrent_storage
+namespace bcos::storage2::memory_storage
 {
 
 template <class Object>
@@ -35,7 +34,7 @@ concept HasMemberSize = requires(Object object)
 using Empty = std::monostate;
 
 template <class KeyType, class ValueType = Empty, bool ordered = false, bool concurrent = false, bool mru = false>
-class ConcurrentStorage
+class MemoryStorage
 {
 private:
     constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets for concurrent, enough?
@@ -125,9 +124,9 @@ private:
     }
 
 public:
-    ConcurrentStorage(unsigned buckets = 0) requires(!concurrent) {}
+    MemoryStorage(unsigned buckets = 0) requires(!concurrent) {}
 
-    ConcurrentStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(concurrent)
+    MemoryStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(concurrent)
       : m_buckets(std::min(buckets, getBucketSize()))
     {}
 
@@ -136,7 +135,7 @@ public:
     class ReadIterator
     {
     public:
-        friend class ConcurrentStorage;
+        friend class MemoryStorage;
         using Key = const KeyType&;
         using Value = const ValueType&;
 
@@ -171,7 +170,7 @@ public:
     class SeekIterator
     {
     public:
-        friend class ConcurrentStorage;
+        friend class MemoryStorage;
         using Key = const KeyType&;
         using Value = const ValueType&;
 
@@ -329,4 +328,4 @@ public:
     }
 };
 
-}  // namespace bcos::storage2::concurrent_storage
+}  // namespace bcos::storage2::memory_storage

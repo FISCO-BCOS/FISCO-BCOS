@@ -1,9 +1,8 @@
 #include "../bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include <bcos-framework/storage2/ConcurrentStorage.h>
+#include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -20,8 +19,7 @@ BOOST_AUTO_TEST_CASE(rollback)
 {
     task::syncWait([]() -> task::Task<void> {
         string_pool::StringPool<> pool;
-        Rollbackable<concurrent_storage::ConcurrentStorage<StateKey, StateValue, true>>
-            rollbackableStorage;
+        Rollbackable<memory_storage::MemoryStorage<StateKey, StateValue, true>> rollbackableStorage;
 
         const auto* tableID = pool.add("table1");
         auto point = rollbackableStorage.current();
@@ -49,8 +47,7 @@ BOOST_AUTO_TEST_CASE(rollback)
         co_await rollbackableStorage.rollback(point);
 
         // Query again
-        std::vector<StateKey> keys2{
-            StateKey{tableID, "Key1"}, StateKey{pool.add("table1"), "Key2"}};
+        std::vector<StateKey> keys2{StateKey{tableID, "Key1"}, StateKey{pool.add("table1"), "Key2"}};
         auto it2 = co_await rollbackableStorage.read(keys2);
         auto count2 = 0;
         while (co_await it2.next())

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ConcurrentStorage.h"
+#include "MemoryStorage.h"
 #include <bcos-utilities/Error.h>
 #include <boost/functional/hash.hpp>
 #include <boost/static_string.hpp>
@@ -53,7 +53,7 @@ class StringPool
 {
 private:
     using StringType = boost::static_string<stringLength>;
-    concurrent_storage::ConcurrentStorage<StringType> m_storage;
+    memory_storage::MemoryStorage<StringType> m_storage;
 
 public:
     using StringID = const StringType*;
@@ -79,7 +79,7 @@ public:
             }
 
             it.release();
-            m_storage.write(single(StringType(str.begin(), str.end())), single(concurrent_storage::Empty{}));
+            m_storage.write(single(StringType(str.begin(), str.end())), single(memory_storage::Empty{}));
         }
     }
 };
