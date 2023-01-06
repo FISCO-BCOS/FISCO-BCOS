@@ -435,20 +435,23 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                     "The group " + std::string(groupID) + " does not exist!"));
             }
 
-            auto isWasm = groupInfo->wasm();
-            auto transactionData = decodeData(data);
-            auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
-                bcos::ref(transactionData), false);
-
-            RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
-                                << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
-            auto start = utcSteadyTime();
-            auto sendTxTimeout = self->m_sendTxTimeout;
-            std::string extraData = std::string(transaction->extraData());
-
+    
             Json::Value jResp;
             try
             {
+                auto isWasm = groupInfo->wasm();
+                auto transactionData = decodeData(data);
+                auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
+                    bcos::ref(transactionData), false, true);
+                
+                if (c_fileLogLevel <= TRACE)
+                {
+                    RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
+                        << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
+                }
+    
+                std::string extraData = std::string(transaction->extraData());
+                auto start = utcSteadyTime();
                 co_await txpool->broadcastPushTransaction(*transaction);
                 auto submitResult = co_await txpool->submitTransaction(transaction);
 
