@@ -46,5 +46,17 @@ private:
     {
         return !entry ? false : entry->getField(0).starts_with(INHERENT_PREFIX);
     }
+
+    static inline std::string_view removePrefix(const std::string_view& data, const std::string_view& prefix)
+    {
+        if (data.starts_with(prefix))
+        {
+            return data.substr(prefix.length(), data.length() - prefix.length());
+        }
+        else
+        {
+            return data;
+        }
+    }
 };
 }  // namespace bcos::precompiled
