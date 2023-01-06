@@ -991,17 +991,16 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
         BOOST_CHECK_EQUAL("", shardCmp);
     }
 
-    /*
-        // invalid contract address
-        {
-            auto shardInfo = getContractShard(number++, "kkkkk", CODE_FILE_INVALID_PATH);
-            s256 code;
-            std::string shardCmp;
-            codec->decode(shardInfo->data(), code, shardCmp);
-            BOOST_CHECK_EQUAL(code, s256(int(CODE_FILE_INVALID_PATH)));
-            BOOST_CHECK_EQUAL("", shardCmp);
-        }
-        */
+
+    // invalid contract address
+    {
+        auto shardInfo = getContractShard(number++, "kkkkk", CODE_FILE_INVALID_PATH);
+        s256 code;
+        std::string shardCmp;
+        codec->decode(shardInfo->data(), code, shardCmp);
+        BOOST_CHECK_EQUAL(code, s256(int(CODE_FILE_INVALID_PATH)));
+        BOOST_CHECK_EQUAL("", shardCmp);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

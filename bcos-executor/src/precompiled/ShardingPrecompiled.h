@@ -30,7 +30,8 @@ public:
     using Ptr = std::shared_ptr<ShardingPrecompiled>;
     ShardingPrecompiled(crypto::Hash::Ptr _hashImpl);
     ~ShardingPrecompiled() override = default;
-    std::shared_ptr<PrecompiledExecResult> call(std::shared_ptr<executor::TransactionExecutive> _executive,
+    std::shared_ptr<PrecompiledExecResult> call(
+        std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
@@ -56,5 +57,8 @@ private:
     }
 
     std::string_view getLinkRootDir() override { return executor::USER_SHARD_PREFIX; }
+
+    bool checkPathPrefixValid(
+        const std::string_view& path, uint32_t blockVersion, const std::string_view& type) override;
 };
 }  // namespace bcos::precompiled
