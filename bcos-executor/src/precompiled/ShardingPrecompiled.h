@@ -42,7 +42,7 @@ private:
     void getContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
     void handleGetContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters);  // only for internal call
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     void setContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string_view& contractAddress, const std::string_view& shardName,
@@ -50,6 +50,10 @@ private:
     void handleSetContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);  // only for internal call
 
+    std::string getContractAbi(
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string_view& contractTableName);
+
+private:
     const char* getThisAddress(bool _isWasm) override
     {
         return _isWasm ? SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS;

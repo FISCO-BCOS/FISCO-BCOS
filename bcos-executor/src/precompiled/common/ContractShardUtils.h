@@ -29,8 +29,8 @@ static const std::string_view INHERENT_PREFIX = "inherent:";
 class ContractShardUtils
 {
 public:
-    static void setContractShard(bcos::storage::StorageWrapper& storage,
-        const std::string_view& contractTableName, const std::string_view& shard);
+    static void setContractShard(bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName,
+        const std::string_view& shard);
     static std::string getContractShard(
         bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName);
     static void setContractShardByParent(bcos::storage::StorageWrapper& storage,
@@ -39,8 +39,8 @@ public:
 private:
     static std::optional<bcos::storage::Entry> getShard(
         bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName);
-    static void setShard(bcos::storage::StorageWrapper& storage,
-        const std::string_view& contractTableName, const std::string_view& shard);
+    static void setShard(bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName,
+        const std::string_view& shard);
 
     static bool isInherent(std::optional<bcos::storage::Entry> entry)
     {

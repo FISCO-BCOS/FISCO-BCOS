@@ -388,12 +388,11 @@ public:
 
 
     ExecutionMessage::UniquePtr linkShard([[maybe_unused]] bool _isWasm, protocol::BlockNumber _number,
-        std::string const& name, std::string const& address, std::string const& abi, int _errorCode = 0,
-        bool _isCover = false)
+        std::string const& name, std::string const& address, int _errorCode = 0, bool _isCover = false)
     {
         bytes in;
 
-        in = codec->encodeWithSig("linkShard(string,string,string)", name, address, abi);
+        in = codec->encodeWithSig("linkShard(string,string)", name, address);
 
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -955,7 +954,7 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
 
     // simple link shard
     {
-        linkShard(false, number++, shardName, addressString, contractAbi);
+        linkShard(false, number++, shardName, addressString);
         auto result = list(number++, "/shards/" + shardName);
         s256 code;
         std::vector<BfsTuple> ls;
@@ -974,8 +973,7 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
     // error link shard
     {
         std::string errorShardName = "hello/world";
-        auto result =
-            linkShard(false, number++, errorShardName, addressString, contractAbi, CODE_FILE_INVALID_TYPE, true);
+        auto result = linkShard(false, number++, errorShardName, addressString, CODE_FILE_INVALID_TYPE, true);
         s256 code;
         codec->decode(result->data(), code);
         BOOST_TEST(code == (int)CODE_FILE_INVALID_TYPE);
