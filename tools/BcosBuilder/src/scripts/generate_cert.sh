@@ -837,36 +837,22 @@ generate_multi_nodes_private_key()
 }
 
 modify_node_ca_setting(){
-    dir_must_not_exists "${modify_node_path}/conf/mulCaPath"
+    dir_must_not_exists "${modify_node_path}/conf/multiCaPath"
     file_must_exists "${multi_ca_path}"
-    mkdir ${modify_node_path}/conf/mulCaPath 2>/dev/null
-    cp ${multi_ca_path} ${modify_node_path}/conf/mulCaPath/${1}.0 2>/dev/null
-    sed -i "s/; mul_ca_path=mulCaPath/mul_ca_path=mulCaPath/g" ${modify_node_path}/config.ini
+    mkdir ${modify_node_path}/conf/multiCaPath 2>/dev/null
+    cp ${multi_ca_path} ${modify_node_path}/conf/multiCaPath/${1}.0 2>/dev/null
+    sed -i "s/; mul_ca_path=multiCaPath/mul_ca_path=multiCaPath/g" ${modify_node_path}/config.ini
 
     LOG_INFO "Modify node ca setting success"
-}
-
-modify_sm_node_ca_setting(){
-    dir_must_not_exists "${modify_node_path}/conf/sm_mulCaPath"
-    file_must_exists "${multi_ca_path}"
-    mkdir ${modify_node_path}/conf/sm_mulCaPath 2>/dev/null
-    cp ${multi_ca_path} ${modify_node_path}/conf/sm_mulCaPath/${1}.0 2>/dev/null
-    sed -i "s/; sm_mul_ca_path=sm_mulCaPath/sm_mul_ca_path=sm_mulCaPath/g" ${modify_node_path}/config.ini
-
-    LOG_INFO "Modify sm node ca setting success"
 }
 
 modify_multiple_ca_node(){
     check_and_install_tassl
     subject_hash=`${OPENSSL_CMD} x509 -hash -noout -in ${multi_ca_path} 2>/dev/null`
     if [[ ! "${multi_ca_path}" || ! "${modify_node_path}" ]];then
-        LOG_FATAL "multi_ca_path/modify_node_path must not be empty!"
+        LOG_FATAL "multi_ca_path and modify_node_path are required!"
     fi
-    if [ ${sm_mode} == "false" ]; then
-        modify_node_ca_setting "${subject_hash}"
-    else
-        modify_sm_node_ca_setting "${subject_hash}"
-    fi
+    modify_node_ca_setting "${subject_hash}"
 }
 
 main() {

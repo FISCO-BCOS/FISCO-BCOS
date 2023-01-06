@@ -570,7 +570,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:v:i:I:M:k:zwDLshmn:ARa:N:u:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:ARa:N:u:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -1248,7 +1248,7 @@ generate_config_ini() {
     ; the node certificate file
     node_cert=ssl.crt
     ; directory the multiple certificates located in
-    ; mul_ca_path=mulCaPath
+    multi_ca_path=multiCaPath
 
 EOF
     generate_common_ini "${output}"
@@ -1411,7 +1411,7 @@ generate_sm_config_ini() {
     ; the node certificate file
     sm_ennode_cert=sm_enssl.crt
     ; directory the multiple certificates located in
-    ; sm_mul_ca_path=sm_mulCaPath
+    multi_ca_path=multiCaPath
 
 EOF
     generate_common_ini "${output}"
@@ -1984,36 +1984,22 @@ generate_auth_account()
 }
 
 modify_node_ca_setting(){
-    dir_must_not_exists "${modify_node_path}/conf/mulCaPath"
+    dir_must_not_exists "${modify_node_path}/conf/multiCaPath"
     file_must_exists "${multi_ca_path}"
-    mkdir ${modify_node_path}/conf/mulCaPath 2>/dev/null
-    cp ${multi_ca_path} ${modify_node_path}/conf/mulCaPath/${1}.0 2>/dev/null
-    sed -i "s/; mul_ca_path=mulCaPath/mul_ca_path=mulCaPath/g" ${modify_node_path}/config.ini
+    mkdir ${modify_node_path}/conf/multiCaPath 2>/dev/null
+    cp ${multi_ca_path} ${modify_node_path}/conf/multiCaPath/${1}.0 2>/dev/null
+    # sed -i "s/; mul_ca_path=multiCaPath/mul_ca_path=multiCaPath/g" ${modify_node_path}/config.ini
 
     LOG_INFO "Modify node ca setting success"
-}
-
-modify_sm_node_ca_setting(){
-    dir_must_not_exists "${modify_node_path}/conf/sm_mulCaPath"
-    file_must_exists "${multi_ca_path}"
-    mkdir ${modify_node_path}/conf/sm_mulCaPath 2>/dev/null
-    cp ${multi_ca_path} ${modify_node_path}/conf/sm_mulCaPath/${1}.0 2>/dev/null
-    sed -i "s/; sm_mul_ca_path=sm_mulCaPath/sm_mul_ca_path=sm_mulCaPath/g" ${modify_node_path}/config.ini
-
-    LOG_INFO "Modify sm node ca setting success"
 }
 
 modify_multiple_ca_node(){
     check_and_install_tassl
     subject_hash=`${OPENSSL_CMD} x509 -hash -noout -in ${multi_ca_path} 2>/dev/null`
     if [[ ! "${multi_ca_path}" || ! "${modify_node_path}" ]];then
-        LOG_FATAL "multi_ca_path/modify_node_path must not be empty!"
+        LOG_FATAL "multi_ca_path and modify_node_path are required!"
     fi
-    if [ ${sm_mode} == "false" ]; then
-        modify_node_ca_setting "${subject_hash}"
-    else
-        modify_sm_node_ca_setting "${subject_hash}"
-    fi
+    modify_node_ca_setting "${subject_hash}"
 }
 
 main() {

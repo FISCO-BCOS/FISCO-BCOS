@@ -277,12 +277,12 @@ void GatewayConfig::initCertConfig(const boost::property_tree::ptree& _pt)
     std::string caCertFile = m_certPath + "/" + _pt.get<std::string>("cert.ca_cert", "ca.crt");
     std::string nodeCertFile = m_certPath + "/" + _pt.get<std::string>("cert.node_cert", "ssl.crt");
     std::string nodeKeyFile = m_certPath + "/" + _pt.get<std::string>("cert.node_key", "ssl.key");
-    std::string mulCaPath =
-        m_certPath + "/" + _pt.get<std::string>("cert.mul_ca_path", "mulCaPath");
+    std::string multiCaPath =
+        m_certPath + "/" + _pt.get<std::string>("cert.multi_ca_path", "multiCaPath");
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initCertConfig") << LOG_KV("ca_path", m_certPath)
                              << LOG_KV("ca_cert", caCertFile) << LOG_KV("node_cert", nodeCertFile)
-                             << LOG_KV("node_key", nodeKeyFile) << LOG_KV("mul_ca_path", mulCaPath);
+                             << LOG_KV("node_key", nodeKeyFile) << LOG_KV("mul_ca_path", multiCaPath);
 
     checkFileExist(caCertFile);
     checkFileExist(nodeCertFile);
@@ -292,14 +292,14 @@ void GatewayConfig::initCertConfig(const boost::property_tree::ptree& _pt)
     certConfig.caCert = caCertFile;
     certConfig.nodeCert = nodeCertFile;
     certConfig.nodeKey = nodeKeyFile;
-    certConfig.mulCaPath = mulCaPath;
+    certConfig.multiCaPath = multiCaPath;
 
     m_certConfig = certConfig;
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initCertConfig") << LOG_KV("ca", certConfig.caCert)
                              << LOG_KV("node_cert", certConfig.nodeCert)
                              << LOG_KV("node_key", certConfig.nodeKey)
-                             << LOG_KV("mul_ca_path", certConfig.mulCaPath);
+                             << LOG_KV("mul_ca_path", certConfig.multiCaPath);
 }
 
 // loads sm ca configuration items from the configuration file
@@ -335,8 +335,8 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
         m_certPath + "/" + _pt.get<std::string>("cert.sm_ennode_cert", "sm_enssl.crt");
     std::string smEnNodeKeyFile =
         m_certPath + "/" + _pt.get<std::string>("cert.sm_ennode_key", "sm_enssl.key");
-    std::string smMulCaPath =
-        m_certPath + "/" + _pt.get<std::string>("cert.sm_mul_ca_path", "sm_mulCaPath");
+    std::string multiCaPath =
+        m_certPath + "/" + _pt.get<std::string>("cert.multi_ca_path", "multiCaPath");
 
     checkFileExist(smCaCertFile);
     checkFileExist(smNodeCertFile);
@@ -350,7 +350,7 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
     smCertConfig.nodeKey = smNodeKeyFile;
     smCertConfig.enNodeCert = smEnNodeCertFile;
     smCertConfig.enNodeKey = smEnNodeKeyFile;
-    smCertConfig.mulCaPath = smMulCaPath;
+    smCertConfig.multiCaPath = multiCaPath;
 
     m_smCertConfig = smCertConfig;
 
@@ -360,7 +360,7 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("sm_node_key", smCertConfig.nodeKey)
                              << LOG_KV("sm_ennode_cert", smCertConfig.enNodeCert)
                              << LOG_KV("sm_ennode_key", smCertConfig.enNodeKey)
-                             << LOG_KV("sm_mul_ca_path", smCertConfig.mulCaPath);
+                             << LOG_KV("multi_ca_path", smCertConfig.multiCaPath);
 }
 
 // loads rate limit configuration items from the configuration file

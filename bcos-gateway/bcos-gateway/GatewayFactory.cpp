@@ -294,7 +294,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     sslContext->add_certificate_authority(
         boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
 
-    std::string caPath = _certConfig.mulCaPath;
+    std::string caPath = _certConfig.multiCaPath;
     if (!caPath.empty())
     {
         sslContext->add_verify_path(caPath);
@@ -410,7 +410,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     sslContext->add_certificate_authority(
         boost::asio::const_buffer(caContent->data(), caContent->size()));
 
-    std::string caPath = _smCertConfig.mulCaPath;
+    std::string caPath = _smCertConfig.multiCaPath;
     if (!caPath.empty())
     {
         sslContext->add_verify_path(caPath);
