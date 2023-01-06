@@ -58,7 +58,8 @@ ShardingPrecompiled::ShardingPrecompiled(crypto::Hash::Ptr _hashImpl) : BFSPreco
 
 inline bool isFromThisOrSDK(PrecompiledExecResult::Ptr _callParameters, const std::string& thisAddress)
 {
-    return _callParameters->m_origin == _callParameters->m_sender || _callParameters->m_sender == thisAddress;
+    return _callParameters->m_origin == _callParameters->m_sender || _callParameters->m_sender == thisAddress ||
+           _callParameters->m_staticCall;
 }
 
 std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
