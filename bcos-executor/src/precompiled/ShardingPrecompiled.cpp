@@ -179,7 +179,7 @@ void ShardingPrecompiled::getContractShard(const std::shared_ptr<executor::Trans
                                << LOG_DESC("getContractShard: invalid contract address")
                                << LOG_KV("contractAddress", contractAddress);
 
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH), ""));
         return;
     }
 
