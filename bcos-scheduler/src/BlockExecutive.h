@@ -11,6 +11,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/TransactionMetaData.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/BlockFactory.h>
@@ -152,6 +153,8 @@ protected:
         ContextID contextID, bcos::protocol::Transaction::ConstPtr tx);
     void buildExecutivesFromMetaData();
     void buildExecutivesFromNormalTransaction();
+
+    bcos::storage::TransactionalStorageInterface::Ptr getStorage();
 
     virtual void serialPrepareExecutor();
     bcos::protocol::TransactionsPtr fetchBlockTxsFromTxPool(

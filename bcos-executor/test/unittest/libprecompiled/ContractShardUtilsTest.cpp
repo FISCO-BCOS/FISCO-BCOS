@@ -18,7 +18,7 @@
  * @date 2023-01-03
  */
 
-#include "precompiled/common/ContractShardUtils.h"
+#include "bcos-table/src/ContractShardUtils.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-tool/VersionConverter.h>

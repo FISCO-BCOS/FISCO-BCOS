@@ -22,7 +22,7 @@
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "common/ContractShardUtils.h"
+#include "bcos-table/src/ContractShardUtils.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tool/BfsFileFactory.h>

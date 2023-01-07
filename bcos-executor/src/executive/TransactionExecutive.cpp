@@ -21,7 +21,6 @@
 
 #include "TransactionExecutive.h"
 #include "../precompiled/BFSPrecompiled.h"
-#include "../precompiled/common/ContractShardUtils.h"
 #include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
@@ -31,6 +30,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+#include "bcos-table/src/ContractShardUtils.h"
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -412,7 +412,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         {
             auto parentTableName =
                 getContractTableName(callParameters->senderAddress, blockContext->isWasm());
-            precompiled::ContractShardUtils::setContractShardByParent(
+            storage::ContractShardUtils::setContractShardByParent(
                 *m_storageWrapper, parentTableName, tableName);
         }
     }

@@ -3,10 +3,10 @@
 //
 
 #include "ShardingTransactionExecutive.h"
-#include "../precompiled/common/ContractShardUtils.h"
+#include "bcos-table/src/ContractShardUtils.h"
 
 using namespace bcos::executor;
-using namespace bcos::precompiled;
+using namespace bcos::storage;
 
 
 ShardingTransactionExecutive::ShardingTransactionExecutive(std::weak_ptr<BlockContext> blockContext,
