@@ -439,8 +439,9 @@ public:
         }
 
         result2->setSeq(1001);
+        result2->setKeyLocks({});
 
-        // touch
+        // setContractShard
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -451,7 +452,7 @@ public:
 
         result3->setSeq(1000);
 
-        // linkShard ret
+        // setContractShard ret
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -461,7 +462,7 @@ public:
         auto result4 = executePromise4.get_future().get();
         result4->setSeq(1001);
 
-        // internalCall
+        // touch
         std::promise<ExecutionMessage::UniquePtr> executePromise5;
         executor->dmcExecuteTransaction(std::move(result4),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
@@ -471,7 +472,7 @@ public:
         auto result5 = executePromise5.get_future().get();
         result5->setSeq(1000);
 
-        // internalCall ret
+        // touch ret
         std::promise<ExecutionMessage::UniquePtr> executePromise6;
         executor->dmcExecuteTransaction(std::move(result5),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
