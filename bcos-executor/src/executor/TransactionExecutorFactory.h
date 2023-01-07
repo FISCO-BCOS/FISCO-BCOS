@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "ShardingExecutor.h"
 #include "TransactionExecutor.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
@@ -54,7 +55,7 @@ public:
                 ledger::FS_USER_TABLE,
                 storage::StorageInterface::SYS_TABLES,
             });
-        return std::make_shared<TransactionExecutor>(ledger, txpool, cachedStorage, backendStorage,
+        return std::make_shared<ShardingExecutor>(ledger, txpool, cachedStorage, backendStorage,
             executionMessageFactory, hashImpl, isWasm, isAuthCheck, keyPageSize,
             keyPageIgnoreTables, name);
     }
@@ -91,7 +92,7 @@ public:
 
     TransactionExecutor::Ptr build()
     {
-        auto executor = std::make_shared<TransactionExecutor>(m_ledger, m_txpool,
+        auto executor = std::make_shared<ShardingExecutor>(m_ledger, m_txpool,
             m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
             m_executionMessageFactory, m_hashImpl, m_isWasm, m_isAuthCheck, m_keyPageSize,
             m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));

@@ -21,6 +21,7 @@
 
 #include "ExecutiveFactory.h"
 #include "CoroutineTransactionExecutive.h"
+#include "ShardingTransactionExecutive.h"
 #include "TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
@@ -31,11 +32,16 @@ using namespace bcos::executor;
 using namespace bcos::precompiled;
 
 
-std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
-    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine)
+std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(const std::string& _contractAddress,
+    int64_t contextID, int64_t seq, bool useCoroutine, bool isSharding)
 {
     std::shared_ptr<TransactionExecutive> executive;
-    if (useCoroutine)
+    if (isSharding)
+    {
+        executive = std::make_shared<ShardingTransactionExecutive>(
+            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+    }
+    else if (useCoroutine)
     {
         executive = std::make_shared<CoroutineTransactionExecutive>(
             m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
