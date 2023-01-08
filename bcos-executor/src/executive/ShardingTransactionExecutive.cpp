@@ -16,6 +16,13 @@ ShardingTransactionExecutive::ShardingTransactionExecutive(std::weak_ptr<BlockCo
         std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector)
 {}
 
+CallParameters::UniquePtr ShardingTransactionExecutive::start(CallParameters::UniquePtr input)
+{
+    auto ret = CoroutineTransactionExecutive::start(std::move(input));
+    ret->contextID = contextID();
+    ret->seq = seq();
+    return ret;
+}
 
 CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
     CallParameters::UniquePtr input)
@@ -30,6 +37,10 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
     // TODO: remove this log
     EXECUTIVE_LOG(INFO) << LOG_BADGE("Sharding")
                         << "ShardingTransactionExecutive externalCall: " << input->toFullString();
+
+    // set DMC contextID and seq
+    input->contextID = contextID();
+    input->seq = seq();
 
     if (!std::empty(input->receiveAddress))
     {

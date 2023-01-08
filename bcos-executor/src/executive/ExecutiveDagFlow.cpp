@@ -4,7 +4,7 @@
 
 #include "ExecutiveDagFlow.h"
 using namespace bcos::executor;
-
+/*
 std::shared_ptr<TransactionExecutive> ExecutiveDagFlow::buildExecutive(
     CallParameters::UniquePtr& input)
 {
@@ -12,3 +12,4 @@ std::shared_ptr<TransactionExecutive> ExecutiveDagFlow::buildExecutive(
     return m_executiveFactory->build(
         input->codeAddress, input->contextID, input->seq, true, isSharding);
 }
+ */

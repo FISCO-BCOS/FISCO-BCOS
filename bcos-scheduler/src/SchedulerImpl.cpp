@@ -151,7 +151,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     auto requestBlockNumber = block->blockHeader()->number();
     try
     {
-        fetchGasLimit(requestBlockNumber);
+        fetchConfig(requestBlockNumber);
     }
     catch (std::exception& e)
     {
@@ -498,7 +498,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                         m_blocks->pop_front();
                     }
                 }
-                fetchGasLimit();
+                fetchConfig();
                 commitLock->unlock();
                 callback(BCOS_ERROR_UNIQUE_PTR(
                              error->errorCode(), "CommitBlock error: " + error->errorMessage()),
@@ -548,6 +548,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 {
                     m_gasLimit = std::get<0>(gasNumber);
                 }
+
+                m_blockVersion = ledgerConfig->compatibilityVersion();
 
                 if (blockExecutive->isSysBlock())
                 {
@@ -634,6 +636,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     block->blockHeader()->setNumber(blockNumber);
     block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
     block->appendTransaction(std::move(tx));
+    block->blockHeader()->setVersion(m_blockVersion);
 
     // Create temp executive
 
@@ -827,7 +830,7 @@ void SchedulerImpl::preExecuteBlock(
         // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this, 0,
         //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
         //     verify);
-        fetchGasLimit();
+        fetchConfig();
         blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
             m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
 
@@ -1016,4 +1019,69 @@ bcos::protocol::BlockNumber SchedulerImpl::getCurrentBlockNumber()
         return getBlockNumberFromStorage();
     }
     return m_blocks->front()->number() - 1;
+}
+
+void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
+{
+    if (m_gasLimit > 0 && m_blockVersion > 0)
+    {
+        return;
+    }
+    SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
+                        << LOG_KV("requestBlockNumber", _number);
+    if (_number == -1)
+    {
+        std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> numberPromise;
+        m_ledger->asyncGetBlockNumber(
+            [&numberPromise](Error::Ptr _error, protocol::BlockNumber _number) {
+                numberPromise.set_value(std::make_tuple(std::move(_error), _number));
+            });
+        Error::Ptr error;
+        std::tie(error, _number) = numberPromise.get_future().get();
+        if (error)
+        {
+            return;
+        }
+    }
+
+    {
+        std::promise<std::tuple<Error::Ptr, std::string>> p;
+        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
+            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
+                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
+                return;
+            });
+        auto [e, value] = p.get_future().get();
+        if (e)
+        {
+            SCHEDULER_LOG(WARNING)
+                << BLOCK_NUMBER(_number) << LOG_DESC("fetchGasLimit failed")
+                << LOG_KV("code", e->errorCode()) << LOG_KV("message", e->errorMessage());
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
+        }
+
+        // cast must be success
+        m_gasLimit = boost::lexical_cast<uint64_t>(value);
+    }
+    {
+        std::promise<std::tuple<Error::Ptr, std::string>> p;
+        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION,
+            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
+                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
+                return;
+            });
+        auto [e, value] = p.get_future().get();
+        if (e)
+        {
+            SCHEDULER_LOG(WARNING)
+                << BLOCK_NUMBER(_number) << LOG_DESC("fetchCompatibilityVersion failed")
+                << LOG_KV("code", e->errorCode()) << LOG_KV("message", e->errorMessage());
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(SchedulerError::InvalidBlockVersion, e->errorMessage()));
+        }
+
+        // cast must be success
+        m_blockVersion = bcos::tool::toVersionNumber(value);
+    }
 }

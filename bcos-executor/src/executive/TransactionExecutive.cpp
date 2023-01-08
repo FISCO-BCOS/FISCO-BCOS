@@ -410,10 +410,14 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
 
         if (blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_3_VERSION))
         {
-            auto parentTableName =
-                getContractTableName(callParameters->senderAddress, blockContext->isWasm());
-            storage::ContractShardUtils::setContractShardByParent(
-                *m_storageWrapper, parentTableName, tableName);
+            if (callParameters->origin != callParameters->senderAddress)
+            {
+                // should contract create contract
+                auto parentTableName =
+                    getContractTableName(callParameters->senderAddress, blockContext->isWasm());
+                storage::ContractShardUtils::setContractShardByParent(
+                    *m_storageWrapper, parentTableName, tableName);
+            }
         }
     }
     catch (exception const& e)

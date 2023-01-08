@@ -108,48 +108,7 @@ public:
 
     ExecutorManager::Ptr executorManager() { return m_executorManager; }
 
-    inline void fetchGasLimit(protocol::BlockNumber _number = -1)
-    {
-        if (m_gasLimit > 0)
-        {
-            return;
-        }
-        SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
-                            << LOG_KV("requestBlockNumber", _number);
-        if (_number == -1)
-        {
-            std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> numberPromise;
-            m_ledger->asyncGetBlockNumber(
-                [&numberPromise](Error::Ptr _error, protocol::BlockNumber _number) {
-                    numberPromise.set_value(std::make_tuple(std::move(_error), _number));
-                });
-            Error::Ptr error;
-            std::tie(error, _number) = numberPromise.get_future().get();
-            if (error)
-            {
-                return;
-            }
-        }
-
-        std::promise<std::tuple<Error::Ptr, std::string>> p;
-        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
-                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
-                return;
-            });
-        auto [e, value] = p.get_future().get();
-        if (e)
-        {
-            SCHEDULER_LOG(WARNING)
-                << BLOCK_NUMBER(_number) << LOG_DESC("fetchGasLimit failed")
-                << LOG_KV("code", e->errorCode()) << LOG_KV("message", e->errorMessage());
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
-        }
-
-        // cast must be success
-        m_gasLimit = boost::lexical_cast<uint64_t>(value);
-    }
+    void fetchConfig(protocol::BlockNumber _number = -1);
 
     int64_t getSchedulerTermId() { return m_schedulerTermId; }
 
@@ -238,6 +197,7 @@ private:
     std::atomic_int64_t m_calledContextID = 1;
 
     uint64_t m_gasLimit = 0;
+    uint32_t m_blockVersion = 0;
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;

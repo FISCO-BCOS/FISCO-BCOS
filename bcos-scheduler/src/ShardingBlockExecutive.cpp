@@ -4,6 +4,8 @@
 
 #include "ShardingBlockExecutive.h"
 #include "SchedulerImpl.h"
+#include "ShardingDmcExecutor.h"
+#include <bcos-table/src/KeyPageStorage.h>
 
 using namespace bcos::scheduler;
 using namespace bcos::storage;
@@ -13,8 +15,22 @@ std::shared_ptr<DmcExecutor> ShardingBlockExecutive::registerAndGetDmcExecutor(
     std::string contractAddress)
 {
     auto shardName = getContractShard(contractAddress);
-    return BlockExecutive::registerAndGetDmcExecutor(shardName);
+    auto dmcExecutor = BlockExecutive::registerAndGetDmcExecutor(shardName);
+    dmcExecutor->setIsSameAddrHandler(
+        [this](const std::string_view& addr, const std::string_view& shard) {
+            return getContractShard(std::string(addr)) == shard;
+        });
+    return dmcExecutor;
 };
+
+DmcExecutor::Ptr ShardingBlockExecutive::buildDmcExecutor(const std::string& name,
+    const std::string& contractAddress,
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
+{
+    auto dmcExecutor = std::make_shared<ShardingDmcExecutor>(
+        name, contractAddress, m_block, executor, m_keyLocks, m_hashImpl, m_dmcRecorder);
+    return dmcExecutor;
+}
 
 inline std::string getContractTableName(const std::string_view& _address)
 {
@@ -38,9 +54,16 @@ inline std::string getContractTableName(const std::string_view& _address)
 
 std::string ShardingBlockExecutive::getContractShard(const std::string& contractAddress)
 {
+    if (contractAddress.length() == 0)
+    {
+        return {};
+    }
+
     if (!m_storageWrapper.has_value())
     {
-        auto stateStorage = std::make_shared<StateStorage>(getStorage());
+        auto stateStorage = std::make_shared<bcos::storage::KeyPageStorage>(
+            getStorage(), 10240, m_block->blockHeaderConst()->version(), nullptr, false);
+        // auto stateStorage = std::make_shared<StateStorage>(getStorage());
         auto recorder = std::make_shared<Recoder>();
         m_storageWrapper.emplace(stateStorage, recorder);
     }
@@ -57,11 +80,19 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
             auto tableName = getContractTableName(contractAddress);
             shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
             m_contract2Shard.emplace(contractAddress, shardName);
+
+            DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
+                           << "Update shard cache: " << LOG_KV("contractAddress", contractAddress)
+                           << LOG_KV("shardName", shardName);
         }
         else
         {
             shardName = shard->second;
         }
+    }
+    else
+    {
+        shardName = shard->second;
     }
 
     return shardName;

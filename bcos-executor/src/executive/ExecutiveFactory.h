@@ -51,6 +51,9 @@ public:
         m_blockContext(blockContext),
         m_gasInjector(gasInjector)
     {}
+
+    ExecutiveFactory(){};
+
     virtual ~ExecutiveFactory() = default;
     virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, bool useCoroutine = true, bool isSharding = false);
@@ -65,6 +68,25 @@ private:
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     std::weak_ptr<BlockContext> m_blockContext;
     std::shared_ptr<wasm::GasInjector> m_gasInjector;
+};
+
+class ShardingExecutiveFactory : public ExecutiveFactory
+{
+public:
+    using Ptr = std::shared_ptr<ShardingExecutiveFactory>;
+
+    ShardingExecutiveFactory(ExecutiveFactory::Ptr base) : ExecutiveFactory(), m_backend(base) {}
+    virtual ~ShardingExecutiveFactory() = default;
+
+    std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
+        int64_t contextID, int64_t seq, bool useCoroutine = true, bool isSharding = false) override
+    {
+        isSharding = true;  // must be true
+        return m_backend->build(_contractAddress, contextID, seq, useCoroutine, isSharding);
+    };
+
+private:
+    ExecutiveFactory::Ptr m_backend;
 };
 
 }  // namespace executor

@@ -142,6 +142,9 @@ protected:
     void DMCExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
     virtual std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
+    virtual std::shared_ptr<DmcExecutor> buildDmcExecutor(const std::string& name,
+        const std::string& contractAddress,
+        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor);
     void scheduleExecutive(ExecutiveState::Ptr executiveState);
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(
@@ -157,6 +160,7 @@ protected:
     bcos::storage::TransactionalStorageInterface::Ptr getStorage();
 
     virtual void serialPrepareExecutor();
+
     bcos::protocol::TransactionsPtr fetchBlockTxsFromTxPool(
         bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool);
     std::string preprocessAddress(const std::string_view& address);

@@ -1452,6 +1452,15 @@ void BlockExecutive::batchBlockRollback(
 }
 
 
+DmcExecutor::Ptr BlockExecutive::buildDmcExecutor(const std::string& name,
+    const std::string& contractAddress,
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
+{
+    auto dmcExecutor = std::make_shared<DmcExecutor>(name, contractAddress, m_block, executor,
+        m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder);
+    return dmcExecutor;
+}
+
 DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractAddress)
 {
     {
@@ -1494,8 +1503,7 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             m_dmcRecorder = std::make_shared<DmcStepRecorder>();
         }
 
-        auto dmcExecutor = std::make_shared<DmcExecutor>(executorInfo->name, contractAddress,
-            m_block, executor, m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder);
+        auto dmcExecutor = buildDmcExecutor(executorInfo->name, contractAddress, executor);
         m_dmcExecutors.emplace(contractAddress, dmcExecutor);
 
         // register functions

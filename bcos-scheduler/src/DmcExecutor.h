@@ -63,6 +63,8 @@ public:
         m_dmcRecorder(dmcRecorder)
     {}
 
+    virtual ~DmcExecutor() = default;
+
     void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
     bool prepare();        // return true if has schedule out message
     bool unlockPrepare();  // return true if need to detect deadlock
@@ -95,6 +97,12 @@ public:
         f_onGetCodeEvent = std::move(onGetCodeEvent);
     }
 
+    void setIsSameAddrHandler(
+        std::function<bool(const std::string_view&, const std::string_view&)> isSameAddrFunc)
+    {
+        f_isSameAddr = std::move(isSameAddrFunc);
+    }
+
     void triggerSwitch()
     {
         if (f_onNeedSwitchEvent)
@@ -113,6 +121,19 @@ public:
             });
     }
 
+protected:
+    virtual void executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback);
+
+    virtual void executorExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+
+        // called every time at all tx stop( pause or finish)
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback);
+
 private:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
     void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
@@ -123,7 +144,7 @@ private:
     std::string newEVMAddress(
         const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
 
-private:
+protected:
     std::string m_name;
     std::string m_contractAddress;
     bcos::protocol::Block::Ptr m_block;
@@ -140,6 +161,8 @@ private:
     std::function<void()> f_onNeedSwitchEvent;
     std::function<void(ExecutiveState::Ptr)> f_onSchedulerOut;
     std::function<bcos::bytes(std::string_view)> f_onGetCodeEvent;
+    std::function<bool(const std::string_view&, const std::string_view&)> f_isSameAddr =
+        [](const std::string_view& a, const std::string_view& b) { return a.compare(b) == 0; };
 };
 
 }  // namespace bcos::scheduler

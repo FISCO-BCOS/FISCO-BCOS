@@ -43,9 +43,10 @@ std::optional<bcos::storage::Entry> ContractShardUtils::getShard(
 
     if (!contractTable)
     {
-        CONTRACT_SHARD_LOG(WARNING)
-            << LOG_BADGE("ContractShard") << "getContractShard openTable failed"
-            << LOG_KV("contractTableName", contractTableName);
+        // always happens
+        CONTRACT_SHARD_LOG(TRACE) << LOG_BADGE("ContractShard")
+                                  << "getContractShard openTable failed"
+                                  << LOG_KV("contractTableName", contractTableName);
         return {};
     }
 

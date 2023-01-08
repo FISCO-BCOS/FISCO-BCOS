@@ -21,20 +21,22 @@
 
 #pragma once
 
-#include "ExecutiveSerialFlow.h"
+#include "ExecutiveStackFlow.h"
 namespace bcos::executor
 {
 
-class ExecutiveDagFlow : public ExecutiveSerialFlow
+class ExecutiveDagFlow : public ExecutiveStackFlow
 {
 public:
     using Ptr = std::shared_ptr<ExecutiveDagFlow>;
 
-    ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory) : ExecutiveSerialFlow(executiveFactory)
+    ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory)
+      : ExecutiveStackFlow(std::make_shared<ShardingExecutiveFactory>(executiveFactory))
     {}
     ~ExecutiveDagFlow() override = default;
 
-    std::shared_ptr<TransactionExecutive> buildExecutive(CallParameters::UniquePtr& input) override;
+    // std::shared_ptr<TransactionExecutive> buildExecutive(CallParameters::UniquePtr& input)
+    // override;
 };
 
 

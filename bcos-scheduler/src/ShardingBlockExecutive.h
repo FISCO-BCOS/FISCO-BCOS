@@ -52,6 +52,9 @@ public:
     {}
 
     std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress) override;
+    std::shared_ptr<DmcExecutor> buildDmcExecutor(const std::string& name,
+        const std::string& contractAddress,
+        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) override;
 
 private:
     std::string getContractShard(const std::string& contractAddress);
@@ -59,6 +62,7 @@ private:
     mutable bcos::SharedMutex x_contract2Shard;
 
     std::optional<bcos::storage::StorageWrapper> m_storageWrapper;
-    tbb::concurrent_unordered_map<std::string, std::string> m_contract2Shard;
+    // tbb::concurrent_unordered_map<std::string, std::string> m_contract2Shard;
+    std::map<std::string, std::string> m_contract2Shard;
 };
 }  // namespace bcos::scheduler

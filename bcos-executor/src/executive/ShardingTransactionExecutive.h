@@ -32,6 +32,8 @@ public:
 
     ~ShardingTransactionExecutive() override = default;
 
+    CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;
+
     CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override;
 
     std::string getContractShard(const std::string_view& contractAddress);
