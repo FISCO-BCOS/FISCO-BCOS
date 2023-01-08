@@ -40,7 +40,7 @@ void ShardingExecutor::executeTransactions(std::string contractAddress,
         TransactionExecutor::executeTransactions(
             contractAddress, std::move(inputs), std::move(callback));
     }
-};
+}
 
 std::shared_ptr<ExecutiveFlowInterface> ShardingExecutor::getExecutiveFlow(
     std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine)
@@ -65,4 +65,4 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingExecutor::getExecutiveFlow(
     {
         return TransactionExecutor::getExecutiveFlow(blockContext, codeAddress, useCoroutine);
     }
-};
+}
