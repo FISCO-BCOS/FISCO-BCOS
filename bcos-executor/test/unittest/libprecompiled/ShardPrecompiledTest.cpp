@@ -905,10 +905,10 @@ BOOST_AUTO_TEST_CASE(couldNotMakeShardTest)
     BlockNumber _number = 3;
     // must could not mkShard shard in normal BFS precompiled
     {
-        auto result = mkdir(_number++, "/shards/hello", CODE_FILE_INVALID_PATH, true);
+        auto result = mkdir(_number++, "/shards/hello", CODE_FILE_BUILD_DIR_FAILED, true);
         s256 m;
         codec->decode(result->data(), m);
-        BOOST_TEST(m == (int)CODE_FILE_INVALID_PATH);
+        BOOST_TEST(m == (int)CODE_FILE_BUILD_DIR_FAILED);
     }
 }
 
