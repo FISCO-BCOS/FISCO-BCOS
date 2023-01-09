@@ -30,8 +30,7 @@ class ExecutiveDagFlow : public ExecutiveStackFlow
 public:
     using Ptr = std::shared_ptr<ExecutiveDagFlow>;
 
-    ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory)
-      : ExecutiveStackFlow(std::make_shared<ShardingExecutiveFactory>(executiveFactory))
+    ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory) : ExecutiveStackFlow(executiveFactory)
     {}
     ~ExecutiveDagFlow() override = default;
 

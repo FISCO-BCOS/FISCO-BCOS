@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief The serial transaction execute context without coroutine
+ * @brief Execute transaction context with coroutine
  * @file CoroutineTransactionExecutive.h
  * @author: jimmyshi
  * @date: 2022-07-19
