@@ -30,7 +30,8 @@ public:
     using Ptr = std::shared_ptr<ShardingPrecompiled>;
     ShardingPrecompiled(crypto::Hash::Ptr _hashImpl);
     ~ShardingPrecompiled() override = default;
-    std::shared_ptr<PrecompiledExecResult> call(std::shared_ptr<executor::TransactionExecutive> _executive,
+    std::shared_ptr<PrecompiledExecResult> call(
+        std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
@@ -42,7 +43,7 @@ private:
     void getContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
     void handleGetContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters);  // only for internal call
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     void setContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string_view& contractAddress, const std::string_view& shardName,
@@ -50,11 +51,20 @@ private:
     void handleSetContractShard(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);  // only for internal call
 
+    std::string getContractAbi(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string_view& contractTableName);
+
+private:
     const char* getThisAddress(bool _isWasm) override
     {
         return _isWasm ? SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS;
     }
 
     std::string_view getLinkRootDir() override { return executor::USER_SHARD_PREFIX; }
+
+    bool checkPathPrefixValid(
+        const std::string_view& path, uint32_t blockVersion, const std::string_view& type) override;
+
+    bool checkContractAddressValid(bool isWasm, const std::string& address);
 };
 }  // namespace bcos::precompiled
