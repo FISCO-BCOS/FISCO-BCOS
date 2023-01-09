@@ -20,18 +20,15 @@
 
 
 #include "ContractShardUtils.h"
-#include "../../Common.h"
-#include "Common.h"
-using namespace bcos::precompiled;
+
 using namespace bcos::storage;
-using namespace bcos::executor;
 
 void ContractShardUtils::setContractShard(bcos::storage::StorageWrapper& storage,
     const std::string_view& contractTableName, const std::string_view& shard)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractShard") << "setContractShard "
-                           << LOG_KV("contractTableName", contractTableName)
-                           << LOG_KV("shard", shard);
+    CONTRACT_SHARD_LOG(TRACE) << LOG_BADGE("ContractShard") << "setContractShard "
+                              << LOG_KV("contractTableName", contractTableName)
+                              << LOG_KV("shard", shard);
 
     setShard(storage, contractTableName, std::string(SHARD_ROOT_PREFIX) + std::string(shard));
 }
@@ -39,16 +36,17 @@ void ContractShardUtils::setContractShard(bcos::storage::StorageWrapper& storage
 std::optional<bcos::storage::Entry> ContractShardUtils::getShard(
     bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractShard") << "getContractShard "
-                           << LOG_KV("contractTableName", contractTableName);
+    CONTRACT_SHARD_LOG(TRACE) << LOG_BADGE("ContractShard") << "getContractShard "
+                              << LOG_KV("contractTableName", contractTableName);
 
     auto contractTable = storage.openTable(contractTableName);
 
     if (!contractTable)
     {
-        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ContractShard")
-                                 << "getContractShard openTable failed"
-                                 << LOG_KV("contractTableName", contractTableName);
+        // always happens
+        CONTRACT_SHARD_LOG(TRACE) << LOG_BADGE("ContractShard")
+                                  << "getContractShard openTable failed"
+                                  << LOG_KV("contractTableName", contractTableName);
         return {};
     }
 
@@ -63,11 +61,10 @@ void ContractShardUtils::setShard(bcos::storage::StorageWrapper& storage,
 
     if (!contractTable)
     {
-        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ContractShard") << "setShard openTable failed"
-                                 << LOG_KV("contractTableName", contractTableName)
-                                 << LOG_KV("shard", shard);
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(CODE_INVALID_OPENTABLE_FAILED, "setShard openTable failed"));
+        CONTRACT_SHARD_LOG(WARNING)
+            << LOG_BADGE("ContractShard") << "setShard openTable failed"
+            << LOG_KV("contractTableName", contractTableName) << LOG_KV("shard", shard);
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(TableNotExists, "setShard openTable failed"));
         return;
     }
 
@@ -80,8 +77,8 @@ void ContractShardUtils::setShard(bcos::storage::StorageWrapper& storage,
 std::string ContractShardUtils::getContractShard(
     bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractShard") << "getContractShard "
-                           << LOG_KV("contractTableName", contractTableName);
+    CONTRACT_SHARD_LOG(TRACE) << LOG_BADGE("ContractShard") << "getContractShard "
+                              << LOG_KV("contractTableName", contractTableName);
 
     std::string_view tableName = contractTableName;
     std::optional<bcos::storage::Entry> entry;
@@ -109,14 +106,14 @@ std::string ContractShardUtils::getContractShard(
 void ContractShardUtils::setContractShardByParent(bcos::storage::StorageWrapper& storage,
     const std::string_view& parentTableName, const std::string_view& contractTableName)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractShard") << "setContractShardByParent "
-                           << LOG_KV("contractTableName", contractTableName)
-                           << LOG_KV("parentTableName", parentTableName);
+    CONTRACT_SHARD_LOG(TRACE) << LOG_BADGE("ContractShard") << "setContractShardByParent "
+                              << LOG_KV("contractTableName", contractTableName)
+                              << LOG_KV("parentTableName", parentTableName);
 
 
     if (contractTableName.compare(parentTableName) == 0)
     {
-        PRECOMPILED_LOG(WARNING)
+        CONTRACT_SHARD_LOG(WARNING)
             << LOG_BADGE("ContractShard")
             << "setContractShardByParent failed, could not set shard parent as itself"
             << LOG_KV("contractTableName", contractTableName)

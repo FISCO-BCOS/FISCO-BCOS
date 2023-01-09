@@ -65,7 +65,9 @@ public:
         ExecutiveFlowInterface::stop();
     };
 
-private:
+protected:
+    virtual std::shared_ptr<TransactionExecutive> buildExecutive(CallParameters::UniquePtr& input);
+
     using SerialMap = std::map<int64_t, CallParameters::UniquePtr, std::less<>>;
     using SerialMapPtr = std::shared_ptr<SerialMap>;
 
