@@ -1322,7 +1322,7 @@ void BlockExecutive::batchBlockCommit(
 #else
                 SCHEDULER_LOG(WARNING)
                         << BLOCK_NUMBER(number())
-                        << "Commit scheduler storage error, just return with no rollback" << error->errorMessage()
+                        << "Commit scheduler storage error, just return with no rollback" <<  LOG_KV("message", error->errorMessage())
                         << LOG_KV("rollbackVersion", rollbackVersion);
                 callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
                             "Commit scheduler storage error, just return with no rollback"));

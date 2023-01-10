@@ -24,6 +24,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-table/src/StateStorageFactory.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
@@ -41,7 +42,6 @@
 #include <bcos-framework/storage/Table.h>
 #include <bcos-tars-protocol/testutil/FakeBlock.h>
 #include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
-#include "bcos-table/src/StateStorageFactory.h"
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <libinitializer/AuthInitializer.h>
@@ -348,6 +348,7 @@ public:
         // Create contract
         // --------------------------------
 
+        // deploy CommitteeManager
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
         executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
@@ -371,8 +372,11 @@ public:
 
         auto result2 = executePromise2.get_future().get();
         BOOST_CHECK_EQUAL((int32_t)result2->type(), (int32_t)ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result2->evmStatus(), 0);
+
         result2->setSeq(1000);
         /// callback get deploy committeeManager context
+        /// return checkAuth result to committeeManager
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(
             std::move(result2), [&](bcos::Error::UniquePtr&& error,
@@ -381,7 +385,7 @@ public:
                 executePromise3.set_value(std::move(result));
             });
 
-        // result3 is the contract deploy contract request
+        // result3 is the deploy Committee contract request
         auto result3 = executePromise3.get_future().get();
 
         BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::MESSAGE);
@@ -406,6 +410,9 @@ public:
         auto result4 = executePromise4.get_future().get();
 
         result4->setSeq(1003);
+        BOOST_CHECK_EQUAL(result4->type(), ExecutionMessage::MESSAGE);
+        BOOST_CHECK_EQUAL(result4->evmStatus(), 0);
+
         /// call precompiled to get deploy auth
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise5;
         executor->dmcExecuteTransaction(
@@ -418,7 +425,8 @@ public:
         auto result5 = executePromise5.get_future().get();
 
         result5->setSeq(1002);
-        /// callback get deploy committee context
+        /// callback get deploy committee context, checkAuth of deploy proposalManager
+        /// complete deploy Committee
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise6;
         executor->dmcExecuteTransaction(
             std::move(result5), [&](bcos::Error::UniquePtr&& error,
@@ -428,7 +436,6 @@ public:
             });
 
         auto result6 = executePromise6.get_future().get();
-
         BOOST_CHECK_EQUAL(result6->type(), ExecutionMessage::FINISHED);
         BOOST_CHECK_EQUAL(result6->contextID(), 99);
         BOOST_CHECK_EQUAL(result6->seq(), 1002);
@@ -448,7 +455,7 @@ public:
                 BOOST_CHECK(!error);
                 executePromise7.set_value(std::move(result));
             });
-
+        /// result7 is the request to deploy proposalManager
         auto result7 = executePromise7.get_future().get();
 
         BOOST_CHECK_EQUAL(result7->type(), ExecutionMessage::MESSAGE);
@@ -539,6 +546,7 @@ public:
         auto result13 = executePromise13.get_future().get();
 
         BOOST_CHECK_EQUAL(result13->type(), ExecutionMessage::MESSAGE);
+        BOOST_CHECK_EQUAL(result13->evmStatus(), 0);
         BOOST_CHECK_EQUAL(result13->contextID(), 99);
         BOOST_CHECK_EQUAL(result13->seq(), 1006);
         BOOST_CHECK_EQUAL(result13->create(), false);
