@@ -40,9 +40,9 @@ enum MessageExtFieldFlag : uint32_t
 enum NodeType : uint32_t
 {
     None = 0x0,
+    LIGHT_NODE = 0x1,
     CONSENSUS_NODE = 0x2,
     OBSERVER_NODE = 0x4,
-    LIGHT_NODE = 0x6,
     NODE_OUTSIDE_GROUP = 0x8,
 };
 
