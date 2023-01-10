@@ -252,12 +252,12 @@ public:
             pages = std::make_unique<std::vector<PageInfo>>();
             *pages = *meta.pages;
         }
-        TableMeta& operator=(const TableMeta& t)
+        TableMeta& operator=(const TableMeta& meta)
         {
-            if (this != &t)
+            if (this != &meta)
             {
                 pages = std::make_unique<std::vector<PageInfo>>();
-                *pages = *t.pages;
+                *pages = *meta.pages;
             }
             return *this;
         }
@@ -464,8 +464,8 @@ public:
             os << "]";
             return os;
         }
-        double hitRate() { return hit / (double)getPageInfoCount; }
-        uint64_t rowCount() { return m_rows; }
+        double hitRate() const { return hit / (double)getPageInfoCount; }
+        uint64_t rowCount() const { return m_rows; }
 
     private:
         uint32_t getPageInfoCount = 0;
