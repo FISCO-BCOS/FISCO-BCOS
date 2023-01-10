@@ -31,7 +31,6 @@
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
-#include <bcos-rpc/jsonrpc/DupTestTxJsonRpcImpl_2_0.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -328,11 +327,6 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     auto jsonRpcInterface =
         std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway, _wsService);
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
-    /*/
-        auto jsonRpcInterface =
-            std::make_shared<bcos::rpc::DupTestTxJsonRpcImpl_2_0>(_groupManager, m_gateway,
-       _wsService);
-        //*/
     auto httpServer = _wsService->httpServer();
     if (httpServer)
     {

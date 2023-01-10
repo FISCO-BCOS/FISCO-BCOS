@@ -234,6 +234,8 @@ void bcos::rpc::toJsonResp(
     jResp["groupID"] = std::string(_transactionPtr->groupId());
     // the abi
     jResp["abi"] = std::string(_transactionPtr->abi());
+    // extraData
+    jResp["extraData"] = std::string(_transactionPtr->extraData());
     // the signature
     jResp["signature"] = toHexStringWithPrefix(_transactionPtr->signatureData());
 }
@@ -433,45 +435,38 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                     "The group " + std::string(groupID) + " does not exist!"));
             }
 
-            auto isWasm = groupInfo->wasm();
-            auto transactionData = decodeData(data);
-            auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
-                bcos::ref(transactionData), false);
-
-            RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
-                                << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
-            auto start = utcSteadyTime();
-            auto sendTxTimeout = self->m_sendTxTimeout;
-
+    
             Json::Value jResp;
             try
             {
+                auto isWasm = groupInfo->wasm();
+                auto transactionData = decodeData(data);
+                auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
+                    bcos::ref(transactionData), false, true);
+                
+                if (c_fileLogLevel <= TRACE)
+                {
+                    RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
+                        << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
+                }
+    
+                std::string extraData = std::string(transaction->extraData());
+                auto start = utcSteadyTime();
                 co_await txpool->broadcastPushTransaction(*transaction);
                 auto submitResult = co_await txpool->submitTransaction(transaction);
 
                 auto txHash = submitResult->txHash();
                 auto hexPreTxHash = txHash.hexPrefixed();
+                auto status = submitResult->status();
 
                 auto totalTime = utcSteadyTime() - start;  // ms
-                if (sendTxTimeout > 0 && totalTime > (uint64_t)sendTxTimeout)
-                {
-                    RPC_IMPL_LOG(WARNING)
-                        << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback timeout")
-                        << LOG_KV("hexPreTxHash", hexPreTxHash)
-                        << LOG_KV("requireProof", requireProof) << LOG_KV("txCostTime", totalTime);
-                }
-                else
+                if (c_fileLogLevel <= TRACE)
                 {
                     RPC_IMPL_LOG(TRACE)
                         << LOG_BADGE("sendTransaction") << LOG_DESC("submit callback")
                         << LOG_KV("hexPreTxHash", hexPreTxHash)
+                        << LOG_KV("status", status)
                         << LOG_KV("requireProof", requireProof) << LOG_KV("txCostTime", totalTime);
-                }
-
-                if (submitResult->status() != (int32_t)bcos::protocol::TransactionStatus::None)
-                {
-                    BOOST_THROW_EXCEPTION(bcos::Error(submitResult->status(),
-                        toString((protocol::TransactionStatus)submitResult->status())));
                 }
 
                 toJsonResp(jResp, hexPreTxHash, (protocol::TransactionStatus)submitResult->status(),
@@ -479,6 +474,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                     *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
                 jResp["to"] = submitResult->to();
                 jResp["from"] = toHexStringWithPrefix(submitResult->sender());
+                jResp["extraData"] = extraData;
 
                 // TODO: check if needed
                 // jResp["input"] = toHexStringWithPrefix(transaction->input());
@@ -662,6 +658,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
                     m_jResp["input"] = _jTx["input"];
                     m_jResp["from"] = _jTx["from"];
                     m_jResp["to"] = _jTx["to"];
+                    m_jResp["extraData"] = _jTx["extraData"];
                     m_jResp["transactionProof"] = _jTx["transactionProof"];
 
                     m_respFunc(nullptr, m_jResp);

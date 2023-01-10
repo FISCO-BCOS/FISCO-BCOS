@@ -129,6 +129,13 @@ void PBFTCacheProcessor::addPrePrepareCache(PBFTMessageInterface::Ptr _prePrepar
 
 void PBFTCacheProcessor::notifyMaxProposalIndex(bcos::protocol::BlockNumber _proposalIndex)
 {
+    // Note: should not notifyMaxProposalIndex when timeout-state, in-case of reset the
+    // committedProposalNumber of the sync-module with higher blockNumber than latest block, which
+    // will stop the node to syncing the latest block from other nodes
+    if (m_config->timeout())
+    {
+        return;
+    }
     // notify the consensusing proposal index to the sync module
     if (m_maxNotifyIndex < _proposalIndex)
     {

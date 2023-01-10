@@ -91,9 +91,9 @@ task::Task<void> TxPool::broadcastPushTransaction(const protocol::Transaction& t
 task::Task<void> TxPool::onReceivePushTransaction(
     bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data)
 {
-    auto transaction = m_transactionFactory->createTransaction(data, false);
     try
     {
+        auto transaction = m_transactionFactory->createTransaction(data, false);
         auto submitResult = co_await submitTransaction(std::move(transaction));
     }
     catch (std::exception& e)

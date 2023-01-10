@@ -138,7 +138,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 {
     assert(m_backendStorage);
     m_ledgerCache->fetchCompatibilityVersion();
-    m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
+
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
 #ifdef WITH_WASM
@@ -146,6 +146,32 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 #endif
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
+    setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
+    assert(!m_constantPrecompiled->empty());
+    assert(m_builtInPrecompiled);
+    start();
+}
+
+void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
+{
+    if (m_blockVersion == blockVersion)
+    {
+        return;
+    }
+
+    RecursiveGuard l(x_resetEnvironmentLock);
+    if (m_blockVersion != blockVersion)
+    {
+        m_blockVersion = blockVersion;
+
+        resetEnvironment();  // should not be called concurrently, if called, there's a bug in
+        // caller
+    }
+}
+
+void TransactionExecutor::resetEnvironment()
+{
+    RecursiveGuard l(x_resetEnvironmentLock);
     if (m_isWasm)
     {
         initWasmEnvironment();
@@ -154,9 +180,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     {
         initEvmEnvironment();
     }
-    assert(!m_constantPrecompiled->empty());
-    assert(m_builtInPrecompiled);
-    start();
 }
 
 void TransactionExecutor::initEvmEnvironment()
@@ -367,14 +390,14 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
     {
         auto view = blockHeader->parentInfo();
         auto parentInfoIt = view.begin();
-        EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
-                                << "NextBlockHeader request: "
-                                << LOG_KV("blockVersion", blockHeader->version())
-                                << LOG_KV("schedulerTermId", schedulerTermId)
-                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
-                                                            (*parentInfoIt).blockHash.abridged() :
-                                                            "null");
-        m_blockVersion = blockHeader->version();
+        EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockHeader->number())
+                                 << "NextBlockHeader request: "
+                                 << LOG_KV("blockVersion", blockHeader->version())
+                                 << LOG_KV("schedulerTermId", schedulerTermId)
+                                 << LOG_KV("parentHash", blockHeader->number() > 0 ?
+                                                             (*parentInfoIt).blockHash.abridged() :
+                                                             "null");
+        setBlockVersion(blockHeader->version());
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
             bcos::storage::StateStorageInterface::Ptr stateStorage;
@@ -454,11 +477,11 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 blockHeader->number() - 1, (*parentInfoIt).blockHash);
         }
 
-        EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
-                                << LOG_KV("number", blockHeader->number())
-                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
-                                                            (*parentInfoIt).blockHash.abridged() :
-                                                            "null");
+        EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
+                                 << LOG_KV("number", blockHeader->number())
+                                 << LOG_KV("parentHash", blockHeader->number() > 0 ?
+                                                             (*parentInfoIt).blockHash.abridged() :
+                                                             "null");
         callback(nullptr);
     }
     catch (std::exception& e)
@@ -842,10 +865,10 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
     auto requestTimestamp = utcTime();
     auto txNum = inputs.size();
     auto blockNumber = m_blockContext->number();
-    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockNumber) << "executeTransactionsInternal request"
-                            << LOG_KV("useCoroutine", useCoroutine) << LOG_KV("txNum", txNum)
-                            << LOG_KV("contractAddress", contractAddress)
-                            << LOG_KV("requestTimestamp", requestTimestamp);
+    EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "executeTransactionsInternal request"
+                             << LOG_KV("useCoroutine", useCoroutine) << LOG_KV("txNum", txNum)
+                             << LOG_KV("contractAddress", contractAddress)
+                             << LOG_KV("requestTimestamp", requestTimestamp);
 
     auto callback = [this, useCoroutine, _callback = _callback, requestTimestamp, blockNumber,
                         txNum, contractAddress](bcos::Error::UniquePtr error,
@@ -1701,7 +1724,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 void TransactionExecutor::prepare(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(params.number) << "Prepare request";
+    EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(params.number) << "Prepare request";
 
     if (!m_isRunning)
     {
@@ -1822,8 +1845,8 @@ void TransactionExecutor::commit(
 
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
         m_ledgerCache->fetchCompatibilityVersion();
-        m_blockVersion = m_ledgerCache->ledgerConfig()->compatibilityVersion();
 
+        setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
         removeCommittedState();
 
         callback(nullptr);

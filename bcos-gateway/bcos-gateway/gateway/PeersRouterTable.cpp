@@ -275,14 +275,14 @@ void PeersRouterTable::asyncBroadcastMsg(
         }
     }
     ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable")
-                      << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode") << LOG_KV("type", _type)
-                      << LOG_KV("moduleID", _moduleID)
+                      << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode")
+                      << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
                       << LOG_KV("payloadSize", _msg->payload()->size())
                       << LOG_KV("peersSize", selectedPeers.size());
     for (auto const& peer : selectedPeers)
     {
         ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
-                          << LOG_KV("type", _type) << LOG_KV("moduleID", _moduleID)
+                          << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
                           << LOG_KV("dst", peer);
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }

@@ -456,6 +456,7 @@ std::string PBFTConfig::printCurrentState()
                  << LOG_KV("unsealedTxs", m_unsealedTxsSize.load())
                  << LOG_KV("sealUntil", m_waitSealUntil)
                  << LOG_KV("waitResealUntil", m_waitResealUntil)
+                 << LOG_KV("consensusTimeout", m_consensusTimeout.load())
                  << LOG_KV("nodeId", nodeID()->shortHex());
     return stringstream.str();
 }
