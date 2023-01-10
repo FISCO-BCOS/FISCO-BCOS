@@ -1266,11 +1266,11 @@ void JsonRpcImpl_2_0::gatewayInfoToJson(
     {
         Json::Value item;
         item["group"] = it.first;
-        auto const& nodeIDList = it.second;
+        auto const& nodeIDInfos = it.second;
         Json::Value nodeIDInfo(Json::arrayValue);
-        for (auto const& nodeID : nodeIDList)
+        for (auto const& nodeInfo : nodeIDInfos)
         {
-            nodeIDInfo.append(Json::Value(nodeID));
+            nodeIDInfo.append(Json::Value(nodeInfo.first));
         }
         item["nodeIDList"] = nodeIDInfo;
         groupInfo.append(item);
@@ -1307,15 +1307,15 @@ void JsonRpcImpl_2_0::getGroupPeers(Json::Value& _response, std::string_view _gr
     for (auto const& info : *_peersInfo)
     {
         auto groupNodeIDInfo = info->nodeIDInfo();
-        auto it = groupNodeIDInfo.find(_groupID);
-
-        if (it != groupNodeIDInfo.end())
+        for(auto const& nodeIDInfo : groupNodeIDInfo)
         {
-            auto const& nodeList = it->second;
-            for (auto const& node : nodeList)
+            auto groupID = nodeIDInfo.first;
+            auto nodeInfo = nodeIDInfo.second;
+            for(auto const& peerInfo : nodeInfo)
             {
-                nodeIDList.insert(node);
+                nodeIDList.insert(peerInfo.first);
             }
+
         }
     }
 

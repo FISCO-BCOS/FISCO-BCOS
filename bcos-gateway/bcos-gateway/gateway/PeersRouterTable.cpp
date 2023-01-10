@@ -196,8 +196,13 @@ PeersRouterTable::Group2NodeIDListType PeersRouterTable::peersNodeIDList(
     for (auto const& it : groupNodeInfos)
     {
         auto const& groupNodeIDList = it->nodeIDList();
-        nodeIDList[it->groupID()] =
-            std::set<std::string>(groupNodeIDList.begin(), groupNodeIDList.end());
+        auto const& nodeTypeList = it->nodeTypeList();
+        for(size_t i = 0; i < groupNodeIDList.size(); ++i)
+        {
+            auto nodeID = groupNodeIDList[i];
+            auto nodeType = nodeTypeList[i];
+            nodeIDList[it->groupID()].insert(std::pair<std::string, uint32_t>(nodeID, nodeType));
+        }
     }
     return nodeIDList;
 }
