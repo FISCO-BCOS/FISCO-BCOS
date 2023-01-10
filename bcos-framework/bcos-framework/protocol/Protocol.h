@@ -40,6 +40,7 @@ enum MessageExtFieldFlag : uint32_t
 enum NodeType : uint32_t
 {
     None = 0x0,
+    LIGHT_NODE = 0x1,
     CONSENSUS_NODE = 0x2,
     OBSERVER_NODE = 0x4,
     NODE_OUTSIDE_GROUP = 0x8,
@@ -178,6 +179,9 @@ inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
         break;
     case NodeType::OBSERVER_NODE:
         _out << "OBSERVER_NODE";
+        break;
+    case NodeType::LIGHT_NODE:
+        _out << "LIGHT_NODE";
         break;
     case NodeType::NODE_OUTSIDE_GROUP:
         _out << "NODE_OUTSIDE_GROUP";
