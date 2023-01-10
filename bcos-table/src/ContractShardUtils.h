@@ -21,16 +21,20 @@
 #pragma once
 #include <bcos-table/src/StorageWrapper.h>
 
-namespace bcos::precompiled
+namespace bcos::storage
 {
+#define CONTRACT_SHARD_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("Sharding")
+
 static const std::string_view SHARD_ROOT_PREFIX = "shard:";
 static const std::string_view INHERENT_PREFIX = "inherent:";
+
+static const std::string_view ACCOUNT_SHARD = "shard";
 
 class ContractShardUtils
 {
 public:
-    static void setContractShard(bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName,
-        const std::string_view& shard);
+    static void setContractShard(bcos::storage::StorageWrapper& storage,
+        const std::string_view& contractTableName, const std::string_view& shard);
     static std::string getContractShard(
         bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName);
     static void setContractShardByParent(bcos::storage::StorageWrapper& storage,
@@ -39,12 +43,12 @@ public:
 private:
     static std::optional<bcos::storage::Entry> getShard(
         bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName);
-    static void setShard(bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName,
-        const std::string_view& shard);
+    static void setShard(bcos::storage::StorageWrapper& storage,
+        const std::string_view& contractTableName, const std::string_view& shard);
 
     static bool isInherent(std::optional<bcos::storage::Entry> entry)
     {
         return !entry ? false : entry->getField(0).starts_with(INHERENT_PREFIX);
     }
 };
-}  // namespace bcos::precompiled
+}  // namespace bcos::storage

@@ -22,7 +22,7 @@
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "common/ContractShardUtils.h"
+#include "bcos-table/src/ContractShardUtils.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tool/BfsFileFactory.h>
@@ -193,14 +193,6 @@ void ShardingPrecompiled::linkShard(
         return;
     }
 
-    /*
-        auto contractAbi = getContractAbi(_executive, contractAddress);
-        if (contractAbi.empty())
-        {
-            _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_NOT_EXIST)));
-            return;
-        }
-        */
     std::string contractAbi = "";
 
     std::string absolutePath = shardName + "/" + contractAddress;
@@ -326,50 +318,6 @@ void ShardingPrecompiled::handleSetContractShard(
 
     auto tableName = getContractTableName(BFSPrecompiled::getLinkRootDir(), contractAddress);
     ContractShardUtils::setContractShard(_executive->storage(), tableName, shardName);
-}
-
-std::string ShardingPrecompiled::getContractAbi(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const std::string_view& contractAddress)
-{
-    auto& storage = _executive->storage();
-    auto tableName = getContractTableName(BFSPrecompiled::getLinkRootDir(), contractAddress);
-
-    auto table = storage.openTable(tableName);
-
-    if (!table)
-    {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled")
-                               << "getContractAbi: contract table not found"
-                               << LOG_KV("tableName", tableName);
-        return {};
-    }
-
-    // set abi in abi table
-    auto codeEntry = storage.getRow(tableName, ACCOUNT_CODE_HASH);
-    auto codeHash = codeEntry->getField(0);
-
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ShardingPrecompiled") << "getContractAbi"
-                           << LOG_KV("tableName", tableName) << LOG_KV("codeHash", toHex(codeHash));
-
-
-    auto abiEntry = storage.getRow(bcos::ledger::SYS_CONTRACT_ABI, toHex(codeHash));
-
-    if (!abiEntry)
-    {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled")
-                               << "getContractAbi: contract abi not found"
-                               << LOG_KV("tableName", tableName)
-                               << LOG_KV("codeHash", toHex(codeHash));
-        return {};
-    }
-    std::string abi = std::string(abiEntry->getField(0));
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ShardingPrecompiled") << "getContractAbi"
-                           << LOG_KV("tableName", tableName) << LOG_KV("codeHash", toHex(codeHash))
-                           << LOG_KV("abi.size()", abi.size());
-
-
-    return abi;
 }
 
 bool ShardingPrecompiled::checkPathPrefixValid(

@@ -64,6 +64,12 @@ void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)
     }
 }
 
+std::shared_ptr<TransactionExecutive> ExecutiveSerialFlow::buildExecutive(
+    CallParameters::UniquePtr& input)
+{
+    return m_executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
+}
+
 void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
@@ -98,9 +104,7 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
 
             auto seq = txInput->seq;
             // build executive
-            auto executive = m_executiveFactory->build(
-                txInput->codeAddress, txInput->contextID, txInput->seq, false);
-
+            auto executive = buildExecutive(txInput);
 
             // run evm
             CallParameters::UniquePtr output = executive->start(std::move(txInput));

@@ -202,7 +202,7 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
             << LOG_DESC(
                    "check mkDir params failed, normal BFS operation could not mkdir a shard dir")
             << LOG_KV("absolutePath", absolutePath);
-        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_INVALID_PATH)));
+        _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_BUILD_DIR_FAILED)));
         return;
     }
 
