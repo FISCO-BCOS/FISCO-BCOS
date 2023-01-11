@@ -70,6 +70,7 @@ public:
         return std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>(
             db, [](rocksdb::DB* db) {
                 CancelAllBackgroundWork(db, true);
+                db->Close();
                 delete db;
             });
     }
