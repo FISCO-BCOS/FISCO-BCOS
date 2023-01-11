@@ -200,8 +200,8 @@ PeersRouterTable::Group2NodeIDListType PeersRouterTable::peersNodeIDList(
         for(size_t i = 0; i < groupNodeIDList.size(); ++i)
         {
             auto nodeID = groupNodeIDList[i];
-            nodeIDList[it->groupID()].insert(std::pair(nodeID, bcos::protocol::NodeType::None));
-            if(!nodeTypeList.empty())
+            nodeIDList[it->groupID()][nodeID] = bcos::protocol::NodeType::None;
+            if(!nodeTypeList.empty() && nodeTypeList.size() > i)
             {
                 auto nodeType = nodeTypeList[i];
                 nodeIDList[it->groupID()][nodeID] = nodeType;
