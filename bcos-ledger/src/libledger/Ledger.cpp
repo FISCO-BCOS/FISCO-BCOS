@@ -415,11 +415,11 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
                 receiptsView[i] = std::string_view((char*)receipts[i].data(), receipts[i].size());
             }
         });
-    std::promise<bcos::Error::Ptr> promise;
-    m_threadPool->enqueue([storage = m_storage, &promise, keys = std::move(txsHash),
+    auto promise = std::make_shared<std::promise<bcos::Error::Ptr>>();
+    m_threadPool->enqueue([storage = m_storage, promise, keys = std::move(txsHash),
                               values = std::move(receiptsView)]() mutable {
         auto err = storage->setRows(SYS_HASH_2_RECEIPT, std::move(keys), std::move(values));
-        promise.set_value(err);
+        promise->set_value(err);
     });
     auto txsToStore = std::make_shared<std::vector<bytes>>();
     txsToStore->reserve(txSize);
@@ -469,7 +469,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
             }
         }
     }
-    auto err = promise.get_future().get();
+    auto err = promise->get_future().get();
     if (err)
     {
         LEDGER_LOG(ERROR) << LOG_DESC("ledger write receipts failed")
