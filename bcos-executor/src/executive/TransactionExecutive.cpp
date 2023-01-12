@@ -365,8 +365,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
-    auto newAddress = string(callParameters->codeAddress);
-    auto tableName = getContractTableName(newAddress, blockContext->isWasm());
+    auto tableName = getContractTableName(
+        callParameters->codeAddress, blockContext->isWasm(), blockContext->blockVersion());
     auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
     extraData->abi = std::move(callParameters->abi);
 
@@ -506,7 +506,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
                 callParameters->gas))
         {
             revert();
-            auto buildCallResults = move(callParameters);
+            auto buildCallResults = std::move(callParameters);
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
@@ -532,7 +532,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
                 tableName, callParameters->origin, newAddress, FS_TYPE_LINK, callParameters->gas))
         {
             revert();
-            auto buildCallResults = move(callParameters);
+            auto buildCallResults = std::move(callParameters);
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
@@ -671,7 +671,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
             }
             auto revision = toRevision(hostContext.vmSchedule());
             // the code evm uses to deploy is not runtime code, so create can not use cache
-            auto vm = blockContext->getVMFactory()->create(vmKind, revision, crypto::HashType(), code, true);
+            auto vm = blockContext->getVMFactory()->create(
+                vmKind, revision, crypto::HashType(), code, true);
             auto ret = vm.execute(hostContext, &evmcMessage);
 
             auto callResults = hostContext.takeCallParameters();
@@ -757,7 +758,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                         FS_TYPE_CONTRACT, callResults->gas))
                 {
                     revert();
-                    auto buildCallResults = move(callResults);
+                    auto buildCallResults = std::move(callResults);
                     buildCallResults->type = CallParameters::REVERT;
                     buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
                     buildCallResults->message = "Error occurs in build BFS dir";
