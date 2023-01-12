@@ -99,7 +99,8 @@ public:
 
     /****** init ledger ******/
     bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
-        const std::string_view& _genesisData, std::string const& _compatibilityVersion);
+        const std::string_view& _genesisData, std::string const& _compatibilityVersion,
+        bool isAuthCheck = false);
 
     void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);

@@ -136,7 +136,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 {
     assert(m_backendStorage);
     m_ledgerCache->fetchCompatibilityVersion();
-
+    m_ledgerCache->fetchAuthCheckStatus();
+    m_isAuthCheck = m_isAuthCheck || m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
 #ifdef WITH_WASM
@@ -1855,6 +1856,7 @@ void TransactionExecutor::commit(
         m_ledgerCache->fetchCompatibilityVersion();
 
         setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
+        m_ledgerCache->fetchAuthCheckStatus();
         removeCommittedState();
 
         callback(nullptr);
