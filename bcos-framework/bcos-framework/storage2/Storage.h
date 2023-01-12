@@ -22,10 +22,8 @@ concept SeekIterator = requires(IteratorType iterator)
     typename IteratorType::Key;
     typename IteratorType::Value;
     std::convertible_to<task::AwaitableReturnType<decltype(iterator.next())>, bool>;
-    std::same_as<typename task::AwaitableReturnType<decltype(iterator.key())>,
-        typename IteratorType::Key>;
-    std::same_as<typename task::AwaitableReturnType<decltype(iterator.value())>,
-        typename IteratorType::Value>;
+    std::same_as<typename task::AwaitableReturnType<decltype(iterator.key())>, typename IteratorType::Key>;
+    std::same_as<typename task::AwaitableReturnType<decltype(iterator.value())>, typename IteratorType::Value>;
 };
 
 template <class IteratorType>
@@ -35,14 +33,23 @@ concept ReadIterator = requires(IteratorType iterator)
     std::convertible_to<task::AwaitableReturnType<decltype(iterator.hasValue())>, bool>;
 };
 
-template <class StorageType, class KeyType, class ValueType>
-concept Storage = requires(StorageType&& impl, KeyType&& key)
+template <class StorageType, class KeyType>
+concept ReadableStorage = requires(StorageType&& impl, KeyType&& key)
 {
     ReadIterator<task::AwaitableReturnType<decltype(impl.read(RANGES::any_view<KeyType>()))>>;
-    std::is_void_v<task::AwaitableReturnType<decltype(impl.write(
-        RANGES::any_view<KeyType>(), RANGES::any_view<ValueType>()))>>;
+};
+
+template <class StorageType, class KeyType, class ValueType>
+concept WriteableStorage = requires(StorageType&& impl, KeyType&& key)
+{
+    task::IsAwaitable<decltype(impl.write(RANGES::any_view<KeyType>(), RANGES::any_view<ValueType>()))>;
+    task::IsAwaitable<decltype(impl.remove(RANGES::any_view<KeyType>()))>;
+};
+
+template <class StorageType, class KeyType>
+concept SeekableStorage = requires(StorageType&& impl, KeyType&& key)
+{
     SeekIterator<task::AwaitableReturnType<decltype(impl.seek(key))>>;
-    std::is_void_v<task::AwaitableReturnType<decltype(impl.remove(RANGES::any_view<KeyType>()))>>;
 };
 
 auto single(auto&& value)

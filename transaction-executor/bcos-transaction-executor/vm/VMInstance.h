@@ -30,7 +30,7 @@ namespace bcos::transaction_executor
 struct EVMCResult
 {
 public:
-    EVMCResult() { m_evmcResult.release = nullptr; }
+    EVMCResult() noexcept { m_evmcResult.release = nullptr; }
     ~EVMCResult() noexcept
     {
         if (m_evmcResult.release != nullptr)
@@ -100,12 +100,11 @@ public:
     VMInstance(VMInstance const&) = delete;
     VMInstance& operator=(VMInstance) = delete;
 
-    EVMCResult execute(const struct evmc_host_interface* host, struct evmc_host_context* context,
-        evmc_revision rev, evmc_message* msg, const uint8_t* code, size_t codeSize)
+    EVMCResult execute(const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
+        evmc_message* msg, const uint8_t* code, size_t codeSize)
     {
         EVMCResult evmcResult;
-        evmcResult.m_evmcResult =
-            m_instance->execute(m_instance, host, context, rev, msg, code, codeSize);
+        evmcResult.m_evmcResult = m_instance->execute(m_instance, host, context, rev, msg, code, codeSize);
         return evmcResult;
     }
 

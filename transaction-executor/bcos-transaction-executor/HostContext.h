@@ -21,12 +21,13 @@
 
 #pragma once
 
-#include "../Common.h"
-#include "EVMHostInterface.h"
+#include "Common.h"
+#include "RollbackableStorage.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-framework/storage2/Storage2.h>
+#include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/Concepts.h>
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -45,24 +46,22 @@ evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
     return toEvmC(GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-template <storage2::Storage<storage::Entry> Storage>
+template <StateStorage Storage>
 class HostContext : public evmc_host_context
 {
 public:
     /// Full constructor.
-    HostContext(const protocol::BlockHeader& blockHeader, const evmc_message& message,
-        Storage& storage, std::string tableName,
-        std::function<task::Task<evmc_result>(const evmc_message&)> callMethod,
-        std::function<task::Task<h256>(int64_t)> getBlockHashMethod)
+    HostContext(const protocol::BlockHeader& blockHeader, const evmc_message& message, Storage& storage,
+        TableNameID tableName, std::function<task::Task<h256>(int64_t)> getBlockHashMethod)
       : evmc_host_context(),
         m_message(message),
         m_storage(storage),
-        m_tableName(std::move(tableName)),
-        m_callMethod(std::move(callMethod)),
+        m_myContractTable(tableName),
         m_getBlockHashMethod(std::move(getBlockHashMethod))
     {
         // TODO: Set the interfaces
-        interface = getHostInterface();
+        interface = getHostInterface<decltype(*this)>();
+        wasm_interface = nullptr;
 
         hash_fn = evm_hash_fn;
         // version = m_executive->blockContext().lock()->blockVersion();
@@ -87,11 +86,13 @@ public:
     task::Task<evmc_bytes32> store(const evmc_bytes32* key)
     {
         auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
-        auto entry = co_await m_storage.getRow(m_tableName, keyView);
+        auto it = co_await m_storage.read(storage2::single(StateKey{m_myContractTable, keyView}));
+        co_await it.next();
 
         evmc_bytes32 result;
-        if (entry)
+        if (co_await it.hasValue())
         {
+            auto& entry = co_await it.value();
             auto field = entry->getField(0);
             std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
         }
@@ -99,6 +100,7 @@ public:
         {
             std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
         }
+
         co_return result;
     }
 
@@ -110,22 +112,21 @@ public:
 
         storage::Entry entry;
         entry.set(valueView);
-        co_await m_storage.setRow(m_tableName, keyView, std::move(entry));
+
+        co_await m_storage.write(storage2::single(keyView), storage2::single(entry));
     }
 
     // call
     task::Task<evmc_result> call(const evmc_message& message)
     {
-        auto result = co_await m_callMethod(message);
-
-        // TODO: Store the log
-        co_return result;
+        // TODO: to be done
+        co_return {};
     }
 
-    task::Task<evmc_result> callBuiltInPrecompiled(
-        const evmc_message* message, bool _isEvmPrecompiled)
+    task::Task<evmc_result> callBuiltInPrecompiled(const evmc_message* message, bool _isEvmPrecompiled)
     {
-        //
+        // TODO: to be done
+        co_return {};
     }
 
     task::Task<void> setCode(crypto::HashType codeHash, bytes code)
@@ -133,53 +134,61 @@ public:
         storage::Entry codeHashEntry;
         codeHashEntry.importFields({codeHash});
 
-        storage::Entry codeEntry;
-        codeEntry.importFields({std::move(code)});
-
         if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
         {
             // Query the code table first
-            auto oldCodeEntry =
-                co_await m_storage.getRow(bcos::ledger::SYS_CODE_BINARY, codeHashEntry.get());
-            if (!oldCodeEntry)
+            bool exists = false;
             {
-                co_await m_storage.setRow(
-                    bcos::ledger::SYS_CODE_BINARY, codeHash, std::move(codeEntry));
+                auto codeIt = co_await m_storage.read(storage2::single(StateKey{m_codeTable, codeHashEntry.get()}));
+                co_await codeIt.next();
+                exists = co_await codeIt.hasValue();
             }
-            co_await m_storage.setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+            if (!exists)
+            {
+                storage::Entry codeEntry;
+                codeEntry.importFields({std::move(code)});
+                co_await m_storage.write(
+                    storage2::single(StateKey{m_codeTable, codeHashEntry.get()}), storage2::single(codeEntry));
+            }
+            co_await m_storage.write(
+                storage2::single(StateKey{m_myContractTable, ACCOUNT_CODE_HASH}), storage2::single(codeHashEntry));
 
             co_return;
         }
 
+        storage::Entry codeEntry;
+        codeEntry.importFields({std::move(code)});
         // old logic
-        co_await m_storage.setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
-        co_await m_storage.setRow(m_tableName, ACCOUNT_CODE, std::move(codeEntry));
+        co_await m_storage.write(
+            storage2::single(StateKey{m_myContractTable, ACCOUNT_CODE_HASH}), storage2::single(codeHashEntry));
+        co_await m_storage.write(
+            storage2::single(StateKey{m_myContractTable, ACCOUNT_CODE}), storage2::single(codeEntry));
+        co_return;
     }
 
-    task::Task<void> setCode(bytes code)
-    {
-        co_await setCode(GlobalHashImpl::g_hashImpl->hash(code), std::move(code));
-    }
+    task::Task<void> setCode(bytes code) { co_await setCode(GlobalHashImpl::g_hashImpl->hash(code), std::move(code)); }
 
     task::Task<void> setCodeAndABI(bytes code, std::string abi)
     {
         auto codeHash = GlobalHashImpl::g_hashImpl->hash(code);
+        auto codeHashView = std::string_view((char*)codeHash.data(), codeHash.size());
         co_await setCode(codeHash, std::move(code));
 
         storage::Entry abiEntry;
         abiEntry.importFields({std::move(abi)});
         if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
         {
-            auto oldABIEntry = co_await m_storage.getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
-            if (oldABIEntry)
+            auto abiIt = co_await m_storage.read(storage2::single(StateKey{m_abiTable, codeHashView}));
+            auto exists = co_await abiIt.next();
+            if (!exists)
             {
-                co_await m_storage.setRow(
-                    bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
+                co_await m_storage.write(
+                    m_abiTable, storage2::single(StateKey{m_abiTable, codeHashView}), storage2::single(abiEntry));
             }
-
             co_return;
         }
-        co_await m_storage.setRow(m_tableName, ACCOUNT_ABI, std::move(abiEntry));
+        co_await m_storage.write(
+            storage2::single(StateKey{m_myContractTable, ACCOUNT_ABI}), storage2::single(abiEntry));
     }
 
     task::Task<size_t> codeSizeAt(std::string_view address)
@@ -188,11 +197,13 @@ public:
         {
             // TODO: Check is precompiled
             std::string contractAddress(address);  // TODO: add address prefix
-            auto codeEntry =
-                co_await m_storage.getRow(contractAddress, bcos::ledger::SYS_CODE_BINARY);
-            if (codeEntry)
+            TableNameID contractTableID;
+            auto codeIt = co_await m_storage.read(storage2::single(StateKey{contractTableID, ACCOUNT_CODE}));
+            co_await codeIt.next();
+            if (co_await codeIt.hasValue())
             {
-                co_return codeEntry->length();
+                auto& code = codeIt.value();
+                co_return code.length();
             }
             co_return 0;
         }
@@ -239,37 +250,77 @@ public:
     }
 
     /// Revert any changes made (by any of the other calls).
-    void log(h256s&& _topics, bytesConstRef _data);
+    void log(h256s&& _topics, bytesConstRef _data)
+    {
+        // TODO:
+    }
 
-    /// ------ get interfaces related to HostContext------
-    std::string_view myAddress() const;
-    std::string_view caller() const { return fromEvmC(m_message.sender); }  // no call?
     std::string_view origin() const { return m_origin; }
-    std::string_view codeAddress() const { return m_origin; }  // no call?
-    bytesConstRef data() const { return {m_message.input_data, m_message.input_size}; }
-
-    h256 codeHash() const;
-
-    u256 salt() const { return fromEvmC(m_message.create2_salt); }
-    int64_t gas() const { return m_message.gas; }
+    /// ------ get interfaces related to HostContext------
+    // std::string_view myAddress() const { return storage2::string_pool::query(m_myContractTable); }
+    // std::string_view caller() const { return fromEvmC(m_message.sender); }  // no call?
+    // std::string_view codeAddress() const { return m_origin; }  // no call?
+    // bytesConstRef data() const { return {m_message.input_data, m_message.input_size}; }
+    // h256 codeHash() const;
+    // u256 salt() const { return fromEvmC(m_message.create2_salt); }
+    // int64_t gas() const { return m_message.gas; }
     void suicide()
     {
         if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            suicide(m_tableName);
+            suicide(m_myContractTable);
         }
     }
 
     const evmc_message& getMessage() const { return m_message; }
 
+    task::Task<evmc_result> execute(const evmc_message& message)
+    {
+        // TODO:
+        // 1: Check auth
+        // 2: Check is precompiled
+        // 3. Do something create or call
+
+        // TODO: if revert, rollback the storage and clear the log
+    }
+
+    task::Task<EVMCResult> call(const evmc_message& message)
+    {
+        std::string tableName;  // TODO: calculate the table name
+        Rollbackable rollbackableStorage(m_storage);
+        auto codeEntry = m_storage.getRow(tableName, ACCOUNT_CODE);
+        if (!codeEntry)
+        {
+            BOOST_THROW_EXCEPTION(NotFoundCode{} << bcos::Error::ErrorMessage("Not found contract code: " + tableName));
+        }
+        auto code = codeEntry->get();
+
+        HostContext<decltype(rollbackableStorage)> hostContext(m_blockHeader, message, rollbackableStorage,
+            std::move(tableName), [this](int64_t) -> task::Task<h256> { co_return {}; });
+
+        auto vmInstance = VMFactory::create();
+        auto mode = toRevision(hostContext.vmSchedule());
+
+        auto result = vmInstance.execute(hostContext.interface, &hostContext, mode, &message, code.data(), code.size());
+        if (result.m_evmcResult.status_code != 0)
+        {
+            // TODO: Rollback the state, clear the log
+            rollbackableStorage.rollback();
+        }
+
+        co_return result;
+    }
+
 private:
     const protocol::BlockHeader& m_blockHeader;
     const evmc_message& m_message;
     Storage& m_storage;
-    std::string m_tableName;
+    TableNameID m_myContractTable;
+    TableNameID m_codeTable;
+    TableNameID m_abiTable;
     std::string m_origin;
 
-    std::function<task::Task<evmc_result>(const evmc_message&)> m_callMethod;
+    // std::function<task::Task<evmc_result>(const evmc_message&)> m_callMethod;
     std::function<task::Task<h256>(int64_t)> m_getBlockHashMethod;
 };
 
