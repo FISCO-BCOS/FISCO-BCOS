@@ -35,8 +35,7 @@ concept BlockHeaderData = requires(BlockHeaderDataType blockHeaderData)
     blockHeaderData.receiptRoot;
     blockHeaderData.stateRoot;
     requires BlockNumber<decltype(blockHeaderData.blockNumber)>;
-    requires std::unsigned_integral<decltype(blockHeaderData.gasUsed)>;
-    requires std::unsigned_integral<decltype(blockHeaderData.timestamp)>;
+    requires std::integral<decltype(blockHeaderData.timestamp)>;
     requires std::integral<decltype(blockHeaderData.sealer)>;
     requires RANGES::range<decltype(blockHeaderData.sealerList)>;
     blockHeaderData.extraData;
