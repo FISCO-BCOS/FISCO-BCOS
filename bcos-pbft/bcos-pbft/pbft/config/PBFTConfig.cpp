@@ -461,7 +461,8 @@ std::string PBFTConfig::printCurrentState()
 void PBFTConfig::tryToSyncTxs()
 {
     // should not try to request txs to peer when unsealedTxs > 0
-    if (m_unsealedTxsSize > 0 || m_timer->running())
+    // only the leader need tryToSyncTxs
+    if (m_unsealedTxsSize > 0 || m_timer->running() || getLeader() != nodeIndex())
     {
         return;
     }

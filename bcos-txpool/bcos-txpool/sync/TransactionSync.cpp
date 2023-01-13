@@ -742,7 +742,7 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
 
 void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
 {
-    auto txsHash = m_config->txpoolStorage()->getAllTxsHash();
+    auto txsHash = m_config->txpoolStorage()->getTxsHash(c_MaxResponsedTxsToNodesWithEmptyTxs);
     if (txsHash->empty())
     {
         return;
@@ -768,5 +768,6 @@ void TransactionSync::onEmptyTxs()
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, HashList());
     auto packetData = txsStatus->encode();
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, ref(*packetData));
+        bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
+        ModuleID::TxsSync, ref(*packetData));
 }

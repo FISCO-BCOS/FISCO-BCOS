@@ -54,7 +54,10 @@ public:
         m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>())
     {
         m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
-        m_pullTxsTimer = std::make_shared<PBFTTimer>(consensusTimeout(), "pullTxsTimer");
+        // Note: the pullTxsTimeout must be smaller than consensusTimeout to fetch txs before
+        // viewchange when there has no-synced txs pullTxsTimeout is larger than 3000ms
+        auto pullTxsTimeout = 2000;
+        m_pullTxsTimer = std::make_shared<PBFTTimer>(pullTxsTimeout, "pullTxsTimer");
         m_pullTxsTimer->registerTimeoutHandler([this] { tryToSyncTxs(); });
     }
 
