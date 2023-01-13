@@ -26,7 +26,13 @@ bool DelegateHostContext::setCode(bytes code)
     storage::Entry codeEntry;
     codeEntry.importFields({code});
     m_code = codeEntry;
+    m_codeHash = hashImpl()->hash(code);
     return true;
+}
+
+h256 DelegateHostContext::codeHash()
+{
+    return m_codeHash;
 }
 
 std::string_view DelegateHostContext::caller() const
