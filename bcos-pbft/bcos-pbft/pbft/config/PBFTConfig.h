@@ -54,8 +54,11 @@ public:
         m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>())
     {
         m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
-        m_pullTxsTimer = std::make_shared<PBFTTimer>(consensusTimeout(), "pullTxsTimer");
-        m_pullTxsTimer->registerTimeoutHandler([this] { broadCastEmptyTxsReq(); });
+        // Note: the pullTxsTimeout must be smaller than consensusTimeout to fetch txs before
+        // viewchange when there has no-synced txs pullTxsTimeout is larger than 3000ms
+        auto pullTxsTimeout = 2000;
+        m_pullTxsTimer = std::make_shared<PBFTTimer>(pullTxsTimeout, "pullTxsTimer");
+        m_pullTxsTimer->registerTimeoutHandler([this] { tryToSyncTxs(); });
     }
 
     ~PBFTConfig() override = default;
@@ -380,12 +383,17 @@ public:
 
     void setMinSealTime(int64_t _minSealTime) noexcept { this->m_minSealTime = _minSealTime; }
 
+    void registerTxsStatusSyncHandler(std::function<void()> const& _txsStatusSyncHandler)
+    {
+        m_txsStatusSyncHandler = _txsStatusSyncHandler;
+    }
+
 protected:
     void updateQuorum() override;
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
         size_t _maxTxsToSeal, size_t _retryTime = 0);
 
-    void broadCastEmptyTxsReq();
+    void tryToSyncTxs();
 
 
 protected:
@@ -455,5 +463,8 @@ protected:
     std::function<bool(bcos::crypto::NodeIDPtr)> m_faultyDiscriminator;
 
     mutable RecursiveMutex m_mutex;
+
+    // handler to notify txs status and try to request txs from peers
+    std::function<void()> m_txsStatusSyncHandler;
 };
 }  // namespace bcos::consensus

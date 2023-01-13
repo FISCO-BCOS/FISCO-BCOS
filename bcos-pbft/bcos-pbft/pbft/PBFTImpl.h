@@ -110,6 +110,12 @@ public:
         m_pbftEngine->pbftConfig()->registerSealerResetNotifier(_sealerResetNotifier);
     }
 
+    // handler to broadcast empty-txs status and try to request txs from peers
+    void registerTxsStatusSyncHandler(std::function<void()> const& _txsStatusSyncHandler)
+    {
+        m_pbftEngine->pbftConfig()->registerTxsStatusSyncHandler(_txsStatusSyncHandler);
+    }
+
     ConsensusNodeList consensusNodeList() const override
     {
         return m_pbftEngine->pbftConfig()->consensusNodeList();

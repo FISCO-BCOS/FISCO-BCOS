@@ -19,9 +19,6 @@
  * @date 2021-04-12
  */
 #include "PBFTConfig.h"
-#include "bcos-txpool/sync/interfaces/TxsSyncMsgFactory.h"
-#include "bcos-txpool/sync/protocol/PB/TxsSyncMsgFactoryImpl.h"
-#include "bcos-txpool/sync/utilities/Common.h"
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -461,17 +458,19 @@ std::string PBFTConfig::printCurrentState()
     return stringstream.str();
 }
 
-void PBFTConfig::broadCastEmptyTxsReq()
+void PBFTConfig::tryToSyncTxs()
 {
-    if (m_unsealedTxsSize > 0 || m_timer->running())
+    // should not try to request txs to peer when unsealedTxs > 0
+    // only the leader need tryToSyncTxs
+    if (m_unsealedTxsSize > 0 || m_timer->running() || getLeader() != nodeIndex())
     {
         return;
     }
-    std::unique_ptr<bcos::sync::TxsSyncMsgFactory> syncMsgFactory =
-        std::make_unique<bcos::sync::TxsSyncMsgFactoryImpl>();
-    auto emptyStat = syncMsgFactory->createTxsSyncMsg(
-        sync::TxsSyncPacketType::TxsStatusPacket, bcos::crypto::HashList({}));
-    auto reqData = emptyStat->encode();
-    m_frontService->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, protocol::ModuleID::TxsSync, ref(*reqData));
+    PBFT_LOG(INFO) << LOG_DESC("tryToSyncTxs: try to request unsealing txs from peer")
+                   << printCurrentState();
+
+    if (m_txsStatusSyncHandler)
+    {
+        m_txsStatusSyncHandler();
+    }
 }

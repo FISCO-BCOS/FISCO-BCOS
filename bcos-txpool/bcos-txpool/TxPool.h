@@ -143,6 +143,8 @@ public:
         m_transactionSync->onEmptyTxs();
     }
 
+    void tryToSyncTxsFromPeers() override { m_transactionSync->onEmptyTxs(); }
+
     // for UT
     void setTxPoolStorage(TxPoolStorageInterface::Ptr _txpoolStorage)
     {

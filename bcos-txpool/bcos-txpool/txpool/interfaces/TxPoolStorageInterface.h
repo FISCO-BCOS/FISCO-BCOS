@@ -105,7 +105,7 @@ public:
         bcos::protocol::Block::Ptr _block) = 0;
 
     virtual bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) = 0;
-    virtual bcos::crypto::HashListPtr getAllTxsHash() = 0;
+    virtual bcos::crypto::HashListPtr getTxsHash(int _limit) = 0;
 
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch)
     {
