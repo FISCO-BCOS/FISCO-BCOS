@@ -41,12 +41,6 @@ struct OutOfRange : bcos::Error
 {
 };
 
-template <class StringID>
-static std::string_view query(StringID stringID)
-{
-    return {stringID->data(), stringID->size()};
-}
-
 constexpr static size_t DEFAULT_STRING_LENGTH = 62;
 template <size_t stringLength = DEFAULT_STRING_LENGTH>
 class StringPool
@@ -83,5 +77,11 @@ public:
         }
     }
 };
+
+template <class StringID>
+static std::string_view query(StringID stringID)
+{
+    return {stringID->data(), stringID->size()};
+}
 
 }  // namespace bcos::storage2::string_pool

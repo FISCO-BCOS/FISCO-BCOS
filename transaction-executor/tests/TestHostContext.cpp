@@ -1,3 +1,4 @@
+// #include "../bcos-transaction-executor/HostContext.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <boost/test/unit_test.hpp>

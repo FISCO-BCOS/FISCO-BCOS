@@ -10,7 +10,7 @@ namespace bcos::transaction_executor
 template <class TransactionExecutorType>
 concept TransactionExecutor = requires(TransactionExecutorType executor, const protocol::Transaction& transaction)
 {
-    std::same_as<typename task::AwaitableReturnType<decltype(executor.execute(transaction))>,
+    requires std::same_as<typename task::AwaitableReturnType<decltype(executor.execute(transaction))>,
         protocol::TransactionReceipt>;
 };
 

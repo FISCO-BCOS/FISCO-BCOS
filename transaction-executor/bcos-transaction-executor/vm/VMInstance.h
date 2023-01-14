@@ -21,43 +21,12 @@
 
 #pragma once
 #include "../Common.h"
+#include "EVMCWrapper.h"
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 
 namespace bcos::transaction_executor
 {
-
-struct EVMCResult
-{
-public:
-    EVMCResult() noexcept { m_evmcResult.release = nullptr; }
-    ~EVMCResult() noexcept
-    {
-        if (m_evmcResult.release != nullptr)
-        {
-            m_evmcResult.release(&m_evmcResult);
-        }
-    }
-
-    EVMCResult(EVMCResult&& evmcResult) noexcept : m_evmcResult(evmcResult.m_evmcResult)
-    {
-        evmcResult.m_evmcResult.release = nullptr;
-    }
-    EVMCResult& operator=(EVMCResult&& evmcResult) noexcept
-    {
-        m_evmcResult = evmcResult.m_evmcResult;
-        evmcResult.m_evmcResult.release = nullptr;
-        return *this;
-    }
-    EVMCResult(EVMCResult const&) = delete;
-    EVMCResult& operator=(EVMCResult const&) = delete;
-
-    evmc_result m_evmcResult;
-};
-
-struct EVMCMessage : public evmc_message
-{
-};
 
 /// Translate the VMSchedule to VMInstance-C revision.
 evmc_revision toRevision(VMSchedule const& _schedule)
@@ -98,14 +67,14 @@ public:
 
     ~VMInstance() noexcept { m_instance->destroy(m_instance); }
     VMInstance(VMInstance const&) = delete;
+    VMInstance(VMInstance&&) noexcept = default;
     VMInstance& operator=(VMInstance) = delete;
+    VMInstance& operator=(VMInstance&&) noexcept = default;
 
-    EVMCResult execute(const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
+    evmc_result execute(const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
         evmc_message* msg, const uint8_t* code, size_t codeSize)
     {
-        EVMCResult evmcResult;
-        evmcResult.m_evmcResult = m_instance->execute(m_instance, host, context, rev, msg, code, codeSize);
-        return evmcResult;
+        return m_instance->execute(m_instance, host, context, rev, msg, code, codeSize);
     }
 
     void enableDebugOutput() {}

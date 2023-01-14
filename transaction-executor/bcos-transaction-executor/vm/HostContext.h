@@ -21,8 +21,9 @@
 
 #pragma once
 
-#include "Common.h"
-#include "RollbackableStorage.h"
+#include "../Common.h"
+#include "../RollbackableStorage.h"
+#include "VMFactory.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -41,6 +42,10 @@
 namespace bcos::transaction_executor
 {
 
+struct NotFoundCode : public bcos::Error
+{
+};
+
 evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 {
     return toEvmC(GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
@@ -51,10 +56,9 @@ class HostContext : public evmc_host_context
 {
 public:
     /// Full constructor.
-    HostContext(const protocol::BlockHeader& blockHeader, const evmc_message& message, Storage& storage,
-        TableNameID tableName, std::function<task::Task<h256>(int64_t)> getBlockHashMethod)
+    HostContext(const protocol::BlockHeader& blockHeader, Storage& storage, TableNameID tableName,
+        std::function<task::Task<h256>(int64_t)> getBlockHashMethod)
       : evmc_host_context(),
-        m_message(message),
         m_storage(storage),
         m_myContractTable(tableName),
         m_getBlockHashMethod(std::move(getBlockHashMethod))
@@ -116,19 +120,6 @@ public:
         co_await m_storage.write(storage2::single(keyView), storage2::single(entry));
     }
 
-    // call
-    task::Task<evmc_result> call(const evmc_message& message)
-    {
-        // TODO: to be done
-        co_return {};
-    }
-
-    task::Task<evmc_result> callBuiltInPrecompiled(const evmc_message* message, bool _isEvmPrecompiled)
-    {
-        // TODO: to be done
-        co_return {};
-    }
-
     task::Task<void> setCode(crypto::HashType codeHash, bytes code)
     {
         storage::Entry codeHashEntry;
@@ -179,8 +170,8 @@ public:
         if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
         {
             auto abiIt = co_await m_storage.read(storage2::single(StateKey{m_abiTable, codeHashView}));
-            auto exists = co_await abiIt.next();
-            if (!exists)
+            co_await abiIt.next();
+            if (!co_await abiIt.hasValue())
             {
                 co_await m_storage.write(
                     m_abiTable, storage2::single(StateKey{m_abiTable, codeHashView}), storage2::single(abiEntry));
@@ -197,7 +188,7 @@ public:
         {
             // TODO: Check is precompiled
             std::string contractAddress(address);  // TODO: add address prefix
-            TableNameID contractTableID;
+            TableNameID contractTableID{};
             auto codeIt = co_await m_storage.read(storage2::single(StateKey{contractTableID, ACCOUNT_CODE}));
             co_await codeIt.next();
             if (co_await codeIt.hasValue())
@@ -256,14 +247,6 @@ public:
     }
 
     std::string_view origin() const { return m_origin; }
-    /// ------ get interfaces related to HostContext------
-    // std::string_view myAddress() const { return storage2::string_pool::query(m_myContractTable); }
-    // std::string_view caller() const { return fromEvmC(m_message.sender); }  // no call?
-    // std::string_view codeAddress() const { return m_origin; }  // no call?
-    // bytesConstRef data() const { return {m_message.input_data, m_message.input_size}; }
-    // h256 codeHash() const;
-    // u256 salt() const { return fromEvmC(m_message.create2_salt); }
-    // int64_t gas() const { return m_message.gas; }
     void suicide()
     {
         if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
@@ -272,49 +255,60 @@ public:
         }
     }
 
-    const evmc_message& getMessage() const { return m_message; }
-
     task::Task<evmc_result> execute(const evmc_message& message)
     {
+        constexpr static evmc_address EMPTY_DESTINATION = {};
         // TODO:
         // 1: Check auth
         // 2: Check is precompiled
         // 3. Do something create or call
-
-        // TODO: if revert, rollback the storage and clear the log
+        if (RANGES::equal(message.destination.bytes, EMPTY_DESTINATION.bytes))
+        {
+            co_return co_await create(message);
+        }
+        else
+        {
+            co_return co_await call(message);
+        }
     }
 
-    task::Task<EVMCResult> call(const evmc_message& message)
+    task::Task<evmc_result> call(const evmc_message& message)
     {
-        std::string tableName;  // TODO: calculate the table name
-        Rollbackable rollbackableStorage(m_storage);
-        auto codeEntry = m_storage.getRow(tableName, ACCOUNT_CODE);
-        if (!codeEntry)
+        auto codeEntryIt = co_await storage2::readOne(m_storage, {m_myContractTable, ACCOUNT_CODE});
+        if (codeEntryIt)
         {
-            BOOST_THROW_EXCEPTION(NotFoundCode{} << bcos::Error::ErrorMessage("Not found contract code: " + tableName));
+            BOOST_THROW_EXCEPTION(
+                NotFoundCode{} << bcos::Error::ErrorMessage(
+                    std::string("Not found contract code: ").append(storage2::string_pool::query(m_myContractTable))));
         }
-        auto code = codeEntry->get();
-
-        HostContext<decltype(rollbackableStorage)> hostContext(m_blockHeader, message, rollbackableStorage,
-            std::move(tableName), [this](int64_t) -> task::Task<h256> { co_return {}; });
+        auto& code = co_await codeEntryIt.value();
 
         auto vmInstance = VMFactory::create();
-        auto mode = toRevision(hostContext.vmSchedule());
+        auto mode = toRevision(vmSchedule());
 
-        auto result = vmInstance.execute(hostContext.interface, &hostContext, mode, &message, code.data(), code.size());
+        auto savepoint = m_storage.current();
+        auto result = vmInstance.execute(interface, this, mode, &message, code.data(), code.size());
         if (result.m_evmcResult.status_code != 0)
         {
-            // TODO: Rollback the state, clear the log
-            rollbackableStorage.rollback();
+            m_storage.rollback(savepoint);
         }
 
         co_return result;
     }
 
+    task::Task<evmc_result> callBuiltInPrecompiled(const evmc_message* message, bool _isEvmPrecompiled)
+    {
+        // TODO: to be done
+        co_return {};
+    }
+
+    task::Task<evmc_result> create(const evmc_message& message) { co_return {}; }
+
+    task::Task<evmc_result> externalCall(const evmc_message& message) { co_return {}; }
+
 private:
     const protocol::BlockHeader& m_blockHeader;
-    const evmc_message& m_message;
-    Storage& m_storage;
+    Rollbackable<Storage>& m_storage;
     TableNameID m_myContractTable;
     TableNameID m_codeTable;
     TableNameID m_abiTable;
