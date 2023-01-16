@@ -93,9 +93,6 @@ public:
     std::string_view extraData() const override { return m_inner()->extraData; }
     void setExtraData(std::string const& _extraData) override { m_inner()->extraData = _extraData; }
 
-    std::string_view extraData() const override { return m_inner()->extraData; }
-    void setExtraData(std::string const& _extraData) override { m_inner()->extraData = _extraData; }
-
     const bcostars::Transaction& inner() const { return *m_inner(); }
     bcostars::Transaction& mutableInner() { return *m_inner(); }
     void setInner(bcostars::Transaction inner) { *m_inner() = std::move(inner); }
