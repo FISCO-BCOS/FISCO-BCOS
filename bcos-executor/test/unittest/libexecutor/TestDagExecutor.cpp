@@ -34,6 +34,7 @@
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StateStorageFactory.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -193,12 +194,13 @@ struct DagExecutorFixture
 };
 BOOST_FIXTURE_TEST_SUITE(TestDagExecutor, DagExecutorFixture)
 
+#ifdef WITH_WASM
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-
-        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
@@ -234,10 +236,12 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
-    blockHeader->setParentInfo({{0, h256(0)}});
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -429,8 +433,9 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
@@ -470,10 +475,13 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
-    blockHeader->setParentInfo({{0, h256(0)}});
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -649,13 +657,15 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
             BOOST_CHECK_EQUAL(name, "alice");
         });
 }
+#endif
 
 BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, false, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
@@ -730,10 +740,14 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
-    blockHeader->setParentInfo({{0, h256(0)}});
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::cout << "Block hash is: " << blockHeader->hash() << std::endl;
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -896,9 +910,9 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, false, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
@@ -967,10 +981,13 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
-    blockHeader->setParentInfo({{0, h256(0)}});
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {

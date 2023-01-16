@@ -22,6 +22,7 @@
 #include <atomic>
 #include <string>
 #include <thread>
+#include <utility>
 
 namespace bcos
 {
@@ -37,8 +38,8 @@ enum class WorkerState
 class Worker
 {
 protected:
-    Worker(std::string const& _threadName = "worker", unsigned _idleWaitMs = 30)
-      : m_threadName(_threadName), m_idleWaitMs(_idleWaitMs)
+    Worker(std::string _threadName = "worker", unsigned _idleWaitMs = 30)
+      : m_threadName(std::move(_threadName)), m_idleWaitMs(_idleWaitMs)
     {}
     virtual ~Worker() { terminate(); }
 
@@ -83,7 +84,7 @@ protected:
     void terminate();
 
     std::atomic<WorkerState>& workerState() { return m_workerState; }
-    unsigned idleWaitMs() { return m_idleWaitMs; }
+    unsigned idleWaitMs() const { return m_idleWaitMs; }
 
 private:
     std::string m_threadName;

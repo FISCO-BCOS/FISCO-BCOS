@@ -62,7 +62,7 @@ protected:
             m_logInitializer->setLogPath(getLogPath());
         }
 
-        m_logInitializer->initLog(pt);
+        m_logInitializer->initLog(_configPath);
 
         // init gateway config
         auto gatewayConfig = std::make_shared<bcos::gateway::GatewayConfig>();

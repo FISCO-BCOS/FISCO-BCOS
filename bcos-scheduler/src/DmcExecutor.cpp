@@ -375,10 +375,8 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                 message->setKeyLocks({});
                 return MessageHint::NEED_PREPARE;
             }
-            else
-            {
-                executiveState->message->setDelegateCallCode(code);
-            }
+
+            executiveState->message->setDelegateCallCode(code);
         }
 
         return MessageHint::NEED_SEND;
@@ -394,12 +392,10 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
             f_onTxFinished(std::move(message));
             return MessageHint::END;
         }
-        else
-        {
-            message->setSeq(executiveState->callStack.top());
-            message->setCreate(false);
-            return MessageHint::NEED_SEND;
-        }
+
+        message->setSeq(executiveState->callStack.top());
+        message->setCreate(false);
+        return MessageHint::NEED_SEND;
     }
         // Retry type, send again
     case protocol::ExecutionMessage::KEY_LOCK:

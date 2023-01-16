@@ -43,26 +43,14 @@
 #include <ranges>
 #include <type_traits>
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class BlockImpl : public bcos::protocol::Block, public std::enable_shared_from_this<BlockImpl>
 {
 public:
-    BlockImpl(bcos::protocol::TransactionFactory::Ptr _transactionFactory,
-        bcos::protocol::TransactionReceiptFactory::Ptr _receiptFactory)
-      : bcos::protocol::Block(_transactionFactory, _receiptFactory),
-        m_inner(std::make_shared<bcostars::Block>()),
-        x_mutex(std::make_shared<std::mutex>())
-    {}
-    BlockImpl(bcos::protocol::TransactionFactory::Ptr _transactionFactory,
-        bcos::protocol::TransactionReceiptFactory::Ptr _receiptFactory, bcostars::Block _block)
-      : BlockImpl(_transactionFactory, _receiptFactory)
-    {
-        *m_inner = std::move(_block);
-    }
-    ~BlockImpl() override{};
+    BlockImpl() : m_inner(std::make_shared<bcostars::Block>()) {}
+    BlockImpl(bcostars::Block _block) : BlockImpl() { *m_inner = std::move(_block); }
+    ~BlockImpl() override = default;
 
     void decode(bcos::bytesConstRef _data, bool _calculateHash, bool _checkSig) override;
     void encode(bcos::bytes& _encodeData) const override;
@@ -114,15 +102,14 @@ public:
     // get receipts size
     uint64_t receiptsSize() const override { return m_inner->receipts.size(); }
 
-    void setNonceList(bcos::protocol::NonceList const& _nonceList) override;
-    void setNonceList(bcos::protocol::NonceList&& _nonceList) override;
-    bcos::protocol::NonceList const& nonceList() const override;
+    void setNonceList(RANGES::any_view<bcos::u256> nonces) override;
+    RANGES::any_view<bcos::u256> nonceList() const override;
 
     const bcostars::Block& inner() const { return *m_inner; }
-    void setInner(const bcostars::Block& inner) { *m_inner = inner; }
-    void setInner(bcostars::Block&& inner) { *m_inner = std::move(inner); }
+    void setInner(bcostars::Block inner) { *m_inner = std::move(inner); }
 
-    bcos::crypto::HashType calculateTransactionRoot() const override
+    bcos::crypto::HashType calculateTransactionRoot(
+        const bcos::crypto::Hash& hashImpl) const override
     {
         auto txsRoot = bcos::crypto::HashType();
         // with no transactions
@@ -131,7 +118,7 @@ public:
             return txsRoot;
         }
 
-        auto anyHasher = m_transactionFactory->cryptoSuite()->hashImpl()->hasher();
+        auto anyHasher = hashImpl.hasher();
         std::visit(
             [this, &txsRoot](auto& hasher) {
                 using Hasher = std::remove_reference_t<decltype(hasher)>;
@@ -166,7 +153,7 @@ public:
         return txsRoot;
     }
 
-    bcos::crypto::HashType calculateReceiptRoot() const override
+    bcos::crypto::HashType calculateReceiptRoot(const bcos::crypto::Hash& hashImpl) const override
     {
         auto receiptsRoot = bcos::crypto::HashType();
         // with no receipts
@@ -174,7 +161,7 @@ public:
         {
             return receiptsRoot;
         }
-        auto anyHasher = m_transactionFactory->cryptoSuite()->hashImpl()->hasher();
+        auto anyHasher = hashImpl.hasher();
         std::visit(
             [this, &receiptsRoot](auto& hasher) {
                 using Hasher = std::remove_reference_t<decltype(hasher)>;
@@ -197,9 +184,6 @@ public:
 
 private:
     std::shared_ptr<bcostars::Block> m_inner;
-    mutable bcos::protocol::NonceList m_nonceList;
-    std::shared_ptr<std::mutex> x_mutex;
     mutable bcos::SharedMutex x_blockHeader;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

@@ -14,6 +14,7 @@
 #pragma once
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
+#include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <boost/asio.hpp>
 
 namespace bcos
@@ -21,16 +22,6 @@ namespace bcos
 namespace gateway
 {
 class SocketFace;
-
-using SessionCallbackFunc = std::function<void(NetworkException, Message::Ptr)>;
-struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
-{
-    using Ptr = std::shared_ptr<ResponseCallback>;
-
-    uint64_t m_startTime;
-    SessionCallbackFunc callback;
-    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
-};
 
 class SessionFace
 {

@@ -130,55 +130,52 @@ void KeyPageStorage::asyncGetRow(std::string_view tableView, std::string_view ke
 }
 
 void KeyPageStorage::asyncGetRows(std::string_view tableView,
-    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
-        _keys,
+    RANGES::any_view<std::string_view,
+        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
 {
-    std::visit(
-        [this, &tableView, &_callback](auto&& _keys) {
-            std::vector<std::optional<Entry>> results(_keys.size());
+    std::vector<std::optional<Entry>> results(keys.size());
 
-            if (m_ignoreTables->find(tableView) != m_ignoreTables->end())
+    if (m_ignoreTables->find(tableView) != m_ignoreTables->end())
+    {
+        Error::UniquePtr err;
+        for (auto i = 0U; i < keys.size(); ++i)
+        {
+            auto [error, entry] = getSysTableRawEntry(tableView, keys[i]);
+            if (error)
             {
-                Error::UniquePtr err;
-                for (auto i = 0U; i < _keys.size(); ++i)
-                {
-                    auto [error, entry] = getSysTableRawEntry(tableView, _keys[i]);
-                    if (error)
+                err = BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                    StorageError::ReadError, "get s_tables rows failed!", *error);
+                break;
+            }
+            results[i] = std::make_optional(std::move(*entry));
+        }
+        _callback(std::move(err), std::move(results));
+    }
+    else
+    {  // page
+        Error::UniquePtr err(nullptr);
+        // TODO: because of page and lock, maybe not parallel is better
+        for (auto i = 0U; i < keys.size(); ++i)
+        {
+            asyncGetRow(tableView, keys[i],
+                [i, &results, &err](Error::UniquePtr _error, std::optional<Entry> _entry) {
+                    if (_error)
                     {
                         err = BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                            StorageError::ReadError, "get s_tables rows failed!", *error);
-                        break;
+                            StorageError::ReadError, "get rows failed!", *_error);
+                        return;
                     }
-                    results[i] = std::make_optional(std::move(*entry));
-                }
-                _callback(std::move(err), std::move(results));
+                    results[i] = std::move(_entry);
+                });
+            if (err)
+            {
+                break;
             }
-            else
-            {  // page
-                Error::UniquePtr err(nullptr);
-                // TODO: because of page and lock, maybe not parallel is better
-                for (auto i = 0U; i < _keys.size(); ++i)
-                {
-                    asyncGetRow(tableView, _keys[i],
-                        [i, &results, &err](Error::UniquePtr _error, std::optional<Entry> _entry) {
-                            if (_error)
-                            {
-                                err = BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                                    StorageError::ReadError, "get rows failed!", *_error);
-                                return;
-                            }
-                            results[i] = std::move(_entry);
-                        });
-                    if (err)
-                    {
-                        break;
-                    }
-                }
-                _callback(std::move(err), std::move(results));
-            }
-        },
-        _keys);
+        }
+        _callback(std::move(err), std::move(results));
+    }
 }
 
 void KeyPageStorage::asyncSetRow(std::string_view tableView, std::string_view keyView, Entry entry,
@@ -635,8 +632,8 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
         }
         if (m_ignoreNotExist)
         {
-            KeyPage_LOG(INFO) << LOG_DESC("data should exist but ignore not exist")
-                              << LOG_KV("table", tableView) << LOG_KV("key", toHex(key));
+            KeyPage_LOG(DEBUG) << LOG_DESC("data should exist but ignore not exist")
+                               << LOG_KV("table", tableView) << LOG_KV("key", toHex(key));
         }
         if (c_fileLogLevel <= TRACE)
         {

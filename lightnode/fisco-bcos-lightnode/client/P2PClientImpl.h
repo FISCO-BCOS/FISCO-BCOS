@@ -127,11 +127,18 @@ public:
                                 for (const auto& peerGatewayInfo : *peerGatewayInfos)
                                 {
                                     auto nodeIDInfo = peerGatewayInfo->nodeIDInfo();
-                                    auto it = nodeIDInfo.find(m_groupID);
+                                    auto nodeInfo = nodeIDInfo.find(m_groupID);
 
-                                    if (it != nodeIDInfo.end() && !it->second.empty())
+                                    if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
                                     {
-                                        nodeIDs.insert(it->second.begin(), it->second.end());
+                                        for(auto& it : nodeInfo->second)
+                                        {
+                                            if(it.second == bcos::protocol::NodeType::CONSENSUS_NODE || it.second == bcos::protocol::NodeType::OBSERVER_NODE)
+                                            {
+                                                nodeIDs.insert(it.first);
+                                                LIGHTNODE_LOG(TRACE) << LOG_KV("NodeID:",it.first) << LOG_KV("nodeType:",it.second);
+                                            }
+                                        }
                                     }
                                 }
 

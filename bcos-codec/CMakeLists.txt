@@ -17,8 +17,7 @@
 # ------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.12)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
-include(Version)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "Minimum OS X deployment version")
 project(bcos-codec VERSION ${VERSION})
 
 file(GLOB SRC_LIST "*.cpp")

@@ -27,7 +27,7 @@
 
 using namespace boost::archive::iterators;
 
-std::string bcos::base64Encode(const byte* _begin, const size_t _dataSize)
+std::string bcos::base64Encode(const byte* _begin, size_t _dataSize)
 {
     using It = base64_from_binary<transform_width<byte*, 6, 8>>;
     auto tmp = std::string(It(_begin), It(_begin + _dataSize));

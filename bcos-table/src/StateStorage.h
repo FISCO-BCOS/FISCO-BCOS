@@ -26,21 +26,20 @@
 
 #include "StateStorageInterface.h"
 #include "bcos-framework/storage/Table.h"
-#include "tbb/enumerable_thread_specific.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
-#include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
 #include <boost/multi_index/mem_fun.hpp>
+#include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
-#include <boost/property_map/property_map.hpp>
 #include <mutex>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcos::storage
 {
@@ -48,44 +47,6 @@ template <bool enableLRU = false>
 class BaseStorage : public virtual storage::StateStorageInterface,
                     public virtual storage::MergeableStorageInterface
 {
-private:
-#define STORAGE_REPORT_GET(table, key, entry, desc) \
-    if (c_fileLogLevel <= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }
-    // STORAGE_LOG(TRACE) << LOG_DESC("GET") << LOG_KV("table", table)
-    //                    << LOG_KV("key", toHex(key)) << LOG_KV("desc", desc);}
-
-
-#define STORAGE_REPORT_SET(table, key, entry, desc) \
-    if (c_fileLogLevel <= bcos::LogLevel::TRACE)    \
-    {                                               \
-    }                                               \
-    // log("SET", (table), (key), (entry), (desc))
-
-    // for debug
-    void log(const std::string_view& op, const std::string_view& table, const std::string_view& key,
-        const std::optional<Entry>& entry, const std::string_view& desc = "")
-    {
-        if (!m_readOnly)
-        {
-            if (entry)
-            {
-                STORAGE_LOG(TRACE)
-                    << op << "|" << table << "|" << toHex(key) << "|[" << toHex(entry->getField(0))
-                    << "]|" << (int32_t)entry->status() << "|" << desc;
-            }
-            else
-            {
-                STORAGE_LOG(TRACE) << op << "|" << table << "|" << toHex(key) << "|"
-                                   << "[]"
-                                   << "|"
-                                   << "NO ENTRY"
-                                   << "|" << desc;
-            }
-        }
-    }
-
 public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
@@ -105,7 +66,7 @@ public:
     ~BaseStorage() override { m_recoder.clear(); }
 
     void asyncGetPrimaryKeys(std::string_view table,
-        const std::optional<storage::Condition const>& _condition,
+        const std::optional<storage::Condition const>& condition,
         std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override
     {
         std::map<std::string_view, storage::Entry::Status> localKeys;
@@ -114,7 +75,7 @@ public:
         {
             std::mutex mergeMutex;
             tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_buckets.size()),
-                [this, &mergeMutex, &localKeys, &table, &_condition](auto const& range) {
+                [this, &mergeMutex, &localKeys, &table, &condition](auto const& range) {
                     for (auto i = range.begin(); i < range.end(); ++i)
                     {
                         auto& bucket = m_buckets[i];
@@ -123,7 +84,7 @@ public:
                         decltype(localKeys) bucketKeys;
                         for (auto& it : bucket.container)
                         {
-                            if (it.table == table && (!_condition || _condition->isValid(it.key)))
+                            if (it.table == table && (!condition || condition->isValid(it.key)))
                             {
                                 bucketKeys.emplace(it.key, it.entry.status());
                             }
@@ -151,7 +112,7 @@ public:
             return;
         }
 
-        prev->asyncGetPrimaryKeys(table, _condition,
+        prev->asyncGetPrimaryKeys(table, condition,
             [localKeys = std::move(localKeys), callback = std::move(_callback)](
                 auto&& error, auto&& remoteKeys) mutable {
                 if (error)
@@ -199,7 +160,7 @@ public:
     void asyncGetRow(std::string_view tableView, std::string_view keyView,
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override
     {
-        auto [bucket, lock] = getBucket(tableView, keyView);
+        auto [bucket, lock] = getBucket(tableView);
         boost::ignore_unused(lock);
 
         auto it = bucket->container.template get<0>().find(std::make_tuple(tableView, keyView));
@@ -211,7 +172,6 @@ public:
             {
                 lock.unlock();
 
-                STORAGE_REPORT_GET(tableView, keyView, std::nullopt, "DELETED");
                 _callback(nullptr, std::nullopt);
             }
             else
@@ -224,15 +184,11 @@ public:
 
                 lock.unlock();
 
-                STORAGE_REPORT_GET(tableView, keyView, optionalEntry, "FOUND");
                 _callback(nullptr, std::move(optionalEntry));
             }
             return;
         }
-        else
-        {
-            STORAGE_REPORT_GET(tableView, keyView, std::nullopt, "NO ENTRY");
-        }
+
         lock.unlock();
 
         auto prev = getPrev();
@@ -251,15 +207,11 @@ public:
 
                     if (entry)
                     {
-                        STORAGE_REPORT_GET(table, key, entry, "PREV FOUND");
-
                         _callback(nullptr,
                             std::make_optional(importExistingEntry(table, key, std::move(*entry))));
                     }
                     else
                     {
-                        STORAGE_REPORT_GET(table, key, std::nullopt, "PREV NOT FOUND");
-
                         _callback(nullptr, std::nullopt);
                     }
                 });
@@ -271,93 +223,84 @@ public:
     }
 
     void asyncGetRows(std::string_view tableView,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) override
     {
-        std::visit(
-            [this, &tableView, &_callback](auto&& _keys) {
-                std::vector<std::optional<Entry>> results(_keys.size());
-                auto missinges = std::tuple<std::vector<std::string_view>,
-                    std::vector<std::tuple<std::string, size_t>>>();
+        auto size = keys.size();
+        std::vector<std::optional<Entry>> results(keys.size());
+        auto missinges = std::tuple<std::vector<std::string_view>,
+            std::vector<std::tuple<std::string, size_t>>>();
 
-                std::atomic_ulong existsCount = 0;
+        std::atomic_ulong existsCount = 0;
 
-#pragma omp parallel for
-                for (auto i = 0u; i < _keys.size(); ++i)
+        for (auto i = 0U; i < keys.size(); ++i)
+        {
+            auto [bucket, lock] = getBucket(tableView);
+            boost::ignore_unused(lock);
+
+            auto it = bucket->container.find(std::make_tuple(tableView, std::string_view(keys[i])));
+            if (it != bucket->container.end())
+            {
+                auto& entry = it->entry;
+                if (entry.status() == Entry::NORMAL || entry.status() == Entry::MODIFIED)
                 {
-                    auto [bucket, lock] = getBucket(tableView, _keys[i]);
-                    boost::ignore_unused(lock);
+                    results[i].emplace(entry);
 
-                    auto it = bucket->container.find(
-                        std::make_tuple(tableView, std::string_view(_keys[i])));
-                    if (it != bucket->container.end())
+                    if constexpr (enableLRU)
                     {
-                        auto& entry = it->entry;
-                        if (entry.status() == Entry::NORMAL || entry.status() == Entry::MODIFIED)
-                        {
-                            results[i].emplace(entry);
-
-                            if constexpr (enableLRU)
-                            {
-                                updateMRUAndCheck(*bucket, it);
-                            }
-                        }
-                        else
-                        {
-                            results[i] = std::nullopt;
-                        }
-                        ++existsCount;
+                        updateMRUAndCheck(*bucket, it);
                     }
-                    else
-                    {
-#pragma omp critical
-                        {
-                            std::get<1>(missinges).emplace_back(std::string(_keys[i]), i);
-                            std::get<0>(missinges).emplace_back(_keys[i]);
-                        }
-                    }
-                }
-
-                auto prev = getPrev();
-                if (existsCount < _keys.size() && prev)
-                {
-                    prev->asyncGetRows(tableView, std::get<0>(missinges),
-                        [this, table = std::string(tableView), callback = std::move(_callback),
-                            missingIndexes = std::move(std::get<1>(missinges)),
-                            results = std::move(results)](
-                            auto&& error, std::vector<std::optional<Entry>>&& entries) mutable {
-                            if (error)
-                            {
-                                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(StorageError::ReadError,
-                                             "async get perv rows failed!", *error),
-                                    std::vector<std::optional<Entry>>());
-                                return;
-                            }
-
-#pragma omp parallel for
-                            for (size_t i = 0; i < entries.size(); ++i)
-                            {
-                                auto& entry = entries[i];
-
-                                if (entry)
-                                {
-                                    results[std::get<1>(missingIndexes[i])].emplace(
-                                        importExistingEntry(table,
-                                            std::move(std::get<0>(missingIndexes[i])),
-                                            std::move(*entry)));
-                                }
-                            }
-
-                            callback(nullptr, std::move(results));
-                        });
                 }
                 else
                 {
-                    _callback(nullptr, std::move(results));
+                    results[i] = std::nullopt;
                 }
-            },
-            _keys);
+                ++existsCount;
+            }
+            else
+            {
+                std::get<1>(missinges).emplace_back(std::string(keys[i]), i);
+                std::get<0>(missinges).emplace_back(keys[i]);
+            }
+        }
+
+        auto prev = getPrev();
+        if (existsCount < keys.size() && prev)
+        {
+            prev->asyncGetRows(tableView, std::get<0>(missinges),
+                [this, table = std::string(tableView), callback = std::move(_callback),
+                    missingIndexes = std::move(std::get<1>(missinges)),
+                    results = std::move(results)](
+                    auto&& error, std::vector<std::optional<Entry>>&& entries) mutable {
+                    if (error)
+                    {
+                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(StorageError::ReadError,
+                                     "async get perv rows failed!", *error),
+                            std::vector<std::optional<Entry>>());
+                        return;
+                    }
+
+                    for (size_t i = 0; i < entries.size(); ++i)
+                    {
+                        auto& entry = entries[i];
+
+                        if (entry)
+                        {
+                            results[std::get<1>(missingIndexes[i])].emplace(
+                                importExistingEntry(table,
+                                    std::move(std::get<0>(missingIndexes[i])), std::move(*entry)));
+                        }
+                    }
+
+                    callback(nullptr, std::move(results));
+                });
+        }
+        else
+        {
+            _callback(nullptr, std::move(results));
+        }
     }
 
     void asyncSetRow(std::string_view tableView, std::string_view keyView, Entry entry,
@@ -373,7 +316,7 @@ public:
         ssize_t updatedCapacity = entry.size();
         std::optional<Entry> entryOld;
 
-        auto [bucket, lock] = getBucket(tableView, keyView);
+        auto [bucket, lock] = getBucket(tableView);
         boost::ignore_unused(lock);
 
         auto it = bucket->container.find(std::make_tuple(tableView, keyView));
@@ -384,7 +327,6 @@ public:
 
             updatedCapacity -= entryOld->size();
 
-            STORAGE_REPORT_SET(tableView, keyView, entry, "UPDATE");
             bucket->container.modify(it, [&entry](Data& data) { data.entry = std::move(entry); });
 
             if constexpr (enableLRU)
@@ -396,8 +338,6 @@ public:
         {
             bucket->container.emplace(
                 Data{std::string(tableView), std::string(keyView), std::move(entry)});
-
-            STORAGE_REPORT_SET(tableView, keyView, std::nullopt, "INSERT");
         }
 
         if (m_recoder.local())
@@ -456,11 +396,11 @@ public:
 
     crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override
     {
-        bcos::crypto::HashType totalHash(0);
+        bcos::crypto::HashType totalHash;
 
-        std::mutex totalMutex;
+        std::vector<bcos::crypto::HashType> hashes(m_buckets.size());
         tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_buckets.size()),
-            [this, &hashImpl, &totalHash, &totalMutex](auto const& range) {
+            [this, &hashImpl, &hashes](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
                     auto& bucket = m_buckets[i];
@@ -477,10 +417,14 @@ public:
                         }
                     }
 
-                    std::unique_lock lock(totalMutex);
-                    totalHash ^= bucketHash;
+                    hashes[i] ^= bucketHash;
                 }
             });
+
+        for (auto const& it : hashes)
+        {
+            totalHash ^= it;
+        }
 
 
         return totalHash;
@@ -494,10 +438,10 @@ public:
             return;
         }
 
-        for (auto& change : recoder)
+        for (const auto& change : recoder)
         {
             ssize_t updateCapacity = 0;
-            auto [bucket, lock] = getBucket(change.table, change.key);
+            auto [bucket, lock] = getBucket(change.table);
             boost::ignore_unused(lock);
 
             auto it = bucket->container.find(
@@ -515,7 +459,7 @@ public:
 
                     updateCapacity = change.entry->size() - it->entry.size();
 
-                    auto& rollbackEntry = change.entry;
+                    const auto& rollbackEntry = change.entry;
                     bucket->container.modify(it,
                         [&rollbackEntry](Data& data) { data.entry = std::move(*rollbackEntry); });
                 }
@@ -560,7 +504,6 @@ public:
     }
 
     void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
-
     void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
 
 private:
@@ -571,19 +514,14 @@ private:
             return entry;
         }
 
-        // entry.setDirty(false);
         entry.setStatus(Entry::NORMAL);
-
         auto updateCapacity = entry.size();
 
-        auto [bucket, lock] = getBucket(table, key);
-        boost::ignore_unused(lock);
+        auto [bucket, lock] = getBucket(table);
         auto it = bucket->container.find(std::make_tuple(table, key));
 
         if (it == bucket->container.end())
         {
-            STORAGE_REPORT_SET(
-                std::get<0>(entryIt->first), key, std::make_optional(entryIt->second), "IMPORT");
             it = bucket->container
                      .emplace(Data{std::string(table), std::string(key), std::move(entry)})
                      .first;
@@ -592,9 +530,6 @@ private:
         }
         else
         {
-            STORAGE_REPORT_SET(
-                std::get<0>(entryIt->first), key, entryIt->second, "IMPORT EXISTS FAILED");
-
             STORAGE_LOG(DEBUG) << "Fail import existsing entry, " << table << " | " << toHex(key);
         }
 
@@ -610,7 +545,8 @@ private:
 
     bool m_enableTraverse = false;
 
-    ssize_t m_maxCapacity = 32 * 1024 * 1024;
+    constexpr static int64_t DEFAULT_CAPACITY = 32L * 1024 * 1024;
+    int64_t m_maxCapacity = DEFAULT_CAPACITY;
 
     struct Data
     {
@@ -625,11 +561,11 @@ private:
     };
 
     using HashContainer = boost::multi_index_container<Data,
-        boost::multi_index::indexed_by<boost::multi_index::hashed_unique<boost::multi_index::
+        boost::multi_index::indexed_by<boost::multi_index::ordered_unique<boost::multi_index::
                 const_mem_fun<Data, std::tuple<std::string_view, std::string_view>, &Data::view>>>>;
     using LRUHashContainer = boost::multi_index_container<Data,
         boost::multi_index::indexed_by<
-            boost::multi_index::hashed_unique<boost::multi_index::const_mem_fun<Data,
+            boost::multi_index::ordered_unique<boost::multi_index::const_mem_fun<Data,
                 std::tuple<std::string_view, std::string_view>, &Data::view>>,
             boost::multi_index::sequenced<>>>;
     using Container = std::conditional_t<enableLRU, LRUHashContainer, HashContainer>;
@@ -643,11 +579,9 @@ private:
     uint32_t m_blockVersion = 0;
     std::vector<Bucket> m_buckets;
 
-    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(
-        std::string_view table, std::string_view key)
+    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(std::string_view table)
     {
         auto hash = std::hash<std::string_view>{}(table);
-        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
         auto index = hash % m_buckets.size();
 
         auto& bucket = m_buckets[index];

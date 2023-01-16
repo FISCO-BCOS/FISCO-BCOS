@@ -196,8 +196,17 @@ PeersRouterTable::Group2NodeIDListType PeersRouterTable::peersNodeIDList(
     for (auto const& it : groupNodeInfos)
     {
         auto const& groupNodeIDList = it->nodeIDList();
-        nodeIDList[it->groupID()] =
-            std::set<std::string>(groupNodeIDList.begin(), groupNodeIDList.end());
+        auto const& nodeTypeList = it->nodeTypeList();
+        for(size_t i = 0; i < groupNodeIDList.size(); ++i)
+        {
+            auto nodeID = groupNodeIDList[i];
+            nodeIDList[it->groupID()][nodeID] = bcos::protocol::NodeType::None;
+            if(nodeTypeList.size() > i)
+            {
+                auto nodeType = nodeTypeList[i];
+                nodeIDList[it->groupID()][nodeID] = nodeType;
+            }
+        }
     }
     return nodeIDList;
 }
@@ -270,14 +279,14 @@ void PeersRouterTable::asyncBroadcastMsg(
         }
     }
     ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable")
-                      << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode") << LOG_KV("type", _type)
-                      << LOG_KV("moduleID", _moduleID)
+                      << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode")
+                      << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
                       << LOG_KV("payloadSize", _msg->payload()->size())
                       << LOG_KV("peersSize", selectedPeers.size());
     for (auto const& peer : selectedPeers)
     {
         ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
-                          << LOG_KV("type", _type) << LOG_KV("moduleID", _moduleID)
+                          << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
                           << LOG_KV("dst", peer);
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }

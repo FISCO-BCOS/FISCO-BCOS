@@ -63,7 +63,7 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
     auto block = _blockFactory->createBlock();
 
     auto blockHeader = testPBBlockHeader(_cryptoSuite, _blockNumber);
-    block->setBlockHeader(blockHeader);
+    blockHeader->calculateHash(*_blockFactory->cryptoSuite()->hashImpl());
     block->setBlockType(CompleteBlock);
     // fake transactions
     for (size_t i = 0; i < _txsNum; i++)
@@ -71,12 +71,16 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
         auto tx = fakeTransaction(_cryptoSuite);
         block->appendTransaction(tx);
     }
+    auto txRoot = block->calculateTransactionRoot(*_cryptoSuite->hashImpl());
+    blockHeader->setTxsRoot(std::move(txRoot));
     // fake receipts
     for (size_t i = 0; i < _receiptsNum; i++)
     {
         auto receipt = testPBTransactionReceipt(_cryptoSuite, _blockNumber);
         block->appendReceipt(receipt);
     }
+    auto receiptRoot = block->calculateReceiptRoot(*_cryptoSuite->hashImpl());
+    blockHeader->setReceiptsRoot(std::move(receiptRoot));
     // fake txsHash
     for (size_t i = 0; i < _txsNum; i++)
     {
@@ -90,6 +94,7 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
         nonceList.emplace_back(u256(123));
     }
     block->setNonceList(nonceList);
+    block->setBlockHeader(blockHeader);
     return block;
 }
 
@@ -99,6 +104,7 @@ inline Block::Ptr fakeEmptyBlock(
     auto block = _blockFactory->createBlock();
 
     auto blockHeader = testPBBlockHeader(_cryptoSuite, _blockNumber);
+    blockHeader->calculateHash(*_blockFactory->cryptoSuite()->hashImpl());
     block->setBlockHeader(blockHeader);
     return block;
 }
@@ -118,6 +124,7 @@ inline BlocksPtr fakeBlocks(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
         parentInfos.push_back(parentInfo);
         block->blockHeader()->setNumber(1 + i);
         block->blockHeader()->setParentInfo(parentInfos);
+        block->blockHeader()->calculateHash(*_cryptoSuite->hashImpl());
         parentInfo.blockNumber = block->blockHeader()->number();
         parentInfo.blockHash = block->blockHeader()->hash();
         blocks->emplace_back(block);
@@ -139,6 +146,7 @@ inline BlocksPtr fakeEmptyBlocks(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Pt
         parentInfos.push_back(parentInfo);
         block->blockHeader()->setNumber(1 + i);
         block->blockHeader()->setParentInfo(parentInfos);
+        block->blockHeader()->calculateHash(*_cryptoSuite->hashImpl());
         parentInfo.blockNumber = block->blockHeader()->number();
         parentInfo.blockHash = block->blockHeader()->hash();
         blocks->emplace_back(block);

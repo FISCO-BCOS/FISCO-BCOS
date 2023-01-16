@@ -20,14 +20,21 @@
  */
 
 #pragma once
+#include "../Common.h"
+#include "VMInstance.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include <evmc/loader.h>
+#include <evmone/evmone.h>
+#include <boost/compute/detail/lru_cache.hpp>
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
-namespace bcos
+namespace bcos::executor
 {
-namespace executor
-{
+size_t const c_EVMONE_CACHE_SIZE = 1024;
+
 class VMInstance;
 enum class VMKind
 {
@@ -39,14 +46,24 @@ enum class VMKind
 class VMFactory
 {
 public:
-    VMFactory() = delete;
-    ~VMFactory() = delete;
-
-    /// Creates a VM instance of the global kind.
-    static VMInstance create();
+    VMFactory(size_t cache_size = c_EVMONE_CACHE_SIZE) : m_cache(cache_size) {}
 
     /// Creates a VM instance of the kind provided.
-    static VMInstance create(VMKind _kind);
+    VMInstance create(VMKind _kind, evmc_revision revision, const crypto::HashType& codeHash,
+        bytes_view code, bool isCreate = false);
+
+    /// @brief Gets an anvanced EVM analysis from the cache. if not found return nullptr
+    std::shared_ptr<evmoneCodeAnalysis> get(
+        const crypto::HashType& key, evmc_revision revision) noexcept;
+
+    // TODO: add lock for put
+    void put(const crypto::HashType& key, const std::shared_ptr<evmoneCodeAnalysis>& analysis,
+        evmc_revision revision) noexcept;
+
+private:
+    boost::compute::detail::lru_cache<crypto::HashType, std::shared_ptr<evmoneCodeAnalysis>>
+        m_cache;
+    evmc_revision m_revision = EVMC_PARIS;
+    std::mutex m_cacheMutex;
 };
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

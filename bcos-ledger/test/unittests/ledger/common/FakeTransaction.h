@@ -19,6 +19,9 @@
  */
 
 #pragma once
+#include <bcos-tars-protocol/impl/TarsHashable.h>
+
+#include "bcos-concepts/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -47,9 +50,14 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     transaction.data.blockLimit = _blockLimit;
     transaction.data.chainID = _chainId;
     transaction.data.groupID = _groupId;
-    auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(_cryptoSuite,
+    auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
     // set signature
+    std::visit(
+        [&pbTransaction](
+            auto&& hasher) { pbTransaction->calculateHash<std::decay_t<decltype(hasher)>>(); },
+        _cryptoSuite->hashImpl()->hasher());
+
     auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->setSignatureData(*signData);
     pbTransaction->forceSender(_keyPair->address(_cryptoSuite->hashImpl()).asBytes());

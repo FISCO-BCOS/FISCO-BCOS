@@ -93,7 +93,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
         // setWeight(string,uint256)
         result = setWeight(_executive, data, codec);
     }
-    else
+    else [[unlikely]]
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled")
                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
@@ -256,8 +256,8 @@ int ConsensusPrecompiled::removeNode(
     codec.decode(_data, nodeID);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove")
-                           << LOG_KV("nodeID", nodeID);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove")
+                          << LOG_KV("nodeID", nodeID);
     if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
@@ -315,8 +315,8 @@ int ConsensusPrecompiled::setWeight(
     codec.decode(_data, nodeID, weight);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("setWeight")
-                           << LOG_KV("nodeID", nodeID);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("setWeight")
+                          << LOG_KV("nodeID", nodeID) << LOG_KV("weight", weight);
     if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")

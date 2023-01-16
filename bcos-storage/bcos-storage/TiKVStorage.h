@@ -58,8 +58,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept override;
 
     void asyncGetRows(std::string_view table,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
         override;
 
@@ -76,8 +77,14 @@ public:
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) noexcept override;
 
-    Error::Ptr setRows(std::string_view table, std::vector<std::string_view> keys,
-        std::vector<std::string_view> values) noexcept override;
+    Error::Ptr setRows(std::string_view table,
+        const std::variant<const gsl::span<std::string_view const>,
+            const gsl::span<std::string const>>& keys,
+        std::variant<gsl::span<const std::string_view>, gsl::span<std::string const>>
+            values) noexcept override;
+    virtual Error::Ptr deleteRows(
+        std::string_view, const std::variant<const gsl::span<std::string_view const>,
+                              const gsl::span<std::string const>>&) noexcept override;
 
     void setSwitchHandler(std::function<void()> _onNeedSwitchEvent)
     {

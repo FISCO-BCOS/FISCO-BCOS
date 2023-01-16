@@ -61,6 +61,7 @@ struct Condition
 {
     Condition() = default;
     ~Condition() = default;
+    void EQ(const std::string& value) { m_conditions.emplace_back(Comparator::EQ, value); }
     void NE(const std::string& value) { m_conditions.emplace_back(Comparator::NE, value); }
     // string compare, "2" > "12"
     void GT(const std::string& value) { m_conditions.emplace_back(Comparator::GT, value); }
@@ -68,6 +69,18 @@ struct Condition
     // string compare, "12" < "2"
     void LT(const std::string& value) { m_conditions.emplace_back(Comparator::LT, value); }
     void LE(const std::string& value) { m_conditions.emplace_back(Comparator::LE, value); }
+    void startsWith(const std::string& value)
+    {
+        m_conditions.emplace_back(Comparator::STARTS_WITH, value);
+    }
+    void endsWith(const std::string& value)
+    {
+        m_conditions.emplace_back(Comparator::ENDS_WITH, value);
+    }
+    void contains(const std::string& value)
+    {
+        m_conditions.emplace_back(Comparator::CONTAINS, value);
+    }
     void limit(size_t start, size_t count) { m_limit = std::pair<size_t, size_t>(start, count); }
 
     std::pair<size_t, size_t> getLimit() const { return m_limit; }
@@ -78,6 +91,12 @@ struct Condition
         {  // conditions should few, so not parallel check for now
             switch (cond.cmp)
             {
+            case Comparator::EQ:
+                if (key != cond.value)
+                {
+                    return false;
+                }
+                break;
             case Comparator::NE:
                 if (key == cond.value)
                 {
@@ -108,6 +127,24 @@ struct Condition
                     return false;
                 }
                 break;
+            case Comparator::STARTS_WITH:
+                if (!key.starts_with(cond.value))
+                {
+                    return false;
+                }
+                break;
+            case Comparator::ENDS_WITH:
+                if (!key.ends_with(cond.value))
+                {
+                    return false;
+                }
+                break;
+            case Comparator::CONTAINS:
+                if (key.find(cond.value) == std::string::npos)
+                {
+                    return false;
+                }
+                break;
             default:
                 // undefined Comparator
                 break;
@@ -116,14 +153,17 @@ struct Condition
         return true;
     }
 
-    enum class Comparator
+    enum class Comparator : uint8_t
     {
-        EQ,
-        NE,
-        GT,
-        GE,
-        LT,
-        LE,
+        GT = 0,
+        GE = 1,
+        LT = 2,
+        LE = 3,
+        EQ = 4,
+        NE = 5,
+        STARTS_WITH = 6,
+        ENDS_WITH = 7,
+        CONTAINS = 8
     };
     struct cond
     {
@@ -153,6 +193,15 @@ struct Condition
                 break;
             case Comparator::LE:
                 cmpStr = "LE";
+                break;
+            case Comparator::STARTS_WITH:
+                cmpStr = "STARTS_WITH";
+                break;
+            case Comparator::ENDS_WITH:
+                cmpStr = "ENDS_WITH";
+                break;
+            case Comparator::CONTAINS:
+                cmpStr = "CONTAINS";
                 break;
             }
             return cmpStr + " " + value;

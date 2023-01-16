@@ -57,24 +57,18 @@ void TransactionSync::stop()
     }
     finishWorker();
     stopWorking();
-    // will not restart worker, so terminate it
     terminate();
     SYNC_LOG(DEBUG) << LOG_DESC("stop SyncTransaction");
 }
 
 void TransactionSync::executeWorker()
 {
-#if FISCO_DEBUG
-    // TODO: remove this, now just for bug tracing
-    m_config->txpoolStorage()->printPendingTxs();
-#endif
     if (!downloadTxsBufferEmpty())
     {
         maintainDownloadingTransactions();
     }
     if (m_config->existsInGroup() && downloadTxsBufferEmpty() && m_newTransactions.load())
     {
-        // TODO: Disable maintain transactions
         maintainTransactions();
     }
     if (!m_config->existsInGroup() || (!m_newTransactions && downloadTxsBufferEmpty()))
@@ -540,7 +534,7 @@ bool TransactionSync::importDownloadedTxs(
                 }
                 try
                 {
-                    tx->verify();
+                    tx->verify(*m_hashImpl, *m_signatureImpl);
                 }
                 catch (std::exception const& e)
                 {
@@ -602,7 +596,7 @@ void TransactionSync::maintainTransactions()
         m_newTransactions = false;
         return;
     }
-    broadcastTxsFromRpc(connectedNodeList, consensusNodeList, txs);
+    broadcastTxsFromRpc(consensusNodeList, txs);
     forwardTxsFromP2P(connectedNodeList, consensusNodeList, txs);
 }
 
@@ -689,7 +683,7 @@ NodeIDListPtr TransactionSync::selectPeers(Transaction::ConstPtr _tx,
     return selectedPeers;
 }
 
-void TransactionSync::broadcastTxsFromRpc(NodeIDSet const& _connectedPeers,
+void TransactionSync::broadcastTxsFromRpc(
     ConsensusNodeList const& _consensusNodeList, ConstTransactionsPtr _txs)
 {
     auto block = m_config->blockFactory()->createBlock();
@@ -702,10 +696,6 @@ void TransactionSync::broadcastTxsFromRpc(NodeIDSet const& _connectedPeers,
         }
         for (auto const& node : _consensusNodeList)
         {
-            if (!_connectedPeers.contains(node->nodeID()))
-            {
-                continue;
-            }
             tx->appendKnownNode(node->nodeID());
         }
         block->appendTransaction(std::const_pointer_cast<Transaction>(tx));
@@ -752,7 +742,7 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
 
 void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
 {
-    auto txsHash = m_config->txpoolStorage()->getAllTxsHash();
+    auto txsHash = m_config->txpoolStorage()->getTxsHash(c_MaxResponsedTxsToNodesWithEmptyTxs);
     if (txsHash->empty())
     {
         return;
@@ -778,5 +768,6 @@ void TransactionSync::onEmptyTxs()
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, HashList());
     auto packetData = txsStatus->encode();
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, ref(*packetData));
+        bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
+        ModuleID::TxsSync, ref(*packetData));
 }

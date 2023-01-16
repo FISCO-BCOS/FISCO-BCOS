@@ -150,6 +150,7 @@ protected:
 
     // default timeout is 3000ms
     std::atomic<uint64_t> m_consensusTimeout = {3000};
+    constexpr const static uint64_t s_consensusTimeout = 3000;
     // default blockTxCountLimit is 1000
     std::atomic<uint64_t> m_blockTxCountLimit = {1000};
 

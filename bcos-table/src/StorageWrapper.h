@@ -7,6 +7,7 @@
 #include <boost/throw_exception.hpp>
 #include <optional>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace bcos::storage
@@ -22,7 +23,7 @@ class StorageWrapper
 {
 public:
     StorageWrapper(storage::StateStorageInterface::Ptr storage, bcos::storage::Recoder::Ptr recoder)
-      : m_storage(std::move(storage)), m_recoder(recoder)
+      : m_storage(std::move(storage)), m_recoder(std::move(recoder))
     {}
 
     StorageWrapper(const StorageWrapper&) = delete;
@@ -30,7 +31,7 @@ public:
     StorageWrapper& operator=(const StorageWrapper&) = delete;
     StorageWrapper& operator=(StorageWrapper&&) = delete;
 
-    virtual ~StorageWrapper() {}
+    virtual ~StorageWrapper() = default;
 
     std::vector<std::string> getPrimaryKeys(
         const std::string_view& table, const std::optional<storage::Condition const>& _condition)
@@ -59,7 +60,7 @@ public:
     {
         GetRowResponse value;
         m_storage->asyncGetRow(table, _key, [&value](auto&& error, auto&& entry) mutable {
-            value = {std::move(error), std::move(entry)};
+            value = {std::forward<decltype(error)>(error), std::forward<decltype(entry)>(entry)};
         });
 
         auto& [error, entry] = value;
@@ -72,12 +73,13 @@ public:
         return std::move(entry);
     }
 
-    virtual std::vector<std::optional<storage::Entry>> getRows(
-        const std::string_view& table, const std::variant<const gsl::span<std::string_view const>,
-                                           const gsl::span<std::string const>>& _keys)
+    virtual std::vector<std::optional<storage::Entry>> getRows(const std::string_view& table,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys)
     {
         GetRowsResponse value;
-        m_storage->asyncGetRows(table, _keys, [&value](auto&& error, auto&& entries) mutable {
+        m_storage->asyncGetRows(table, keys, [&value](auto&& error, auto&& entries) mutable {
             value = {std::move(error), std::move(entries)};
         });
 

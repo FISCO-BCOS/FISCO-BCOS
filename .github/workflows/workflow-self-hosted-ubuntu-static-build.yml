@@ -2,8 +2,10 @@ name: Ubuntu Static Build
 on:
   pull_request:
     branches:
-      - release-3.1.0
-    types: [closed] 
+      - release-3.*
+      - feature-3.*
+      - master
+    types: [closed]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -11,7 +13,7 @@ concurrency:
 
 jobs:
   build_ubuntu:
-    name: ubuntu static build 
+    name: ubuntu static build
     if:  github.event.pull_request.merged == true
     runs-on: self-hosted-static-ubuntu
     strategy:
@@ -51,6 +53,9 @@ jobs:
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
+
+      - name: Config vcpkg registry proxy
+        run: sed -i "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
 
       - name: Build for linux
         run: |

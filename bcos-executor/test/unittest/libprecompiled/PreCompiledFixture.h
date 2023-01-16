@@ -19,9 +19,12 @@
  */
 
 #pragma once
+#include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-table/src/StateStorageFactory.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
@@ -95,9 +98,9 @@ public:
         ledger->setBlockNumber(header->number() - 1);
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-            storage, executionResultFactory, hashImpl, _isWasm, _isCheckAuth, false);
+            storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth);
 
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -253,20 +256,24 @@ public:
     }
 
     void nextBlock(
-        int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_1_VERSION)
+        int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_2_VERSION)
     {
         if (blockNumber < 0) [[unlikely]]
         {
             // for parallel test
             return;
         }
-        std::cout << "next block: " << blockNumber << std::endl;
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(cryptoSuite,
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
-        blockHeader->setParentInfo({{blockNumber - 1, h256(blockNumber - 1)}});
+
+        std::vector<bcos::protocol::ParentInfo> parentInfos{
+            {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
+        blockHeader->setParentInfo(parentInfos);
+
         blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);
+        blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(
             0, blockHeader, [&](bcos::Error::Ptr&& error) { nextPromise.set_value(); });
@@ -280,7 +287,7 @@ public:
             // for parallel test
             return;
         }
-        std::cout << "commit block: " << blockNumber << std::endl;
+
         TwoPCParams commitParams{};
         commitParams.number = blockNumber;
 
@@ -341,6 +348,7 @@ public:
         // Create contract
         // --------------------------------
 
+        // deploy CommitteeManager
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
         executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
@@ -350,6 +358,7 @@ public:
             });
 
         auto result = executePromise.get_future().get();
+        BOOST_CHECK_EQUAL((int32_t)result->type(), (int32_t)ExecutionMessage::MESSAGE);
 
         result->setSeq(1001);
         /// call precompiled to get deploy auth
@@ -362,9 +371,12 @@ public:
             });
 
         auto result2 = executePromise2.get_future().get();
+        BOOST_CHECK_EQUAL((int32_t)result2->type(), (int32_t)ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result2->evmStatus(), 0);
 
         result2->setSeq(1000);
         /// callback get deploy committeeManager context
+        /// return checkAuth result to committeeManager
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(
             std::move(result2), [&](bcos::Error::UniquePtr&& error,
@@ -373,6 +385,7 @@ public:
                 executePromise3.set_value(std::move(result));
             });
 
+        // result3 is the deploy Committee contract request
         auto result3 = executePromise3.get_future().get();
 
         BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::MESSAGE);
@@ -397,6 +410,9 @@ public:
         auto result4 = executePromise4.get_future().get();
 
         result4->setSeq(1003);
+        BOOST_CHECK_EQUAL(result4->type(), ExecutionMessage::MESSAGE);
+        BOOST_CHECK_EQUAL(result4->evmStatus(), 0);
+
         /// call precompiled to get deploy auth
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise5;
         executor->dmcExecuteTransaction(
@@ -409,7 +425,8 @@ public:
         auto result5 = executePromise5.get_future().get();
 
         result5->setSeq(1002);
-        /// callback get deploy committee context
+        /// callback get deploy committee context, checkAuth of deploy proposalManager
+        /// complete deploy Committee
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise6;
         executor->dmcExecuteTransaction(
             std::move(result5), [&](bcos::Error::UniquePtr&& error,
@@ -419,7 +436,6 @@ public:
             });
 
         auto result6 = executePromise6.get_future().get();
-
         BOOST_CHECK_EQUAL(result6->type(), ExecutionMessage::FINISHED);
         BOOST_CHECK_EQUAL(result6->contextID(), 99);
         BOOST_CHECK_EQUAL(result6->seq(), 1002);
@@ -439,7 +455,7 @@ public:
                 BOOST_CHECK(!error);
                 executePromise7.set_value(std::move(result));
             });
-
+        /// result7 is the request to deploy proposalManager
         auto result7 = executePromise7.get_future().get();
 
         BOOST_CHECK_EQUAL(result7->type(), ExecutionMessage::MESSAGE);
@@ -530,6 +546,7 @@ public:
         auto result13 = executePromise13.get_future().get();
 
         BOOST_CHECK_EQUAL(result13->type(), ExecutionMessage::MESSAGE);
+        BOOST_CHECK_EQUAL(result13->evmStatus(), 0);
         BOOST_CHECK_EQUAL(result13->contextID(), 99);
         BOOST_CHECK_EQUAL(result13->seq(), 1006);
         BOOST_CHECK_EQUAL(result13->create(), false);
@@ -549,6 +566,7 @@ public:
         auto result14 = executePromise14.get_future().get();
 
         result14->setSeq(1006);
+        BOOST_CHECK_EQUAL((int32_t)result14->type(), (int32_t)ExecutionMessage::FINISHED);
 
         // committee callback to voteComputer
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise15;
@@ -559,6 +577,7 @@ public:
                 executePromise15.set_value(std::move(result));
             });
         auto result15 = executePromise15.get_future().get();
+        BOOST_CHECK_EQUAL((int32_t)result15->type(), (int32_t)ExecutionMessage::FINISHED);
 
         result15->setSeq(1004);
 
@@ -573,7 +592,7 @@ public:
 
         auto result16 = executePromise16.get_future().get();
 
-        BOOST_CHECK_EQUAL(result16->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL((int32_t)result16->type(), (int32_t)ExecutionMessage::FINISHED);
         BOOST_CHECK_EQUAL(result16->contextID(), 99);
         BOOST_CHECK_EQUAL(result16->seq(), 1004);
         BOOST_CHECK_EQUAL(result16->create(), false);

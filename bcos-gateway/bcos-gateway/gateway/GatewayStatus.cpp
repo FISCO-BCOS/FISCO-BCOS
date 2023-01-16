@@ -64,12 +64,12 @@ bool GatewayStatus::randomChooseP2PNode(
         ret = randomChooseNode(_p2pNodeID, GroupType::GROUP_WITH_CONSENSUS_NODE, _groupID);
     }
     // select the observer node
-    if (_type & NodeType::OBSERVER_NODE)
+    if (!ret && _type & NodeType::OBSERVER_NODE)
     {
         ret = randomChooseNode(_p2pNodeID, GroupType::GROUP_WITHOUT_CONSENSUS_NODE, _groupID);
     }
     // select the OUTSIDE_GROUP(AMOP message needed)
-    if (_type & NodeType::NODE_OUTSIDE_GROUP)
+    if (!ret && _type & NodeType::NODE_OUTSIDE_GROUP)
     {
         ret = randomChooseNode(_p2pNodeID, GroupType::OUTSIDE_GROUP, _groupID);
     }

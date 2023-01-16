@@ -56,7 +56,7 @@ bcostars::Error ExecutorServiceServer::nextBlockHeader(tars::Int64 schedulerTerm
 {
     _current->setResponse(false);
     auto header = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        m_cryptoSuite, [m_header = _blockHeader]() mutable { return &m_header; });
+        [m_header = _blockHeader]() mutable { return &m_header; });
     m_executor->nextBlockHeader(schedulerTermId, header, [_current](bcos::Error::UniquePtr _error) {
         async_response_nextBlockHeader(_current, toTarsError(std::move(_error)));
     });

@@ -16,7 +16,7 @@ public:
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback) override
+        std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
     {
         BOOST_CHECK(false);  // Need implementations
     };
@@ -30,10 +30,11 @@ public:
         _callback(nullptr);
     }
 
-    void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
-        crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) override
+    bcos::Error::Ptr storeTransactionsAndReceipts(
+        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr) override
     {
         BOOST_CHECK(false);  // Need implementations
+        return nullptr;
     };
 
     protocol::BlockHeader::Ptr m_blockHeader;
@@ -102,6 +103,10 @@ public:
     {
         BOOST_CHECK(false);  // Need implementations
     };
+
+    void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) override
+    {}
 
 
     void asyncGetSystemConfigByKey(std::string_view const& _key,

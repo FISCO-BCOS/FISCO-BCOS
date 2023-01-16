@@ -100,6 +100,28 @@ private:
         }
     }
 
+    task::Task<std::string> impl_getABI(std::string contractAddress)
+    {
+        bcostars::RequestGetABI request;
+        bcostars::ResponseGetABI response;
+        request.contractAddress = contractAddress;
+        auto nodeID = co_await p2p().randomSelectNode();
+
+        LIGHTNODE_LOG(TRACE) << LOG_KV("nodeID", nodeID) << LOG_KV("request.contractAddress", request.contractAddress);
+            co_await p2p().sendMessageByNodeID(
+            protocol::LIGHTNODE_GET_ABI, std::move(nodeID), request, response);
+        if (response.error.errorCode)
+        {
+            LIGHTNODE_LOG(WARNING) << "getABI failed, errorCode: " << response.error.errorCode
+                                   << " " << response.error.errorMessage;
+            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+        }
+        LIGHTNODE_LOG(TRACE) << "get contractAddress " << request.contractAddress << "ABI from remote, the ABI is"
+                            << response.abiStr;
+        auto abiStr = response.abiStr;
+        co_return abiStr;
+    }
+
     task::Task<bcos::concepts::ledger::Status> impl_getStatus()
     {
         bcostars::RequestGetStatus request;

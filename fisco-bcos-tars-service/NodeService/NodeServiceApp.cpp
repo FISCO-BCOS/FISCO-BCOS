@@ -86,7 +86,7 @@ void NodeServiceApp::initLog()
         m_logInitializer->setLogPath(getLogPath());
     }
 
-    m_logInitializer->initLog(pt);
+    m_logInitializer->initLog(m_iniConfigPath);
 }
 
 void NodeServiceApp::initNodeService()

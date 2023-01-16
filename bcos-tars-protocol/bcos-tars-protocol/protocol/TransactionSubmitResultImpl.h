@@ -92,7 +92,7 @@ public:
     bcos::protocol::TransactionReceipt::Ptr transactionReceipt() const override
     {
         return std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-            m_cryptoSuite, [innerPtr = &m_inner()->transactionReceipt]() { return innerPtr; });
+            [innerPtr = &m_inner()->transactionReceipt]() { return innerPtr; });
     }
     void setTransactionReceipt(bcos::protocol::TransactionReceipt::Ptr transactionReceipt) override
     {

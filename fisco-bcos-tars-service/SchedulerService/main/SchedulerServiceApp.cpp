@@ -31,7 +31,6 @@
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
-#include <bcos-scheduler/src/TarsRemoteExecutorManager.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
@@ -132,7 +131,7 @@ void SchedulerServiceApp::initConfig()
     {
         m_logInitializer->setLogPath(getLogPath());
     }
-    m_logInitializer->initLog(pt);
+    m_logInitializer->initLog(m_iniConfigPath);
 
     m_nodeConfig =
         std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
@@ -166,7 +165,7 @@ void SchedulerServiceApp::createScheduler()
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);
     // handler for notify block number
     scheduler->registerBlockNumberReceiver([this](bcos::protocol::BlockNumber number) {
-        BCOS_LOG(INFO) << "Notify blocknumber: " << number;
+        BCOS_LOG(DEBUG) << "Notify blocknumber: " << number;
         // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
         m_rpc->asyncNotifyBlockNumber(
             m_nodeConfig->groupId(), m_nodeConfig->nodeName(), number, [](bcos::Error::Ptr) {});

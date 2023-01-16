@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "TransactionReceipt.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 
 namespace bcos
@@ -32,19 +33,13 @@ class TransactionReceiptFactory
 public:
     using Ptr = std::shared_ptr<TransactionReceiptFactory>;
     TransactionReceiptFactory() = default;
-    virtual ~TransactionReceiptFactory() {}
+    virtual ~TransactionReceiptFactory() = default;
     virtual TransactionReceipt::Ptr createReceipt(bytesConstRef _receiptData) = 0;
     virtual TransactionReceipt::Ptr createReceipt(bytes const& _receiptData) = 0;
-    virtual TransactionReceipt::Ptr createReceipt(u256 const& _gasUsed,
-        const std::string_view& _contractAddress,
-        std::shared_ptr<std::vector<LogEntry>> _logEntries, int32_t _status, bytes const& _output,
-        BlockNumber _blockNumber) = 0;
 
-    virtual TransactionReceipt::Ptr createReceipt(u256 const& _gasUsed,
-        const std::string_view& _contractAddress,
-        std::shared_ptr<std::vector<LogEntry>> _logEntries, int32_t _status, bytes&& _output,
-        BlockNumber _blockNumber) = 0;
-    virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() = 0;
+    virtual TransactionReceipt::Ptr createReceipt(u256 const& gasUsed, std::string contractAddress,
+        const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
+        BlockNumber blockNumber) = 0;
 };
 }  // namespace protocol
 }  // namespace bcos

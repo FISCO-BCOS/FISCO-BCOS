@@ -23,15 +23,15 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::protocol;
 
-void ProGatewayNodeManager::DetectNodeAlive()
+void ProGatewayNodeManager::detectNodeAlive()
 {
     m_nodeAliveDetector->restart();
     auto updated = m_localRouterTable->eraseUnreachableNodes();
-    if (!updated)
+    if (updated)
     {
-        return;
+        increaseSeq();
     }
-    increaseSeq();
+
     syncLatestNodeIDList();
 }
 

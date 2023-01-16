@@ -80,8 +80,6 @@ void FrontService::checkParams()
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment(" FrontService ioService is uninitialized"));
     }
-
-    return;
 }
 
 void FrontService::start()
@@ -149,8 +147,6 @@ void FrontService::start()
     {
         FRONT_LOG(INFO) << LOG_DESC("register module") << LOG_KV("moduleID", module.first);
     }
-
-    return;
 }
 void FrontService::stop()
 {
@@ -164,7 +160,7 @@ void FrontService::stop()
     try
     {
         {
-            RecursiveGuard l(x_callback);
+            Guard guard(x_callback);
             for (auto& callback : m_callback)
             {
                 FRONT_LOG(INFO) << LOG_DESC("FrontService stopped, erase the callback")
@@ -203,8 +199,6 @@ void FrontService::stop()
     FRONT_LOG(INFO) << LOG_DESC("FrontService stop")
                     << LOG_KV("nodeID", (m_nodeID ? m_nodeID->hex() : ""))
                     << LOG_KV("groupID", m_groupID);
-
-    return;
 }
 
 /**
@@ -216,7 +210,7 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
 {
     bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo;
     {
-        Guard l(x_groupNodeInfo);
+        Guard guard(x_groupNodeInfo);
         groupNodeInfo = m_groupNodeInfo;
     }
 
@@ -237,8 +231,6 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
     FRONT_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
                     << LOG_KV("nodeIDs.size()",
                            (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
-
-    return;
 }
 
 /**
@@ -357,7 +349,7 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
     message->setPayload(_data);
 
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
 
     m_gatewayInterface->asyncSendBroadcastMessage(
         _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
@@ -375,7 +367,7 @@ void FrontService::onReceiveGroupNodeInfo(const std::string& _groupID,
 {
     {
         protocolNegotiate(_groupNodeInfo);
-        Guard l(x_groupNodeInfo);
+        Guard guard(x_groupNodeInfo);
         m_groupNodeInfo = _groupNodeInfo;
     }
     // To be considered: How to ensure orderly notifications in the pro/max mode
