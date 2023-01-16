@@ -21,6 +21,7 @@
 #pragma once
 #include "../TransactionSyncConfig.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/protocol/Block.h>
 
 namespace bcos::sync
@@ -43,7 +44,7 @@ public:
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) = 0;
 
     virtual void onRecvSyncMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, std::function<void(bytesConstRef _response)> _sendResponse) = 0;
+        bytesConstRef _data, std::function<void(bytesConstRef response)> _sendResponse) = 0;
 
     virtual TransactionSyncConfig::Ptr config() { return m_config; }
     virtual void onEmptyTxs() = 0;

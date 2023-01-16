@@ -25,9 +25,15 @@
 #include <bcos-concepts/Hash.h>
 #include <bcos-utilities/Common.h>
 #include <boost/endian/conversion.hpp>
+#include <range/v3/algorithm/transform.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
+
+struct EmptyBlockHeaderHash : public bcos::error::Exception
+{
+};
+
 void BlockHeaderImpl::decode(bcos::bytesConstRef _data)
 {
     tars::TarsInputStream<tars::BufferReader> input;
@@ -44,52 +50,47 @@ void BlockHeaderImpl::encode(bcos::bytes& _encodeData) const
     output.getByteBuffer().swap(_encodeData);
 }
 
-
 bcos::crypto::HashType BlockHeaderImpl::hash() const
 {
-    bcos::UpgradableGuard l(x_inner);
-    if (!m_inner()->dataHash.empty())
+    if (m_inner()->dataHash.empty())
     {
-        return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->dataHash.data()));
+        BOOST_THROW_EXCEPTION(EmptyBlockHeaderHash{});
     }
-    auto hashImpl = m_cryptoSuite->hashImpl();
-    auto anyHasher = hashImpl->hasher();
 
+    bcos::crypto::HashType hashResult(
+        (bcos::byte*)m_inner()->dataHash.data(), m_inner()->dataHash.size());
+
+    return hashResult;
+}
+
+void BlockHeaderImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
+{
+    auto anyHasher = hashImpl.hasher();
     bcos::crypto::HashType hashResult;
     std::visit(
-        [this, &hashResult, &l](auto& hasher) {
+        [this, &hashResult](auto& hasher) {
             using Hasher = std::remove_cvref_t<decltype(hasher)>;
             bcos::concepts::hash::calculate<Hasher>(*m_inner(), hashResult);
 
-            bcos::UpgradeGuard ul(l);
             m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
         },
         anyHasher);
-    return hashResult;
 }
 
 void BlockHeaderImpl::clear()
 {
     m_inner()->resetDefautlt();
-    m_parentInfo.clear();
 }
 
-gsl::span<const bcos::protocol::ParentInfo> BlockHeaderImpl::parentInfo() const
+RANGES::any_view<bcos::protocol::ParentInfo, RANGES::category::input | RANGES::category::sized>
+BlockHeaderImpl::parentInfo() const
 {
-    bcos::ReadGuard l(x_inner);
-    if (m_parentInfo.empty())
-    {
-        for (auto const& it : m_inner()->data.parentInfo)
-        {
-            bcos::protocol::ParentInfo parentInfo;
-            parentInfo.blockNumber = it.blockNumber;
-            parentInfo.blockHash =
-                *(reinterpret_cast<const bcos::crypto::HashType*>(it.blockHash.data()));
-            m_parentInfo.emplace_back(parentInfo);
-        }
-    }
-
-    return gsl::span(m_parentInfo.data(), m_parentInfo.size());
+    return m_inner()->data.parentInfo |
+           RANGES::views::transform([](const bcostars::ParentInfo& tarsParentInfo) {
+               return bcos::protocol::ParentInfo{.blockNumber = tarsParentInfo.blockNumber,
+                   .blockHash = bcos::crypto::HashType((bcos::byte*)tarsParentInfo.blockHash.data(),
+                       tarsParentInfo.blockHash.size())};
+           });
 }
 
 bcos::crypto::HashType BlockHeaderImpl::txsRoot() const
@@ -129,17 +130,15 @@ bcos::u256 BlockHeaderImpl::gasUsed() const
     return {};
 }
 
-void BlockHeaderImpl::setParentInfo(gsl::span<const bcos::protocol::ParentInfo> const& _parentInfo)
+void BlockHeaderImpl::setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfos)
 {
-    bcos::WriteGuard l(x_inner);
-    m_parentInfo.clear();
-    m_inner()->data.parentInfo.clear();
-    for (auto& it : _parentInfo)
+    auto* inner = m_inner();
+    inner->data.parentInfo.clear();
+    for (auto it : parentInfos)
     {
-        ParentInfo parentInfo;
-        parentInfo.blockNumber = it.blockNumber;
-        parentInfo.blockHash.assign(it.blockHash.begin(), it.blockHash.end());
-        m_inner()->data.parentInfo.emplace_back(parentInfo);
+        auto& newParentInfo = inner->data.parentInfo.emplace_back();
+        newParentInfo.blockNumber = it.blockNumber;
+        newParentInfo.blockHash.assign(it.blockHash.begin(), it.blockHash.end());
     }
     clearDataHash();
 }
@@ -149,7 +148,7 @@ void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerL
     m_inner()->data.sealerList.clear();
     for (auto const& it : _sealerList)
     {
-        m_inner()->data.sealerList.push_back(std::vector<char>(it.begin(), it.end()));
+        m_inner()->data.sealerList.emplace_back(it.begin(), it.end());
     }
     clearDataHash();
 }
@@ -162,7 +161,7 @@ void BlockHeaderImpl::setSignatureList(
     // in case of the consensus module get the cached-sync-blockHeader with signatureList which will
     // cause redundant signature lists to be stored
     m_inner()->signatureList.clear();
-    for (auto& it : _signatureList)
+    for (const auto& it : _signatureList)
     {
         Signature signature;
         signature.sealerIndex = it.index;

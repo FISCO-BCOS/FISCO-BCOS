@@ -333,19 +333,23 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
         auto syncMsg = m_config->msgFactory()->createBlockSyncMsg(_data);
         switch (syncMsg->packetType())
         {
-        case BlockSyncPacketType::BlockStatusPacket: {
+        case BlockSyncPacketType::BlockStatusPacket:
+        {
             onPeerStatus(_nodeID, syncMsg);
             break;
         }
-        case BlockSyncPacketType::BlockRequestPacket: {
+        case BlockSyncPacketType::BlockRequestPacket:
+        {
             onPeerBlocksRequest(_nodeID, syncMsg);
             break;
         }
-        case BlockSyncPacketType::BlockResponsePacket: {
+        case BlockSyncPacketType::BlockResponsePacket:
+        {
             onPeerBlocks(_nodeID, syncMsg);
             break;
         }
-        default: {
+        default:
+        {
             BLKSYNC_LOG(WARNING) << LOG_DESC(
                                         "asyncNotifyBlockSyncMessage: unknown block sync message")
                                  << LOG_KV("type", syncMsg->packetType())
@@ -517,16 +521,16 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
     for (size_t loop = 0; loop < m_config->maxShardPerPeer() && shard < shardNumber; loop++)
     {
         bool findPeer = false;
+        // shard: [from, to]
         m_syncStatus->foreachPeerRandom([&](PeerStatus::Ptr _p) {
             if (_p->number() < m_config->knownHighestNumber())
             {
                 // Only send request to nodes which are not syncing(has max number)
                 return true;
             }
-            // shard: [from, to]
             BlockNumber from = _from + 1 + shard * blockSizePerShard;
             BlockNumber to = std::min((BlockNumber)(from + blockSizePerShard - 1), _to);
-            if (_p->number() < to)
+            if (_p->number() < to || _p->archivedBlockNumber() >= from)
             {
                 return true;  // to next peer
             }
@@ -544,6 +548,7 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
             BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("Request")
                               << LOG_DESC("Request blocks") << LOG_KV("from", from)
                               << LOG_KV("to", to) << LOG_KV("curNum", m_config->blockNumber())
+                              << LOG_KV("peerArchived", _p->archivedBlockNumber())
                               << LOG_KV("peer", _p->nodeId()->shortHex())
                               << LOG_KV("maxRequestNumber", m_maxRequestNumber)
                               << LOG_KV("node", m_config->nodeID()->shortHex());
@@ -645,11 +650,16 @@ void BlockSync::maintainBlockRequest()
         {
             auto blocksReq = reqQueue->topAndPop();
             BlockNumber numberLimit = blocksReq->fromNumber() + blocksReq->size();
+            // read archived block number to check the request range
+            // the number less than archived block number is not exist
+            auto archivedBlockNumber = m_config->archiveBlockNumber();
             BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download Request: response blocks")
                                << LOG_KV("from", blocksReq->fromNumber())
                                << LOG_KV("size", blocksReq->size()) << LOG_KV("to", numberLimit - 1)
+                               << LOG_KV("archivedNumber", archivedBlockNumber)
                                << LOG_KV("peer", _p->nodeId()->shortHex());
-            for (BlockNumber number = blocksReq->fromNumber(); number < numberLimit; number++)
+            BlockNumber startNumber = std::max(blocksReq->fromNumber(), archivedBlockNumber);
+            for (BlockNumber number = startNumber; number < numberLimit; number++)
             {
                 fetchAndSendBlock(reqQueue, _p->nodeId(), number);
             }
@@ -672,7 +682,6 @@ void BlockSync::fetchAndSendBlock(
                     << LOG_DESC("fetchAndSendBlock failed for asyncGetBlockDataByNumber failed")
                     << LOG_KV("number", _number) << LOG_KV("errorCode", _error->errorCode())
                     << LOG_KV("errorMessage", _error->errorMessage());
-                _reqQueue->push(_number, 1);
                 return;
             }
             try
@@ -686,9 +695,9 @@ void BlockSync::fetchAndSendBlock(
                 auto signature = blockHeader->signatureList();
                 auto config = sync->m_config;
                 auto blocksReq = config->msgFactory()->createBlocksMsg();
-                bytesPointer blockData = std::make_shared<bytes>();
-                _block->encode(*blockData);
-                blocksReq->appendBlockData(std::move(*blockData));
+                bytes blockData;
+                _block->encode(blockData);
+                blocksReq->appendBlockData(std::move(blockData));
                 blocksReq->setNumber(_number);
                 config->frontService()->asyncSendMessageByNodeID(
                     ModuleID::BlockSync, _peer, ref(*(blocksReq->encode())), 0, nullptr);
@@ -738,53 +747,34 @@ void BlockSync::maintainPeersConnection()
     {
         m_syncStatus->deletePeer(node);
     }
-    // Add new peers
-    auto groupNodeList = m_config->groupNodeList();
-    for (auto node : groupNodeList)
-    {
-        // skip the node-self
-        if (node->data() == m_config->nodeID()->data())
-        {
-            continue;
-        }
-        // not send request to the nodes disconnected
-        if (!m_config->connected(node))
-        {
-            continue;
-        }
-        // create a peer
-        auto newPeerStatus = m_config->msgFactory()->createBlockSyncStatusMsg(
-            m_config->blockNumber(), m_config->hash(), m_config->genesisHash(),
-            static_cast<int32_t>(BlockSyncMsgVersion::v1));
-        m_syncStatus->updatePeerStatus(m_config->nodeID(), newPeerStatus);
-        BLKSYNC_LOG(TRACE) << LOG_BADGE("Status") << LOG_DESC("Send current status to peer")
-                           << LOG_KV("number", newPeerStatus->number())
-                           << LOG_KV("genesisHash", newPeerStatus->genesisHash().abridged())
-                           << LOG_KV("currentHash", newPeerStatus->hash().abridged())
-                           << LOG_KV("peer", node->shortHex())
-                           << LOG_KV("node", m_config->nodeID()->shortHex());
-        auto encodedData = newPeerStatus->encode();
-        m_config->frontService()->asyncSendMessageByNodeID(
-            ModuleID::BlockSync, node, ref(*encodedData), 0, nullptr);
-    }
+    // create a peer
+    broadcastSyncStatus();
 }
 
 void BlockSync::broadcastSyncStatus()
 {
-    auto statusMsg = m_config->msgFactory()->createBlockSyncStatusMsg(
-        m_config->blockNumber(), m_config->hash(), m_config->genesisHash());
+    auto statusMsg = m_config->msgFactory()->createBlockSyncStatusMsg(m_config->blockNumber(),
+        m_config->hash(), m_config->genesisHash(), static_cast<int32_t>(BlockSyncMsgVersion::v2),
+        m_config->archiveBlockNumber());
+    m_syncStatus->updatePeerStatus(m_config->nodeID(), statusMsg);
     auto encodedData = statusMsg->encode();
     BLKSYNC_LOG(TRACE) << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatus")
                        << LOG_KV("number", statusMsg->number())
                        << LOG_KV("genesisHash", statusMsg->genesisHash().abridged())
                        << LOG_KV("currentHash", statusMsg->hash().abridged());
-    m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
-        ModuleID::BlockSync, ref(*encodedData));
+    // Note: only send status to the observers/sealers, but the OUTSIDE_GROUP node node maybe
+    // observer/sealer before sync to the highest here can't use asyncSendBroadcastMessage
+    auto const& groupNodeList = m_config->groupNodeList();
+    for (auto const& nodeID : groupNodeList)
+    {
+        m_config->frontService()->asyncSendMessageByNodeID(
+            ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+    }
 }
 
 bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)
 {
+    // if the node is down, it has no peer information
     if (!m_syncStatus->hasPeer(_nodeID))
     {
         return true;
@@ -806,6 +796,7 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
 
     int64_t currentNumber = m_config->blockNumber();
     syncInfo["blockNumber"] = currentNumber;
+    syncInfo["archivedBlockNumber"] = m_config->archiveBlockNumber();
     syncInfo["latestHash"] = *toHexString(m_config->hash());
     syncInfo["knownHighestNumber"] = m_config->knownHighestNumber();
     syncInfo["knownLatestHash"] = *toHexString(m_config->knownLatestHash());
@@ -822,6 +813,7 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
         info["genesisHash"] = *toHexString(_p->genesisHash());
         info["blockNumber"] = Json::UInt64(_p->number());
         info["latestHash"] = *toHexString(_p->hash());
+        info["archivedBlockNumber"] = Json::UInt64(_p->archivedBlockNumber());
         peersInfo.append(info);
         return true;
     });

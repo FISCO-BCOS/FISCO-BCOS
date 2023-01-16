@@ -7,6 +7,7 @@
 module bcostars {
     interface TxPoolService {
         Error submit(Transaction tx, out TransactionSubmitResult result);
+        Error broadcastPushTransaction(Transaction tx);
         
         Error asyncSealTxs(long txsLimit, vector<vector<byte>> avoidTxs, out Block txsList, out Block sysTxsList);
         Error asyncMarkTxs(vector<vector<byte>> txHashs, bool sealedFlag, long batchId, vector<byte> batchHash);

@@ -3,6 +3,61 @@
 #include <bcos-task/Wait.h>
 using namespace bcostars;
 
+bcostars::Error TxPoolServiceServer::submit(const bcostars::Transaction& tx,
+    bcostars::TransactionSubmitResult& result, tars::TarsCurrentPtr current)
+{
+    current->setResponse(false);
+
+    auto transaction = std::make_shared<protocol::TransactionImpl>(
+        [m_transaction = std::move(const_cast<bcostars::Transaction&>(tx))]() mutable {
+            return &m_transaction;
+        });
+    bcos::task::wait([](std::shared_ptr<bcos::txpool::TxPoolInterface> txpool,
+                         protocol::TransactionImpl::Ptr transaction,
+                         tars::TarsCurrentPtr current) -> bcos::task::Task<void> {
+        try
+        {
+            auto submitResult = co_await txpool->submitTransaction(std::move(transaction));
+            async_response_submit(current, {},
+                std::dynamic_pointer_cast<bcostars::protocol::TransactionSubmitResultImpl>(
+                    submitResult)
+                    ->inner());
+        }
+        catch (bcos::Error& e)
+        {
+            async_response_submit(current, toTarsError(e), {});
+        }
+    }(m_txpoolInitializer->txpool(), std::move(transaction), current));
+
+    return {};
+}
+
+bcostars::Error TxPoolServiceServer::broadcastPushTransaction(
+    const bcostars::Transaction& tx, tars::TarsCurrentPtr current)
+{
+    current->setResponse(false);
+
+    auto transaction = std::make_shared<protocol::TransactionImpl>(
+        [m_transaction = std::move(const_cast<bcostars::Transaction&>(tx))]() mutable {
+            return &m_transaction;
+        });
+    bcos::task::wait([](std::shared_ptr<bcos::txpool::TxPoolInterface> txpool,
+                         protocol::TransactionImpl::Ptr transaction,
+                         tars::TarsCurrentPtr current) -> bcos::task::Task<void> {
+        try
+        {
+            co_await txpool->broadcastPushTransaction(*transaction);
+            async_response_broadcastPushTransaction(current, {});
+        }
+        catch (bcos::Error& e)
+        {
+            async_response_broadcastPushTransaction(current, toTarsError(e));
+        }
+    }(m_txpoolInitializer->txpool(), std::move(transaction), current));
+
+    return {};
+}
+
 bcostars::Error TxPoolServiceServer::asyncFillBlock(const vector<vector<tars::Char>>& txHashs,
     vector<bcostars::Transaction>& filled, tars::TarsCurrentPtr current)
 {
@@ -128,36 +183,6 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
         });
 
     return bcostars::Error();
-}
-
-bcostars::Error TxPoolServiceServer::submit(const bcostars::Transaction& tx,
-    bcostars::TransactionSubmitResult& result, tars::TarsCurrentPtr current)
-{
-    current->setResponse(false);
-
-    auto transaction =
-        std::make_shared<protocol::TransactionImpl>(m_txpoolInitializer->cryptoSuite(),
-            [m_transaction = std::move(const_cast<bcostars::Transaction&>(tx))]() mutable {
-                return &m_transaction;
-            });
-    bcos::task::wait([](std::shared_ptr<bcos::txpool::TxPoolInterface> txpool,
-                         protocol::TransactionImpl::Ptr transaction,
-                         tars::TarsCurrentPtr current) -> bcos::task::Task<void> {
-        try
-        {
-            auto submitResult = co_await txpool->submitTransaction(std::move(transaction));
-            async_response_submit(current, {},
-                std::dynamic_pointer_cast<bcostars::protocol::TransactionSubmitResultImpl>(
-                    submitResult)
-                    ->inner());
-        }
-        catch (bcos::Error& e)
-        {
-            async_response_submit(current, toTarsError(e), {});
-        }
-    }(m_txpoolInitializer->txpool(), std::move(transaction), std::move(current)));
-
-    return {};
 }
 
 bcostars::Error TxPoolServiceServer::asyncVerifyBlock(const vector<tars::Char>& generatedNodeID,

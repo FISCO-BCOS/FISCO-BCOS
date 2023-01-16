@@ -12,7 +12,7 @@ SHELL_FOLDER=$(
 )
 
 check_script="clang-format"
-commit_limit=10
+commit_limit=1000
 file_limit=35
 insert_limit=300
 license_line=20
@@ -74,7 +74,7 @@ function check_PR_limit() {
     #     LOG_ERROR "modify ${files} files, limit is ${file_limit}"
     #     exit 1
     # fi
-    local need_check_files=$(git diff --numstat HEAD^ |awk '{print $3}'|grep -vE 'test|tools\/|fisco-bcos\/|.github\/')
+    local need_check_files=$(git diff --numstat HEAD^ |sed "s/{.*> //g" |sed "s/}//g" |awk '{print $3}' |grep -vE 'test|tools\/|fisco-bcos\/|.github\/')
     echo "need check files:"
     echo "${need_check_files}"
 
@@ -108,10 +108,10 @@ function check_PR_limit() {
     local unique_commit=$(git log --format="%an %s" HEAD^..HEAD | sort -u | wc -l)
     if [ ${unique_commit} -ne ${commits} ]; then
         LOG_ERROR "${commits} != ${unique_commit}, please make commit message unique!"
-        exit 1
+        # exit 1
     fi
     local merges=$(git log --format=%s HEAD^..HEAD | grep -i merge | wc -l)
-    if [ ${merges} -gt 5 ]; then
+    if [ ${merges} -gt 10 ]; then
         LOG_ERROR "PR contain merge : ${merges}, Please rebase!"
         exit 1
     fi

@@ -1,7 +1,7 @@
 #include "bcos-task/Wait.h"
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
-#include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
+#include <bcos-lightnode/transaction-pool/TransactionPoolImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>
@@ -33,7 +33,7 @@ public:
             receipt.data.status = 100;
             receipt.data.blockNumber = 10086;
             auto receiptObj = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                nullptr, [receipt = std::move(receipt)]() mutable { return &receipt; });
+                [receipt = std::move(receipt)]() mutable { return &receipt; });
             result->setTransactionReceipt(receiptObj);
             co_return result;
         }
@@ -52,7 +52,7 @@ public:
         bcostars::TransactionReceipt receipt;
         receipt.data.status = 79;
         auto receiptObj = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-            nullptr, [receipt = std::move(receipt)]() mutable { return &receipt; });
+            [receipt = std::move(receipt)]() mutable { return &receipt; });
         result->setTransactionReceipt(receiptObj);
         std::cout << "resume ended " << std::this_thread::get_id() << std::endl;
 

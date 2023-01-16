@@ -61,7 +61,7 @@ TransactionStatus LedgerNonceChecker::checkBlockLimit(bcos::protocol::Transactio
 }
 
 
-void LedgerNonceChecker::batchInsert(BlockNumber _batchId, NonceListPtr _nonceList)
+void LedgerNonceChecker::batchInsert(BlockNumber _batchId, NonceListPtr const& _nonceList)
 {
     if (m_blockNumber < _batchId)
     {

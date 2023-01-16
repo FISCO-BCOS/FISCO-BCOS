@@ -25,6 +25,7 @@
 #include <ratio>
 #include <stack>
 #include <thread>
+#include <utility>
 
 namespace bcos::scheduler
 {
@@ -49,8 +50,9 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
-      : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool)
+      : BlockExecutive(std::move(block), scheduler, startContextID,
+            std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
+            std::move(_txPool))
     {
         m_syncBlock = _syncBlock;
         m_gasLimit = _gasLimit;
@@ -195,6 +197,7 @@ protected:
     bool m_isRunning = false;
 
     std::function<void()> f_onNeedSwitchEvent;
+    crypto::Hash::Ptr m_hashImpl;
 };
 
 }  // namespace bcos::scheduler

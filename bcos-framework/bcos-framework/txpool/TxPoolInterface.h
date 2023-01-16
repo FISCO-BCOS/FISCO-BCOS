@@ -25,6 +25,8 @@
 #include "TxPoolTypeDef.h"
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
+#include <boost/throw_exception.hpp>
+#include <stdexcept>
 
 namespace bcos
 {
@@ -48,14 +50,36 @@ public:
      * @return protocol::TransactionSubmitResult::Ptr
      */
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr transaction) = 0;
+        [[maybe_unused]] protocol::Transaction::Ptr transaction)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+    }
+
+    virtual task::Task<void> broadcastPushTransaction(
+        [[maybe_unused]] const protocol::Transaction& transaction)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+    }
+
+    virtual task::Task<void> onReceivePushTransaction(
+        bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+    }
+
+    virtual task::Task<std::vector<protocol::Transaction::Ptr>> getMissedTransactions(
+        std::vector<crypto::HashType> transactionHashes, bcos::crypto::NodeIDPtr fromNodeID)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+    }
 
     /**
      * @brief fetch transactions from the txpool
      *
      * @param _txsLimit the max number of the transactions to be fetch
      * @param _avoidTxs list of transactions that need to be filtered
-     * @param _sealCallback after the  txpool responds to the sealed txs, the callback is triggered
+     * @param _sealCallback after the  txpool responds to the sealed txs, the callback is
+     * triggered
      */
     virtual void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
@@ -120,6 +144,8 @@ public:
     // determine to clean up txs periodically or not
     virtual void registerTxsCleanUpSwitch(std::function<bool()>) {}
     virtual void clearAllTxs() {}
+
+    virtual void tryToSyncTxsFromPeers() {}
 };
 }  // namespace txpool
 }  // namespace bcos

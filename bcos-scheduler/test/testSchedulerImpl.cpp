@@ -131,6 +131,8 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
             std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract1");
         block->appendTransactionMetaData(std::move(metaTx));
     }
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
+
     // executeBlock
     bcos::protocol::BlockHeader::Ptr blockHeader;
 
@@ -167,6 +169,7 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
                 std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract1");
             block->appendTransactionMetaData(std::move(metaTx));
         }
+        block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
         // executeBlock
         bcos::protocol::BlockHeader::Ptr blockHeader;
         SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHash", block)
@@ -207,6 +210,7 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
                 std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract2");
             block->appendTransactionMetaData(std::move(metaTx));
         }
+        block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
         bcos::protocol::BlockHeader::Ptr executeHeader1;
         // execute olderBlock whenQueueFront whenInQueue
         scheduler->executeBlock(block, false,
@@ -240,6 +244,7 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
             std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract2");
         block11->appendTransactionMetaData(std::move(metaTx));
     }
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     bcos::protocol::BlockHeader::Ptr executeHeader11;
     // requestBlock = backNumber + 1
     scheduler->executeBlock(block11, false,
@@ -280,6 +285,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
                 std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(h256(j), "contract2");
             block->appendTransactionMetaData(std::move(metaTx));
         }
+        block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
         // executeBlock
         bcos::protocol::BlockHeader::Ptr blockHeader;
         scheduler->executeBlock(block, false,
@@ -310,10 +316,12 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     size_t errorNumber = 0;
     size_t queueFrontNumber = 0;
     ledger->commitSuccess(true);
+    ledger->commitSuccess(true); // the committed block number is 7
     for (size_t i = 7; i < 11; ++i)
     {
         auto blockHeader = blockHeaderFactory->createBlockHeader();
         blockHeader->setNumber(i);
+        blockHeader->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
         std::promise<bool> committedPromise;
         scheduler->commitBlock(
             blockHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
@@ -341,8 +349,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
             commitBlockError = false;
         }
     }
-    BOOST_CHECK_EQUAL(errorNumber, 1);
-    BOOST_CHECK_EQUAL(queueFrontNumber, 3);
+    BOOST_CHECK_EQUAL(errorNumber, 4);
+    BOOST_CHECK_EQUAL(queueFrontNumber, 0);
     BOOST_CHECK(!commitBlockError);
     SCHEDULER_LOG(DEBUG) << LOG_KV("errorNumber", errorNumber)
                          << LOG_KV("queueFrontNumber", queueFrontNumber);
@@ -350,6 +358,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     // commit blockNumber <= 5
     auto blockHeader0 = blockHeaderFactory->createBlockHeader();
     blockHeader0->setNumber(0);
+    blockHeader0->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     std::promise<bool> committedPromise;
     scheduler->commitBlock(
         blockHeader0, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
@@ -387,6 +396,7 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
     // create Block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(6);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     for (size_t i = 0; i < 10; ++i)
     {
@@ -486,7 +496,6 @@ BOOST_AUTO_TEST_CASE(call)
     auto executor = std::make_shared<MockParallelExecutorForCall>("executor1");
     executorManager->addExecutor("executor1", executor);
 
-
     std::string inputStr = "Hello world! request";
     bcos::crypto::KeyPairInterface::Ptr keyPair =
         blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
@@ -557,6 +566,7 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
     // Generate a test block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(0);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto tx = blockFactory->transactionFactory()->createTransaction(
         3, precompiled::AUTH_COMMITTEE_ADDRESS, {}, u256(1), 500, "chainId", "groupId", utcTime());

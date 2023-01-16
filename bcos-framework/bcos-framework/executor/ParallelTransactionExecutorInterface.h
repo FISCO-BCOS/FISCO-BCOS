@@ -31,12 +31,9 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/iterator/iterator_categories.hpp>
-#include <boost/range/any_range.hpp>
 #include <memory>
 
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 class ParallelTransactionExecutorInterface
 {
@@ -50,9 +47,9 @@ public:
             callback)
     {
         // TODO: use pure virtual function
-        auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
-        status->setSeq(m_seq);
-        callback(nullptr, std::move(status));
+        auto executorStatus = std::make_unique<bcos::protocol::ExecutorStatus>();
+        executorStatus->setSeq(m_seq);
+        callback(nullptr, std::move(executorStatus));
     };
 
     virtual void nextBlockHeader(int64_t schedulerTermId,
@@ -137,5 +134,4 @@ public:
 protected:
     int64_t m_seq = utcTime();
 };
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

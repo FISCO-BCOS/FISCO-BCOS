@@ -65,7 +65,7 @@ int main(int argc, const char* argv[])
     int max = std::max(total, dbKeys);
     std::vector<std::string> keySet(max, "");
     std::vector<std::string> valueSet(max, "");
-#pragma omp parallel for
+
     for (int i = 0; i < max; ++i)
     {
         keySet[i] = boost::uuids::to_string(boost::uuids::random_generator()());
@@ -102,10 +102,8 @@ int main(int argc, const char* argv[])
     {
         rocksdb::WriteBatch b;
 
-#pragma omp parallel for
         for (int i = 0; i < dbKeys; ++i)
         {
-#pragma omp critical
             b.Put(keySet[i], valueSet[i]);
         }
         db->Write(rocksdb::WriteOptions(), &b);
@@ -266,10 +264,8 @@ int main(int argc, const char* argv[])
     {
         rocksdb::WriteBatch b;
 
-#pragma omp parallel for
         for (int i = 0; i < dbKeys; ++i)
         {
-#pragma omp critical
             b.Put(keySet[i], valueSet[i]);
         }
         db->Write(rocksdb::WriteOptions(), &b);

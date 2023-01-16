@@ -2,8 +2,10 @@ name: Arm Static Buld
 on:
   pull_request:
     branches:
-      - release-3.1.0
-    types: [closed] 
+      - release-3.*
+      - feature-3.*
+      - master
+    types: [closed]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -15,7 +17,7 @@ jobs:
     runs-on: self-hosted-static-arm
     strategy:
       fail-fast: false
-    env: 
+    env:
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
     steps:
@@ -40,6 +42,9 @@ jobs:
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
+
+      - name: Config vcpkg registry proxy
+        run: sed -i "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
 
       - name: Build for linux
         run: |

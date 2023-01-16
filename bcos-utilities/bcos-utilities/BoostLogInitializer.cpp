@@ -19,6 +19,8 @@
  * @author: yujiechen
  */
 #include "BoostLogInitializer.h"
+#include "bcos-framework/bcos-framework/Common.h"
+#include "bcos-utilities/BoostLog.h"
 #include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/core/core.hpp>
@@ -29,6 +31,37 @@ using namespace bcos;
 
 namespace logging = boost::log;
 namespace expr = boost::log::expressions;
+
+// register SIGUSE2 for dynamic reset log level
+struct BoostLogLevelResetHandler
+{
+    static void handle(int sig)
+    {
+        BCOS_LOG(INFO) << LOG_BADGE("BoostLogInitializer::Signal")
+                       << LOG_DESC("receive SIGUSE2 sig");
+
+        try
+        {
+            boost::property_tree::ptree pt;
+            boost::property_tree::read_ini(configFile, pt);
+
+            auto logLevelStr = pt.get<std::string>("log.level", "info");
+            /// set log level
+            unsigned logLevel = bcos::BoostLogInitializer::getLogLevel(logLevelStr);
+
+            setFileLogLevel((LogLevel)logLevel);
+
+            BCOS_LOG(INFO) << LOG_BADGE("BoostLogInitializer::Signal") << LOG_DESC("set log level")
+                           << LOG_KV("logLevelStr", logLevelStr) << LOG_KV("logLevel", logLevel);
+        }
+        catch (...)
+        {}
+    }
+
+    static std::string configFile;
+};
+
+std::string BoostLogLevelResetHandler::configFile;
 
 /// handler to solve log rotate
 bool BoostLogInitializer::canRotate(size_t const& _index)
@@ -89,6 +122,29 @@ BoostLogInitializer::initConsoleLogSink(
     boost::log::core::get()->set_logging_enabled(enable_log);
     return consoleSink;
 }
+
+void BoostLogInitializer::initLog(
+    const std::string& _configFile, std::string const& _logger, std::string const& _logPrefix)
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_ini(_configFile, pt);
+
+    initLog(pt, _logger, _logPrefix);
+
+    // register SIGUSR2 for reset boost log level
+    BoostLogLevelResetHandler::configFile = _configFile;
+    signal(BOOST_LOG_RELOAD_LOG_LEVEL, BoostLogLevelResetHandler::handle);
+}
+
+void BoostLogInitializer::initStatLog(
+    const std::string& _configFile, std::string const& _logger, std::string const& _logPrefix)
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_ini(_configFile, pt);
+
+    return initStatLog(pt, _logger, _logPrefix);
+}
+
 /**
  * @brief: set log for specified channel
  *
@@ -114,13 +170,25 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
         {
             m_logPath = _pt.get<std::string>("log.log_path", "log");
         }
-        boost::shared_ptr<sink_t> sink = initLogSink(_pt, logLevel, m_logPath, _logPrefix, _logger);
+
+        auto enableRotateByHour = _pt.get<bool>("log.enable_rotate_by_hour", true);
+        boost::shared_ptr<sink_t> sink = nullptr;
+        if (enableRotateByHour)
+        {
+            sink = initHourLogSink(_pt, logLevel, m_logPath, _logPrefix, _logger);
+        }
+        else
+        {
+            sink = initLogSink(_pt, logLevel, m_logPath, _logPrefix, _logger);
+        }
+
         setLogFormatter(sink);
     }
     setFileLogLevel((LogLevel)logLevel);
 }
 
-boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLogSink(
+// rotate the log file the log every hour
+boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initHourLogSink(
     boost::property_tree::ptree const& pt, unsigned const& _logLevel, std::string const& _logPath,
     std::string const& _logPrefix, std::string const& channel)
 {
@@ -128,11 +196,12 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLo
         (int)boost::posix_time::second_clock::local_time().time_of_day().hours());
     /// set file name
     std::string fileName = _logPath + "/" + _logPrefix + "_%Y%m%d%H.%M.log";
-    boost::shared_ptr<sink_t> sink(new sink_t());
 
+    boost::shared_ptr<sink_t> sink(new sink_t());
     sink->locked_backend()->set_open_mode(std::ios::app);
     sink->locked_backend()->set_time_based_rotation(
         boost::bind(&BoostLogInitializer::canRotate, this, (m_currentHourVec.size() - 1)));
+
     sink->locked_backend()->set_file_name_pattern(fileName);
     /// set rotation size MB
     uint64_t rotation_size = pt.get<uint64_t>("log.max_log_file_size", 200) * 1048576;
@@ -140,11 +209,39 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLo
     /// set auto-flush according to log configuration
     bool need_flush = pt.get<bool>("log.flush", true);
     sink->locked_backend()->auto_flush(need_flush);
+    sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel);
 
+    boost::log::core::get()->add_sink(sink);
+    m_sinks.push_back(sink);
+    bool enable_log = pt.get<bool>("log.enable", true);
+    boost::log::core::get()->set_logging_enabled(enable_log);
+    // add attributes
+    boost::log::add_common_attributes();
+    return sink;
+}
 
-    sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
-                     boost::log::trivial::severity >= _logLevel);
+boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLogSink(
+    boost::property_tree::ptree const& pt, unsigned const& _logLevel, std::string const& _logPath,
+    std::string const& _logPrefix, std::string const& channel)
+{
+    /// set file name
+    std::string fileName = _logPath + "/" + _logPrefix + "_%Y%m%d_%N.log";
+    // std::string targetFileNamePattern = _logPath + "/" + _logPrefix + "_%Y%m%d_%N.log";
+    boost::shared_ptr<sink_t> sink(new sink_t());
 
+    sink->locked_backend()->set_open_mode(std::ios::app);
+    sink->locked_backend()->set_time_based_rotation(
+        boost::log::sinks::file::rotation_at_time_point(0, 0, 0));
+    // sink->locked_backend()->set_file_name_pattern(fileName);
+    sink->locked_backend()->set_file_name_pattern(fileName);
+    // sink->locked_backend()->set_target_file_name_pattern(targetFileNamePattern);
+    /// set rotation size MB
+    uint64_t rotation_size = pt.get<uint64_t>("log.max_log_file_size", 1024) * 1048576;
+    sink->locked_backend()->set_rotation_size(rotation_size);
+    /// set auto-flush according to log configuration
+    bool need_flush = pt.get<bool>("log.flush", true);
+    sink->locked_backend()->auto_flush(need_flush);
+    sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel);
 
     boost::log::core::get()->add_sink(sink);
     m_sinks.push_back(sink);

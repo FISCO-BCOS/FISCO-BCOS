@@ -144,6 +144,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     auto version = std::min(m_sealerConfig->consensus()->compatibilityVersion(),
         (uint32_t)g_BCOSConfig.maxSupportedVersion());
     _block->blockHeader()->setVersion(version);
+    _block->blockHeader()->calculateHash(*m_hashImpl);
 
     auto encodedData = std::make_shared<bytes>();
     _block->encode(*encodedData);

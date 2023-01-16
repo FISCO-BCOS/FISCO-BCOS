@@ -63,13 +63,13 @@ public:
         std::function<void(bcos::ledger::LedgerConfig::Ptr, bool _syncBlock)> _finalizeHandler)
         override
     {
-        m_finalizeHandler = _finalizeHandler;
+        m_finalizeHandler = std::move(_finalizeHandler);
     }
     void registerOnStableCheckPointCommitFailed(
         std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
             _onStableCheckPointCommitFailed) override
     {
-        m_onStableCheckPointCommitFailed = _onStableCheckPointCommitFailed;
+        m_onStableCheckPointCommitFailed = std::move(_onStableCheckPointCommitFailed);
     }
 
     void asyncGetCommittedProposals(bcos::protocol::BlockNumber _start, size_t _offset,

@@ -24,9 +24,9 @@
 
 #include "RPCInitializer.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
-#include "bcos-lightnode/ledger/LedgerImpl.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-storage/StorageImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -66,48 +66,58 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
                            wsService = std::move(wsService), groupID = std::move(groupID),
                            nodeName = std::move(nodeName),
                            stopToken = std::move(stopToken)]() mutable {
-        bcos::pthread_setThreadName("blkNotify");
+        bcos::pthread_setThreadName("Syncer");
         while (!(*stopToken))
         {
             try
             {
-                auto ledger = bcos::concepts::getRef(toLedger);
+                auto& ledger = bcos::concepts::getRef(toLedger);
 
-                auto beforeStatus = ~ledger.getStatus();
-                ~ledger.template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
-                    fromLedger, true);
-                auto afterStatus = ~ledger.getStatus();
+                auto syncedBlock =
+                    ~ledger
+                         .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
+                             fromLedger, true);
+                auto currentStatus = ~ledger.getStatus();
 
-                // Notify the client if block number changed
-                if (afterStatus.blockNumber > beforeStatus.blockNumber)
+                if (syncedBlock > 0)
                 {
+                    // Notify the client if block number changed
                     auto sessions = wsService->sessions();
-                    std::string group;
-                    Json::Value response;
-                    response["group"] = groupID;
-                    response["nodeName"] = nodeName;
-                    response["blockNumber"] = afterStatus.blockNumber;
-                    auto resp = response.toStyledString();
 
-                    for (auto& session : sessions)
+                    if (!sessions.empty())
                     {
-                        if (session && session->isConnected())
+                        Json::Value response;
+                        response["group"] = groupID;
+                        response["nodeName"] = nodeName;
+                        response["blockNumber"] = currentStatus.blockNumber;
+                        auto resp = response.toStyledString();
+
+                        auto message = wsService->messageFactory()->buildMessage();
+                        message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
+                        message->setPayload(
+                            std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
+
+                        for (auto& session : sessions)
                         {
-                            auto message = wsService->messageFactory()->buildMessage();
-                            message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
-                            message->setPayload(
-                                std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
-                            session->asyncSendMessage(message);
+                            if (session && session->isConnected())
+                            {
+                                session->asyncSendMessage(message);
+                            }
                         }
                     }
+                }
+                else
+                {
+                    // No block update, wait for it
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
             }
             catch (std::exception& e)
             {
                 LIGHTNODE_LOG(INFO)
                     << "Sync block fail, may be connecting" << boost::diagnostic_information(e);
+                std::this_thread::sleep_for(std::chrono::seconds(1));
             }
-            std::this_thread::sleep_for(std::chrono::seconds(2));
         }
     });
 
@@ -167,7 +177,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     boost::property_tree::read_ini(configFile, configProperty);
 
     auto logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    logInitializer->initLog(configProperty);
+    logInitializer->initLog(configFile);
 
     g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
@@ -187,7 +197,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     auto gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
     auto protocolInfo = g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService);
     gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
-        protocolInitializer.keyPair()->publicKey(), bcos::protocol::OBSERVER_NODE, front,
+        protocolInitializer.keyPair()->publicKey(), bcos::protocol::NodeType::LIGHT_NODE, front,
         protocolInfo);
     gateway->start();
 
@@ -212,7 +222,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     {
         auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
-            std::move(storageWrapper));
+            std::move(storageWrapper), protocolInitializer.blockFactory(), storage);
 
         LIGHTNODE_LOG(INFO) << "start sm light node...";
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
@@ -221,7 +231,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     {
         auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
-            std::move(storageWrapper));
+            std::move(storageWrapper), protocolInitializer.blockFactory(), storage);
 
         LIGHTNODE_LOG(INFO) << "start light node...";
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);

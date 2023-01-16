@@ -83,7 +83,7 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
         /// get(string)
         get(tableName, _executive, data, _callParameters, gasPricer);
     }
-    else
+    else [[unlikely]]
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTablePrecompiled")
                               << LOG_DESC("call undefined function!");
@@ -128,8 +128,8 @@ void KVTablePrecompiled::set(const std::string& tableName,
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, key, value);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
-                          << LOG_KV("key", key) << LOG_KV("value", value);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
+                           << LOG_KV("key", key) << LOG_KV("value", value);
 
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
 

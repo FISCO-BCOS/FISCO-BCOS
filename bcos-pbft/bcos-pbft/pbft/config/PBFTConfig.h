@@ -54,8 +54,11 @@ public:
         m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>())
     {
         m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
-        m_pullTxsTimer = std::make_shared<PBFTTimer>(consensusTimeout(), "pullTxsTimer");
-        m_pullTxsTimer->registerTimeoutHandler(std::bind(&PBFTConfig::broadCastEmptyTxsReq, this));
+        // Note: the pullTxsTimeout must be smaller than consensusTimeout to fetch txs before
+        // viewchange when there has no-synced txs pullTxsTimeout is larger than 3000ms
+        auto pullTxsTimeout = 2000;
+        m_pullTxsTimer = std::make_shared<PBFTTimer>(pullTxsTimeout, "pullTxsTimer");
+        m_pullTxsTimer->registerTimeoutHandler([this] { tryToSyncTxs(); });
     }
 
     ~PBFTConfig() override = default;
@@ -204,12 +207,20 @@ public:
             // increase the changeCycle
             timer()->incChangeCycle(1);
         }
+        // drop in view change status, set consensus timeout as min seal time
+        // NOTE: if consensusTimeout == minSealTime, and all nodes use same long minSealTime
+        // leader will use minSealTime to seal a proposal, and follower will be timeout after
+        // consensusTimeout, it will cause never reach consensus.
+        setConsensusTimeout(
+            std::max(m_consensusTimeout.load(), (uint64_t)m_minSealTime.load() + 1));
         // start the timer again(the timer here must be restarted)
         timer()->restart();
     }
 
     virtual void resetNewViewState(ViewType _view)
     {
+        PBFT_LOG(INFO) << LOG_DESC("resetNewViewState") << LOG_KV("m_view", m_view)
+                       << LOG_KV("_view", _view);
         if (m_view > _view)
         {
             return;
@@ -220,6 +231,11 @@ public:
         }
         // reset the timer when reach a new-view
         m_timeoutState.store(false);
+        // reach new view, consensus time recovery to normal
+        // NOTE: should not recover when reach new view
+        // if all nodes reach new view, and set consensusTimeout to 3000
+        // and all nodes minSealTime > 3000, it will cause consensus always be timeout
+        //        setConsensusTimeout(s_consensusTimeout);
         freshTimer();
         // update the changeCycle
         timer()->resetChangeCycle();
@@ -342,6 +358,8 @@ public:
     {
         WriteGuard l(x_connectedNodeList);
         *m_connectedNodeList = std::move(_connectedNodeList);
+        PBFT_LOG(INFO) << LOG_DESC("setConnectedNodeList")
+                       << LOG_KV("size", m_connectedNodeList->size());
     }
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet const& _connectedNodeList)
     {
@@ -363,12 +381,19 @@ public:
 
     bcos::protocol::BlockNumber waitSealUntil() { return m_waitSealUntil; }
 
+    void setMinSealTime(int64_t _minSealTime) noexcept { this->m_minSealTime = _minSealTime; }
+
+    void registerTxsStatusSyncHandler(std::function<void()> const& _txsStatusSyncHandler)
+    {
+        m_txsStatusSyncHandler = _txsStatusSyncHandler;
+    }
+
 protected:
     void updateQuorum() override;
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
         size_t _maxTxsToSeal, size_t _retryTime = 0);
 
-    void broadCastEmptyTxsReq();
+    void tryToSyncTxs();
 
 
 protected:
@@ -414,17 +439,18 @@ protected:
 
     int64_t m_waterMarkLimit = 50;
     std::atomic<int64_t> m_checkPointTimeoutInterval = {3000};
+    std::atomic<int64_t> m_minSealTime = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
     const unsigned c_pbftMsgDefaultVersion = 0;
     const unsigned c_networkTimeoutInterval = 1000;
-    // state variable that identifies whether has timed out
+    // state variable that identifies whether it has timed out
     std::atomic_bool m_timeoutState = {false};
 
     std::atomic<size_t> m_unsealedTxsSize = {0};
     // notify the sealer to reseal new block until m_waitResealUntil stable committed
     std::atomic<bcos::protocol::BlockNumber> m_waitResealUntil = {0};
-    // notify the ealer to seal new block until m_waitSealUntil committed
+    // notify the sealer to seal new block until m_waitSealUntil committed
     std::atomic<bcos::protocol::BlockNumber> m_waitSealUntil = {0};
 
     bcos::crypto::NodeIDSetPtr m_connectedNodeList;
@@ -437,5 +463,8 @@ protected:
     std::function<bool(bcos::crypto::NodeIDPtr)> m_faultyDiscriminator;
 
     mutable RecursiveMutex m_mutex;
+
+    // handler to notify txs status and try to request txs from peers
+    std::function<void()> m_txsStatusSyncHandler;
 };
 }  // namespace bcos::consensus

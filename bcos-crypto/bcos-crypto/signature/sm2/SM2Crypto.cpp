@@ -26,20 +26,20 @@
 
 using namespace bcos;
 using namespace bcos::crypto;
-bool SM2Crypto::verify(
-    std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData)
+bool SM2Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
+    bytesConstRef _signatureData) const
 {
     return verify(
         std::make_shared<KeyImpl>(SM2_PUBLIC_KEY_LEN, _pubKeyBytes), _hash, _signatureData);
 }
 
-KeyPairInterface::UniquePtr SM2Crypto::createKeyPair(SecretPtr _secretKey)
+KeyPairInterface::UniquePtr SM2Crypto::createKeyPair(SecretPtr _secretKey) const
 {
     return m_keyPairFactory->createKeyPair(_secretKey);
 }
 
 std::shared_ptr<bytes> SM2Crypto::sign(
-    const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub)
+    const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {
     FixedBytes<SM2_SIGNATURE_LEN> signatureDataArray;
     CInputBuffer rawPrivateKey{_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()};
@@ -63,7 +63,7 @@ std::shared_ptr<bytes> SM2Crypto::sign(
     return signatureData;
 }
 
-bool SM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData)
+bool SM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
     CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
     CInputBuffer messageHash{(const char*)_hash.data(), HashType::SIZE};
@@ -78,7 +78,7 @@ bool SM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _
     return false;
 }
 
-PublicPtr SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData)
+PublicPtr SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) const
 {
     auto signatureStruct = std::make_shared<SignatureDataWithPub>(_signData);
     auto sm2Pub = std::make_shared<KeyImpl>(SM2_PUBLIC_KEY_LEN, signatureStruct->pub());
@@ -91,7 +91,7 @@ PublicPtr SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData)
                               _hash.hex() + ", signature:" + *toHexString(_signData)));
 }
 
-std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input)
+std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input) const
 {
     struct
     {
@@ -121,7 +121,7 @@ std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConst
     return {false, {}};
 }
 
-KeyPairInterface::UniquePtr SM2Crypto::generateKeyPair()
+KeyPairInterface::UniquePtr SM2Crypto::generateKeyPair() const
 {
     return m_keyPairFactory->generateKeyPair();
 }

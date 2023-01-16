@@ -23,6 +23,7 @@
 #include <bcos-framework/protocol/Exceptions.h>
 #include <bcos-utilities/Common.h>
 #include <tbb/parallel_invoke.h>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::protocol;
@@ -34,7 +35,16 @@ namespace test
 inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr decodedBlockHeader)
 {
     BOOST_CHECK(decodedBlockHeader->version() == blockHeader->version());
-    BOOST_CHECK(decodedBlockHeader->parentInfo() == blockHeader->parentInfo());
+    // BOOST_CHECK(decodedBlockHeader->parentInfo() == blockHeader->parentInfo());
+
+    auto originParent = blockHeader->parentInfo();
+    auto decodedParent = decodedBlockHeader->parentInfo();
+    BOOST_CHECK_EQUAL(originParent.size(), decodedParent.size());
+    for (auto [originParentInfo, decodedParentInfo] : RANGES::zip_view(originParent, decodedParent))
+    {
+        BOOST_CHECK_EQUAL(originParentInfo.blockHash, decodedParentInfo.blockHash);
+        BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodedParentInfo.blockNumber);
+    }
     BOOST_CHECK(decodedBlockHeader->txsRoot() == blockHeader->txsRoot());
     BOOST_CHECK(decodedBlockHeader->receiptsRoot() == blockHeader->receiptsRoot());
     BOOST_CHECK(decodedBlockHeader->stateRoot() == blockHeader->stateRoot());
@@ -216,14 +226,14 @@ inline BlockHeader::Ptr testPBBlockHeader(CryptoSuite::Ptr _cryptoSuite)
     // test verifySignatureList
     signatureList = fakeSignatureList(signImpl, keyPairVec, blockHeader->hash());
     blockHeader->setSignatureList(signatureList);
-    blockHeader->verifySignatureList();
+    blockHeader->verifySignatureList(*hashImpl, *signImpl);
 
     auto invalidSignatureList = fakeSignatureList(signImpl, keyPairVec, receiptsRoot);
     blockHeader->setSignatureList(invalidSignatureList);
-    BOOST_CHECK_THROW(blockHeader->verifySignatureList(), InvalidSignatureList);
+    BOOST_CHECK_THROW(blockHeader->verifySignatureList(*hashImpl, *signImpl), InvalidSignatureList);
 
     blockHeader->setSignatureList(signatureList);
-    blockHeader->verifySignatureList();
+    blockHeader->verifySignatureList(*hashImpl, *signImpl);
     return blockHeader;
 }
 }  // namespace test

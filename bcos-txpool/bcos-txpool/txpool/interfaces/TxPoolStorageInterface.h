@@ -40,11 +40,11 @@ public:
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) = 0;
 
-    virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) = 0;
+    virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
     virtual void batchInsert(bcos::protocol::Transactions const& _txs) = 0;
 
-    virtual bcos::protocol::Transaction::ConstPtr remove(bcos::crypto::HashType const& _txHash) = 0;
-    virtual bcos::protocol::Transaction::ConstPtr removeSubmittedTx(
+    virtual bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) = 0;
+    virtual bcos::protocol::Transaction::Ptr removeSubmittedTx(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) = 0;
     virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
@@ -105,14 +105,12 @@ public:
         bcos::protocol::Block::Ptr _block) = 0;
 
     virtual bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) = 0;
-    virtual bcos::crypto::HashListPtr getAllTxsHash() = 0;
+    virtual bcos::crypto::HashListPtr getTxsHash(int _limit) = 0;
 
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch)
     {
         m_txsCleanUpSwitch = _txsCleanUpSwitch;
     }
-
-    virtual bool preStoreTxs() const { return true; }
 
 protected:
     bcos::CallbackCollectionHandler<> m_onReady;
