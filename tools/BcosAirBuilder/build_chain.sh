@@ -36,7 +36,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.2.0"
+default_version="v3.3.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -57,6 +57,10 @@ download_timeout=240
 make_tar=
 default_group="group0"
 default_chainid="chain0"
+
+# for modifying multipy ca node
+modify_node_path=""
+multi_ca_path=""
 
 LOG_WARN() {
     local content=${1}
@@ -114,6 +118,12 @@ check_name() {
         LOG_FATAL "$name name [$value] invalid, it should match regex: ^[a-zA-Z0-9._-]+\$"
     }
 }
+
+generate_random_num(){
+    num=`${OPENSSL_CMD} rand -hex 4`
+    echo $num
+}
+randNum=$(generate_random_num)
 
 generate_sm_sm2_param() {
     local output=$1
@@ -300,7 +310,7 @@ gen_chain_cert() {
     dir_must_exists "$chaindir"
 
     ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt  2>/dev/null
+    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt  2>/dev/null
     if [ ! -f "${chaindir}/cert.cnf" ];then
         mv "${cert_conf}" "${chaindir}"
     fi
@@ -324,7 +334,7 @@ gen_rsa_node_cert() {
     dir_must_exists "${ndpath}"
 
     ${OPENSSL_CMD} genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
-    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
+    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
     ${OPENSSL_CMD} x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
         -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req -extfile "$capath"/cert.cnf 2>/dev/null
 
@@ -464,7 +474,7 @@ gen_sm_chain_cert() {
     dir_must_exists "$chaindir"
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$chaindir/sm_ca.key" 2>/dev/null
-    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt" 2>/dev/null
+    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt" 2>/dev/null
     if [ ! -f "${chaindir}/${sm_cert_conf}" ];then
         cp "${sm_cert_conf}" "${chaindir}"
     fi
@@ -486,7 +496,7 @@ gen_sm_node_cert_with_ext() {
     file_must_not_exists "$ndpath/sm_${type}.key"
 
     "$OPENSSL_CMD" genpkey -paramfile "$capath/${sm2_params}" -out "$certpath/sm_${type}.key" 2> /dev/null
-    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr" 2> /dev/null
+    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr" 2> /dev/null
 
     "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions" 2> /dev/null
 
@@ -540,6 +550,8 @@ Usage:
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
     -z <Generate tar packet>            [Optional] Pack the data on the chain to generate tar packet
+    -N <node path>                      [Optional] set the path of the node modified to multi ca mode
+    -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -h Help
 
 deploy nodes e.g
@@ -550,12 +562,15 @@ expand node e.g
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m -i 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
+modify node e.g
+    bash $0 -C modify -N ./node0 -u ./ca/ca.crt
+    bash $0 -C modify -N ./node0 -u ./ca/ca.crt -s
 EOF
     exit 0
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:ARa:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:ARa:N:u:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -624,6 +639,18 @@ parse_params() {
         ;;
         v) compatibility_version="${OPTARG}";;
         z) make_tar="true";;
+        N)
+            modify_node_path=$OPTARG
+            dir_must_exists "${modify_node_path}"
+            ;; 
+        u)
+            multi_ca_path="$OPTARG"
+            local last_char=${multi_ca_path: -1}
+            if [ ${last_char} == "/" ]; then
+                multi_ca_path=${OPTARG%/*}
+            fi
+            file_must_exists "${multi_ca_path}"
+            ;;
         h) help ;;
         *) help ;;
         esac
@@ -1220,6 +1247,9 @@ generate_config_ini() {
     node_key=ssl.key
     ; the node certificate file
     node_cert=ssl.crt
+    ; directory the multiple certificates located in
+    multi_ca_path=multiCaPath
+
 EOF
     generate_common_ini "${output}"
 }
@@ -1380,6 +1410,9 @@ generate_sm_config_ini() {
     sm_ennode_key=sm_enssl.key
     ; the node certificate file
     sm_ennode_cert=sm_enssl.crt
+    ; directory the multiple certificates located in
+    multi_ca_path=multiCaPath
+
 EOF
     generate_common_ini "${output}"
 }
@@ -1491,8 +1524,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.2.0
-    compatibility_version=3.2.0
+    ; the default is 3.3.0
+    compatibility_version=3.3.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
@@ -1950,6 +1983,25 @@ generate_auth_account()
   mv accounts* "${ca_dir}"
 }
 
+modify_node_ca_setting(){
+    dir_must_not_exists "${modify_node_path}/conf/multiCaPath"
+    file_must_exists "${multi_ca_path}"
+    mkdir ${modify_node_path}/conf/multiCaPath 2>/dev/null
+    cp ${multi_ca_path} ${modify_node_path}/conf/multiCaPath/${1}.0 2>/dev/null
+    # sed -i "s/; mul_ca_path=multiCaPath/mul_ca_path=multiCaPath/g" ${modify_node_path}/config.ini
+
+    LOG_INFO "Modify node ca setting success"
+}
+
+modify_multiple_ca_node(){
+    check_and_install_tassl
+    subject_hash=`${OPENSSL_CMD} x509 -hash -noout -in ${multi_ca_path} 2>/dev/null`
+    if [[ ! "${multi_ca_path}" || ! "${modify_node_path}" ]];then
+        LOG_FATAL "multi_ca_path and modify_node_path are required!"
+    fi
+    modify_node_ca_setting "${subject_hash}"
+}
+
 main() {
     check_env
     check_and_install_tassl
@@ -1978,6 +2030,8 @@ main() {
             echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis -s"
             echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -n nodeids -s -R"
         fi
+    elif [[ "${command}" == "modify" ]]; then
+        modify_multiple_ca_node
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
     fi

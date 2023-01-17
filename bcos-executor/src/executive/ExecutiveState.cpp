@@ -57,7 +57,7 @@ CallParameters::UniquePtr ExecutiveState::go()
     }
 
     // update status
-    EXECUTOR_LOG(DEBUG) << "DMC Execute tx done" << output->toString();
+
     switch (output->type)
     {
     case CallParameters::MESSAGE:
@@ -75,6 +75,8 @@ CallParameters::UniquePtr ExecutiveState::go()
     // But why output->context & output->seq here always be 0 ?????
     output->contextID = m_contextID;
     output->seq = m_seq;
+
+    EXECUTOR_LOG(DEBUG) << "DMC Execute tx done" << output->toString();
     return output;
 }
 

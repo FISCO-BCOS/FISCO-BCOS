@@ -294,7 +294,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     sslContext->add_certificate_authority(
         boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
 
-    std::string caPath;
+    std::string caPath = _certConfig.multiCaPath;
     if (!caPath.empty())
     {
         sslContext->add_verify_path(caPath);
@@ -404,14 +404,13 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
             InvalidParameter() << errinfo_comment("GatewayFactory::buildSSLContext "
                                                   "SSL_CTX_use_enc_PrivateKey error"));
     }
-
     auto caContent =
         readContentsToString(boost::filesystem::path(_smCertConfig.caCert));  // node.key content
 
     sslContext->add_certificate_authority(
         boost::asio::const_buffer(caContent->data(), caContent->size()));
 
-    std::string caPath;
+    std::string caPath = _smCertConfig.multiCaPath;
     if (!caPath.empty())
     {
         sslContext->add_verify_path(caPath);

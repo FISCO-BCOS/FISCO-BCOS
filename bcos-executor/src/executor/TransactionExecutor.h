@@ -222,7 +222,7 @@ protected:
         gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
-    std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
+    virtual std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
         std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine);
 
 

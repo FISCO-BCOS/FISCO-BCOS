@@ -21,47 +21,34 @@
 #pragma once
 #include <bcos-table/src/StorageWrapper.h>
 
-namespace bcos::precompiled
+namespace bcos::storage
 {
+#define CONTRACT_SHARD_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("Sharding")
+
 static const std::string_view SHARD_ROOT_PREFIX = "shard:";
 static const std::string_view INHERENT_PREFIX = "inherent:";
+
+static const std::string_view ACCOUNT_SHARD = "shard";
 
 class ContractShardUtils
 {
 public:
-    static void setContractShard(std::shared_ptr<bcos::storage::StorageWrapper> storage,
+    static void setContractShard(bcos::storage::StorageWrapper& storage,
         const std::string_view& contractTableName, const std::string_view& shard);
-
-    static std::string getContractShard(std::shared_ptr<bcos::storage::StorageWrapper> storage,
-        const std::string_view& contractTableName);
-
-    static void setContractShardByParent(std::shared_ptr<bcos::storage::StorageWrapper> storage,
+    static std::string getContractShard(
+        bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName);
+    static void setContractShardByParent(bcos::storage::StorageWrapper& storage,
         const std::string_view& parentTableName, const std::string_view& contractTableName);
 
 private:
     static std::optional<bcos::storage::Entry> getShard(
-        std::shared_ptr<bcos::storage::StorageWrapper> storage,
-        const std::string_view& contractTableName);
-
-    static void setShard(std::shared_ptr<bcos::storage::StorageWrapper> storage,
+        bcos::storage::StorageWrapper& storage, const std::string_view& contractTableName);
+    static void setShard(bcos::storage::StorageWrapper& storage,
         const std::string_view& contractTableName, const std::string_view& shard);
 
     static bool isInherent(std::optional<bcos::storage::Entry> entry)
     {
         return !entry ? false : entry->getField(0).starts_with(INHERENT_PREFIX);
     }
-
-    static inline std::string_view removePrefix(
-        const std::string_view& data, const std::string_view& prefix)
-    {
-        if (data.starts_with(prefix))
-        {
-            return data.substr(prefix.length(), data.length() - prefix.length());
-        }
-        else
-        {
-            return data;
-        }
-    }
 };
-}  // namespace bcos::precompiled
+}  // namespace bcos::storage
