@@ -48,7 +48,7 @@ lightnode_binary_path=""
 download_lightnode_binary="false"
 mtail_binary_path=""
 wasm_mode="false"
-serial_mode="false"
+serial_mode="true"
 nodeids_dir=""
 # if the config.genesis path has been set, don't generate genesis file, use the config instead
 genesis_conf_path=""
@@ -534,7 +534,7 @@ Usage:
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
-    -R <Serial_mode>                    [Optional] Whether to use serial execute,default is false
+    -R <Serial_mode>                    [Optional] Whether to use serial execute,default is true
     -k <key page size>                  [Optional] key page size, default is 10240
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
@@ -555,7 +555,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:ARa:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:AR:a:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -617,7 +617,7 @@ parse_params() {
         ;;
         A) auth_mode="true" ;;
         w) wasm_mode="true";;
-        R) serial_mode="true";;
+        R) serial_mode="${OPTARG}";;
         a)
           auth_mode="true"
           auth_admin_account="${OPTARG}"
