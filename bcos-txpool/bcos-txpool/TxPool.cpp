@@ -414,7 +414,7 @@ void TxPool::init()
     auto startNumber =
         (ledgerConfig->blockNumber() > blockLimit ? (ledgerConfig->blockNumber() - blockLimit + 1) :
                                                     0);
-    if (startNumber > 0)
+    if (startNumber >= 0)
     {
         auto toNumber = ledgerConfig->blockNumber();
         auto fetchedSize = std::min(blockLimit, (toNumber - startNumber + 1));
