@@ -177,8 +177,8 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
             {
                 if (_onVerifyFinished)
                 {
-                    _onVerifyFinished(BCOS_ERROR_PTR(
-                                          -1, "asyncVerifyBlock failed for lock txpool failed"),
+                    _onVerifyFinished(
+                        BCOS_ERROR_PTR(-1, "asyncVerifyBlock failed for lock txpool failed"),
                         false);
                 }
                 return;
@@ -314,8 +314,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
         if (!txpool)
         {
             _onBlockFilled(
-                BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
-                nullptr);
+                BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), nullptr);
             return;
         }
         auto sync = txpool->m_transactionSync;
@@ -328,8 +327,8 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
                         << LOG_KV("code", _error ? _error->errorCode() : 0)
                         << LOG_KV("msg", _error ? _error->errorMessage() : "fetchSucc")
                         << LOG_KV("verifyResult", _verifyResult);
-                    _onBlockFilled(BCOS_ERROR_PTR(
-                                       CommonError::TransactionsMissing, "TransactionsMissing"),
+                    _onBlockFilled(
+                        BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
                         nullptr);
                     return;
                 }
@@ -366,8 +365,7 @@ void TxPool::fillBlock(HashListPtr _txsHash,
         else
         {
             _onBlockFilled(
-                BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
-                nullptr);
+                BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), nullptr);
         }
         return;
     }
@@ -414,7 +412,7 @@ void TxPool::init()
     auto startNumber =
         (ledgerConfig->blockNumber() > blockLimit ? (ledgerConfig->blockNumber() - blockLimit + 1) :
                                                     0);
-    if (startNumber > 0)
+    if (startNumber >= 0)
     {
         auto toNumber = ledgerConfig->blockNumber();
         auto fetchedSize = std::min(blockLimit, (toNumber - startNumber + 1));

@@ -188,7 +188,25 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // number 2 nonce
     auto nonceBlock = m_blockFactory->createBlock();
-    nonceBlock->setNonceList(block->nonceList());
+    std::vector<bcos::u256> nonceList;
+    // get nonce from _blockTxs
+    if (_blockTxs)
+    {
+        for (auto const& tx : *_blockTxs)
+        {
+            nonceList.emplace_back(tx->nonce());
+        }
+    }
+    // get nonce from block txs
+    else
+    {
+        for (uint64_t i = 0; i < block->transactionsSize(); i++)
+        {
+            auto const& tx = block->transaction(i);
+            nonceList.emplace_back(tx->nonce());
+        }
+    }
+    nonceBlock->setNonceList(nonceList);
     bytes nonceBuffer;
     nonceBlock->encode(nonceBuffer);
 
