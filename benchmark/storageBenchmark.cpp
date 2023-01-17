@@ -1,7 +1,5 @@
-#include "bcos-task/SequenceScheduler.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-task/TBBScheduler.h>
 #include <bcos-task/Wait.h>
 #include <tbb/blocked_range.h>
 #include <tbb/enumerable_thread_specific.h>
@@ -55,11 +53,14 @@ void testStorage2BatchWrite(auto& storage, RANGES::range auto const& dataSet)
     task::syncWait([](decltype(storage)& storage, decltype(dataSet)& dataSet) -> task::Task<void> {
         auto now = std::chrono::steady_clock::now();
 
-        co_await storage.write(dataSet | RANGES::views::transform([](auto& item) { return std::get<0>(item); }),
-            dataSet | RANGES::views::transform([](auto& item) -> auto const& { return std::get<1>(item); }));
+        co_await storage.write(
+            dataSet | RANGES::views::transform([](auto& item) { return std::get<0>(item); }),
+            dataSet | RANGES::views::transform(
+                          [](auto& item) -> auto const& { return std::get<1>(item); }));
 
-        auto elpased =
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - now).count();
+        auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - now)
+                           .count();
 
         std::cout << "Storage2 batchWrite elpased: " << elpased << "ms" << std::endl;
         co_return;
@@ -72,10 +73,12 @@ void testStorage2SingleWrite(auto& storage, RANGES::range auto const& dataSet)
         auto now = std::chrono::steady_clock::now();
         for (const auto& item : dataSet)
         {
-            co_await storage.write(storage2::single(std::get<0>(item)), storage2::single(std::get<1>(item)));
+            co_await storage.write(
+                storage2::single(std::get<0>(item)), storage2::single(std::get<1>(item)));
         }
-        auto elpased =
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - now).count();
+        auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - now)
+                           .count();
         std::cout << "Storage2 singleWrite elpased: " << elpased << "ms" << std::endl;
         co_return;
     }(storage, dataSet));
@@ -95,8 +98,9 @@ void testStorage2BatchRead(auto& storage, RANGES::range auto const& keySet)
 
             // some operator of key and value
         }
-        auto elpased =
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - now).count();
+        auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - now)
+                           .count();
         std::cout << "Storage2 batchRead elpased: " << elpased << "ms" << std::endl;
         co_return;
     }(storage, keySet));
@@ -114,11 +118,12 @@ int main(int argc, char* argv[])
     auto count = boost::lexical_cast<int>(argv[2]);
     auto dataSet = generatRandomData(count);
 
-    storage2::memory_storage::MemoryStorage<TableKey, storage::Entry, Attribute(ORDERED | CONCURRENT)> storage;
+    storage2::memory_storage::MemoryStorage<TableKey, storage::Entry,
+        Attribute(ORDERED | CONCURRENT)>
+        storage;
     testStorage2BatchWrite(storage, dataSet);
-    testStorage2BatchRead(
-        storage, dataSet | RANGES::views::transform([](auto& item) -> auto& { return std::get<0>(item); }));
-
+    testStorage2BatchRead(storage,
+        dataSet | RANGES::views::transform([](auto& item) -> auto& { return std::get<0>(item); }));
 
     testStorage2SingleWrite(storage, dataSet);
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include "Coroutine.h"
-#include "Scheduler.h"
 #include <bcos-concepts/Exception.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -140,9 +139,6 @@ public:
         task.m_handle = nullptr;
     }
     ~Task() noexcept = default;
-
-    auto handle() noexcept { return m_handle; }
-    void setScheduler(Scheduler* scheduler) noexcept { m_handle.promise().m_scheduler = scheduler; }
 
 private:
     CO_STD::coroutine_handle<promise_type> m_handle;

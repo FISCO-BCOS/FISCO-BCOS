@@ -1,6 +1,4 @@
 #pragma once
-#include "Scheduler.h"
-#include "SequenceScheduler.h"
 #include "Task.h"
 #include "Trait.h"
 #include <coroutine>
@@ -61,7 +59,7 @@ auto syncWait(auto&& task) requires std::is_rvalue_reference_v<decltype(task)>
     std::promise<AwaitableReturnType<Task>> promise;
     auto future = promise.get_future();
 
-    auto waitTask = [](Task&& task, std::promise<typename Task::ReturnType> promise) -> WaitTask {
+    auto waitTask = [](Task&& task, std::promise<typename Task::ReturnType>& promise) -> WaitTask {
         try
         {
             if constexpr (std::is_void_v<typename Task::ReturnType>)
@@ -80,7 +78,7 @@ auto syncWait(auto&& task) requires std::is_rvalue_reference_v<decltype(task)>
         }
 
         co_return;
-    }(std::forward<Task>(task), std::move(promise));
+    }(std::forward<Task>(task), promise);
     waitTask.start();
 
     if constexpr (std::is_void_v<typename Task::ReturnType>)
