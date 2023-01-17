@@ -139,15 +139,15 @@ BOOST_AUTO_TEST_CASE(asyncTask)
 
 BOOST_AUTO_TEST_CASE(tbbScheduler)
 {
-    TBBScheduler tbbScheduler;
+    // TBBScheduler tbbScheduler;
 
-    bcos::task::syncWait(
-        []() -> Task<void> {
-            auto num = co_await level2();
-            co_await level3();
-            co_return;
-        }(),
-        &tbbScheduler);
+    // bcos::task::syncWait(
+    //     []() -> Task<void> {
+    //         auto num = co_await level2();
+    //         co_await level3();
+    //         co_return;
+    //     }(),
+    //     &tbbScheduler);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

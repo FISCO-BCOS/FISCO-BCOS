@@ -17,19 +17,6 @@ namespace bcos::task
 struct NoReturnValue : public bcos::error::Exception {};
 // clang-format on
 
-template <class Promise>
-concept HasMemberScheduler = requires(Promise promise)
-{
-    promise.m_scheduler;
-};
-
-// Task可以在没有配置调度器的情况下自我调度，但这样的话每个Task将在彻底结束（清理协程栈之前）前恢复上一个Task的执行，导致Task的协程栈增长，一旦Task中有大量循环或深层次的协程co_await调用，将会导致协程栈溢出
-// Tasks can be self-scheduled without a scheduler configured, but in this
-// way, each Task will resume the execution of the previous Task before
-// completely ending (before cleaning up the coroutine stack), causing the
-// Task's coroutine stack to grow, and once there are a large number of
-// loops or deep coroutine co_await calls in the Task, it will cause the
-// coroutine stack to overflow
 template <class Value>
 class Task
 {
@@ -55,35 +42,12 @@ public:
         bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
 
         template <class Promise>
-        void await_suspend(CO_STD::coroutine_handle<Promise> handle)
+        auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
         {
-            // 如果co_await来自有scheduler的task，沿用它的scheduler，结束时由该Scheduler执行continuation
-            // If the co_await comes from a task with a scheduler, its scheduler is inherited and
-            // the handle is executed using that scheduler
-            if constexpr (HasMemberScheduler<Promise>)
-            {
-                if (handle.promise().m_scheduler)
-                {
-                    if (m_handle.promise().m_scheduler == nullptr)
-                    {
-                        m_handle.promise().m_scheduler = handle.promise().m_scheduler;
-                    }
-                }
-            }
-
             m_handle.promise().m_continuationHandle = handle;
             m_handle.promise().m_awaitable = this;
 
-            if (m_handle.promise().m_scheduler)
-            {
-                m_handle.promise().m_scheduler->execute(m_handle);
-            }
-            else
-            {
-                m_handle.resume();
-            }
-
-            // return m_handle;
+            return m_handle;
         }
         Value await_resume()
         {
@@ -108,7 +72,6 @@ public:
         CO_STD::coroutine_handle<promise_type> m_handle;
         ValueType m_value;
     };
-
     Awaitable operator co_await() { return Awaitable(*static_cast<Task*>(this)); }
 
     template <class PromiseImpl>
@@ -120,21 +83,12 @@ public:
             struct FinalAwaitable
             {
                 constexpr bool await_ready() const noexcept { return false; }
-                void await_suspend(CO_STD::coroutine_handle<PromiseImpl> handle) const noexcept
+                CO_STD::coroutine_handle<> await_suspend(
+                    CO_STD::coroutine_handle<PromiseImpl> handle) const noexcept
                 {
                     auto continuationHandle = handle.promise().m_continuationHandle;
-                    if (continuationHandle)
-                    {
-                        if (m_promise.m_scheduler)
-                        {
-                            m_promise.m_scheduler->execute(continuationHandle);
-                        }
-                        else
-                        {
-                            continuationHandle.resume();
-                        }
-                    }
                     handle.destroy();
+                    return continuationHandle;
                 }
                 constexpr void await_resume() noexcept {}
 
@@ -158,7 +112,6 @@ public:
 
         CO_STD::coroutine_handle<> m_continuationHandle;
         Awaitable* m_awaitable = nullptr;
-        Scheduler* m_scheduler = nullptr;
     };
     struct PromiseVoid : public PromiseBase<PromiseVoid>
     {

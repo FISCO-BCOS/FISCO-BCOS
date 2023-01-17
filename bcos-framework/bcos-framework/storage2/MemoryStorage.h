@@ -150,8 +150,8 @@ public:
         using Key = const KeyType&;
         using Value = const ValueType&;
 
-        task::AwaitableValue<bool> hasValue() { return {*m_it != nullptr}; }
-        task::AwaitableValue<bool> next()
+        task::AwaitableValue<bool> hasValue() const { return {*m_it != nullptr}; }
+        task::AwaitableValue<bool> next() &
         {
             if (!m_started)
             {
@@ -185,7 +185,7 @@ public:
         using Key = const KeyType&;
         using Value = const ValueType&;
 
-        task::AwaitableValue<bool> next()
+        task::AwaitableValue<bool> next() &
         {
             if (!m_started)
             {
@@ -206,7 +206,7 @@ public:
         bool m_started = false;
     };
 
-    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto const& keys)
+    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto const& keys) &
     {
         task::AwaitableValue<ReadIterator> outputAwaitable(ReadIterator{});
         ReadIterator& output = outputAwaitable.value();
@@ -251,7 +251,7 @@ public:
         return outputAwaitable;
     }
 
-    task::AwaitableValue<SeekIterator> seek(auto const& key) requires(withOrdered)
+    task::AwaitableValue<SeekIterator> seek(auto const& key) & requires(withOrdered)
     {
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
@@ -298,8 +298,9 @@ public:
                     updatedCapacity -= getSize(existsValue);
                 }
 
-                auto&& newValue = value;
-                bucket.get().container.modify(it, [&newValue](Data& data) { data.value = std::move(newValue); });
+                bucket.get().container.modify(it, [newValue = std::forward<decltype(value)>(value)](Data& data) {
+                    data.value = std::forward<decltype(newValue)>(newValue);
+                });
             }
             else
             {

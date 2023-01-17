@@ -62,16 +62,25 @@ auto single(auto&& value)
            RANGES::views::transform([](auto&& input) -> auto& { return input.get(); });
 }
 
+
+template <class KeyType>
+task::Task<bool> existsOne(ReadableStorage<KeyType> auto& storage, KeyType const& key)
+{
+    auto it = co_await storage.read(storage2::single(key));
+    co_await it.next();
+    co_return co_await it.hasValue();
+}
+
 template <class Reference>
-using ReferenceToWrapper = std::conditional_t<std::is_reference_v<Reference>,
+using ValueOrReferenceWrapper = std::conditional_t<std::is_reference_v<Reference>,
     std::reference_wrapper<std::remove_reference_t<Reference>>, Reference>;
 
 template <class KeyType>
 auto readOne(ReadableStorage<KeyType> auto& storage, KeyType const& key) -> task::Task<std::optional<
-    ReferenceToWrapper<typename task::AwaitableReturnType<decltype(storage.read(storage2::single(key)))>::Value>>>
+    ValueOrReferenceWrapper<typename task::AwaitableReturnType<decltype(storage.read(storage2::single(key)))>::Value>>>
 {
-    using ValueType =
-        ReferenceToWrapper<typename task::AwaitableReturnType<decltype(storage.read(storage2::single(key)))>::Value>;
+    using ValueType = ValueOrReferenceWrapper<
+        typename task::AwaitableReturnType<decltype(storage.read(storage2::single(key)))>::Value>;
 
     std::optional<ValueType> result;
     auto it = co_await storage.read(storage2::single(key));
@@ -88,6 +97,14 @@ template <class KeyType, class ValueType>
 task::Task<void> writeOne(WriteableStorage<KeyType, ValueType> auto& storage, KeyType const& key, ValueType&& value)
 {
     co_await storage.write(storage2::single(key), storage2::single(std::forward<decltype(value)>(value)));
+    co_return;
+}
+
+template <class KeyType, class ValueType>
+task::Task<void> removeOne(WriteableStorage<KeyType, ValueType> auto& storage, KeyType const& key)
+{
+    co_await storage.remove(storage2::single(key));
+    co_return;
 }
 
 }  // namespace bcos::storage2

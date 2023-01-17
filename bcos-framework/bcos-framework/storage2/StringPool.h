@@ -84,4 +84,10 @@ static std::string_view query(StringID stringID)
     return {stringID->data(), stringID->size()};
 }
 
+template <class StringID>
+std::string_view operator*(StringID stringID)
+{
+    return {stringID->data(), stringID->size()};
+}
+
 }  // namespace bcos::storage2::string_pool
