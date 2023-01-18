@@ -158,5 +158,7 @@ private:
 
     bcos::crypto::Hash::Ptr m_hashImpl;
     bcos::crypto::SignatureCrypto::Ptr m_signatureImpl;
+
+    const int c_MaxResponsedTxsToNodesWithEmptyTxs = 1000;
 };
 }  // namespace bcos::sync

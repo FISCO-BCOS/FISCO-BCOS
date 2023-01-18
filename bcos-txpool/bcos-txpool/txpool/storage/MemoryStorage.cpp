@@ -959,7 +959,7 @@ bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
     return true;
 }
 
-HashListPtr MemoryStorage::getAllTxsHash()
+HashListPtr MemoryStorage::getTxsHash(int _limit)
 {
     auto txsHash = std::make_shared<HashList>();
     ReadGuard l(x_txpoolMutex);
@@ -969,6 +969,10 @@ HashListPtr MemoryStorage::getAllTxsHash()
         if (!tx)
         {
             continue;
+        }
+        if ((int)txsHash->size() >= _limit)
+        {
+            break;
         }
         txsHash->emplace_back(it.first);
     }

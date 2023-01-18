@@ -374,6 +374,16 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
         });
         onGroupInfoChanged();
     });
+
+    std::weak_ptr<TxPoolInterface> weakTxPool = m_txpool;
+    m_pbft->registerTxsStatusSyncHandler([weakTxPool]() {
+        auto txpool = weakTxPool.lock();
+        if (!txpool)
+        {
+            return;
+        }
+        txpool->tryToSyncTxsFromPeers();
+    });
 }
 
 void PBFTInitializer::createSealer()
