@@ -23,6 +23,7 @@
 
 #include "../Common.h"
 #include "../RollbackableStorage.h"
+#include "EVMHostInterface.h"
 #include "VMFactory.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -55,11 +56,14 @@ template <StateStorage Storage>
 class HostContext : public evmc_host_context
 {
 public:
-    HostContext(Storage& storage, TableNamePool& tableNamePool, const protocol::BlockHeader& blockHeader,
-        std::string_view contractAddress)
-      : evmc_host_context(), m_storage(storage), m_tableNamePool(tableNamePool), m_blockHeader(blockHeader)
+    HostContext(Storage& storage, TableNamePool& tableNamePool,
+        const protocol::BlockHeader& blockHeader, std::string_view contractAddress)
+      : evmc_host_context(),
+        m_storage(storage),
+        m_tableNamePool(tableNamePool),
+        m_blockHeader(blockHeader)
     {
-        interface = getHostInterface<decltype(*this)>();
+        interface = getHostInterface();
         wasm_interface = nullptr;
 
         hash_fn = evm_hash_fn;
@@ -121,15 +125,18 @@ public:
         if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
         {
             // Query the code table first
-            if (!co_await storage2::existsOne(m_storage, StateKey{m_codeTable, codeHashEntry.get()}))
+            if (!co_await storage2::existsOne(
+                    m_storage, StateKey{m_codeTable, codeHashEntry.get()}))
             {
                 storage::Entry codeEntry;
                 codeEntry.importFields({std::move(code)});
                 co_await m_storage.write(
-                    storage2::single(StateKey{m_codeTable, codeHashEntry.get()}), storage2::single(codeEntry));
+                    storage2::single(StateKey{m_codeTable, codeHashEntry.get()}),
+                    storage2::single(codeEntry));
             }
             co_await m_storage.write(
-                storage2::single(StateKey{m_myContractTable, ACCOUNT_CODE_HASH}), storage2::single(codeHashEntry));
+                storage2::single(StateKey{m_myContractTable, ACCOUNT_CODE_HASH}),
+                storage2::single(codeHashEntry));
 
             co_return;
         }
@@ -137,14 +144,17 @@ public:
         storage::Entry codeEntry;
         codeEntry.importFields({std::move(code)});
         // old logic
-        co_await m_storage.write(
-            storage2::single(StateKey{m_myContractTable, ACCOUNT_CODE_HASH}), storage2::single(codeHashEntry));
-        co_await m_storage.write(
-            storage2::single(StateKey{m_myContractTable, ACCOUNT_CODE}), storage2::single(codeEntry));
+        co_await m_storage.write(storage2::single(StateKey{m_myContractTable, ACCOUNT_CODE_HASH}),
+            storage2::single(codeHashEntry));
+        co_await m_storage.write(storage2::single(StateKey{m_myContractTable, ACCOUNT_CODE}),
+            storage2::single(codeEntry));
         co_return;
     }
 
-    task::Task<void> setCode(bytes code) { co_await setCode(GlobalHashImpl::g_hashImpl->hash(code), std::move(code)); }
+    task::Task<void> setCode(bytes code)
+    {
+        co_await setCode(GlobalHashImpl::g_hashImpl->hash(code), std::move(code));
+    }
 
     task::Task<void> setCodeAndABI(bytes code, std::string abi)
     {
@@ -156,12 +166,14 @@ public:
         abiEntry.importFields({std::move(abi)});
         if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
         {
-            auto abiIt = co_await m_storage.read(storage2::single(StateKey{m_abiTable, codeHashView}));
+            auto abiIt =
+                co_await m_storage.read(storage2::single(StateKey{m_abiTable, codeHashView}));
             co_await abiIt.next();
             if (!co_await abiIt.hasValue())
             {
-                co_await m_storage.write(
-                    m_abiTable, storage2::single(StateKey{m_abiTable, codeHashView}), storage2::single(abiEntry));
+                co_await m_storage.write(m_abiTable,
+                    storage2::single(StateKey{m_abiTable, codeHashView}),
+                    storage2::single(abiEntry));
             }
             co_return;
         }
@@ -176,7 +188,8 @@ public:
             // TODO: Check is precompiled
             std::string contractAddress(address);  // TODO: add address prefix
             TableNameID contractTableID{};
-            auto code = co_await storage2::readOne(m_storage, StateKey{contractTableID, ACCOUNT_CODE});
+            auto code =
+                co_await storage2::readOne(m_storage, StateKey{contractTableID, ACCOUNT_CODE});
             if (code)
             {
                 co_return code->length();
@@ -263,7 +276,8 @@ public:
         {
             BOOST_THROW_EXCEPTION(
                 NotFoundCode{} << bcos::Error::ErrorMessage(
-                    std::string("Not found contract code: ").append(storage2::string_pool::query(m_myContractTable))));
+                    std::string("Not found contract code: ")
+                        .append(storage2::string_pool::query(m_myContractTable))));
         }
         auto& code = *codeEntry;
 
@@ -286,7 +300,8 @@ public:
         auto mode = toRevision(vmSchedule());
 
         auto savepoint = m_storage.current();
-        auto result = vmInstance.execute(interface, this, mode, &message, message.input_data, message.input_size);
+        auto result = vmInstance.execute(
+            interface, this, mode, &message, message.input_data, message.input_size);
         if (result.m_evmcResult.status_code != 0)
         {
             m_storage.rollback(savepoint);
@@ -299,7 +314,8 @@ public:
         co_return result;
     }
 
-    task::Task<evmc_result> callBuiltInPrecompiled(const evmc_message* message, bool _isEvmPrecompiled)
+    task::Task<evmc_result> callBuiltInPrecompiled(
+        const evmc_message* message, bool _isEvmPrecompiled)
     {
         // TODO: to be done
         co_return {};
