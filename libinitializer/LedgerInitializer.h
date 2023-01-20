@@ -52,7 +52,8 @@ public:
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             std::move(storageWrapper), blockFactory, storage);
         ledger->buildGenesisBlock(nodeConfig->ledgerConfig(), nodeConfig->txGasLimit(),
-            nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr());
+            nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr(),
+            nodeConfig->isAuthCheck());
 
         return ledger;
     }

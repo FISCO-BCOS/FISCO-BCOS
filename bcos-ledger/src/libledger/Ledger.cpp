@@ -1455,7 +1455,8 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
 
 // sync method
 bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
-    const std::string_view& _genesisData, std::string const& _compatibilityVersion)
+    const std::string_view& _genesisData, std::string const& _compatibilityVersion,
+    bool _isAuthCheck)
 {
     LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
     if (_gasLimit < TX_GAS_LIMIT_MIN)
@@ -1662,6 +1663,14 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     Entry compatibilityVersionEntry;
     compatibilityVersionEntry.setObject(SystemConfigEntry{_compatibilityVersion, 0});
     sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
+
+    if (versionCompareTo(versionNumber, BlockVersion::V3_3_VERSION) >= 0)
+    {
+        // write auth check status
+        Entry authCheckStatusEntry;
+        authCheckStatusEntry.setObject(SystemConfigEntry{_isAuthCheck ? "1" : "0", 0});
+        sysTable->setRow(SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(authCheckStatusEntry));
+    }
 
     // write consensus node list
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;

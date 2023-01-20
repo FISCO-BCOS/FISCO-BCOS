@@ -282,7 +282,8 @@ void GatewayConfig::initCertConfig(const boost::property_tree::ptree& _pt)
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initCertConfig") << LOG_KV("ca_path", m_certPath)
                              << LOG_KV("ca_cert", caCertFile) << LOG_KV("node_cert", nodeCertFile)
-                             << LOG_KV("node_key", nodeKeyFile) << LOG_KV("mul_ca_path", multiCaPath);
+                             << LOG_KV("node_key", nodeKeyFile)
+                             << LOG_KV("mul_ca_path", multiCaPath);
 
     checkFileExist(caCertFile);
     checkFileExist(nodeCertFile);
