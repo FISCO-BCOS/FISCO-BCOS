@@ -6,6 +6,7 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/parallel_for.h>
+#include <boost/container_hash/hash_fwd.hpp>
 #include <boost/lexical_cast.hpp>
 #include <chrono>
 #include <iostream>
@@ -23,6 +24,7 @@ struct std::hash<Key>
     auto operator()(Key const& str) const noexcept
     {
         auto hash = std::hash<std::string>{}(std::get<0>(str));
+        boost::hash_combine(hash, std::hash<std::string>{}(std::get<1>(str)));
         return hash;
     }
 };

@@ -41,7 +41,8 @@ enum Attribute : int
     MRU = 0x4
 };
 
-template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE>
+template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE,
+    class BucketHasher = void>
 class MemoryStorage
 {
 private:
@@ -51,9 +52,12 @@ private:
     constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets for concurrent, enough?
     constexpr unsigned getBucketSize() { return withConcurrent ? MAX_BUCKETS : 1; }
 
+    static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
+
     constexpr static unsigned DEFAULT_CAPACITY = 32L * 1024 * 1024;  // For mru
     using Mutex = std::conditional_t<withConcurrent, std::mutex, Empty>;
-    using Lock = std::conditional_t<withConcurrent, std::unique_lock<std::mutex>, utilities::NullLock>;
+    using Lock =
+        std::conditional_t<withConcurrent, std::unique_lock<std::mutex>, utilities::NullLock>;
 
     struct Data
     {
@@ -65,13 +69,14 @@ private:
         boost::multi_index::ordered_unique<boost::multi_index::member<Data, KeyType, &Data::key>>,
         boost::multi_index::hashed_unique<boost::multi_index::member<Data, KeyType, &Data::key>>>;
     using Container = std::conditional_t<withMRU,
-        boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
+        boost::multi_index_container<Data,
+            boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
 
     struct Bucket
     {
         Container container;
-        [[no_unique_address]] Mutex mutex;                                                // For concurrent
+        [[no_unique_address]] Mutex mutex;  // For concurrent
         [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> capacity = {};  // For mru
     };
     using Buckets = std::conditional_t<withConcurrent, std::vector<Bucket>, std::array<Bucket, 1>>;
@@ -100,12 +105,15 @@ private:
         {
             return 0;
         }
-        auto hash = boost::hash<std::remove_cvref_t<decltype(key)>>{}(key);
-        return hash % m_buckets.size();
+        else
+        {
+            auto hash = BucketHasher{}(key);
+            return hash % m_buckets.size();
+        }
     }
 
-    void updateMRUAndCheck(
-        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt) requires withMRU
+    void updateMRUAndCheck(Bucket& bucket,
+        typename Container::template nth_index<0>::type::iterator entryIt) requires withMRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
@@ -174,7 +182,8 @@ public:
     private:
         typename std::vector<const Data*>::iterator m_it;
         std::vector<const Data*> m_iterators;
-        [[no_unique_address]] std::conditional_t<withConcurrent, std::forward_list<Lock>, Empty> m_bucketLocks;
+        [[no_unique_address]] std::conditional_t<withConcurrent, std::forward_list<Lock>, Empty>
+            m_bucketLocks;
         bool m_started = false;
     };
 
@@ -267,10 +276,11 @@ public:
         return output;
     }
 
-    task::AwaitableValue<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    task::AwaitableValue<void> write(
+        RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, value] :
-            RANGES::zip_view(std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
+        for (auto&& [key, value] : RANGES::zip_view(
+                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
         {
             auto [bucket, lock] = getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
@@ -298,9 +308,10 @@ public:
                     updatedCapacity -= getSize(existsValue);
                 }
 
-                bucket.get().container.modify(it, [newValue = std::forward<decltype(value)>(value)](Data& data) {
-                    data.value = std::forward<decltype(newValue)>(newValue);
-                });
+                bucket.get().container.modify(
+                    it, [newValue = std::forward<decltype(value)>(value)](Data& data) {
+                        data.value = std::forward<decltype(newValue)>(newValue);
+                    });
             }
             else
             {

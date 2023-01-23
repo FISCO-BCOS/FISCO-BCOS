@@ -34,7 +34,8 @@ public:
             auto& record = *it;
             if (record.value)
             {
-                co_await m_storage.write(storage2::single(record.key), storage2::single(*record.value));
+                co_await m_storage.write(
+                    storage2::single(record.key), storage2::single(*record.value));
             }
             else
             {
@@ -52,7 +53,8 @@ public:
         co_return co_await m_storage.read(keys);
     }
 
-    auto seek(auto const& key) -> task::Task<task::AwaitableReturnType<decltype(m_storage.seek(key))>>
+    auto seek(auto const& key)
+        -> task::Task<task::AwaitableReturnType<decltype(m_storage.seek(key))>>
     {
         co_return co_await m_storage.seek(key);
     }
@@ -67,17 +69,17 @@ public:
             auto keyIt = RANGES::begin(keys);
             while (co_await storageIt.next())
             {
-                auto& record = m_records.emplace_front();
-                record.key = *(keyIt++);
+                auto& record = m_records.emplace_front(Record{.key = *(keyIt++), .value = {}});
                 if (co_await storageIt.hasValue())
                 {
                     // Update exists value, store the old value
-                    record.value = {co_await storageIt.value()};
+                    record.value.emplace(co_await storageIt.value());
                 }
             }
         }
 
-        co_return co_await m_storage.write(std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
+        co_return co_await m_storage.write(
+            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
     }
 
     auto remove(RANGES::input_range auto const& keys)
@@ -94,7 +96,7 @@ public:
                 if (co_await storageIt.hasValue())
                 {
                     // Update exists value, store the old value
-                    record.value = {co_await storageIt.value()};
+                    record.value.emplace(co_await storageIt.value());
                 }
             }
         }

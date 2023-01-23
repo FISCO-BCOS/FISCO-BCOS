@@ -46,36 +46,37 @@ bool accountExists(evmc_host_context* context, const evmc_address* _addr) noexce
 }
 
 template <class HostContextType>
-evmc_bytes32 getStorage(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key)
+evmc_bytes32 getStorage(
+    evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key)
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
 
     // programming assert for debug
-    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
+    // assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
-    return task::syncWait(hostContext.store(key));
+    return task::syncWait(hostContext.get(key));
 }
 
 template <class HostContextType>
-evmc_storage_status setStorage(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr,
-    const evmc_bytes32* key, const evmc_bytes32* value)
+evmc_storage_status setStorage(evmc_host_context* context,
+    [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key, const evmc_bytes32* value)
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
-    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
+    // assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
     auto status = EVMC_STORAGE_MODIFIED;
     if (value == nullptr)  // TODO: Should use 32 bytes 0
     {
         status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
+        // hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas; // TODO: add gas
     }
-    task::syncWait(hostContext.setStore(key, value));  // Interface uses native endianness
+    task::syncWait(hostContext.set(key, value));  // Interface uses native endianness
     return status;
 }
 
 template <class HostContextType>
-evmc_bytes32 getBalance(
-    [[maybe_unused]] evmc_host_context* _context, [[maybe_unused]] const evmc_address* _addr) noexcept
+evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* _context,
+    [[maybe_unused]] const evmc_address* _addr) noexcept
 {
     // always return 0
     return toEvmC(h256(0));
@@ -85,14 +86,14 @@ template <class HostContextType>
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    return hostContext.codeSizeAt(fromEvmC(*_addr));
+    return task::syncWait(hostContext.codeSizeAt(fromEvmC(*_addr)));
 }
 
 template <class HostContextType>
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    return toEvmC(hostContext.codeHashAt(fromEvmC(*_addr)));
+    return toEvmC(task::syncWait(hostContext.codeHashAt(fromEvmC(*_addr))));
 }
 
 /**
@@ -109,7 +110,8 @@ evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
  * @return size_t : return copied code size(in byte)
  */
 template <class HostContextType>
-size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_t* _bufferData, size_t _bufferSize)
+size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_t* _bufferData,
+    size_t _bufferSize)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
 
@@ -118,7 +120,8 @@ size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_
 }
 
 template <class HostContextType>
-void selfdestruct(evmc_host_context* _context, const evmc_address* _addr, const evmc_address* _beneficiary) noexcept
+void selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
+    const evmc_address* _beneficiary) noexcept
 {
     (void)_addr;
     (void)_beneficiary;
@@ -128,8 +131,9 @@ void selfdestruct(evmc_host_context* _context, const evmc_address* _addr, const 
 }
 
 template <class HostContextType>
-void log(evmc_host_context* _context, [[maybe_unused]] const evmc_address* _addr, uint8_t const* _data,
-    size_t _dataSize, const evmc_bytes32 _topics[], size_t _numTopics) noexcept
+void log(evmc_host_context* _context, [[maybe_unused]] const evmc_address* _addr,
+    uint8_t const* _data, size_t _dataSize, const evmc_bytes32 _topics[],
+    size_t _numTopics) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
     assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
@@ -146,7 +150,8 @@ evmc_access_status access_account(evmc_host_context* _context, const evmc_addres
 }
 
 template <class HostContextType>
-evmc_access_status access_storage(evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
+evmc_access_status access_storage(
+    evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
     std::ignore = _context;
     std::ignore = _addr;
@@ -159,7 +164,8 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
     evmc_tx_context result;
-    if (hostContext.isWasm())
+    // if (hostContext.isWasm())
+    if (false)
     {
         result.tx_origin = toEvmC(hostContext.origin());
     }
@@ -184,24 +190,24 @@ template <class HostContextType>
 evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
 {
     auto& hostContext = static_cast<HostContextType&>(*_txContextPtr);
-    return toEvmC(hostContext.blockHash(_number));
+    return toEvmC(task::syncWait(hostContext.blockHash(_number)));
 }
 
 template <class HostContextType>
-evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
+evmc_result call(evmc_host_context* context, const evmc_message* message) noexcept
 {
     // gas maybe smaller than 0 since outside gas is u256 and evmc_message is
     // int64_t so gas maybe smaller than 0 in some extreme cases
     // * origin code: assert(_msg->gas >= 0)
-    if (_msg->gas < 0)
+    if (message->gas < 0)
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", message->gas);
         BOOST_THROW_EXCEPTION(protocol::GasOverflow());
     }
 
-    auto& hostContext = static_cast<HostContextType&>(*_context);
+    auto& hostContext = static_cast<HostContextType&>(*context);
 
-    return hostContext.externalRequest(_msg);
+    return task::syncWait(hostContext.externalCall(*message));
 }
 
 template <class HostContextType>

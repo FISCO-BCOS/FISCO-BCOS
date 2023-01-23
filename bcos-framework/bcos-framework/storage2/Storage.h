@@ -62,7 +62,6 @@ auto single(auto&& value)
            RANGES::views::transform([](auto&& input) -> auto& { return input.get(); });
 }
 
-
 template <class KeyType>
 task::Task<bool> existsOne(ReadableStorage<KeyType> auto& storage, KeyType const& key)
 {

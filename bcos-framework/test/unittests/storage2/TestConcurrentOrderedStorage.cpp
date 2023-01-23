@@ -32,30 +32,35 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
         constexpr static int count = 100;
 
         MemoryStorage<std::tuple<std::string, std::string>, storage::Entry, ORDERED> storage;
-        co_await storage.write(RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
-            return std::tuple<std::string, std::string>("table", "key:" + boost::lexical_cast<std::string>(num));
-        }),
+        co_await storage.write(
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(num));
+            }),
             RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
                 storage::Entry entry;
                 entry.set("Hello world!" + boost::lexical_cast<std::string>(num));
                 return entry;
             }));
 
-        auto it = co_await storage.read(RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int i) {
-            return std::tuple<std::string, std::string>("table", "key:" + boost::lexical_cast<std::string>(i));
-        }));
+        auto it = co_await storage.read(
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int i) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(i));
+            }));
 
         int i = 0;
         while (co_await it.next())
         {
             BOOST_REQUIRE(co_await it.hasValue());
-            auto exceptKey =
-                std::tuple<std::string, std::string>("table", "key:" + boost::lexical_cast<std::string>(i));
+            auto exceptKey = std::tuple<std::string, std::string>(
+                "table", "key:" + boost::lexical_cast<std::string>(i));
             auto key = co_await it.key();
             BOOST_CHECK_EQUAL(std::get<0>(key), std::get<0>(exceptKey));
             BOOST_CHECK_EQUAL(std::get<1>(key), std::get<1>(exceptKey));
 
-            BOOST_CHECK_EQUAL((co_await it.value()).get(), "Hello world!" + boost::lexical_cast<std::string>(i));
+            BOOST_CHECK_EQUAL(
+                (co_await it.value()).get(), "Hello world!" + boost::lexical_cast<std::string>(i));
             ++i;
         }
         BOOST_CHECK_EQUAL(i, count);
@@ -64,24 +69,29 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
         // modify
         storage::Entry newEntry;
         newEntry.set("Hello map!");
-        co_await storage.write(storage2::single(std::tuple<std::string, std::string>("table", "key:5")),
+        co_await storage.write(
+            storage2::single(std::tuple<std::string, std::string>("table", "key:5")),
             storage2::single(std::move(newEntry)));
 
-        auto result = co_await storage.read(storage2::single(std::tuple<std::string, std::string>("table", "key:5")));
+        auto result = co_await storage.read(
+            storage2::single(std::tuple<std::string, std::string>("table", "key:5")));
         co_await result.next();
         BOOST_REQUIRE(co_await result.hasValue());
         BOOST_CHECK_EQUAL((co_await result.value()).get(), "Hello map!");
         result.release();
 
-        BOOST_CHECK_NO_THROW(
-            co_await storage.remove(RANGES::iota_view<int, int>(10, 20) | RANGES::views::transform([](int i) {
-                return std::tuple<std::string, std::string>("table", "key:" + boost::lexical_cast<std::string>(i));
+        BOOST_CHECK_NO_THROW(co_await storage.remove(
+            RANGES::iota_view<int, int>(10, 20) | RANGES::views::transform([](int i) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(i));
             })));
 
         // Check if records had erased
-        it = co_await storage.read(RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int i) {
-            return std::tuple<std::string, std::string>("table", "key:" + boost::lexical_cast<std::string>(i));
-        }));
+        it = co_await storage.read(
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int i) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(i));
+            }));
 
         i = 0;
         while (co_await it.next())
@@ -93,8 +103,8 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
             else
             {
                 BOOST_REQUIRE(co_await it.hasValue());
-                auto exceptKey =
-                    std::tuple<std::string, std::string>("table", "key:" + boost::lexical_cast<std::string>(i));
+                auto exceptKey = std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(i));
 
                 auto key = co_await it.key();
                 BOOST_CHECK_EQUAL(std::get<0>(key), std::get<0>(exceptKey));
@@ -106,8 +116,8 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
                 }
                 else
                 {
-                    BOOST_CHECK_EQUAL(
-                        (co_await it.value()).get(), "Hello world!" + boost::lexical_cast<std::string>(i));
+                    BOOST_CHECK_EQUAL((co_await it.value()).get(),
+                        "Hello world!" + boost::lexical_cast<std::string>(i));
                 }
             }
             ++i;
@@ -121,7 +131,8 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
 BOOST_AUTO_TEST_CASE(mru)
 {
     task::syncWait([]() -> task::Task<void> {
-        MemoryStorage<int, storage::Entry, Attribute(ORDERED | CONCURRENT | MRU)> storage(1);
+        MemoryStorage<int, storage::Entry, Attribute(ORDERED | CONCURRENT | MRU), std::hash<int>>
+            storage(1);
         storage.setMaxCapacity(1000);
 
         // write 10 100byte value
