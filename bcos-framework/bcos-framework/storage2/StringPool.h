@@ -102,7 +102,7 @@ public:
     }
 };
 
-StringID makeStringID(StringPool& pool, std::string_view str)
+inline StringID makeStringID(StringPool& pool, std::string_view str)
 {
     return {pool, pool.add(str)};
 }
@@ -168,7 +168,7 @@ public:
 namespace std
 {
 
-std::ostream& operator<<(
+inline std::ostream& operator<<(
     std::ostream& stream, bcos::storage2::string_pool::StringID const& stringID)
 {
     stream << *stringID;

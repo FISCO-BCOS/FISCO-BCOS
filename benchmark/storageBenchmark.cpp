@@ -170,13 +170,13 @@ int main(int argc, char* argv[])
 
         std::cout << std::endl << "Testing storage2 memory storage..." << std::endl;
         storage2::memory_storage::MemoryStorage<Key, storage::Entry,
-            Attribute(ORDERED | CONCURRENT)>
+            Attribute(ORDERED | CONCURRENT), std::hash<Key>>
             newStorage1;
         co_await storage2BatchWrite(newStorage1, dataSet);
         // co_await storage2BatchRead(newStorage1, dataSet);
 
         storage2::memory_storage::MemoryStorage<Key, storage::Entry,
-            Attribute(ORDERED | CONCURRENT)>
+            Attribute(ORDERED | CONCURRENT), std::hash<Key>>
             newStorage2;
         co_await storage2MultiThreadWrite(newStorage2, dataSet);
 

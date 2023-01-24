@@ -86,14 +86,14 @@ template <class HostContextType>
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    return task::syncWait(hostContext.codeSizeAt(fromEvmC(*_addr)));
+    return task::syncWait(hostContext.codeSizeAt(*_addr));
 }
 
 template <class HostContextType>
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    return toEvmC(task::syncWait(hostContext.codeHashAt(fromEvmC(*_addr))));
+    return toEvmC(task::syncWait(hostContext.codeHashAt(*_addr)));
 }
 
 /**
@@ -136,7 +136,7 @@ void log(evmc_host_context* _context, [[maybe_unused]] const evmc_address* _addr
     size_t _numTopics) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
+    // assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
     hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
 }
@@ -163,26 +163,27 @@ template <class HostContextType>
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    evmc_tx_context result;
+    evmc_tx_context result = {};
     // if (hostContext.isWasm())
     if (false)
     {
-        result.tx_origin = toEvmC(hostContext.origin());
+        // result.tx_origin = toEvmC(hostContext.origin());
     }
     else
     {
-        auto origin = fromHex(hostContext.origin());
-        result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size()));
+        // auto origin = fromHex(hostContext.origin());
+        // result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size())); //
+        // TODO: add origin
     }
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
     result.block_gas_limit = hostContext.blockGasLimit();
 
-    RANGES::fill(result.tx_gas_price.bytes, 0);
-    RANGES::fill(result.tx_gas_price.bytes, 0);
-    RANGES::fill(result.block_coinbase.bytes, 0);
-    RANGES::fill(result.block_difficulty.bytes, 0);
-    RANGES::fill(result.chain_id.bytes, 0);
+    // RANGES::fill(result.tx_gas_price.bytes, 0);
+    // RANGES::fill(result.tx_gas_price.bytes, 0);
+    // RANGES::fill(result.block_coinbase.bytes, 0);
+    // RANGES::fill(result.block_difficulty.bytes, 0);
+    // RANGES::fill(result.chain_id.bytes, 0);
     return result;
 }
 

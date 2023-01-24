@@ -19,14 +19,3 @@ template <class StorageType>
 concept StateStorage = storage2::ReadableStorage<StorageType, StateKey> &&
     storage2::WriteableStorage<StorageType, StateKey, StateValue>;
 }  // namespace bcos::transaction_executor
-
-template <>
-struct std::hash<bcos::transaction_executor::StateKey>
-{
-    size_t operator()(const bcos::transaction_executor::StateKey& stateKey)
-    {
-        size_t hash = std::hash<bcos::transaction_executor::TableNameID>{}(std::get<0>(stateKey));
-        boost::hash_combine(hash, std::hash<std::string>{}(std::get<1>(stateKey)));
-        return hash;
-    }
-};

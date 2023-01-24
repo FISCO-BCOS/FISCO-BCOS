@@ -21,7 +21,6 @@
 
 #pragma once
 #include "../Common.h"
-#include "EVMCWrapper.h"
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 
@@ -71,8 +70,8 @@ public:
     VMInstance& operator=(VMInstance) = delete;
     VMInstance& operator=(VMInstance&&) noexcept = default;
 
-    evmc_result execute(const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
-        evmc_message* msg, const uint8_t* code, size_t codeSize)
+    evmc_result execute(const struct evmc_host_interface* host, struct evmc_host_context* context,
+        evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize)
     {
         return m_instance->execute(m_instance, host, context, rev, msg, code, codeSize);
     }
