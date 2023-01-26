@@ -91,7 +91,7 @@ auto syncWait(auto&& task) requires std::is_rvalue_reference_v<decltype(task)>
     }
 }
 
-template <class Task>
+template <IsAwaitable Task>
 auto operator~(Task&& task)
 {
     return syncWait(std::forward<Task>(task));

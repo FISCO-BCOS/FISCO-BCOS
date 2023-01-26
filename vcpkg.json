@@ -33,6 +33,7 @@
     "jsoncpp",
     "protobuf",
     "cryptopp",
+    "fmt",
     {
       "name": "tarscpp",
       "version>=": "3.0.3-m"

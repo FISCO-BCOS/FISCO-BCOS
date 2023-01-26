@@ -140,7 +140,7 @@ public:
         {
             auto itAwaitable = m_storage.read(single(str));
             auto& it = itAwaitable.value();
-            it.next();
+            std::ignore = it.next();
             auto existsAwaitable = it.hasValue();
             auto exists = existsAwaitable.value();
             if (exists)

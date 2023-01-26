@@ -17,7 +17,7 @@ struct NoReturnValue : public bcos::error::Exception {};
 // clang-format on
 
 template <class Value>
-class Task
+class [[nodiscard]] Task
 {
 public:
     using ReturnType = Value;
@@ -145,7 +145,7 @@ private:
 };
 
 template <class Value>
-class AwaitableValue
+class [[nodiscard]] AwaitableValue
 {
 public:
     AwaitableValue(Value&& value) : m_value(std::forward<Value>(value)) {}

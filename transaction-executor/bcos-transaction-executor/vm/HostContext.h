@@ -15,8 +15,8 @@
  *
  * @brief host context
  * @file HostContext.h
- * @author: xingqiangbai
- * @date: 2021-05-24
+ * @author: ancelmo
+ * @date: 2022-12-24
  */
 
 #pragma once
@@ -26,6 +26,7 @@
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
 #include "bcos-framework/storage2/StringPool.h"
+#include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -36,10 +37,13 @@
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
 #include <evmone/evmone.h>
+#include <fmt/format.h>
+#include <boost/throw_exception.hpp>
 #include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string_view>
 
 namespace bcos::transaction_executor
@@ -67,7 +71,7 @@ public:
         m_blockHeader(blockHeader),
         m_message(message),
         m_origin(origin),
-        m_myContractTable(getTableNameID(message.destination)),
+        m_myContractTable(getMyContractTable(blockHeader, message)),
         m_codeTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CODE_BINARY)),
         m_abiTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CONTRACT_ABI))
     {
@@ -174,7 +178,7 @@ public:
         co_await setCode(codeHash, std::move(code));
 
         storage::Entry abiEntry;
-        abiEntry.importFields({std::move(abi)});
+        abiEntry.set(std::move(abi));
         if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
         {
             auto abiIt = co_await m_rollbackableStorage.read(
@@ -266,12 +270,11 @@ public:
 
     task::Task<evmc_result> execute()
     {
-        constexpr static evmc_address EMPTY_DESTINATION = {};
         // TODO:
         // 1: Check auth
         // 2: Check is precompiled
 
-        if (RANGES::equal(m_message.destination.bytes, EMPTY_DESTINATION.bytes))
+        if (m_message.kind == EVMC_CREATE || m_message.kind == EVMC_CREATE2)
         {
             co_return co_await create();
         }
@@ -279,6 +282,28 @@ public:
         {
             co_return co_await call();
         }
+    }
+
+    task::Task<evmc_result> create()
+    {
+        auto vmInstance = VMFactory::create();
+        auto mode = toRevision(vmSchedule());
+
+        auto savepoint = m_rollbackableStorage.current();
+        auto result = vmInstance.execute(
+            interface, this, mode, &m_message, m_message.input_data, m_message.input_size);
+        if (result.status_code != 0)
+        {
+            co_await m_rollbackableStorage.rollback(savepoint);
+        }
+        else
+        {
+            // Write result to table
+            co_await setCode(bytes(result.output_data, result.output_data + result.output_size));
+            result.create_address = m_newContractAddress;
+        }
+
+        co_return result;
     }
 
     task::Task<evmc_result> call()
@@ -301,27 +326,7 @@ public:
             interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
         if (result.status_code != 0)
         {
-            m_rollbackableStorage.rollback(savepoint);
-        }
-
-        co_return result;
-    }
-
-    task::Task<evmc_result> create()
-    {
-        auto vmInstance = VMFactory::create();
-        auto mode = toRevision(vmSchedule());
-
-        auto savepoint = m_rollbackableStorage.current();
-        auto result = vmInstance.execute(
-            interface, this, mode, &m_message, m_message.input_data, m_message.input_size);
-        if (result.status_code != 0)
-        {
-            m_rollbackableStorage.rollback(savepoint);
-        }
-        else
-        {
-            // Write result to table
+            co_await m_rollbackableStorage.rollback(savepoint);
         }
 
         co_return result;
@@ -349,6 +354,33 @@ private:
             m_tableNamePool, std::string_view(tableName.data(), tableName.size()));
     }
 
+    TableNameID getMyContractTable(
+        const protocol::BlockHeader& blockHeader, const evmc_message& message)
+    {
+        switch (message.kind)
+        {
+        case EVMC_CREATE:
+        {
+            auto address = fmt::format("{}_{}_{}", blockHeader.number(), 0, 0);
+            auto hash = GlobalHashImpl::g_hashImpl->hash(address);
+            m_newContractAddress = evmc_address{};
+            RANGES::copy_n(
+                hash.data(), sizeof(m_newContractAddress.bytes), m_newContractAddress.bytes);
+            return getTableNameID(m_newContractAddress);
+        }
+        case EVMC_CREATE2:
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error("Unimplement"));
+            break;
+        }
+        default:
+        {
+            m_newContractAddress = {};
+            return getTableNameID(message.destination);
+        }
+        }
+    }
+
     Rollbackable<Storage> m_rollbackableStorage;
     TableNamePool& m_tableNamePool;
     const protocol::BlockHeader& m_blockHeader;
@@ -358,6 +390,8 @@ private:
     TableNameID m_myContractTable;
     TableNameID m_codeTable;
     TableNameID m_abiTable;
+
+    evmc_address m_newContractAddress;
 };
 
 }  // namespace bcos::transaction_executor

@@ -115,7 +115,8 @@ size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
 
-    hostContext.setCode(bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize));
+    task::syncWait(hostContext.setCode(
+        bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize)));
     return _bufferSize;
 }
 
