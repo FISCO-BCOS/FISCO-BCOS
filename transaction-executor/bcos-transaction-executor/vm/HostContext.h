@@ -300,7 +300,6 @@ public:
         }
         else
         {
-            // Write result to table
             co_await setCode(bytes(result.output_data, result.output_data + result.output_size));
             result.create_address = m_newContractAddress;
         }
@@ -341,7 +340,14 @@ public:
         co_return evmc_result{};
     }
 
-    task::Task<evmc_result> externalCall(const evmc_message& message) { co_return evmc_result{}; }
+    task::Task<evmc_result> externalCall(const evmc_message& message)
+    {
+        // Use recursion hostcontext
+        HostContext hostcontext(m_rollbackableStorage, m_tableNamePool, m_blockHeader, message,
+            m_origin, m_contextID, m_seq + 1);
+
+        co_return co_await hostcontext.execute();
+    }
 
 private:
     TableNameID getTableNameID(const evmc_address& address)

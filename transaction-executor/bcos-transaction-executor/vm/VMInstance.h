@@ -83,4 +83,12 @@ private:
     evmc_vm* m_instance = nullptr;
 };
 
+void releaseResult(evmc_result& result)
+{
+    if (result.release)
+    {
+        result.release(std::addressof(result));
+    }
+}
+
 }  // namespace bcos::transaction_executor

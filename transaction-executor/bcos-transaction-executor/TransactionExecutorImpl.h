@@ -15,11 +15,14 @@ template <StateStorage Storage, class ReceiptFactory>
 class TransactionExecutorImpl
 {
 public:
-    TransactionExecutorImpl(protocol::BlockHeader const& blockHeader, Storage& storage, ReceiptFactory& receiptFactory)
+    TransactionExecutorImpl(
+        protocol::BlockHeader const& blockHeader, Storage& storage, ReceiptFactory& receiptFactory)
       : m_blockHeader(blockHeader), m_storage(storage), m_receiptFactory(receiptFactory)
     {}
 
-    task::Task<std::unique_ptr<protocol::TransactionReceipt>> execute(const protocol::Transaction& transaction) {}
+    task::Task<std::unique_ptr<protocol::TransactionReceipt>> execute(
+        const protocol::Transaction& transaction)
+    {}
 
 private:
     protocol::BlockHeader const& m_blockHeader;
