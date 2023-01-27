@@ -54,7 +54,7 @@ public:
             evmc_address origin = {};
 
             HostContext<decltype(storage)> hostContext(
-                storage, tableNamePool, blockHeader, message, origin);
+                storage, tableNamePool, blockHeader, message, origin, 0, 0);
             auto result = co_await hostContext.execute();
 
             BOOST_CHECK_EQUAL(result.status_code, 0);
@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(simpleCall)
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         evmc_message message = {.kind = EVMC_CALL,
-            .flags = EVMC_STATIC,
+            .flags = 0,
             .depth = 0,
             .gas = 1000000,
             .destination = helloworldAddress,
@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE(simpleCall)
         evmc_address origin = {};
 
         HostContext<decltype(storage)> hostContext(
-            storage, tableNamePool, blockHeader, message, origin);
+            storage, tableNamePool, blockHeader, message, origin, 0, 0);
         auto result = co_await hostContext.execute();
 
         BOOST_CHECK_EQUAL(result.status_code, 0);

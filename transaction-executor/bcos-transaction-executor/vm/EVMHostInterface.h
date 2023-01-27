@@ -121,11 +121,9 @@ size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_
 }
 
 template <class HostContextType>
-void selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
-    const evmc_address* _beneficiary) noexcept
+void selfdestruct(evmc_host_context* _context, [[maybe_unused]] const evmc_address* _addr,
+    [[maybe_unused]] const evmc_address* _beneficiary) noexcept
 {
-    (void)_addr;
-    (void)_beneficiary;
     auto& hostContext = static_cast<HostContextType&>(*_context);
 
     hostContext.suicide();  // FISCO BCOS has no _beneficiary

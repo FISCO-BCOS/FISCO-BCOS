@@ -62,15 +62,17 @@ template <StateStorage Storage>
 class HostContext : public evmc_host_context
 {
 public:
-    HostContext(Storage& storage, TableNamePool& tableNamePool,
+    HostContext(Rollbackable<Storage>& storage, TableNamePool& tableNamePool,
         const protocol::BlockHeader& blockHeader, const evmc_message& message,
-        const evmc_address& origin)
+        const evmc_address& origin, int contextID, int seq)
       : evmc_host_context(),
         m_rollbackableStorage(storage),
         m_tableNamePool(tableNamePool),
         m_blockHeader(blockHeader),
         m_message(message),
         m_origin(origin),
+        m_contextID(contextID),
+        m_seq(seq),
         m_myContractTable(getMyContractTable(blockHeader, message)),
         m_codeTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CODE_BINARY)),
         m_abiTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CONTRACT_ABI))
@@ -100,7 +102,7 @@ public:
     task::Task<evmc_bytes32> get(const evmc_bytes32* key)
     {
         StateKey stateKey(
-            m_myContractTable, std::string_view((char*)key->bytes, sizeof(key->bytes)));
+            m_myContractTable, std::string_view((const char*)key->bytes, sizeof(key->bytes)));
         auto it = co_await m_rollbackableStorage.read(storage2::single(stateKey));
         co_await it.next();
 
@@ -381,16 +383,17 @@ private:
         }
     }
 
-    Rollbackable<Storage> m_rollbackableStorage;
+    Rollbackable<Storage>& m_rollbackableStorage;
     TableNamePool& m_tableNamePool;
     const protocol::BlockHeader& m_blockHeader;
     const evmc_message& m_message;
     const evmc_address& m_origin;
+    int m_contextID;
+    int m_seq;
 
     TableNameID m_myContractTable;
     TableNameID m_codeTable;
     TableNameID m_abiTable;
-
     evmc_address m_newContractAddress;
 };
 
