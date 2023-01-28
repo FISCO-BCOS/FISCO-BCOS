@@ -99,6 +99,9 @@ public:
     void setCompatibilityVersion(uint32_t _version) { m_compatibilityVersion = _version; }
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
 
+    void setAuthCheckStatus(uint32_t _authStatus) { m_authCheckStatus = _authStatus; }
+    uint32_t authCheckStatus() const { return m_authCheckStatus; }
+
 protected:
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
@@ -109,10 +112,11 @@ protected:
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {3000000000, 0};
     // the compatibilityVersion
     // the system version, can only be upgraded manually
-    uint32_t m_compatibilityVersion;
+    uint32_t m_compatibilityVersion = 0;
     // no need to store, in memory data
     int64_t m_sealerId = -1;
     int64_t m_txsSize = -1;
+    uint32_t m_authCheckStatus = 0;
 };
 }  // namespace ledger
 }  // namespace bcos
