@@ -13,10 +13,10 @@ namespace bcos::concepts::transaction
 template <class TransactionDataType>
 concept TransactionData = requires(TransactionDataType transactionData)
 {
-    std::integral<decltype(transactionData.version)>;
+    requires std::integral<decltype(transactionData.version)>;
     transactionData.chainID;
     transactionData.groupID;
-    std::integral<decltype(transactionData.blockLimit)>;
+    requires std::integral<decltype(transactionData.blockLimit)>;
     transactionData.nonce;
     transactionData.to;
     transactionData.input;
@@ -26,15 +26,13 @@ concept TransactionData = requires(TransactionDataType transactionData)
 template <class TransactionType>
 concept Transaction = requires(TransactionType transaction)
 {
-    bcos::concepts::hash::Hashable<TransactionType>;
-    bcos::concepts::serialize::Serializable<TransactionType>;
     TransactionType{};
-    TransactionData<decltype(transaction.data)>;
+    requires TransactionData<decltype(transaction.data)>;
     transaction.dataHash;
     transaction.signature;
     transaction.sender;
-    std::integral<decltype(transaction.importTime)>;
-    std::integral<decltype(transaction.attribute)>;
+    requires std::integral<decltype(transaction.importTime)>;
+    requires std::integral<decltype(transaction.attribute)>;
 };
 
 // template <class TransactionType>

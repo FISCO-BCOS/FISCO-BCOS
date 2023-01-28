@@ -42,7 +42,7 @@ auto& getRef(Input& input)
 template <class Range>
 concept DynamicRange = requires(Range range, size_t newSize)
 {
-    RANGES::range<Range>;
+    requires RANGES::range<Range>;
     range.resize(newSize);
     range.reserve(newSize);
 };
