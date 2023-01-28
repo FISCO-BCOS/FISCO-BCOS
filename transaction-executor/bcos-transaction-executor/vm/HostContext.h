@@ -25,6 +25,7 @@
 #include "../RollbackableStorage.h"
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
+#include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/storage2/StringPool.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -53,18 +54,18 @@ struct NotFoundCode : public bcos::Error
 {
 };
 
-evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
+inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 {
     return toEvmC(GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-template <StateStorage Storage>
+template <StateStorage Storage, protocol::IsBlockHeader BlockHeader>
 class HostContext : public evmc_host_context
 {
 public:
     HostContext(Rollbackable<Storage>& storage, TableNamePool& tableNamePool,
-        const protocol::BlockHeader& blockHeader, const evmc_message& message,
-        const evmc_address& origin, int contextID, int seq)
+        BlockHeader const& blockHeader, const evmc_message& message, const evmc_address& origin,
+        int contextID, int seq)
       : evmc_host_context(),
         m_rollbackableStorage(storage),
         m_tableNamePool(tableNamePool),
@@ -244,6 +245,7 @@ public:
     int64_t blockNumber() const { return m_blockHeader.number(); }
     uint32_t blockVersion() const { return m_blockHeader.version(); }
     uint64_t timestamp() const { return m_blockHeader.timestamp(); }
+    evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const
     {
         // TODO: add version check
@@ -252,14 +254,13 @@ public:
         //     // FISCO BCOS only has tx Gas limit. We use it as block gas limit
         //     return m_executive->blockContext().lock()->txGasLimit();
         // }
-        return 3000000000;  // TODO: add config
+        return 3000 * 10000;  // TODO: add config
     }
-    evmc_address origin() const { return m_origin; }
 
     /// Revert any changes made (by any of the other calls).
-    void log(h256s&& _topics, bytesConstRef _data)
+    void log(h256s topics, bytesConstRef data)
     {
-        // TODO:
+        m_logs.emplace_back(bytes{}, std::move(topics), data.toBytes());
     }
 
     void suicide()
@@ -342,12 +343,19 @@ public:
 
     task::Task<evmc_result> externalCall(const evmc_message& message)
     {
-        // Use recursion hostcontext
         HostContext hostcontext(m_rollbackableStorage, m_tableNamePool, m_blockHeader, message,
             m_origin, m_contextID, m_seq + 1);
 
-        co_return co_await hostcontext.execute();
+        auto result = co_await hostcontext.execute();
+        if (result.status_code == EVMC_SUCCESS)
+        {
+            m_logs.insert(m_logs.end(), hostcontext.m_logs.begin(), hostcontext.m_logs.end());
+        }
+
+        co_return result;
     }
+
+    const std::vector<protocol::LogEntry>& logs() & { return m_logs; }
 
 private:
     TableNameID getTableNameID(const evmc_address& address)
@@ -391,7 +399,7 @@ private:
 
     Rollbackable<Storage>& m_rollbackableStorage;
     TableNamePool& m_tableNamePool;
-    const protocol::BlockHeader& m_blockHeader;
+    BlockHeader const& m_blockHeader;
     const evmc_message& m_message;
     const evmc_address& m_origin;
     int m_contextID;
@@ -401,6 +409,7 @@ private:
     TableNameID m_codeTable;
     TableNameID m_abiTable;
     evmc_address m_newContractAddress;
+    std::vector<protocol::LogEntry> m_logs;
 };
 
 }  // namespace bcos::transaction_executor

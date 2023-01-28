@@ -19,7 +19,6 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 
 constexpr std::string_view helloworldAddress = "HelloWorldHelloWorld";
-;
 class TestHostContextFixture
 {
 public:

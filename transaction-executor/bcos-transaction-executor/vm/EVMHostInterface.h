@@ -130,31 +130,30 @@ void selfdestruct(evmc_host_context* _context, [[maybe_unused]] const evmc_addre
 }
 
 template <class HostContextType>
-void log(evmc_host_context* _context, [[maybe_unused]] const evmc_address* _addr,
-    uint8_t const* _data, size_t _dataSize, const evmc_bytes32 _topics[],
-    size_t _numTopics) noexcept
+void log(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, uint8_t const* data,
+    size_t dataSize, const evmc_bytes32 topics[], size_t numTopics) noexcept
 {
-    auto& hostContext = static_cast<HostContextType&>(*_context);
-    // assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
-    h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
-    hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
+    auto& hostContext = static_cast<HostContextType&>(*context);
+    h256s hashTopics;
+    hashTopics.reserve(numTopics);
+    for (auto i : RANGES::iota_view<size_t, size_t>(0, numTopics))
+    {
+        hashTopics.emplace_back(topics[i].bytes, sizeof(evmc_bytes32));
+    }
+    hostContext.log(std::move(hashTopics), bytesConstRef{data, dataSize});
 }
 
 template <class HostContextType>
-evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
+evmc_access_status access_account(
+    [[maybe_unused]] evmc_host_context* _context, [[maybe_unused]] const evmc_address* _addr)
 {
-    std::ignore = _context;
-    std::ignore = _addr;
     return EVMC_ACCESS_COLD;
 }
 
 template <class HostContextType>
-evmc_access_status access_storage(
-    evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
+evmc_access_status access_storage([[maybe_unused]] evmc_host_context* _context,
+    [[maybe_unused]] const evmc_address* _addr, [[maybe_unused]] const evmc_bytes32* _key)
 {
-    std::ignore = _context;
-    std::ignore = _addr;
-    std::ignore = _key;
     return EVMC_ACCESS_COLD;
 }
 
@@ -163,17 +162,7 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
     evmc_tx_context result = {};
-    // if (hostContext.isWasm())
-    if (false)
-    {
-        // result.tx_origin = toEvmC(hostContext.origin());
-    }
-    else
-    {
-        // auto origin = fromHex(hostContext.origin());
-        // result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size())); //
-        // TODO: add origin
-    }
+    result.tx_origin = hostContext.origin();
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
     result.block_gas_limit = hostContext.blockGasLimit();

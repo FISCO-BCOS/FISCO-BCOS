@@ -23,9 +23,7 @@
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class LogEntry;
 class TransactionReceiptFactory
@@ -41,5 +39,17 @@ public:
         const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
         BlockNumber blockNumber) = 0;
 };
-}  // namespace protocol
-}  // namespace bcos
+
+template <class T>
+concept IsTransactionReceiptFactory = std::derived_from<T, TransactionReceiptFactory>;
+
+template <IsTransactionReceiptFactory ReceiptFactory>
+struct ReceiptFactoryReturnTrait
+{
+    using type = std::remove_cvref_t<decltype(std::declval<ReceiptFactory>().createReceipt(
+        bcos::u256{}, std::string{}, std::vector<LogEntry>{}, 0, bcos::bytesConstRef{}, 0))>;
+};
+
+template <IsTransactionReceiptFactory ReceiptFactory>
+using ReceiptFactoryReturnType = typename ReceiptFactoryReturnTrait<ReceiptFactory>::type;
+}  // namespace bcos::protocol

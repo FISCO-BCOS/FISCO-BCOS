@@ -28,7 +28,7 @@ namespace bcos::transaction_executor
 {
 
 /// Translate the VMSchedule to VMInstance-C revision.
-evmc_revision toRevision(VMSchedule const& _schedule)
+inline evmc_revision toRevision(VMSchedule const& _schedule)
 {
     if (_schedule.enableLondon)
         return EVMC_LONDON;
@@ -83,7 +83,7 @@ private:
     evmc_vm* m_instance = nullptr;
 };
 
-void releaseResult(evmc_result& result)
+inline void releaseResult(evmc_result& result)
 {
     if (result.release)
     {
