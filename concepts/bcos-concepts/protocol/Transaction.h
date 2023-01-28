@@ -27,7 +27,7 @@ template <class TransactionType>
 concept Transaction = requires(TransactionType transaction)
 {
     TransactionType{};
-    TransactionData<decltype(transaction.data)>;
+    requires TransactionData<decltype(transaction.data)>;
     transaction.dataHash;
     transaction.signature;
     transaction.sender;
