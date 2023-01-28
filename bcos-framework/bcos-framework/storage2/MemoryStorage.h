@@ -309,7 +309,7 @@ public:
                 }
 
                 bucket.get().container.modify(
-                    it, [newValue = std::forward<decltype(value)>(value)](Data& data) {
+                    it, [newValue = std::forward<decltype(value)>(value)](Data& data) mutable {
                         data.value = std::forward<decltype(newValue)>(newValue);
                     });
             }
