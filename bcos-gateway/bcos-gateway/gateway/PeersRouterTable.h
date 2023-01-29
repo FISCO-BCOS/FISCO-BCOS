@@ -53,7 +53,7 @@ public:
 
     void updatePeerStatus(P2pID const& _p2pID, GatewayNodeStatus::Ptr _gatewayNodeStatus);
 
-    using Group2NodeIDListType = std::map<std::string, std::set<std::string>, std::less<>>;
+    using Group2NodeIDListType = std::map<std::string, std::map<std::string, uint32_t>>;
     Group2NodeIDListType peersNodeIDList(P2pID const& _p2pNodeID) const;
 
     void asyncBroadcastMsg(

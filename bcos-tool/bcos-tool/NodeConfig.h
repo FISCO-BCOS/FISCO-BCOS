@@ -28,6 +28,7 @@
 #include <util/tc_clientsocket.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <cstddef>
 #include <optional>
 #include <unordered_map>
 
@@ -140,6 +141,8 @@ public:
     bool isWasm() const { return m_isWasm; }
     bool isAuthCheck() const { return m_isAuthCheck; }
     bool isSerialExecute() const { return m_isSerialExecute; }
+    size_t vmCacheSize() const { return m_vmCacheSize; }
+
     std::string const& authAdminAddress() const { return m_authAdminAddress; }
 
     std::string const& rpcServiceName() const { return m_rpcServiceName; }
@@ -301,7 +304,7 @@ private:
     // storage configuration
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
-    size_t m_keyPageSize = 8192;
+    size_t m_keyPageSize = 10240;
     std::vector<std::string> m_pd_addrs;
     std::string m_pdCaPath;
     std::string m_pdCertPath;
@@ -317,6 +320,7 @@ private:
     bool m_isWasm = false;
     bool m_isAuthCheck = false;
     bool m_isSerialExecute = false;
+    size_t m_vmCacheSize = 1024;
     std::string m_authAdminAddress;
 
     // Pro and Max versions run do not apply to tars admin site

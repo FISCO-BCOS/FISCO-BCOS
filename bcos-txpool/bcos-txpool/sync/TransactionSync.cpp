@@ -390,9 +390,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                           << LOG_KV("peer", _nodeID->shortHex())
                           << LOG_KV("expectedType", TxsSyncPacketType::TxsResponsePacket)
                           << LOG_KV("recvType", txsResponse->type());
-        _onVerifyFinished(BCOS_ERROR_PTR(
-                              CommonError::FetchTransactionsFailed, "FetchTransactionsFailed"),
-            false);
+        _onVerifyFinished(
+            BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed, "FetchTransactionsFailed"), false);
         return;
     }
     // verify missedTxs
@@ -415,8 +414,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1);
         // response to verify result
         _onVerifyFinished(
-            BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
-            false);
+            BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
         // try to import the transactions even when verify failed
         importDownloadedTxs(_nodeID, transactions);
         return;
@@ -433,8 +431,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     {
         if ((*_missedTxs)[i] != transactions->transaction(i)->hash())
         {
-            _onVerifyFinished(BCOS_ERROR_PTR(CommonError::InconsistentTransactions,
-                                  "InconsistentTransactions"),
+            _onVerifyFinished(
+                BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
                 false);
             return;
         }
@@ -742,7 +740,7 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
 
 void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
 {
-    auto txsHash = m_config->txpoolStorage()->getAllTxsHash();
+    auto txsHash = m_config->txpoolStorage()->getTxsHash(c_MaxResponsedTxsToNodesWithEmptyTxs);
     if (txsHash->empty())
     {
         return;
@@ -768,5 +766,6 @@ void TransactionSync::onEmptyTxs()
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, HashList());
     auto packetData = txsStatus->encode();
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, ref(*packetData));
+        bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
+        ModuleID::TxsSync, ref(*packetData));
 }

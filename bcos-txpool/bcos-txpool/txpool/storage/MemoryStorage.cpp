@@ -531,14 +531,13 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
 
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
-    if (c_fileLogLevel <= TRACE)
-        [[unlikely]]
+    if (c_fileLogLevel <= TRACE) [[unlikely]]
+    {
+        for (auto const& tx : _missedTxs)
         {
-            for (auto const& tx : _missedTxs)
-            {
-                TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
-            }
+            TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
         }
+    }
     return fetchedTxs;
 }
 
@@ -959,7 +958,7 @@ bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
     return true;
 }
 
-HashListPtr MemoryStorage::getAllTxsHash()
+HashListPtr MemoryStorage::getTxsHash(int _limit)
 {
     auto txsHash = std::make_shared<HashList>();
     ReadGuard l(x_txpoolMutex);
@@ -969,6 +968,10 @@ HashListPtr MemoryStorage::getAllTxsHash()
         if (!tx)
         {
             continue;
+        }
+        if ((int)txsHash->size() >= _limit)
+        {
+            break;
         }
         txsHash->emplace_back(it.first);
     }

@@ -36,13 +36,6 @@ static const char* const SYS_VALUE = "value";
 static const char* const SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
 static const char* const SYS_VALUE_AND_ENABLE_BLOCK_NUMBER = "value,enable_number";
 
-// FileSystem paths
-static const char* const FS_ROOT = "/";
-static const char* const FS_APPS = "/apps";
-static const char* const FS_USER = "/usr";
-static const char* const FS_SYS_BIN = "/sys";
-static const char* const FS_USER_TABLE = "/tables";
-
 enum LedgerError : int32_t
 {
     SUCCESS = 0,

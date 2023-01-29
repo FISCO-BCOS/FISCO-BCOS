@@ -37,6 +37,7 @@ public:
     virtual void setGroupID(std::string const& _groupID) = 0;
     // the nodeIDList
     virtual void setNodeIDList(std::vector<std::string>&& _nodeIDList) = 0;
+    virtual void setNodeTypeList(std::vector<int32_t>&& _nodeTypeList) = 0;
     virtual void appendNodeID(std::string const& _nodeID) = 0;
     virtual void appendProtocol(bcos::protocol::ProtocolInfo::ConstPtr _protocol) = 0;
     // the groupType
@@ -45,6 +46,7 @@ public:
     virtual std::string const& groupID() const = 0;
     // Note: externally ensure thread safety
     virtual std::vector<std::string> const& nodeIDList() const = 0;
+    virtual std::vector<int32_t> const& nodeTypeList() const = 0;
     virtual int type() const = 0;
 
     virtual void setNodeProtocolList(

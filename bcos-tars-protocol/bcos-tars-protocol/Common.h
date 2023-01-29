@@ -75,7 +75,10 @@ public:
 
     ~BufferWriter() {}
 
-    void reset() { _len = 0; }
+    void reset()
+    {
+        _len = 0;
+    }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -94,8 +97,14 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const { return _buf; }
-    size_t getLength() const { return _len; }
+    const ByteType* getBuffer() const
+    {
+        return _buf;
+    }
+    size_t getLength() const
+    {
+        return _len;
+    }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -302,12 +311,13 @@ inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::P2PInfo const& _p2pInfo)
     return tarsP2PInfo;
 }
 
-inline bcostars::GroupNodeInfo toTarsNodeIDInfo(
-    std::string const& _groupID, std::set<std::string> const& _nodeIDList)
+inline bcostars::GroupNodeInfo toTarsNodeIDInfo(std::string const& _groupID,
+    std::set<std::string> const& _nodeIDList, std::set<std::uint32_t> const& _nodeTypeList)
 {
     GroupNodeInfo groupNodeIDInfo;
     groupNodeIDInfo.groupID = _groupID;
     groupNodeIDInfo.nodeIDList = std::vector<std::string>(_nodeIDList.begin(), _nodeIDList.end());
+    groupNodeIDInfo.nodeTypeList = std::vector<int32_t>(_nodeTypeList.begin(), _nodeTypeList.end());
     return groupNodeIDInfo;
 }
 inline bcostars::GatewayInfo toTarsGatewayInfo(bcos::gateway::GatewayInfo::Ptr _bcosGatewayInfo)
@@ -322,7 +332,18 @@ inline bcostars::GatewayInfo toTarsGatewayInfo(bcos::gateway::GatewayInfo::Ptr _
     std::vector<GroupNodeInfo> tarsNodeIDInfos;
     for (auto const& it : nodeIDList)
     {
-        tarsNodeIDInfos.emplace_back(toTarsNodeIDInfo(it.first, it.second));
+        auto gourpID = it.first;
+        auto nodeInfos = it.second;
+        std::set<std::string> nodeIDs;
+        std::set<uint32_t> nodeTypes;
+        for (auto const& nodeInfo : nodeInfos)
+        {
+            auto nodeID = nodeInfo.first;
+            auto nodeType = nodeInfo.second;
+            nodeIDs.insert(nodeID);
+            nodeTypes.insert(nodeType);
+        }
+        tarsNodeIDInfos.emplace_back(toTarsNodeIDInfo(it.first, nodeIDs, nodeTypes));
     }
     tarsGatewayInfo.nodeIDInfo = tarsNodeIDInfos;
     return tarsGatewayInfo;
@@ -343,12 +364,17 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
 {
     auto bcosGatewayInfo = std::make_shared<bcos::gateway::GatewayInfo>();
     auto p2pInfo = toBcosP2PNodeInfo(_tarsGatewayInfo.p2pInfo);
-    std::map<std::string, std::set<std::string>, std::less<>> nodeIDInfos;
+    std::map<std::string, std::map<std::string, uint32_t>> nodeIDInfos;
     for (auto const& it : _tarsGatewayInfo.nodeIDInfo)
     {
         auto const& nodeIDListInfo = it.nodeIDList;
-        nodeIDInfos[it.groupID] =
-            std::set<std::string>(nodeIDListInfo.begin(), nodeIDListInfo.end());
+        auto const& nodeTypeInfo = it.nodeTypeList;
+        for (size_t i = 0; i < nodeIDListInfo.size(); ++i)
+        {
+            auto nodeID = nodeIDListInfo[i];
+            auto nodeType = nodeTypeInfo[i];
+            nodeIDInfos[it.groupID].insert(std::pair<std::string, uint32_t>(nodeID, nodeType));
+        }
     }
     bcosGatewayInfo->setP2PInfo(std::move(p2pInfo));
     bcosGatewayInfo->setNodeIDInfo(std::move(nodeIDInfos));

@@ -87,6 +87,9 @@ public:
     ExecutiveFlowInterface::Ptr getExecutiveFlow(std::string codeAddress);
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
+    std::shared_ptr<VMFactory> getVMFactory() { return m_vmFactory; }
+    void setVMFactory(std::shared_ptr<VMFactory> factory) { m_vmFactory = factory; }
+
     void stop()
     {
         std::vector<ExecutiveFlowInterface::Ptr> executiveFlow2Stop;
@@ -146,6 +149,7 @@ private:
     LedgerCache::Ptr m_ledgerCache;
     std::set<std::string> m_suicides;  // contract address need to selfdestruct
     mutable bcos::SharedMutex x_suicides;
+    std::shared_ptr<VMFactory> m_vmFactory;
 };
 
 }  // namespace executor

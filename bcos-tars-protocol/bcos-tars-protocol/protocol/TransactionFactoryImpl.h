@@ -23,6 +23,8 @@
 #include "TransactionImpl.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
+#include <fstream>
+#include <stdexcept>
 #include <utility>
 
 namespace bcostars::protocol
@@ -42,12 +44,39 @@ public:
     ~TransactionFactoryImpl() override = default;
 
     bcos::protocol::Transaction::Ptr createTransaction(
-        bcos::bytesConstRef txData, bool checkSig = true) override
+        bcos::bytesConstRef txData, bool checkSig = true, bool checkHash = false) override
     {
         auto transaction = std::make_shared<TransactionImpl>(
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
 
         transaction->decode(txData);
+
+        auto originDataHash = std::move(transaction->mutableInner().dataHash);
+        transaction->mutableInner().dataHash.clear();
+
+        auto anyHasher = m_cryptoSuite->hashImpl()->hasher();
+        std::visit(
+            [&transaction](auto& hasher) {
+                transaction->calculateHash<std::remove_cvref_t<decltype(hasher)>>();
+            },
+            anyHasher);
+
+        // check if hash matching
+        if (checkHash && !originDataHash.empty() &&
+            (originDataHash != transaction->mutableInner().dataHash)) [[unlikely]]
+        {
+            bcos::crypto::HashType originHashResult(
+                (bcos::byte*)originDataHash.data(), originDataHash.size());
+            bcos::crypto::HashType hashResult(
+                (bcos::byte*)transaction->mutableInner().dataHash.data(),
+                transaction->mutableInner().dataHash.size());
+
+            BCOS_LOG(WARNING) << LOG_DESC("the transaction hash does not match")
+                              << LOG_KV("originHash", originHashResult.hex())
+                              << LOG_KV("realHash", hashResult.hex());
+            BOOST_THROW_EXCEPTION(std::invalid_argument("transaction hash mismatching"));
+        }
+
         if (checkSig)
         {
             transaction->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());

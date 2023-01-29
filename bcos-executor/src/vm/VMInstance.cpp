@@ -20,26 +20,18 @@
  */
 
 #include "VMInstance.h"
+
 #include "HostContext.h"
+#include "evmone/advanced_analysis.hpp"
+#include "evmone/advanced_execution.hpp"
+#include <utility>
 
 using namespace std;
-namespace bcos
+namespace bcos::executor
 {
-namespace executor
-{
-namespace
-{
-/// The list of EVM-C options stored as pairs of (name, value).
-std::vector<std::pair<std::string, std::string>> s_evmcOptions;
 
-}  // namespace
-
-std::vector<std::pair<std::string, std::string>>& evmcOptions() noexcept
-{
-    return s_evmcOptions;
-}
-
-VMInstance::VMInstance(evmc_vm* _instance) noexcept : m_instance(_instance)
+VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view code) noexcept
+  : m_instance(instance), m_revision(revision), m_code(code)
 {
     assert(m_instance != nullptr);
     // the abi_version of intepreter is EVMC_ABI_VERSION when callback VMFactory::create()
@@ -47,40 +39,46 @@ VMInstance::VMInstance(evmc_vm* _instance) noexcept : m_instance(_instance)
 
     // Set the options.
     if (m_instance->set_option)
-        for (auto& pair : evmcOptions())
-            m_instance->set_option(m_instance, pair.first.c_str(), pair.second.c_str());
+    {  // baseline interpreter could not work with precompiled
+        m_instance->set_option(m_instance, "advanced", "");  // default is baseline interpreter
+        // m_instance->set_option(m_instance, "trace", "");
+        // m_instance->set_option(m_instance, "cgoto", "no");
+    }
 }
 
-Result VMInstance::exec(HostContext& _hostContext, evmc_revision _rev, evmc_message* _msg,
-    const uint8_t* _code, size_t _code_size)
+VMInstance::VMInstance(
+    std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision, bytes_view code) noexcept
+  : m_analysis(std::move(analysis)), m_revision(revision), m_code(code)
 {
-    Result result = Result(m_instance->execute(
-        m_instance, _hostContext.interface, &_hostContext, _rev, _msg, _code, _code_size));
-    return result;
+    assert(m_analysis != nullptr);
 }
 
-void VMInstance::enableDebugOutput()
+Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
 {
-    // m_instance->set_option(m_instance, "histogram", "1");
+    if (m_instance)
+    {
+        return Result(m_instance->execute(m_instance, _hostContext.interface, &_hostContext,
+            m_revision, _msg, m_code.data(), m_code.size()));
+    }
+    auto state = std::make_unique<evmone::advanced::AdvancedExecutionState>(
+        *_msg, m_revision, *_hostContext.interface, &_hostContext, m_code);
+    {  // baseline
+
+        // auto vm = evmc_create_evmone(); // baseline use the vm to get options
+        // return Result(evmone::baseline::execute(*static_cast<evmone::VM*>(vm), *state,
+        // *m_analysis));
+    }
+    // advanced, TODO: state also could be reused
+
+    return Result(evmone::advanced::execute(*state, *m_analysis));
 }
 
 evmc_revision toRevision(VMSchedule const& _schedule)
 {
-    if (_schedule.enableLondon)
-        return EVMC_LONDON;
-    if (_schedule.enableIstanbul)
-        return EVMC_ISTANBUL;
-    if (_schedule.haveCreate2)
-        return EVMC_CONSTANTINOPLE;
-    if (_schedule.haveRevert)
-        return EVMC_BYZANTIUM;
-    if (_schedule.eip158Mode)
-        return EVMC_SPURIOUS_DRAGON;
-    if (_schedule.eip150Mode)
-        return EVMC_TANGERINE_WHISTLE;
-    if (_schedule.haveDelegateCall)
-        return EVMC_HOMESTEAD;
-    return EVMC_FRONTIER;
+    if (_schedule.enablePairs)
+    {
+        return EVMC_PARIS;
+    }
+    return EVMC_LONDON;
 }
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

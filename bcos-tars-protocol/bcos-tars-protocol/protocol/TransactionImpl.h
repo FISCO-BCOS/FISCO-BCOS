@@ -51,7 +51,7 @@ public:
     void encode(bcos::bytes& txData) const override;
 
     bcos::crypto::HashType hash() const override;
-    
+
     template <bcos::crypto::hasher::Hasher Hasher>
     void calculateHash()
     {
@@ -89,6 +89,9 @@ public:
 
     int32_t attribute() const override { return m_inner()->attribute; }
     void setAttribute(int32_t attribute) override { m_inner()->attribute = attribute; }
+
+    std::string_view extraData() const override { return m_inner()->extraData; }
+    void setExtraData(std::string const& _extraData) override { m_inner()->extraData = _extraData; }
 
     const bcostars::Transaction& inner() const { return *m_inner(); }
     bcostars::Transaction& mutableInner() { return *m_inner(); }

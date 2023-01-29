@@ -46,7 +46,7 @@ ExternalProject_Add(bcos_wasm_project
         PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
         # DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-wasm.git
-        GIT_TAG d5d58e5bf4ec9a7a6f397b36d0aadf9805d5aa29
+        GIT_TAG 5c05f91d55c7bd4e7d88d2461bbded57539c8127
         GIT_SHALLOW false
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ""

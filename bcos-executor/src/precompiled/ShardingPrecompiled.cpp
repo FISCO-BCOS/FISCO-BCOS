@@ -344,7 +344,8 @@ bool ShardingPrecompiled::checkPathPrefixValid(
 }
 
 
-bool ShardingPrecompiled::checkContractAddressValid(bool isWasm, const std::string& address)
+bool ShardingPrecompiled::checkContractAddressValid(
+    bool isWasm, const std::string& address, uint32_t blockVersion)
 {
     if (!isWasm)
     {
@@ -358,5 +359,5 @@ bool ShardingPrecompiled::checkContractAddressValid(bool isWasm, const std::stri
         }
     }
 
-    return checkPathValid(address);
+    return checkPathValid(address, blockVersion);
 }

@@ -215,6 +215,7 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
         groupNodeInfo->setGroupID(it.first);
         // get nodeID and type
         std::vector<std::string> nodeIDList;
+        std::vector<int32_t> nodeTypeList;
         std::vector<ProtocolInfo::ConstPtr> protocolList;
 
         auto groupType = GroupType::OUTSIDE_GROUP;
@@ -222,6 +223,7 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
         for (auto const& pNodeInfo : it.second)
         {
             nodeIDList.emplace_back(pNodeInfo.first);
+            nodeTypeList.emplace_back(pNodeInfo.second->nodeType());
             protocolList.emplace_back(pNodeInfo.second->protocolInfo());
             if ((NodeType)(pNodeInfo.second->nodeType()) == NodeType::CONSENSUS_NODE)
             {
@@ -240,11 +242,13 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
         }
         groupNodeInfo->setType(groupType);
         groupNodeInfo->setNodeIDList(std::move(nodeIDList));
+        groupNodeInfo->setNodeTypeList(std::move(nodeTypeList));
         groupNodeInfo->setNodeProtocolList(std::move(protocolList));
         groupNodeInfos.emplace_back(groupNodeInfo);
         NODE_MANAGER_LOG(INFO) << LOG_DESC("generateNodeStatus") << LOG_KV("groupType", groupType)
                                << LOG_KV("groupID", it.first)
                                << LOG_KV("nodeListSize", groupNodeInfo->nodeIDList().size())
+                               << LOG_KV("nodeTypeListSize", groupNodeInfo->nodeTypeList().size())
                                << LOG_KV("seq", statusSeq());
     }
     NODE_MANAGER_LOG(INFO) << LOG_DESC("generateNodeStatus")
@@ -318,7 +322,7 @@ GroupNodeInfo::Ptr GatewayNodeManager::getGroupNodeInfoList(const std::string& _
     return groupNodeInfo;
 }
 
-std::map<std::string, std::set<std::string>, std::less<>> GatewayNodeManager::peersNodeIDList(
+std::map<std::string, std::map<std::string, uint32_t>> GatewayNodeManager::peersNodeIDList(
     std::string const& _p2pNodeID)
 {
     if (_p2pNodeID == m_p2pNodeID)
