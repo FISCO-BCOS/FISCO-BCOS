@@ -173,8 +173,9 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](bcos::Error::Ptr&& error,
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
-        SCHEDULER_LOG(INFO) << METRIC << BLOCK_NUMBER(requestBlockNumber) << "ExecuteBlock response"
-                            << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
+        SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber)
+                             << "ExecuteBlock response"
+                             << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
         _callback(error == nullptr ? nullptr : std::move(error), std::move(blockHeader), _sysBlock);
     };
 
@@ -370,13 +371,13 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> _callback)
 {
-    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(header->number()) << "CommitBlock request";
+    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(header->number()) << "CommitBlock request";
 
     auto requestBlockNumber = header->number();
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](
                         bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
-        SCHEDULER_LOG(INFO) << METRIC << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock response"
-                            << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
+        SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock response"
+                             << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
         _callback(error == nullptr ? nullptr : std::move(error), std::move(config));
     };
 
@@ -565,7 +566,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 // So it should not exec tx notifier
                 if (m_txNotifier && blockNumber != 0)
                 {
-                    SCHEDULER_LOG(INFO) << "Start notify block result: " << blockNumber;
+                    SCHEDULER_LOG(DEBUG) << "Start notify block result: " << blockNumber;
                     blockExecutive->asyncNotify(m_txNotifier,
                         [this, blockNumber, callback = std::move(callback),
                             ledgerConfig = std::move(ledgerConfig)](Error::Ptr _error) mutable {
@@ -582,7 +583,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                                 m_blockNumberReceiver(blockNumber);
                             }
 
-                            SCHEDULER_LOG(INFO) << "End notify block result: " << blockNumber;
+                            SCHEDULER_LOG(INFO)
+                                << LOG_BADGE("BlockTrace") << "Notify block result success"
+                                << LOG_KV("blockNumber", blockNumber);
                             // Note: only after the block notify finished can call the callback
                             callback(std::move(_error), std::move(ledgerConfig));
                         });
@@ -796,17 +799,17 @@ void SchedulerImpl::preExecuteBlock(
     bcos::protocol::Block::Ptr block, bool verify, std::function<void(Error::Ptr&&)> _callback)
 {
     auto startT = utcTime();
-    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(block->blockHeaderConst()->number())
-                        << "preExeBlock request"
-                        << LOG_KV("txCount",
-                               block->transactionsSize() + block->transactionsMetaDataSize())
-                        << LOG_KV("startT(ms)", startT);
+    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(block->blockHeaderConst()->number())
+                         << "preExeBlock request"
+                         << LOG_KV("txCount",
+                                block->transactionsSize() + block->transactionsMetaDataSize())
+                         << LOG_KV("startT(ms)", startT);
 
     auto callback = [startT, _callback = std::move(_callback),
                         number = block->blockHeaderConst()->number()](bcos::Error::Ptr&& error) {
-        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number) << METRIC << "preExeBlock response"
-                            << LOG_KV("message", error ? error->what() : "ok")
-                            << LOG_KV("cost(ms)", utcTime() - startT);
+        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number) << METRIC << "preExeBlock response"
+                             << LOG_KV("message", error ? error->what() : "ok")
+                             << LOG_KV("cost(ms)", utcTime() - startT);
         _callback(error == nullptr ? nullptr : std::move(error));
     };
 

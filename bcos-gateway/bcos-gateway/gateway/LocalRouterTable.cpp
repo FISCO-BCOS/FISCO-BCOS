@@ -69,21 +69,23 @@ void LocalRouterTable::getGroupNodeInfoList(
     }
 }
 
-std::map<std::string, std::set<std::string>, std::less<>> LocalRouterTable::nodeListInfo() const
+std::map<std::string, std::map<std::string, uint32_t>> LocalRouterTable::nodeListInfo() const
 {
-    std::map<std::string, std::set<std::string>, std::less<>> nodeList;
+    std::map<std::string, std::map<std::string, uint32_t>> nodeList;
     ReadGuard l(x_nodeList);
     for (auto const& it : m_nodeList)
     {
         auto groupID = it.first;
         if (!nodeList.count(groupID))
         {
-            nodeList[groupID] = std::set<std::string>();
+            nodeList[groupID] = std::map<std::string, uint32_t>();
         }
         auto const& infos = it.second;
         for (auto const& nodeIt : infos)
         {
-            nodeList[groupID].insert(nodeIt.first);
+            auto nodeID = nodeIt.first;
+            auto nodeType = nodeIt.second->nodeType();
+            nodeList[groupID].insert(std::pair<std::string, uint32_t>(nodeID, nodeType));
         }
     }
     return nodeList;

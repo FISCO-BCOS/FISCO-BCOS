@@ -165,7 +165,7 @@ void SchedulerServiceApp::createScheduler()
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);
     // handler for notify block number
     scheduler->registerBlockNumberReceiver([this](bcos::protocol::BlockNumber number) {
-        BCOS_LOG(INFO) << "Notify blocknumber: " << number;
+        BCOS_LOG(DEBUG) << "Notify blocknumber: " << number;
         // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
         m_rpc->asyncNotifyBlockNumber(
             m_nodeConfig->groupId(), m_nodeConfig->nodeName(), number, [](bcos::Error::Ptr) {});

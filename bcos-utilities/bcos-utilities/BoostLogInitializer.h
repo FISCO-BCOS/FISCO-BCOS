@@ -112,6 +112,11 @@ private:
         unsigned const& _logLevel, std::string const& _logPath, std::string const& _logPrefix,
         std::string const& channel);
 
+    // rotate the log file the log every hour
+    boost::shared_ptr<sink_t> initHourLogSink(boost::property_tree::ptree const& _pt,
+        unsigned const& _logLevel, std::string const& _logPath, std::string const& _logPrefix,
+        std::string const& channel);
+
     boost::shared_ptr<console_sink_t> initConsoleLogSink(boost::property_tree::ptree const& _pt,
         unsigned const& _logLevel, std::string const& channel);
 

@@ -35,6 +35,7 @@
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
+#include "bcos-tool/BfsFileFactory.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -50,6 +51,8 @@
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
+#include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
@@ -274,12 +277,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         // Note: ensure that there has at least one executor before pbft/sync execute block
 
+        auto storageFactory =
+            std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
         std::string executorName = "executor-local";
         auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
             m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
-            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(),
-            executorName);
+            executionMessageFactory, storageFactory,
+            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
+            m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName);
         auto switchExecutorManager =
             std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
         executorManager->addExecutor(executorName, switchExecutorManager);
@@ -365,6 +370,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             auto ledger =
                 std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(
                     std::move(storageWrapper), m_protocolInitializer->blockFactory(), storage);
+            ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
 
             auto txpool = m_txpoolInitializer->txpool();
             auto transactionPool =
@@ -394,7 +400,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     // notify blockNumber
     schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
-            INITIALIZER_LOG(INFO) << "Notify blocknumber: " << number;
+            INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
             // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });

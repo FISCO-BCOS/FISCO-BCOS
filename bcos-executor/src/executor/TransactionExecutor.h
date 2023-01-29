@@ -26,6 +26,7 @@
 
 #include "../Common.h"
 #include "../dag/CriticalFields.h"
+#include "bcos-executor/src/vm/VMFactory.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -37,6 +38,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StateStorageFactory.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-executor/src/executive/LedgerCache.h>
@@ -79,6 +81,7 @@ class BlockContext;
 class PrecompiledContract;
 template <typename T, typename V>
 class ClockCache;
+class StateStorageFactory;
 struct FunctionAbi;
 struct CallParameters;
 
@@ -96,7 +99,8 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
+        storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
+        bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
         std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name);
 
     ~TransactionExecutor() override = default;
@@ -246,6 +250,7 @@ protected:
     storage::MergeableStorageInterface::Ptr m_cachedStorage;
     std::shared_ptr<storage::TransactionalStorageInterface> m_backendStorage;
     protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
+    storage::StateStorageFactory::Ptr m_stateStorageFactory;
     std::shared_ptr<BlockContext> m_blockContext;
     crypto::Hash::Ptr m_hashImpl;
     bool m_isAuthCheck = false;
@@ -309,8 +314,6 @@ protected:
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
     uint32_t m_blockVersion = 0;
-    size_t m_keyPageSize = 0;
-    VMSchedule m_schedule = FiscoBcosScheduleV4;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
     int64_t m_schedulerTermId = -1;
@@ -323,10 +326,18 @@ protected:
     void initWasmEnvironment();
     void resetEnvironment();
     void initTestPrecompiledTable(storage::StorageInterface::Ptr storage);
-
+    VMSchedule getVMSchedule(uint32_t currentVersion) const
+    {
+        if (currentVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+        {
+            return FiscoBcosScheduleV320;
+        }
+        return FiscoBcosSchedule;
+    }
     std::function<void()> f_onNeedSwitchEvent;
 
     LedgerCache::Ptr m_ledgerCache;
+    std::shared_ptr<VMFactory> m_vmFactory;
 };
 
 }  // namespace executor

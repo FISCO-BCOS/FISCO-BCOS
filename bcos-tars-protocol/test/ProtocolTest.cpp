@@ -269,7 +269,7 @@ BOOST_AUTO_TEST_CASE(block)
     bcos::bytes buffer;
     BOOST_CHECK_NO_THROW(block->encode(buffer));
 
-    auto decodedBlock = blockFactory->createBlock(buffer);
+    auto decodedBlock = blockFactory->createBlock(bcos::ref(buffer));
 
     BOOST_CHECK(decodedBlock->blockHeader()->sealerList().size() == header->sealerList().size());
     // ensure the sealerlist lifetime

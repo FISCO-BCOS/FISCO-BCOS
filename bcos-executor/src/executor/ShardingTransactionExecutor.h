@@ -26,14 +26,16 @@ class ShardingTransactionExecutor : public TransactionExecutor
 {
 public:
     using Ptr = std::shared_ptr<ShardingTransactionExecutor>;
-    ShardingTransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledger, txpool::TxPoolInterface::Ptr txpool,
-        storage::MergeableStorageInterface::Ptr cachedStorage,
+    ShardingTransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledger,
+        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
+        storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
+        bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
         std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name)
       : TransactionExecutor(ledger, txpool, cachedStorage, backendStorage, executionMessageFactory,
-            hashImpl, isWasm, isAuthCheck, keyPageSize, keyPageIgnoreTables, name){};
+            stateStorageFactory, hashImpl, isWasm, isAuthCheck, vmFactory, keyPageIgnoreTables,
+            name){};
 
     ~ShardingTransactionExecutor() override = default;
 

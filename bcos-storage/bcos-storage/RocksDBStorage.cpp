@@ -480,6 +480,7 @@ bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,
     bcos::Error::Ptr err = nullptr;
     std::visit(
         [&](auto&& keys, auto&& values) {
+            auto start = utcSteadyTime();
             if (table.empty())
             {
                 STORAGE_ROCKSDB_LOG(WARNING)
@@ -522,21 +523,27 @@ bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,
                     }
                 });
             auto writeBatch = WriteBatch();
+            size_t dataSize = 0;
             for (size_t i = 0; i < keys.size(); ++i)
             {
                 // Storage Security
                 if (m_dataEncryption)
                 {
+                    dataSize += realKeys[i].size() + encryptedValues[i].size();
                     writeBatch.Put(std::move(realKeys[i]), std::move(encryptedValues[i]));
                 }
                 else
                 {
+                    dataSize += realKeys[i].size() + values[i].size();
                     writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
                 }
             }
             WriteOptions options;
             auto status = m_db->Write(options, &writeBatch);
             err = checkStatus(status);
+            STORAGE_ROCKSDB_LOG(INFO)
+                << LOG_DESC("setRows finished") << LOG_KV("put", keys.size())
+                << LOG_KV("dataSize", dataSize) << LOG_KV("time(ms)", utcSteadyTime() - start);
         },
         _keys, _values);
     return err;

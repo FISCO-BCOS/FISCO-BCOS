@@ -144,7 +144,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         }
         else
         {
-            request->receiveAddress = evmAddress2String(_msg->destination);
+            request->receiveAddress = evmAddress2String(_msg->code_address);
         }
 
         request->codeAddress = request->receiveAddress;
@@ -159,7 +159,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
                 (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
             {
                 request->delegateCall = true;
-                request->codeAddress = evmAddress2String(_msg->destination);
+                request->codeAddress = evmAddress2String(_msg->code_address);
                 request->delegateCallSender = evmAddress2String(_msg->sender);
                 request->receiveAddress = codeAddress();
                 request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
@@ -172,6 +172,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         result.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION);
         result.release = nullptr;  // no output to release
         result.gas_left = 0;
+        result.gas_refund = 0;
         return result;
     }
     case EVMC_CREATE:
@@ -202,6 +203,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     // Convert CallParameters to evmc_resultx
     evmc_result result{.status_code = toEVMStatus(response, *blockContext),
         .gas_left = response->gas,
+        .gas_refund = 0,
         .output_data = response->data.data(),
         .output_size = response->data.size(),
         .release = nullptr,  // TODO: check if the response data need to release
@@ -282,6 +284,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
     }
 
     preResult.gas_left = callResults->gas;
+    preResult.gas_refund = 0;
     if (preResult.gas_left < 0)
     {
         callResults->type = CallParameters::REVERT;
@@ -558,13 +561,13 @@ std::optional<storage::Entry> HostContext::code()
     return m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
 }
 
-h256 HostContext::codeHash()
+crypto::HashType HostContext::codeHash()
 {
     auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
     if (entry)
     {
         auto code = entry->getField(0);
-        return h256(code, h256::StringDataType::FromBinary);
+        return crypto::HashType(code, crypto::HashType::StringDataType::FromBinary);
     }
 
     return {};

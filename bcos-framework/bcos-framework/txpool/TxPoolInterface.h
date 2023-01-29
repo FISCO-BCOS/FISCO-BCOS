@@ -144,6 +144,8 @@ public:
     // determine to clean up txs periodically or not
     virtual void registerTxsCleanUpSwitch(std::function<bool()>) {}
     virtual void clearAllTxs() {}
+
+    virtual void tryToSyncTxsFromPeers() {}
 };
 }  // namespace txpool
 }  // namespace bcos

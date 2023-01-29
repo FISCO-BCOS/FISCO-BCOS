@@ -197,7 +197,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     auto gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
     auto protocolInfo = g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService);
     gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
-        protocolInitializer.keyPair()->publicKey(), bcos::protocol::OBSERVER_NODE, front,
+        protocolInitializer.keyPair()->publicKey(), bcos::protocol::NodeType::LIGHT_NODE, front,
         protocolInfo);
     gateway->start();
 

@@ -84,7 +84,7 @@ protected:
     void terminate();
 
     std::atomic<WorkerState>& workerState() { return m_workerState; }
-    unsigned idleWaitMs() { return m_idleWaitMs; }
+    unsigned idleWaitMs() const { return m_idleWaitMs; }
 
 private:
     std::string m_threadName;

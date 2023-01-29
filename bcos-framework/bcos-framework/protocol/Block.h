@@ -88,11 +88,13 @@ public:
     virtual void setBlockHeader(BlockHeader::Ptr _blockHeader) = 0;
     // set transactions
     virtual void setTransaction(uint64_t _index, Transaction::Ptr _transaction) = 0;
+    // FIXME: appendTransaction will create Transaction, the parameter should be object not pointer
     virtual void appendTransaction(Transaction::Ptr _transaction) = 0;
     // set receipts
     virtual void setReceipt(uint64_t _index, TransactionReceipt::Ptr _receipt) = 0;
     virtual void appendReceipt(TransactionReceipt::Ptr _receipt) = 0;
     // set transaction metaData
+    // FIXME: appendTransactionMetaData will create, parameter should be object instead of pointer
     virtual void appendTransactionMetaData(TransactionMetaData::Ptr _txMetaData) = 0;
 
     // get transactions size

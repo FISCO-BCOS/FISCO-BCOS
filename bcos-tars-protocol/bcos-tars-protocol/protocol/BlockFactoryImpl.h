@@ -41,21 +41,24 @@ public:
         m_blockHeaderFactory(std::move(blockHeaderFactory)),
         m_transactionFactory(std::move(transactionFactory)),
         m_receiptFactory(std::move(receiptFactory)){};
-
+    BlockFactoryImpl(BlockFactoryImpl const&) = default;
+    BlockFactoryImpl(BlockFactoryImpl&&) = default;
+    BlockFactoryImpl& operator=(BlockFactoryImpl const&) = default;
+    BlockFactoryImpl& operator=(BlockFactoryImpl&&) = default;
     ~BlockFactoryImpl() override = default;
-    bcos::protocol::Block::Ptr createBlock() override { return std::make_shared<BlockImpl>(); }
 
-    bcos::protocol::Block::Ptr createBlock(
-        bcos::bytes const& _data, bool _calculateHash = true, bool _checkSig = true) override
-    {
-        return createBlock(bcos::ref(_data), _calculateHash, _checkSig);
-    }
+    bcos::protocol::Block::Ptr createBlock() override { return std::make_shared<BlockImpl>(); }
 
     bcos::protocol::Block::Ptr createBlock(
         bcos::bytesConstRef _data, bool _calculateHash = true, bool _checkSig = true) override
     {
         auto block = std::make_shared<BlockImpl>();
         block->decode(_data, _calculateHash, _checkSig);
+
+        if (block->inner().blockHeader.dataHash.empty())
+        {
+            block->blockHeader()->calculateHash(*m_cryptoSuite->hashImpl());
+        }
 
         return block;
     }

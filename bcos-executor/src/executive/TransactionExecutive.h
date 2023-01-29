@@ -23,6 +23,7 @@
 
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
+#include "../vm/VMFactory.h"
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
@@ -168,7 +169,8 @@ protected:
         _callParameters.data = std::move(codecOutput);
     }
 
-    inline std::string getContractTableName(const std::string_view& _address, bool isWasm = false)
+    inline std::string getContractTableName(
+        const std::string_view& _address, bool isWasm = false, uint32_t version = 0)
     {
         auto blockContext = m_blockContext.lock();
 
@@ -184,9 +186,12 @@ protected:
         std::string formatAddress(_address);
         if (isWasm)
         {
-            if (_address.find(USER_TABLE_PREFIX) == 0)
+            if (protocol::versionCompareTo(version, protocol::BlockVersion::V3_2_VERSION) < 0)
             {
-                return formatAddress;
+                if (_address.find(USER_TABLE_PREFIX) == 0)
+                {
+                    return formatAddress;
+                }
             }
             formatAddress = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
         }

@@ -21,12 +21,12 @@
 #pragma once
 
 #include "PrecompiledAbi.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/Entry.h"
-#include "bcos-executor/src/Common.h"
 #include <memory>
 #include <string>
 
@@ -39,20 +39,15 @@ namespace precompiled
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using TableInfoTupleV320 = std::tuple<uint8_t, std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
-using ConditionTupleV320 = std::tuple<uint8_t, uint32_t, std::string>;
+using ConditionTupleV320 = std::tuple<uint8_t, std::string, std::string>;
 using LimitTuple = std::tuple<uint32_t, uint32_t>;
 using UpdateFieldTuple = std::tuple<std::string, std::string>;
 using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
 using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
-struct Conditions
-{
-    std::vector<ConditionTuple>     cond;
-    std::vector<ConditionTupleV320> cond_v320;
-};
 struct TableInfo
 {
-    TableInfoTuple     info;
+    TableInfoTuple info;
     TableInfoTupleV320 info_v320;
 };
 /// Precompiled reserved code field
@@ -79,7 +74,7 @@ const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
 const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
 const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 const int USER_TABLE_MAX_LIMIT_COUNT = 500;
-const int USER_TABLE_MIN_LIMIT_COUNT = 50;  
+const int USER_TABLE_MIN_LIMIT_COUNT = 50;
 
 const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
