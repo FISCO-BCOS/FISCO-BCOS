@@ -36,11 +36,12 @@ public:
             Rollbackable<std::remove_reference_t<decltype(m_storage)>> rollbackableStorage(
                 m_storage);
 
+            auto toAddress = unhexAddress(transaction.to());
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
                 .gas = 30 * 10000,
-                .destination = unhexAddress(transaction.to()),
+                .recipient = toAddress,
                 .destination_ptr = nullptr,
                 .destination_len = 0,
                 .sender = unhexAddress(transaction.sender()),
@@ -49,10 +50,11 @@ public:
                 .input_data = transaction.input().data(),
                 .input_size = transaction.input().size(),
                 .value = {},
-                .create2_salt = {}};
+                .create2_salt = {},
+                .code_address = toAddress};
 
             HostContext hostContext(rollbackableStorage, m_tableNamePool, blockHeader, evmcMessage,
-                evmcMessage.destination, evmcMessage.sender, contextID, 0);
+                evmcMessage.sender, contextID, 0);
             auto evmcResult = co_await hostContext.execute();
 
             std::string newContractAddress;

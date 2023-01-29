@@ -63,18 +63,17 @@ class HostContext : public evmc_host_context
 {
 public:
     HostContext(Rollbackable<Storage>& storage, TableNamePool& tableNamePool,
-        BlockHeader const& blockHeader, const evmc_message& message, const evmc_address& myAddress,
-        const evmc_address& origin, int contextID, int seq)
+        BlockHeader const& blockHeader, const evmc_message& message, const evmc_address& origin,
+        int contextID, int seq)
       : evmc_host_context(),
         m_rollbackableStorage(storage),
         m_tableNamePool(tableNamePool),
         m_blockHeader(blockHeader),
         m_message(message),
         m_origin(origin),
-        m_myAddress(myAddress),
         m_contextID(contextID),
         m_seq(seq),
-        m_myContractTable(getMyContractTable(blockHeader, message, myAddress)),
+        m_myContractTable(getMyContractTable(blockHeader, message)),
         m_codeTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CODE_BINARY)),
         m_abiTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CONTRACT_ABI))
     {
@@ -336,7 +335,7 @@ public:
 
     task::Task<evmc_result> call()
     {
-        auto codeEntry = co_await code(m_message.destination);
+        auto codeEntry = co_await code(m_message.code_address);
         if (!codeEntry)
         {
             BOOST_THROW_EXCEPTION(
@@ -368,10 +367,8 @@ public:
 
     task::Task<evmc_result> externalCall(const evmc_message& message)
     {
-        auto const& myAddress =
-            message.kind == EVMC_DELEGATECALL ? m_myAddress : message.destination;
         HostContext hostcontext(m_rollbackableStorage, m_tableNamePool, m_blockHeader, message,
-            myAddress, m_origin, m_contextID, m_seq + 1);
+            m_origin, m_contextID, m_seq + 1);
 
         auto result = co_await hostcontext.execute();
         if (result.status_code == EVMC_SUCCESS)
@@ -397,8 +394,8 @@ private:
             m_tableNamePool, std::string_view(tableName.data(), tableName.size()));
     }
 
-    TableNameID getMyContractTable(const protocol::BlockHeader& blockHeader,
-        const evmc_message& message, const evmc_address& myAddress)
+    TableNameID getMyContractTable(
+        const protocol::BlockHeader& blockHeader, const evmc_message& message)
     {
         switch (message.kind)
         {
@@ -420,7 +417,7 @@ private:
         {
             // CALL OR DELEGATECALL
             m_newContractAddress = {};
-            return getTableNameID(myAddress);
+            return getTableNameID(message.recipient);
         }
         }
     }
@@ -430,7 +427,6 @@ private:
     BlockHeader const& m_blockHeader;
     const evmc_message& m_message;
     const evmc_address& m_origin;
-    const evmc_address& m_myAddress;
     int m_contextID;
     int m_seq;
 

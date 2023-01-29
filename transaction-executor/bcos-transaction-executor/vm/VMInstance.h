@@ -30,21 +30,11 @@ namespace bcos::transaction_executor
 /// Translate the VMSchedule to VMInstance-C revision.
 inline evmc_revision toRevision(VMSchedule const& _schedule)
 {
-    if (_schedule.enableLondon)
-        return EVMC_LONDON;
-    if (_schedule.enableIstanbul)
-        return EVMC_ISTANBUL;
-    if (_schedule.haveCreate2)
-        return EVMC_CONSTANTINOPLE;
-    if (_schedule.haveRevert)
-        return EVMC_BYZANTIUM;
-    if (_schedule.eip158Mode)
-        return EVMC_SPURIOUS_DRAGON;
-    if (_schedule.eip150Mode)
-        return EVMC_TANGERINE_WHISTLE;
-    if (_schedule.haveDelegateCall)
-        return EVMC_HOMESTEAD;
-    return EVMC_FRONTIER;
+    if (_schedule.enablePairs)
+    {
+        return EVMC_PARIS;
+    }
+    return EVMC_LONDON;
 }
 
 /// The RAII wrapper for an VMInstance-C instance.
@@ -60,7 +50,9 @@ public:
         // Set the options.
         if (m_instance->set_option != nullptr)
         {
-            // TODO: set some options
+            m_instance->set_option(m_instance, "advanced", "");
+            m_instance->set_option(m_instance, "trace", "");
+            // m_instance->set_option(m_instance, "baseline", "");
         }
     }
 

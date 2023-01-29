@@ -39,8 +39,8 @@ public:
             evmc_message message = {.kind = EVMC_CREATE,
                 .flags = 0,
                 .depth = 0,
-                .gas = 1000000,
-                .destination = {},
+                .gas = 3000 * 10000,
+                .recipient = {},
                 .destination_ptr = nullptr,
                 .destination_len = 0,
                 .sender = {},
@@ -49,14 +49,15 @@ public:
                 .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
                 .input_size = helloworldBytecodeBinary.size(),
                 .value = {},
-                .create2_salt = {}};
+                .create2_salt = {},
+                .code_address = {}};
             evmc_address origin = {};
 
-            HostContext hostContext(rollbackableStorage, tableNamePool, blockHeader, message,
-                message.destination, origin, 0, 0);
+            HostContext hostContext(
+                rollbackableStorage, tableNamePool, blockHeader, message, origin, 0, 0);
             auto result = co_await hostContext.execute();
 
-            BOOST_CHECK_EQUAL(result.status_code, 0);
+            BOOST_REQUIRE_EQUAL(result.status_code, 0);
 
             helloworldAddress = result.create_address;
             if (result.release)
@@ -79,7 +80,7 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
-            .destination = helloworldAddress,
+            .recipient = helloworldAddress,
             .destination_ptr = nullptr,
             .destination_len = 0,
             .sender = {},
@@ -88,11 +89,12 @@ public:
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
-            .create2_salt = {}};
+            .create2_salt = {},
+            .code_address = helloworldAddress};
         evmc_address origin = {};
 
-        HostContext hostContext(rollbackableStorage, tableNamePool, blockHeader, message,
-            message.destination, origin, 0, 0);
+        HostContext hostContext(
+            rollbackableStorage, tableNamePool, blockHeader, message, origin, 0, 0);
         auto result = co_await hostContext.execute();
 
         co_return result;
