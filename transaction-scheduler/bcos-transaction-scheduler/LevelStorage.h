@@ -19,8 +19,31 @@ private:
 
     std::mutex m_storageMutex;
 
+    template <transaction_executor::StateStorage ReadableStorage>
+    auto readFromStorage(ReadableStorage& storage, RANGES::input_range auto const& keys)
+        -> task::Task<task::AwaitableReturnType<decltype(m_mutableStorage.read(keys))>>
+    {
+        auto it = storage.read(keys);
+        co_return readFromStorage();
+    }
+
 public:
     LevelStorage(BackendStorage& backendStorage) : m_backendStorage(backendStorage) {}
+
+    class ReadIterator
+    {
+    public:
+        friend class LevelStorage;
+        using Key = const transaction_executor::StateKey&;
+        using Value = const transaction_executor::StateValue&;
+
+        task::Task<bool> hasValue() const { co_return true; }
+        task::Task<bool> next() & {}
+        task::Task<Key> key() const {}
+        task::Task<Value> value() const {}
+
+        void release() {}
+    };
 
     LevelStorage fork()
     {
@@ -43,19 +66,30 @@ public:
         m_mutableStorage = std::make_shared<Storage>(args...);
     }
 
-    void pushFront()
+    void dropMutable() { m_mutableStorage.reset(); }
+
+    void pushMutableToImmutableFront()
     {
         std::unique_lock lock(m_storageMutex);
         m_immutableStorages.push_front(m_mutableStorage);
         m_mutableStorage.reset();
     }
 
-    void popFront()
+    void popImmutableFront()
     {
         std::unique_lock lock(m_storageMutex);
         m_immutableStorages.pop_front();
     }
 
-    void popAndMergeBack() {}
+    void mergeAndPopImmutableBack() {}
+
+    auto read(RANGES::input_range auto const& keys)
+        -> task::Task<task::AwaitableReturnType<decltype(m_mutableStorage.read(keys))>>
+    {
+        if (m_mutableStorage)
+        {
+            auto it = m_mutableStorage->read(keys);
+        }
+    }
 };
 }  // namespace bcos::transaction_scheduler

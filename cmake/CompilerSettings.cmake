@@ -103,6 +103,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11.0)
             add_compile_options(-fcoroutines)
+            add_compile_options(-Wno-error=unused-value)
         endif()
 
         add_compile_options(-fPIC)
