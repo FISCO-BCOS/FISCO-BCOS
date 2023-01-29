@@ -45,7 +45,7 @@ private:
 
 void wait(auto&& task) requires std::is_rvalue_reference_v<decltype(task)>
 {
-    auto waitTask = [](decltype(task) task) -> WaitTask {
+    auto waitTask = []([[maybe_unused]] decltype(task) task) -> WaitTask {
         co_await task;
         co_return;
     }(std::forward<decltype(task)>(task));
