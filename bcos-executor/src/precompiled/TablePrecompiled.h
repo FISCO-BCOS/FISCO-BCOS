@@ -84,8 +84,8 @@ private:
         const std::vector<precompiled::ConditionTuple>& conditions,
         const precompiled::LimitTuple& limit) const;
     bool buildConditions(std::optional<precompiled::Condition>& valueCondition,
-        const precompiled::Conditions& conditions, const precompiled::LimitTuple& limit,
-        uint32_t version, size_t columnSize, bool isNumericalOrder) const;
+        const std::vector<precompiled::ConditionTupleV320>& conditions, 
+        const precompiled::LimitTuple& limit, precompiled::TableInfoTupleV320& tableInfo) const;
     void desc(precompiled::TableInfo& _tableInfo, const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters, bool withKeyOrder) const;

@@ -113,7 +113,8 @@ inline bytesConstRef getParamData(bytesConstRef _param)
 }
 
 
-bool checkPathValid(std::string const& _absolutePath);
+bool checkPathValid(
+    std::string_view _absolutePath, std::variant<uint32_t, protocol::BlockVersion> version);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
 

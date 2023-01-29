@@ -366,8 +366,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
-    auto newAddress = string(callParameters->codeAddress);
-    auto tableName = getContractTableName(newAddress, blockContext->isWasm());
+    auto tableName = getContractTableName(
+        callParameters->codeAddress, blockContext->isWasm(), blockContext->blockVersion());
     auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
     extraData->abi = std::move(callParameters->abi);
 
@@ -519,7 +519,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
                 callParameters->gas))
         {
             revert();
-            auto buildCallResults = move(callParameters);
+            auto buildCallResults = std::move(callParameters);
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
@@ -545,7 +545,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
                 tableName, callParameters->origin, newAddress, FS_TYPE_LINK, callParameters->gas))
         {
             revert();
-            auto buildCallResults = move(callParameters);
+            auto buildCallResults = std::move(callParameters);
             buildCallResults->type = CallParameters::REVERT;
             buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
             buildCallResults->message = "Error occurs in build BFS dir";
@@ -640,14 +640,14 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 evmcMessage.input_data = hostContext.data().data();
                 evmcMessage.input_size = hostContext.data().size();
 
-                if (hostContext.myAddress().size() < sizeof(evmcMessage.destination) * 2)
+                if (hostContext.myAddress().size() < sizeof(evmcMessage.recipient) * 2)
                 {
                     std::uninitialized_fill_n(
-                        evmcMessage.destination.bytes, sizeof(evmcMessage.destination), 0);
+                        evmcMessage.recipient.bytes, sizeof(evmcMessage.recipient), 0);
                 }
                 else
                 {
-                    boost::algorithm::unhex(hostContext.myAddress(), evmcMessage.destination.bytes);
+                    boost::algorithm::unhex(hostContext.myAddress(), evmcMessage.recipient.bytes);
                 }
 
                 if (hostContext.caller().size() < sizeof(evmcMessage.sender) * 2)
@@ -660,6 +660,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     boost::algorithm::unhex(hostContext.caller(), evmcMessage.sender.bytes);
                 }
             }
+            evmcMessage.code_address = evmcMessage.recipient;
 
             return evmcMessage;
         };
@@ -672,7 +673,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
         if (hostContext.isCreate())
         {
-            auto mode = toRevision(hostContext.vmSchedule());
             auto evmcMessage = getEVMCMessage(*blockContext, hostContext);
 
             auto code = hostContext.data();
@@ -682,10 +682,11 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 vmKind = VMKind::BcosWasm;
             }
-
-            auto vm = VMFactory::create(vmKind);
-
-            auto ret = vm.exec(hostContext, mode, &evmcMessage, code.data(), code.size());
+            auto revision = toRevision(hostContext.vmSchedule());
+            // the code evm uses to deploy is not runtime code, so create can not use cache
+            auto vm = blockContext->getVMFactory()->create(
+                vmKind, revision, crypto::HashType(), code, true);
+            auto ret = vm.execute(hostContext, &evmcMessage);
 
             auto callResults = hostContext.takeCallParameters();
             // clear unnecessary logs
@@ -721,15 +722,16 @@ CallParameters::UniquePtr TransactionExecutive::go(
             }
 
             auto outputRef = ret.output();
-            if (outputRef.size() > hostContext.vmSchedule().maxCodeSize)
+            auto maxCodeSize = blockContext->isWasm() ? blockContext->vmSchedule().maxWasmCodeSize :
+                                                        hostContext.vmSchedule().maxEvmCodeSize;
+            if (outputRef.size() > maxCodeSize)
             {
                 revert();
                 callResults->type = CallParameters::REVERT;
                 callResults->status = (int32_t)TransactionStatus::OutOfGas;
                 callResults->message =
                     "Code is too large: " + boost::lexical_cast<std::string>(outputRef.size()) +
-                    " limit: " +
-                    boost::lexical_cast<std::string>(hostContext.vmSchedule().maxCodeSize);
+                    " limit: " + boost::lexical_cast<std::string>(maxCodeSize);
                 if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
                 {
                     writeErrInfoToOutput("Deploy code is too large.", *callResults);
@@ -769,7 +771,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                         FS_TYPE_CONTRACT, callResults->gas))
                 {
                     revert();
-                    auto buildCallResults = move(callResults);
+                    auto buildCallResults = std::move(callResults);
                     buildCallResults->type = CallParameters::REVERT;
                     buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
                     buildCallResults->message = "Error occurs in build BFS dir";
@@ -825,7 +827,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             return callResults;
         }
         else
-        {
+        {  // execute
             auto codeEntry = hostContext.code();
             if (!codeEntry)
             {
@@ -855,12 +857,11 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 vmKind = VMKind::BcosWasm;
             }
-            auto vm = VMFactory::create(vmKind);
-
-            auto mode = toRevision(hostContext.vmSchedule());
+            auto revision = toRevision(hostContext.vmSchedule());
+            auto vm = blockContext->getVMFactory()->create(vmKind, revision, hostContext.codeHash(),
+                bytes_view((uint8_t*)code.data(), code.size()));
             auto evmcMessage = getEVMCMessage(*blockContext, hostContext);
-            auto ret = vm.exec(hostContext, mode, &evmcMessage,
-                reinterpret_cast<const byte*>(code.data()), code.size());
+            auto ret = vm.execute(hostContext, &evmcMessage);
 
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
@@ -1082,7 +1083,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_REVERT:
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVMC_REVERT") << LOG_KV("to", callResults->receiveAddress)
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM_REVERT") << LOG_KV("to", callResults->receiveAddress)
                             << LOG_KV("gasLeft", callResults->gas);
         // FIXME: Copy the output for now, but copyless version possible.
         callResults->gas = _result.gasLeft();

@@ -14,9 +14,10 @@ module bcostars {
         1 optional TransactionData data;
         2 optional vector<byte> dataHash;
         3 optional vector<byte> signature;
-        7 optional vector<byte> sender;
         4 optional long importTime;
         5 optional int attribute;
         // 6 optional string source;
+        7 optional vector<byte> sender;
+        8 optional string extraData;
     };
 };

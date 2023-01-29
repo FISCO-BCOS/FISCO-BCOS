@@ -48,7 +48,7 @@ lightnode_binary_path=""
 download_lightnode_binary="false"
 mtail_binary_path=""
 wasm_mode="false"
-serial_mode="false"
+serial_mode="true"
 nodeids_dir=""
 # if the config.genesis path has been set, don't generate genesis file, use the config instead
 genesis_conf_path=""
@@ -532,7 +532,7 @@ Usage:
     -I <chain id>                       [Optional] set the chain id, default: chain0
     -v <FISCO-BCOS binary version>      [Optional] Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -L <fisco bcos lightnode exec>      [Optional] fisco bcos lightnode executable, input "download_binary" to download lightnode binary or assign correct lightnode binary path
+    -L <fisco bcos lightnode exec>      [Optional] fisco bcos lightnode executable，input "download_binary" to download lightnode binary or assign correct lightnode binary path
     -e <fisco-bcos exec>                [Optional] fisco-bcos binary exec
     -t <mtail exec>                     [Optional] mtail binary exec
     -o <output dir>                     [Optional] output directory, default ./nodes
@@ -544,7 +544,7 @@ Usage:
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
-    -R <Serial_mode>                    [Optional] Whether to use serial execute,default is false
+    -R <Serial_mode>                    [Optional] Whether to use serial execute,default is true
     -k <key page size>                  [Optional] key page size, default is 10240
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
@@ -570,7 +570,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:ARa:N:u:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:AR:a:N:u:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -632,7 +632,7 @@ parse_params() {
         ;;
         A) auth_mode="true" ;;
         w) wasm_mode="true";;
-        R) serial_mode="true";;
+        R) serial_mode="${OPTARG}";;
         a)
           auth_mode="true"
           auth_admin_account="${OPTARG}"
@@ -1354,7 +1354,9 @@ generate_common_ini() {
     ; info debug trace
     level=info
     ; MB
-    max_log_file_size=200
+    max_log_file_size=1024
+    ; rotate the log every hour
+    ;enable_rotate_by_hour=true
 EOF
 }
 
@@ -1736,10 +1738,13 @@ deploy_nodes()
     fi
     if [ "${download_lightnode_binary}" == "true" ];then
         download_lightnode_bin
+
     fi
     if [ "${lightnode_flag}" == "true" ] && [ ! -f "${lightnode_binary_path}" ] && [ "${download_lightnode_binary}" != "true" ];then
       LOG_FATAL "please input \"download_binary\" or assign correct lightnode binary path"
     fi
+
+
     if "${monitor_mode}" ;then
         download_monitor_bin
         if [[ ! -f "$mtail_binary_path" ]]; then

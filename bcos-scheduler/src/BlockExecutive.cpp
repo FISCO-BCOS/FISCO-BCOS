@@ -85,7 +85,8 @@ void BlockExecutive::prepare()
 
     m_hasPrepared = true;
 
-    SCHEDULER_LOG(INFO) << METRIC << LOG_BADGE("prepareBlockExecutive") << BLOCK_NUMBER(number())
+    SCHEDULER_LOG(INFO) << METRIC << LOG_BADGE("BlockTrace") << "preExeBlock success"
+                        << BLOCK_NUMBER(number())
                         << LOG_KV("blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
                         << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
                         << LOG_KV("timeCost", (utcTime() - startT));
@@ -261,10 +262,10 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
 void BlockExecutive::buildExecutivesFromNormalTransaction()
 {
-    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number())
-                        << "BlockExecutive prepare: buildExecutivesFromNormalTransaction"
-                        << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                        << LOG_KV("txCount", m_block->transactionsSize());
+    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number())
+                         << "BlockExecutive prepare: buildExecutivesFromNormalTransaction"
+                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                         << LOG_KV("txCount", m_block->transactionsSize());
 
     m_executiveResults.resize(m_block->transactionsSize());
     std::vector<std::tuple<std::string, protocol::ExecutionMessage::UniquePtr, bool>> results(
@@ -299,8 +300,8 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
 bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
     bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool)
 {
-    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock start"
-                        << LOG_KV("txNum", block->transactionsMetaDataSize());
+    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock start"
+                         << LOG_KV("txNum", block->transactionsMetaDataSize());
     bcos::protocol::TransactionsPtr txs = nullptr;
     auto lastT = utcTime();
     if (txPool != nullptr)
@@ -350,10 +351,10 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
         txs = future.get();
         txsPromise = nullptr;
     }
-    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock end"
-                        << LOG_KV("txNum", block->transactionsMetaDataSize())
-                        << LOG_KV("cost", utcTime() - lastT)
-                        << LOG_KV("fetchNum", txs ? txs->size() : 0);
+    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock end"
+                         << LOG_KV("txNum", block->transactionsMetaDataSize())
+                         << LOG_KV("cost", utcTime() - lastT)
+                         << LOG_KV("fetchNum", txs ? txs->size() : 0);
     return txs;
 }
 
@@ -478,9 +479,10 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
     auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
 
     m_currentTimePoint = std::chrono::system_clock::now();
-    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
+    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
 
-    m_scheduler->m_ledger->asyncPrewriteBlock(stateStorage, m_blockTxs, m_block,
+    m_scheduler->m_ledger->asyncPrewriteBlock(
+        stateStorage, m_blockTxs, m_block,
         [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
             if (error)
             {
@@ -498,7 +500,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
             }
 
             auto status = std::make_shared<CommitStatus>();
-            status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
+            // self + ledger(txs receipts) + executors = 1 + 1 + executors
+            status->total = 2 + m_scheduler->m_executorManager->size();
             status->checkAndCommit = [this, callback](const CommitStatus& status) {
                 if (!m_isRunning)
                 {
@@ -535,7 +538,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     return;
                 }
 
-                SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "batchCommitBlock begin";
+                SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "batchCommitBlock begin";
                 batchBlockCommit(status.startTS, [this, callback](Error::UniquePtr&& error) {
                     if (error)
                     {
@@ -557,10 +560,11 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
                     m_commitElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::system_clock::now() - m_currentTimePoint);
-                    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << "CommitBlock: "
-                                        << "success, execute elapsed: " << m_executeElapsed.count()
-                                        << "ms hash elapsed: " << m_hashElapsed.count()
-                                        << "ms commit elapsed: " << m_commitElapsed.count() << "ms";
+                    SCHEDULER_LOG(DEBUG)
+                        << BLOCK_NUMBER(number()) << "CommitBlock: "
+                        << "success, execute elapsed: " << m_executeElapsed.count()
+                        << "ms hash elapsed: " << m_hashElapsed.count()
+                        << "ms commit elapsed: " << m_commitElapsed.count() << "ms";
 
                     callback(nullptr);
                 });
@@ -584,7 +588,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     }
                     ++status->success;
 
-                    SCHEDULER_LOG(INFO)
+                    SCHEDULER_LOG(DEBUG)
                         << BLOCK_NUMBER(number())
                         << "primary prepare finished, call executor prepare"
                         << LOG_KV("startTimeStamp", startTimeStamp)
@@ -631,7 +635,30 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                         });
                     }
                 });
-        });
+            // write transactions and receipts in another DB txn
+            auto err = m_scheduler->m_ledger->storeTransactionsAndReceipts(
+                m_blockTxs, std::const_pointer_cast<const bcos::protocol::Block>(m_block));
+            {
+                WriteGuard lock(status->x_lock);
+                if (err)
+                {
+                    ++status->failed;
+                    SCHEDULER_LOG(ERROR)
+                        << BLOCK_NUMBER(number()) << "write txs and receipts failed: "
+                        << LOG_KV("message", err->errorMessage());
+                }
+                else
+                {
+                    ++status->success;
+                }
+                if (status->success + status->failed < status->total)
+                {
+                    return;
+                }
+            }
+            status->checkAndCommit(*status);
+        },
+        false);
 }
 
 void BlockExecutive::asyncNotify(
@@ -1295,7 +1322,7 @@ void BlockExecutive::batchBlockCommit(
 #else
                 SCHEDULER_LOG(WARNING)
                         << BLOCK_NUMBER(number())
-                        << "Commit scheduler storage error, just return with no rollback" << error->errorMessage()
+                        << "Commit scheduler storage error, just return with no rollback" <<  LOG_KV("message", error->errorMessage())
                         << LOG_KV("rollbackVersion", rollbackVersion);
                 callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
                             "Commit scheduler storage error, just return with no rollback"));

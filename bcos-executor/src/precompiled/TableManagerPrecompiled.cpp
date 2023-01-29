@@ -129,10 +129,10 @@ void TableManagerPrecompiled::createTable(
     std::string keyField = std::get<0>(tableInfo);
     auto& valueFields = std::get<1>(tableInfo);
     std::string valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields);
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("TableManagerPrecompiled")
-                          << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
-                          << LOG_KV("valueField", valueField);
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("TableManagerPrecompiled")
+                           << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
+                           << LOG_KV("valueField", valueField);
     // here is a trick to set table key field info
     valueField = keyField + "," + valueField;
 
@@ -156,10 +156,10 @@ void TableManagerPrecompiled::createTableV32(
     keyField = std::get<1>(tableInfo);
     auto& valueFields = std::get<2>(tableInfo);
     valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields, keyOrder);
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("TableManagerPrecompiled")
-                          << LOG_KV("createTable", tableName) << LOG_KV("keyOrder", int(*keyOrder))
-                          << LOG_KV("keyField", keyField) << LOG_KV("valueField", valueField);
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("TableManagerPrecompiled")
+                           << LOG_KV("createTable", tableName) << LOG_KV("keyOrder", int(*keyOrder))
+                           << LOG_KV("keyField", keyField) << LOG_KV("valueField", valueField);
     // Compatible with older versions (< v3.2) of table and KvTable
     valueField =
         V320_TABLE_INFO_PREFIX + std::to_string(*keyOrder) + "," + keyField + "," + valueField;
@@ -177,10 +177,10 @@ void TableManagerPrecompiled::createKVTable(
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(_callParameters->params(), tableName, key, value);
     precompiled::checkCreateTableParam(tableName, key, value);
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("TableManagerPrecompiled")
-                          << LOG_KV("createKVTable", tableName) << LOG_KV("keyField", key)
-                          << LOG_KV("valueField", value);
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("TableManagerPrecompiled")
+                           << LOG_KV("createKVTable", tableName) << LOG_KV("keyField", key)
+                           << LOG_KV("valueField", value);
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // /tables + tableName
     auto newTableName = getTableName(tableName);
@@ -231,10 +231,10 @@ void TableManagerPrecompiled::appendColumns(
     codec.decode(_callParameters->params(), tableName, newColumns);
     tableName = getActualTableName(getTableName(tableName));
 
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                          << LOG_BADGE("TableManagerPrecompiled") << LOG_DESC("appendColumns")
-                          << LOG_KV("tableName", tableName)
-                          << LOG_KV("newColumns", boost::join(newColumns, ","));
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+                           << LOG_BADGE("TableManagerPrecompiled") << LOG_DESC("appendColumns")
+                           << LOG_KV("tableName", tableName)
+                           << LOG_KV("newColumns", boost::join(newColumns, ","));
     // 1. get origin table info
     auto table = _executive->storage().openTable(StorageInterface::SYS_TABLES);
     auto existEntry = table->getRow(tableName);
@@ -342,6 +342,11 @@ void TableManagerPrecompiled::desc(
         return;
     }
     auto keyAndValue = sysEntry->get();
+    // for compatibility
+    if (keyAndValue.starts_with(V320_TABLE_INFO_PREFIX))
+    {
+        keyAndValue = keyAndValue.substr(keyAndValue.find_first_of(',') + 1);
+    }
     auto keyField = std::string(keyAndValue.substr(0, keyAndValue.find_first_of(',')));
     auto valueFields = std::string(keyAndValue.substr(keyAndValue.find_first_of(',') + 1));
     std::vector<std::string> values;
@@ -369,7 +374,7 @@ void TableManagerPrecompiled::descWithKeyOrder(
     auto sysEntry = _executive->storage().getRow(storage::StorageInterface::SYS_TABLES, tableName);
     if (!sysEntry)
     {
-        TableInfoTuple tableInfo = {};
+        TableInfoTupleV320 tableInfo = {};
         _callParameters->setExecResult(codec.encode(std::move(tableInfo)));
         return;
     }

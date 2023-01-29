@@ -55,7 +55,8 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
                          << "\", the table name must be letters or numbers, and "
                             "only supports \""
                          << tableAllowCharString << "\" as special character set";
-                PRECOMPILED_LOG(INFO) << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMsg.str());
+                PRECOMPILED_LOG(DEBUG)
+                    << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMsg.str());
                 // Note: the StorageException and PrecompiledException content can't
                 // be modified at will for the information will be written to the
                 // blockchain
@@ -72,9 +73,9 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
             errorMessage << "Invalid field \"" << fieldName
                          << "\", the size of the field must be larger than 0 and "
                             "the field can't start with \"_\"";
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMessage.str())
-                                  << LOG_KV("field name", fieldName)
-                                  << LOG_KV("table name", tableName);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMessage.str())
+                << LOG_KV("field name", fieldName) << LOG_KV("table name", tableName);
             BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
         }
         size_t iSize = fieldName.size();
@@ -89,7 +90,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
                     << "\", the field name must be letters or numbers, and only supports \""
                     << allowCharString << "\" as special character set";
 
-                PRECOMPILED_LOG(INFO)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMessage.str())
                     << LOG_KV("field name", fieldName) << LOG_KV("table name", tableName);
                 BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
@@ -104,11 +105,11 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
     for (auto& valueField : valueFieldList)
     {
         auto ret = valueFieldSet.insert(valueField);
-        if (!ret.second)
+        if (!ret.second) [[unlikely]]
         {
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("checkNameValidate") << LOG_DESC("duplicated field")
-                                  << LOG_KV("field name", valueField)
-                                  << LOG_KV("table name", tableName);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("checkNameValidate") << LOG_DESC("duplicated field")
+                << LOG_KV("field name", valueField) << LOG_KV("table name", tableName);
             BOOST_THROW_EXCEPTION(PrecompiledError("duplicated field: " + valueField));
         }
         checkFieldNameValidate(tableName, valueField);
@@ -217,7 +218,7 @@ void bcos::precompiled::clearName2SelectCache()
 
 uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 {
-    if (_param.size() < 4)
+    if (_param.size() < 4) [[unlikely]]
     {
         PRECOMPILED_LOG(INFO) << LOG_DESC(
                                      "getParamFunc param too short, not enough to call precompiled")
@@ -275,57 +276,61 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     }
 }
 
-bool precompiled::checkPathValid(std::string const& _path)
+bool precompiled::checkPathValid(
+    std::string_view _path, std::variant<uint32_t, protocol::BlockVersion> version)
 {
-    if (_path.empty())
+    if (_path.empty()) [[unlikely]]
         return false;
-    if (_path.length() > FS_PATH_MAX_LENGTH)
+    if (_path.length() > FS_PATH_MAX_LENGTH) [[unlikely]]
     {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("checkPathValid")
-                              << LOG_DESC("path too long, over flow FS_PATH_MAX_LENGTH")
-                              << LOG_KV("path", _path);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("checkPathValid")
+                               << LOG_DESC("path too long, over flow FS_PATH_MAX_LENGTH")
+                               << LOG_KV("path", _path);
         return false;
     }
     if (_path == "/")
         return true;
-    std::string absoluteDir = _path;
-    if (absoluteDir[0] == '/')
+    std::string_view absoluteDir = _path;
+    if (absoluteDir.starts_with('/'))
     {
-        absoluteDir = absoluteDir.substr(1);
+        absoluteDir.remove_prefix(1);
     }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
+    if (absoluteDir.ends_with('/'))
     {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
+        absoluteDir.remove_suffix(1);
     }
     std::vector<std::string> pathList;
+    //    constexpr std::string_view delim{"/"};
+    //    auto spliter = RANGES::split_view(absoluteDir, delim);
     boost::split(pathList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
     if (pathList.size() > FS_PATH_MAX_LEVEL || pathList.empty())
     {
-        PRECOMPILED_LOG(INFO)
+        PRECOMPILED_LOG(DEBUG)
             << LOG_BADGE("checkPathValid")
             << LOG_DESC("resource path's level is too deep, level over FS_PATH_MAX_LEVEL")
             << LOG_KV("path", _path);
         return false;
     }
-    // TODO: adapt Chinese
+    // TODO: adapt Chinese, should use wstring
     std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']*$)");
-    auto checkFieldNameValidate = [&reg](const std::string& fieldName) -> bool {
-        if (fieldName.empty())
+    if (versionCompareTo(version, BlockVersion::V3_2_VERSION) >= 0)
+    {
+        reg = (R"(^[\w]+[\w\-#@.]*$)");
+    }
+    auto checkFieldNameValidate = [&reg](std::string fieldName) -> bool {
+        if (fieldName.empty()) [[unlikely]]
         {
             std::stringstream errorMessage;
             errorMessage << "Invalid field \"" + fieldName
                          << "\", the size of the field must be larger than 0";
-            PRECOMPILED_LOG(INFO) << LOG_DESC(errorMessage.str())
-                                  << LOG_KV("field name", fieldName);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName);
             return false;
         }
         if (!std::regex_match(fieldName, reg))
         {
-            std::stringstream errorMessage;
-            errorMessage << "Invalid field \"" << fieldName << "\", the field name must be in reg: "
-                         << R"(^[0-9a-zA-Z\u4e00-\u9fa5][^\>\<\*\?\/\=\+\(\)\$\"\']*$)";
-            PRECOMPILED_LOG(INFO) << LOG_DESC(errorMessage.str())
-                                  << LOG_KV("field name", fieldName);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_DESC("Invalid path field " + fieldName) << LOG_KV("field name", fieldName);
             return false;
         }
         return true;

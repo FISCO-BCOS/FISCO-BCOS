@@ -48,6 +48,9 @@ DERIVE_BCOS_EXCEPTION(InvalidEncoding);
 
 namespace executor
 {
+
+using bytes_view = std::basic_string_view<uint8_t>;
+
 #define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
 #define EXECUTOR_BLK_LOG(LEVEL, number) EXECUTOR_LOG(LEVEL) << BLOCK_NUMBER(number)
 #define EXECUTOR_NAME_LOG(LEVEL) \
@@ -158,182 +161,30 @@ struct SubState
 
 struct VMSchedule
 {
-    VMSchedule() : tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}) {}
-    VMSchedule(bool _efcd, bool _hdc, unsigned const& _txCreateGas)
-      : tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}),
-        exceptionalFailedCodeDeposit(_efcd),
-        haveDelegateCall(_hdc),
-        txCreateGas(_txCreateGas)
-    {}
-
-    std::array<unsigned, 8> tierStepGas;
+    VMSchedule() {}
     bool exceptionalFailedCodeDeposit = true;
-    bool haveDelegateCall = false;
-    bool eip150Mode = true;
-    bool eip158Mode = true;
-    bool haveBitwiseShifting = false;
-    bool haveRevert = true;
-    bool haveReturnData = true;
-    bool haveStaticCall = true;
-    bool haveCreate2 = true;
-    bool haveExtcodehash = false;
-    bool enableIstanbul = false;
-    bool enableLondon = false;
-    /// gas cost for specified calculation
-    /// exp gas cost
-    unsigned expGas = 10;
-    unsigned expByteGas = 10;
-    /// sha3 gas cost
-    unsigned sha3Gas = 30;
-    unsigned sha3WordGas = 6;
-    /// load/store gas cost
-    unsigned sloadGas = 50;
-    unsigned sstoreSetGas = 20000;
-    unsigned sstoreResetGas = 5000;
+    bool enableLondon = true;
+    bool enablePairs = false;
     unsigned sstoreRefundGas = 15000;
-    /// jump gas cost
-    unsigned jumpdestGas = 1;
-    /// log gas cost
-    unsigned logGas = 375;
-    unsigned logDataGas = 8;
-    unsigned logTopicGas = 375;
-    /// creat contract gas cost
-    unsigned createGas = 32000;
-    /// call function of contract gas cost
-    unsigned callGas = 40;
-    unsigned callStipend = 2300;
-    unsigned callValueTransferGas = 9000;
-    unsigned callNewAccountGas = 25000;
-
     unsigned suicideRefundGas = 24000;
-    unsigned memoryGas = 3;
-    unsigned quadCoeffDiv = 512;
     unsigned createDataGas = 20;
-    /// transaction related gas
-    unsigned txGas = 21000;
-    unsigned txCreateGas = 53000;
-    unsigned txDataZeroGas = 4;
-    unsigned txDataNonZeroGas = 68;
-    unsigned copyGas = 3;
-    /// extra code related gas
-    unsigned extcodesizeGas = 20;
-    unsigned extcodecopyGas = 20;
-    unsigned extcodehashGas = 400;
-    unsigned balanceGas = 20;
-    unsigned suicideGas = 0;
-    unsigned blockhashGas = 20;
-    unsigned maxCodeSize = unsigned(-1);
+    unsigned maxEvmCodeSize = 0x40000;
+    unsigned maxWasmCodeSize = 0xF00000;  // 15MB
 
-    boost::optional<u256> blockRewardOverwrite;
-
-    bool staticCallDepthLimit() const { return !eip150Mode; }
-    bool suicideChargesNewAccountGas() const { return eip150Mode; }
-    bool emptinessIsNonexistence() const { return eip158Mode; }
-    bool zeroValueTransferChargesNewAccountGas() const { return !eip158Mode; }
 };
-
-/// exceptionalFailedCodeDeposit: false
-/// haveDelegateCall: false
-/// tierStepGas: {0, 2, 3, 5, 8, 10, 20, 0}
-/// txCreateGas: 21000
-static const VMSchedule FrontierSchedule = VMSchedule(false, false, 21000);
-/// value of params are equal to HomesteadSchedule
-static const VMSchedule HomesteadSchedule = VMSchedule(true, true, 53000);
-/// EIP150(refer to:
-/// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-150.md)
-static const VMSchedule EIP150Schedule = [] {
-    VMSchedule schedule = HomesteadSchedule;
-    schedule.eip150Mode = true;
-    schedule.extcodesizeGas = 700;
-    schedule.extcodecopyGas = 700;
-    schedule.balanceGas = 400;
-    schedule.sloadGas = 200;
-    schedule.callGas = 700;
-    schedule.suicideGas = 5000;
-    return schedule;
-}();
-/// EIP158
-static const VMSchedule EIP158Schedule = [] {
-    VMSchedule schedule = EIP150Schedule;
-    schedule.expByteGas = 50;
-    schedule.eip158Mode = true;
-    schedule.maxCodeSize = 0x6000;
-    return schedule;
-}();
-
-static const VMSchedule ByzantiumSchedule = [] {
-    VMSchedule schedule = EIP158Schedule;
-    schedule.haveRevert = true;
-    schedule.haveReturnData = true;
-    schedule.haveStaticCall = true;
-    // schedule.blockRewardOverwrite = {3 * ether};
-    return schedule;
-}();
-
-static const VMSchedule ConstantinopleSchedule = [] {
-    VMSchedule schedule = ByzantiumSchedule;
-    schedule.blockhashGas = 800;
-    schedule.haveCreate2 = true;
-    schedule.haveBitwiseShifting = true;
-    schedule.haveExtcodehash = true;
-    return schedule;
-}();
 
 static const VMSchedule FiscoBcosSchedule = [] {
-    VMSchedule schedule = ConstantinopleSchedule;
+    VMSchedule schedule = VMSchedule();
     return schedule;
 }();
 
-static const VMSchedule FiscoBcosScheduleV2 = [] {
-    VMSchedule schedule = ConstantinopleSchedule;
-    schedule.maxCodeSize = 0x40000;
+static const VMSchedule FiscoBcosScheduleV320 = [] {
+    VMSchedule schedule = VMSchedule();
+    schedule.enablePairs = true;
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
+    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
     return schedule;
 }();
-
-static const VMSchedule FiscoBcosScheduleV3 = [] {
-    VMSchedule schedule = FiscoBcosScheduleV2;
-    schedule.enableIstanbul = true;
-    return schedule;
-}();
-
-static const VMSchedule FiscoBcosScheduleV4 = [] {
-    VMSchedule schedule = FiscoBcosScheduleV3;
-    schedule.enableLondon = true;
-    return schedule;
-}();
-
-static const VMSchedule BCOSWASMSchedule = [] {
-    VMSchedule schedule = FiscoBcosScheduleV4;
-    schedule.maxCodeSize = 0xF00000;  // 15MB
-    // Ensure that zero bytes are not subsidised and are charged the same as
-    // non-zero bytes.
-    schedule.txDataZeroGas = schedule.txDataNonZeroGas;
-    return schedule;
-}();
-
-static const VMSchedule DefaultSchedule = FiscoBcosScheduleV4;
-
-struct ImportRequirements
-{
-    using value = unsigned;
-    enum
-    {
-        ValidSeal = 1,               ///< Validate seal
-        TransactionBasic = 8,        ///< Check the basic structure of the transactions.
-        TransactionSignatures = 32,  ///< Check the basic structure of the transactions.
-        Parent = 64,                 ///< Check parent block header
-        PostGenesis = 256,           ///< Require block to be non-genesis.
-        CheckTransactions = TransactionBasic | TransactionSignatures,  ///< Check transaction
-                                                                       ///< signatures.
-        OutOfOrderChecks = ValidSeal | CheckTransactions,  ///< Do all checks that can be done
-                                                           ///< independently of prior blocks having
-                                                           ///< been imported.
-        InOrderChecks = Parent,  ///< Do all checks that cannot be done independently
-                                 ///< of prior blocks having been imported.
-        Everything = ValidSeal | CheckTransactions | Parent,
-        None = 0
-    };
-};
 
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 

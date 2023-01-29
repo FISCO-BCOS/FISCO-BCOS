@@ -42,8 +42,10 @@ public:
             // m_callback(std::move(args)...);
             pool->template enqueue(
                 [callback = std::move(m_callback),
-                    args = std::make_shared<std::tuple<Args...>>(std::make_tuple(std::forward<Args>(
-                        args)...))]() mutable { std::apply(callback, std::move(*args)); });
+                    m_args = std::make_shared<std::tuple<Args...>>(
+                        std::make_tuple(std::forward<Args>(args)...))]() mutable {
+                    std::apply(callback, std::move(*m_args));
+                });
         }
     }
 
@@ -571,7 +573,8 @@ void ExecutorServiceClient::getABI(
 
         void callback_getABI(const bcostars::Error& ret, std::string const& abi) override
         {
-            m_callback(toBcosError(ret), std::move(abi));
+            std::string tempAbi = abi;
+            m_callback(toBcosError(ret), std::move(tempAbi));
         }
 
         void callback_getABI_exception(tars::Int32 ret) override
@@ -580,7 +583,7 @@ void ExecutorServiceClient::getABI(
         }
 
     private:
-        AsyncCallback<bcos::Error::Ptr, const std::string&> m_callback;
+        AsyncCallback<bcos::Error::Ptr, std::string> m_callback;
     };
     // timeout is 30s
     m_prx->tars_set_timeout(30000)->async_getABI(

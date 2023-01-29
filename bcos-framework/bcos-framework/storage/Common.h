@@ -69,15 +69,15 @@ struct Condition
     // string compare, "12" < "2"
     void LT(const std::string& value) { m_conditions.emplace_back(Comparator::LT, value); }
     void LE(const std::string& value) { m_conditions.emplace_back(Comparator::LE, value); }
-    void STARTS_WITH(const std::string& value)
+    void startsWith(const std::string& value)
     {
         m_conditions.emplace_back(Comparator::STARTS_WITH, value);
     }
-    void ENDS_WITH(const std::string& value)
+    void endsWith(const std::string& value)
     {
         m_conditions.emplace_back(Comparator::ENDS_WITH, value);
     }
-    void CONTAINS(const std::string& value)
+    void contains(const std::string& value)
     {
         m_conditions.emplace_back(Comparator::CONTAINS, value);
     }

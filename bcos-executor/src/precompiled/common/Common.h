@@ -39,17 +39,12 @@ namespace precompiled
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using TableInfoTupleV320 = std::tuple<uint8_t, std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
-using ConditionTupleV320 = std::tuple<uint8_t, uint32_t, std::string>;
+using ConditionTupleV320 = std::tuple<uint8_t, std::string, std::string>;
 using LimitTuple = std::tuple<uint32_t, uint32_t>;
 using UpdateFieldTuple = std::tuple<std::string, std::string>;
 using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
 using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
-struct Conditions
-{
-    std::vector<ConditionTuple>     cond;
-    std::vector<ConditionTupleV320> cond_v320;
-};
 struct TableInfo
 {
     TableInfoTuple     info;

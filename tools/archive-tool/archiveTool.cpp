@@ -14,9 +14,9 @@
  *  limitations under the License.
  *
  * @brief the tool to read and modify data of storage
- * @file storageTool.cpp
+ * @file archiveTool.cpp
  * @author: xingqiangbai
- * @date 2022-07-13
+ * @date 2022-11-08
  */
 
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -304,7 +304,7 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                     transactionValues[j] = transactionJson.toStyledString();
                     // read the receipt and store to archive database use json format
                     Json::Value receiptJson;
-                    bcos::rpc::toJsonResp(receiptJson, keys[j], protocol::TransactionStatus::None,
+                    bcos::rpc::toJsonResp(receiptJson, toHex(keys[j], "0x"), protocol::TransactionStatus::None,
                         *receipt, nodeConfig->isWasm(), *hashImpl);
                     receiptValues[j] = receiptJson.toStyledString();
                 }

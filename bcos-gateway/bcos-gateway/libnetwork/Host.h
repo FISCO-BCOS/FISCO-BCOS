@@ -98,6 +98,18 @@ public:
         m_sslContextPubHandler = _sslContextPubHandler;
     }
 
+    virtual std::function<bool(X509* x509, std::string& pubHex)>
+    sslContextPubHandlerWithoutExtInfo()
+    {
+        return m_sslContextPubHandlerWithoutExtInfo;
+    }
+
+    virtual void setSSLContextPubHandlerWithoutExtInfo(
+        std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo)
+    {
+        m_sslContextPubHandlerWithoutExtInfo = _sslContextPubHandlerWithoutExtInfo;
+    }
+
     virtual std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
     virtual void setThreadPool(std::shared_ptr<bcos::ThreadPool> threadPool)
     {
@@ -192,6 +204,7 @@ private:
 
     // get the hex public key of the peer from the the SSL connection
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandler;
+    std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
 
     bool m_run = false;
 

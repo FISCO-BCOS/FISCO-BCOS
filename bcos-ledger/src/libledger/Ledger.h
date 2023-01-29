@@ -40,7 +40,9 @@ class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledge
 public:
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage)
-      : m_blockFactory(std::move(_blockFactory)), m_storage(std::move(_storage))
+      : m_blockFactory(std::move(_blockFactory)),
+        m_storage(std::move(_storage)),
+        m_threadPool(std::make_shared<ThreadPool>("WriteReceipts", 1))
     {}
 
     ~Ledger() override = default;
@@ -50,10 +52,10 @@ public:
         std::function<void(Error::UniquePtr&&)> _callback) override;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback) override;
+        std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts = true) override;
 
-    void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
-        crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) override;
+    bcos::Error::Ptr storeTransactionsAndReceipts(
+        bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) override;
 
     void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock) override;
@@ -151,5 +153,6 @@ private:
     bcos::storage::StorageInterface::Ptr m_storage;
 
     mutable RecursiveMutex m_mutex;
+    std::shared_ptr<bcos::ThreadPool> m_threadPool;
 };
 }  // namespace bcos::ledger

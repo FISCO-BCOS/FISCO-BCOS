@@ -123,6 +123,24 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     case bcos::protocol::TransactionStatus::AccountFrozen:
         _out << "AccountFrozen";
         break;
+    case TransactionStatus::AccountAbolished:
+        _out << "AccountAbolished";
+        break;
+    case TransactionStatus::ContractAbolished:
+        _out << "ContractAbolished";
+        break;
+    case TransactionStatus::WASMValidationFailure:
+        _out << "WASMValidationFailure";
+        break;
+    case TransactionStatus::WASMArgumentOutOfRange:
+        _out << "WASMArgumentOutOfRange";
+        break;
+    case TransactionStatus::WASMUnreachableInstruction:
+        _out << "WASMUnreachableInstruction";
+        break;
+    case TransactionStatus::WASMTrap:
+        _out << "WASMTrap";
+        break;
     case bcos::protocol::TransactionStatus::TxPoolIsFull:
         _out << "TxPoolIsFull";
         break;
@@ -147,6 +165,10 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     case bcos::protocol::TransactionStatus::RequestNotBelongToTheGroup:
         _out << "RequestNotBelongToTheGroup";
         break;
+    case TransactionStatus::TransactionPoolTimeout:
+        _out << "TransactionPoolTimeout";
+        break;
+    case TransactionStatus::Unknown:
     default:
         _out << "Unknown";
         break;

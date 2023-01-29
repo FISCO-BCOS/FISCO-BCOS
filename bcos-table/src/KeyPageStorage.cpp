@@ -632,8 +632,8 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
         }
         if (m_ignoreNotExist)
         {
-            KeyPage_LOG(INFO) << LOG_DESC("data should exist but ignore not exist")
-                              << LOG_KV("table", tableView) << LOG_KV("key", toHex(key));
+            KeyPage_LOG(DEBUG) << LOG_DESC("data should exist but ignore not exist")
+                               << LOG_KV("table", tableView) << LOG_KV("key", toHex(key));
         }
         if (c_fileLogLevel <= TRACE)
         {

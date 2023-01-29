@@ -156,6 +156,38 @@ public:
                         []([[maybe_unused]] const Error::Ptr& error) {});
                 }(ledger, std::move(front), std::move(nodeID), std::string(messageID), data));
             });
+        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_ABI,
+                                               [ledger, weakFront](
+                bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
+                auto front = weakFront.lock();
+                if (!front)
+                {
+                    return;
+                }
+                task::wait([](decltype(ledger) ledger, std::shared_ptr<front::FrontService> front,
+                              bcos::crypto::NodeIDPtr nodeID, std::string id,
+                              bytesConstRef data) -> task::Task<void> {
+                    bcostars::ResponseGetABI response;
+                    try
+                    {
+                        bcostars::RequestGetABI request;
+                        bcos::concepts::serialize::decode(data, request);
+                        auto abiStr = co_await concepts::getRef(ledger).getABI(request.contractAddress);
+                        response.abiStr = abiStr;
+                        LIGHTNODE_LOG(TRACE) << "client get ABI response is: " << response.abiStr;
+                    }
+                    catch (std::exception& e)
+                    {
+                        response.error.errorCode = -1;
+                        response.error.errorMessage = boost::diagnostic_information(e);
+                    }
+                    bcos::bytes responseBuffer;
+                    bcos::concepts::serialize::encode(response, responseBuffer);
+                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_ABI,
+                        nodeID, bcos::ref(responseBuffer),
+                        []([[maybe_unused]] const Error::Ptr& error) {});
+                }(ledger, std::move(front), std::move(nodeID), std::string(id), data));
+            });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_SEND_TRANSACTION,
             [transactionPool, self, weakFront](
                 bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {

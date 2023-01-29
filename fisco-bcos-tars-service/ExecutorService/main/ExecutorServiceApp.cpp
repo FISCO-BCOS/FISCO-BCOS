@@ -29,11 +29,13 @@
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 
 using namespace bcostars;
+using namespace bcos::storage;
 using namespace bcos::initializer;
 using namespace bcos::protocol;
 
@@ -147,14 +149,15 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
+    auto stateStorageFactory = std::make_shared<bcos::storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
 
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, storage);
 
     auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
-        m_txpool, cacheFactory, storage, executionMessageFactory,
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
-        m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), "executor");
+        m_txpool, cacheFactory, storage, executionMessageFactory, stateStorageFactory,
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),m_nodeConfig->vmCacheSize(),
+        m_nodeConfig->isAuthCheck(), "executor");
 
     m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
 

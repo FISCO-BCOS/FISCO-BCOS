@@ -45,7 +45,7 @@ public:
 
     // TODO: implement this
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr, bcos::protocol::TransactionsPtr,
-        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::Ptr&&)>) override
+        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::Ptr&&)>, bool) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPrewriteBlock");
     }
@@ -57,10 +57,11 @@ public:
     }
 
     // TODO: implement this
-    void asyncStoreTransactions(std::shared_ptr<std::vector<bcos::bytesConstPtr>>,
-        bcos::crypto::HashListPtr, std::function<void(bcos::Error::Ptr)>) override
+    bcos::Error::Ptr storeTransactionsAndReceipts(
+        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr) override
     {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncStoreTransactions");
+        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method");
+        return nullptr;
     }
 
     void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,

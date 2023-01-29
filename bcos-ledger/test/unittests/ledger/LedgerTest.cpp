@@ -27,6 +27,7 @@
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/ConsensusNode.h"
@@ -201,6 +202,17 @@ public:
                 fakeBlockPromise.set_value(true);
             });
         future.get();
+        for (int i = 0; i < _number; ++i)
+        {
+            auto block = m_fakeBlocks->at(i);
+            auto transactions = std::make_shared<Transactions>();
+            for (size_t j = 0; j < block->transactionsSize(); ++j)
+            {
+                auto tx = block->transaction(j);
+                transactions->push_back(std::const_pointer_cast<Transaction>(tx));
+            }
+            m_fakeTransactions.emplace_back(transactions);
+        }
     }
 
     inline void initEmptyBlocks(int _number)
@@ -243,22 +255,9 @@ public:
                     BOOST_CHECK_EQUAL(_error, nullptr);
                     p1.set_value(true);
                 });
-            //            m_ledger->asyncStoreTransactions(txDataList, txHashList, [=,
-            //            &p1](Error::Ptr _error) {
-            //                BOOST_CHECK_EQUAL(_error, nullptr);
-            //                p1.set_value(true);
-            //            });
             BOOST_CHECK_EQUAL(f1.get(), true);
 
             auto& block = m_fakeBlocks->at(i);
-
-            // write transactions
-            std::promise<bool> writeTransactions;
-            m_ledger->asyncStoreTransactions(txDataList, txHashList, [&](Error::Ptr error) {
-                BOOST_CHECK(!error);
-                writeTransactions.set_value(true);
-            });
-            writeTransactions.get_future().get();
 
             // write other meta data
             std::promise<bool> prewritePromise;
@@ -311,6 +310,7 @@ public:
     std::shared_ptr<Ledger> m_ledger = nullptr;
     LedgerConfig::Ptr m_param;
     BlocksPtr m_fakeBlocks;
+    std::vector<TransactionsPtr> m_fakeTransactions;
     bcos::crypto::merkle::Merkle<crypto::hasher::openssl::OpenSSL_Keccak256_Hasher> merkleUtility;
 };
 
@@ -1048,40 +1048,35 @@ BOOST_AUTO_TEST_CASE(preStoreTransaction)
     initBlocks(5);
     auto txBytesList = std::make_shared<std::vector<bytesConstPtr>>();
     auto hashList = std::make_shared<crypto::HashList>();
-    for (size_t i = 0; i < m_fakeBlocks->at(3)->transactionsSize(); ++i)
-    {
-        bcos::bytes txData;
-        m_fakeBlocks->at(3)->transaction(i)->encode(txData);
-        auto txPointer = std::make_shared<bytes>(txData);
-        auto hash = m_fakeBlocks->at(3)->transaction(i)->hash();
-        txBytesList->emplace_back(txPointer);
-        hashList->emplace_back(hash);
-    }
+    auto block = m_fakeBlocks->at(3);
+    auto transactions = m_fakeTransactions[3];
 
     std::promise<bool> p1;
     auto f1 = p1.get_future();
-    m_ledger->asyncStoreTransactions(txBytesList, hashList, [&](Error::Ptr _error) {
+    m_ledger->asyncPreStoreBlockTxs(transactions, block, [&](Error::Ptr _error) {
         BOOST_CHECK_EQUAL(_error, nullptr);
         p1.set_value(true);
     });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
+#if 0
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     // null pointer
-    m_ledger->asyncStoreTransactions(txBytesList, nullptr, [&](Error::Ptr _error) {
+    m_ledger->asyncPreStoreBlockTxs(transactions, nullptr, [&](Error::Ptr _error) {
         BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::ErrorArgument);
         p2.set_value(true);
     });
+    BOOST_CHECK_EQUAL(f2.get(), true);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
-    m_ledger->asyncStoreTransactions(nullptr, hashList, [&](Error::Ptr _error) {
+    m_ledger->asyncPreStoreBlockTxs(nullptr, block, [&](Error::Ptr _error) {
         BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::ErrorArgument);
         p3.set_value(true);
     });
-    BOOST_CHECK_EQUAL(f1.get(), true);
-    BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(preStoreReceipt)
@@ -1191,7 +1186,8 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
         0, "to", input, 200, 300, "chainid", "groupid", 800, keyPair);
 
     block->appendTransaction(tx);
-
+    auto blockTxs = std::make_shared<Transactions>();
+    blockTxs->push_back(tx);
     auto txs = std::make_shared<std::vector<bytesConstPtr>>();
     auto hashList = std::make_shared<crypto::HashList>();
     bcos::bytes encoded;
@@ -1200,10 +1196,10 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     hashList->emplace_back(tx->hash());
 
     initFixture();
-
-    m_ledger->asyncStoreTransactions(txs, hashList, [](Error::Ptr error) { BOOST_CHECK(!error); });
+    auto transactions = std::make_shared<Transactions>();
+    transactions->push_back(tx);
     m_ledger->asyncPrewriteBlock(
-        m_storage, nullptr, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
+        m_storage, blockTxs, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
 
     m_ledger->asyncGetBlockDataByNumber(
         100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {

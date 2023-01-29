@@ -25,94 +25,82 @@
 #ifdef WITH_WASM
 #include <BCOS_WASM.h>
 #endif
-#include <evmc/loader.h>
-#include <evmone/evmone.h>
 #include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
 
-namespace bcos
+namespace bcos::executor
 {
-namespace executor
-{
-namespace
-{
-auto g_kind = VMKind::evmone;
 
 /// The pointer to VMInstance create function in DLL VMInstance VM.
 ///
 /// This variable is only written once when processing command line arguments,
 /// so access is thread-safe.
-evmc_create_fn g_evmcCreateFn;
 
-/// A helper type to build the tabled of VM implementations.
-///
-/// More readable than std::tuple.
-/// Fields are not initialized to allow usage of construction with initializer lists {}.
-struct VMKindTableEntry
+// evmc_create_fn g_evmcCreateFn;
+
+VMInstance VMFactory::create(VMKind kind, evmc_revision revision, const crypto::HashType& codeHash,
+    bytes_view code, bool isCreate)
 {
-    VMKind kind;
-    const char* name;
-};
-
-/// The table of available VM implementations.
-
-#if 0
-VMKindTableEntry vmKindsTable[] = {{VMKind::BcosWasm, "bcos wasm"}, {VMKind::evmone, "evmone"}};
-void setVMKind(const std::string& _name)
-{
-    for (auto& entry : vmKindsTable)
-    {
-        // Try to find a match in the table of VMs.
-        if (_name == entry.name)
-        {
-            g_kind = entry.kind;
-            return;
-        }
-    }
-    // If not match for predefined VM names, try loading it as an VMInstance DLL.
-    evmc_loader_error_code ec;
-    g_evmcCreateFn = evmc_load(_name.c_str(), &ec);
-    switch (ec)
-    {
-    case EVMC_LOADER_SUCCESS:
-        break;
-    case EVMC_LOADER_CANNOT_OPEN:
-        BOOST_THROW_EXCEPTION(
-            po::validation_error(po::validation_error::invalid_option_value, "vm", _name, 1));
-    case EVMC_LOADER_SYMBOL_NOT_FOUND:
-        BOOST_THROW_EXCEPTION(std::system_error(std::make_error_code(std::errc::invalid_seek),
-            "loading " + _name + " failed: VMInstance create function not found"));
-    default:
-        BOOST_THROW_EXCEPTION(
-            std::system_error(std::error_code(static_cast<int>(ec), std::generic_category()),
-                "loading " + _name + " failed"));
-    }
-    g_kind = VMKind::DLL;
-}
-#endif
-}  // namespace
-
-VMInstance VMFactory::create()
-{
-    return create(g_kind);
-}
-
-VMInstance VMFactory::create(VMKind _kind)
-{
-    switch (_kind)
+    switch (kind)
     {
 #ifdef WITH_WASM
     case VMKind::BcosWasm:
-        return VMInstance{evmc_create_bcoswasm()};
+        return VMInstance{evmc_create_bcoswasm(), revision, code};
 #endif
+    // case VMKind::DLL:
+    //     return VMInstance{g_evmcCreateFn()};
     case VMKind::evmone:
-        return VMInstance{evmc_create_evmone()};
-    case VMKind::DLL:
-        return VMInstance{g_evmcCreateFn()};
     default:
-        return VMInstance{evmc_create_evmone()};
+    {
+        if (isCreate)
+        {
+            return VMInstance{evmc_create_evmone(), revision, code};
+        }
+        std::shared_ptr<evmoneCodeAnalysis> analysis{get(codeHash, revision)};
+        if (!analysis)
+        {
+            analysis = std::make_shared<evmoneCodeAnalysis>(
+                evmone::advanced::analyze(revision, code));
+            // analysis = std::make_shared<evmoneCodeAnalysis>(
+            //     evmone::baseline::analyze(revision, code));
+            put(codeHash, analysis, revision);
+        }
+        return VMInstance{analysis, revision, code};
+    }
     }
 }
-}  // namespace executor
-}  // namespace bcos
+
+std::shared_ptr<evmoneCodeAnalysis> VMFactory::get(
+    const crypto::HashType& key, evmc_revision revision) noexcept
+{
+    if (revision == m_revision)
+    {
+        std::unique_lock lock(m_cacheMutex);
+        auto analysis = m_cache.get(key);
+        lock.unlock();
+        if (analysis)
+        {
+            return analysis.value();
+        }
+    }
+    return nullptr;
+}
+
+void VMFactory::put(const crypto::HashType& key,
+    const std::shared_ptr<evmoneCodeAnalysis>& analysis,
+    evmc_revision revision) noexcept
+{
+    if (revision != m_revision)
+    {
+        std::unique_lock l(m_cacheMutex);
+        m_cache.clear();
+    }
+    m_revision = revision;
+    {
+        std::unique_lock l(m_cacheMutex);
+        m_cache.insert(key, analysis);
+    }
+}
+
+}  // namespace bcos::executor
