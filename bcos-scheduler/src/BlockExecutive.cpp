@@ -1013,8 +1013,7 @@ void BlockExecutive::DMCExecute(
     {
         DMC_LOG(WARNING) << "DMCExecute exception: " << LOG_KV("code", e.errorCode())
                          << LOG_KV("message", e.errorMessage());
-        callback(
-            BCOS_ERROR_UNIQUE_PTR(e.errorCode(), e.errorMessage()), nullptr, m_isSysBlock);
+        callback(BCOS_ERROR_UNIQUE_PTR(e.errorCode(), e.errorMessage()), nullptr, m_isSysBlock);
     }
     catch (std::exception& e)
     {

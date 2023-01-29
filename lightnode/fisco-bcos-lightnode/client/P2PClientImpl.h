@@ -131,12 +131,17 @@ public:
 
                                     if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
                                     {
-                                        for(auto& it : nodeInfo->second)
+                                        for (auto& it : nodeInfo->second)
                                         {
-                                            if(it.second == bcos::protocol::NodeType::CONSENSUS_NODE || it.second == bcos::protocol::NodeType::OBSERVER_NODE)
+                                            if (it.second ==
+                                                    bcos::protocol::NodeType::CONSENSUS_NODE ||
+                                                it.second ==
+                                                    bcos::protocol::NodeType::OBSERVER_NODE)
                                             {
                                                 nodeIDs.insert(it.first);
-                                                LIGHTNODE_LOG(TRACE) << LOG_KV("NodeID:",it.first) << LOG_KV("nodeType:",it.second);
+                                                LIGHTNODE_LOG(TRACE)
+                                                    << LOG_KV("NodeID:", it.first)
+                                                    << LOG_KV("nodeType:", it.second);
                                             }
                                         }
                                     }

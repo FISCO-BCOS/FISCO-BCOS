@@ -63,7 +63,7 @@ public:
     std::string const& groupID() const override { return m_inner()->groupID; }
     // Note: externally ensure thread safety
     std::vector<std::string> const& nodeIDList() const override { return m_inner()->nodeIDList; }
-    std::vector<int32_t> const& nodeTypeList() const override {return m_inner()->nodeTypeList; }
+    std::vector<int32_t> const& nodeTypeList() const override { return m_inner()->nodeTypeList; }
     int type() const override { return m_inner()->type; }
     void setNodeProtocolList(
         std::vector<bcos::protocol::ProtocolInfo::ConstPtr>&& _protocolList) override

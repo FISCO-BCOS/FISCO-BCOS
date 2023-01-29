@@ -124,7 +124,7 @@ public:
         return bytes_view(m_callParameters->data.data(), m_callParameters->data.size());
     }
     virtual std::optional<storage::Entry> code();
-    h256 codeHash();
+    virtual h256 codeHash();
     u256 salt() const { return m_salt; }
     SubState& sub() { return m_sub; }
     bool isCreate() const { return m_callParameters->create; }

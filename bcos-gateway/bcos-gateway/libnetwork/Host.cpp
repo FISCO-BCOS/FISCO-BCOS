@@ -126,7 +126,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 return preverified;
             }
 
-            // For compatibility, p2p communication between nodes still uses the old public key analysis method
+            // For compatibility, p2p communication between nodes still uses the old public key
+            // analysis method
             if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
                 return preverified;

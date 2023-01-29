@@ -12,9 +12,9 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-executor/src/Common.h>
-#include <bcos-tool/bcos-tool/VersionConverter.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-table/src/StateStorageFactory.h>
+#include <bcos-tool/bcos-tool/VersionConverter.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
@@ -48,10 +48,12 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
 public:
     LedgerImpl(Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storageInterface)
-      : Ledger(std::move(blockFactory), storageInterface), m_backupStorage(storageInterface), m_storage{std::move(storage)}
+      : Ledger(std::move(blockFactory), storageInterface),
+        m_backupStorage(storageInterface),
+        m_storage{std::move(storage)}
     {}
 
-    void setKeyPageSize(size_t keyPageSize){m_keyPageSize = keyPageSize;}
+    void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
 
 private:
     template <bcos::concepts::ledger::DataFlag... Flags>
@@ -117,47 +119,51 @@ private:
         bcos::concepts::bytebuffer::assignTo(hashStr, hash);
     }
 
-    task::Task<std::string> impl_getABI(std::string _contractAddress){
-        //try to get compatibilityVersion
-        std::string  contractTableName = getContractTableName(_contractAddress);
-        auto versionEntry = storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
-        auto [compatibilityVersionStr, number] = versionEntry->template getObject<SystemConfigEntry>();
+    task::Task<std::string> impl_getABI(std::string _contractAddress)
+    {
+        // try to get compatibilityVersion
+        std::string contractTableName = getContractTableName("/apps/", _contractAddress);
+        auto versionEntry =
+            storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
+        auto [compatibilityVersionStr, number] =
+            versionEntry->template getObject<SystemConfigEntry>();
         if (!versionEntry)
         {
             LEDGER_LOG(WARNING) << "Not found compatibilityVersion: ";
-            BOOST_THROW_EXCEPTION(GetABIError{}
-                                  << bcos::error::ErrorMessage{"get compatibilityVersion not found"});
+            BOOST_THROW_EXCEPTION(
+                GetABIError{} << bcos::error::ErrorMessage{"get compatibilityVersion not found"});
         }
         m_compatibilityVersion = bcos::tool::toVersionNumber(compatibilityVersionStr);
-        LEDGER_LOG(TRACE) << "getABI contractAddress is: " << _contractAddress << ", contractTableName is: "
-                         << contractTableName <<", m_compatibilityVersion is " << m_compatibilityVersion;
+        LEDGER_LOG(TRACE) << "getABI contractAddress is: " << _contractAddress
+                          << ", contractTableName is: " << contractTableName
+                          << ", m_compatibilityVersion is " << m_compatibilityVersion;
 
-        //create keyPageStorage
+        // create keyPageStorage
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(m_keyPageSize);
-        auto stateStorage =  stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion);
+        auto stateStorage =
+            stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion);
 
-        //try to get codeHash
+        // try to get codeHash
         auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");
-        if(!codeHashEntry.second)[[unlikely]]
+        if (!codeHashEntry.second) [[unlikely]]
         {
             LEDGER_LOG(WARNING) << "Not found codeHash contractAddress:" << _contractAddress;
-            BOOST_THROW_EXCEPTION(GetABIError{}
-                                  << bcos::error::ErrorMessage{"Get CodeHash not found"});
+            BOOST_THROW_EXCEPTION(
+                GetABIError{} << bcos::error::ErrorMessage{"Get CodeHash not found"});
         }
         auto codeHash = codeHashEntry.second->getField(0);
 
-        //according to codeHash get abi
+        // according to codeHash get abi
         auto entry = stateStorage->getRow(SYS_CONTRACT_ABI, codeHash);
-        if(!entry.second)[[unlikely]]
+        if (!entry.second) [[unlikely]]
         {
             LEDGER_LOG(WARNING) << "Not found contractAddress abi:" << _contractAddress;
-            BOOST_THROW_EXCEPTION(
-                GetABIError{}
-                    << bcos::error::ErrorMessage{"Get Abi not found"});
+            BOOST_THROW_EXCEPTION(GetABIError{} << bcos::error::ErrorMessage{"Get Abi not found"});
         }
 
         std::string abiStr = std::string(entry.second->getField(0));
-        LEDGER_LOG(TRACE) << "contractAddress is " << _contractAddress << "ledger impl get abi is: " << abiStr;
+        LEDGER_LOG(TRACE) << "contractAddress is " << _contractAddress
+                          << "ledger impl get abi is: " << abiStr;
         co_return abiStr;
     }
 

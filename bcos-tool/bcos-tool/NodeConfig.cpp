@@ -491,16 +491,15 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
-    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
-        [[unlikely]]
-        {
-            NodeConfig_LOG(WARNING) << LOG_DESC(
-                                           "loadTxPoolConfig: the configured txs_expiration_time "
-                                           "is smaller than default "
-                                           "consensus time, reset to the consensus time")
-                                    << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
-                                    << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
-        }
+    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS) [[unlikely]]
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+                                       "loadTxPoolConfig: the configured txs_expiration_time "
+                                       "is smaller than default "
+                                       "consensus time, reset to the consensus time")
+                                << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
+                                << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
+    }
     m_txsExpirationTime = std::max(
         {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
 
@@ -683,8 +682,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig")
-                         << LOG_KV("sendTxTimeout", m_sendTxTimeout)
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize);
 }
 

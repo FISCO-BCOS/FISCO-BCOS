@@ -60,10 +60,7 @@ public:
         return impl().impl_getBlockHashByNumber(number, hash);
     }
 
-    auto getABI(std::string contractAddress)
-    {
-        return impl().impl_getABI(contractAddress);
-    }
+    auto getABI(std::string contractAddress) { return impl().impl_getABI(contractAddress); }
 
 
     auto getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out) requires

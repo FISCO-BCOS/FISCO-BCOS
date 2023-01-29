@@ -531,14 +531,13 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
 
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
-    if (c_fileLogLevel <= TRACE)
-        [[unlikely]]
+    if (c_fileLogLevel <= TRACE) [[unlikely]]
+    {
+        for (auto const& tx : _missedTxs)
         {
-            for (auto const& tx : _missedTxs)
-            {
-                TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
-            }
+            TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
         }
+    }
     return fetchedTxs;
 }
 

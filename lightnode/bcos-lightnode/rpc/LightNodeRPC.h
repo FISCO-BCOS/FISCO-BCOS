@@ -391,24 +391,25 @@ public:
         _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
 
-    void getABI([[maybe_unused]]std::string_view _groupID, [[maybe_unused]]std::string_view _nodeName,
-                std::string_view _contractAddress, RespFunc _respFunc) override
+    void getABI([[maybe_unused]] std::string_view _groupID,
+        [[maybe_unused]] std::string_view _nodeName, std::string_view _contractAddress,
+        RespFunc _respFunc) override
     {
-        bcos::task::wait(
-            [this](auto remoteLedger, std::string _contractAddress, RespFunc _respFunc) -> task::Task<void>{
-              try
-              {
-                  LIGHTNODE_LOG(TRACE) << "RPC get contract " <<_contractAddress << " ABI request";
-                  auto abiStr = co_await remoteLedger.getABI(_contractAddress);
-                  LIGHTNODE_LOG(TRACE) <<  " lightNode RPC get ABI is: " << abiStr;
-                  Json::Value resp = abiStr;
-                  _respFunc(nullptr, resp);
-              }
-              catch (std::exception& error)
-              {
-                  toErrorResp(error, std::move(_respFunc));
-              }
-            }(remoteLedger(), std::string(_contractAddress), std::move(_respFunc)));
+        bcos::task::wait([this](auto remoteLedger, std::string _contractAddress,
+                             RespFunc _respFunc) -> task::Task<void> {
+            try
+            {
+                LIGHTNODE_LOG(TRACE) << "RPC get contract " << _contractAddress << " ABI request";
+                auto abiStr = co_await remoteLedger.getABI(_contractAddress);
+                LIGHTNODE_LOG(TRACE) << " lightNode RPC get ABI is: " << abiStr;
+                Json::Value resp = abiStr;
+                _respFunc(nullptr, resp);
+            }
+            catch (std::exception& error)
+            {
+                toErrorResp(error, std::move(_respFunc));
+            }
+        }(remoteLedger(), std::string(_contractAddress), std::move(_respFunc)));
     }
 
     void getSealerList(

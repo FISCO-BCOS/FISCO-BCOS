@@ -304,8 +304,9 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                     transactionValues[j] = transactionJson.toStyledString();
                     // read the receipt and store to archive database use json format
                     Json::Value receiptJson;
-                    bcos::rpc::toJsonResp(receiptJson, toHex(keys[j], "0x"), protocol::TransactionStatus::None,
-                        *receipt, nodeConfig->isWasm(), *hashImpl);
+                    bcos::rpc::toJsonResp(receiptJson, toHex(keys[j], "0x"),
+                        protocol::TransactionStatus::None, *receipt, nodeConfig->isWasm(),
+                        *hashImpl);
                     receiptValues[j] = receiptJson.toStyledString();
                 }
             });

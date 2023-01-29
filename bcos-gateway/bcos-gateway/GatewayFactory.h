@@ -29,7 +29,8 @@ public:
         bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr)
       : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName), m_dataEncrypt(_dataEncrypt)
     {
-        // For compatibility, p2p communication between nodes still uses the old public key analysis method
+        // For compatibility, p2p communication between nodes still uses the old public key analysis
+        // method
         initSSLContextPubHexHandler();
         // the new old public key analysis method is used for black white list
         initSSLContextPubHexHandlerWithoutExtInfo();

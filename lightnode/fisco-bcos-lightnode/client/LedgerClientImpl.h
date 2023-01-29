@@ -107,8 +107,9 @@ private:
         request.contractAddress = contractAddress;
         auto nodeID = co_await p2p().randomSelectNode();
 
-        LIGHTNODE_LOG(TRACE) << LOG_KV("nodeID", nodeID) << LOG_KV("request.contractAddress", request.contractAddress);
-            co_await p2p().sendMessageByNodeID(
+        LIGHTNODE_LOG(TRACE) << LOG_KV("nodeID", nodeID)
+                             << LOG_KV("request.contractAddress", request.contractAddress);
+        co_await p2p().sendMessageByNodeID(
             protocol::LIGHTNODE_GET_ABI, std::move(nodeID), request, response);
         if (response.error.errorCode)
         {
@@ -116,8 +117,8 @@ private:
                                    << " " << response.error.errorMessage;
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
         }
-        LIGHTNODE_LOG(TRACE) << "get contractAddress " << request.contractAddress << "ABI from remote, the ABI is"
-                            << response.abiStr;
+        LIGHTNODE_LOG(TRACE) << "get contractAddress " << request.contractAddress
+                             << "ABI from remote, the ABI is" << response.abiStr;
         auto abiStr = response.abiStr;
         co_return abiStr;
     }

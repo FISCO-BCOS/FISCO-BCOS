@@ -170,7 +170,6 @@ struct VMSchedule
     unsigned createDataGas = 20;
     unsigned maxEvmCodeSize = 0x40000;
     unsigned maxWasmCodeSize = 0xF00000;  // 15MB
-
 };
 
 static const VMSchedule FiscoBcosSchedule = [] {
@@ -181,7 +180,7 @@ static const VMSchedule FiscoBcosSchedule = [] {
 static const VMSchedule FiscoBcosScheduleV320 = [] {
     VMSchedule schedule = VMSchedule();
     schedule.enablePairs = true;
-    schedule.maxEvmCodeSize = 0x100000;  // 1MB
+    schedule.maxEvmCodeSize = 0x100000;   // 1MB
     schedule.maxWasmCodeSize = 0xF00000;  // 15MB
     return schedule;
 }();

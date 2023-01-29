@@ -390,9 +390,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                           << LOG_KV("peer", _nodeID->shortHex())
                           << LOG_KV("expectedType", TxsSyncPacketType::TxsResponsePacket)
                           << LOG_KV("recvType", txsResponse->type());
-        _onVerifyFinished(BCOS_ERROR_PTR(
-                              CommonError::FetchTransactionsFailed, "FetchTransactionsFailed"),
-            false);
+        _onVerifyFinished(
+            BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed, "FetchTransactionsFailed"), false);
         return;
     }
     // verify missedTxs
@@ -415,8 +414,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1);
         // response to verify result
         _onVerifyFinished(
-            BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
-            false);
+            BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
         // try to import the transactions even when verify failed
         importDownloadedTxs(_nodeID, transactions);
         return;
@@ -433,8 +431,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     {
         if ((*_missedTxs)[i] != transactions->transaction(i)->hash())
         {
-            _onVerifyFinished(BCOS_ERROR_PTR(CommonError::InconsistentTransactions,
-                                  "InconsistentTransactions"),
+            _onVerifyFinished(
+                BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
                 false);
             return;
         }

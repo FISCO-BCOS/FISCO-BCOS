@@ -75,7 +75,10 @@ public:
 
     ~BufferWriter() {}
 
-    void reset() { _len = 0; }
+    void reset()
+    {
+        _len = 0;
+    }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -94,8 +97,14 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const { return _buf; }
-    size_t getLength() const { return _len; }
+    const ByteType* getBuffer() const
+    {
+        return _buf;
+    }
+    size_t getLength() const
+    {
+        return _len;
+    }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -302,8 +311,8 @@ inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::P2PInfo const& _p2pInfo)
     return tarsP2PInfo;
 }
 
-inline bcostars::GroupNodeInfo toTarsNodeIDInfo(
-    std::string const& _groupID, std::set<std::string> const& _nodeIDList, std::set<std::uint32_t> const& _nodeTypeList)
+inline bcostars::GroupNodeInfo toTarsNodeIDInfo(std::string const& _groupID,
+    std::set<std::string> const& _nodeIDList, std::set<std::uint32_t> const& _nodeTypeList)
 {
     GroupNodeInfo groupNodeIDInfo;
     groupNodeIDInfo.groupID = _groupID;
@@ -360,7 +369,7 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
     {
         auto const& nodeIDListInfo = it.nodeIDList;
         auto const& nodeTypeInfo = it.nodeTypeList;
-        for(size_t i = 0; i < nodeIDListInfo.size(); ++i)
+        for (size_t i = 0; i < nodeIDListInfo.size(); ++i)
         {
             auto nodeID = nodeIDListInfo[i];
             auto nodeType = nodeTypeInfo[i];
