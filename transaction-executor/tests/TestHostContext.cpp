@@ -52,8 +52,8 @@ public:
                 .create2_salt = {}};
             evmc_address origin = {};
 
-            HostContext hostContext(
-                rollbackableStorage, tableNamePool, blockHeader, message, origin, 0, 0);
+            HostContext hostContext(rollbackableStorage, tableNamePool, blockHeader, message,
+                message.destination, origin, 0, 0);
             auto result = co_await hostContext.execute();
 
             BOOST_CHECK_EQUAL(result.status_code, 0);
@@ -91,8 +91,8 @@ public:
             .create2_salt = {}};
         evmc_address origin = {};
 
-        HostContext hostContext(
-            rollbackableStorage, tableNamePool, blockHeader, message, origin, 0, 0);
+        HostContext hostContext(rollbackableStorage, tableNamePool, blockHeader, message,
+            message.destination, origin, 0, 0);
         auto result = co_await hostContext.execute();
 
         co_return result;
@@ -205,6 +205,31 @@ BOOST_AUTO_TEST_CASE(failure)
         releaseResult(result4);
 
         co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(delegateCall)
+{
+    syncWait([this]() -> Task<void> {
+        bcos::codec::abi::ContractABICodec abiCodec(
+            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+
+        auto result1 = co_await call("delegateCall()");
+        BOOST_CHECK_EQUAL(result1.status_code, 0);
+        releaseResult(result1);
+
+        auto result2 = co_await call("getInt()");
+        bcos::s256 getIntResult = -1;
+        abiCodec.abiOut(
+            bcos::bytesConstRef(result2.output_data, result2.output_size), getIntResult);
+        BOOST_CHECK_EQUAL(getIntResult, 19876);
+        releaseResult(result2);
+
+        auto result3 = co_await call("getString()");
+        std::string strResult;
+        abiCodec.abiOut(bcos::bytesConstRef(result3.output_data, result3.output_size), strResult);
+        BOOST_CHECK_EQUAL(strResult, "hi!");
+        releaseResult(result3);
     }());
 }
 

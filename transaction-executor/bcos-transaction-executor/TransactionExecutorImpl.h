@@ -7,7 +7,6 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <bcos-framework/storage2/Storage.h>
-#include <bcos-framework/transaction-executor/Concepts.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
@@ -37,19 +36,14 @@ public:
             Rollbackable<std::remove_reference_t<decltype(m_storage)>> rollbackableStorage(
                 m_storage);
 
-            evmc_address sender;
-            evmc_address receiver;
-            boost::algorithm::unhex(transaction.sender(), sender.bytes);
-            boost::algorithm::unhex(transaction.to(), receiver.bytes);
-
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
                 .gas = 30 * 10000,
-                .destination = receiver,
+                .destination = unhexAddress(transaction.to()),
                 .destination_ptr = nullptr,
                 .destination_len = 0,
-                .sender = sender,
+                .sender = unhexAddress(transaction.sender()),
                 .sender_ptr = nullptr,
                 .sender_len = 0,
                 .input_data = transaction.input().data(),
@@ -58,7 +52,7 @@ public:
                 .create2_salt = {}};
 
             HostContext hostContext(rollbackableStorage, m_tableNamePool, blockHeader, evmcMessage,
-                receiver, contextID, 0);
+                evmcMessage.destination, evmcMessage.sender, contextID, 0);
             auto evmcResult = co_await hostContext.execute();
 
             std::string newContractAddress;
@@ -88,6 +82,18 @@ public:
     }
 
 private:
+    evmc_address unhexAddress(std::string_view view)
+    {
+        if (view.empty())
+        {
+            return {};
+        }
+
+        evmc_address address;
+        boost::algorithm::unhex(view, address.bytes);
+        return address;
+    }
+
     Storage& m_storage;
     ReceiptFactory& m_receiptFactory;
     TableNamePool m_tableNamePool;

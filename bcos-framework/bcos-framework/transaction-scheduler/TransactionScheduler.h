@@ -1,12 +1,19 @@
 #pragma once
 
 #include "../protocol/Block.h"
+#include <bcos-task/Trait.h>
 
 namespace bcos::concepts::transaction_scheduler
 {
 
 template <class TransactionRangeType>
 concept TransactionRange = RANGES::range<TransactionRangeType>;
+
+template <class Impl>
+concept TransactionScheduler = requires(Impl impl)
+{
+    requires 
+};
 
 // All auto interfaces is awaitable
 template <class Impl>

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "bcos-task/Trait.h"
-#include <bcos-framework/transaction-executor/Concepts.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 
 namespace bcos::transaction_executor
