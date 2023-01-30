@@ -22,6 +22,7 @@
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterFactory.h"
+#include "bcos-gateway/libratelimit/TimeWindowRateLimiter.h"
 #include "bcos-gateway/libratelimit/TokenBucketRateLimiter.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -29,13 +30,62 @@
 #include <boost/filesystem.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
 #include <memory>
+#include <thread>
 
 using namespace bcos;
 using namespace gateway;
 using namespace bcos::test;
 
 BOOST_FIXTURE_TEST_SUITE(RateLimiterManagerTest, TestPromptFixture)
+
+BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter)
+{
+    uint64_t maxPermitsSize = 1000;
+    uint64_t timeWindowMS = 1000;
+    auto rateLimiter =
+        std::make_shared<ratelimiter::TimeWindowRateLimiter>(maxPermitsSize, timeWindowMS);
+
+    BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
+    BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
+    BOOST_CHECK(rateLimiter->currentPermitsSize() == maxPermitsSize);
+
+    uint64_t permitsSize0 = 2000;
+    BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize0));
+
+    uint64_t permitsSize = 1000;
+    BOOST_CHECK(rateLimiter->tryAcquire(permitsSize));
+    BOOST_CHECK(rateLimiter->currentPermitsSize() == 0);
+    BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize));
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize));
+    BOOST_CHECK(rateLimiter->currentPermitsSize() == 0);
+    BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
+    BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+    BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
+    BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
+    BOOST_CHECK(rateLimiter->tryAcquire(permitsSize));
+    BOOST_CHECK(rateLimiter->currentPermitsSize() == (maxPermitsSize - permitsSize));
+    BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize));
+
+    rateLimiter->rollback(permitsSize);
+
+    BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
+    BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
+    BOOST_CHECK(rateLimiter->currentPermitsSize() == permitsSize);
+    rateLimiter->tryAcquire(permitsSize);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+    BOOST_CHECK(rateLimiter->tryAcquire(100));
+    BOOST_CHECK(rateLimiter->tryAcquire(200));
+    BOOST_CHECK(rateLimiter->tryAcquire(300));
+    BOOST_CHECK(rateLimiter->tryAcquire(400));
+    BOOST_CHECK(!rateLimiter->tryAcquire(100));
+}
 
 BOOST_AUTO_TEST_CASE(test_rateLimiterManager)
 {
