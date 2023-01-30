@@ -961,11 +961,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longKey = "0";
-        for (int j = 0; j < USER_TABLE_KEY_VALUE_MAX_LENGTH; ++j)
-        {
-            longKey += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_KEY_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longKey = ss.str();
         auto r1 = insert(number++, longKey, {"test1", "test2"}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -974,11 +972,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "id111", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1060,11 +1056,9 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrderTest)
     // insert too long value
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "3", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1124,11 +1118,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longKey = "0";
-        for (int j = 0; j < USER_TABLE_KEY_VALUE_MAX_LENGTH; ++j)
-        {
-            longKey += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_KEY_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longKey = ss.str();
         auto r1 = insert(number++, longKey, {"test1", "test2"}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1137,11 +1129,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "id111", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1224,11 +1214,9 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrdeWasmTest)
     // insert too long value
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "3", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);

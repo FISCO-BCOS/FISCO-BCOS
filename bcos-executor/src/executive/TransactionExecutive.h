@@ -169,7 +169,8 @@ protected:
         _callParameters.data = std::move(codecOutput);
     }
 
-    inline std::string getContractTableName(const std::string_view& _address, bool isWasm = false)
+    inline std::string getContractTableName(
+        const std::string_view& _address, bool isWasm = false, bool isCreate = false)
     {
         auto blockContext = m_blockContext.lock();
         auto version = blockContext->blockVersion();
@@ -183,18 +184,22 @@ protected:
             }
         }
 
-
-        std::string formatAddress(_address);
+        std::string_view formatAddress = _address;
         if (isWasm)
         {
-            if (protocol::versionCompareTo(version, protocol::BlockVersion::V3_2_VERSION) < 0)
+            // NOTE: if version < 3.2, then it will allow deploying contracts under /tables. It's a
+            // bug, but it should maintain data compatibility.
+            // NOTE2: if it's internalCreate it should allow creating table under /tables
+            if (protocol::versionCompareTo(version, protocol::BlockVersion::V3_2_VERSION) < 0 ||
+                !isCreate)
             {
-                if (_address.find(USER_TABLE_PREFIX) == 0)
+                if (_address.starts_with(USER_TABLE_PREFIX))
                 {
-                    return formatAddress;
+                    return std::string(formatAddress);
                 }
             }
-            formatAddress = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
+            formatAddress =
+                formatAddress.starts_with('/') ? formatAddress.substr(1) : formatAddress;
         }
 
         return std::string(USER_APPS_PREFIX).append(formatAddress);

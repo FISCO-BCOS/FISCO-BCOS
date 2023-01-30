@@ -366,7 +366,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
-    auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
+    auto tableName = getContractTableName(
+        callParameters->codeAddress, blockContext->isWasm(), callParameters->create);
     auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
     extraData->abi = std::move(callParameters->abi);
 
@@ -387,10 +388,12 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         callParameters->abi = std::move(extraData->abi);
         auto sender = callParameters->senderAddress;
         auto response = internalCreate(std::move(callParameters));
-        // 3.1.0 < version < 3.3
+        // 3.1.0 < version < 3.3, authCheck==true, then create
+        // version >= 3.3, always create
         if ((blockContext->isAuthCheck() &&
                 versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0) ||
-            versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
+            (!blockContext->isWasm() &&
+                versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0))
         {
             // Create auth table
             creatAuthTable(tableName, response->origin, std::move(sender));
