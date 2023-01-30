@@ -7,7 +7,10 @@
 
 namespace bcos::transaction_scheduler
 {
-struct MutableStorageExists : public bcos::Error
+struct DuplicateMutableStorage : public bcos::Error
+{
+};
+struct NotExistsMutableStorage : public bcos::Error
 {
 };
 
@@ -21,28 +24,22 @@ template <class Storage, class Key>
 using StorageReadIteratorType = typename StorageReadIteratorTrait<Storage, Key>::type;
 
 template <transaction_executor::StateStorage MutableStorage,
-    transaction_executor::StateStorage BackendStorage, class CacheStorage = void>
-requires(std::is_void_v<CacheStorage> ||
-         transaction_executor::StateStorage<CacheStorage>) class LevelStorage
+    transaction_executor::StateStorage BackendStorage, class CachedStorage = void>
+requires(std::is_void_v<CachedStorage> ||
+         transaction_executor::StateStorage<CachedStorage>) class LevelStorage
 {
 private:
-    constexpr static bool withCacheStorage = !(std::is_void_v<CacheStorage>);
+    constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
 
     std::shared_ptr<MutableStorage> m_mutableStorage;                // Mutable storage
     std::list<std::shared_ptr<MutableStorage>> m_immutableStorages;  // Read only storages
-    [[no_unique_address]] std::conditional_t<withCacheStorage, CacheStorage&, std::monostate>
+    [[no_unique_address]] std::conditional_t<withCacheStorage,
+        std::add_lvalue_reference_t<CachedStorage>,
+        std::monostate>
         m_cacheStorage;                // Cache
                                        // storage
     BackendStorage& m_backendStorage;  // Backend storage
     std::mutex m_storageMutex;
-
-    template <transaction_executor::StateStorage ReadableStorage>
-    auto readFromStorage(ReadableStorage& storage, RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(m_mutableStorage.read(keys))>>
-    {
-        auto it = storage.read(keys);
-        co_return readFromStorage();
-    }
 
 public:
     template <RANGES::input_range KeyRange, transaction_executor::StateStorage... StorageType>
@@ -59,6 +56,7 @@ public:
 
         task::AwaitableValue<bool> next() &
         {
+            m_innerIt = std::monostate{};
             if (!m_started)
             {
                 m_started = true;
@@ -68,22 +66,43 @@ public:
         }
         task::Task<bool> hasValue() const
         {
-            if (m_innerIt.index() == 0)
-            {
-                query(*m_keyRangeIt);
-            }
+            co_await query(*m_keyRangeIt);
             co_return std::visit(
                 [](auto&& iterator) -> task::Task<bool> {
                     using IteratorType = std::remove_cvref_t<decltype(iterator)>;
-                    if constexpr (!std::is_same_v<std::monostate, decltype(iterator)>)
+                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
                     {
-                        co_return iterator.hasValue();
+                        co_return co_await iterator.hasValue();
                     }
                 },
                 m_innerIt);
         }
-        task::Task<Key> key() const {}
-        task::Task<Value> value() const {}
+        task::Task<Key> key() const
+        {
+            co_await query(*m_keyRangeIt);
+            co_return std::visit(
+                [](auto&& iterator) -> task::Task<Key> {
+                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
+                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
+                    {
+                        co_return co_await iterator.key();
+                    }
+                },
+                m_innerIt);
+        }
+        task::Task<Value> value() const
+        {
+            co_await query(*m_keyRangeIt);
+            co_return co_await std::visit(
+                [](auto&& iterator) -> task::Task<Value> {
+                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
+                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
+                    {
+                        co_return co_await iterator.value();
+                    }
+                },
+                m_innerIt);
+        }
 
         void release() {}
 
@@ -91,6 +110,11 @@ public:
         // Query from top to buttom
         task::Task<void> query(Key key)
         {
+            if (m_innerIt.index() != 0)
+            {
+                co_return;
+            }
+
             if (m_storage.m_mutableStorage &&
                 co_await queryAndSetIt(m_storage.m_mutableStorage, key))
             {
@@ -144,7 +168,31 @@ public:
     auto read(RANGES::input_range auto&& keys) -> task::AwaitableValue<ReadIterator<decltype(keys)>>
     requires std::is_lvalue_reference_v<decltype(keys)>
     {
-        co_return ReadIterator<decltype(keys), BackendStorage, MutableStorage>(keys, *this);
+        auto it = ReadIterator<decltype(keys), BackendStorage, MutableStorage>(keys, *this);
+        return task::AwaitableValue<decltype(it)>(std::move(it));
+    }
+
+    task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    {
+        if (!m_mutableStorage)
+        {
+            BOOST_THROW_EXCEPTION(NotExistsMutableStorage{});
+        }
+
+        co_await m_mutableStorage->write(
+            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
+        co_return;
+    }
+
+    task::Task<void> remove(RANGES::input_range auto const& keys)
+    {
+        if (!m_mutableStorage)
+        {
+            BOOST_THROW_EXCEPTION(NotExistsMutableStorage{});
+        }
+
+        co_await m_mutableStorage->remove(keys);
+        co_return;
     }
 
     LevelStorage fork() const
@@ -162,7 +210,7 @@ public:
         std::unique_lock lock(m_storageMutex);
         if (m_mutableStorage)
         {
-            BOOST_THROW_EXCEPTION(MutableStorageExists{});
+            BOOST_THROW_EXCEPTION(DuplicateMutableStorage{});
         }
 
         m_mutableStorage = std::make_shared<MutableStorage>(args...);

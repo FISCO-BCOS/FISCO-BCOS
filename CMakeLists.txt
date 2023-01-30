@@ -45,7 +45,6 @@ if(FULLNODE)
     include(ProjectGroupSig)
     include(ProjectSDF)
 
-
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)
@@ -70,6 +69,7 @@ if(FULLNODE)
     add_subdirectory(libtask)
 
     add_subdirectory(transaction-executor)
+    add_subdirectory(transaction-scheduler)
 
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
