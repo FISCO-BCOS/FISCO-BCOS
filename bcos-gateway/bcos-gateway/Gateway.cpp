@@ -174,7 +174,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
         return;
     }
 
-    class Retry : public std::enable_shared_from_this<Retry>
+    class Retry : public std::enable_shared_from_this<Retry>, public ObjectCounter<Retry>
     {
     public:
         // random choose one p2pID to send message
@@ -225,8 +225,8 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
                     {
                         if (self->m_respFunc)
                         {
-                            auto errorPtr = BCOS_ERROR_PTR(
-                                CommonError::NetworkBandwidthOverFlow, e.what());
+                            auto errorPtr =
+                                BCOS_ERROR_PTR(CommonError::NetworkBandwidthOverFlow, e.what());
                             self->m_respFunc(errorPtr);
                         }
 

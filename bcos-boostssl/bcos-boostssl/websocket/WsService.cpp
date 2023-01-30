@@ -17,6 +17,7 @@
  * @author: octopus
  * @date 2021-07-28
  */
+#include "bcos-boostssl/websocket/WsStream.h"
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -88,7 +89,14 @@ void WsService::start()
         reconnect();
     }
 
+    // start connect to server
     reportConnectedNodes();
+
+    // start monitor object alloc
+    m_objMonitor
+        .startMonitor<WsMessage, WsSession, RawWsStream, SslWsStream, WsStreamDelegateBuilder,
+            WsSession::CallBack, WsSession::Message, WsStreamDelegate, WsStreamDelegateBuilder>(
+            10000, "bcos-boostssl");
 
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("start")
                             << LOG_DESC("start websocket service successfully")
@@ -124,6 +132,7 @@ void WsService::stop()
         m_heartbeat->cancel();
     }
 
+    m_objMonitor.stopMonitor();
 
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("stop") << LOG_DESC("stop websocket service successfully");
 }

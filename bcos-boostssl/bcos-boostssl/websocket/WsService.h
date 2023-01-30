@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include <bcos-boostssl/httpserver/HttpServer.h>
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-boostssl/websocket/Common.h>
@@ -245,6 +246,8 @@ private:
     IOServicePool::Ptr m_ioservicePool;
 
     std::shared_ptr<boost::asio::io_context> m_timerIoc;
+
+    bcos::ObjectAllocatorMonitor m_objMonitor;
 };
 
 }  // namespace ws

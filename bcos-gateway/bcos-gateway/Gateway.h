@@ -35,7 +35,9 @@ namespace bcos
 {
 namespace gateway
 {
-class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gateway>
+class Gateway : public GatewayInterface,
+                public std::enable_shared_from_this<Gateway>,
+                public bcos::ObjectCounter<Gateway>
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;

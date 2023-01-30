@@ -18,6 +18,7 @@
  * @date 2021-07-28
  */
 #pragma once
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -44,7 +45,8 @@ namespace ws
 {
 class WsService;
 // The websocket session for connection
-class WsSession : public std::enable_shared_from_this<WsSession>
+class WsSession : public std::enable_shared_from_this<WsSession>,
+                  public bcos::ObjectCounter<WsSession>
 {
 public:
     using Ptr = std::shared_ptr<WsSession>;
@@ -156,8 +158,8 @@ public:
         m_needCheckRspPacket = _needCheckRespPacket;
     }
 
-protected:
-    struct CallBack
+public:
+    struct CallBack : public bcos::ObjectCounter<CallBack>
     {
         using Ptr = std::shared_ptr<CallBack>;
         RespCallBack respCallBack;
@@ -172,12 +174,17 @@ protected:
 
     virtual void asyncRead();
     virtual void asyncWrite(std::shared_ptr<bcos::bytes> _buffer);
-    
+
     virtual void send(std::shared_ptr<bcos::bytes> _buffer);
 
     // async read
     virtual void onReadPacket(boost::beast::flat_buffer& _buffer);
     void onWritePacket();
+
+    struct Message : public bcos::ObjectCounter<Message>
+    {
+        std::shared_ptr<bcos::bytes> buffer;
+    };
 
 protected:
     // flag for message that need to check respond packet like p2pmessage
@@ -217,12 +224,6 @@ protected:
     std::shared_ptr<bcos::ThreadPool> m_threadPool;
     // ioc
     std::shared_ptr<boost::asio::io_context> m_ioc;
-
-    struct Message
-    {
-        std::shared_ptr<bcos::bytes> buffer;
-    };
-
     // send message queue
     mutable bcos::SharedMutex x_writeQueue;
     std::priority_queue<std::shared_ptr<Message>> m_writeQueue;
@@ -234,7 +235,7 @@ class WsSessionFactory
 public:
     using Ptr = std::shared_ptr<WsSessionFactory>;
     WsSessionFactory() = default;
-    virtual ~WsSessionFactory() {}
+    virtual ~WsSessionFactory() = default;
 
 public:
     virtual WsSession::Ptr createSession(std::string _moduleName)
