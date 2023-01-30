@@ -116,6 +116,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             /// return early when the certificate is invalid
             if (!preverified)
             {
+                HOST_LOG(DEBUG) << LOG_DESC("ssl handshake certificate verify failed")
+                                << LOG_KV("preverified", preverified);
                 return false;
             }
             /// get the object points to certificate
