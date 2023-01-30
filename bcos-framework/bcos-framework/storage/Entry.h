@@ -22,7 +22,8 @@ namespace bcos::storage
 {
 
 template <class Input>
-concept EntryBufferInput = std::same_as<Input, std::string_view> || std::same_as<Input, std::string> ||
+concept EntryBufferInput =
+    std::same_as<Input, std::string_view> || std::same_as<Input, std::string> ||
     std::same_as<Input, std::vector<char>> || std::same_as<Input, std::vector<unsigned char>>;
 
 class Entry
@@ -45,8 +46,9 @@ public:
 
     using SBOBuffer = std::array<char, SMALL_SIZE>;
 
-    using ValueType = std::variant<SBOBuffer, std::string, std::vector<unsigned char>, std::vector<char>,
-        std::shared_ptr<std::string>, std::shared_ptr<std::vector<unsigned char>>, std::shared_ptr<std::vector<char>>>;
+    using ValueType = std::variant<SBOBuffer, std::string, std::vector<unsigned char>,
+        std::vector<char>, std::shared_ptr<std::string>,
+        std::shared_ptr<std::vector<unsigned char>>, std::shared_ptr<std::vector<char>>>;
 
     Entry() = default;
     Entry(const Entry&) = default;
@@ -55,17 +57,20 @@ public:
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
     ~Entry() noexcept = default;
 
-    template <typename Out, typename InputArchive = boost::archive::binary_iarchive, int flag = ARCHIVE_FLAG>
+    template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
+        int flag = ARCHIVE_FLAG>
     void getObject(Out& out) const
     {
         auto view = get();
-        boost::iostreams::stream<boost::iostreams::array_source> inputStream(view.data(), view.size());
+        boost::iostreams::stream<boost::iostreams::array_source> inputStream(
+            view.data(), view.size());
         InputArchive archive(inputStream, flag);
 
         archive >> out;
     }
 
-    template <typename Out, typename InputArchive = boost::archive::binary_iarchive, int flag = ARCHIVE_FLAG>
+    template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
+        int flag = ARCHIVE_FLAG>
     Out getObject() const
     {
         Out out;
@@ -74,11 +79,13 @@ public:
         return out;
     }
 
-    template <typename In, typename OutputArchive = boost::archive::binary_oarchive, int flag = ARCHIVE_FLAG>
+    template <typename In, typename OutputArchive = boost::archive::binary_oarchive,
+        int flag = ARCHIVE_FLAG>
     void setObject(const In& in)
     {
         std::string value;
-        boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
+        boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
+            value);
         OutputArchive archive(outputStream, flag);
 
         archive << in;
@@ -93,8 +100,9 @@ public:
     {
         if (index > 0)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(
-                -1, "Get field index: " + boost::lexical_cast<std::string>(index) + " failed, index out of range"));
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(-1, "Get field index: " + boost::lexical_cast<std::string>(index) +
+                                   " failed, index out of range"));
         }
 
         return get();
@@ -105,8 +113,9 @@ public:
     {
         if (index > 0)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(
-                -1, "Set field index: " + boost::lexical_cast<std::string>(index) + " failed, index out of range"));
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(-1, "Set field index: " + boost::lexical_cast<std::string>(index) +
+                                   " failed, index out of range"));
         }
 
         set(std::forward<T>(input));
@@ -182,7 +191,8 @@ public:
     {
         if (values.size() != 1)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(StorageError::UnknownEntryType, "Import fields not equal to 1"));
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(StorageError::UnknownEntryType, "Import fields not equal to 1"));
         }
 
         setField(0, std::move(*values.begin()));
@@ -195,8 +205,8 @@ public:
     }
 
     bool valid() const { return m_status == Status::NORMAL; }
-    crypto::HashType hash(std::string_view table, std::string_view key, const bcos::crypto::Hash::Ptr& hashImpl,
-        uint32_t blockVersion) const
+    crypto::HashType hash(std::string_view table, std::string_view key,
+        const bcos::crypto::Hash::Ptr& hashImpl, uint32_t blockVersion) const
     {
         bcos::crypto::HashType entryHash(0);
         if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
@@ -218,8 +228,9 @@ public:
                         if (c_fileLogLevel <= TRACE)
                         {
                             STORAGE_LOG(TRACE)
-                                << "Entry hash, dirty entry: " << table << " | " << toHex(key) << " | " << toHex(table)
-                                << toHex(key) << toHex(data) << LOG_KV("hash", entryHash.abridged());
+                                << "Entry hash, dirty entry: " << table << " | " << toHex(key)
+                                << " | " << toHex(table) << toHex(key) << toHex(data)
+                                << LOG_KV("hash", entryHash.abridged());
                         }
                         break;
                     }
@@ -228,15 +239,16 @@ public:
                         hasher.final(entryHash);
                         if (c_fileLogLevel <= TRACE)
                         {
-                            STORAGE_LOG(TRACE) << "Entry hash, deleted entry: " << table << " | " << toHex(key)
-                                               << LOG_KV("hash", entryHash.abridged());
+                            STORAGE_LOG(TRACE)
+                                << "Entry hash, deleted entry: " << table << " | " << toHex(key)
+                                << LOG_KV("hash", entryHash.abridged());
                         }
                         break;
                     }
                     default:
                     {
-                        STORAGE_LOG(DEBUG)
-                            << "Entry hash, clean entry: " << table << " | " << toHex(key) << " | " << (int)m_status;
+                        STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | "
+                                           << toHex(key) << " | " << (int)m_status;
                         break;
                     }
                     }
@@ -252,8 +264,9 @@ public:
                 entryHash = hashImpl->hash(ref);
                 if (c_fileLogLevel <= TRACE)
                 {
-                    STORAGE_LOG(TRACE) << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
-                                       << toHex(value) << LOG_KV("hash", entryHash.abridged());
+                    STORAGE_LOG(TRACE)
+                        << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
+                        << toHex(value) << LOG_KV("hash", entryHash.abridged());
                 }
             }
             else if (m_status == Entry::DELETED)
@@ -261,14 +274,14 @@ public:
                 entryHash = bcos::crypto::HashType(0x1);
                 if (c_fileLogLevel <= TRACE)
                 {
-                    STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | " << toHex(key)
-                                       << LOG_KV("hash", entryHash.abridged());
+                    STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
+                                       << toHex(key) << LOG_KV("hash", entryHash.abridged());
                 }
             }
             else
             {
-                STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | " << toHex(key) << " | "
-                                   << (int)m_status;
+                STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | "
+                                   << toHex(key) << " | " << (int)m_status;
             }
         }
         return entryHash;

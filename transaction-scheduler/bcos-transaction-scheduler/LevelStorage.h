@@ -1,6 +1,7 @@
 #pragma once
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <boost/throw_exception.hpp>
+#include <type_traits>
 
 namespace bcos::transaction_scheduler
 {
@@ -16,7 +17,6 @@ private:
     std::shared_ptr<Storage> m_mutableStorage;
     std::list<std::shared_ptr<Storage>> m_immutableStorages;  // Read only storages
     BackendStorage& m_backendStorage;                         // Backend storage
-
     std::mutex m_storageMutex;
 
     template <transaction_executor::StateStorage ReadableStorage>
@@ -28,8 +28,7 @@ private:
     }
 
 public:
-    LevelStorage(BackendStorage& backendStorage) : m_backendStorage(backendStorage) {}
-
+    template <class Range>
     class ReadIterator
     {
     public:
@@ -37,13 +36,25 @@ public:
         using Key = const transaction_executor::StateKey&;
         using Value = const transaction_executor::StateValue&;
 
+        task::AwaitableValue<bool> next() & {}
         task::Task<bool> hasValue() const { co_return true; }
-        task::Task<bool> next() & {}
         task::Task<Key> key() const {}
         task::Task<Value> value() const {}
 
         void release() {}
+
+    private:
+        std::vector<Key>
     };
+    LevelStorage(BackendStorage& backendStorage) : m_backendStorage(backendStorage) {}
+
+    auto read(RANGES::input_range auto keys) -> ReadIterator
+    {
+        if (m_mutableStorage)
+        {
+            auto it = m_mutableStorage->read(keys);
+        }
+    }
 
     LevelStorage fork()
     {
@@ -82,14 +93,5 @@ public:
     }
 
     void mergeAndPopImmutableBack() {}
-
-    auto read(RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(m_mutableStorage.read(keys))>>
-    {
-        if (m_mutableStorage)
-        {
-            auto it = m_mutableStorage->read(keys);
-        }
-    }
 };
 }  // namespace bcos::transaction_scheduler

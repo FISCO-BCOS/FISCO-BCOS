@@ -43,7 +43,8 @@ auto getAwaitable(auto&& task)
 }
 
 template <class Awaitable>
-concept IsAwaitable = HasADLCoAwait<Awaitable> || HasMemberCoAwait<Awaitable> || HasAwaitable<Awaitable>;
+concept IsAwaitable =
+    HasADLCoAwait<Awaitable> || HasMemberCoAwait<Awaitable> || HasAwaitable<Awaitable>;
 
 template <class Task>
 requires IsAwaitable<Task>

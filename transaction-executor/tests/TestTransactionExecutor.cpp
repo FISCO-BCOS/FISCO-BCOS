@@ -33,7 +33,6 @@ BOOST_AUTO_TEST_CASE(execute)
         bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory(cryptoSuite);
 
         bcos::transaction_executor::TransactionExecutorImpl executor(storage, receiptFactory);
-
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
 

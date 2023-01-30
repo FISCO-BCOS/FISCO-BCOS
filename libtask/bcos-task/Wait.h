@@ -4,6 +4,7 @@
 #include <exception>
 #include <future>
 #include <iostream>
+#include <type_traits>
 #include <variant>
 
 namespace bcos::task
@@ -52,7 +53,8 @@ void wait(auto&& task) requires std::is_rvalue_reference_v<decltype(task)>
     waitTask.start();
 }
 
-auto syncWait(auto&& task) requires std::is_rvalue_reference_v<decltype(task)>
+auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(task)>>
+requires std::is_rvalue_reference_v<decltype(task)>
 {
     using Task = std::remove_cvref_t<decltype(task)>;
     std::promise<AwaitableReturnType<Task>> promise;
