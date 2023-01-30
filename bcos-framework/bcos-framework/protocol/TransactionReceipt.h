@@ -56,5 +56,5 @@ using ReceiptsPtr = std::shared_ptr<Receipts>;
 using ReceiptsConstPtr = std::shared_ptr<const Receipts>;
 
 template <class T>
-concept IsTransactionReceipt = std::derived_from<T, TransactionReceipt>;
+concept IsTransactionReceipt = std::derived_from<std::remove_cvref_t<T>, TransactionReceipt>;
 }  // namespace bcos::protocol

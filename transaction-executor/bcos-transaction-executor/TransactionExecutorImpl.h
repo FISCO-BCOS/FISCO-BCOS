@@ -40,7 +40,7 @@ public:
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
-                .gas = 30 * 10000,
+                .gas = 3000 * 10000,  // TODO: use arg
                 .recipient = toAddress,
                 .destination_ptr = nullptr,
                 .destination_len = 0,

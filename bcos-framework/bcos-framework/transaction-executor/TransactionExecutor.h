@@ -24,9 +24,8 @@ template <class TransactionExecutorType>
 concept TransactionExecutor = requires(TransactionExecutorType executor,
     const protocol::BlockHeader& blockHeader, const protocol::Transaction& transaction)
 {
-    requires std::same_as<
-        typename task::AwaitableReturnType<decltype(executor.execute(blockHeader, transaction, 0))>,
-        protocol::TransactionReceipt>;
+    requires protocol::IsTransactionReceipt<typename task::AwaitableReturnType<
+        decltype(executor.execute(blockHeader, transaction, 0))>>;
 };
 
 // All auto interfaces is awaitable
