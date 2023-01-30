@@ -99,6 +99,7 @@
 #include <shared_mutex>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 
@@ -129,7 +130,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_cachedStorage(std::move(cachedStorage)),
     m_backendStorage(std::move(backendStorage)),
     m_executionMessageFactory(std::move(executionMessageFactory)),
-    m_stateStorageFactory(stateStorageFactory),
+    m_stateStorageFactory(std::move(stateStorageFactory)),
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
     m_isWasm(isWasm),
@@ -139,8 +140,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 {
     assert(m_backendStorage);
     m_ledgerCache->fetchCompatibilityVersion();
-    m_ledgerCache->fetchAuthCheckStatus();
-    m_isAuthCheck = m_isAuthCheck || m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
 #ifdef WITH_WASM
@@ -149,6 +148,12 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
     setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
+    if (versionCompareTo(
+            m_ledgerCache->ledgerConfig()->compatibilityVersion(), BlockVersion::V3_3_VERSION) >= 0)
+    {
+        m_ledgerCache->fetchAuthCheckStatus();
+        m_isAuthCheck = m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+    }
     assert(!m_constantPrecompiled->empty());
     assert(m_builtInPrecompiled);
     start();
@@ -242,7 +247,7 @@ void TransactionExecutor::initEvmEnvironment()
     m_constantPrecompiled->insert(
         {BFS_ADDRESS, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl)});
     /// auth precompiled
-    if (m_isAuthCheck)
+    if (m_isAuthCheck || versionCompareTo(m_blockVersion, BlockVersion::V3_3_VERSION) >= 0)
     {
         m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
             std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, m_isWasm)});
@@ -1859,7 +1864,12 @@ void TransactionExecutor::commit(
         m_ledgerCache->fetchCompatibilityVersion();
 
         setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
-        m_ledgerCache->fetchAuthCheckStatus();
+        if (versionCompareTo(m_ledgerCache->ledgerConfig()->compatibilityVersion(),
+                BlockVersion::V3_3_VERSION) >= 0)
+        {
+            m_ledgerCache->fetchAuthCheckStatus();
+            m_isAuthCheck = m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+        }
         removeCommittedState();
 
         callback(nullptr);

@@ -169,12 +169,13 @@ protected:
         _callParameters.data = std::move(codecOutput);
     }
 
-    inline std::string getContractTableName(
-        const std::string_view& _address, bool isWasm = false, uint32_t version = 0)
+    inline std::string getContractTableName(const std::string_view& _address, bool isWasm = false)
     {
         auto blockContext = m_blockContext.lock();
+        auto version = blockContext->blockVersion();
 
-        if (blockContext->isAuthCheck())
+        if (blockContext->isAuthCheck() ||
+            protocol::versionCompareTo(version, protocol::BlockVersion::V3_3_VERSION) >= 0)
         {
             if (_address.starts_with(precompiled::SYS_ADDRESS_PREFIX))
             {

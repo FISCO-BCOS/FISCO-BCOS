@@ -56,7 +56,7 @@ private:
     std::unordered_map<std::string, std::function<void(int64_t, uint32_t)>> m_sysValueCmp;
     const std::set<std::string_view> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,
         bcos::ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, bcos::ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
-        bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION};
+        bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION, bcos::ledger::SYSTEM_KEY_AUTH_CHECK_STATUS};
 };
 
 }  // namespace bcos::precompiled
