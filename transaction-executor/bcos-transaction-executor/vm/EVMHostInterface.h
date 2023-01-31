@@ -96,27 +96,13 @@ evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
     return toEvmC(task::syncWait(hostContext.codeHashAt(*_addr)));
 }
 
-/**
- * @brief : copy code between [_codeOffset, _codeOffset + _bufferSize] to
- * bufferData if _codeOffset is larger than code length, then return 0; if
- * _codeOffset + _bufferSize is larger than the end of the code, than only copy
- * [_codeOffset, _codeEnd]
- * @param _context : evm context, including to myAddress, caller, gas, origin,
- * value, etc.
- * @param _addr: the evmc-address of the code
- * @param _codeOffset: the offset begin to copy code
- * @param _bufferData : buffer store the copied code
- * @param _bufferSize : code size to copy
- * @return size_t : return copied code size(in byte)
- */
 template <class HostContextType>
 size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_t* _bufferData,
     size_t _bufferSize)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
 
-    task::syncWait(hostContext.setCode(
-        bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize)));
+    task::syncWait(hostContext.setCode(bytesConstRef((bcos::byte*)_bufferData, _bufferSize)));
     return _bufferSize;
 }
 

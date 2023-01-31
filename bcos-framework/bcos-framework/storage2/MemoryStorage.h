@@ -215,7 +215,7 @@ public:
         bool m_started = false;
     };
 
-    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto const& keys) &
+    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto const& keys)
     {
         task::AwaitableValue<ReadIterator> outputAwaitable(ReadIterator{});
         ReadIterator& output = outputAwaitable.value();

@@ -1,6 +1,7 @@
 #pragma once
 #include "Task.h"
 #include "Trait.h"
+#include <coroutine>
 #include <exception>
 #include <future>
 #include <iostream>
@@ -10,47 +11,9 @@
 namespace bcos::task
 {
 
-class WaitTask
-{
-public:
-    struct promise_type
-    {
-        CO_STD::suspend_always initial_suspend() noexcept { return {}; }
-        auto final_suspend() noexcept
-        {
-            struct FinalAwaitable
-            {
-                bool await_ready() noexcept { return false; }
-                void await_suspend(CO_STD::coroutine_handle<promise_type> handle) noexcept
-                {
-                    handle.destroy();
-                }
-                constexpr void await_resume() noexcept {}
-            };
-            return FinalAwaitable{};
-        }
-        auto get_return_object()
-        {
-            return CO_STD::coroutine_handle<promise_type>::from_promise(*this);
-        }
-        void unhandled_exception() {}
-        void return_void() noexcept {}
-    };
-
-    WaitTask(CO_STD::coroutine_handle<promise_type> handle) noexcept : m_handle(handle) {}
-    void start() { m_handle.resume(); }
-
-private:
-    CO_STD::coroutine_handle<promise_type> m_handle;
-};
-
 void wait(auto&& task) requires std::is_rvalue_reference_v<decltype(task)>
 {
-    auto waitTask = []([[maybe_unused]] decltype(task) task) -> WaitTask {
-        co_await task;
-        co_return;
-    }(std::forward<decltype(task)>(task));
-    waitTask.start();
+    task.start();
 }
 
 auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(task)>>
@@ -60,7 +23,8 @@ requires std::is_rvalue_reference_v<decltype(task)>
     std::promise<AwaitableReturnType<Task>> promise;
     auto future = promise.get_future();
 
-    auto waitTask = [](Task&& task, std::promise<typename Task::ReturnType>& promise) -> WaitTask {
+    auto waitTask = [](Task&& task,
+                        std::promise<typename Task::ReturnType>& promise) -> task::Task<void> {
         try
         {
             if constexpr (std::is_void_v<typename Task::ReturnType>)

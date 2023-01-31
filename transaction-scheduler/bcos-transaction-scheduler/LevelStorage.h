@@ -17,8 +17,8 @@ struct NotExistsMutableStorage : public bcos::Error
 template <class Storage, class Key>
 struct StorageReadIteratorTrait
 {
-    using type = typename task::AwaitableReturnType<decltype(std::declval<Storage>->read(
-        std::declval<Key>()))>;
+    using type = typename task::AwaitableReturnType<decltype(std::declval<Storage>().read(
+        storage2::single<Key>(std::declval<Key>())))>;
 };
 template <class Storage, class Key>
 using StorageReadIteratorType = typename StorageReadIteratorTrait<Storage, Key>::type;
@@ -77,7 +77,7 @@ public:
                 },
                 m_innerIt);
         }
-        task::Task<Key> key() const
+        task::Task<Key> key()
         {
             co_await query(*m_keyRangeIt);
             co_return std::visit(
@@ -90,7 +90,7 @@ public:
                 },
                 m_innerIt);
         }
-        task::Task<Value> value() const
+        task::Task<Value> value()
         {
             co_await query(*m_keyRangeIt);
             co_return co_await std::visit(
@@ -149,7 +149,7 @@ public:
             co_await it.next();
             if (co_await it.hasValue())
             {
-                m_innerIt.template emplace<decltype(it)>(std::move(it));
+                m_innerIt = std::move(it);
                 co_return true;
             }
             co_return false;
@@ -165,7 +165,8 @@ public:
     };
     LevelStorage(BackendStorage& backendStorage) : m_backendStorage(backendStorage) {}
 
-    auto read(RANGES::input_range auto&& keys) -> task::AwaitableValue<ReadIterator<decltype(keys)>>
+    auto read(RANGES::input_range auto&& keys)
+        -> task::AwaitableValue<ReadIterator<decltype(keys), BackendStorage, MutableStorage>>
     requires std::is_lvalue_reference_v<decltype(keys)>
     {
         auto it = ReadIterator<decltype(keys), BackendStorage, MutableStorage>(keys, *this);

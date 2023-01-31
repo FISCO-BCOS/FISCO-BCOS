@@ -35,6 +35,7 @@
     "protobuf",
     "cryptopp",
     "fmt",
+    "benchmark",
     {
       "name": "tarscpp",
       "version>=": "3.0.3-m"

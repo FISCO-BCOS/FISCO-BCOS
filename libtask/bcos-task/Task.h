@@ -4,6 +4,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <concepts>
+#include <coroutine>
 #include <exception>
 #include <functional>
 #include <type_traits>
@@ -44,7 +45,7 @@ public:
         bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
 
         template <class Promise>
-        auto await_suspend(CO_STD::coroutine_handle<Promise> handle)
+        std::coroutine_handle<> await_suspend(CO_STD::coroutine_handle<Promise> handle)
         {
             m_handle.promise().m_continuationHandle = handle;
             m_handle.promise().m_awaitable = this;
@@ -94,7 +95,7 @@ public:
                 {
                     auto continuationHandle = handle.promise().m_continuationHandle;
                     handle.destroy();
-                    return continuationHandle;
+                    return continuationHandle ? continuationHandle : CO_STD::noop_coroutine();
                 }
                 constexpr void await_resume() noexcept {}
 
@@ -146,6 +147,7 @@ public:
         task.m_handle = nullptr;
     }
     ~Task() noexcept = default;
+    void start() { m_handle.resume(); }
 
 private:
     CO_STD::coroutine_handle<promise_type> m_handle;

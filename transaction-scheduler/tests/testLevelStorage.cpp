@@ -45,11 +45,20 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
 {
     task::syncWait([this]() -> task::Task<void> {
         levelStorage.newMutable();
+        StateKey key{storage2::string_pool::makeStringID(tableNamePool, "test_table"), "test_key"};
 
         storage::Entry entry;
-        co_await storage2::writeOne(levelStorage,
-            StateKey{storage2::string_pool::makeStringID(tableNamePool, "test_table"), "test_key"},
-            std::move(entry));
+        co_await storage2::writeOne(levelStorage, key, std::move(entry));
+
+        RANGES::single_view keysView(key);
+        auto it = co_await levelStorage.read(keysView);
+
+        co_await it.next();
+        BOOST_CHECK_EQUAL(co_await it.key(), key);
+        BOOST_CHECK_EQUAL(co_await it.value(), entry);
+
+        // constexpr static bool isReadable = ReadableStorage<decltype(levelStorage), StateKey>;
+        // co_await storage2::readOne(levelStorage, key);
 
         co_return;
     }());
