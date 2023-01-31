@@ -130,8 +130,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
         }
         else
         {
-            if (m_scheduler->m_isAuthCheck && !m_staticCall &&
-                isSysContractDeploy(m_block->blockHeaderConst()->number()) &&
+            if (!m_staticCall && isSysContractDeploy(m_block->blockHeaderConst()->number()) &&
                 tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
             {
                 // if enable auth check, and first deploy auth contract
@@ -1293,7 +1292,7 @@ void BlockExecutive::batchBlockCommit(
         params, [rollbackVersion, status, this, callback](Error::Ptr&& error, uint64_t commitTS) {
             if (error)
             {
-//#define COMMIT_FAILED_NEED_ROLLBACK
+// #define COMMIT_FAILED_NEED_ROLLBACK
 #ifdef COMMIT_FAILED_NEED_ROLLBACK
                 SCHEDULER_LOG(ERROR)
                     << BLOCK_NUMBER(number()) << "Commit node storage error! need rollback"

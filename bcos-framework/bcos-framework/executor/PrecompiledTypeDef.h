@@ -26,7 +26,7 @@ namespace bcos
 {
 /// System contract
 constexpr const int SYS_CONTRACT_DEPLOY_NUMBER = 0;
-inline bool isSysContractDeploy(protocol::BlockNumber _number)
+constexpr inline bool isSysContractDeploy(protocol::BlockNumber _number)
 {
     return _number == SYS_CONTRACT_DEPLOY_NUMBER;
 }

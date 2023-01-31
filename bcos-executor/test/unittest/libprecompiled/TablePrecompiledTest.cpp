@@ -1241,11 +1241,9 @@ BOOST_AUTO_TEST_CASE(updateTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1350,11 +1348,9 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {

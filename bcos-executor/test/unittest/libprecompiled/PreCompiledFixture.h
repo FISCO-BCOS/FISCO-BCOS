@@ -94,8 +94,14 @@ public:
         blockFactory = createBlockFactory(cryptoSuite);
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
         header->setNumber(1);
-        ledger = std::make_shared<MockLedger>();
+        ledger = std::make_shared<MockLedger>(storage);
         ledger->setBlockNumber(header->number() - 1);
+        std::promise<bool> p;
+        Entry authEntry;
+        authEntry.setObject(SystemConfigEntry(_isCheckAuth ? "1" : "0", 0));
+        storage->asyncSetRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_AUTH_CHECK_STATUS,
+            std::move(authEntry), [&p](auto&& e) { p.set_value(true); });
+        p.get_future().get();
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);

@@ -54,9 +54,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_storage(std::move(storage)),
     m_hashImpl(_hashImpl),
     m_ledgerCache(ledgerCache)
-{
-    m_isAuthCheck = m_isAuthCheck || m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
-}
+{}
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
