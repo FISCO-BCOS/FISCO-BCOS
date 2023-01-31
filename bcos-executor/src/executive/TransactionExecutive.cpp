@@ -367,7 +367,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
     auto tableName = getContractTableName(
-        callParameters->codeAddress, blockContext->isWasm(), blockContext->blockVersion());
+        callParameters->codeAddress, blockContext->isWasm(), callParameters->create);
     auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
     extraData->abi = std::move(callParameters->abi);
 
@@ -388,8 +388,12 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         callParameters->abi = std::move(extraData->abi);
         auto sender = callParameters->senderAddress;
         auto response = internalCreate(std::move(callParameters));
-        if (blockContext->isAuthCheck() &&
-            blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+        // 3.1.0 < version < 3.3, authCheck==true, then create
+        // version >= 3.3, always create
+        if ((blockContext->isAuthCheck() &&
+                versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0) ||
+            (!blockContext->isWasm() &&
+                versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0))
         {
             // Create auth table
             creatAuthTable(tableName, response->origin, std::move(sender));
@@ -402,9 +406,10 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         m_storageWrapper->createTable(tableName, STORAGE_VALUE);
         EXECUTIVE_LOG(INFO) << "create contract table " << LOG_KV("table", tableName)
                             << LOG_KV("sender", callParameters->senderAddress);
-        if (blockContext->isAuthCheck())
+        if (blockContext->isAuthCheck() ||
+            versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
         {
-            // Create auth table
+            // Create auth table, always create auth table when version >= 3.3.0
             creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress);
         }
 
@@ -596,10 +601,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
                                   const HostContext& hostContext) -> evmc_message {
             // the block number will be larger than 0,
             // can be controlled by the programmers
-            if (!blockContext.isAuthCheck())
-            {
-                assert(blockContext.number() > 0);
-            }
 
             evmc_call_kind kind = hostContext.isCreate() ? EVMC_CREATE : EVMC_CALL;
             uint32_t flags = hostContext.staticCall() ? EVMC_STATIC : 0;
@@ -1274,8 +1275,8 @@ void TransactionExecutive::creatAuthTable(
 {
     // Create the access table
     //  /sys/ not create
-    if (_tableName.starts_with(USER_SYS_PREFIX) ||
-        getContractTableName(_sender, false).starts_with(USER_SYS_PREFIX))
+    if (_tableName.starts_with(precompiled::SYS_ADDRESS_PREFIX) ||
+        _tableName.starts_with(USER_SYS_PREFIX))
     {
         return;
     }
@@ -1295,7 +1296,7 @@ void TransactionExecutive::creatAuthTable(
                          << LOG_KV("admin", admin);
     auto table = m_storageWrapper->createTable(authTableName, STORAGE_VALUE);
 
-    if (table)
+    if (table) [[likely]]
     {
         tool::BfsFileFactory::buildAuth(table.value(), admin);
     }

@@ -183,45 +183,6 @@ public:
         return result2;
     };
 
-    ExecutionMessage::UniquePtr list(
-        protocol::BlockNumber _number, std::string const& path, int _errorCode = 0)
-    {
-        bytes in = codec->encodeWithSig("list(string)", path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
-        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-        auto hash = tx->hash();
-        txpool->hash2Transaction.emplace(hash, tx);
-        auto params2 = std::make_unique<NativeExecutionMessage>();
-        params2->setTransactionHash(hash);
-        params2->setContextID(1000);
-        params2->setSeq(1000);
-        params2->setDepth(0);
-        params2->setFrom(sender);
-        params2->setTo(isWasm ? BFS_NAME : BFS_ADDRESS);
-        params2->setOrigin(sender);
-        params2->setStaticCall(false);
-        params2->setGasAvailable(gas);
-        params2->setData(std::move(in));
-        params2->setType(NativeExecutionMessage::TXHASH);
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise2.set_value(std::move(result));
-            });
-        auto result2 = executePromise2.get_future().get();
-        if (_errorCode != 0)
-        {
-            std::vector<BfsTuple> empty;
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode), empty));
-        }
-
-        commitBlock(_number);
-        return result2;
-    };
-
     ExecutionMessage::UniquePtr openTable(
         protocol::BlockNumber _number, std::string const& _path, int _errorCode = 0)
     {
@@ -1000,11 +961,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longKey = "0";
-        for (int j = 0; j < USER_TABLE_KEY_VALUE_MAX_LENGTH; ++j)
-        {
-            longKey += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_KEY_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longKey = ss.str();
         auto r1 = insert(number++, longKey, {"test1", "test2"}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1013,11 +972,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "id111", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1099,11 +1056,9 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrderTest)
     // insert too long value
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "3", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1163,11 +1118,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longKey = "0";
-        for (int j = 0; j < USER_TABLE_KEY_VALUE_MAX_LENGTH; ++j)
-        {
-            longKey += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_KEY_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longKey = ss.str();
         auto r1 = insert(number++, longKey, {"test1", "test2"}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1176,11 +1129,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "id111", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1263,11 +1214,9 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrdeWasmTest)
     // insert too long value
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "3", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1529,11 +1478,9 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1594,11 +1541,9 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1697,11 +1642,9 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderWasmTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1763,11 +1706,9 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderWasmTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {

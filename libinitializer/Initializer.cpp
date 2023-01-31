@@ -441,7 +441,8 @@ void Initializer::initSysContract()
             SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, block);
     }
 
-    if (!m_nodeConfig->isWasm() && m_nodeConfig->isAuthCheck())
+    if ((!m_nodeConfig->isWasm() && m_nodeConfig->isAuthCheck()) ||
+        versionCompareTo(m_nodeConfig->compatibilityVersion(), BlockVersion::V3_3_VERSION) >= 0)
     {
         // add auth deploy func here
         AuthInitializer::init(
