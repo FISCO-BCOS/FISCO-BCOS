@@ -203,7 +203,7 @@ void TableManagerPrecompiled::createKVTable(
             "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
-        _callParameters->m_gasLeft - gasPricer->calTotalGas(), false, std::move(abi));
+        _callParameters->m_gasLeft - gasPricer->calTotalGas(), true, std::move(abi));
 
     if (response->status != (int32_t)TransactionStatus::None)
     {
@@ -427,7 +427,7 @@ void TableManagerPrecompiled::externalCreateTable(
             "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
-        _callParameters->m_gasLeft - gasPricer->calTotalGas(), false, std::move(abi));
+        _callParameters->m_gasLeft - gasPricer->calTotalGas(), true, std::move(abi));
 
     if (response->status != (int32_t)TransactionStatus::None)
     {
