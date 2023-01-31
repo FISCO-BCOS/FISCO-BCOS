@@ -13,6 +13,9 @@ struct DuplicateMutableStorage : public bcos::Error
 struct NotExistsMutableStorage : public bcos::Error
 {
 };
+struct NotExistsImmutableStorage : public bcos::Error
+{
+};
 
 template <class Storage, class Key>
 struct StorageReadIteratorTrait
@@ -67,7 +70,7 @@ public:
         task::Task<bool> hasValue() const
         {
             co_await query(*m_keyRangeIt);
-            co_return std::visit(
+            co_return co_await std::visit(
                 [](auto&& iterator) -> task::Task<bool> {
                     using IteratorType = std::remove_cvref_t<decltype(iterator)>;
                     if constexpr (!std::is_same_v<std::monostate, IteratorType>)
@@ -80,7 +83,7 @@ public:
         task::Task<Key> key()
         {
             co_await query(*m_keyRangeIt);
-            co_return std::visit(
+            co_return co_await std::visit(
                 [](auto&& iterator) -> task::Task<Key> {
                     using IteratorType = std::remove_cvref_t<decltype(iterator)>;
                     if constexpr (!std::is_same_v<std::monostate, IteratorType>)
@@ -116,14 +119,14 @@ public:
             }
 
             if (m_storage.m_mutableStorage &&
-                co_await queryAndSetIt(m_storage.m_mutableStorage, key))
+                co_await queryAndSetIt(*m_storage.m_mutableStorage, key))
             {
                 co_return;
             }
 
             for (auto& storage : m_storage.m_immutableStorages)
             {
-                if (co_await queryAndSetIt(storage, key))
+                if (co_await queryAndSetIt(*storage, key))
                 {
                     co_return;
                 }
@@ -145,11 +148,11 @@ public:
 
         task::Task<bool> queryAndSetIt(auto& storage, auto const& key)
         {
-            auto it = co_await storage->read(storage2::single(key));
+            auto it = co_await storage.read(storage2::single(key));
             co_await it.next();
             if (co_await it.hasValue())
             {
-                m_innerIt = std::move(it);
+                m_innerIt.template emplace<decltype(it)>(std::move(it));
                 co_return true;
             }
             co_return false;
@@ -163,7 +166,15 @@ public:
             m_innerIt;
         bool m_started = false;
     };
-    LevelStorage(BackendStorage& backendStorage) : m_backendStorage(backendStorage) {}
+    LevelStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
+      : m_backendStorage(backendStorage)
+    {}
+
+    // template <typename std::enable_if_t<withCacheStorage>>
+    // LevelStorage(
+    //     BackendStorage& backendStorage, std::add_lvalue_reference_t<CachedStorage> cacheStorage)
+    //   : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
+    // {}
 
     auto read(RANGES::input_range auto&& keys)
         -> task::AwaitableValue<ReadIterator<decltype(keys), BackendStorage, MutableStorage>>
@@ -221,6 +232,10 @@ public:
 
     void pushMutableToImmutableFront()
     {
+        if (!m_mutableStorage)
+        {
+            BOOST_THROW_EXCEPTION(NotExistsMutableStorage{});
+        }
         std::unique_lock lock(m_storageMutex);
         m_immutableStorages.push_front(m_mutableStorage);
         m_mutableStorage.reset();
@@ -229,6 +244,10 @@ public:
     void popImmutableFront()
     {
         std::unique_lock lock(m_storageMutex);
+        if (m_immutableStorages.empty())
+        {
+            BOOST_THROW_EXCEPTION(NotExistsImmutableStorage{});
+        }
         m_immutableStorages.pop_front();
     }
 

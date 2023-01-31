@@ -151,9 +151,33 @@ static void call_delegateCall(benchmark::State& state)
     }(state));
 }
 
+static void call_deployAndCall(benchmark::State& state)
+{
+    Fixture fixture;
+    std::string contractAddress = fixture.deployContract();
+
+    bcos::codec::abi::ContractABICodec abiCodec(
+        bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+    bcostars::protocol::TransactionImpl transaction1(
+        [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+    auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(999));
+    transaction1.mutableInner().data.input.assign(input.begin(), input.end());
+    transaction1.mutableInner().data.to = contractAddress;
+
+    task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        int contextID = 0;
+        for (auto const& it : state)
+        {
+            [[maybe_unused]] auto receipt =
+                co_await fixture.executor.execute(fixture.blockHeader, transaction1, ++contextID);
+        }
+    }(state));
+}
+
 BENCHMARK(create);
 BENCHMARK(call_setInt);
 BENCHMARK(call_setString);
 BENCHMARK(call_delegateCall);
+BENCHMARK(call_deployAndCall);
 
 BENCHMARK_MAIN();

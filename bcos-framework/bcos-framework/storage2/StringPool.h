@@ -180,8 +180,7 @@ struct hash<bcos::storage2::string_pool::StringID>
 {
     size_t operator()(bcos::storage2::string_pool::StringID const& stringID)
     {
-        size_t hash = 0;
-        boost::hash_combine(hash, stringID.m_pool);
+        auto hash = (size_t)stringID.m_pool;
         boost::hash_combine(hash, stringID.m_stringPoolID);
         return hash;
     }

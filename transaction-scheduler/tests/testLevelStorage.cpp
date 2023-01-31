@@ -9,13 +9,24 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
+template <>
+struct std::hash<StateKey>
+{
+    size_t operator()(const StateKey& key) const
+    {
+        auto const& tableID = std::get<0>(key);
+        return std::hash<TableNameID>{}(tableID);
+    }
+};
+
 class TestLevelStorageFixture
 {
 public:
     using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED)>;
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-        memory_storage::Attribute(memory_storage::ORDERED)>;
+        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
+        std::hash<StateKey>>;
 
     TestLevelStorageFixture() : levelStorage(backendStorage) {}
 
@@ -44,21 +55,29 @@ BOOST_AUTO_TEST_CASE(noMutable)
 BOOST_AUTO_TEST_CASE(readWriteMutable)
 {
     task::syncWait([this]() -> task::Task<void> {
+        BOOST_CHECK_THROW(levelStorage.pushMutableToImmutableFront(), NotExistsMutableStorage);
+
         levelStorage.newMutable();
         StateKey key{storage2::string_pool::makeStringID(tableNamePool, "test_table"), "test_key"};
 
         storage::Entry entry;
-        co_await storage2::writeOne(levelStorage, key, std::move(entry));
+        entry.set("Hello world!");
+        co_await storage2::writeOne(levelStorage, key, entry);
 
         RANGES::single_view keysView(key);
         auto it = co_await levelStorage.read(keysView);
 
         co_await it.next();
-        BOOST_CHECK_EQUAL(co_await it.key(), key);
-        BOOST_CHECK_EQUAL(co_await it.value(), entry);
+        const auto& iteratorKey = co_await it.key();
+        BOOST_CHECK_EQUAL(std::get<0>(iteratorKey), std::get<0>(key));
+        BOOST_CHECK_EQUAL(std::get<1>(iteratorKey), std::get<1>(key));
 
-        // constexpr static bool isReadable = ReadableStorage<decltype(levelStorage), StateKey>;
-        // co_await storage2::readOne(levelStorage, key);
+        const auto& iteratorValue = co_await it.value();
+        BOOST_CHECK_EQUAL(iteratorValue.get(), entry.get());
+
+        BOOST_CHECK_NO_THROW(levelStorage.pushMutableToImmutableFront());
+        BOOST_CHECK_THROW(
+            co_await storage2::writeOne(levelStorage, key, entry), NotExistsMutableStorage);
 
         co_return;
     }());

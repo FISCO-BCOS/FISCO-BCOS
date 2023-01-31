@@ -14,6 +14,7 @@
 #include <forward_list>
 #include <functional>
 #include <mutex>
+#include <range/v3/iterator/basic_iterator.hpp>
 #include <set>
 #include <thread>
 #include <type_traits>
@@ -158,6 +159,13 @@ public:
         using Key = const KeyType&;
         using Value = const ValueType&;
 
+        ReadIterator() = default;
+        ReadIterator(const ReadIterator&) = delete;
+        ReadIterator(ReadIterator&&) noexcept = default;
+        ReadIterator& operator=(const ReadIterator&) = delete;
+        ReadIterator& operator=(ReadIterator&&) noexcept = default;
+        ~ReadIterator() noexcept = default;
+
         task::AwaitableValue<bool> hasValue() const { return {*m_it != nullptr}; }
         task::AwaitableValue<bool> next() &
         {
@@ -235,7 +243,7 @@ public:
                 if (!locks[bucketIndex])
                 {
                     locks[bucketIndex] = true;
-                    output.m_bucketLocks.emplace_front(std::unique_lock(bucket.mutex));
+                    output.m_bucketLocks.emplace_front(bucket.mutex);
                 }
             }
 
