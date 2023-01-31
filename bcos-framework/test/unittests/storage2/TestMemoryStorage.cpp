@@ -2,6 +2,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
+#include <fmt/format.h>
 #include <boost/function.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -11,7 +12,7 @@
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
 
-struct Storage2ImplFixture
+struct MemoryStorageFixture
 {
 };
 
@@ -24,7 +25,7 @@ struct std::hash<std::tuple<std::string, std::string>>
         return hash;
     }
 };
-BOOST_FIXTURE_TEST_SUITE(TestStorage2, Storage2ImplFixture)
+BOOST_FIXTURE_TEST_SUITE(TestMemoryStorage, MemoryStorageFixture)
 
 BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
 {
@@ -179,6 +180,48 @@ BOOST_AUTO_TEST_CASE(mru)
             ++i;
         }
         BOOST_CHECK_EQUAL(i, 10);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(logicalDeletion)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MemoryStorage<int, storage::Entry, Attribute(ORDERED | LOGICAL_DELETION)> storage;
+
+        // Write 100 items
+        co_await storage.write(RANGES::iota_view<int, int>(0, 100),
+            RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](int num) {
+                storage::Entry entry;
+                entry.set(fmt::format("Item: {}", num));
+                return entry;
+            }));
+
+        // Delete half of items
+        co_await storage.remove(RANGES::iota_view<int, int>(0, 50) |
+                                RANGES::views::transform([](int num) { return num * 2; }));
+
+        // Query and check if deleted items
+        int i = 0;
+        auto it = co_await storage.seek(0);
+        while (co_await it.next())
+        {
+            if ((i + 2) % 2 == 0)
+            {
+                BOOST_CHECK(!co_await it.hasValue());
+            }
+            else
+            {
+                BOOST_CHECK(co_await it.hasValue());
+                BOOST_CHECK_EQUAL(co_await it.key(), i);
+                auto const& entry = co_await it.value();
+                BOOST_CHECK_EQUAL(entry.get(), fmt::format("Item: {}", i));
+            }
+            ++i;
+        }
+
+        BOOST_CHECK_EQUAL(i, 100);
+
+        co_return;
     }());
 }
 

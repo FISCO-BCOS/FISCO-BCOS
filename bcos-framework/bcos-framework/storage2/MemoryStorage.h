@@ -32,14 +32,20 @@ concept HasMemberSize = requires(Object object)
     // clang-format on
 };
 
-using Empty = std::monostate;
+struct Empty
+{
+};
+struct Deleted
+{
+};
 
 enum Attribute : int
 {
-    NONE = 0x0,
-    ORDERED = 0x1,
-    CONCURRENT = 0x2,
-    MRU = 0x4
+    NONE = 0,
+    ORDERED = 1,
+    CONCURRENT = 2,
+    MRU = 4,
+    LOGICAL_DELETION = 8,
 };
 
 template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE,
@@ -50,6 +56,8 @@ private:
     constexpr static bool withOrdered = (attribute & Attribute::ORDERED) != 0;
     constexpr static bool withConcurrent = (attribute & Attribute::CONCURRENT) != 0;
     constexpr static bool withMRU = (attribute & Attribute::MRU) != 0;
+    constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
+
     constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets for concurrent, enough?
     constexpr unsigned getBucketSize() { return withConcurrent ? MAX_BUCKETS : 1; }
 
@@ -59,11 +67,13 @@ private:
     using Mutex = std::conditional_t<withConcurrent, std::mutex, Empty>;
     using Lock =
         std::conditional_t<withConcurrent, std::unique_lock<std::mutex>, utilities::NullLock>;
+    using DataValueType =
+        std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
 
     struct Data
     {
         KeyType key;
-        [[no_unique_address]] ValueType value;
+        [[no_unique_address]] DataValueType value;
     };
 
     using IndexType = std::conditional_t<withOrdered,
@@ -166,7 +176,6 @@ public:
         ReadIterator& operator=(ReadIterator&&) noexcept = default;
         ~ReadIterator() noexcept = default;
 
-        task::AwaitableValue<bool> hasValue() const { return {*m_it != nullptr}; }
         task::AwaitableValue<bool> next() &
         {
             if (!m_started)
@@ -177,7 +186,26 @@ public:
             return {(++m_it) != m_iterators.end()};
         }
         task::AwaitableValue<Key> key() const { return {(*m_it)->key}; }
-        task::AwaitableValue<Value> value() const { return {(*m_it)->value}; }
+        task::AwaitableValue<Value> value() const
+        {
+            if constexpr (withLogicalDeletion)
+            {
+                return {std::get<ValueType>((*m_it)->value)};
+            }
+
+            return {(*m_it)->value};
+        }
+        task::AwaitableValue<bool> hasValue() const
+        {
+            if constexpr (withLogicalDeletion)
+            {
+                if (*m_it != nullptr && std::holds_alternative<Deleted>((*m_it)->value))
+                {
+                    return false;
+                }
+            }
+            return {*m_it != nullptr};
+        }
 
         void release()
         {
@@ -212,7 +240,28 @@ public:
             return {(++m_it) != m_end};
         }
         task::AwaitableValue<Key> key() const { return {m_it->key}; }
-        task::AwaitableValue<Value> value() const { return {m_it->value}; }
+        task::AwaitableValue<Value> value() const
+        {
+            if constexpr (withLogicalDeletion)
+            {
+                return {std::get<ValueType>(m_it->value)};
+            }
+            else
+            {
+                return {m_it->value};
+            }
+        }
+        task::AwaitableValue<bool> hasValue() const
+        {
+            if constexpr (withLogicalDeletion)
+            {
+                if (std::holds_alternative<Deleted>(m_it->value))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
 
         void release() { m_bucketLock.unlock(); }
 
@@ -268,7 +317,7 @@ public:
         return outputAwaitable;
     }
 
-    task::AwaitableValue<SeekIterator> seek(auto const& key) & requires(withOrdered)
+    task::AwaitableValue<SeekIterator> seek(auto const& key) requires(withOrdered)
     {
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
@@ -279,7 +328,10 @@ public:
         auto& seekIt = output.value();
         seekIt.m_it = it;
         seekIt.m_end = index.end();
-        seekIt.m_bucketLock = std::move(lock);
+        if constexpr (withConcurrent)
+        {
+            seekIt.m_bucketLock = std::move(lock);
+        }
 
         return output;
     }
@@ -323,7 +375,8 @@ public:
             }
             else
             {
-                it = bucket.get().container.emplace_hint(it, Data{.key = key, .value = value});
+                it = bucket.get().container.emplace_hint(
+                    it, Data{.key = key, .value = std::forward<decltype(value)>(value)});
             }
 
             if constexpr (withMRU)
@@ -347,11 +400,38 @@ public:
             if (it != index.end())
             {
                 auto& existsValue = it->value;
+                if constexpr (withLogicalDeletion)
+                {
+                    if (std::holds_alternative<Deleted>(existsValue))
+                    {
+                        // Already deleted
+                        return {};
+                    }
+                }
+
                 if constexpr (withMRU)
                 {
                     bucket.get().capacity -= getSize(existsValue);
                 }
-                bucket.get().container.erase(it);
+
+                if constexpr (withLogicalDeletion)
+                {
+                    bucket.get().container.modify(it, [](Data& data) mutable {
+                        data.value.template emplace<Deleted>(Deleted{});
+                    });
+                }
+                else
+                {
+                    bucket.get().container.erase(it);
+                }
+            }
+            else
+            {
+                if constexpr (withLogicalDeletion)
+                {
+                    it = bucket.get().container.emplace_hint(
+                        it, Data{.key = key, .value = Deleted{}});
+                }
             }
         }
 

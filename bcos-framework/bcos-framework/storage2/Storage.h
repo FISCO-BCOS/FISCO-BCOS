@@ -17,7 +17,7 @@ namespace bcos::storage2
 {
 
 template <class IteratorType>
-concept SeekIterator = requires(IteratorType iterator)
+concept ReadIterator = requires(IteratorType iterator)
 {
     typename IteratorType::Key;
     typename IteratorType::Value;
@@ -27,12 +27,6 @@ concept SeekIterator = requires(IteratorType iterator)
     typename IteratorType::Key > ;
     requires std::same_as < typename task::AwaitableReturnType<decltype(iterator.value())>,
     typename IteratorType::Value > ;
-};
-
-template <class IteratorType>
-concept ReadIterator = requires(IteratorType iterator)
-{
-    requires SeekIterator<IteratorType>;
     requires std::convertible_to < task::AwaitableReturnType<decltype(iterator.hasValue())>,
     bool > ;
 };
@@ -54,7 +48,7 @@ concept WriteableStorage = requires(StorageType&& impl, KeyType&& key)
 template <class StorageType, class KeyType>
 concept SeekableStorage = requires(StorageType&& impl, KeyType&& key)
 {
-    requires SeekIterator<task::AwaitableReturnType<decltype(impl.seek(key))>>;
+    requires ReadIterator<task::AwaitableReturnType<decltype(impl.seek(key))>>;
 };
 
 auto single(auto&& value)
