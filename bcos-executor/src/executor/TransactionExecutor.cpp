@@ -102,6 +102,9 @@
 #include <utility>
 #include <vector>
 
+#ifdef USE_TCMALLOC
+#include "gperftools/malloc_extension.h"
+#endif
 
 using namespace bcos;
 using namespace std;
@@ -1873,6 +1876,10 @@ void TransactionExecutor::commit(
         removeCommittedState();
 
         callback(nullptr);
+#ifdef USE_TCMALLOC
+        // EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "TCMalloc release";
+        // MallocExtension::instance()->ReleaseFreeMemory();
+#endif
     });
 }
 

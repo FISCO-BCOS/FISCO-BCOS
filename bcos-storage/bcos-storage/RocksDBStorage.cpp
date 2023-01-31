@@ -27,6 +27,7 @@
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
+#include <rocksdb/table.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
@@ -445,13 +446,29 @@ void RocksDBStorage::asyncCommit(
     }
     auto end = utcSteadyTime();
     callback(nullptr, 0);
-
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit finished")
                               << LOG_KV("blockNumber", params.number)
                               << LOG_KV("startTS", params.timestamp)
                               << LOG_KV("time(ms)", end - start)
                               << LOG_KV("callback time(ms)", utcSteadyTime() - end)
                               << LOG_KV("count", count);
+    if (enableRocksDBMemoryStatistics)
+    {
+        auto* tableOptions =
+            m_db->GetOptions().table_factory->GetOptions<rocksdb::BlockBasedTableOptions>();
+        std::string out;
+        m_db->GetProperty("rocksdb.estimate-table-readers-mem", &out);
+        std::string current;
+        m_db->GetProperty("rocksdb.cur-size-all-mem-tables", &current);
+        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("RocksDB statistics")
+                                  << LOG_KV("blockNumber", params.number)
+                                  << LOG_KV(
+                                         "block_cache_usage", tableOptions->block_cache->GetUsage())
+                                  << LOG_KV("block_cache_pinned_usage",
+                                         tableOptions->block_cache->GetPinnedUsage())
+                                  << LOG_KV("estimate-table-readers-mem", out)
+                                  << LOG_KV("cur-size-all-mem-tables", current);
+    }
 }
 
 void RocksDBStorage::asyncRollback(

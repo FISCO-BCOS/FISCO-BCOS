@@ -51,13 +51,19 @@ public:
         // FIXME: enable blob support when space amplification is acceptable
         // options.enable_blob_files = keyPageSize > 1 ? true : false;
         options.compression = rocksdb::kZSTD;
-        options.max_open_files = 512;
+        options.max_open_files = 256;
         // options.min_blob_size = 1024;
 
-        if (boost::filesystem::space(_path).available < 1024 * 1024 * 100)
+        // block cache 32MB
+        std::shared_ptr<rocksdb::Cache> cache = rocksdb::NewLRUCache(32 * 1024 * 1024);
+        rocksdb::BlockBasedTableOptions table_options;
+        table_options.block_cache = cache;
+        options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
+
+        if (boost::filesystem::space(_path).available < 1024 * 1024 * 500)
         {
-            BCOS_LOG(INFO) << "available disk space is less than 100MB";
-            throw std::runtime_error("available disk space is less than 100MB");
+            BCOS_LOG(INFO) << "available disk space is less than 500MB";
+            throw std::runtime_error("available disk space is less than 500MB");
         }
 
         // open DB
