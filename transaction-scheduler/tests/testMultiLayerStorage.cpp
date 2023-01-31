@@ -1,6 +1,6 @@
-#include "../bcos-transaction-scheduler/LevelStorage.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include <bcos-task/Wait.h>
+#include <bcos-transaction-scheduler/MultiLayerStorage.h>
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
 #include <range/v3/view/transform.hpp>
@@ -34,7 +34,7 @@ public:
 
     TableNamePool tableNamePool;
     BackendStorage backendStorage;
-    LevelStorage<MutableStorage, BackendStorage> levelStorage;
+    MultiLayerStorage<MutableStorage, BackendStorage> levelStorage;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestLevelStorage, TestLevelStorageFixture)

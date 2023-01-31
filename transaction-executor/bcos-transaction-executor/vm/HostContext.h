@@ -384,11 +384,11 @@ public:
 private:
     TableNameID getTableNameID(const evmc_address& address)
     {
-        std::array<char, EVM_CONTRACT_PREFIX.size() + sizeof(address)> tableName;
+        std::array<char, USER_APPS_PREFIX.size() + sizeof(address)> tableName;
         std::uninitialized_copy_n(
-            EVM_CONTRACT_PREFIX.data(), EVM_CONTRACT_PREFIX.size(), tableName.data());
+            USER_APPS_PREFIX.data(), USER_APPS_PREFIX.size(), tableName.data());
         std::uninitialized_copy_n((const char*)address.bytes, sizeof(address),
-            tableName.data() + EVM_CONTRACT_PREFIX.size());
+            tableName.data() + USER_APPS_PREFIX.size());
 
         return storage2::string_pool::makeStringID(
             m_tableNamePool, std::string_view(tableName.data(), tableName.size()));

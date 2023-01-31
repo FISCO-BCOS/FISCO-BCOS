@@ -30,7 +30,7 @@ using StorageReadIteratorType = typename StorageReadIteratorTrait<Storage, Key>:
 template <transaction_executor::StateStorage MutableStorage,
     transaction_executor::StateStorage BackendStorage, class CachedStorage = void>
 requires(std::is_void_v<CachedStorage> ||
-         transaction_executor::StateStorage<CachedStorage>) class LevelStorage
+         transaction_executor::StateStorage<CachedStorage>) class MultiLayerStorage
 {
 private:
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
@@ -48,7 +48,7 @@ private:
     std::mutex m_mergeMutex;
 
 public:
-    template <RANGES::borrowed_range KeyRange, transaction_executor::StateStorage... StorageType>
+    template <RANGES::input_range KeyRange, transaction_executor::StateStorage... StorageType>
     class ReadIterator
     {
     public:
@@ -56,13 +56,13 @@ public:
         using Key = const transaction_executor::StateKey&;
         using Value = const transaction_executor::StateValue&;
 
-        ReadIterator(KeyRange&& keyRange, LevelStorage& storage)
+        ReadIterator(KeyRange&& keyRange, MultiLayerStorage& storage)
           : m_keyRange(std::forward<decltype(keyRange)>(keyRange)),
             m_storage(storage),
             m_keyRangeIt(RANGES::begin(m_keyRange))
         {}
 
-        task::AwaitableValue<bool> next() &
+        task::AwaitableValue<bool> next()
         {
             m_innerIt = std::monostate{};
             if (!m_started)
@@ -165,14 +165,14 @@ public:
         }
 
         KeyRange m_keyRange;
-        LevelStorage& m_storage;
+        MultiLayerStorage& m_storage;
         RANGES::iterator_t<KeyRange> m_keyRangeIt;
         mutable std::variant<std::monostate,
             StorageReadIteratorType<StorageType, transaction_executor::StateKey>...>
             m_innerIt;
         bool m_started = false;
     };
-    LevelStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
+    MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
     {}
 
@@ -182,7 +182,7 @@ public:
     //   : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
     // {}
 
-    auto read(RANGES::borrowed_range auto&& keys)
+    auto read(RANGES::input_range auto&& keys)
         -> task::AwaitableValue<ReadIterator<decltype(keys), BackendStorage, MutableStorage>>
     {
         auto it = ReadIterator<decltype(keys), BackendStorage, MutableStorage>(
@@ -213,10 +213,10 @@ public:
         co_return;
     }
 
-    LevelStorage fork() const
+    MultiLayerStorage fork() const
     {
         std::unique_lock lock(m_immutablesMutex);
-        LevelStorage levelStorage(m_backendStorage);
+        MultiLayerStorage levelStorage(m_backendStorage);
         levelStorage.m_immutableStorages = m_immutableStorages;
 
         return levelStorage;
