@@ -183,7 +183,7 @@ int64_t SystemConfigPrecompiled::checkValueValid(
 {
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
-    if (!c_supportedKey.contains(key))
+    if (!m_sysValueCmp.contains(key) && !m_valueConverter.contains(key))
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
     }
@@ -264,9 +264,22 @@ void SystemConfigPrecompiled::upgradeChain(
     uint32_t toVersion) const
 {
     auto blockContext = _executive->blockContext().lock();
+    auto version = blockContext->blockVersion();
 
-    if (blockContext->blockVersion() <= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) &&
-        toVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    if (versionCompareTo(toVersion, BlockVersion::V3_3_VERSION) >= 0)
+    {
+        auto entry = _executive->storage().getRow(SYS_CONFIG, SYSTEM_KEY_AUTH_CHECK_STATUS);
+        if (!entry)
+        {
+            Entry newAuthEntry;
+            newAuthEntry.setObject(SystemConfigEntry{
+                blockContext->isAuthCheck() ? "1" : "0", blockContext->number() + 1});
+            _executive->storage().setRow(
+                SYS_CONFIG, SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(newAuthEntry));
+        }
+    }
+    if (versionCompareTo(version, BlockVersion::V3_0_VERSION) <= 0 &&
+        versionCompareTo(toVersion, BlockVersion::V3_1_VERSION) >= 0)
     {
         // rebuild Bfs
         auto input = codec.encodeWithSig(
@@ -288,9 +301,9 @@ void SystemConfigPrecompiled::upgradeChain(
 
         // create new system tables of 3.1.0
         // clang-format off
-            std::string_view tables[] = {
-                SYS_CODE_BINARY, bcos::ledger::SYS_VALUE,
-                SYS_CONTRACT_ABI, bcos::ledger::SYS_VALUE,
+           constexpr std::string_view tables[] = {
+                SYS_CODE_BINARY, SYS_VALUE_FIELDS,
+                SYS_CONTRACT_ABI, SYS_VALUE_FIELDS,
             };
         // clang-format on
         size_t total = sizeof(tables) / sizeof(std::string_view);

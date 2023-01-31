@@ -1982,6 +1982,24 @@ BOOST_AUTO_TEST_CASE(countTest)
         }
         insert(number++, std::to_string(j), {value}, callAddress);
     }
+    //    number++;
+    //    nextBlock(number);
+    //    std::vector<std::string> keys;
+    //    std::vector<std::string> values;
+    //    keys.reserve(INSERT_COUNT);
+    //    values.reserve(INSERT_COUNT);
+    //    for (int j = 0; j < INSERT_COUNT; ++j)
+    //    {
+    //        keys.push_back(std::to_string(j));
+    //        std::string value = "no";
+    //        if (randomSet.contains(j))
+    //        {
+    //            value = "yes";
+    //        }
+    //        values.push_back(std::move(value));
+    //    }
+    //    storage->setRows(callAddress, keys, values);
+    //    commitBlock(number);
     boost::log::core::get()->set_logging_enabled(true);
 
     // (<= && <= && ==) or (<= && <= && !=)

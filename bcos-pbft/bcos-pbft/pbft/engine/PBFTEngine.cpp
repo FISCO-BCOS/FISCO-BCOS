@@ -1645,13 +1645,11 @@ void PBFTEngine::fetchAndUpdateLedgerConfig()
     m_ledgerFetcher->fetchBlockTxCountLimit();
     m_ledgerFetcher->fetchConsensusLeaderPeriod();
     m_ledgerFetcher->fetchCompatibilityVersion();
-    m_ledgerFetcher->fetchAuthCheckStatus();
     auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                    << LOG_KV("blockNumber", ledgerConfig->blockNumber())
                    << LOG_KV("hash", ledgerConfig->hash().abridged())
                    << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
-                   << LOG_KV("authCheckStatus", ledgerConfig->authCheckStatus())
                    << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
     m_config->resetConfig(ledgerConfig);
 }
