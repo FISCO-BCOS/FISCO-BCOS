@@ -42,13 +42,18 @@ concept WriteableStorage = requires(StorageType&& impl, KeyType&& key)
 {
     requires task::IsAwaitable<decltype(impl.write(
         RANGES::any_view<KeyType>(), RANGES::any_view<ValueType>()))>;
-    requires task::IsAwaitable<decltype(impl.remove(RANGES::any_view<KeyType>()))>;
 };
 
 template <class StorageType, class KeyType>
 concept SeekableStorage = requires(StorageType&& impl, KeyType&& key)
 {
     requires ReadIterator<task::AwaitableReturnType<decltype(impl.seek(key))>>;
+};
+
+template <class StorageType, class KeyType>
+concept ErasableStorage = requires(StorageType&& impl, KeyType&& key)
+{
+    requires task::IsAwaitable<decltype(impl.remove(RANGES::any_view<KeyType>()))>;
 };
 
 auto single(auto&& value)
@@ -98,8 +103,8 @@ task::Task<void> writeOne(
     co_return;
 }
 
-template <class KeyType, class ValueType>
-task::Task<void> removeOne(WriteableStorage<KeyType, ValueType> auto& storage, KeyType const& key)
+template <class KeyType>
+task::Task<void> removeOne(ErasableStorage<KeyType> auto& storage, KeyType const& key)
 {
     co_await storage.remove(storage2::single(key));
     co_return;

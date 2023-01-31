@@ -1,4 +1,5 @@
 #include <bcos-framework/storage2/StringPool.h>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -26,6 +27,21 @@ BOOST_AUTO_TEST_CASE(addAndQuery)
     BOOST_REQUIRE_NE(id3, id);
     BOOST_REQUIRE_NE(id3, id2);
     BOOST_REQUIRE_EQUAL(*id3, "hello world2!");
+}
+
+BOOST_AUTO_TEST_CASE(compare)
+{
+    storage2::string_pool::FixedStringPool pool;
+    auto anyID = makeStringID(pool, "");
+
+    StringID emptyID;
+    BOOST_CHECK_LT(emptyID, anyID);
+    BOOST_CHECK_GT(anyID, emptyID);
+
+    StringID emptyID2;
+    BOOST_CHECK_EQUAL(emptyID, emptyID2);
+
+    BOOST_CHECK_THROW(*emptyID, EmptyStringID);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

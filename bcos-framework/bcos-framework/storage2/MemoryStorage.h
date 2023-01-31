@@ -192,8 +192,10 @@ public:
             {
                 return {std::get<ValueType>((*m_it)->value)};
             }
-
-            return {(*m_it)->value};
+            else
+            {
+                return {(*m_it)->value};
+            }
         }
         task::AwaitableValue<bool> hasValue() const
         {

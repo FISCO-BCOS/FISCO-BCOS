@@ -51,6 +51,9 @@ struct OutOfRange : public bcos::Error
 struct NoMatchStringPool : public bcos::Error
 {
 };
+struct EmptyStringID : public bcos::Error
+{
+};
 
 class StringPool
 {
@@ -71,6 +74,7 @@ private:
     StringPool::ID m_stringPoolID;
 
 public:
+    StringID() : m_pool(nullptr), m_stringPoolID(nullptr) {}
     StringID(const StringPool& pool, StringPool::ID stringPoolID)
       : m_pool(std::addressof(pool)), m_stringPoolID(stringPoolID)
     {}
@@ -79,10 +83,31 @@ public:
     StringID& operator=(const StringID&) = default;
     StringID& operator=(StringID&&) = default;
 
-    std::string_view operator*() const { return m_pool->query(m_stringPoolID); }
+    std::string_view operator*() const
+    {
+        if (m_pool == nullptr)
+        {
+            BOOST_THROW_EXCEPTION(EmptyStringID{});
+        }
+        return m_pool->query(m_stringPoolID);
+    }
 
     std::weak_ordering operator<=>(const StringID& rhs) const
     {
+        if (m_pool == nullptr)
+        {
+            if (rhs.m_pool == nullptr)
+            {
+                return std::weak_ordering::equivalent;
+            }
+            return std::weak_ordering::less;
+        }
+
+        if (rhs.m_pool == nullptr)
+        {
+            return std::weak_ordering::greater;
+        }
+
         if (std::addressof(m_pool) == std::addressof(rhs.m_pool))
         {
             return m_stringPoolID <=> rhs.m_stringPoolID;
@@ -93,6 +118,11 @@ public:
 
     bool operator==(const StringID& rhs) const
     {
+        if (m_pool == nullptr)
+        {
+            return rhs.m_pool == nullptr;
+        }
+
         if (std::addressof(m_pool) == std::addressof(rhs.m_pool))
         {
             return m_stringPoolID == rhs.m_stringPoolID;

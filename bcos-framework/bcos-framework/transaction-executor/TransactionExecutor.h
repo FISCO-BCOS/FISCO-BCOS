@@ -14,7 +14,7 @@ using TableNameID = storage2::string_pool::StringID;
 using StateKey = std::tuple<TableNameID, std::string>;
 using StateValue = storage::Entry;
 
-constexpr std::string_view EVM_CONTRACT_PREFIX("/apps/");
+const static StateKey EMPTY_STATE_KEY{TableNameID(), std::string_view()};
 
 template <class StorageType>
 concept StateStorage = storage2::ReadableStorage<StorageType, StateKey> &&
