@@ -620,6 +620,9 @@ void DownloadingQueue::onCommitFailed(
                              << LOG_KV("code", _error->errorCode())
                              << LOG_KV("message", _error->errorMessage());
         fetchAndUpdateLedgerConfig();
+        // Note: When an InvalidBlocks error occurs, there may be uncommitted blocks in the
+        // commitQueue, so need to call tryToCommitBlockToLedger and then commit the block
+        tryToCommitBlockToLedger();
         return;
     }
     if (blockHeader->number() <= m_config->blockNumber())
