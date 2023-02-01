@@ -23,12 +23,14 @@ cert_conf="${output_dir}/cert.cnf"
 days=36500
 rsa_key_length=2048
 sm_mode='false'
+enable_hsm='false'
 macOS=""
 x86_64_arch="true"
 sm2_params="sm_sm2.param"
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
 nodeid_list=""
+nodeid_list_from_path=""
 file_dir="./"
 p2p_connected_conf_name="nodes.json"
 command="deploy"
@@ -49,7 +51,7 @@ download_lightnode_binary="false"
 mtail_binary_path=""
 wasm_mode="false"
 serial_mode="true"
-nodeids_dir=""
+node_key_dir=""
 # if the config.genesis path has been set, don't generate genesis file, use the config instead
 genesis_conf_path=""
 lightnode_flag="false"
@@ -538,6 +540,7 @@ Usage:
     -o <output dir>                     [Optional] output directory, default ./nodes
     -p <Start port>                     [Optional] Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
+    -H <HSM model>                      [Optional] Whether to use HSM(Hardware secure module), default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -D, build with docker
@@ -570,7 +573,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:AR:a:N:u:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:AR:a:N:u:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -605,6 +608,7 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
+        H) enable_hsm="true";;
         g) default_group="${OPTARG}"
             check_name "group" "${default_group}"
             ;;
@@ -617,8 +621,8 @@ parse_params() {
            monitor_mode="true"
            ;;
         n)
-           nodeids_dir="${OPTARG}"
-           dir_must_exists "${nodeids_dir}"
+           node_key_dir="${OPTARG}"
+           dir_must_exists "${node_key_dir}"
            ;;
         i)
            mtail_ip_param="${OPTARG}"
@@ -674,6 +678,7 @@ print_result() {
     LOG_INFO "Start port           : ${port_start[*]}"
     LOG_INFO "Server IP            : ${ip_array[*]}"
     LOG_INFO "SM model             : ${sm_mode}"
+    LOG_INFO "enable HSM           : ${enable_hsm}"
     LOG_INFO "Output dir           : ${output_dir}"
     LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -1263,6 +1268,11 @@ generate_common_ini() {
 
 [security]
     private_key_path=conf/node.pem
+    enable_hsm=${enable_hsm}
+    ; path of hsm dynamic library
+    ;hsm_lib_path=
+    ;key_index=
+    ;password=
 
 [storage_security]
     ; enable data disk encryption or not, default is false
@@ -1472,15 +1482,21 @@ generate_secp256k1_node_account() {
     if [ ! -d "${output_path}" ]; then
         mkdir -p ${output_path}
     fi
-    if [ ! -f /tmp/secp256k1.param ]; then
-        ${OPENSSL_CMD} ecparam -out /tmp/secp256k1.param -name secp256k1
+
+    # generate nodeids from file
+    if [ ! -z "${node_key_dir}" ]; then
+        generate_nodeids_from_path "${node_key_dir}" "pem" "${node_index}" "${output_path}"
+    else
+        if [ ! -f /tmp/secp256k1.param ]; then
+            ${OPENSSL_CMD} ecparam -out /tmp/secp256k1.param -name secp256k1
+        fi
+        ${OPENSSL_CMD} genpkey -paramfile /tmp/secp256k1.param -out ${output_path}/node.pem 2>/dev/null
+        # generate nodeid
+        ${OPENSSL_CMD} ec -text -noout -in "${output_path}/node.pem" 2>/dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$output_path"/node.nodeid
+        local node_id=$(cat "${output_path}/node.nodeid")
+        nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}: 1
+        "
     fi
-    ${OPENSSL_CMD} genpkey -paramfile /tmp/secp256k1.param -out ${output_path}/node.pem 2>/dev/null
-    # generate nodeid
-    ${OPENSSL_CMD} ec -text -noout -in "${output_path}/node.pem" 2>/dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$output_path"/node.nodeid
-    local node_id=$(cat "${output_path}/node.nodeid")
-    nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}: 1
-    "
 }
 
 generate_sm_node_account() {
@@ -1489,14 +1505,23 @@ generate_sm_node_account() {
     if [ ! -d "${output_path}" ]; then
         mkdir -p ${output_path}
     fi
-    if [ ! -f ${sm2_params} ]; then
-        generate_sm_sm2_param ${sm2_params}
+
+    if [ "${enable_hsm}" == "true" ] && [ -z "${node_key_dir}" ]; then
+        LOG_FATAL "Must input path of node key in HSM mode, eg: bash build_chain.sh -H -n node_key_dir"
     fi
-    ${OPENSSL_CMD} genpkey -paramfile ${sm2_params} -out ${output_path}/node.pem 2>/dev/null
-    $OPENSSL_CMD ec -in "$output_path/node.pem" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$output_path/node.nodeid"
-    local node_id=$(cat "${output_path}/node.nodeid")
-    nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}:1
-    "
+
+    if [ ! -z "${node_key_dir}" ]; then
+        generate_nodeids_from_path "${node_key_dir}" "pem" "${node_index}" "${output_path}"
+    else
+        if [ ! -f ${sm2_params} ]; then
+            generate_sm_sm2_param ${sm2_params}
+        fi
+        ${OPENSSL_CMD} genpkey -paramfile ${sm2_params} -out ${output_path}/node.pem 2>/dev/null
+        $OPENSSL_CMD ec -in "$output_path/node.pem" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$output_path/node.nodeid"
+        local node_id=$(cat "${output_path}/node.nodeid")
+        nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}:1
+        "
+    fi
 }
 
 generate_genesis_config() {
@@ -1618,6 +1643,9 @@ generate_node_account()
     local account_dir="${2}"
     local count="${3}"
     if [[ "${sm_mode}" == "false" ]]; then
+        if [ "${enable_hsm}" == "true" ]; then
+            LOG_FATAL "HSM is only supported in sm mode"
+        fi
         generate_secp256k1_node_account "${account_dir}" "${count}"
     else
         generate_sm_node_account "${account_dir}" "${count}"
@@ -1834,7 +1862,12 @@ deploy_nodes()
             local rpc_port=$((rpc_listen_port + node_count))
             generate_config "${sm_mode}" "${node_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
             generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
-            generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list}"
+            if [ ! -z "${node_key_dir}" ]; then
+                # generate nodeids from file
+                generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list_from_path}"
+            else
+                generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list}"
+            fi
             set_value ${ip//./}_count $(($(get_value ${ip//./}_count) + 1))
             ((++count))
         done
@@ -1924,7 +1957,41 @@ generate_template_package()
         LOG_INFO "Auth account     : ${auth_admin_account}"
     fi
     LOG_INFO "SM model             : ${sm_mode}"
+    LOG_INFO "enable HSM           : ${enable_hsm}"
     LOG_INFO "All completed. Files in ${output_dir}"
+}
+
+generate_nodeids_from_path()
+{
+    local node_key_dir="${1}"
+    local file_type="${2}"
+    local file_index="${3}"
+    local output_dir="${4}"
+
+    if [ ! -d "${output_dir}" ]; then
+        mkdir -p "${output_dir}"
+    fi
+
+    local node_key_file_list=$(ls "${node_key_dir}" | tr "\n" " ")
+    local node_key_file_array=(${node_key_file_list})
+
+    if [[ ! -f "${node_key_dir}/${node_key_file_array[${file_index}]}" ]]; then
+        LOG_WARN " node key file not exist, ${node_key_dir}/${node_key_file_array[${file_index}]}"
+        continue
+    fi
+    local nodeid=""
+    if [ "${file_type}" == "pem" ]; then
+        ${OPENSSL_CMD} ec -text -noout -in "${node_key_dir}/${node_key_file_array[${file_index}]}" 2>/dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$node_key_dir"/node.nodeid
+        nodeid=$(cat "${node_key_dir}/node.nodeid")
+        cp -f "${node_key_dir}/${node_key_file_array[${file_index}]}" "${output_dir}/node.pem"
+        rm -f "${node_key_dir}/node.nodeid"
+    elif [ "${file_type}" == "nodeid" ]; then
+        nodeid=$(cat "${nodeid_dir}/${nodeid_file}")
+    else
+        LOG_FATAL "generate_nodeids_from_path function only support pem and nodeid file type, don't support ${file_type} yet"
+    fi
+    nodeid_list_from_path=$"${nodeid_list_from_path}node.${node_index}=${nodeid}: 1
+    "
 }
 
 generate_genesis_config_by_nodeids()
@@ -1932,34 +1999,19 @@ generate_genesis_config_by_nodeids()
     local nodeid_dir="${1}"
     local output_dir="${2}"
 
-    local nodeid_list=""
-    local node_index=0
-
     local nodeid_file_list=$(ls "${nodeid_dir}" | tr "\n" " ")
     local nodeid_file_array=(${nodeid_file_list})
-    # gen node.N=xxxx first
-    for nodeid_file in ${nodeid_file_array[@]}
-    do
-        if [[ ! -f "${nodeid_dir}/${nodeid_file}" ]]; then
-            LOG_WARN " x.nodeid file not exist, ${nodeid_dir}/${nodeid_file}"
-            continue
-        fi
-        local nodeid=$(cat "${nodeid_dir}/${nodeid_file}")
-        nodeid_list=$"${nodeid_list}node.${node_index}=${nodeid}: 1
-        "
 
-        ((node_index += 1))
+    local total_files_sum="${#nodeid_file_array[*]}"
+    for ((local file_index=0; file_index < total_files_sum; ++file_index)); do
+        generate_nodeids_from_path "${nodeid_file_array}" "nodeid" "${file_index}" "${output_dir}"
     done
 
-    if [[ -z "${nodeid_list}" ]]; then
+    if [[ -z "${nodeid_list_from_path}" ]]; then
         LOG_FATAL "generate config.genesis failed, please check if the nodeids directory correct"
     fi
 
-    if [ ! -d "${output_dir}" ]; then
-        mkdir -p "${output_dir}"
-    fi
-
-    generate_genesis_config "${output_dir}/config.genesis" "${nodeid_list}"
+    generate_genesis_config "${output_dir}/config.genesis" "${generate_nodeids_from_path}"
 }
 
 check_auth_account()
@@ -2023,9 +2075,9 @@ main() {
             # config.genesis is set
             file_must_exists "${genesis_conf_path}"
             generate_template_package "${node_name}" "${binary_path}" "${genesis_conf_path}" "${output_dir}"
-        elif [[ -n "${nodeids_dir}" ]] && [[ -d "${nodeids_dir}" ]]; then
+        elif [[ -n "${node_key_dir}" ]] && [[ -d "${node_key_dir}" ]]; then
             dir_must_not_exists "${output_dir}"
-            generate_genesis_config_by_nodeids "${nodeids_dir}" "${output_dir}/"
+            generate_genesis_config_by_nodeids "${node_key_dir}" "${output_dir}/"
             file_must_exists "${output_dir}/config.genesis"
             generate_template_package "${node_name}" "${binary_path}" "${output_dir}/config.genesis" "${output_dir}"
         else
