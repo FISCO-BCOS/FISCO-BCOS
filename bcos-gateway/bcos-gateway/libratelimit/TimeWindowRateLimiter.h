@@ -70,7 +70,7 @@ public:
      *
      * @param _requiredPermits
      */
-    void acquire(int64_t _requiredPermits) override;
+    bool acquire(int64_t _requiredPermits) override;
 
     /**
      * @brief
