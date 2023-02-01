@@ -23,7 +23,7 @@ struct Fixture
 {
     Fixture() : levelStorage(backendStorage) {}
 
-    void prepareData(int count)
+    void prepareData(int64_t count, int layer = 0)
     {
         levelStorage.newMutable();
         // Write count data
@@ -46,11 +46,12 @@ struct Fixture
 
             co_await levelStorage.write(allKeys, allValues);
         }(count));
-    }
 
-    void prepareMultiLayerData(int count, int layerCount)
-    {
-        // Put data into 5 layer
+        for (auto i = 0; i < layer; ++i)
+        {
+            levelStorage.pushMutableToImmutableFront();
+            levelStorage.newMutable();
+        }
     }
 
     using MutableStorage = MemoryStorage<transaction_executor::StateKey,
@@ -67,10 +68,27 @@ struct Fixture
 
 static void read1(benchmark::State& state)
 {
-    constexpr static int dataCount = 10 * 10000;
-
+    int dataCount = state.range(0);
     Fixture fixture;
     fixture.prepareData(dataCount);
+
+    int i = 0;
+    task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        for (auto const& it : state)
+        {
+            [[maybe_unused]] auto data = co_await storage2::readOne(
+                fixture.levelStorage, fixture.allKeys[((i++) + dataCount) % dataCount]);
+        }
+
+        co_return;
+    }(state));
+}
+
+static void read10(benchmark::State& state)
+{
+    int dataCount = state.range(0);
+    Fixture fixture;
+    fixture.prepareData(dataCount, 10);
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
@@ -107,7 +125,8 @@ static void write1(benchmark::State& state)
     }(state));
 }
 
-BENCHMARK(read1);
+BENCHMARK(read1)->DenseRange(40000, 200000, 40000);
+BENCHMARK(read10)->DenseRange(40000, 200000, 40000);
 BENCHMARK(write1);
 
 BENCHMARK_MAIN();

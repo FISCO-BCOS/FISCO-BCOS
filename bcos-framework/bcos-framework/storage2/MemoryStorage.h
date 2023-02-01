@@ -3,6 +3,7 @@
 #include "Storage.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/NullLock.h>
+#include <boost/container/small_vector.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
@@ -63,7 +64,7 @@ private:
 
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
-    constexpr static unsigned DEFAULT_CAPACITY = 32L * 1024 * 1024;  // For mru
+    constexpr static unsigned DEFAULT_CAPACITY = 256L * 1024 * 1024;  // For mru
     using Mutex = std::conditional_t<withConcurrent, std::mutex, Empty>;
     using Lock =
         std::conditional_t<withConcurrent, std::unique_lock<std::mutex>, utilities::NullLock>;
@@ -181,32 +182,33 @@ public:
             if (!m_started)
             {
                 m_started = true;
-                return {m_it != m_iterators.end()};
+                return {m_index != m_iterators.size()};
             }
-            return {(++m_it) != m_iterators.end()};
+            return {++m_index != m_iterators.size()};
         }
-        task::AwaitableValue<Key> key() const { return {(*m_it)->key}; }
+        task::AwaitableValue<Key> key() const { return {m_iterators[m_index]->key}; }
         task::AwaitableValue<Value> value() const
         {
             if constexpr (withLogicalDeletion)
             {
-                return {std::get<ValueType>((*m_it)->value)};
+                return {std::get<ValueType>(m_iterators[m_index]->value)};
             }
             else
             {
-                return {(*m_it)->value};
+                return {m_iterators[m_index]->value};
             }
         }
         task::AwaitableValue<bool> hasValue() const
         {
+            auto data = m_iterators[m_index];
             if constexpr (withLogicalDeletion)
             {
-                if (*m_it != nullptr && std::holds_alternative<Deleted>((*m_it)->value))
+                if (data != nullptr && std::holds_alternative<Deleted>(data->value))
                 {
                     return false;
                 }
             }
-            return {*m_it != nullptr};
+            return {data != nullptr};
         }
 
         void release()
@@ -218,8 +220,8 @@ public:
         }
 
     private:
-        typename std::vector<const Data*>::iterator m_it;
-        std::vector<const Data*> m_iterators;
+        size_t m_index = 0;
+        boost::container::small_vector<const Data*, 1> m_iterators;
         [[no_unique_address]] std::conditional_t<withConcurrent, std::forward_list<Lock>, Empty>
             m_bucketLocks;
         bool m_started = false;
@@ -299,7 +301,6 @@ public:
             }
 
             auto const& index = bucket.container.template get<0>();
-
             auto it = index.find(key);
             if (it != index.end())
             {
@@ -314,7 +315,6 @@ public:
                 output.m_iterators.emplace_back(nullptr);
             }
         }
-        output.m_it = output.m_iterators.begin();
 
         return outputAwaitable;
     }

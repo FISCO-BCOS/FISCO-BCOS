@@ -176,6 +176,7 @@ public:
       : m_backendStorage(backendStorage)
     {}
 
+    // TODO: add cache storage
     // template <typename std::enable_if_t<withCacheStorage>>
     // LevelStorage(
     //     BackendStorage& backendStorage, std::add_lvalue_reference_t<CachedStorage> cacheStorage)

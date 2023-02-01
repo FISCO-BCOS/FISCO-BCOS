@@ -26,8 +26,8 @@ public:
     {}
 
     task::Task<protocol::ReceiptFactoryReturnType<ReceiptFactory>> execute(
-        protocol::BlockHeader const& blockHeader, const protocol::Transaction& transaction,
-        int contextID)
+        protocol::IsBlockHeader auto const& blockHeader,
+        protocol::IsTransaction auto const& transaction, int contextID)
     {
         constexpr static evmc_address EMPTY_ADDRESS = {};
 
