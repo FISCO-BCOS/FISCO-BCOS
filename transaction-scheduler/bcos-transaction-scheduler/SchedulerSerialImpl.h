@@ -11,7 +11,7 @@ template <bcos::transaction_executor::StateStorage BackendStorage,
         MemoryStorage<transaction_executor::StateKey, transaction_executor::StateValue,
             storage2::memory_storage::Attribute(
                 storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION)>>
-class SchedulerParallelImpl
+class SchedulerSerialImpl
   : public SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor, MutableStorage>
 {
 public:

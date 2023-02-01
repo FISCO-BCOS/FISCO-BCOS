@@ -41,5 +41,7 @@ public:
 
         co_return receipts;
     }
+
+    size_t m_windowSize;
 };
 }  // namespace bcos::transaction_scheduler

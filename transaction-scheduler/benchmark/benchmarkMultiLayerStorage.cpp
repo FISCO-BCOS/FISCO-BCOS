@@ -27,7 +27,7 @@ struct Fixture
     {
         levelStorage.newMutable();
         // Write count data
-        task::syncWait([this](int count) -> task::Task<void> {
+        task::syncWait([this](int64_t count) -> task::Task<void> {
             allKeys = RANGES::iota_view<int, int>(0, count) |
                       RANGES::views::transform([tableNamePool = &tableNamePool](int num) {
                           return transaction_executor::StateKey{
@@ -68,7 +68,7 @@ struct Fixture
 
 static void read1(benchmark::State& state)
 {
-    int dataCount = state.range(0);
+    auto dataCount = state.range(0);
     Fixture fixture;
     fixture.prepareData(dataCount);
 
@@ -86,7 +86,7 @@ static void read1(benchmark::State& state)
 
 static void read10(benchmark::State& state)
 {
-    int dataCount = state.range(0);
+    auto dataCount = state.range(0);
     Fixture fixture;
     fixture.prepareData(dataCount, 10);
 

@@ -1,3 +1,6 @@
+#include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-transaction-executor/TransactionExecutorImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <boost/test/unit_test.hpp>
 
@@ -9,24 +12,33 @@ using namespace bcos::transaction_scheduler;
 class TestSchedulerSerialFixture
 {
 public:
-    using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
 
-    TestSchedulerSerialFixture() : levelStorage(backendStorage) {}
+    TestSchedulerSerialFixture() : receiptFactory(cryptoSuite), {}
 
     TableNamePool tableNamePool;
     BackendStorage backendStorage;
-    MultiLayerStorage<MutableStorage, BackendStorage> levelStorage;
+    bcos::crypto::CryptoSuite::Ptr cryptoSuite;
+    bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
+    SchedulerSerialImpl<BackendStorage, decltype(receiptFactory),
+        TransactionExecutorImpl<BackendStorage, decltype(receiptFactory)>>
+        scheduler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestSchedulerSerial, TestSchedulerSerialFixture)
 
 BOOST_AUTO_TEST_CASE(execute)
 {
+    auto hash = std::make_shared<bcos::crypto::Keccak256>();
     BackendStorage backendStorage;
+    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(hash, nullptr, nullptr);
+    bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory(cryptoSuite);
+
+    SchedulerSerialImpl<BackendStorage, decltype(receiptFactory),
+        TransactionExecutorImpl<BackendStorage, decltype(receiptFactory)>>
+        scheduler(backendStorage, receiptFactory);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

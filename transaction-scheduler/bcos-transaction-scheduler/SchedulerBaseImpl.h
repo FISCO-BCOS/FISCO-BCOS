@@ -13,10 +13,7 @@ namespace bcos::transaction_scheduler
 template <bcos::transaction_executor::StateStorage BackendStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
     bcos::transaction_executor::TransactionExecutor<BackendStorage, ReceiptFactory> Executor,
-    bcos::transaction_executor::StateStorage MutableStorage = storage2::memory_storage::
-        MemoryStorage<transaction_executor::StateKey, transaction_executor::StateValue,
-            storage2::memory_storage::Attribute(
-                storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION)>>
+    bcos::transaction_executor::StateStorage MutableStorage>
 class SchedulerBaseImpl
 {
 public:
