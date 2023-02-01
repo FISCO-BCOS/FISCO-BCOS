@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.14)
 
 find_package(fmt REQUIRED)
+find_package(evmc REQUIRED)
+find_package(evmone REQUIRED)
+find_package(intx REQUIRED)
+find_package(ethash REQUIRED)
+find_package(fmt REQUIRED)
 
 add_library(transaction-scheduler INTERFACE)
 target_include_directories(transaction-scheduler INTERFACE

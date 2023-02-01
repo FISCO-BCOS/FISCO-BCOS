@@ -1,28 +1,26 @@
 #pragma once
-#include "MultiLayerStorage.h"
-#include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-framework/protocol/TransactionReceiptFactory.h>
-#include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
-#include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
-#include <bcos-task/Task.h>
+
+#include "SchedulerBaseImpl.h"
 
 namespace bcos::transaction_scheduler
 {
-
 template <bcos::transaction_executor::StateStorage BackendStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
+    bcos::transaction_executor::TransactionExecutor<BackendStorage, ReceiptFactory> Executor,
     bcos::transaction_executor::StateStorage MutableStorage = storage2::memory_storage::
         MemoryStorage<transaction_executor::StateKey, transaction_executor::StateValue,
             storage2::memory_storage::Attribute(
                 storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION)>>
-class TransactionSchedulerImpl
+class SchedulerSerialImpl
+  : public SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor, MutableStorage>
 {
 public:
-    TransactionSchedulerImpl(BackendStorage& backendStorage) : m_multiLayerStorage(backendStorage)
-    {}
-
-    void nextBlock() { m_multiLayerStorage.newMutable(); }
+    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
+        MutableStorage>::SchedulerBaseImpl;
+    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
+        MutableStorage>::multiLayerStorage;
+    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
+        MutableStorage>::receiptFactory;
 
     task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> executeTransactions(
         protocol::IsBlockHeader auto const& blockHeader,
@@ -34,10 +32,15 @@ public:
             receipts.reserve(RANGES::size(transactions));
         }
 
+        int contextID = 0;
+        Executor executor(multiLayerStorage(), receiptFactory());
+        for (auto const& transaction : transactions)
+        {
+            receipts.emplace_back(co_await executor.execute(blockHeader, transaction, contextID++));
+        }
+        multiLayerStorage().pushMutableToImmutableFront();
 
+        co_return receipts;
     }
-
-private:
-    MultiLayerStorage<MutableStorage, BackendStorage> m_multiLayerStorage;
 };
 }  // namespace bcos::transaction_scheduler
