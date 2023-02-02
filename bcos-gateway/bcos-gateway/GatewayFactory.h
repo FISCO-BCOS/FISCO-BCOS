@@ -21,7 +21,7 @@ namespace bcos
 {
 namespace gateway
 {
-class GatewayFactory
+class GatewayFactory : public bcos::ObjectCounter<GatewayFactory>
 {
 public:
     using Ptr = std::shared_ptr<GatewayFactory>;

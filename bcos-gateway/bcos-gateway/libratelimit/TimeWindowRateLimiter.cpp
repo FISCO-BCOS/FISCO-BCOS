@@ -25,6 +25,7 @@
 #include <bcos-gateway/libratelimit/TimeWindowRateLimiter.h>
 #include <chrono>
 #include <thread>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -32,10 +33,10 @@ using namespace bcos::gateway::ratelimiter;
 
 bool TimeWindowRateLimiter::tryAcquire(int64_t _requiredPermits)
 {
-    if ((uint64_t)_requiredPermits > m_maxPermitsSize)
+    if (std::cmp_greater(_requiredPermits, m_maxPermitsSize))
     {
-        // TODO: the acquire amount exceeded the maximum
-        RATELIMIT_LOG(WARNING) << LOG_DESC("the acquire amount exceeded the maximum")
+        // Notice: the acquire amount exceeded the maximum, it will never succeed
+        RATELIMIT_LOG(WARNING) << LOG_DESC("the try acquire amount exceeded the maximum")
                                << LOG_KV("requiredPermits", _requiredPermits)
                                << LOG_KV("maxPermitsSize", m_maxPermitsSize);
         return false;
@@ -45,11 +46,12 @@ bool TimeWindowRateLimiter::tryAcquire(int64_t _requiredPermits)
     auto nowTimeMS = utcSteadyTime();
     if (nowTimeMS - m_lastPermitsUpdateTime >= m_timeWindowMS)
     {
+        // Reset the count info of the new time window
         m_lastPermitsUpdateTime = nowTimeMS;
         m_currentPermitsSize = m_maxPermitsSize;
     }
 
-    if (m_currentPermitsSize >= (uint64_t)_requiredPermits)
+    if (std::cmp_greater_equal(m_currentPermitsSize, _requiredPermits))
     {
         m_currentPermitsSize -= _requiredPermits;
         return true;
@@ -58,9 +60,17 @@ bool TimeWindowRateLimiter::tryAcquire(int64_t _requiredPermits)
     return false;
 }
 
-void TimeWindowRateLimiter::acquire(int64_t _requiredPermits)
+bool TimeWindowRateLimiter::acquire(int64_t _requiredPermits)
 {
-    // TODO: notice infinite loops when the acquire amount exceeded the maximum
+    if (std::cmp_greater(_requiredPermits, m_maxPermitsSize))
+    {
+        // Notice: the acquire amount exceeded the maximum, it will never succeed
+        RATELIMIT_LOG(WARNING) << LOG_DESC("the acquire amount exceeded the maximum")
+                               << LOG_KV("requiredPermits", _requiredPermits)
+                               << LOG_KV("maxPermitsSize", m_maxPermitsSize);
+        return false;
+    }
+
     while (!tryAcquire(_requiredPermits))
     {
         // sleep for tryAcquire success
@@ -76,6 +86,8 @@ void TimeWindowRateLimiter::acquire(int64_t _requiredPermits)
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+
+    return true;
 }
 
 void TimeWindowRateLimiter::rollback(int64_t _requiredPermits)

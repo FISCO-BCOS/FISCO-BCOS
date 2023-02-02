@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
@@ -16,7 +17,7 @@ namespace bcos
 {
 namespace gateway
 {
-class GatewayConfig
+class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
 {
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;

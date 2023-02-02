@@ -19,12 +19,13 @@
  */
 #pragma once
 #include "Service.h"
+#include "bcos-utilities/ObjectCounter.h"
 #include "router/RouterTableInterface.h"
 namespace bcos
 {
 namespace gateway
 {
-class ServiceV2 : public Service
+class ServiceV2 : public Service, public ObjectCounter<ServiceV2>
 {
 public:
     using Ptr = std::shared_ptr<ServiceV2>;

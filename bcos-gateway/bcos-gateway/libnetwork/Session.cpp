@@ -129,6 +129,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                            << LOG_KV("resp", message->isRespPacket());
     }
 
+    // TODO: optimize data copy resulting from serialization
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
 
@@ -432,6 +433,7 @@ void Session::doRead()
                     try
                     {
                         // Note: the decode function may throw exception
+                        // TODO: optimize data copy resulting from serialization
                         ssize_t result =
                             message->decode(bytesConstRef(s->m_data.data(), s->m_data.size()));
                         if (result > 0)
