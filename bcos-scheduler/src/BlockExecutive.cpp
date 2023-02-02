@@ -27,6 +27,10 @@
 #include <thread>
 #include <utility>
 
+#ifdef USE_TCMALLOC
+#include "gperftools/malloc_extension.h"
+#endif
+
 using namespace bcos::scheduler;
 using namespace bcos::ledger;
 
@@ -1281,8 +1285,11 @@ void BlockExecutive::batchBlockCommit(
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, std::move(message)));
             return;
         }
-
         callback(nullptr);
+#ifdef USE_TCMALLOC
+        // SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "TCMalloc release";
+        // MallocExtension::instance()->ReleaseFreeMemory();
+#endif
     };
 
     bcos::protocol::TwoPCParams params;
