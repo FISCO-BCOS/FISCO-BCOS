@@ -9,8 +9,7 @@ using namespace bcos;
 using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_scheduler;
 
-template <>
-struct std::hash<bcos::transaction_executor::StateKey>
+struct TableNameHash
 {
     size_t operator()(const bcos::transaction_executor::StateKey& key) const
     {
@@ -18,7 +17,6 @@ struct std::hash<bcos::transaction_executor::StateKey>
         return std::hash<bcos::transaction_executor::TableNameID>{}(tableID);
     }
 };
-
 struct Fixture
 {
     Fixture() : levelStorage(backendStorage) {}
@@ -56,9 +54,8 @@ struct Fixture
 
     using MutableStorage = MemoryStorage<transaction_executor::StateKey,
         transaction_executor::StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
-    using BackendStorage =
-        MemoryStorage<transaction_executor::StateKey, transaction_executor::StateValue,
-            Attribute(ORDERED | CONCURRENT), std::hash<transaction_executor::StateKey>>;
+    using BackendStorage = MemoryStorage<transaction_executor::StateKey,
+        transaction_executor::StateValue, Attribute(ORDERED | CONCURRENT), TableNameHash>;
 
     transaction_executor::TableNamePool tableNamePool;
     BackendStorage backendStorage;
@@ -94,7 +91,7 @@ static void read10(benchmark::State& state)
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         for (auto const& it : state)
         {
-            [[maybe_unused]] auto data = co_await storage2::readOne<transaction_executor::StateKey>(
+            [[maybe_unused]] auto data = co_await storage2::readOne(
                 fixture.levelStorage, fixture.allKeys[((i++) + dataCount) % dataCount]);
         }
 
@@ -113,7 +110,7 @@ static void write1(benchmark::State& state)
         {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", i));
-            co_await storage2::writeOne<transaction_executor::StateKey>(fixture.levelStorage,
+            co_await storage2::writeOne(fixture.levelStorage,
                 transaction_executor::StateKey{
                     storage2::string_pool::makeStringID(fixture.tableNamePool, "test_table"),
                     fmt::format("key: {}", i)},

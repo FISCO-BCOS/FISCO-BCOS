@@ -1,13 +1,28 @@
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-transaction-executor/TransactionExecutorImpl.h>
+#include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
+
+struct MockExecutor
+{
+    MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory) {}
+
+    task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(
+        auto&& blockHeader, auto&& transaction, [[maybe_unused]] int contextID)
+    {
+        co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
+    }
+};
 
 class TestSchedulerSerialFixture
 {
@@ -16,29 +31,42 @@ public:
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
 
-    TestSchedulerSerialFixture() : receiptFactory(cryptoSuite), {}
+    TestSchedulerSerialFixture()
+      : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
+            std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
+        receiptFactory(cryptoSuite),
+        scheduler(backendStorage, receiptFactory)
+    {}
 
     TableNamePool tableNamePool;
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    SchedulerSerialImpl<BackendStorage, decltype(receiptFactory),
-        TransactionExecutorImpl<BackendStorage, decltype(receiptFactory)>>
-        scheduler;
+    SchedulerSerialImpl<BackendStorage, decltype(receiptFactory), MockExecutor> scheduler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestSchedulerSerial, TestSchedulerSerialFixture)
 
-BOOST_AUTO_TEST_CASE(execute)
+BOOST_AUTO_TEST_CASE(executeBlock)
 {
-    auto hash = std::make_shared<bcos::crypto::Keccak256>();
-    BackendStorage backendStorage;
-    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(hash, nullptr, nullptr);
-    bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory(cryptoSuite);
+    task::syncWait([&]() -> task::Task<void> {
+        scheduler.start();
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        auto transactions =
+            RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](int i) {
+                return std::make_unique<bcostars::protocol::TransactionImpl>(
+                    [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+            }) |
+            RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-    SchedulerSerialImpl<BackendStorage, decltype(receiptFactory),
-        TransactionExecutorImpl<BackendStorage, decltype(receiptFactory)>>
-        scheduler(backendStorage, receiptFactory);
+        auto receipts = co_await scheduler.execute(blockHeader,
+            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
+        scheduler.finish();
+        co_await scheduler.commit();
+
+        co_return;
+    }());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

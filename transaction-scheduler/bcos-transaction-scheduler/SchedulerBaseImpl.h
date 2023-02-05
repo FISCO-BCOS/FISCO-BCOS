@@ -21,8 +21,8 @@ public:
       : m_multiLayerStorage(backendStorage), m_receiptFactory(receiptFactory)
     {}
 
-    void startExecute() { m_multiLayerStorage.newMutable(); }
-    void finishExecute() { m_multiLayerStorage.pushMutableToImmutableFront(); }
+    void start() { m_multiLayerStorage.newMutable(); }
+    void finish() { m_multiLayerStorage.pushMutableToImmutableFront(); }
     task::Task<void> commit() { co_await m_multiLayerStorage.mergeAndPopImmutableBack(); }
 
     task::Task<protocol::ReceiptFactoryReturnType<ReceiptFactory>> call(

@@ -22,7 +22,7 @@ public:
     using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
         MutableStorage>::receiptFactory;
 
-    task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> executeTransactions(
+    task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> execute(
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
     {

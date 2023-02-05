@@ -21,6 +21,8 @@ private:
 
 public:
     using Savepoint = typename std::forward_list<Record>::const_iterator;
+    using Key = typename Storage::Key;
+    using Value = typename Storage::Value;
 
     Rollbackable(Storage& storage) : m_storage(storage) {}
 

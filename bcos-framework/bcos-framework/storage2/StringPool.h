@@ -7,17 +7,16 @@
 #include <boost/functional/hash.hpp>
 #include <boost/static_string.hpp>
 #include <boost/throw_exception.hpp>
-#include <any>
 #include <compare>
 #include <functional>
 #include <string_view>
 
-template <size_t length>
-struct boost::hash<boost::static_string<length>>
+template <size_t n>
+struct boost::hash<boost::container::small_vector<char, n>>
 {
-    std::size_t operator()(const boost::static_string<length>& str) const noexcept
+    std::size_t operator()(const boost::container::small_vector<char, n>& str) const noexcept
     {
-        return boost::hash<boost::string_view>{}(str);
+        return boost::hash<std::string_view>{}(std::string_view(str.data(), str.size()));
     }
     std::size_t operator()(std::string_view view) const noexcept
     {
@@ -26,18 +25,20 @@ struct boost::hash<boost::static_string<length>>
 };
 
 template <size_t n>
-struct std::equal_to<boost::static_string<n>>
+struct std::equal_to<boost::container::small_vector<char, n>>
 {
-    bool operator()(const boost::static_string<n>& str, std::string_view view) const noexcept
-    {
-        return std::string_view(str.data(), str.size()) == view;
-    }
-    bool operator()(std::string_view view, const boost::static_string<n>& str) const noexcept
+    bool operator()(
+        const boost::container::small_vector<char, n>& str, std::string_view view) const noexcept
     {
         return std::string_view(str.data(), str.size()) == view;
     }
     bool operator()(
-        const boost::static_string<n>& lhs, const boost::static_string<n>& rhs) const noexcept
+        std::string_view view, const boost::container::small_vector<char, n>& str) const noexcept
+    {
+        return std::string_view(str.data(), str.size()) == view;
+    }
+    bool operator()(const boost::container::small_vector<char, n>& lhs,
+        const boost::container::small_vector<char, n>& rhs) const noexcept
     {
         return lhs == rhs;
     }
@@ -137,12 +138,11 @@ inline StringID makeStringID(StringPool& pool, std::string_view str)
     return {pool, pool.add(str)};
 }
 
-constexpr static size_t DEFAULT_STRING_LENGTH = 62;
-template <size_t stringLength = DEFAULT_STRING_LENGTH>
+constexpr static size_t DEFAULT_STRING_LENGTH = 32;
 class FixedStringPool : public StringPool
 {
 private:
-    using StringType = boost::static_string<stringLength>;
+    using StringType = boost::container::small_vector<char, DEFAULT_STRING_LENGTH>;
     mutable memory_storage::MemoryStorage<StringType, memory_storage::Empty,
         memory_storage::CONCURRENT, boost::hash<StringType>>
         m_storage;
@@ -161,11 +161,6 @@ public:
 
     ID add(std::string_view str) override
     {
-        if (str.size() > stringLength)
-        {
-            BOOST_THROW_EXCEPTION(OutOfRange{});
-        }
-
         while (true)
         {
             auto itAwaitable = m_storage.read(single(str));
@@ -188,7 +183,7 @@ public:
 
     std::string_view query(ID id) const override
     {
-        auto strPtr = (StringType*)id;
+        auto* strPtr = (StringType*)id;
         return {strPtr->data(), strPtr->size()};
     }
 };
@@ -210,7 +205,8 @@ struct hash<bcos::storage2::string_pool::StringID>
 {
     size_t operator()(bcos::storage2::string_pool::StringID const& stringID)
     {
-        auto hash = (size_t)stringID.m_pool;
+        size_t hash = 0;
+        boost::hash_combine(hash, stringID.m_pool);
         boost::hash_combine(hash, stringID.m_stringPoolID);
         return hash;
     }

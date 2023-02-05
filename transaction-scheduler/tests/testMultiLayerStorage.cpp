@@ -1,4 +1,5 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/MultiLayerStorage.h>
 #include <fmt/format.h>
@@ -11,13 +12,12 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-template <>
-struct std::hash<StateKey>
+struct TableNameHash
 {
-    size_t operator()(const StateKey& key) const
+    size_t operator()(const bcos::transaction_executor::StateKey& key) const
     {
         auto const& tableID = std::get<0>(key);
-        return std::hash<TableNameID>{}(tableID);
+        return std::hash<bcos::transaction_executor::TableNameID>{}(tableID);
     }
 };
 
@@ -28,7 +28,7 @@ public:
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
-        std::hash<StateKey>>;
+        TableNameHash>;
 
     TestLevelStorageFixture() : levelStorage(backendStorage) {}
 
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
         co_await it.next();
         const auto& iteratorKey = co_await it.key();
         BOOST_CHECK_EQUAL(std::get<0>(iteratorKey), std::get<0>(key));
-        BOOST_CHECK_EQUAL(std::get<1>(iteratorKey), std::get<1>(key));
+        BOOST_CHECK_EQUAL(std::get<1>(iteratorKey).toStringView(), std::get<1>(key).toStringView());
 
         const auto& iteratorValue = co_await it.value();
         BOOST_CHECK_EQUAL(iteratorValue.get(), entry.get());
@@ -121,7 +121,7 @@ BOOST_AUTO_TEST_CASE(merge)
             auto const& key = co_await it.key();
             BOOST_CHECK_EQUAL(*std::get<0>(key),
                 *(storage2::string_pool::makeStringID(tableNamePool, "test_table")));
-            BOOST_CHECK_EQUAL(std::get<1>(key), fmt::format("key: {}", i));
+            BOOST_CHECK_EQUAL(std::get<1>(key).toStringView(), fmt::format("key: {}", i));
 
             auto const& value = co_await it.value();
             BOOST_CHECK_EQUAL(value.get(), fmt::format("value: {}", i));

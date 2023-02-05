@@ -15,8 +15,10 @@
 #include <forward_list>
 #include <functional>
 #include <mutex>
+#include <new>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <set>
+#include <shared_mutex>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -65,9 +67,11 @@ private:
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 256L * 1024 * 1024;  // For mru
-    using Mutex = std::conditional_t<withConcurrent, std::mutex, Empty>;
-    using Lock =
-        std::conditional_t<withConcurrent, std::unique_lock<std::mutex>, utilities::NullLock>;
+    // using Mutex = std::mutex;
+    using Mutex = std::mutex;
+    using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
+    using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
+
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
 
@@ -88,7 +92,7 @@ private:
     struct Bucket
     {
         Container container;
-        [[no_unique_address]] Mutex mutex;  // For concurrent
+        [[no_unique_address]] BucketMutex mutex;  // For concurrent
         [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> capacity = {};  // For mru
     };
     using Buckets = std::conditional_t<withConcurrent, std::vector<Bucket>, std::array<Bucket, 1>>;
@@ -155,6 +159,9 @@ private:
     }
 
 public:
+    using Key = KeyType;
+    using Value = ValueType;
+
     MemoryStorage(unsigned buckets = 0) requires(!withConcurrent) {}
 
     MemoryStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(withConcurrent)
@@ -177,14 +184,9 @@ public:
         ReadIterator& operator=(ReadIterator&&) noexcept = default;
         ~ReadIterator() noexcept = default;
 
-        task::AwaitableValue<bool> next() &
+        task::AwaitableValue<bool> next()
         {
-            if (!m_started)
-            {
-                m_started = true;
-                return {m_index != m_iterators.size()};
-            }
-            return {++m_index != m_iterators.size()};
+            return {static_cast<size_t>(++m_index) != m_iterators.size()};
         }
         task::AwaitableValue<Key> key() const { return {m_iterators[m_index]->key}; }
         task::AwaitableValue<Value> value() const
@@ -220,11 +222,11 @@ public:
         }
 
     private:
-        size_t m_index = 0;
+        int64_t m_index = -1;
         boost::container::small_vector<const Data*, 1> m_iterators;
-        [[no_unique_address]] std::conditional_t<withConcurrent, std::forward_list<Lock>, Empty>
+        [[no_unique_address]] std::conditional_t<withConcurrent,
+            boost::container::small_vector<Lock, 1>, Empty>
             m_bucketLocks;
-        bool m_started = false;
     };
 
     class SeekIterator
@@ -296,7 +298,7 @@ public:
                 if (!locks[bucketIndex])
                 {
                     locks[bucketIndex] = true;
-                    output.m_bucketLocks.emplace_front(bucket.mutex);
+                    output.m_bucketLocks.emplace_back(bucket.mutex);
                 }
             }
 
