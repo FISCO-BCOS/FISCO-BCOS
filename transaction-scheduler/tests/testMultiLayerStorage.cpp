@@ -30,11 +30,11 @@ public:
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         TableNameHash>;
 
-    TestLevelStorageFixture() : levelStorage(backendStorage) {}
+    TestLevelStorageFixture() : multiLayerStorage(backendStorage) {}
 
     TableNamePool tableNamePool;
     BackendStorage backendStorage;
-    MultiLayerStorage<MutableStorage, BackendStorage> levelStorage;
+    MultiLayerStorage<MutableStorage, BackendStorage> multiLayerStorage;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestLevelStorage, TestLevelStorageFixture)
@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(noMutable)
     task::syncWait([this]() -> task::Task<void> {
         storage::Entry entry;
         BOOST_CHECK_THROW(
-            co_await storage2::writeOne(levelStorage,
+            co_await storage2::writeOne(multiLayerStorage,
                 StateKey{
                     storage2::string_pool::makeStringID(tableNamePool, "test_table"), "test_key"},
                 std::move(entry)),
@@ -57,17 +57,17 @@ BOOST_AUTO_TEST_CASE(noMutable)
 BOOST_AUTO_TEST_CASE(readWriteMutable)
 {
     task::syncWait([this]() -> task::Task<void> {
-        BOOST_CHECK_THROW(levelStorage.pushMutableToImmutableFront(), NotExistsMutableStorage);
+        BOOST_CHECK_THROW(multiLayerStorage.pushMutableToImmutableFront(), NotExistsMutableStorage);
 
-        levelStorage.newMutable();
+        multiLayerStorage.newMutable();
         StateKey key{storage2::string_pool::makeStringID(tableNamePool, "test_table"), "test_key"};
 
         storage::Entry entry;
         entry.set("Hello world!");
-        co_await storage2::writeOne(levelStorage, key, entry);
+        co_await storage2::writeOne(multiLayerStorage, key, entry);
 
         RANGES::single_view keyViews(key);
-        auto it = co_await levelStorage.read(keyViews);
+        auto it = co_await multiLayerStorage.read(keyViews);
 
         co_await it.next();
         const auto& iteratorKey = co_await it.key();
@@ -77,9 +77,9 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
         const auto& iteratorValue = co_await it.value();
         BOOST_CHECK_EQUAL(iteratorValue.get(), entry.get());
 
-        BOOST_CHECK_NO_THROW(levelStorage.pushMutableToImmutableFront());
+        BOOST_CHECK_NO_THROW(multiLayerStorage.pushMutableToImmutableFront());
         BOOST_CHECK_THROW(
-            co_await storage2::writeOne(levelStorage, key, entry), NotExistsMutableStorage);
+            co_await storage2::writeOne(multiLayerStorage, key, entry), NotExistsMutableStorage);
 
         co_return;
     }());
@@ -88,9 +88,9 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
 BOOST_AUTO_TEST_CASE(merge)
 {
     task::syncWait([this]() -> task::Task<void> {
-        BOOST_CHECK_THROW(levelStorage.pushMutableToImmutableFront(), NotExistsMutableStorage);
+        BOOST_CHECK_THROW(multiLayerStorage.pushMutableToImmutableFront(), NotExistsMutableStorage);
 
-        levelStorage.newMutable();
+        multiLayerStorage.newMutable();
 
         auto toKey = RANGES::views::transform([tableNamePool = &tableNamePool](int num) {
             return StateKey{storage2::string_pool::makeStringID(*tableNamePool, "test_table"),
@@ -103,17 +103,17 @@ BOOST_AUTO_TEST_CASE(merge)
             return entry;
         });
 
-        co_await levelStorage.write(RANGES::iota_view<int, int>(0, 100) | toKey,
+        co_await multiLayerStorage.write(RANGES::iota_view<int, int>(0, 100) | toKey,
             RANGES::iota_view<int, int>(0, 100) | toValue);
 
         BOOST_CHECK_THROW(
-            co_await levelStorage.mergeAndPopImmutableBack(), NotExistsImmutableStorage);
+            co_await multiLayerStorage.mergeAndPopImmutableBack(), NotExistsImmutableStorage);
 
-        levelStorage.pushMutableToImmutableFront();
-        co_await levelStorage.mergeAndPopImmutableBack();
+        multiLayerStorage.pushMutableToImmutableFront();
+        co_await multiLayerStorage.mergeAndPopImmutableBack();
 
         auto keys = RANGES::iota_view<int, int>(0, 100) | toKey;
-        auto it = co_await levelStorage.read(keys);
+        auto it = co_await multiLayerStorage.read(keys);
 
         int i = 0;
         while (co_await it.next())
@@ -129,12 +129,12 @@ BOOST_AUTO_TEST_CASE(merge)
         }
         BOOST_CHECK_EQUAL(i, 100);
 
-        levelStorage.newMutable();
-        co_await levelStorage.remove(RANGES::iota_view<int, int>(20, 30) | toKey);
-        levelStorage.pushMutableToImmutableFront();
-        co_await levelStorage.mergeAndPopImmutableBack();
+        multiLayerStorage.newMutable();
+        co_await multiLayerStorage.remove(RANGES::iota_view<int, int>(20, 30) | toKey);
+        multiLayerStorage.pushMutableToImmutableFront();
+        co_await multiLayerStorage.mergeAndPopImmutableBack();
 
-        auto removedIt = co_await levelStorage.read(keys);
+        auto removedIt = co_await multiLayerStorage.read(keys);
         i = 0;
         while (co_await removedIt.next())
         {

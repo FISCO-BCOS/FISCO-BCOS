@@ -16,7 +16,7 @@ template <class ResolverType, class Item>
 concept Resolver = requires(ResolverType&& resolver)
 {
     // clang-format off
-    { resolver.encode(std::declval<Item>()) } -> concepts::bytebuffer::ByteBuffer;
+    // { resolver.encode(std::declval<Item>()) } -> concepts::bytebuffer::ByteBuffer;
     { resolver.decode(std::string_view{})} -> std::convertible_to<Item>;
     // clang-format on
 };
@@ -29,9 +29,10 @@ struct ResolverEncodeReturnTrait
 template <class AnyResolver, class Key>
 using ResolverEncodeReturnType = typename ResolverEncodeReturnTrait<AnyResolver, Key>::type;
 
-struct RocksDBException : public bcos::Error
-{
-};
+// clang-format off
+struct RocksDBException : public bcos::Error {};
+struct UnsupportedMethod : public bcos::Error {};
+// clang-format on
 
 template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
     Resolver<ValueType> ValueResolver>
@@ -46,76 +47,59 @@ public:
     RocksDBStorage2(::rocksdb::DB& rocksDB) : m_rocksDB(rocksDB) {}
     RocksDBStorage2(
         ::rocksdb::DB& rocksDB, KeyResolver&& keyResolver, ValueResolver&& valueResolver)
-      : RocksDBStorage2(rocksDB),
+      : m_rocksDB(rocksDB),
         m_keyResolver(std::forward<KeyResolver>(keyResolver)),
         m_valueResolver(std::forward<ValueResolver>(valueResolver))
     {}
     using Key = KeyType;
     using Value = ValueType;
 
-    template <RANGES::input_range KeyRange>
     class ReadIterator
     {
-        friend class RocksDBStorage;
+        friend class RocksDBStorage2;
 
     private:
-        using StoreRangeType = std::conditional_t<std::is_rvalue_reference_v<KeyRange>,
-            std::remove_reference_t<KeyRange>, KeyRange>;
-
-        StoreRangeType m_keyRange;
-        RANGES::iterator_t<KeyRange> m_keyRangeIt;
-
         boost::container::small_vector<::rocksdb::PinnableSlice, 1> m_results;
         boost::container::small_vector<::rocksdb::Status, 1> m_status;
         int64_t m_index = -1;
         [[no_unique_address]] ValueResolver m_valueResolver;
 
     public:
-        ReadIterator(KeyRange&& keyRange) : m_keyRange(std::forward<KeyRange>(keyRange)) {}
-
         task::AwaitableValue<bool> next()
         {
-            if (m_index == -1)
-            {
-                m_keyRangeIt = RANGES::begin(m_keyRange);
-            }
-            else
-            {
-                RANGES::advance(m_keyRangeIt);
-            }
             return !(static_cast<size_t>(++m_index) == m_results.size());
         }
         task::AwaitableValue<bool> hasValue() const
         {
             auto exists = m_status[m_index].ok();
-            task::AwaitableValue<bool> hasValueAwaitable(exists);
+            task::AwaitableValue<bool> hasValueAwaitable(false);
+            hasValueAwaitable.value() = exists;
             return hasValueAwaitable;
         }
-        task::AwaitableValue<RANGES::range_value_t<KeyRange> const&> key() const
+        task::AwaitableValue<KeyType const&> key() const
         {
-            return *m_keyRangeIt;
+            BOOST_THROW_EXCEPTION(UnsupportedMethod{});
         }
         task::AwaitableValue<ValueType> value() const
         {
             task::AwaitableValue<ValueType> valueAwaitable(
-                m_valueResolver.decode(m_results[m_index]));
+                m_valueResolver.decode(m_results[m_index].ToStringView()));
             return valueAwaitable;
         }
     };
 
-    auto read(RANGES::input_range auto&& keys) -> task::AwaitableValue<ReadIterator<decltype(keys)>>
+    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto&& keys)
     {
-        task::AwaitableValue<ReadIterator<decltype(keys)>> readIteratorAwaitable(
-            std::forward<decltype(keys)>(keys));
+        task::AwaitableValue<ReadIterator> readIteratorAwaitable({});
         auto& readIterator = readIteratorAwaitable.value();
         if constexpr (RANGES::sized_range<decltype(keys)>)
         {
             if (RANGES::size(keys) == 1)
             {
                 readIterator.m_results.resize(1);
-                readIterator.m_exists.resize(1);
+                readIterator.m_status.resize(1);
 
-                auto key = m_keyResolver.encode();
+                auto key = m_keyResolver.encode(keys[0]);
                 auto status =
                     m_rocksDB.Get(::rocksdb::ReadOptions(), m_rocksDB.DefaultColumnFamily(),
                         ::rocksdb::Slice(RANGES::data(key), RANGES::size(key)),
@@ -138,7 +122,7 @@ public:
                 ResolverEncodeReturnType<KeyResolver, RANGES::range_value_t<decltype(keys)>>>>();
 
         auto rocksDBKeys = encodedKeys | RANGES::views::transform([](const auto& encodedKey) {
-            return ::rocksdb::Slice(RANGES::data(encodedKeys), RANGES::size(encodedKey));
+            return ::rocksdb::Slice(RANGES::data(encodedKey), RANGES::size(encodedKey));
         }) | RANGES::to<std::vector<::rocksdb::Slice>>();
 
         readIterator.m_results.resize(RANGES::size(rocksDBKeys));
@@ -160,8 +144,8 @@ public:
             auto encodedKey = m_keyResolver.encode(key);
             auto encodedValue = m_valueResolver.encode(value);
 
-            writeBatch.Put(Slice(RANGES::data(encodedKey), RANGES::size(encodedKey)),
-                Slice(RANGES::data(encodedValue), RANGES::size(encodedValue)));
+            writeBatch.Put(::rocksdb::Slice(RANGES::data(encodedKey), RANGES::size(encodedKey)),
+                ::rocksdb::Slice(RANGES::data(encodedValue), RANGES::size(encodedValue)));
         }
 
         ::rocksdb::WriteOptions options;
@@ -181,7 +165,7 @@ public:
         for (auto const& key : keys)
         {
             auto encodedKey = m_keyResolver.encode(key);
-            writeBatch.Delete(Slice(RANGES::data(encodedKey), RANGES::size(encodedKey)));
+            writeBatch.Delete(::rocksdb::Slice(RANGES::data(encodedKey), RANGES::size(encodedKey)));
         }
 
         ::rocksdb::WriteOptions options;

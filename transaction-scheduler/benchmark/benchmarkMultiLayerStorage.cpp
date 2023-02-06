@@ -17,6 +17,7 @@ struct TableNameHash
         return std::hash<bcos::transaction_executor::TableNameID>{}(tableID);
     }
 };
+
 struct Fixture
 {
     Fixture() : levelStorage(backendStorage) {}
@@ -122,8 +123,8 @@ static void write1(benchmark::State& state)
     }(state));
 }
 
-BENCHMARK(read1)->DenseRange(40000, 200000, 40000);
-BENCHMARK(read10)->DenseRange(40000, 200000, 40000);
+BENCHMARK(read1)->Arg(100000)->Arg(1000000);
+BENCHMARK(read10)->Arg(100000)->Arg(1000000);
 BENCHMARK(write1);
 
 BENCHMARK_MAIN();

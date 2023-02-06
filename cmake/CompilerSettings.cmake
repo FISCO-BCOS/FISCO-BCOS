@@ -111,6 +111,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-Wno-error=stringop-overflow)
         add_compile_options(-Wno-error=stringop-overread)
         add_compile_options(-Wno-error=interference-size)
+        # add_compile_options(-fconcepts-diagnostics-depth=10)
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG "-O -g")
