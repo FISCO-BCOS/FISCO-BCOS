@@ -59,4 +59,7 @@ public:
     virtual TransactionFactory::Ptr transactionFactory() = 0;
     virtual TransactionReceiptFactory::Ptr receiptFactory() = 0;
 };
+
+template <class T>
+concept IsBlockFactory = std::derived_from<T, BlockFactory> || std::same_as<T, BlockFactory>;
 }  // namespace bcos::protocol

@@ -34,9 +34,9 @@ enum class VMKind
     evmone,
 };
 
-struct UnknownVM : public bcos::Error
-{
-};
+// clang-format off
+struct UnknownVMError : public bcos::Error {};
+// clang-format on
 
 class VMFactory
 {
@@ -52,7 +52,7 @@ public:
         case VMKind::evmone:
             return VMInstance{evmc_create_evmone()};
         default:
-            BOOST_THROW_EXCEPTION(UnknownVM{});
+            BOOST_THROW_EXCEPTION(UnknownVMError{});
         }
     }
 };

@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(noMutable)
                 StateKey{
                     storage2::string_pool::makeStringID(tableNamePool, "test_table"), "test_key"},
                 std::move(entry)),
-            NotExistsMutableStorage);
+            NotExistsMutableStorageError);
 
         co_return;
     }());
@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(noMutable)
 BOOST_AUTO_TEST_CASE(readWriteMutable)
 {
     task::syncWait([this]() -> task::Task<void> {
-        BOOST_CHECK_THROW(multiLayerStorage.pushMutableToImmutableFront(), NotExistsMutableStorage);
+        BOOST_CHECK_THROW(multiLayerStorage.pushMutableToImmutableFront(), NotExistsMutableStorageError);
 
         multiLayerStorage.newMutable();
         StateKey key{storage2::string_pool::makeStringID(tableNamePool, "test_table"), "test_key"};
@@ -79,7 +79,7 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
 
         BOOST_CHECK_NO_THROW(multiLayerStorage.pushMutableToImmutableFront());
         BOOST_CHECK_THROW(
-            co_await storage2::writeOne(multiLayerStorage, key, entry), NotExistsMutableStorage);
+            co_await storage2::writeOne(multiLayerStorage, key, entry), NotExistsMutableStorageError);
 
         co_return;
     }());
@@ -88,7 +88,7 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
 BOOST_AUTO_TEST_CASE(merge)
 {
     task::syncWait([this]() -> task::Task<void> {
-        BOOST_CHECK_THROW(multiLayerStorage.pushMutableToImmutableFront(), NotExistsMutableStorage);
+        BOOST_CHECK_THROW(multiLayerStorage.pushMutableToImmutableFront(), NotExistsMutableStorageError);
 
         multiLayerStorage.newMutable();
 
@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(merge)
             RANGES::iota_view<int, int>(0, 100) | toValue);
 
         BOOST_CHECK_THROW(
-            co_await multiLayerStorage.mergeAndPopImmutableBack(), NotExistsImmutableStorage);
+            co_await multiLayerStorage.mergeAndPopImmutableBack(), NotExistsImmutableStorageError);
 
         multiLayerStorage.pushMutableToImmutableFront();
         co_await multiLayerStorage.mergeAndPopImmutableBack();

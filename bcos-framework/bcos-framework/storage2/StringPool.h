@@ -46,15 +46,9 @@ struct std::equal_to<boost::container::small_vector<char, n>>
 
 namespace bcos::storage2::string_pool
 {
-struct OutOfRange : public bcos::Error
-{
-};
-struct NoMatchStringPool : public bcos::Error
-{
-};
-struct EmptyStringID : public bcos::Error
-{
-};
+// clang-format off
+struct EmptyStringIDError : public bcos::Error {};
+// clang-format on
 
 class StringPool
 {
@@ -83,12 +77,13 @@ public:
     StringID(StringID&&) = default;
     StringID& operator=(const StringID&) = default;
     StringID& operator=(StringID&&) = default;
+    ~StringID() = default;
 
     std::string_view operator*() const
     {
         if (m_pool == nullptr)
         {
-            BOOST_THROW_EXCEPTION(EmptyStringID{});
+            BOOST_THROW_EXCEPTION(EmptyStringIDError{});
         }
         return m_pool->query(m_stringPoolID);
     }

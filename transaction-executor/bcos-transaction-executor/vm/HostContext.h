@@ -49,9 +49,9 @@
 namespace bcos::transaction_executor
 {
 
-struct NotFoundCode : public bcos::Error
-{
-};
+// clang-format off
+struct NotFoundCodeError : public bcos::Error {};
+// clang-format on
 
 inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 {
@@ -339,7 +339,7 @@ public:
         if (!codeEntry)
         {
             BOOST_THROW_EXCEPTION(
-                NotFoundCode{} << bcos::Error::ErrorMessage(
+                NotFoundCodeError{} << bcos::Error::ErrorMessage(
                     std::string("Not found contract code: ").append(*m_myContractTable)));
         }
         auto code = codeEntry->get();

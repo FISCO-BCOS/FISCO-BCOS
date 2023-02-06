@@ -9,15 +9,12 @@
 
 namespace bcos::transaction_scheduler
 {
-struct DuplicateMutableStorage : public bcos::Error
-{
-};
-struct NotExistsMutableStorage : public bcos::Error
-{
-};
-struct NotExistsImmutableStorage : public bcos::Error
-{
-};
+
+// clang-format off
+struct DuplicateMutableStorageError : public bcos::Error {};
+struct NotExistsMutableStorageError : public bcos::Error {};
+struct NotExistsImmutableStorageError : public bcos::Error {};
+// clang-format on
 
 template <transaction_executor::StateStorage MutableStorage,
     transaction_executor::StateStorage BackendStorage, class CachedStorage = void>
@@ -36,9 +33,9 @@ private:
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::add_lvalue_reference_t<CachedStorage>,
         std::monostate>
-        m_cacheStorage;                // Cache
-                                       // storage
-    BackendStorage& m_backendStorage;  // Backend storage
+        m_cacheStorage;               // Cache
+                                      // storage
+    BackendStorage m_backendStorage;  // Backend storage
 
     std::mutex m_immutablesMutex;
     std::mutex m_mergeMutex;
@@ -68,10 +65,11 @@ public:
             }
         }
 
-        ReadIterator(const ReadIterator&) = default;
+        ReadIterator(const ReadIterator&) = delete;
         ReadIterator(ReadIterator&& rhs) noexcept = default;
         ReadIterator& operator=(const ReadIterator&) = delete;
         ReadIterator& operator=(ReadIterator&&) noexcept = default;
+        ~ReadIterator() = default;
 
         task::AwaitableValue<bool> next()
         {
@@ -182,8 +180,8 @@ public:
         bool m_started = false;
     };
 
-    MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
-      : m_backendStorage(backendStorage)
+    MultiLayerStorage(BackendStorage&& backendStorage) requires(!withCacheStorage)
+      : m_backendStorage(std::forward<BackendStorage>(backendStorage))
     {}
 
     MultiLayerStorage(BackendStorage& backendStorage,
@@ -205,7 +203,7 @@ public:
     {
         if (!m_mutableStorage)
         {
-            BOOST_THROW_EXCEPTION(NotExistsMutableStorage{});
+            BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
         }
 
         co_await m_mutableStorage->write(
@@ -217,7 +215,7 @@ public:
     {
         if (!m_mutableStorage)
         {
-            BOOST_THROW_EXCEPTION(NotExistsMutableStorage{});
+            BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
         }
 
         co_await m_mutableStorage->remove(keys);
@@ -239,7 +237,7 @@ public:
         std::unique_lock lock(m_immutablesMutex);
         if (m_mutableStorage)
         {
-            BOOST_THROW_EXCEPTION(DuplicateMutableStorage{});
+            BOOST_THROW_EXCEPTION(DuplicateMutableStorageError{});
         }
 
         m_mutableStorage = std::make_shared<MutableStorage>(args...);
@@ -251,7 +249,7 @@ public:
     {
         if (!m_mutableStorage)
         {
-            BOOST_THROW_EXCEPTION(NotExistsMutableStorage{});
+            BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
         }
         std::unique_lock lock(m_immutablesMutex);
         m_immutableStorages.push_front(m_mutableStorage);
@@ -263,7 +261,7 @@ public:
         std::unique_lock lock(m_immutablesMutex);
         if (m_immutableStorages.empty())
         {
-            BOOST_THROW_EXCEPTION(NotExistsImmutableStorage{});
+            BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
         m_immutableStorages.pop_front();
     }
@@ -274,7 +272,7 @@ public:
         std::unique_lock immutablesLock(m_immutablesMutex);
         if (m_immutableStorages.empty())
         {
-            BOOST_THROW_EXCEPTION(NotExistsImmutableStorage{});
+            BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
         auto immutableStorage = std::move(m_immutableStorages.back());
         m_immutableStorages.pop_back();

@@ -53,4 +53,8 @@ public:
         return header;
     }
 };
+
+template <class T>
+concept IsBlockHeaderFactory =
+    std::derived_from<T, BlockHeaderFactory> || std::same_as<T, BlockHeaderFactory>;
 }  // namespace bcos::protocol

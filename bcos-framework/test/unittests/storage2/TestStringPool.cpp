@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(compare)
     StringID emptyID2;
     BOOST_CHECK_EQUAL(emptyID, emptyID2);
 
-    BOOST_CHECK_THROW(*emptyID, EmptyStringID);
+    BOOST_CHECK_THROW(*emptyID, EmptyStringIDError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
