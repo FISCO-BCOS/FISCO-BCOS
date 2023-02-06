@@ -1435,12 +1435,6 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture, c
     }
 }
 
-static void removeByConditionTest(TableFactoryPrecompiledV320Fixture* fixture, const int INSERT_COUNT, const int INTERVAL, 
-    const int VALID_COUNT, const int VALID_COUNT_PER_SECTION, BlockNumber& number, const std::map<uint32_t, uint32_t>& randomSet)
-{
-    auto callAddress = fixture->tableTestAddress;
-}
-
 BOOST_FIXTURE_TEST_SUITE(precompiledTableTestV320, TableFactoryPrecompiledV320Fixture)
 
 BOOST_AUTO_TEST_CASE(createTableTest)
