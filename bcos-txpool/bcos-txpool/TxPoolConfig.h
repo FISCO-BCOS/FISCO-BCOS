@@ -27,9 +27,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionMetaData.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class TxPoolConfig
 {
@@ -48,7 +46,7 @@ public:
         m_blockLimit(_blockLimit)
     {}
 
-    virtual ~TxPoolConfig() {}
+    virtual ~TxPoolConfig() = default;
     virtual void setPoolLimit(size_t _poolLimit) { m_poolLimit = _poolLimit; }
     virtual size_t poolLimit() const { return m_poolLimit; }
 
@@ -63,7 +61,7 @@ public:
     bcos::protocol::BlockFactory::Ptr blockFactory() { return m_blockFactory; }
     void setBlockFactory(bcos::protocol::BlockFactory::Ptr _blockFactory)
     {
-        m_blockFactory = _blockFactory;
+        m_blockFactory = std::move(_blockFactory);
     }
 
     bcos::protocol::TransactionFactory::Ptr txFactory()
@@ -82,5 +80,4 @@ private:
     size_t m_poolLimit = 15000;
     int64_t m_blockLimit = 1000;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

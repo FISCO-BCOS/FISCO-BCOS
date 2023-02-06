@@ -58,7 +58,7 @@ void Sealer::stop()
 
 void Sealer::init(bcos::consensus::ConsensusInterface::Ptr _consensus)
 {
-    m_sealerConfig->setConsensusInterface(_consensus);
+    m_sealerConfig->setConsensusInterface(std::move(_consensus));
 }
 
 void Sealer::asyncNotifySealProposal(uint64_t _proposalStartIndex, uint64_t _proposalEndIndex,
@@ -122,7 +122,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     }
     if (_block->blockHeader()->number() <= m_sealingManager->currentNumber())
     {
-        SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has alreay been committed")
+        SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has already been committed")
                        << LOG_KV("proposalIndex", _block->blockHeader()->number())
                        << LOG_KV("currentNumber", m_sealingManager->currentNumber());
         m_sealingManager->notifyResetProposal(_block);
@@ -156,8 +156,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
                    << LOG_KV("txsSize", _block->transactionsHashSize())
                    << LOG_KV("version", version);
     m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, ref(*encodedData),
-        _block->blockHeader()->number(), _block->blockHeader()->hash(),
-        [_block](Error::Ptr _error) {
+        _block->blockHeader()->number(), _block->blockHeader()->hash(), [_block](auto&& _error) {
             if (_error == nullptr)
             {
                 return;

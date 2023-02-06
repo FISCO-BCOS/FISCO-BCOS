@@ -23,9 +23,9 @@
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-utilities/DataConvertUtility.h>
-namespace bcos
-{
-namespace txpool
+
+#include <utility>
+namespace bcos::txpool
 {
 class TxValidator : public TxValidatorInterface
 {
@@ -34,12 +34,12 @@ public:
     TxValidator(NonceCheckerInterface::Ptr _txPoolNonceChecker,
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite, std::string const& _groupId,
         std::string const& _chainId)
-      : m_txPoolNonceChecker(_txPoolNonceChecker),
-        m_cryptoSuite(_cryptoSuite),
+      : m_txPoolNonceChecker(std::move(_txPoolNonceChecker)),
+        m_cryptoSuite(std::move(_cryptoSuite)),
         m_groupId(_groupId),
         m_chainId(_chainId)
     {}
-    ~TxValidator() override {}
+    ~TxValidator() override = default;
 
     bcos::protocol::TransactionStatus verify(bcos::protocol::Transaction::ConstPtr _tx) override;
     bcos::protocol::TransactionStatus submittedToChain(
@@ -49,8 +49,7 @@ protected:
     virtual bool isSystemTransaction(bcos::protocol::Transaction::ConstPtr _tx)
     {
         auto txAddress = _tx->to();
-        return bcos::precompiled::c_systemTxsAddress.count(
-            std::string(txAddress.begin(), txAddress.end()));
+        return bcos::precompiled::c_systemTxsAddress.contains(std::string(txAddress));
     }
 
 private:
@@ -59,5 +58,4 @@ private:
     std::string m_groupId;
     std::string m_chainId;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

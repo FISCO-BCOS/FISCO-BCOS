@@ -27,9 +27,7 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <bcos-utilities/Worker.h>
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockSync : public BlockSyncInterface,
                   public Worker,
@@ -38,22 +36,25 @@ class BlockSync : public BlockSyncInterface,
 public:
     using Ptr = std::shared_ptr<BlockSync>;
     BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs = 200);
-    ~BlockSync() override {}
+    ~BlockSync() override = default;
 
     void start() override;
     void stop() override;
 
-    // called by the frontService to dispatch message
+    // called by the frontService to dispatch message, server-side
     void asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const& _uuid,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-        std::function<void(Error::Ptr _error)> _onRecv) override;
+        std::function<void(Error::Ptr)> _onRecv) override;
 
+    // consensus notify sync module to try to commit block
     void asyncNotifyNewBlock(bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
         std::function<void(Error::Ptr)> _onRecv) override;
+    // for rpc
     void asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _onGetSyncInfo) override;
 
-    void asyncNotifyCommittedIndex(bcos::protocol::BlockNumber _number,
-        std::function<void(Error::Ptr _error)> _onRecv) override
+    // consensus notify sync module committed block number
+    void asyncNotifyCommittedIndex(
+        bcos::protocol::BlockNumber _number, std::function<void(Error::Ptr)> _onRecv) override
     {
         m_config->setCommittedProposalNumber(_number);
         if (_onRecv)
@@ -85,9 +86,12 @@ protected:
     void initSendResponseHandler();
     void executeWorker() override;
     void workerProcessLoop() override;
-    // for message handle
+    /// for message handle
+    // call when receive BlockStatusPacket, update peers status
     virtual void onPeerStatus(bcos::crypto::NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg);
+    // call when receive BlockResponsePacket, receive block and push in queue
     virtual void onPeerBlocks(bcos::crypto::NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg);
+    // call when receive BlockRequestPacket, send block to peer
     virtual void onPeerBlocksRequest(
         bcos::crypto::NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg);
 
@@ -115,7 +119,6 @@ protected:
         bcos::protocol::BlockNumber _number);
     void printSyncInfo();
 
-protected:
     BlockSyncConfig::Ptr m_config;
     SyncPeerStatus::Ptr m_syncStatus;
     DownloadingQueue::Ptr m_downloadingQueue;
@@ -139,5 +142,4 @@ protected:
 
     std::atomic_bool m_masterNode = {false};
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

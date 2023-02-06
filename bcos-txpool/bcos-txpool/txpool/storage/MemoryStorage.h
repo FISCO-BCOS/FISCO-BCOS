@@ -45,6 +45,7 @@ public:
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
 
     bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) override;
+    // invoke when scheduler finished block executed and notify txpool new block result
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
     bcos::protocol::Transaction::Ptr removeSubmittedTx(
@@ -53,6 +54,7 @@ public:
     bcos::protocol::TransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
 
+    // FIXME: deprecated, after using txpool::broadcastPushTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
@@ -70,6 +72,7 @@ public:
     }
     void clear() override;
 
+    // FIXME: deprecated, after using txpool::broadcastPushTransaction
     bcos::crypto::HashListPtr filterUnknownTxs(
         bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
@@ -80,7 +83,6 @@ public:
 
     void stop() override;
     void start() override;
-    void printPendingTxs() override;
 
     std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
         bcos::protocol::Block::Ptr _block) override;

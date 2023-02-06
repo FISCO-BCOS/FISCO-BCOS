@@ -49,7 +49,7 @@ void BlockSyncConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig)
     });
 
     // Note: can't add lock before asyncNotifyNewBlock in case of deadlock
-    Guard l(m_mutex);
+    Guard lock(m_mutex);
     if (_ledgerConfig->blockNumber() <= m_blockNumber && m_blockNumber > 0)
     {
         return;
@@ -101,13 +101,13 @@ void BlockSyncConfig::resetBlockInfo(BlockNumber _blockNumber, bcos::crypto::Has
 
 HashType const& BlockSyncConfig::hash() const
 {
-    ReadGuard l(x_hash);
+    ReadGuard lock(x_hash);
     return m_hash;
 }
 
 void BlockSyncConfig::setHash(HashType const& _hash)
 {
-    WriteGuard l(x_hash);
+    WriteGuard lock(x_hash);
     m_hash = _hash;
 }
 
@@ -118,13 +118,13 @@ void BlockSyncConfig::setKnownHighestNumber(BlockNumber _highestNumber)
 
 void BlockSyncConfig::setKnownLatestHash(HashType const& _hash)
 {
-    WriteGuard l(x_knownLatestHash);
+    WriteGuard lock(x_knownLatestHash);
     m_knownLatestHash = _hash;
 }
 
 HashType const& BlockSyncConfig::knownLatestHash()
 {
-    ReadGuard l(x_knownLatestHash);
+    ReadGuard lock(x_knownLatestHash);
     return m_knownLatestHash;
 }
 
@@ -164,7 +164,7 @@ bcos::protocol::NodeType BlockSyncConfig::determineNodeType()
 bool BlockSyncConfig::existNode(bcos::consensus::ConsensusNodeListPtr const& _nodeList,
     SharedMutex& _lock, bcos::crypto::NodeIDPtr _nodeID)
 {
-    ReadGuard l(_lock);
+    ReadGuard lock(_lock);
     for (auto const& it : *_nodeList)
     {
         if (it->nodeID()->data() == _nodeID->data())
