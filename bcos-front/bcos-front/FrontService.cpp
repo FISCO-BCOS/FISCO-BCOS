@@ -17,6 +17,7 @@
  * @author: octopus
  * @date 2021-04-19
  */
+#include "bcos-utilities/CompositeBuffer.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-front/Common.h>
@@ -351,8 +352,10 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
     auto buffer = std::make_shared<bytes>();
     message->encode(*buffer);
 
+    auto compositeBuffer = CompositeBufferFactory::build(*buffer);
+
     m_gatewayInterface->asyncSendBroadcastMessage(
-        _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
+        _type, m_groupID, _moduleID, m_nodeID, compositeBuffer);
 }
 
 /**
@@ -619,11 +622,13 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
     }
 
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
+
+    auto compositeBuffer = CompositeBufferFactory::build(*buffer);
 
     // call gateway interface to send the message
     m_gatewayInterface->asyncSendMessageByNodeID(m_groupID, _moduleID, m_nodeID, _nodeID,
-        bytesConstRef(buffer->data(), buffer->size()), [_receiveMsgCallback](Error::Ptr _error) {
+        compositeBuffer, [_receiveMsgCallback](Error::Ptr _error) {
             if (_receiveMsgCallback)
             {
                 _receiveMsgCallback(_error);

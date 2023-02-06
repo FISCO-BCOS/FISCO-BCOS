@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "bcos-utilities/CompositeBuffer.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -30,7 +31,6 @@
 #include "bcos-tars-protocol/tars/GatewayService.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
-#include <string>
 
 #define GATEWAYCLIENT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYCLIENT][INITIALIZER]"
 #define GATEWAYCLIENT_BADGE "[GATEWAYCLIENT]"
@@ -54,7 +54,7 @@ public:
 
     void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bcos::bytesConstRef _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override
+        bcos::CompositeBuffer::Ptr _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override
     {
         class Callback : public bcostars::GatewayServicePrxCallback
         {
@@ -91,11 +91,12 @@ public:
         }
         auto srcNodeID = _srcNodeID->data();
         auto destNodeID = _dstNodeID->data();
+        auto buffer = _payload->toSingleBuffer();
         m_prx->tars_set_timeout(c_networkTimeout)
             ->async_asyncSendMessageByNodeID(new Callback(_errorRespFunc), _groupID, _moduleID,
                 std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
                 std::vector<char>(destNodeID.begin(), destNodeID.end()),
-                std::vector<char>(_payload.begin(), _payload.end()));
+                std::vector<char>(buffer.begin(), buffer.end()));
     }
 
     void asyncGetPeers(std::function<void(
@@ -154,7 +155,7 @@ public:
 
     void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-        bcos::bytesConstRef _payload) override
+        bcos::CompositeBuffer::Ptr _payload) override
     {
         std::vector<std::vector<char>> tarsNodeIDs;
         for (auto const& it : _dstNodeIDs)
@@ -170,13 +171,14 @@ public:
             return;
         }
         auto srcNodeID = _srcNodeID->data();
+        auto buffer = _payload->toSingleBuffer();
         m_prx->async_asyncSendMessageByNodeIDs(nullptr, _groupID, _moduleID,
             std::vector<char>(srcNodeID.begin(), srcNodeID.end()), tarsNodeIDs,
-            std::vector<char>(_payload.begin(), _payload.end()));
+            std::vector<char>(buffer.begin(), buffer.end()));
     }
 
     void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::bytesConstRef _payload) override
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::CompositeBuffer::Ptr _payload) override
     {
         auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
@@ -186,9 +188,10 @@ public:
             return;
         }
         auto srcNodeID = _srcNodeID->data();
+        auto data = _payload->toSingleBuffer();
         m_prx->async_asyncSendBroadcastMessage(nullptr, _type, _groupID, _moduleID,
             std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
-            std::vector<char>(_payload.begin(), _payload.end()));
+            std::vector<char>(data.begin(), data.end()));
     }
 
     void asyncGetGroupNodeInfo(const std::string& _groupID,

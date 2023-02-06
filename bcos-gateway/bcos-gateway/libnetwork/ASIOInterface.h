@@ -98,7 +98,7 @@ public:
     virtual void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler);
 
     virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
-        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
+        const std::vector<boost::asio::const_buffer>& buffers, ReadWriteHandler handler)
     {
         auto type = m_type;
         auto ioService = socket->ioService();

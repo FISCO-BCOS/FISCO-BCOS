@@ -116,16 +116,16 @@ public:
         return nullptr;
     }
 
-    void asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
-        Options options = Options(), P2PResponseCallback _callback = nullptr) override;
+    void asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
+        Options options = Options(), P2PRespCallback _callback = nullptr) override;
 
     void asyncBroadcastMessageToP2PNodes(
-        int16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) override;
+        uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) override;
 
-    void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<P2pID>& _nodeIDs,
+    void asyncSendMessageByP2PNodeIDs(uint16_t _type, const std::vector<P2pID>& _nodeIDs,
         bytesConstRef _payload, Options _options) override;
 
-    void registerHandlerByMsgType(int16_t _type, MessageHandler const& _msgHandler) override
+    void registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) override
     {
         UpgradableGuard l(x_msgHandlers);
         if (m_msgHandlers.count(_type) || !_msgHandler)
@@ -136,17 +136,17 @@ public:
         m_msgHandlers[_type] = _msgHandler;
     }
 
-    MessageHandler getMessageHandlerByMsgType(int16_t _type)
+    MessageHandler getMessageHandlerByMsgType(uint16_t _type)
     {
         ReadGuard l(x_msgHandlers);
-        if (m_msgHandlers.count(_type))
+        if (m_msgHandlers.count(_type) != 0u)
         {
             return m_msgHandlers[_type];
         }
         return nullptr;
     }
 
-    void eraseHandlerByMsgType(int16_t _type) override
+    void eraseHandlerByMsgType(uint16_t _type) override
     {
         UpgradableGuard l(x_msgHandlers);
         if (!m_msgHandlers.count(_type))
@@ -177,11 +177,11 @@ public:
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
         Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
-
-    std::shared_ptr<P2PMessage> newP2PMessage(int16_t _type, bytesConstRef _payload);
     // handshake protocol
     void asyncSendProtocol(P2PSession::Ptr _session);
     void onReceiveProtocol(
+        NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+    void onReceiveHeartbeat(
         NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
 
     // handlers called when new-session
@@ -248,7 +248,7 @@ protected:
 
     bool m_run = false;
 
-    std::map<int16_t, MessageHandler> m_msgHandlers;
+    std::map<uint16_t, MessageHandler> m_msgHandlers;
     mutable SharedMutex x_msgHandlers;
 
     // the local protocol

@@ -2,6 +2,8 @@
 
 #include "../Common/TarsUtils.h"
 #include "GatewayInitializer.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/CompositeBuffer.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-tars-protocol/Common.h>
 #include <bcos-tars-protocol/ErrorConverter.h>
@@ -35,8 +37,12 @@ public:
         current->setResponse(false);
         auto bcosNodeID = m_gatewayInitializer->keyFactory()->createKey(
             bcos::bytesConstRef((const bcos::byte*)srcNodeID.data(), srcNodeID.size()));
-        m_gatewayInitializer->gateway()->asyncSendBroadcastMessage(_type, groupID, moduleID,
-            bcosNodeID, bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()));
+
+        auto buffer = bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size());
+        auto compositeBuffer = CompositeBufferFactory::build(buffer);
+
+        m_gatewayInitializer->gateway()->asyncSendBroadcastMessage(
+            _type, groupID, moduleID, bcosNodeID, compositeBuffer);
 
         async_response_asyncSendBroadcastMessage(current, toTarsError<bcos::Error::Ptr>(nullptr));
         return bcostars::Error();
@@ -75,10 +81,11 @@ public:
             bcos::bytesConstRef((const bcos::byte*)srcNodeID.data(), srcNodeID.size()));
         auto bcosDstNodeID = keyFactory->createKey(
             bcos::bytesConstRef((const bcos::byte*)dstNodeID.data(), dstNodeID.size()));
+        auto compositeBuffer =
+            CompositeBufferFactory::build(bcos::bytes{payload.begin(), payload.end()});
 
         m_gatewayInitializer->gateway()->asyncSendMessageByNodeID(groupID, moduleID, bcosSrcNodeID,
-            bcosDstNodeID, bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()),
-            [current](bcos::Error::Ptr error) {
+            bcosDstNodeID, compositeBuffer, [current](bcos::Error::Ptr error) {
                 async_response_asyncSendMessageByNodeID(current, toTarsError(error));
             });
         return bcostars::Error();
@@ -100,8 +107,11 @@ public:
                 bcos::bytesConstRef((const bcos::byte*)it.data(), it.size())));
         }
 
-        m_gatewayInitializer->gateway()->asyncSendMessageByNodeIDs(groupID, moduleID, bcosSrcNodeID,
-            nodeIDs, bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()));
+        auto compositeBuffer =
+            CompositeBufferFactory::build(bcos::bytes{payload.begin(), payload.end()});
+
+        m_gatewayInitializer->gateway()->asyncSendMessageByNodeIDs(
+            groupID, moduleID, bcosSrcNodeID, nodeIDs, compositeBuffer);
 
         async_response_asyncSendMessageByNodeIDs(current, toTarsError<bcos::Error::Ptr>(nullptr));
         return bcostars::Error();

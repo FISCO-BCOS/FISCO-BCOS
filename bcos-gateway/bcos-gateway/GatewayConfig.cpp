@@ -200,7 +200,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       nodes_file=nodes.json
       */
     m_uuid = _pt.get<std::string>("p2p.uuid", "");
-    if (_uuidRequired && m_uuid.size() == 0)
+    if (_uuidRequired && m_uuid.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "initP2PConfig: invalid uuid! Must be non-empty!"));

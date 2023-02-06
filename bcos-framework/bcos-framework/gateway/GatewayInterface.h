@@ -26,6 +26,7 @@
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/CompositeBuffer.h>
 #include <bcos-utilities/Error.h>
 
 namespace bcos
@@ -80,7 +81,7 @@ public:
      */
     virtual void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, ErrorRespFunc _errorRespFunc) = 0;
+        CompositeBuffer::Ptr _payload, ErrorRespFunc _errorRespFunc) = 0;
 
     /**
      * @brief: send message to multiple nodes
@@ -94,7 +95,7 @@ public:
      */
     virtual void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-        bytesConstRef _payload) = 0;
+        CompositeBuffer::Ptr _payload) = 0;
 
     /**
      * @brief: send message to all nodes
@@ -106,7 +107,7 @@ public:
      * @return void
      */
     virtual void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
-        int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
+        int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, CompositeBuffer::Ptr _payload) = 0;
 
     /// multi-group related interfaces
 

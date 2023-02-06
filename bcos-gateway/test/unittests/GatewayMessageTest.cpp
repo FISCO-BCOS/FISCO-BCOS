@@ -20,6 +20,8 @@
  */
 
 #include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/CompositeBuffer.h"
 #include <boost/test/tools/old/interface.hpp>
 #define BOOST_TEST_MAIN
 
@@ -78,7 +80,7 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
     auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     encodeMsg->setVersion(_version);
     auto buffer = std::make_shared<bytes>();
-    auto r = encodeMsg->encode(*buffer.get());
+    auto r = encodeMsg->encode(*buffer);
 
     BOOST_CHECK_EQUAL(r, true);
 
@@ -99,7 +101,7 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), 0);
     BOOST_CHECK_EQUAL(decodeMsg->seq(), 0);
     BOOST_CHECK_EQUAL(decodeMsg->ext(), 0);
-    BOOST_CHECK_EQUAL(decodeMsg->payload()->size(), 0);
+    BOOST_CHECK_EQUAL(decodeMsg->readPayload()->size(), 0);
 
     auto decodeMsg1 = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     // decode with less length
@@ -166,6 +168,7 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     uint16_t packetType = 0x4321;
     uint16_t ext = 0x1101;
     auto payload = std::make_shared<bytes>(10000, 'a');
+    auto buffer = CompositeBufferFactory::build(*payload);
 
     auto version = encodeMsg->version();
     int16_t headerLen = 14;
@@ -177,10 +180,10 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     encodeMsg->setSeq(seq);
     encodeMsg->setPacketType(packetType);
     encodeMsg->setExt(ext);
-    encodeMsg->setPayload(payload);
+    encodeMsg->setWritePayload(buffer);
 
-    auto buffer = std::make_shared<bytes>();
-    auto r = encodeMsg->encode(*buffer.get());
+    auto encodeBuffer = CompositeBufferFactory::build(*payload);
+    auto r = encodeMsg->encode(*encodeBuffer);
     BOOST_CHECK_EQUAL(r, true);
 
     // decode default
@@ -456,7 +459,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_compress)
     encodeMsg->setOptions(options);
 
     // compress payload
-    auto compressData = std::make_shared<bytes>();
+    bcos::bytes compressData;
     auto r = encodeMsg->tryToCompressPayload(compressData);
     BOOST_CHECK(r);
     BOOST_CHECK_EQUAL((encodeMsg->ext() & bcos::protocol::MessageExtFieldFlag::Compress),

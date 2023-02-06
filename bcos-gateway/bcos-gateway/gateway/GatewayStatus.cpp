@@ -88,7 +88,7 @@ bool GatewayStatus::randomChooseNode(
         }
         p2pNodeList = m_groupP2PNodeList.at(_groupID).at(_type);
     }
-    if (p2pNodeList.size() == 0)
+    if (p2pNodeList.empty())
     {
         return false;
     }
@@ -117,7 +117,7 @@ void GatewayStatus::removeP2PIDWithoutLock(
         {
             it->second.erase(_p2pNodeID);
         }
-        if (it->second.size() == 0)
+        if (it->second.empty())
         {
             it = p2pNodeList.erase(it);
             continue;
@@ -133,7 +133,7 @@ void GatewayStatus::removeP2PNode(std::string const& _p2pNodeID)
     {
         auto& p2pNodeList = m_groupP2PNodeList[pGroupInfo->first];
         removeP2PIDWithoutLock(pGroupInfo->first, _p2pNodeID);
-        if (p2pNodeList.size() == 0)
+        if (p2pNodeList.empty())
         {
             pGroupInfo = m_groupP2PNodeList.erase(pGroupInfo);
             continue;

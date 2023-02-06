@@ -20,6 +20,7 @@
  */
 
 #include "FakeGateway.h"
+#include "bcos-utilities/WrapperBuffer.h"
 #include <bcos-front/Common.h>
 
 using namespace bcos;
@@ -37,10 +38,12 @@ using namespace bcos::gateway;
  * @return void
  */
 void FakeGateway::asyncSendMessageByNodeID(const std::string& _groupID, int,
-    bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload,
-    bcos::gateway::ErrorRespFunc _errorRespFunc)
+    bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+    CompositeBuffer::Ptr _payload, bcos::gateway::ErrorRespFunc _errorRespFunc)
 {
-    m_frontService->onReceiveMessage(_groupID, _dstNodeID, _payload, _errorRespFunc);
+    auto buffer = _payload->toSingleBuffer();
+    auto payload = WrapperBufferFactory::build(buffer);
+    m_frontService->onReceiveMessage(_groupID, _dstNodeID, payload->asRefBuffer(), _errorRespFunc);
 
     FRONT_LOG(DEBUG) << "[FakeGateway] asyncSendMessageByNodeID" << LOG_KV("groupID", _groupID)
                      << LOG_KV("nodeID", _srcNodeID->hex()) << LOG_KV("nodeID", _dstNodeID->hex());
@@ -56,12 +59,15 @@ void FakeGateway::asyncSendMessageByNodeID(const std::string& _groupID, int,
  */
 void FakeGateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int,
     bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-    bytesConstRef _payload)
+    CompositeBuffer::Ptr _payload)
 {
+    auto buffer = _payload->toSingleBuffer();
+    auto payload = WrapperBufferFactory::build(buffer);
+
     if (!_dstNodeIDs.empty())
     {
         m_frontService->onReceiveMessage(
-            _groupID, _srcNodeID, _payload, bcos::gateway::ErrorRespFunc());
+            _groupID, _srcNodeID, payload->asRefBuffer(), bcos::gateway::ErrorRespFunc());
     }
 
     FRONT_LOG(DEBUG) << "[FakeGateway] asyncSendMessageByNodeIDs" << LOG_KV("groupID", _groupID);
@@ -74,8 +80,12 @@ void FakeGateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int,
  * @return void
  */
 void FakeGateway::asyncSendBroadcastMessage(uint16_t, const std::string& _groupID, int,
-    bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload)
+    bcos::crypto::NodeIDPtr _srcNodeID, CompositeBuffer::Ptr _payload)
 {
-    m_frontService->onReceiveBroadcastMessage(_groupID, _srcNodeID, _payload, ErrorRespFunc());
+    auto buffer = _payload->toSingleBuffer();
+    auto payload = WrapperBufferFactory::build(buffer);
+
+    m_frontService->onReceiveBroadcastMessage(
+        _groupID, _srcNodeID, payload->asRefBuffer(), ErrorRespFunc());
     FRONT_LOG(DEBUG) << "asyncSendBroadcastMessage" << LOG_KV("groupID", _groupID);
 }

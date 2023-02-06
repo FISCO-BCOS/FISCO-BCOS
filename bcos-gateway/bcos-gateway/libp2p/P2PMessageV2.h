@@ -27,6 +27,7 @@ namespace gateway
 {
 class P2PMessageV2 : public P2PMessage
 {
+
 public:
     using Ptr = std::shared_ptr<P2PMessageV2>;
     //~P2PMessageV2() override = default;
@@ -34,10 +35,10 @@ public:
     virtual int16_t ttl() const { return m_ttl; }
     virtual void setTTL(int16_t _ttl) { m_ttl = _ttl; }
 
-protected:
     int32_t decodeHeader(bytesConstRef _buffer) override;
     bool encodeHeader(bytes& _buffer) override;
 
+private:
     int16_t m_ttl = 10;
 };
 
@@ -49,6 +50,15 @@ public:
     Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessageV2>();
+        return message;
+    }
+
+    Message::Ptr buildMessage(uint16_t _type, CompositeBuffer::Ptr _data) override
+    {
+        auto message = std::make_shared<P2PMessageV2>();
+        message->setPacketType(_type);
+        message->setWritePayload(_data);
+        message->setSeq(newSeq());
         return message;
     }
 };
