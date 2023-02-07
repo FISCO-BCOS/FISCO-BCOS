@@ -53,6 +53,7 @@ void PBFTLogSync::requestCommittedProposals(
         });
 }
 
+// new view
 void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
     PBFTMessageInterface::Ptr _prePrepareMsg, HandlePrePrepareCallback _prePrepareCallback)
 {

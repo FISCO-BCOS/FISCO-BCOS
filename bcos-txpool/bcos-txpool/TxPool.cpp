@@ -42,6 +42,7 @@ void TxPool::start()
         return;
     }
 
+    // broadcast tx in txpool
     // m_transactionSync->start();
 
     m_txpoolStorage->start();
@@ -253,7 +254,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
 }
 
 void TxPool::asyncNotifyTxsSyncMessage(Error::Ptr _error, std::string const& _uuid,
-    NodeIDPtr _nodeID, bytesConstRef _data, std::function<void(Error::Ptr _error)> _onRecv)
+    NodeIDPtr _nodeID, bytesConstRef _data, std::function<void(Error::Ptr)> _onRecv)
 {
     auto self = weak_from_this();
     m_transactionSync->onRecvSyncMessage(
@@ -509,7 +510,7 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
                 return;
             }
             txpool->m_config->ledger()->asyncPreStoreBlockTxs(
-                _txs, _block, [startT, blockHeader](Error::UniquePtr&& _error) {
+                std::move(_txs), _block, [startT, blockHeader](Error::UniquePtr&& _error) {
                     if (_error)
                     {
                         TXPOOL_LOG(WARNING)

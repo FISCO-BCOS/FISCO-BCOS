@@ -457,13 +457,13 @@ void PBFTInitializer::syncGroupNodeInfo()
             }
             try
             {
-                if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().size() == 0)
+                if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().empty())
                 {
                     return;
                 }
                 NodeIDSet nodeIdSet;
                 auto const& nodeIDList = _groupNodeInfo->nodeIDList();
-                if (nodeIDList.size() == 0)
+                if (nodeIDList.empty())
                 {
                     return;
                 }
@@ -475,12 +475,12 @@ void PBFTInitializer::syncGroupNodeInfo()
                     nodeIdSet.insert(nodeID);
                 }
                 // the blockSync module set the connected node list
-                pbftInit->m_blockSync->config()->setConnectedNodeList(std::move(nodeIdSet));
+                pbftInit->m_blockSync->config()->setConnectedNodeList(nodeIdSet);
                 // the txpool module set the connected node list
                 auto txpool = std::dynamic_pointer_cast<bcos::txpool::TxPool>(pbftInit->m_txpool);
-                txpool->transactionSync()->config()->setConnectedNodeList(std::move(nodeIdSet));
                 INITIALIZER_LOG(INFO) << LOG_DESC("syncGroupNodeInfo for block sync and txpool")
                                       << LOG_KV("connectedSize", nodeIdSet.size());
+                txpool->transactionSync()->config()->setConnectedNodeList(std::move(nodeIdSet));
             }
             catch (std::exception const& e)
             {

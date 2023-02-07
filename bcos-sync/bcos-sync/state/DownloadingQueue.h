@@ -24,9 +24,7 @@
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <queue>
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 // increase order
 struct BlockCmp
@@ -48,11 +46,11 @@ public:
 
     using Ptr = std::shared_ptr<DownloadingQueue>;
     explicit DownloadingQueue(BlockSyncConfig::Ptr _config)
-      : m_config(_config), m_blockBuffer(std::make_shared<BlocksMessageQueue>())
+      : m_config(std::move(_config)), m_blockBuffer(std::make_shared<BlocksMessageQueue>())
     {
         m_ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_config->ledger());
     }
-    virtual ~DownloadingQueue() {}
+    virtual ~DownloadingQueue() = default;
 
     virtual void push(BlocksMsgInterface::Ptr _blocksData);
     // Is the queue empty?
@@ -76,7 +74,7 @@ public:
     virtual void registerNewBlockHandler(
         std::function<void(bcos::ledger::LedgerConfig::Ptr)> _newBlockHandler)
     {
-        m_newBlockHandler = _newBlockHandler;
+        m_newBlockHandler = std::move(_newBlockHandler);
     }
 
     // flush m_buffer into queue
@@ -85,7 +83,7 @@ public:
     virtual void tryToCommitBlockToLedger();
     virtual size_t commitQueueSize()
     {
-        ReadGuard l(x_commitQueue);
+        ReadGuard lock(x_commitQueue);
         return m_commitQueue.size();
     }
 
@@ -114,7 +112,6 @@ private:
     std::string printBlockHeader(bcos::protocol::BlockHeader::Ptr _header);
     void fetchAndUpdateLedgerConfig();
 
-private:
     BlockSyncConfig::Ptr m_config;
     BlockQueue m_blocks;
     mutable SharedMutex x_blocks;
@@ -129,5 +126,4 @@ private:
 
     std::shared_ptr<bcos::tool::LedgerConfigFetcher> m_ledgerFetcher;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

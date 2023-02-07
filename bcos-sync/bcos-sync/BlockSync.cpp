@@ -39,9 +39,9 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
     m_downloadBlockProcessor = std::make_shared<bcos::ThreadPool>("Download", 1);
     m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
     m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout(), "downloadTimer");
-    m_downloadingTimer->registerTimeoutHandler(boost::bind(&BlockSync::onDownloadTimeout, this));
+    m_downloadingTimer->registerTimeoutHandler([this] { onDownloadTimeout(); });
     m_downloadingQueue->registerNewBlockHandler(
-        boost::bind(&BlockSync::onNewBlock, this, boost::placeholders::_1));
+        [this](auto&& config) { onNewBlock(std::forward<decltype(config)>(config)); });
     initSendResponseHandler();
 }
 
@@ -230,7 +230,7 @@ void BlockSync::workerProcessLoop()
         try
         {
             executeWorker();
-            if (idleWaitMs())
+            if (idleWaitMs() != 0U)
             {
                 boost::unique_lock<boost::mutex> l(x_signalled);
                 m_signalled.wait_for(l, boost::chrono::milliseconds(idleWaitMs()));
@@ -314,8 +314,8 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
 }
 
 void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID,
-    bytesConstRef _data, std::function<void(bytesConstRef _respData)>,
-    std::function<void(Error::Ptr _error)> _onRecv)
+    bytesConstRef _data, std::function<void(bytesConstRef)>,
+    std::function<void(Error::Ptr)> _onRecv)
 {
     if (_onRecv)
     {
@@ -378,6 +378,7 @@ void BlockSync::asyncNotifyNewBlock(
                        << LOG_KV("hash", _ledgerConfig->hash().abridged())
                        << LOG_KV("consNodeSize", _ledgerConfig->consensusNodeList().size())
                        << LOG_KV("observerNodeSize", _ledgerConfig->observerNodeList().size());
+    // TODO: figure out why
     if (_ledgerConfig->blockNumber() > m_config->blockNumber())
     {
         onNewBlock(_ledgerConfig);
@@ -388,7 +389,7 @@ void BlockSync::asyncNotifyNewBlock(
 
 void BlockSync::onNewBlock(bcos::ledger::LedgerConfig::Ptr _ledgerConfig)
 {
-    m_config->resetConfig(_ledgerConfig);
+    m_config->resetConfig(std::move(_ledgerConfig));
     broadcastSyncStatus();
     m_downloadingQueue->clearExpiredQueueCache();
 }
@@ -423,7 +424,7 @@ void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
 
 void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)
 {
-    auto blockRequest = m_config->msgFactory()->createBlockRequest(_syncMsg);
+    auto blockRequest = m_config->msgFactory()->createBlockRequest(std::move(_syncMsg));
     BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("onPeerBlocksRequest")
                       << LOG_DESC("Receive block request") << LOG_KV("peer", _nodeID->shortHex())
                       << LOG_KV("from", blockRequest->number())
@@ -675,7 +676,8 @@ void BlockSync::fetchAndSendBlock(
     auto blockFlag = HEADER | TRANSACTIONS;
     auto self = weak_from_this();
     m_config->ledger()->asyncGetBlockDataByNumber(_number, blockFlag,
-        [self, _reqQueue, _peer, _number](Error::Ptr _error, Block::Ptr _block) {
+        [self, _reqQueue = std::move(_reqQueue), _peer = std::move(_peer), _number](
+            Error::Ptr _error, Block::Ptr _block) {
             if (_error != nullptr)
             {
                 BLKSYNC_LOG(WARNING)
@@ -743,7 +745,7 @@ void BlockSync::maintainPeersConnection()
         return true;
     });
     // delete the invalid peer
-    for (auto node : peersToDelete)
+    for (const auto& node : peersToDelete)
     {
         m_syncStatus->deletePeer(node);
     }
@@ -762,7 +764,7 @@ void BlockSync::broadcastSyncStatus()
                        << LOG_KV("number", statusMsg->number())
                        << LOG_KV("genesisHash", statusMsg->genesisHash().abridged())
                        << LOG_KV("currentHash", statusMsg->hash().abridged());
-    // Note: only send status to the observers/sealers, but the OUTSIDE_GROUP node node maybe
+    // Note: only send status to the observers/sealers, but the OUTSIDE_GROUP node maybe
     // observer/sealer before sync to the highest here can't use asyncSendBroadcastMessage
     auto const& groupNodeList = m_config->groupNodeList();
     for (auto const& nodeID : groupNodeList)
@@ -780,11 +782,7 @@ bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)
         return true;
     }
     auto nodeStatus = m_syncStatus->peerStatus(_nodeID);
-    if ((nodeStatus->number() + c_FaultyNodeBlockDelta) < m_config->blockNumber())
-    {
-        return true;
-    }
-    return false;
+    return (nodeStatus->number() + c_FaultyNodeBlockDelta) < m_config->blockNumber();
 }
 
 void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _onGetSyncInfo)

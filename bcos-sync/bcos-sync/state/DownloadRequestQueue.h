@@ -21,10 +21,9 @@
 #pragma once
 #include "bcos-sync/BlockSyncConfig.h"
 #include <queue>
+#include <utility>
 
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class DownloadRequest
 {
@@ -34,8 +33,8 @@ public:
       : m_fromNumber(_fromNumber), m_size(_size)
     {}
 
-    bcos::protocol::BlockNumber fromNumber() { return m_fromNumber; }
-    size_t size() { return m_size; }
+    bcos::protocol::BlockNumber fromNumber() const { return m_fromNumber; }
+    size_t size() const { return m_size; }
 
 private:
     bcos::protocol::BlockNumber m_fromNumber;
@@ -59,9 +58,9 @@ class DownloadRequestQueue
 public:
     using Ptr = std::shared_ptr<DownloadRequestQueue>;
     explicit DownloadRequestQueue(BlockSyncConfig::Ptr _config, bcos::crypto::NodeIDPtr _nodeId)
-      : m_config(_config), m_nodeId(_nodeId)
+      : m_config(std::move(_config)), m_nodeId(std::move(_nodeId))
     {}
-    virtual ~DownloadRequestQueue() {}
+    virtual ~DownloadRequestQueue() = default;
 
     virtual void push(bcos::protocol::BlockNumber _fromNumber, size_t _size);
     virtual DownloadRequest::Ptr topAndPop();  // Must call use disablePush() before
@@ -75,5 +74,4 @@ private:
     RequestQueue m_reqQueue;
     mutable SharedMutex x_reqQueue;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync
