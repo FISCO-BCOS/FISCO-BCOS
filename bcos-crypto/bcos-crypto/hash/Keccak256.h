@@ -42,7 +42,7 @@ public:
     using Ptr = std::shared_ptr<Keccak256>;
     Keccak256() { setHashImplType(HashImplType::Keccak256Hash); }
     ~Keccak256() override {}
-    HashType hash(bytesConstRef _data) override { return keccak256Hash(_data); }
+    HashType hash(bytesConstRef _data) const override { return keccak256Hash(_data); }
     bcos::crypto::hasher::AnyHasher hasher() const override
     {
         return bcos::crypto::hasher::AnyHasher{

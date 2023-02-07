@@ -20,11 +20,45 @@ class SchedulerBaseImpl
 {
 public:
     SchedulerBaseImpl(BackendStorage& backendStorage, ReceiptFactory& receiptFactory)
-      : m_multiLayerStorage(backendStorage), m_receiptFactory(receiptFactory)
+      : m_multiLayerStorage(std::forward<BackendStorage>(backendStorage)),
+        m_receiptFactory(receiptFactory)
     {}
 
     void start() { m_multiLayerStorage.newMutable(); }
-    void finish() { m_multiLayerStorage.pushMutableToImmutableFront(); }
+    task::Task<bcos::h256> finish(
+        protocol::IsBlockHeader auto const& blockHeader, crypto::Hash const& hashImpl)
+    {
+        // State root
+        auto mutableStorage = m_multiLayerStorage.top();
+        auto it = co_await mutableStorage.seek(transaction_executor::EMPTY_STATE_KEY);
+        bcos::h256 hash;
+        while (co_await it.next())
+        {
+            bcos::h256 entryHash;
+            auto tableKey = co_await it.key();
+            auto& [table, key] = tableKey;
+            auto tableName = *table;
+            auto keyView = key.toStringView();
+            if (co_await it.hasValue())
+            {
+                auto value = co_await it.value();
+
+                entryHash = hashImpl.hash(tableName) ^ hashImpl.hash(keyView) ^
+                            value.hash(tableName, keyView, hashImpl, blockHeader.version());
+            }
+            else
+            {
+                storage::Entry deleteEntry;
+                deleteEntry.setStatus(storage::Entry::DELETED);
+                entryHash = hashImpl.hash(tableName) ^ hashImpl.hash(keyView) ^
+                            deleteEntry.hash(tableName, keyView, hashImpl, blockHeader.version());
+            }
+            hash ^= entryHash;
+        }
+        m_multiLayerStorage.pushMutableToImmutableFront();
+
+        co_return hash;
+    }
     task::Task<void> commit() { co_await m_multiLayerStorage.mergeAndPopImmutableBack(); }
 
     task::Task<protocol::ReceiptFactoryReturnType<ReceiptFactory>> call(

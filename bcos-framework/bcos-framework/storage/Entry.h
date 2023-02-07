@@ -206,12 +206,12 @@ public:
 
     bool valid() const { return m_status == Status::NORMAL; }
     crypto::HashType hash(std::string_view table, std::string_view key,
-        const bcos::crypto::Hash::Ptr& hashImpl, uint32_t blockVersion) const
+        const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const
     {
         bcos::crypto::HashType entryHash(0);
         if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            auto anyHasher = hashImpl->hasher();
+            auto anyHasher = hashImpl.hasher();
 
             std::visit(
                 [this, &table, &key, &entryHash](auto& hasher) {
@@ -261,7 +261,7 @@ public:
             {
                 auto value = get();
                 bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-                entryHash = hashImpl->hash(ref);
+                entryHash = hashImpl.hash(ref);
                 if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_LOG(TRACE)

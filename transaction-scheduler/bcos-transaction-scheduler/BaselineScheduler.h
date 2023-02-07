@@ -18,9 +18,11 @@ template <class SchedulerImpl, protocol::IsBlockHeaderFactory BlockHeaderFactory
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 public:
-    BaselineScheduler(SchedulerImpl&& schedulerImpl, BlockHeaderFactory&& blockHeaderFactory)
+    BaselineScheduler(SchedulerImpl&& schedulerImpl, BlockHeaderFactory&& blockHeaderFactory,
+        crypto::Hash const& hashImpl)
       : m_schedulerImpl(std::forward<SchedulerImpl>(schedulerImpl)),
-        m_blockHeaderFactory(std::forward<BlockHeaderFactory>(blockHeaderFactory))
+        m_blockHeaderFactory(std::forward<BlockHeaderFactory>(blockHeaderFactory)),
+        m_hashImpl(hashImpl)
     {}
     BaselineScheduler(const BaselineScheduler&) = delete;
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
@@ -79,19 +81,27 @@ public:
                                        [](protocol::Transaction::ConstPtr const& transactionPtr) {
                                            return *transactionPtr;
                                        }));
-                self->m_schedulerImpl.finish();
+                auto stateRoot = self->m_schedulerImpl.finish(*blockHeaderPtr, self->m_hashImpl);
+
+                bcos::u256 totalGas = 0;
+                for (auto& receipt : receipts)
+                {
+                    totalGas += receipt->gasUsed();
+                    block->appendReceipt(std::move(receipt));
+                }
+                block->setBlockHeader(self->m_blockHeaderFactory.populateBlockHeader(blockHeader));
+
+                auto newBlockHeader = block->blockHeader();
+                newBlockHeader->setStateRoot(stateRoot);
+                newBlockHeader->setGasUsed(totalGas);
+                newBlockHeader->setTxsRoot(block->calculateTransactionRoot(self->m_hashImpl));
+                newBlockHeader->setReceiptsRoot(block->calculateReceiptRoot(self->m_hashImpl));
+                newBlockHeader->calculateHash(self->m_hashImpl);
 
                 std::unique_lock queueLock(self->m_queueMutex);
-                self->m_results->push({.m_receipts = std::move(receipts)});
+                self->m_results->push({.m_block = std::move(block)});
                 queueLock.unlock();
                 executeLock.unlock();
-
-                auto newBlockHeader = self->m_blockHeaderFactory.populateBlockHeader(blockHeader);
-                newBlockHeader->setStateRoot();
-                newBlockHeader->setGasUsed();
-                newBlockHeader->setTxsRoot();
-                newBlockHeader->setReceiptsRoot();
-                newBlockHeader->calculateHash();
 
                 callback(nullptr, std::move(newBlockHeader), false);
 
@@ -144,6 +154,7 @@ public:
 private:
     SchedulerImpl m_schedulerImpl;
     BlockHeaderFactory m_blockHeaderFactory;
+    crypto::Hash const& m_hashImpl;
 
     int64_t m_lastExecutedBlockNumber = 0;
     std::mutex m_executeMutex;
@@ -153,7 +164,7 @@ private:
 
     struct ExecuteResult
     {
-        std::vector<protocol::TransactionReceipt::Ptr> m_receipts;
+        protocol::Block::Ptr m_block;
     };
     std::queue<ExecuteResult> m_results;
     std::mutex m_resultsMutex;

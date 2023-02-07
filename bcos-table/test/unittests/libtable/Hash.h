@@ -30,7 +30,7 @@ public:
     typedef std::shared_ptr<Header256Hash> Ptr;
     Header256Hash() = default;
     virtual ~Header256Hash(){};
-    HashType hash(bytesConstRef _data) override
+    HashType hash(bytesConstRef _data) const override
     {
         std::hash<std::string_view> hash;
         auto h = hash(std::string_view((const char*)_data.data(), _data.size()));

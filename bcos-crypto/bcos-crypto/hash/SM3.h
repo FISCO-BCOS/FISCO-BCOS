@@ -41,7 +41,7 @@ public:
     using Ptr = std::shared_ptr<SM3>;
     SM3() { setHashImplType(HashImplType::Sm3Hash); }
     virtual ~SM3() {}
-    HashType hash(bytesConstRef _data) override { return sm3Hash(_data); }
+    HashType hash(bytesConstRef _data) const override { return sm3Hash(_data); }
 
     bcos::crypto::hasher::AnyHasher hasher() const override
     {

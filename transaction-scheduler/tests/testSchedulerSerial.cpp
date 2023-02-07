@@ -43,13 +43,14 @@ public:
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
     SchedulerSerialImpl<BackendStorage, decltype(receiptFactory), MockExecutor> scheduler;
+    crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestSchedulerSerial, TestSchedulerSerialFixture)
 
 BOOST_AUTO_TEST_CASE(executeBlock)
 {
-    task::syncWait([&]() -> task::Task<void> {
+    task::syncWait([&, this]() -> task::Task<void> {
         scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
@@ -62,7 +63,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 
         auto receipts = co_await scheduler.execute(blockHeader,
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
-        scheduler.finish();
+        co_await scheduler.finish(blockHeader, *hashImpl);
         co_await scheduler.commit();
 
         co_return;

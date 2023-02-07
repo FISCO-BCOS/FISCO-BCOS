@@ -20,7 +20,7 @@ struct TableNameHash
 
 struct Fixture
 {
-    Fixture() : levelStorage(backendStorage) {}
+    Fixture() : levelStorage(std::forward<decltype(backendStorage)>(backendStorage)) {}
 
     void prepareData(int64_t count, int layer = 0)
     {

@@ -1,5 +1,6 @@
 #pragma once
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <bcos-utilities/AnyHolder.h>
 #include <boost/throw_exception.hpp>
 #include <range/v3/range/access.hpp>
 #include <range/v3/range_fwd.hpp>
@@ -47,83 +48,6 @@ public:
     template <RANGES::input_range KeyRange, transaction_executor::StateStorage... StorageType>
     class ReadIterator
     {
-    public:
-        friend class LevelStorage;
-        using Key = MultiLayerStorage::Key const&;
-        using Value = MultiLayerStorage::Value const&;
-
-        ReadIterator(KeyRange&& keyRange, MultiLayerStorage& storage)
-          : m_keyRange(std::forward<decltype(keyRange)>(keyRange)),
-            m_storage(storage),
-            m_keyRangeIt(RANGES::begin(m_keyRange))
-        {
-            if constexpr (withCacheStorage)
-            {
-                static_assert(
-                    std::is_same_v<typename MutableStorage::Key, typename CachedStorage::Key> &&
-                    std::is_same_v<typename MutableStorage::Value, typename CachedStorage::Value>);
-            }
-        }
-
-        ReadIterator(const ReadIterator&) = delete;
-        ReadIterator(ReadIterator&& rhs) noexcept = default;
-        ReadIterator& operator=(const ReadIterator&) = delete;
-        ReadIterator& operator=(ReadIterator&&) noexcept = default;
-        ~ReadIterator() = default;
-
-        task::AwaitableValue<bool> next()
-        {
-            m_innerIt = std::monostate{};
-            if (!m_started)
-            {
-                m_started = true;
-                return m_keyRangeIt != RANGES::end(m_keyRange);
-            }
-            return ++m_keyRangeIt != RANGES::end(m_keyRange);
-        }
-        task::Task<bool> hasValue() const
-        {
-            co_await query(*m_keyRangeIt);
-            co_return co_await std::visit(
-                [](auto&& iterator) -> task::Task<bool> {
-                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
-                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
-                    {
-                        co_return co_await iterator.hasValue();
-                    }
-                    co_return false;
-                },
-                m_innerIt);
-        }
-        task::Task<Key> key() const
-        {
-            co_await query(*m_keyRangeIt);
-            co_return co_await std::visit(
-                [](auto&& iterator) -> task::Task<Key> {
-                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
-                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
-                    {
-                        co_return co_await iterator.key();
-                    }
-                },
-                m_innerIt);
-        }
-        task::Task<Value> value() const
-        {
-            co_await query(*m_keyRangeIt);
-            co_return co_await std::visit(
-                [](auto&& iterator) -> task::Task<Value> {
-                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
-                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
-                    {
-                        co_return co_await iterator.value();
-                    }
-                },
-                m_innerIt);
-        }
-
-        void release() {}
-
     private:
         // Query from top to buttom
         task::Task<void> query(Key key) const
@@ -173,14 +97,90 @@ public:
             co_return false;
         }
 
-        KeyRange m_keyRange;
+        utilities::AnyHolder<std::remove_cvref_t<KeyRange>> m_keyRange;
         MultiLayerStorage& m_storage;
         RANGES::iterator_t<KeyRange> m_keyRangeIt;
         mutable std::variant<std::monostate, storage2::ReadIteratorType<StorageType>...> m_innerIt;
         bool m_started = false;
+
+    public:
+        using Key = MultiLayerStorage::Key const&;
+        using Value = MultiLayerStorage::Value const&;
+
+        ReadIterator(KeyRange&& keyRange, MultiLayerStorage& storage)
+          : m_keyRange(std::forward<decltype(keyRange)>(keyRange)),
+            m_storage(storage),
+            m_keyRangeIt(RANGES::begin(m_keyRange.get()))
+        {
+            if constexpr (withCacheStorage)
+            {
+                static_assert(
+                    std::is_same_v<typename MutableStorage::Key, typename CachedStorage::Key> &&
+                    std::is_same_v<typename MutableStorage::Value, typename CachedStorage::Value>);
+            }
+        }
+
+        ReadIterator(const ReadIterator&) = delete;
+        ReadIterator(ReadIterator&& rhs) noexcept = default;
+        ReadIterator& operator=(const ReadIterator&) = delete;
+        ReadIterator& operator=(ReadIterator&&) noexcept = default;
+        ~ReadIterator() = default;
+
+        task::AwaitableValue<bool> next()
+        {
+            m_innerIt = std::monostate{};
+            if (!m_started)
+            {
+                m_started = true;
+                return m_keyRangeIt != RANGES::end(m_keyRange.get());
+            }
+            return ++m_keyRangeIt != RANGES::end(m_keyRange.get());
+        }
+        task::Task<bool> hasValue() const
+        {
+            co_await query(*m_keyRangeIt);
+            co_return co_await std::visit(
+                [](auto&& iterator) -> task::Task<bool> {
+                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
+                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
+                    {
+                        co_return co_await iterator.hasValue();
+                    }
+                    co_return false;
+                },
+                m_innerIt);
+        }
+        task::Task<Key> key() const
+        {
+            co_await query(*m_keyRangeIt);
+            co_return co_await std::visit(
+                [](auto&& iterator) -> task::Task<Key> {
+                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
+                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
+                    {
+                        co_return co_await iterator.key();
+                    }
+                },
+                m_innerIt);
+        }
+        task::Task<Value> value() const
+        {
+            co_await query(*m_keyRangeIt);
+            co_return co_await std::visit(
+                [](auto&& iterator) -> task::Task<Value> {
+                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
+                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
+                    {
+                        co_return co_await iterator.value();
+                    }
+                },
+                m_innerIt);
+        }
+
+        void release() {}
     };
 
-    MultiLayerStorage(BackendStorage&& backendStorage) requires(!withCacheStorage)
+    MultiLayerStorage(BackendStorage backendStorage) requires(!withCacheStorage)
       : m_backendStorage(std::forward<BackendStorage>(backendStorage))
     {}
 
@@ -291,6 +291,15 @@ public:
                 co_await storage2::removeOne(m_backendStorage, co_await it.key());
             }
         }
+    }
+
+    MutableStorage& top()
+    {
+        if (!m_mutableStorage)
+        {
+            BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
+        }
+        return *m_mutableStorage;
     }
 };
 }  // namespace bcos::transaction_scheduler
