@@ -36,7 +36,7 @@ struct ObjectAllocStatToString
 template <>
 struct ObjectAllocStatToString<>
 {
-    static std::string toString(bool aliveOnly = false, const std::string& _delimiter = " ")
+    static std::string toString(uint32_t aliveThreshold = 0, const std::string& _delimiter = " ")
     {
         return "";
     }
@@ -45,28 +45,31 @@ struct ObjectAllocStatToString<>
 template <typename TYPE, typename... ARGS>
 struct ObjectAllocStatToString<TYPE, ARGS...> : public ObjectAllocStatToString<ARGS...>
 {
-    static std::string toString(bool aliveOnly = false, const std::string& _delimiter = " ")
+    static std::string toString(uint32_t aliveThreshold = 0, const std::string& _delimiter = " ")
     {
         auto createdObjCount = TYPE::createdObjCount();
         auto destroyedObjCount = TYPE::destroyedObjCount();
         auto aliveObjCount = TYPE::aliveObjCount();
 
-        if (aliveOnly && aliveObjCount <= 0)
+        if (aliveObjCount < aliveThreshold /** Exclude global object and single instance objects */)
         {
-            return ObjectAllocStatToString<ARGS...>::toString(aliveOnly, _delimiter);
+            return ObjectAllocStatToString<ARGS...>::toString(aliveThreshold, _delimiter);
         }
 
         return std::string("[ type: ") + boost::core::demangle(typeid(TYPE).name()) +
                " ,created: " + std::to_string(createdObjCount) +
                " ,destroyed: " + std::to_string(destroyedObjCount) +
                " ,alive: " + std::to_string(aliveObjCount) + " ]" + _delimiter +
-               ObjectAllocStatToString<ARGS...>::toString(aliveOnly, _delimiter);
+               ObjectAllocStatToString<ARGS...>::toString(aliveThreshold, _delimiter);
     }
 };
 
 class ObjectAllocatorMonitor
 {
 public:
+    using Ptr = std::shared_ptr<ObjectAllocatorMonitor>;
+    using ConstPtr = std::shared_ptr<const ObjectAllocatorMonitor>;
+
     ObjectAllocatorMonitor() = default;
     ~ObjectAllocatorMonitor() { stopMonitor(); }
 
@@ -76,7 +79,7 @@ public:
     ObjectAllocatorMonitor& operator=(ObjectAllocatorMonitor&&) = default;
 
     template <typename... ARGS>
-    void startMonitor(uint32_t _monitorPeriodMS, const std::string& _moduleName)
+    void startMonitor(uint32_t aliveThreshold = 0, uint32_t _monitorPeriodMS = 60000)
     {
         if (m_run)
         {
@@ -89,20 +92,19 @@ public:
             std::max(_monitorPeriodMS, MIN_OBJ_ALLOC_MONITOR_PERIOD_MS), "objMonitor");
 
         auto weakPtrTimer = std::weak_ptr<Timer>(m_timer);
-        m_timer->registerTimeoutHandler([_moduleName, weakPtrTimer]() {
+        m_timer->registerTimeoutHandler([aliveThreshold, weakPtrTimer]() {
             auto timer = weakPtrTimer.lock();
             if (!timer)
             {
                 return;
             }
 
-            auto objStatString = ObjectAllocStatToString<ARGS...>::toString(false);
-            auto aliveObjStatString = ObjectAllocStatToString<ARGS...>::toString(true);
+            auto objStatString = ObjectAllocStatToString<ARGS...>::toString(0);
+            auto aliveObjStatString = ObjectAllocStatToString<ARGS...>::toString(aliveThreshold);
 
             BCOS_LOG(DEBUG) << LOG_BADGE("startMonitor") << LOG_BADGE("ObjectMonitor")
-                            << LOG_BADGE(_moduleName) << LOG_KV("ObjectAllocStat", objStatString);
+                            << LOG_KV("ObjectAllocStat", objStatString);
             BCOS_LOG(INFO) << LOG_BADGE("startMonitor") << LOG_BADGE("AliveObjectMonitor")
-                           << LOG_BADGE(_moduleName)
                            << LOG_KV("AliveObjectAllocStat", aliveObjStatString);
             timer->restart();
         });

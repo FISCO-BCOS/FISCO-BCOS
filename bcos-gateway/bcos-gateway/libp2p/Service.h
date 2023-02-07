@@ -27,9 +27,7 @@ class Host;
 class P2PMessage;
 class Gateway;
 
-class Service : public P2PInterface,
-                public std::enable_shared_from_this<Service>,
-                public ObjectCounter<Service>
+class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
     Service(std::string const& _nodeID);

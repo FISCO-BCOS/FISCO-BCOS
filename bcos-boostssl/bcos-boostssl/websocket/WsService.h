@@ -246,8 +246,6 @@ private:
     IOServicePool::Ptr m_ioservicePool;
 
     std::shared_ptr<boost::asio::io_context> m_timerIoc;
-
-    bcos::ObjectAllocatorMonitor m_objMonitor;
 };
 
 }  // namespace ws

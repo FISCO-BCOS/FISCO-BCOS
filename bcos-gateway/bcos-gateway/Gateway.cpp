@@ -18,6 +18,17 @@
  * @date 2021-04-19
  */
 
+#include "bcos-gateway/GatewayConfig.h"
+#include "bcos-gateway/GatewayFactory.h"
+#include "bcos-gateway/gateway/FrontServiceInfo.h"
+#include "bcos-gateway/gateway/GatewayStatus.h"
+#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/Socket.h"
+#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libp2p/P2PSession.h"
+#include "bcos-gateway/libp2p/Service.h"
+#include "bcos-gateway/libp2p/ServiceV2.h"
+#include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
@@ -57,8 +68,6 @@ void Gateway::start()
     }
 
     GATEWAY_LOG(INFO) << LOG_DESC("start end.");
-
-    return;
 }
 
 void Gateway::stop()
@@ -82,8 +91,8 @@ void Gateway::stop()
     {
         m_gatewayRateLimiter->stop();
     }
+
     GATEWAY_LOG(INFO) << LOG_DESC("stop end.");
-    return;
 }
 
 void Gateway::asyncGetPeers(
@@ -173,129 +182,6 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
         }
         return;
     }
-
-    class Retry : public std::enable_shared_from_this<Retry>, public ObjectCounter<Retry>
-    {
-    public:
-        // random choose one p2pID to send message
-        P2pID chooseP2pID()
-        {
-            auto p2pId = P2pID();
-            if (!m_p2pIDs.empty())
-            {
-                p2pId = *m_p2pIDs.begin();
-                m_p2pIDs.erase(m_p2pIDs.begin());
-            }
-
-            return p2pId;
-        }
-
-        // send the message with retry
-        void trySendMessage()
-        {
-            if (m_p2pIDs.empty())
-            {
-                GATEWAY_LOG(ERROR)
-                    << LOG_DESC("[Gateway::Retry]") << LOG_DESC("unable to send the message")
-                    << LOG_KV("srcNodeID", m_srcNodeID->hex())
-                    << LOG_KV("dstNodeID", m_dstNodeID->hex())
-                    << LOG_KV("seq", std::to_string(m_p2pMessage->seq()));
-
-                if (m_respFunc)
-                {
-                    auto errorPtr = BCOS_ERROR_PTR(
-                        CommonError::GatewaySendMsgFailed, "unable to send the message");
-                    m_respFunc(errorPtr);
-                }
-                return;
-            }
-
-            auto seq = m_p2pMessage->seq();
-            auto p2pID = chooseP2pID();
-            auto self = shared_from_this();
-            auto startT = utcTime();
-            auto callback = [seq, self, startT, p2pID](NetworkException e,
-                                std::shared_ptr<P2PSession> session,
-                                std::shared_ptr<P2PMessage> message) {
-                std::ignore = session;
-                if (e.errorCode() != P2PExceptionType::Success)
-                {
-                    // bandwidth overflow , do'not try again
-                    if (e.errorCode() == P2PExceptionType::BandwidthOverFlow)
-                    {
-                        if (self->m_respFunc)
-                        {
-                            auto errorPtr =
-                                BCOS_ERROR_PTR(CommonError::NetworkBandwidthOverFlow, e.what());
-                            self->m_respFunc(errorPtr);
-                        }
-
-                        return;
-                    }
-
-                    GATEWAY_LOG(ERROR)
-                        << LOG_BADGE("Retry") << LOG_DESC("network callback") << LOG_KV("seq", seq)
-                        << LOG_KV("dstP2P", p2pID) << LOG_KV("errorCode", e.errorCode())
-                        << LOG_KV("errorMessage", e.what())
-                        << LOG_KV("timeCost", (utcTime() - startT));
-                    // try again
-                    self->trySendMessage();
-                    return;
-                }
-
-                try
-                {
-                    auto payload = message->payload();
-                    int respCode =
-                        boost::lexical_cast<int>(std::string(payload->begin(), payload->end()));
-                    // the peer gateway not response not ok ,it means the gateway not dispatch the
-                    // message successfully,find another gateway and try again
-                    if (respCode != CommonError::SUCCESS)
-                    {
-                        GATEWAY_LOG(WARNING)
-                            << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
-                            << LOG_KV("errorCode", respCode) << LOG_KV("errorMessage", e.what());
-                        // try again
-                        self->trySendMessage();
-                        return;
-                    }
-                    GATEWAY_LOG(TRACE)
-                        << LOG_BADGE("Retry: asyncSendMessageByNodeID success")
-                        << LOG_KV("dstP2P", p2pID) << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
-                        << LOG_KV("dstNodeID", self->m_dstNodeID->hex());
-                    // send message successfully
-                    if (self->m_respFunc)
-                    {
-                        self->m_respFunc(nullptr);
-                    }
-                    return;
-                }
-                catch (const std::exception& e)
-                {
-                    GATEWAY_LOG(ERROR)
-                        << LOG_BADGE("trySendMessage and receive response exception")
-                        << LOG_KV("payload",
-                               std::string(message->payload()->begin(), message->payload()->end()))
-                        << LOG_KV("packetType", message->packetType())
-                        << LOG_KV("src", message->options() ?
-                                             toHex(*(message->options()->srcNodeID())) :
-                                             "unknown")
-                        << LOG_KV("size", message->length()) << LOG_KV("error", e.what());
-
-                    self->trySendMessage();
-                }
-            };
-            m_p2pInterface->asyncSendMessageByNodeID(p2pID, m_p2pMessage, callback, Options(10000));
-        }
-
-    public:
-        std::vector<P2pID> m_p2pIDs;
-        NodeIDPtr m_srcNodeID;
-        NodeIDPtr m_dstNodeID;
-        std::shared_ptr<P2PMessage> m_p2pMessage;
-        std::shared_ptr<P2PInterface> m_p2pInterface;
-        ErrorRespFunc m_respFunc;
-    };
 
     auto retry = std::make_shared<Retry>();
     auto message =
