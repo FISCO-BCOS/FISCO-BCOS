@@ -25,7 +25,7 @@ namespace bcos
 {
 namespace gateway
 {
-class ServiceV2 : public Service, public ObjectCounter<ServiceV2>
+class ServiceV2 : public Service
 {
 public:
     using Ptr = std::shared_ptr<ServiceV2>;

@@ -25,7 +25,7 @@ namespace bcos
 {
 namespace gateway
 {
-class P2PMessageV2 : public P2PMessage, public bcos::ObjectCounter<P2PMessageV2>
+class P2PMessageV2 : public P2PMessage
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageV2>;

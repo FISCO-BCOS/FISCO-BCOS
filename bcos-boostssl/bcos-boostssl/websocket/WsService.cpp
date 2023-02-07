@@ -92,12 +92,6 @@ void WsService::start()
     // start connect to server
     reportConnectedNodes();
 
-    // start monitor object alloc
-    m_objMonitor
-        .startMonitor<WsMessage, WsSession, RawWsStream, SslWsStream, WsStreamDelegateBuilder,
-            WsSession::CallBack, WsSession::Message, WsStreamDelegate, WsStreamDelegateBuilder>(
-            10000, "bcos-boostssl");
-
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("start")
                             << LOG_DESC("start websocket service successfully")
                             << LOG_KV("model", m_config->model())
@@ -131,8 +125,6 @@ void WsService::stop()
     {
         m_heartbeat->cancel();
     }
-
-    m_objMonitor.stopMonitor();
 
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("stop") << LOG_DESC("stop websocket service successfully");
 }
