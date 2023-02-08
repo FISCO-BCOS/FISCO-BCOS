@@ -46,7 +46,7 @@ public:
             callback) override;
 
     std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
-        std::shared_ptr<BlockContext> blockContext, std::string codeAddress,
-        bool useCoroutine) override;
+        std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
+        bool isStaticCall = false) override;
 };
 }  // namespace bcos::executor

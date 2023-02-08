@@ -32,12 +32,14 @@ using namespace tbb::flow;
 #define DAG_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("DAG")
 
 // Generate DAG according with given transactions
-void TxDAG2::init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTxFunc const& _f)
+void TxDAG2::init(critical::CriticalFieldsInterface::Ptr _txsCriticals)
 {
+    // must setExecuteTxFunc beforehand
+    assert(f_executeTx);
+
     auto txsSize = _txsCriticals->size();
     DAG_LOG(INFO) << LOG_DESC("Begin init transaction DAG") << LOG_KV("transactionNum", txsSize);
 
-    f_executeTx = _f;
     m_totalParaTxs = _txsCriticals->size();
 
     // Generate tasks in m_tasks

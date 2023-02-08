@@ -227,7 +227,8 @@ protected:
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
     virtual std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
-        std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine);
+        std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
+        bool isStaticCall = false);
 
 
     void asyncExecuteExecutiveFlow(std::shared_ptr<ExecutiveFlowInterface> executiveFlow,

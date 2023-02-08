@@ -960,7 +960,7 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
                 auto message =
                     (boost::format("Unsupported message type: %d") % params->type()).str();
                 EXECUTOR_NAME_LOG(ERROR)
-                    << BLOCK_NUMBER(blockNumber) << "DAG Execute error, " << message;
+                    << BLOCK_NUMBER(blockNumber) << "Execute error, " << message;
                 // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
                 break;
             }
@@ -2186,7 +2186,8 @@ void TransactionExecutor::getABI(
 }
 
 ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
-    std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine)
+    std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
+    bool isStaticCall)
 {
     EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
     bcos::RecursiveGuard lock(x_executiveFlowLock);
@@ -2313,8 +2314,11 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
 
                 auto callParameters = createCallParameters(*input, *tx);
 
-                ExecutiveFlowInterface::Ptr executiveFlow =
-                    getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
+                ExecutiveFlowInterface::Ptr executiveFlow;
+
+                executiveFlow = getExecutiveFlow(blockContext, callParameters->receiveAddress,
+                    useCoroutine, input->staticCall());
+
                 executiveFlow->submit(std::move(callParameters));
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -2351,8 +2355,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     case bcos::protocol::ExecutionMessage::KEY_LOCK:
     {
         auto callParameters = createCallParameters(*input, input->staticCall());
-        ExecutiveFlowInterface::Ptr executiveFlow =
-            getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
+        ExecutiveFlowInterface::Ptr executiveFlow = getExecutiveFlow(
+            blockContext, callParameters->receiveAddress, useCoroutine, input->staticCall());
         executiveFlow->submit(std::move(callParameters));
         asyncExecuteExecutiveFlow(executiveFlow,
             [this, callback = std::move(callback)](bcos::Error::UniquePtr&& error,
@@ -2685,7 +2689,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 {
     // DAG run
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
-    txDag->init(criticals, [this, &inputs, &executionResults](ID id) {
+    txDag->setExecuteTxFunc([this, &inputs, &executionResults](ID id) {
         if (!m_isRunning)
         {
             return;
@@ -2719,6 +2723,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
                 << "executeTransactionsWithCriticals error: " << boost::diagnostic_information(e);
         }
     });
+
+    txDag->init(criticals);
 
     txDag->run(m_DAGThreadNum);
 }
