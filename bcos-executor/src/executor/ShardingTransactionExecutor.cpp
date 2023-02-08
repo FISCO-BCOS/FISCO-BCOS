@@ -49,21 +49,32 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
     if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
-        bcos::RecursiveGuard lock(x_executiveFlowLock);
+
         ExecutiveFlowInterface::Ptr executiveFlow = blockContext->getExecutiveFlow(codeAddress);
         if (executiveFlow == nullptr)
         {
-            auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
-                m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+            if (!isStaticCall)
+            {
+                auto executiveFactory =
+                    std::make_shared<ShardingExecutiveFactory>(blockContext, m_precompiledContract,
+                        m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
 
-            executiveFlow = std::make_shared<ExecutiveDagFlow>(executiveFactory);
-            executiveFlow->setThreadPool(m_threadPool);
-            blockContext->setExecutiveFlow(codeAddress, executiveFlow);
+                executiveFlow = std::make_shared<ExecutiveDagFlow>(executiveFactory, m_abiCache);
+                executiveFlow->setThreadPool(m_threadPool);
+                blockContext->setExecutiveFlow(codeAddress, executiveFlow);
+            }
+            else
+            {
+                // use serial to call
+                executiveFlow = TransactionExecutor::getExecutiveFlow(
+                    blockContext, codeAddress, false, isStaticCall);
+            }
         }
         return executiveFlow;
     }
     else
     {
-        return TransactionExecutor::getExecutiveFlow(blockContext, codeAddress, useCoroutine);
+        return TransactionExecutor::getExecutiveFlow(
+            blockContext, codeAddress, useCoroutine, isStaticCall);
     }
 }
