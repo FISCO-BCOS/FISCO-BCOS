@@ -20,17 +20,20 @@
 
 #pragma once
 
+#include "bcos-utilities/CompositeBuffer.h"
 #include "bcos-utilities/ObjectCounter.h"
+#include "bcos-utilities/WrapperBuffer.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>
+#include <utility>
 #include <vector>
 
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
     do                                                                                       \
     {                                                                                        \
-        if ((offset) > (length))                                                             \
+        if (std::cmp_greater((offset), (length)))                                            \
         {                                                                                    \
             throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) + \
                                     " ,length: " + std::to_string(length));                  \
@@ -57,8 +60,11 @@ public:
     /// groupID length(2) + nodeID length(2) + dst nodeID count(1) + moduleID(2)
     const static size_t OPTIONS_MIN_LENGTH = 7;
 
-public:
     P2PMessageOptions() { m_srcNodeID = std::make_shared<bytes>(); }
+    P2PMessageOptions(const P2PMessageOptions&) = delete;
+    P2PMessageOptions(P2PMessageOptions&&) = delete;
+    P2PMessageOptions& operator=(const P2PMessageOptions&) = delete;
+    P2PMessageOptions& operator=(P2PMessageOptions&&) = delete;
 
     virtual ~P2PMessageOptions() = default;
 
@@ -70,7 +76,7 @@ public:
     const static size_t MAX_DST_NODEID_COUNT = 255;
 
     bool encode(bytes& _buffer);
-    ssize_t decode(bytesConstRef _buffer);
+    int32_t decode(bytesConstRef _buffer);
 
 public:
     uint16_t moduleID() const { return m_moduleID; }
@@ -88,7 +94,7 @@ public:
         m_dstNodeIDs = _dstNodeIDs;
     }
 
-protected:
+private:
     std::string m_groupID;
     std::shared_ptr<bytes> m_srcNodeID;
     std::vector<std::shared_ptr<bytes>> m_dstNodeIDs;
@@ -112,21 +118,23 @@ protected:
 ///       dst nodeIDs       : bytes
 ///       moduleID          : 2 bytes
 ///   payload           :X bytes
+
+class P2PMessageV2;
+
 class P2PMessage : public Message, public bcos::ObjectCounter<P2PMessage>
 {
 public:
+    friend P2PMessageV2;
+
     using Ptr = std::shared_ptr<P2PMessage>;
+    using ConstPtr = std::shared_ptr<const P2PMessage>;
 
     /// length(4) + version(2) + packetType(2) + seq(4) + ext(2)
-    const static size_t MESSAGE_HEADER_LENGTH = 14;
+    const static size_t MESSAGE_HEADER_LENGTH = (4 + 2 + 2 + 4 + 2);
     const static size_t MAX_MESSAGE_LENGTH =
-        100 * 1024 * 1024;  ///< The maximum length of data is 100M.
+        static_cast<const size_t>(100 * 1024 * 1024);  ///< The maximum length of data is 100M.
 public:
-    P2PMessage()
-    {
-        m_payload = std::make_shared<bytes>();
-        m_options = std::make_shared<P2PMessageOptions>();
-    }
+    P2PMessage() { m_options = std::make_shared<P2PMessageOptions>(); }
 
     // ~P2PMessage() override = default;
 
@@ -139,13 +147,18 @@ public:
             return m_length;
         }
 
+        // TODO: Classification discussion, whether the message packet is received or to sent
         // estimate the length of msg to be encoded
-        int64_t length = (int64_t)payload()->size() + (int64_t)P2PMessage::MESSAGE_HEADER_LENGTH;
+        // head length
+        uint32_t length = P2PMessage::MESSAGE_HEADER_LENGTH;
+        // payload length
+        length += (m_writePayload ? m_writePayload->payloadSize() :
+                                    (m_readPayload ? m_readPayload->size() : 0));
+        // option length
         if (hasOptions() && options() && options()->srcNodeID())
         {
             length += P2PMessageOptions::OPTIONS_MIN_LENGTH;
-            length +=
-                (int64_t)(options()->srcNodeID()->size() * (1 + options()->dstNodeIDs().size()));
+            length += (options()->srcNodeID()->size() * (1 + options()->dstNodeIDs().size()));
         }
         return length;
     }
@@ -164,21 +177,30 @@ public:
     virtual void setExt(uint16_t _ext) { m_ext |= _ext; }
 
     P2PMessageOptions::Ptr options() const { return m_options; }
-    void setOptions(P2PMessageOptions::Ptr _options) { m_options = _options; }
+    void setOptions(P2PMessageOptions::Ptr& _options) { m_options = _options; }
 
-    std::shared_ptr<bytes> payload() const { return m_payload; }
-    void setPayload(std::shared_ptr<bytes> _payload) { m_payload = _payload; }
+    // For encode msg
+    bcos::CompositeBuffer::Ptr writePayload() const { return m_writePayload; }
+    void setWritePayload(bcos::CompositeBuffer::Ptr& _writePayload)
+    {
+        m_writePayload = _writePayload;
+    }
+
+    // For decode msg
+    bcos::WrapperBuffer::Ptr readPayload() const { return m_readPayload; }
+    void setReadPayload(bcos::WrapperBuffer::Ptr& _readPayload) { m_readPayload = _readPayload; }
 
     void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
-    bool encode(bytes& _buffer) override;
-    ssize_t decode(bytesConstRef _buffer) override;
     bool isRespPacket() const override
     {
         return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
     }
 
+    bool encode(bcos::CompositeBuffer& _buffer) override;
+    int32_t decode(bytesConstRef _buffer) override;
+
     // compress payload if payload need to be compressed
-    bool tryToCompressPayload(std::shared_ptr<bytes> compressData);
+    bool tryToCompressPayload(bytes& compressData);
 
     bool hasOptions() const
     {
@@ -204,11 +226,10 @@ public:
     }
     MessageExtAttributes::Ptr extAttributes() override { return m_extAttr; }
 
-protected:
     virtual int32_t decodeHeader(bytesConstRef _buffer);
     virtual bool encodeHeader(bytes& _buffer);
 
-protected:
+private:
     uint32_t m_length = 0;
     uint16_t m_version = (uint16_t)(bcos::protocol::ProtocolVersion::V0);
     uint16_t m_packetType = 0;
@@ -222,9 +243,11 @@ protected:
 
     P2PMessageOptions::Ptr m_options;  ///< options fields
 
-    std::shared_ptr<bytes> m_payload;  ///< payload data
+    bcos::CompositeBuffer::Ptr m_writePayload{nullptr};  ///< payload data for write
 
-    MessageExtAttributes::Ptr m_extAttr = nullptr;  ///< message additional attributes
+    bcos::WrapperBuffer::Ptr m_readPayload{nullptr};  ///< payload data for read
+
+    MessageExtAttributes::Ptr m_extAttr{nullptr};  ///< message additional attributes
 };
 
 class P2PMessageFactory : public MessageFactory, public bcos::ObjectCounter<P2PMessageFactory>

@@ -19,6 +19,7 @@
  * @date 2021-05-13
  */
 #include "GatewayNodeManager.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
@@ -36,7 +37,7 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
   : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)
 {
     m_uuid = _uuid;
-    if (_uuid.size() == 0)
+    if (_uuid.empty())
     {
         m_uuid = _nodeID;
     }
@@ -106,8 +107,8 @@ void GatewayNodeManager::onReceiveStatusSeq(
         return;
     }
     auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
-        *((uint32_t*)_msg->payload()->data()));
-    auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
+        *((uint32_t*)_msg->readPayload()->asRefBuffer().data()));
+    auto const& from = (!_msg->srcP2PNodeID().empty()) ? _msg->srcP2PNodeID() : _session->p2pID();
     auto statusSeqChanged = statusChanged(from, statusSeq);
     if (!statusSeqChanged)
     {
@@ -141,8 +142,8 @@ void GatewayNodeManager::onReceiveNodeStatus(
         return;
     }
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
-    gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
-    auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
+    gatewayNodeStatus->decode(_msg->readPayload()->asRefBuffer());
+    auto const& from = (!_msg->srcP2PNodeID().empty()) ? _msg->srcP2PNodeID() : _session->p2pID();
 
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("from", from)
                            << LOG_KV("seq", gatewayNodeStatus->seq())
@@ -155,7 +156,7 @@ void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNode
     auto seq = _status->seq();
     {
         UpgradableGuard l(x_p2pID2Seq);
-        if (m_p2pID2Seq.count(_p2pID) && (m_p2pID2Seq.at(_p2pID) >= seq))
+        if (m_p2pID2Seq.contains(_p2pID) && (m_p2pID2Seq.at(_p2pID) >= seq))
         {
             return;
         }
@@ -279,8 +280,9 @@ void GatewayNodeManager::broadcastStatusSeq()
     message->setPacketType(GatewayMessageType::SyncNodeSeq);
     auto seq = statusSeq();
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
-    auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);
-    message->setPayload(payload);
+    bcos::bytes buffer{(byte*)&statusSeq, (byte*)&statusSeq + 4};
+    auto payload = bcos::CompositeBufferFactory::build(buffer);
+    message->setWritePayload(payload);
     NODE_MANAGER_LOG(TRACE) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
     m_p2pInterface->asyncBroadcastMessage(message, Options());
 }

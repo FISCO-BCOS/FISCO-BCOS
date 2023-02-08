@@ -178,12 +178,11 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         }
         // insert the new node
         auto serviceName = nodeInfo->serviceName(bcos::protocol::FRONT);
-        if (serviceName.size() == 0)
+        if (serviceName.empty())
         {
             continue;
         }
 
-        // TODO:: tars
         auto frontPrx = bcostars::createServantProxy<bcostars::FrontServicePrx>(serviceName);
         auto frontClient = std::make_shared<bcostars::FrontServiceClient>(frontPrx, m_keyFactory);
 
@@ -239,7 +238,7 @@ bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& 
     uint16_t _moduleID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
-    if (frontServiceList.size() == 0)
+    if (frontServiceList.empty())
     {
         return false;
     }
