@@ -74,6 +74,7 @@ public:
     void onEmptyTxs() override;
 
 protected:
+#pragma region deprecated
     virtual void responseTxsStatus(bcos::crypto::NodeIDPtr _fromNode);
     [[deprecated("Use TxPool::broadcastPushTransaction")]] void executeWorker() override;
 
@@ -90,6 +91,7 @@ protected:
 
     virtual void onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
         SendResponseCallback _sendResponse, bcos::crypto::PublicPtr _peer);
+#pragma endregion
 
     // functions called by requestMissedTxs
     virtual void verifyFetchedTxs(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,

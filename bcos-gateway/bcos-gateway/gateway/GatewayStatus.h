@@ -19,12 +19,13 @@
  */
 #pragma once
 #include "bcos-gateway/Common.h"
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
 namespace bcos
 {
 namespace gateway
 {
-class GatewayStatus
+class GatewayStatus : public ObjectCounter<GatewayStatus>
 {
 public:
     using Ptr = std::shared_ptr<GatewayStatus>;

@@ -4,7 +4,9 @@
 #include "bcos-framework/protocol/BlockHeader.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/storage2/OldStorageWrapper.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
 #include <queue>
@@ -14,14 +16,35 @@ namespace bcos::transaction_scheduler
 
 #define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
-template <class SchedulerImpl, protocol::IsBlockHeaderFactory BlockHeaderFactory>
+template <class SchedulerImpl, protocol::IsBlockFactory BlockFactory,
+    protocol::IsBlockHeaderFactory BlockHeaderFactory, ledger::IsLedger Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
+private:
+    SchedulerImpl m_schedulerImpl;
+    std::shared_ptr<BlockFactory> m_blockFactory;
+    BlockHeaderFactory m_blockHeaderFactory;
+    crypto::Hash const& m_hashImpl;
+
+    int64_t m_lastExecutedBlockNumber = -1;
+    std::mutex m_executeMutex;
+
+    int64_t m_lastcommittedBlockNumber = -1;
+    std::mutex m_commitMutex;
+
+    struct ExecuteResult
+    {
+        protocol::Block::Ptr m_block;
+    };
+    std::queue<ExecuteResult> m_results;
+    std::mutex m_resultsMutex;
+
 public:
-    BaselineScheduler(SchedulerImpl&& schedulerImpl, BlockHeaderFactory&& blockHeaderFactory,
-        crypto::Hash const& hashImpl)
-      : m_schedulerImpl(std::forward<SchedulerImpl>(schedulerImpl)),
-        m_blockHeaderFactory(std::forward<BlockHeaderFactory>(blockHeaderFactory)),
+    BaselineScheduler(SchedulerImpl& schedulerImpl, std::shared_ptr<BlockFactory> blockFactory,
+        BlockHeaderFactory& blockHeaderFactory, crypto::Hash const& hashImpl)
+      : m_schedulerImpl(schedulerImpl),
+        m_blockFactory(std::move(blockFactory)),
+        m_blockHeaderFactory(blockHeaderFactory),
         m_hashImpl(hashImpl)
     {}
     BaselineScheduler(const BaselineScheduler&) = delete;
@@ -51,13 +74,12 @@ public:
                     co_return;
                 }
 
-
                 auto blockHeader = block->blockHeaderConst();
-                if (self->m_executingBlockNumber != 0 &&
+                if (self->m_executingBlockNumber != -1 &&
                     blockHeader->number() - self->m_lastExecutedBlockNumber != 1)
                 {
                     auto message =
-                        fmt::format("Discontinuous input block number! expect: {} input: {}",
+                        fmt::format("Discontinuous execute block number! expect: {} input: {}",
                             self->m_lastExecutedBlockNumber + 1, blockHeader->number());
 
                     executeLock.unlock();
@@ -112,18 +134,68 @@ public:
         }(this, std::move(block), std::move(callback)));
     }
 
-    void commitBlock(bcos::protocol::BlockHeader::Ptr header,
-        std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback)
-        override
-    {}
+    void commitBlock(protocol::BlockHeader::Ptr header,
+        std::function<void(Error::Ptr&&, ledger::LedgerConfig::Ptr&&)> callback) override
+    {
+        task::wait([](decltype(this) self, protocol::BlockHeader::Ptr blockHeader,
+                       decltype(callback) callback) -> task::Task<void> {
+            try
+            {
+                std::unique_lock commitLock(self->m_commitMutex, std::try_to_lock);
+                if (!commitLock.owns_lock())
+                {
+                    auto message = fmt::format(
+                        "Another block:{} is committing!", self->m_lastcommittedBlockNumber);
+                    SCHEDULER_LOG(INFO) << message;
+                    callback(
+                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                        nullptr, false);
+
+                    co_return;
+                }
+
+                if (self->m_lastcommittedBlockNumber != -1 &&
+                    blockHeader->number() - self->m_lastcommittedBlockNumber != 1)
+                {
+                    auto message =
+                        fmt::format("Discontinuous commit block number! expect: {} input: {}",
+                            self->m_lastcommittedBlockNumber + 1, blockHeader->number());
+
+                    commitLock.unlock();
+                    SCHEDULER_LOG(INFO) << message;
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                                 scheduler::SchedulerError::InvalidBlockNumber, message),
+                        nullptr, false);
+                    co_return;
+                }
+
+                auto& result = self->m_results.back();
+
+                auto& mutableStorage = self->m_schedulerImpl.multiLayerStorage().top();
+                auto oldStorage = std::make_shared<storage2::OldStorageWrapper>(mutableStorage);
+                Ledger ledger(self->m_blockFactory, oldStorage);
+                ledger.asyncPrewriteBlock(oldStorage, nullptr, result.m_block, []() {
+                    // Nothing to do
+                });
+            }
+            catch (bcos::Error& e)
+            {}
+        }(this, std::move(header), std::move(callback)));
+    }
 
     void status(
-        std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback) override
+        [[maybe_unused]] std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>
+            callback) override
     {}
 
-    void call(protocol::Transaction::Ptr tx,
-        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) override
-    {}
+    void call(protocol::Transaction::Ptr transaction,
+        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback) override
+    {
+        task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
+                       decltype(callback) callback) -> task::Task<void> {
+            auto receipt = co_await self->m_schedulerImpl.call(*transaction);
+        }(this, std::move(transaction), std::move(callback)));
+    }
 
     void registerExecutor([[maybe_unused]] std::string name,
         [[maybe_unused]] bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
@@ -145,29 +217,12 @@ public:
     {}
 
     // for performance, do the things before executing block in executor.
-    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(Error::Ptr&&)> callback) override
+    void preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,
+        [[maybe_unused]] bool verify,
+        [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
     {}
 
     void stop() override{};
-
-private:
-    SchedulerImpl m_schedulerImpl;
-    BlockHeaderFactory m_blockHeaderFactory;
-    crypto::Hash const& m_hashImpl;
-
-    int64_t m_lastExecutedBlockNumber = 0;
-    std::mutex m_executeMutex;
-
-    int64_t m_lastcommittedBlockNumber = 0;
-    std::mutex m_commitMutex;
-
-    struct ExecuteResult
-    {
-        protocol::Block::Ptr m_block;
-    };
-    std::queue<ExecuteResult> m_results;
-    std::mutex m_resultsMutex;
 };
 
 }  // namespace bcos::transaction_scheduler

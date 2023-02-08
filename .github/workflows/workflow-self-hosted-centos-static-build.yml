@@ -35,7 +35,7 @@ jobs:
       - name: yum install
         run: |
           sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static glibc-static glibc-devel libzstd-devel
-          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip
+          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28

@@ -703,6 +703,9 @@ public:
         return result2;
     };
 
+public:
+    CodecWrapper::Ptr codec;
+    
 protected:
     crypto::Hash::Ptr hashImpl;
     crypto::Hash::Ptr smHashImpl;
@@ -716,7 +719,6 @@ protected:
     std::shared_ptr<MockLedger> ledger;
     KeyPairInterface::Ptr keyPair;
 
-    CodecWrapper::Ptr codec;
     int64_t gas = MockLedger::TX_GAS_LIMIT;
     bool isWasm = false;
     std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";

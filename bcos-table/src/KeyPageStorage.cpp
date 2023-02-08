@@ -234,6 +234,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
         const std::string_view& table, const std::string_view& key, const Entry& entry)>
         callback) const
 {
+    m_size = 0;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size(), 32),
         [this, &onlyDirty, &callback](const tbb::blocked_range<size_t>& range) {
             for (auto i = range.begin(); i != range.end(); ++i)
@@ -250,6 +251,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                             auto readLock = meta->rLock();
                             Entry entry;
                             entry.setObject(*meta);
+                            m_size += entry.size();
                             readLock.unlock();
                             if (!m_readOnly)
                             {
@@ -294,6 +296,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                             else
                             {
                                 entry.setObject(*page);
+                                m_size += entry.size();
                                 entry.setStatus(it.second->entry.status());
                                 if (!m_readOnly)
                                 {
@@ -339,6 +342,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                         if (!onlyDirty || it.second->entry.dirty())
                         {
                             auto& entry = it.second->entry;
+                            m_size += entry.size();
                             // assert(it.first.first == SYS_TABLES);
                             callback(it.first.first, it.first.second, entry);
                         }
@@ -346,6 +350,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                 }
             }
         });
+    KeyPage_LOG(INFO) << LOG_DESC("parallelTraverse") << LOG_KV("size", m_size);
 }
 
 auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> crypto::HashType

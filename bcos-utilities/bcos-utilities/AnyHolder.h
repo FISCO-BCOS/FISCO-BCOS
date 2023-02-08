@@ -18,13 +18,12 @@ template <class Value>
 class AnyHolder
 {
 private:
-    std::variant<Value, std::reference_wrapper<Value>, std::reference_wrapper<Value const>>
-        m_object;
+    std::variant<Value, std::reference_wrapper<Value>, std::reference_wrapper<Value const>> m_value;
 
 public:
-    AnyHolder(Value&& object) : m_object(std::forward<Value>(object)) {}
-    AnyHolder(Value& object) : m_object(std::reference_wrapper<Value>(object)) {}
-    AnyHolder(Value const& object) : m_object(std::reference_wrapper<Value const>(object)) {}
+    AnyHolder(Value&& object) : m_value(std::forward<Value>(object)) {}
+    AnyHolder(Value& object) : m_value(std::reference_wrapper<Value>(object)) {}
+    AnyHolder(Value const& object) : m_value(std::reference_wrapper<Value const>(object)) {}
 
     Value& get() &
     {
@@ -34,7 +33,7 @@ public:
                 [](std::reference_wrapper<Value const> ref) -> Value& {
                     BOOST_THROW_EXCEPTION(ReferenceFromConstError{});
                 }),
-            m_object);
+            m_value);
     }
     Value const& get() const&
     {
@@ -42,7 +41,7 @@ public:
             overloaded([](Value& ref) -> Value const& { return ref; },
                 [](std::reference_wrapper<Value>& ref) -> Value const& { return ref.get(); },
                 [](std::reference_wrapper<Value const> ref) -> Value const& { return ref.get(); }),
-            m_object);
+            m_value);
     }
 
     Value& operator()() & { return get(); }

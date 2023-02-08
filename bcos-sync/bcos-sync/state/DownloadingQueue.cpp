@@ -32,7 +32,7 @@ using namespace bcos::ledger;
 void DownloadingQueue::push(BlocksMsgInterface::Ptr _blocksData)
 {
     // push to the blockBuffer firstly
-    UpgradableGuard l(x_blockBuffer);
+    UpgradableGuard lock(x_blockBuffer);
     if (m_blockBuffer->size() >= m_config->maxDownloadingBlockQueueSize())
     {
         BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
@@ -40,28 +40,28 @@ void DownloadingQueue::push(BlocksMsgInterface::Ptr _blocksData)
                              << LOG_KV("queueSize", m_blockBuffer->size());
         return;
     }
-    UpgradeGuard ul(l);
+    UpgradeGuard ulock(lock);
     m_blockBuffer->emplace_back(_blocksData);
 }
 
 bool DownloadingQueue::empty()
 {
-    ReadGuard l1(x_blockBuffer);
-    ReadGuard l2(x_blocks);
+    ReadGuard lock1(x_blockBuffer);
+    ReadGuard lock2(x_blocks);
     return (m_blocks.empty() && (!m_blockBuffer || m_blockBuffer->empty()));
 }
 
 size_t DownloadingQueue::size()
 {
-    ReadGuard l1(x_blockBuffer);
-    ReadGuard l2(x_blocks);
-    size_t s = (!m_blockBuffer ? 0 : m_blockBuffer->size()) + m_blocks.size();
-    return s;
+    ReadGuard lock1(x_blockBuffer);
+    ReadGuard lock2(x_blocks);
+    size_t size = (!m_blockBuffer ? 0 : m_blockBuffer->size()) + m_blocks.size();
+    return size;
 }
 
 void DownloadingQueue::pop()
 {
-    WriteGuard l(x_blocks);
+    WriteGuard lock(x_blocks);
     if (!m_blocks.empty())
     {
         m_blocks.pop();
@@ -74,7 +74,7 @@ Block::Ptr DownloadingQueue::top(bool isFlushBuffer)
     {
         flushBufferToQueue();
     }
-    ReadGuard l(x_blocks);
+    ReadGuard lock(x_blocks);
     if (!m_blocks.empty())
     {
         return m_blocks.top();
@@ -85,7 +85,7 @@ Block::Ptr DownloadingQueue::top(bool isFlushBuffer)
 void DownloadingQueue::clear()
 {
     {
-        WriteGuard l(x_blockBuffer);
+        WriteGuard lock(x_blockBuffer);
         m_blockBuffer->clear();
     }
     clearQueue();
@@ -93,16 +93,16 @@ void DownloadingQueue::clear()
 
 void DownloadingQueue::clearQueue()
 {
-    WriteGuard l(x_blocks);
+    WriteGuard lock(x_blocks);
     BlockQueue emptyQueue;
     swap(m_blocks, emptyQueue);  // Does memory leak here ?
 }
 
 void DownloadingQueue::flushBufferToQueue()
 {
-    WriteGuard l(x_blockBuffer);
+    WriteGuard lock(x_blockBuffer);
     bool ret = true;
-    while (m_blockBuffer->size() > 0 && ret)
+    while (!m_blockBuffer->empty() && ret)
     {
         auto blocksShard = m_blockBuffer->front();
         m_blockBuffer->pop_front();
@@ -113,7 +113,7 @@ void DownloadingQueue::flushBufferToQueue()
 bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
 {
     // pop buffer into queue
-    WriteGuard l(x_blocks);
+    WriteGuard lock(x_blocks);
     if (m_blocks.size() >= m_config->maxDownloadingBlockQueueSize())
     {
         BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
@@ -151,7 +151,7 @@ bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
             continue;
         }
     }
-    if (m_blocks.size() == 0)
+    if (m_blocks.empty())
     {
         return true;
     }
@@ -167,18 +167,14 @@ bool DownloadingQueue::isNewerBlock(Block::Ptr _block)
 {
     // Note: must holder blockHeader here to ensure the life cycle of blockHeader
     auto blockHeader = _block->blockHeader();
-    if (blockHeader->number() <= m_config->blockNumber())
-    {
-        return false;
-    }
-    return true;
+    return blockHeader->number() > m_config->blockNumber();
 }
 
 void DownloadingQueue::clearFullQueueIfNotHas(BlockNumber _blockNumber)
 {
     bool needClear = false;
     {
-        ReadGuard l(x_blocks);
+        ReadGuard lock(x_blocks);
         if (m_blocks.size() == m_config->maxDownloadingBlockQueueSize() &&
             m_blocks.top()->blockHeader()->number() > _blockNumber)
         {
@@ -217,7 +213,7 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr _header)
 
     sealerListStr << "size: " << _header->sealerList().size();
     signatureListStr << "size: " << _header->signatureList().size();
-    if (c_fileLogLevel <= TRACE)
+    if (c_fileLogLevel == TRACE)
     {
         auto sealerList = _header->sealerList();
         sealerListStr << ", sealer list: ";
@@ -450,7 +446,7 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
 void DownloadingQueue::updateCommitQueue(Block::Ptr _block)
 {
     {
-        WriteGuard l(x_commitQueue);
+        WriteGuard lock(x_commitQueue);
         m_commitQueue.push(_block);
     }
     tryToCommitBlockToLedger();
@@ -458,7 +454,7 @@ void DownloadingQueue::updateCommitQueue(Block::Ptr _block)
 
 void DownloadingQueue::tryToCommitBlockToLedger()
 {
-    WriteGuard l(x_commitQueue);
+    WriteGuard lock(x_commitQueue);
     if (m_commitQueue.empty())
     {
         return;
@@ -496,7 +492,6 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
         return;
     }
     // commit transaction firstly
-    auto startT = utcTime();
     auto self = weak_from_this();
     try
     {
@@ -583,7 +578,7 @@ void DownloadingQueue::finalizeBlock(bcos::protocol::Block::Ptr, LedgerConfig::P
 {
     if (m_newBlockHandler)
     {
-        m_newBlockHandler(_ledgerConfig);
+        m_newBlockHandler(std::move(_ledgerConfig));
     }
     // try to commit the next block
     tryToCommitBlockToLedger();
@@ -597,7 +592,7 @@ void DownloadingQueue::clearExpiredQueueCache()
 
 void DownloadingQueue::clearExpiredCache(BlockQueue& _queue, SharedMutex& _lock)
 {
-    WriteGuard l(_lock);
+    WriteGuard lock(_lock);
     while (!_queue.empty() && _queue.top()->blockHeader()->number() <= m_config->blockNumber())
     {
         _queue.pop();
@@ -620,6 +615,9 @@ void DownloadingQueue::onCommitFailed(
                              << LOG_KV("code", _error->errorCode())
                              << LOG_KV("message", _error->errorMessage());
         fetchAndUpdateLedgerConfig();
+        // Note: When an InvalidBlocks error occurs, there may be uncommitted blocks in the
+        // commitQueue, so need to call tryToCommitBlockToLedger and then commit the block
+        tryToCommitBlockToLedger();
         return;
     }
     if (blockHeader->number() <= m_config->blockNumber())
@@ -636,7 +634,7 @@ void DownloadingQueue::onCommitFailed(
 
     // re-push failedBlock to commitQueue
     {
-        WriteGuard l(x_commitQueue);
+        WriteGuard lock(x_commitQueue);
         m_commitQueue.push(_failedBlock);
     }
     if (_error->errorCode() == bcos::scheduler::SchedulerError::BlockIsCommitting)
@@ -665,8 +663,8 @@ void DownloadingQueue::onCommitFailed(
     {
         // re-push un-committed block into m_blocks
         // Note: this operation is low performance and low frequency
-        WriteGuard l(x_commitQueue);
-        WriteGuard lock(x_blocks);
+        WriteGuard lock1(x_commitQueue);
+        WriteGuard lock2(x_blocks);
         if (m_commitQueue.empty())
         {
             return;
@@ -675,13 +673,13 @@ void DownloadingQueue::onCommitFailed(
         // write-back the poped block into commitQueue here
         while (!m_commitQueue.empty())
         {
-            auto topBlock = m_commitQueue.top();
-            if (topBlock->blockHeader()->number() >= topNumber)
+            auto topCommitBlock = m_commitQueue.top();
+            if (topCommitBlock->blockHeader()->number() >= topNumber)
             {
                 break;
             }
             rePushedBlockCount++;
-            m_blocks.push(topBlock);
+            m_blocks.push(topCommitBlock);
             m_commitQueue.pop();
         }
     }
@@ -708,13 +706,11 @@ void DownloadingQueue::fetchAndUpdateLedgerConfig()
         m_ledgerFetcher->fetchBlockTxCountLimit();
         m_ledgerFetcher->fetchConsensusLeaderPeriod();
         m_ledgerFetcher->fetchCompatibilityVersion();
-        m_ledgerFetcher->fetchAuthCheckStatus();
         auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
         BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                           << LOG_KV("blockNumber", ledgerConfig->blockNumber())
                           << LOG_KV("hash", ledgerConfig->hash().abridged())
                           << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
-                          << LOG_KV("authCheckStatus", ledgerConfig->authCheckStatus())
                           << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
         m_config->resetConfig(ledgerConfig);
     }

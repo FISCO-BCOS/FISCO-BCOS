@@ -15,7 +15,9 @@ using namespace bcos::transaction_scheduler;
 
 struct MockExecutor
 {
-    MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory) {}
+    MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
+        [[maybe_unused]] auto&& tableNamePool)
+    {}
 
     task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(
         auto&& blockHeader, auto&& transaction, [[maybe_unused]] int contextID)
@@ -35,7 +37,7 @@ public:
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
-        scheduler(backendStorage, receiptFactory)
+        scheduler(backendStorage, receiptFactory, tableNamePool)
     {}
 
     TableNamePool tableNamePool;

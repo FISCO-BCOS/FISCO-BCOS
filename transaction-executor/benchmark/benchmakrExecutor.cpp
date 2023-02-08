@@ -27,7 +27,7 @@ struct Fixture
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
-        executor(storage, receiptFactory),
+        executor(storage, receiptFactory, tableNamePool),
         blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
@@ -53,6 +53,7 @@ struct Fixture
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     Storage storage;
     ReceiptFactory receiptFactory;
+    TableNamePool tableNamePool;
     bcos::transaction_executor::TransactionExecutorImpl<Storage, ReceiptFactory> executor;
     bcos::bytes helloworldBytecodeBinary;
 

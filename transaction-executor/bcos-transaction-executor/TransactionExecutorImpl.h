@@ -20,9 +20,27 @@ namespace bcos::transaction_executor
 template <StateStorage Storage, protocol::IsTransactionReceiptFactory ReceiptFactory>
 class TransactionExecutorImpl
 {
+private:
+    evmc_address unhexAddress(std::string_view view)
+    {
+        if (view.empty())
+        {
+            return {};
+        }
+
+        evmc_address address;
+        boost::algorithm::unhex(view, address.bytes);
+        return address;
+    }
+
+    Storage& m_storage;
+    ReceiptFactory& m_receiptFactory;
+    TableNamePool& m_tableNamePool;
+
 public:
-    TransactionExecutorImpl(Storage& storage, ReceiptFactory& receiptFactory)
-      : m_storage(storage), m_receiptFactory(receiptFactory)
+    TransactionExecutorImpl(
+        Storage& storage, ReceiptFactory& receiptFactory, TableNamePool& tableNamePool)
+      : m_storage(storage), m_receiptFactory(receiptFactory), m_tableNamePool(tableNamePool)
     {}
 
     task::Task<protocol::ReceiptFactoryReturnType<ReceiptFactory>> execute(
@@ -82,23 +100,6 @@ public:
             co_return receipt;
         }
     }
-
-private:
-    evmc_address unhexAddress(std::string_view view)
-    {
-        if (view.empty())
-        {
-            return {};
-        }
-
-        evmc_address address;
-        boost::algorithm::unhex(view, address.bytes);
-        return address;
-    }
-
-    Storage& m_storage;
-    ReceiptFactory& m_receiptFactory;
-    TableNamePool m_tableNamePool;
 };
 
 }  // namespace bcos::transaction_executor

@@ -22,9 +22,7 @@
 #include "bcos-txpool/txpool/validator/TxPoolNonceChecker.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class LedgerNonceChecker : public TxPoolNonceChecker
 {
@@ -61,5 +59,4 @@ private:
     std::map<int64_t, bcos::protocol::NonceListPtr> m_blockNonceCache;
     mutable SharedMutex x_blockNonceCache;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

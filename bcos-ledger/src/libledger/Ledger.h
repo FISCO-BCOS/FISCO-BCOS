@@ -35,7 +35,7 @@
 
 namespace bcos::ledger
 {
-class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledger>
+class Ledger : public LedgerInterface
 {
 public:
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,

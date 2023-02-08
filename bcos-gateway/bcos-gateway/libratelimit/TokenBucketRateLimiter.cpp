@@ -66,18 +66,36 @@ void TokenBucketRateLimiter::setMaxBurstReqNum(int64_t const& _maxBurstReqNum)
 
 bool TokenBucketRateLimiter::tryAcquire(int64_t _requiredPermits)
 {
+    if (std::cmp_greater(_requiredPermits, m_maxQPS))
+    {
+        // Notice: the acquire amount exceeded the maximum, it will never succeed
+        RATELIMIT_LOG(WARNING) << LOG_DESC("the try acquire amount exceeded the maximum")
+                               << LOG_KV("requiredPermits", _requiredPermits)
+                               << LOG_KV("maxPermitsSize", m_maxQPS);
+        return false;
+    }
+
     int64_t waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, false, utcSteadyTimeUs());
     return (waitTime == 0);
 }
 
-void TokenBucketRateLimiter::acquire(int64_t _requiredPermits)
+bool TokenBucketRateLimiter::acquire(int64_t _requiredPermits)
 {
+    if (std::cmp_greater(_requiredPermits, m_maxQPS))
+    {
+        // Notice: the acquire amount exceeded the maximum, it will never succeed
+        RATELIMIT_LOG(WARNING) << LOG_DESC("the try acquire amount exceeded the maximum")
+                               << LOG_KV("requiredPermits", _requiredPermits)
+                               << LOG_KV("maxPermitsSize", m_maxQPS);
+        return false;
+    }
+
     int64_t waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, false, utcSteadyTimeUs());
     if (waitTime > 0)
     {
         std::this_thread::sleep_for(std::chrono::microseconds(waitTime));
     }
-    return;
+    return true;
 }
 
 void TokenBucketRateLimiter::rollback(int64_t _requiredPermits)
@@ -88,7 +106,6 @@ void TokenBucketRateLimiter::rollback(int64_t _requiredPermits)
     {
         m_currentStoredPermits = m_maxPermits;
     }
-    return;
 }
 
 int64_t TokenBucketRateLimiter::fetchPermitsAndGetWaitTime(

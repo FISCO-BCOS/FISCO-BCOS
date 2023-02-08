@@ -52,7 +52,7 @@ public:
      * @param _requiredPermits
      * @return void
      */
-    virtual void acquire(int64_t _requiredPermits) = 0;
+    virtual bool acquire(int64_t _requiredPermits) = 0;
 
     /**
      * @brief

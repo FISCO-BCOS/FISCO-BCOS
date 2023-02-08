@@ -21,6 +21,8 @@ public:
         MutableStorage>::multiLayerStorage;
     using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
         MutableStorage>::receiptFactory;
+    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
+        MutableStorage>::tableNamePool;
 
     task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> execute(
         protocol::IsBlockHeader auto const& blockHeader,
@@ -33,7 +35,7 @@ public:
         }
 
         int contextID = 0;
-        Executor executor(multiLayerStorage(), receiptFactory());
+        Executor executor(multiLayerStorage(), receiptFactory(), tableNamePool());
         for (auto const& transaction : transactions)
         {
             receipts.emplace_back(co_await executor.execute(blockHeader, transaction, contextID++));

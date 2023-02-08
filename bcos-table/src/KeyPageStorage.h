@@ -1251,6 +1251,7 @@ private:
     size_t m_mergeSize;
     std::atomic_uint64_t m_readLength{0};
     std::atomic_uint64_t m_writeLength{0};
+    mutable std::atomic_uint64_t m_size{0};
     std::vector<Bucket> m_buckets;
     std::shared_ptr<const std::set<std::string, std::less<>>> m_ignoreTables;
     bool m_ignoreNotExist = false;

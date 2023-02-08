@@ -24,9 +24,7 @@
 #include "bcos-framework/protocol/TransactionMetaData.h"
 #include <bcos-utilities/CallbackCollectionHandler.h>
 #include <bcos-utilities/ThreadPool.h>
-namespace bcos
-{
-namespace sealer
+namespace bcos::sealer
 {
 using TxsMetaDataQueue = std::deque<bcos::protocol::TransactionMetaData::Ptr>;
 class SealingManager : public std::enable_shared_from_this<SealingManager>
@@ -35,7 +33,7 @@ public:
     using Ptr = std::shared_ptr<SealingManager>;
     using ConstPtr = std::shared_ptr<SealingManager const>;
     explicit SealingManager(SealerConfig::Ptr _config)
-      : m_config(_config),
+      : m_config(std::move(_config)),
         m_pendingTxs(std::make_shared<TxsMetaDataQueue>()),
         m_pendingSysTxs(std::make_shared<TxsMetaDataQueue>()),
         m_worker(std::make_shared<ThreadPool>("sealerWorker", 1))
@@ -58,7 +56,7 @@ public:
     virtual void setUnsealedTxsSize(size_t _unsealedTxsSize)
     {
         m_unsealedTxsSize = _unsealedTxsSize;
-        m_config->consensus()->asyncNoteUnSealedTxsSize(_unsealedTxsSize, [](Error::Ptr _error) {
+        m_config->consensus()->asyncNoteUnSealedTxsSize(_unsealedTxsSize, [](auto&& _error) {
             if (_error)
             {
                 SEAL_LOG(WARNING) << LOG_DESC(
@@ -85,6 +83,7 @@ public:
             m_startSealingNumber = _startSealingNumber;
             m_sealingNumber = _startSealingNumber;
             m_lastSealTime = utcSteadyTime();
+            // for sys block
             if (m_waitUntil >= m_startSealingNumber)
             {
                 SEAL_LOG(INFO) << LOG_DESC("resetSealingInfo: reset waitUntil for reseal");
@@ -141,6 +140,7 @@ private:
     std::atomic<ssize_t> m_endSealingNumber = {0};
     std::atomic<size_t> m_maxTxsPerBlock = {0};
 
+    // for sys block
     std::atomic<int64_t> m_waitUntil = {0};
 
     bcos::CallbackCollectionHandler<> m_onReady;
@@ -149,5 +149,4 @@ private:
 
     std::atomic<ssize_t> m_currentNumber = {0};
 };
-}  // namespace sealer
-}  // namespace bcos
+}  // namespace bcos::sealer

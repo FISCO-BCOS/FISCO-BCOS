@@ -164,8 +164,29 @@ public:
                     });
                 callback(nullptr, result);
             }
+            // TODO: should call compaction
+            // delete nonces of historical blocks
+            auto lastBlockToDeleteNonces =
+                currentBlock > 5000 ? currentBlock - 5000 : 1;  // MAX_BLOCK_LIMIT is 5000
+            if (lastBlockToDeleteNonces != 1)
+            {
+                auto numberRange =
+                    RANGES::iota_view<uint64_t, uint64_t>(1, lastBlockToDeleteNonces);
+                auto numberList = numberRange |
+                                  RANGES::views::transform([](protocol::BlockNumber blockNumber) {
+                                      return boost::lexical_cast<std::string>(blockNumber);
+                                  }) |
+                                  RANGES::to<std::vector<std::string>>();
+                auto err = m_storage->deleteRows(ledger::SYS_BLOCK_NUMBER_2_NONCES, numberList);
+                if (err)
+                {
+                    ARCHIVE_SERVICE_LOG(WARNING)
+                        << LOG_BADGE("delete historical blocks nonces")
+                        << LOG_KV("lastBlockToDeleteNonces", lastBlockToDeleteNonces)
+                        << LOG_KV("message", err->errorMessage());
+                }
+            }
         };
-        // TODO: should call compaction
         m_httpServer->setHttpReqHandler([this](auto&& PH1, auto&& PH2) {
             handleHttpRequest(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2));
         });
