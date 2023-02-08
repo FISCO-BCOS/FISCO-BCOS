@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <fstream>
 #include <iterator>
+#include <optional>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -81,9 +82,20 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     }
 
     auto session = shared_from_this();
-    // checking before send the message
-    if (m_beforeMessageHandler && !m_beforeMessageHandler(session, message, callback))
+
+    if (auto result =
+            (m_beforeMessageHandler ? m_beforeMessageHandler(session, message) : std::nullopt))
     {
+        auto error = result.value();
+        // SESSION_LOG(TRACE) << LOG_BADGE("beforeMessageHandler")
+        //                   << LOG_KV("error", error.errorMessage());
+        if (callback)
+        {
+            server->threadPool()->enqueue([callback, error] {
+                callback(
+                    NetworkException((int)error.errorCode(), error.errorMessage()), Message::Ptr());
+            });
+        }
         return;
     }
 
@@ -96,12 +108,12 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
             std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
                 server->asioInterface()->newTimer(options.timeout);
 
-            auto session = std::weak_ptr<Session>(shared_from_this());
+            auto self = std::weak_ptr<Session>(session);
             auto seq = message->seq();
-            timeoutHandler->async_wait([session, seq](const boost::system::error_code& _error) {
+            timeoutHandler->async_wait([self, seq](const boost::system::error_code& _error) {
                 try
                 {
-                    auto s = session.lock();
+                    auto s = self.lock();
                     if (!s)
                     {
                         return;
@@ -115,7 +127,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                 }
             });
             handler->timeoutHandler = timeoutHandler;
-            handler->m_startTime = utcSteadyTime();
+            handler->startTime = utcSteadyTime();
         }
 
         m_sessionCallbackManager->addCallback(message->seq(), handler);
@@ -129,7 +141,6 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                            << LOG_KV("resp", message->isRespPacket());
     }
 
-    // TODO: optimize data copy resulting from serialization
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
 
@@ -433,7 +444,6 @@ void Session::doRead()
                     try
                     {
                         // Note: the decode function may throw exception
-                        // TODO: optimize data copy resulting from serialization
                         ssize_t result =
                             message->decode(bytesConstRef(s->m_data.data(), s->m_data.size()));
                         if (result > 0)
@@ -551,7 +561,8 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                     << LOG_BADGE("onMessage")
                     << LOG_DESC("callback not found, maybe the callback timeout")
                     << LOG_KV("endpoint", session->nodeIPEndpoint())
-                    << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
+                    << LOG_KV("seq", message->seq()) << LOG_KV("ext", message->ext())
+                    << LOG_KV("resp", message->isRespPacket());
                 return;
             }
 

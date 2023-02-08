@@ -3,6 +3,7 @@
  *  @date 20180910
  */
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOInterface
 #include <bcos-gateway/libnetwork/Common.h>         // for SocketFace
@@ -13,6 +14,7 @@
 #include <bcos-gateway/libp2p/P2PSession.h>  // for P2PSession
 #include <bcos-gateway/libp2p/Service.h>
 #include <boost/random.hpp>
+#include <optional>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -95,7 +97,7 @@ void Service::heartBeat()
         /// exclude myself
         if (it.second == id())
         {
-            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself p2pid same")
+            SERVICE_LOG(TRACE) << LOG_DESC("heartBeat ignore myself p2pid same")
                                << LOG_KV("remote endpoint", it.first)
                                << LOG_KV("nodeid", it.second);
             continue;
@@ -199,11 +201,29 @@ void Service::onConnect(
     p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
     p2pSession->setProtocolInfo(m_localProtocol);
 
+
     auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
-    p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
-        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSessionWeakPtr));
-    p2pSession->session()->setBeforeMessageHandler(std::bind(&Service::onBeforeMessage,
-        shared_from_this(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    auto self = weak_from_this();
+
+    p2pSession->session()->setMessageHandler([self, p2pSessionWeakPtr](NetworkException _e,
+                                                 SessionFace::Ptr _session, Message::Ptr _message) {
+        auto service = self.lock();
+        if (service)
+        {
+            return service->onMessage(_e, _session, _message, p2pSessionWeakPtr);
+        }
+    });
+
+    p2pSession->session()->setBeforeMessageHandler(
+        [self](SessionFace::Ptr _session, Message::Ptr _message) -> std::optional<bcos::Error> {
+            auto service = self.lock();
+            if (service)
+            {
+                return service->onBeforeMessage(_session, _message);
+            }
+
+            return std::nullopt;
+        });
     p2pSession->start();
     asyncSendProtocol(p2pSession);
     updateStaticNodes(session->socket(), p2pID);
@@ -297,15 +317,15 @@ void Service::sendRespMessageBySession(
                        << LOG_KV("payload size", _payload.size());
 }
 
-bool Service::onBeforeMessage(
-    SessionFace::Ptr _session, Message::Ptr _message, SessionCallbackFunc _callback)
+std::optional<bcos::Error> Service::onBeforeMessage(
+    SessionFace::Ptr _session, Message::Ptr _message)
 {
     if (m_beforeMessageHandler)
     {
-        return m_beforeMessageHandler(_session, _message, _callback);
+        return m_beforeMessageHandler(_session, _message);
     }
 
-    return true;
+    return std::nullopt;
 }
 
 void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
@@ -342,16 +362,26 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
             return;
         }
 
-        // on message handler
-        if (m_onMessageHandler)
+        if (auto result =
+                (m_onMessageHandler ? m_onMessageHandler(session, message) : std::nullopt))
         {
-            m_onMessageHandler(session, message);
+            auto& error = result.value();
+            // TODO:  discard the request or response the failure ???
+            SERVICE_LOG(WARNING) << LOG_DESC("onMessageHandler failed")
+                                 << LOG_KV("seq", message->seq())
+                                 << LOG_KV("packetType", message->packetType())
+                                 << LOG_KV("ext", message->ext())
+                                 << LOG_KV("endpoint", nodeIPEndpoint)
+                                 << LOG_KV("errorCode", error.errorCode())
+                                 << LOG_KV("errorMsg", error.errorMessage());
+            return;
         }
 
         /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
         SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message") << LOG_KV("p2pid", p2pID)
                            << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("seq", p2pMessage->seq())
+                           << LOG_KV("ext", p2pMessage->ext())
                            << LOG_KV("version", p2pMessage->version())
                            << LOG_KV("packetType", p2pMessage->packetType());
 
@@ -433,16 +463,16 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
         BOOST_THROW_EXCEPTION(e);
     }
 
-    return P2PMessage::Ptr();
+    return {};
 }
 
-void Service::asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
+void Service::asyncSendMessageByEndPoint(NodeIPEndpoint const& _endpoint, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, Options options)
 {
     RecursiveGuard l(x_sessions);
     for (auto const& it : m_sessions)
     {
-        if (it.second->session()->nodeIPEndpoint() == _endPoint)
+        if (it.second->session()->nodeIPEndpoint() == _endpoint)
         {
             sendMessageToSession(it.second, message, options, callback);
             break;

@@ -374,13 +374,18 @@ void Gateway::onReceiveP2PMessage(
     auto groupID = options->groupID();
     // moduleID
     auto moduleID = options->moduleID();
+    int64_t length = _msg->length();
 
-    m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+    auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, length);
+    if (result)
+    {
+        // TODO: response qps overflow
+    }
 
     auto srcNodeID = options->srcNodeID();
     const auto& dstNodeIDs = options->dstNodeIDs();
-    auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID.get());
-    auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0].get());
+    auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID);
+    auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0]);
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
     onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, payload,
         [groupID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](Error::Ptr _error) {
@@ -423,15 +428,25 @@ void Gateway::onReceiveBroadcastMessage(
     // moduleID
     uint16_t moduleID = options->moduleID();
 
-    m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+    auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+    if (result)
+    {
+        // For broadcast message, ratelimit check failed, do nothing.
+        return;
+    }
 
     auto srcNodeIDPtr =
         m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
 
     auto type = _msg->ext();
-    GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage") << LOG_KV("groupID", groupID)
-                       << LOG_KV("src", _msg->srcP2PNodeID()) << LOG_KV("dst", _msg->dstP2PNodeID())
-                       << LOG_KV("type", type);
+
+    if (c_fileLogLevel <= TRACE)
+    {
+        GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage") << LOG_KV("groupID", groupID)
+                           << LOG_KV("src", _msg->srcP2PNodeID())
+                           << LOG_KV("dst", _msg->dstP2PNodeID()) << LOG_KV("type", type);
+    }
+
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
         srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
 }

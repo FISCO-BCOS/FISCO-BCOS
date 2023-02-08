@@ -35,8 +35,13 @@ bool TimeWindowRateLimiter::tryAcquire(int64_t _requiredPermits)
 {
     if (std::cmp_greater(_requiredPermits, m_maxPermitsSize))
     {
+        if (m_allowExceedMaxPermitSize)
+        {
+            return true;
+        }
+
         // Notice: the acquire amount exceeded the maximum, it will never succeed
-        RATELIMIT_LOG(WARNING) << LOG_DESC("the try acquire amount exceeded the maximum")
+        RATELIMIT_LOG(WARNING) << LOG_DESC("try acquire exceeded the maximum")
                                << LOG_KV("requiredPermits", _requiredPermits)
                                << LOG_KV("maxPermitsSize", m_maxPermitsSize);
         return false;
@@ -64,8 +69,13 @@ bool TimeWindowRateLimiter::acquire(int64_t _requiredPermits)
 {
     if (std::cmp_greater(_requiredPermits, m_maxPermitsSize))
     {
+        if (m_allowExceedMaxPermitSize)
+        {
+            return true;
+        }
+
         // Notice: the acquire amount exceeded the maximum, it will never succeed
-        RATELIMIT_LOG(WARNING) << LOG_DESC("the acquire amount exceeded the maximum")
+        RATELIMIT_LOG(WARNING) << LOG_DESC("acquire exceeded the maximum")
                                << LOG_KV("requiredPermits", _requiredPermits)
                                << LOG_KV("maxPermitsSize", m_maxPermitsSize);
         return false;

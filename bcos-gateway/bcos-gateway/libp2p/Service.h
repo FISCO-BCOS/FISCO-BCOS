@@ -31,6 +31,11 @@ class Service : public P2PInterface, public std::enable_shared_from_this<Service
 {
 public:
     Service(std::string const& _nodeID);
+    Service(const Service&) = delete;
+    Service(Service&&) = delete;
+    Service& operator=(const Service&) = delete;
+    Service& operator=(Service&&) = delete;
+
     virtual ~Service() { stop(); }
 
     using Ptr = std::shared_ptr<Service>;
@@ -48,8 +53,8 @@ public:
     virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
-    virtual bool onBeforeMessage(
-        SessionFace::Ptr _session, Message::Ptr _message, SessionCallbackFunc _callback);
+    virtual std::optional<bcos::Error> onBeforeMessage(
+        SessionFace::Ptr _session, Message::Ptr _message);
 
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
@@ -161,17 +166,16 @@ public:
     void asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
         CallbackFuncWithSession callback, Options options = Options());
 
-    // handle before sending message, if the check fails, meaning false is returned, the message is
-    // not sent, and the SessionCallbackFunc will be performed
     void setBeforeMessageHandler(
-        std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> _handler)
+        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler)
     {
-        m_beforeMessageHandler = _handler;
+        m_beforeMessageHandler = std::move(_handler);
     }
 
-    void setOnMessageHandler(std::function<void(SessionFace::Ptr, Message::Ptr)> _handler)
+    void setOnMessageHandler(
+        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler)
     {
-        m_onMessageHandler = _handler;
+        m_onMessageHandler = std::move(_handler);
     }
 
 protected:
@@ -227,7 +231,9 @@ protected:
         }
     }
 
-protected:
+    friend class ServiceV2;
+
+private:
     std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;
 
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
@@ -260,9 +266,10 @@ protected:
     // handlers called when delete-session
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
 
-    std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)>
+        m_beforeMessageHandler;
 
-    std::function<void(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
 };
 
 }  // namespace gateway

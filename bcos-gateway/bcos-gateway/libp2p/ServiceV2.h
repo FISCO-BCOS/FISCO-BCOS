@@ -30,7 +30,13 @@ class ServiceV2 : public Service
 public:
     using Ptr = std::shared_ptr<ServiceV2>;
     ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory);
-    ~ServiceV2() override {}
+
+    ServiceV2(const ServiceV2&) = delete;
+    ServiceV2(ServiceV2&&) = delete;
+    ServiceV2& operator=(const ServiceV2&) = delete;
+    ServiceV2& operator=(ServiceV2&&) = delete;
+
+    ~ServiceV2() override = default;
 
     void start() override;
     void stop() override;
