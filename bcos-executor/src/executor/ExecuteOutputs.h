@@ -40,24 +40,24 @@ public:
         auto contextID = result->contextID();
         m_contextID2Result.emplace(contextID, std::move(result));
     }
+
     std::vector<protocol::ExecutionMessage::UniquePtr> dumpAndClear()
     {
         auto results = std::vector<protocol::ExecutionMessage::UniquePtr>();
+        results.resize(m_contextID2Result.size());
 
-        std::set<int64_t, std::less<>> contextIDs;
+        int64_t startContextID = std::numeric_limits<int64_t>::max();
 
         for (auto it = m_contextID2Result.begin(); it != m_contextID2Result.end(); it++)
         {
-            // we assume that context id is in sequence increasing
-            contextIDs.insert(it->first);
+            startContextID = std::min(it->first, startContextID);
         }
 
-        for (auto contextID : contextIDs)
+        for (auto it = m_contextID2Result.begin(); it != m_contextID2Result.end(); it++)
         {
-            auto& result = m_contextID2Result.at(contextID);
-            // std::cout << " dump  " << result->contextID() << " | " << result->seq() << " | "
-            //          << protocol::ExecutionMessage::getTypeName(result->type()) << std::endl;
-            results.push_back(std::move(result));
+            auto contextID = it->first;
+            auto& output = it->second;
+            results[contextID - startContextID] = std::move(output);
         }
 
         m_contextID2Result.clear();

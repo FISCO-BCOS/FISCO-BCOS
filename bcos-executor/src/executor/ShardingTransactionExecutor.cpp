@@ -43,7 +43,8 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
 }
 
 std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiveFlow(
-    std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine)
+    std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
+    bool isStaticCall)
 {
     if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
     {

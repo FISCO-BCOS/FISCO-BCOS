@@ -20,15 +20,15 @@
  */
 
 #pragma once
-#include <bcos-executor/src/CallParameters.h>
-#include <bcos-executor/src/Common.h>
-#include <bcos-executor/src/dag/DAG.h>
 #include "bcos-executor/src/dag/TxDAGInterface.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/executor/TransactionExecutor.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include <bcos-executor/src/CallParameters.h>
+#include <bcos-executor/src/Common.h>
+#include <bcos-executor/src/dag/DAG.h>
 #include <map>
 #include <memory>
 #include <queue>
@@ -46,9 +46,10 @@ public:
     TxDAG() : m_dag() {}
     virtual ~TxDAG() {}
 
+    void setExecuteTxFunc(ExecuteTxFunc const& _f) override { f_executeTx = _f; };
+
     // Generate DAG according with given transactions
-    void init(
-        critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTxFunc const& _f) override;
+    void init(critical::CriticalFieldsInterface::Ptr _txsCriticals) override;
 
     void run(unsigned int threadNum) override;
 
