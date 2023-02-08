@@ -41,7 +41,7 @@ void ExecutiveDagFlow::submit(CallParameters::UniquePtr txInput)
     assert(contextID < (int64_t)m_inputs->size());
 
     (*m_inputs)[contextID] = std::move(txInput);
-};
+}
 
 
 void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs)
@@ -71,7 +71,7 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
             submit(std::move(txInput));
         }
     }
-};
+}
 
 void ExecutiveDagFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxReturn,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
@@ -216,7 +216,7 @@ void ExecutiveDagFlow::run(std::function<void(CallParameters::UniquePtr)> onTxRe
         f_onTxReturn = nullptr;
         onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveDagFlow run error", e));
     }
-};
+}
 //*/
 
 
