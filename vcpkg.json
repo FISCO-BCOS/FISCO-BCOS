@@ -48,7 +48,7 @@
     },
     {
       "name": "tarscpp",
-      "version>=": "3.0.3-m"
+      "version>=": "3.0.3-m#1"
     },
     {
       "name": "openssl",
