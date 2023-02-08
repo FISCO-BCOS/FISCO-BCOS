@@ -22,6 +22,7 @@
 #pragma once
 
 #include "../executor/TransactionExecutor.h"
+//#include "PromiseTransactionExecutive.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
 #include <stack>
@@ -49,13 +50,30 @@ public:
         m_constantPrecompiled(constantPrecompiled),
         m_builtInPrecompiled(builtInPrecompiled),
         m_blockContext(blockContext),
-        m_gasInjector(gasInjector)
+        m_gasInjector(gasInjector),
+        m_pool(std::make_shared<bcos::ThreadPool>("executive", 128))
+
     {}
+
     virtual ~ExecutiveFactory() = default;
     virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, bool useCoroutine = true);
+    std::weak_ptr<BlockContext> getBlockContext() { return m_blockContext; };
 
-private:
+    std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& address) const
+    {
+        auto constantPrecompiled = m_constantPrecompiled->find(address);
+
+        if (constantPrecompiled != m_constantPrecompiled->end())
+        {
+            return constantPrecompiled->second;
+        }
+        return {};
+    }
+
+protected:
+    void setParams(std::shared_ptr<TransactionExecutive> executive);
+
     void registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive);
 
     std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
@@ -65,6 +83,28 @@ private:
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     std::weak_ptr<BlockContext> m_blockContext;
     std::shared_ptr<wasm::GasInjector> m_gasInjector;
+    bcos::ThreadPool::Ptr m_pool;
+};
+
+class ShardingExecutiveFactory : public ExecutiveFactory
+{
+public:
+    using Ptr = std::shared_ptr<ShardingExecutiveFactory>;
+
+    ShardingExecutiveFactory(std::weak_ptr<BlockContext> blockContext,
+        std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
+            precompiledContract,
+        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+            constantPrecompiled,
+        std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
+        std::shared_ptr<wasm::GasInjector> gasInjector)
+      : ExecutiveFactory(
+            blockContext, precompiledContract, constantPrecompiled, builtInPrecompiled, gasInjector)
+    {}
+    virtual ~ShardingExecutiveFactory() = default;
+
+    std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
+        int64_t contextID, int64_t seq, bool useCoroutine = true) override;
 };
 
 }  // namespace executor
