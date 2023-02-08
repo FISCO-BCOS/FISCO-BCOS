@@ -90,4 +90,4 @@ std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
         setParams(executive);
         return executive;
     }
-};
+}
