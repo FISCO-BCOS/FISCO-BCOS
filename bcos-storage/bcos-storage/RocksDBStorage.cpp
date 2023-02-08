@@ -127,7 +127,7 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
             STORAGE_ROCKSDB_LOG(WARNING)
                 << LOG_DESC("asyncGetRow failed") << LOG_KV("table", _table) << LOG_KV("key", _key)
                 << LOG_KV("error", errorMessage);
-            if (status.getState())
+            if (status.getState() != nullptr)
             {
                 errorMessage.append(" ").append(status.getState());
             }
@@ -199,13 +199,13 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                     {
                         entries[i] = std::make_optional(Entry());
 
-                        std::string v(value.data(), value.size());
+                        std::string originValue(value.data(), value.size());
 
-                        // Storage Security
-                        if (false == v.empty() && nullptr != m_dataEncryption)
-                            v = m_dataEncryption->decrypt(v);
-
-                        entries[i]->set(std::move(v));
+                        if (!originValue.empty() && nullptr != m_dataEncryption)
+                        {  // Storage Security
+                            originValue = m_dataEncryption->decrypt(originValue);
+                        }
+                        entries[i]->set(std::move(originValue));
                     }
                     else
                     {
@@ -214,7 +214,7 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                             STORAGE_ROCKSDB_LOG(TRACE)
                                 << "Multi get rows, not found key: " << keys[i];
                         }
-                        else if (status.getState())
+                        else if (status.getState() != nullptr)
                         {
                             STORAGE_ROCKSDB_LOG(WARNING)
                                 << "Multi get rows error: " << status.getState();
@@ -267,17 +267,19 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
             std::string value(_entry.get().data(), _entry.get().size());
 
             // Storage Security
-            if (false == value.empty() && nullptr != m_dataEncryption)
+            if (!value.empty() && nullptr != m_dataEncryption)
+            {
                 value = m_dataEncryption->encrypt(value);
+            }
 
-            status = m_db->Put(options, dbKey, std::move(value));
+            status = m_db->Put(options, dbKey, value);
         }
 
         if (!status.ok())
         {
             checkStatus(status);
             std::string errorMessage = "Set row failed! " + status.ToString();
-            if (status.getState())
+            if (status.getState() != nullptr)
             {
                 errorMessage.append(" ").append(status.getState());
             }
@@ -360,7 +362,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
             }
             return true;
         });
-
+        auto encode = utcSteadyTime();
         for (auto& [status, key, value] : dataChanges)
         {
             if (status == Entry::DELETED)
@@ -383,7 +385,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                         }
                         else
                         {
-                            STORAGE_ROCKSDB_LOG(FATAL) << "Unexcepted monostate!";
+                            STORAGE_ROCKSDB_LOG(FATAL) << "Unexpected monostate!";
                         }
                     },
                     value);
@@ -407,6 +409,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                                   << LOG_KV("blockNumber", param.number) << LOG_KV("put", putCount)
                                   << LOG_KV("delete", deleteCount)
                                   << LOG_KV("startTS", param.timestamp)
+                                  << LOG_KV("encode(ms)", encode - start)
                                   << LOG_KV("time(ms)", end - start)
                                   << LOG_KV("callback time(ms)", utcSteadyTime() - end);
     }
@@ -547,7 +550,7 @@ bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,
                 if (m_dataEncryption)
                 {
                     dataSize += realKeys[i].size() + encryptedValues[i].size();
-                    writeBatch.Put(std::move(realKeys[i]), std::move(encryptedValues[i]));
+                    writeBatch.Put(realKeys[i], encryptedValues[i]);
                 }
                 else
                 {
@@ -627,10 +630,7 @@ bcos::Error::Ptr RocksDBStorage::checkStatus(rocksdb::Status const& status)
     // exception that can be recovered by retry
     // statuses are: Busy, TimedOut, TryAgain, Aborted, MergeInProgress, IsIncomplete, Expired,
     // CompactionToolLarge
-    else
-    {
-        errorInfo = errorInfo + ", please try again!";
-        STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC(errorInfo);
-        return BCOS_ERROR_PTR(DatabaseRetryable, errorInfo);
-    }
+    errorInfo = errorInfo + ", please try again!";
+    STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC(errorInfo);
+    return BCOS_ERROR_PTR(DatabaseRetryable, errorInfo);
 }
