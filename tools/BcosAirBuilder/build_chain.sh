@@ -42,7 +42,7 @@ default_version="v3.3.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
-auth_mode="false"
+auth_mode="true"
 monitor_mode="false"
 auth_admin_account=
 binary_path=""
@@ -425,7 +425,7 @@ download_monitor_bin()
     local mtail_postfix=""
     if [[ -n "${macOS}" ]];then
         if [[ "${platform}" == "arm64" ]];then
-            mtail_postfix ="Darwin_arm64"
+            mtail_postfix="Darwin_arm64"
         elif [[ "${platform}" == "x86_64" ]];then
             mtail_postfix="Darwin_x86_64"
         else
@@ -434,7 +434,7 @@ download_monitor_bin()
         fi
     else
         if [[ "${platform}" == "aarch64" ]];then
-            mtail_postfix ="Linux_arm64"
+            mtail_postfix="Linux_arm64"
         elif [[ "${platform}" == "x86_64" ]];then
             mtail_postfix="Linux_x86_64"
         else
@@ -544,7 +544,6 @@ Usage:
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -D, build with docker
-    -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -R <Serial_mode>                    [Optional] Whether to use serial execute,default is true
@@ -573,7 +572,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:AR:a:N:u:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -634,11 +633,9 @@ parse_params() {
                 LOG_FATAL "Not support docker mode for macOS now"
            fi
         ;;
-        A) auth_mode="true" ;;
         w) wasm_mode="true";;
         R) serial_mode="${OPTARG}";;
         a)
-          auth_mode="true"
           auth_admin_account="${OPTARG}"
         ;;
         v) compatibility_version="${OPTARG}";;
