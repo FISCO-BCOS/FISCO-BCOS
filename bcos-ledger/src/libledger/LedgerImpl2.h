@@ -25,6 +25,7 @@
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <future>
+#include <range/v3/view/transform.hpp>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -66,7 +67,7 @@ public:
     {}
 
     template <bcos::concepts::ledger::DataFlag... Flags>
-    task::Task<void> impl_setBlock(bcos::concepts::block::Block auto block)
+    task::Task<void> setBlock(bcos::concepts::block::Block auto block)
     {
         LEDGER_LOG(INFO) << "setBlock: " << block.blockHeader.data.blockNumber;
 
@@ -123,7 +124,7 @@ public:
     }
 
     template <bool isTransaction>
-    task::Task<void> impl_setTransactions(RANGES::range auto hashes, RANGES::range auto&& buffers)
+    task::Task<void> setTransactions(RANGES::range auto const& hashes, RANGES::range auto&& buffers)
     {
         if (RANGES::size(buffers) != RANGES::size(hashes))
         {
@@ -248,7 +249,7 @@ public:
             }
         }
 
-        if (std::empty(block.transactionsMetaData))
+        if (transactionsBlock.transactionsMetaDataSize() == 0)
         {
             LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
             co_return;
@@ -273,30 +274,31 @@ public:
     {
         LEDGER_LOG(DEBUG) << "setBlockData transactions: " << blockNumberKey;
 
-        if (std::empty(block.transactionsMetaData))
+        if (block.transactionsMetaDataSize() == 0)
         {
             LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
             co_return;
         }
 
-        std::vector<std::vector<bcos::byte>> transactionBuffers(block.transactions.size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
-            [&block, &transactionBuffers](const tbb::blocked_range<size_t>& range) {
-                for (auto i = range.begin(); i < range.end(); ++i)
-                {
-                    auto& transaction = block.transactions[i];
-                    bcos::concepts::serialize::encode(transaction, transactionBuffers[i]);
-                }
-            });
+        auto hashes = RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsMetaDataSize()) |
+                      RANGES::views::transform([&block](uint64_t index) {
+                          auto metaData = block.transactionMetaData(index);
+                          return metaData->hash();
+                      });
+        auto buffers = RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsSize()) |
+                       RANGES::views::transform([&block](uint64_t index) {
+                           auto transaction = block.transaction(index);
+                           std::vector<bcos::byte> buffer;
+                           bcos::concepts::serialize::encode(*transaction, buffer);
 
-        auto hashView = block.transactionsMetaData |
-                        RANGES::views::transform([](auto& metaData) { return metaData.hash; });
-        co_await impl_setTransactions<false>(hashView, std::move(transactionBuffers));
+                           return buffer;
+                       });
+        co_await setTransactions<false>(hashes, buffers);
     }
 
     template <std::same_as<concepts::ledger::RECEIPTS>>
     task::Task<void> setBlockData(
-        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+        std::string_view blockNumberKey, protocol::IsBlock auto const& block)
     {
         LEDGER_LOG(DEBUG) << "setBlockData receipts: " << blockNumberKey;
 
@@ -327,7 +329,7 @@ public:
 
         auto hashView = block.transactionsMetaData |
                         RANGES::views::transform([](auto& metaData) { return metaData.hash; });
-        co_await impl_setTransactions<false>(hashView, std::move(receiptBuffers));
+        co_await setTransactions<false>(hashView, std::move(receiptBuffers));
 
         LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                           << LOG_KV("number", blockNumberKey)
