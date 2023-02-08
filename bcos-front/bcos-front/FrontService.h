@@ -25,7 +25,6 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <boost/asio.hpp>
 #include <utility>
 
 namespace bcos
@@ -40,7 +39,7 @@ public:
     FrontService();
     FrontService(const FrontService&) = delete;
     FrontService(FrontService&&) = delete;
-    virtual ~FrontService();
+    ~FrontService() override;
 
     FrontService& operator=(const FrontService&) = delete;
     FrontService& operator=(FrontService&&) = delete;
@@ -55,7 +54,7 @@ public:
 
 public:
     /**
-     * @brief: get nodeIDs from frontservice
+     * @brief: get nodeIDs from front service
      * @param _onGetGroupNodeInfoFunc: response callback
      * @return void
      */

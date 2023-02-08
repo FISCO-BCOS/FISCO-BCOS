@@ -79,7 +79,7 @@ public:
      */
     void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override;
+        CompositeBuffer::Ptr _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override;
 
     /**
      * @brief: send message to multiple nodes
@@ -92,7 +92,7 @@ public:
      */
     void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-        bytesConstRef _payload) override;
+        CompositeBuffer::Ptr _payload) override;
 
     /**
      * @brief: send message to all nodes
@@ -104,7 +104,7 @@ public:
      * @return void
      */
     void asyncSendBroadcastMessage(uint16_t _nodeType, const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
+        bcos::crypto::NodeIDPtr _srcNodeID, CompositeBuffer::Ptr _payload) override;
 
     void asyncNotifyGroupInfo(
         bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override

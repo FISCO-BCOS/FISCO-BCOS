@@ -37,8 +37,6 @@ namespace bcos
 {
 namespace gateway
 {
-
-
 class Retry : public std::enable_shared_from_this<Retry>, public ObjectCounter<Retry>
 {
 public:
@@ -109,9 +107,9 @@ public:
 
             try
             {
-                auto payload = message->payload();
+                auto payload = message->readPayload()->asRefBuffer();
                 int respCode =
-                    boost::lexical_cast<int>(std::string(payload->begin(), payload->end()));
+                    boost::lexical_cast<int>(std::string(payload.begin(), payload.end()));
                 // the peer gateway not response not ok ,it means the gateway not dispatch the
                 // message successfully,find another gateway and try again
                 if (respCode != bcos::protocol::CommonError::SUCCESS)
@@ -138,9 +136,7 @@ public:
             {
                 GATEWAY_LOG(ERROR)
                     << LOG_BADGE("trySendMessage and receive response exception")
-                    << LOG_KV("payload",
-                           std::string(message->payload()->begin(), message->payload()->end()))
-                    << LOG_KV("packetType", message->packetType())
+                    << LOG_KV("seq", message->seq()) << LOG_KV("packetType", message->packetType())
                     << LOG_KV("src", message->options() ?
                                          toHex(*(message->options()->srcNodeID())) :
                                          "unknown")
@@ -161,13 +157,11 @@ public:
     ErrorRespFunc m_respFunc;
 };
 
-
-class Gateway : public GatewayInterface,
-                public std::enable_shared_from_this<Gateway>,
-                public bcos::ObjectCounter<Gateway>
+class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gateway>
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;
+
     Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
@@ -218,7 +212,7 @@ public:
      */
     void asyncSendMessageByNodeID(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, ErrorRespFunc _errorRespFunc) override;
+        bcos::CompositeBuffer::Ptr _payload, ErrorRespFunc _errorRespFunc) override;
 
     /**
      * @brief: send message to multiple nodes
@@ -231,7 +225,7 @@ public:
      */
     void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _nodeIDs,
-        bytesConstRef _payload) override;
+        CompositeBuffer::Ptr _payload) override;
 
     /**
      * @brief: send broadcast message
@@ -242,7 +236,7 @@ public:
      * @return void
      */
     void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
+        bcos::crypto::NodeIDPtr _srcNodeID, CompositeBuffer::Ptr _payload) override;
 
     /**
      * @brief: receive p2p message

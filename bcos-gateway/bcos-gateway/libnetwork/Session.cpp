@@ -8,6 +8,7 @@
  */
 
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/CompositeBuffer.h"
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOIn...
 #include <bcos-gateway/libnetwork/Common.h>         // for SESSIO...
 #include <bcos-gateway/libnetwork/Host.h>           // for Host
@@ -68,6 +69,10 @@ bool Session::actived() const
 void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCallbackFunc callback)
 {
     auto server = m_server.lock();
+    if (!server)
+    {
+        return;
+    }
     if (!actived())
     {
         SESSION_LOG(WARNING) << "Session inactived";
@@ -125,7 +130,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                 }
             });
             handler->timeoutHandler = timeoutHandler;
-            handler->m_startTime = utcSteadyTime();
+            handler->startTime = utcSteadyTime();
         }
 
         m_sessionCallbackManager->addCallback(message->seq(), handler);
@@ -139,13 +144,14 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                            << LOG_KV("resp", message->isRespPacket());
     }
 
-    std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
-    message->encode(*p_buffer);
+    // Notice: for reduce memory copy
+    auto compositeBuffer = CompositeBufferFactory::build();
+    message->encode(*compositeBuffer);
 
-    send(p_buffer);
+    send(compositeBuffer);
 }
 
-void Session::send(const std::shared_ptr<bytes>& _msg)
+void Session::send(CompositeBuffer::Ptr& _msg)
 {
     if (!actived())
     {
@@ -167,7 +173,7 @@ void Session::send(const std::shared_ptr<bytes>& _msg)
     write();
 }
 
-void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr<bytes>)
+void Session::onWrite(boost::system::error_code ec, std::size_t, CompositeBuffer::Ptr)
 {
     if (!actived())
     {
@@ -221,7 +227,7 @@ void Session::write()
 
         m_writing = true;
 
-        std::pair<std::shared_ptr<bytes>, u256> task;
+        std::pair<CompositeBuffer::Ptr, u256> task;
         u256 enter_time = u256(0);
 
         if (m_writeQueue.empty())
@@ -241,10 +247,11 @@ void Session::write()
         {
             if (m_socket->isConnected())
             {
-                // asio::buffer referecne buffer, so buffer need alive before
+                // asio::buffer reference buffer, so buffer need alive before
                 // asio::buffer be used
                 auto self = std::weak_ptr<Session>(shared_from_this());
-                server->asioInterface()->asyncWrite(m_socket, boost::asio::buffer(*buffer),
+
+                server->asioInterface()->asyncWrite(m_socket, buffer->toMultiBuffers(),
                     [self, buffer](const boost::system::error_code _error, std::size_t _size) {
                         auto session = self.lock();
                         if (!session)
@@ -530,7 +537,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
         }
         try
         {
-            // the forwarding message
+            // TODO: move the logic to Service for deal with the forwarding message
             if (!message->dstP2PNodeID().empty() &&
                 message->dstP2PNodeID() != session->m_hostNodeID)
             {

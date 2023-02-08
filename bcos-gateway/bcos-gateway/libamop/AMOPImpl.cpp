@@ -18,6 +18,7 @@
  * @date 2021-10-26
  */
 #include "AMOPImpl.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libnetwork/Common.h>
@@ -87,7 +88,7 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
         Options option(0);
         m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType, _nodeID,
             bytesConstRef(buffer->data(), buffer->size()), option,
-            [_nodeID](Error::Ptr&& _error, int16_t, bytesPointer) {
+            [_nodeID](Error::Ptr&& _error, int16_t, WrapperBuffer::Ptr) {
                 if (_error && (_error->errorCode() != CommonError::SUCCESS))
                 {
                     AMOP_LOG(WARNING)
@@ -118,7 +119,7 @@ std::shared_ptr<bytes> AMOPImpl::buildAndEncodeMessage(uint32_t _type, bcos::byt
     message->setType(_type);
     message->setData(_data);
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
     return buffer;
 }
 
@@ -159,7 +160,7 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
         Options option(0);
         m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType, _nodeID,
             bytesConstRef(buffer->data(), buffer->size()), option,
-            [_nodeID](Error::Ptr&& _error, int16_t, bytesPointer) {
+            [_nodeID](Error::Ptr&& _error, int16_t, WrapperBuffer::Ptr) {
                 if (_error && (_error->errorCode() != CommonError::SUCCESS))
                 {
                     AMOP_LOG(WARNING)
@@ -288,7 +289,7 @@ bool AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic,
 {
     std::vector<std::string> clients;
     m_topicManager->queryClientsByTopic(_topic, clients);
-    if (clients.size() == 0)
+    if (clients.empty())
     {
         AMOP_LOG(INFO) << LOG_DESC("trySendTopicMessageToLocalClient failed for empty client")
                        << LOG_KV("topic", _topic);
@@ -369,7 +370,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
             m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType,
                 choosedNodeID, bytesConstRef(m_buffer->data(), m_buffer->size()), option,
                 [self, choosedNodeID, callback = m_callback](
-                    Error::Ptr&& _error, int16_t _type, bytesPointer _responseData) {
+                    Error::Ptr&& _error, int16_t _type, WrapperBuffer::Ptr _responseData) {
                     if (_error && (_error->errorCode() != CommonError::SUCCESS))
                     {
                         AMOP_LOG(DEBUG)
@@ -384,8 +385,9 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     bcos::Error::Ptr error = nullptr;
                     if (_type == bcos::gateway::GatewayMessageType::AMOPMessageType)
                     {
-                        // zero copy overhead
-                        auto amopMsg = self->m_messageFactory->buildMessage(ref(*_responseData));
+                        // TODO:zero copy overhead
+                        auto amopMsg =
+                            self->m_messageFactory->buildMessage(_responseData->asRefBuffer());
                         auto errorMessage =
                             std::string(amopMsg->data().begin(), amopMsg->data().end());
                         auto errorCode = amopMsg->status();
@@ -409,7 +411,8 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                         AMOP_LOG(INFO)
                             << LOG_DESC("asyncSendMessageByTopic: receive responseData")
                             << LOG_KV("size", _responseData->size()) << LOG_KV("type", _type);
-                        callback(std::move(error), _type, _responseData);
+                        auto data = std::make_shared<bcos::bytes>(_responseData->asBuffer());
+                        callback(std::move(error), _type, data);
                     }
                 });
         }
@@ -471,7 +474,7 @@ void AMOPImpl::asyncSendBroadcastMessageByTopic(
     auto buffer = buildAndEncodeMessage(AMOPMessage::Type::AMOPBroadcast, _data);
     m_network->asyncSendMessageByP2PNodeIDs(GatewayMessageType::AMOPMessageType, nodeIDs,
         bytesConstRef(buffer->data(), buffer->size()), Options(0));
-    AMOP_LOG(DEBUG) << LOG_BADGE("asyncSendBroadbastMessage") << LOG_DESC("send broadcast message")
+    AMOP_LOG(DEBUG) << LOG_BADGE("asyncSendBroadcastMessage") << LOG_DESC("send broadcast message")
                     << LOG_KV("topic", _topic) << LOG_KV("data size", _data.size());
 }
 
@@ -511,7 +514,7 @@ void AMOPImpl::dispatcherAMOPMessage(
         return;
     }
     // zero copy overhead
-    auto amopMessage = m_messageFactory->buildMessage(ref(*_message->payload()));
+    auto amopMessage = m_messageFactory->buildMessage(_message->readPayload()->asRefBuffer());
     auto amopMsgType = amopMessage->type();
     auto fromNodeID =
         _message->srcP2PNodeID().empty() ? _session->p2pID() : _message->srcP2PNodeID();
@@ -537,7 +540,9 @@ void AMOPImpl::dispatcherAMOPMessage(
                 responseP2PMsg->setSrcP2PNodeID(_message->dstP2PNodeID());
                 responseP2PMsg->setSeq(_message->seq());
                 responseP2PMsg->setRespPacket();
-                responseP2PMsg->setPayload(_responseData);
+
+                auto payload = bcos::CompositeBufferFactory::build(*_responseData);
+                responseP2PMsg->setWritePayload(payload);
                 responseP2PMsg->setPacketType(_type);
                 m_network->asyncSendMessageByNodeID(
                     responseP2PMsg->dstP2PNodeID(), responseP2PMsg, nullptr);

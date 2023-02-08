@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "bcos-utilities/CompositeBuffer.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/ObjectCounter.h"
 #include <bcos-gateway/libnetwork/Common.h>
@@ -33,6 +34,7 @@ class Session : public SessionFace,
                 public bcos::ObjectCounter<Session>
 {
 public:
+    // TODO: make it config items
     Session(size_t _bufferSize = 4096);
     virtual ~Session();
 
@@ -95,7 +97,7 @@ protected:
     virtual void checkNetworkStatus();
 
 private:
-    void send(const std::shared_ptr<bytes>& _msg);
+    void send(CompositeBuffer::Ptr& _msg);
 
     void doRead();
     std::vector<byte> m_data;  ///< Buffer for ingress packet data.
@@ -112,7 +114,7 @@ private:
 
     /// Perform a single round of the write operation. This could end up calling
     /// itself asynchronously.
-    void onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer);
+    void onWrite(boost::system::error_code ec, std::size_t length, CompositeBuffer::Ptr buffer);
     void write();
 
     /// call by doRead() to deal with message
@@ -126,14 +128,14 @@ private:
     class QueueCompare
     {
     public:
-        bool operator()(const std::pair<std::shared_ptr<bytes>, u256>&,
-            const std::pair<std::shared_ptr<bytes>, u256>&) const
+        bool operator()(const std::pair<CompositeBuffer::Ptr, u256>&,
+            const std::pair<CompositeBuffer::Ptr, u256>&) const
         {
             return false;
         }
     };
 
-    boost::heap::priority_queue<std::pair<std::shared_ptr<bytes>, u256>,
+    boost::heap::priority_queue<std::pair<CompositeBuffer::Ptr, u256>,
         boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
         m_writeQueue;
     std::atomic_bool m_writing = {false};

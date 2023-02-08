@@ -19,10 +19,11 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::protocol;
 
-static const uint32_t CHECK_INTERVEL = 10000;
+static const uint32_t CHECK_INTERVAL = 10000;
 
 Service::Service(std::string const& _nodeID) : m_nodeID(_nodeID)
 {
+    m_msgHandlers.fill(nullptr);
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
     m_codec = g_BCOSConfig.codec();
     // Process handshake packet logic, handshake protocol and determine
@@ -30,6 +31,10 @@ Service::Service(std::string const& _nodeID) : m_nodeID(_nodeID)
     // should be set
     registerHandlerByMsgType(GatewayMessageType::Handshake,
         boost::bind(&Service::onReceiveProtocol, this, boost::placeholders::_1,
+            boost::placeholders::_2, boost::placeholders::_3));
+
+    registerHandlerByMsgType(GatewayMessageType::Heartbeat,
+        boost::bind(&Service::onReceiveHeartbeat, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
 }
 
@@ -67,7 +72,7 @@ void Service::stop()
 
         /// disconnect sessions
         RecursiveGuard l(x_sessions);
-        for (auto session : m_sessions)
+        for (auto& session : m_sessions)
         {
             session.second->stop(ClientQuit);
         }
@@ -117,7 +122,7 @@ void Service::heartBeat()
     }
 
     auto self = std::weak_ptr<Service>(shared_from_this());
-    m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
+    m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVAL);
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
         {
@@ -164,8 +169,8 @@ void Service::onConnect(
     if (e.errorCode())
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
-                             << LOG_KV("p2pid", p2pID) << LOG_KV("nodeName", p2pInfo.nodeName)
-                             << LOG_KV("endpoint", peer) << LOG_KV("errorMessage", e.what());
+                             << LOG_KV("errorMessage", e.what()) << LOG_KV("p2pid", p2pID)
+                             << LOG_KV("nodeName", p2pInfo.nodeName) << LOG_KV("endpoint", peer);
 
         return;
     }
@@ -194,7 +199,7 @@ void Service::onConnect(
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(session);
     p2pSession->setP2PInfo(p2pInfo);
-    p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
+    p2pSession->setService(weak_from_this());
     p2pSession->setProtocolInfo(m_localProtocol);
 
     auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
@@ -281,18 +286,19 @@ void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr 
 }
 
 void Service::sendRespMessageBySession(
-    bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession)
+    bytesConstRef _data, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession)
 {
     auto respMessage = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
 
+    auto payload = bcos::CompositeBufferFactory::build(_data);
     respMessage->setSeq(_p2pMessage->seq());
     respMessage->setRespPacket();
-    respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    respMessage->setWritePayload(payload);
 
     sendMessageToSession(_p2pSession, respMessage);
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
                        << LOG_KV("p2pid", _p2pSession->p2pID())
-                       << LOG_KV("payload size", _payload.size());
+                       << LOG_KV("payload size", _data.size());
 }
 
 std::optional<bcos::Error> Service::onBeforeMessage(
@@ -348,7 +354,6 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
             return;
         }
 
-        /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
         SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message") << LOG_KV("p2pid", p2pID)
                            << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("seq", p2pMessage->seq())
@@ -356,24 +361,19 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
                            << LOG_KV("packetType", p2pMessage->packetType());
 
         auto packetType = p2pMessage->packetType();
+        auto ext = p2pMessage->ext();
+        auto version = p2pMessage->version();
         auto handler = getMessageHandlerByMsgType(packetType);
         if (handler)
         {
-            // TODO: use thread pool here
             handler(e, p2pSession, p2pMessage);
             return;
         }
-        switch (packetType)
-        {
-        case GatewayMessageType::Heartbeat:
-            break;
-        default:
-        {
-            SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type")
-                               << LOG_KV("packetType", packetType) << LOG_KV("seq", message->seq());
-        }
-        break;
-        };
+
+        SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type") << LOG_KV("seq", message->seq())
+                           << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
+                           << LOG_KV("version", version)
+                           << LOG_KV("dst p2p", p2pMessage->dstP2PNodeID());
     }
     catch (std::exception& e)
     {
@@ -546,25 +546,11 @@ bool Service::isConnected(P2pID const& nodeID) const
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
 
-    if (it != m_sessions.end() && it->second->actived())
-    {
-        return true;
-    }
-    return false;
+    return it != m_sessions.end() && it->second->actived();
 }
 
-std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef _payload)
-{
-    auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-
-    message->setPacketType(_type);
-    message->setSeq(messageFactory()->newSeq());
-    message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
-    return message;
-}
-
-void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
-    Options _options, P2PResponseCallback _callback)
+void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
+    Options _options, P2PRespCallback _callback)
 {
     if (!isReachable(_dstNodeID))
     {
@@ -576,12 +562,15 @@ void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytes
         }
         return;
     }
-    auto p2pMessage = newP2PMessage(_type, _payload);
+
+    auto payload = bcos::CompositeBufferFactory::build(_payload);
+    auto p2pMessage =
+        std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage(_type, payload));
     asyncSendMessageByNodeID(
         _dstNodeID, p2pMessage,
         [_dstNodeID, _callback](NetworkException _e, std::shared_ptr<P2PSession>,
             std::shared_ptr<P2PMessage> _p2pMessage) {
-            auto packetType = _p2pMessage ? _p2pMessage->packetType() : 0;
+            auto packetType = _p2pMessage ? _p2pMessage->packetType() : (uint16_t)0;
             if (_e.errorCode() != 0)
             {
                 SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByP2PNodeID error")
@@ -589,28 +578,30 @@ void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytes
                                      << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
                 if (_callback)
                 {
-                    _callback(
-                        _e.toError(), packetType, _p2pMessage ? _p2pMessage->payload() : nullptr);
+                    _callback(_e.toError(), packetType,
+                        _p2pMessage ? _p2pMessage->readPayload() : nullptr);
                 }
                 return;
             }
             if (_callback)
             {
-                _callback(nullptr, packetType, _p2pMessage->payload());
+                _callback(nullptr, packetType, _p2pMessage->readPayload());
             }
         },
         _options);
 }
 
 void Service::asyncBroadcastMessageToP2PNodes(
-    int16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options)
+    uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options)
 {
-    auto p2pMessage = newP2PMessage(_type, _payload);
+    auto payload = bcos::CompositeBufferFactory::build(_payload);
+    auto p2pMessage =
+        std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage(_type, payload));
     asyncBroadcastMessage(p2pMessage, _options);
 }
 
 void Service::asyncSendMessageByP2PNodeIDs(
-    int16_t _type, const std::vector<P2pID>& _nodeIDs, bytesConstRef _payload, Options _options)
+    uint16_t _type, const std::vector<P2pID>& _nodeIDs, bytesConstRef _payload, Options _options)
 {
     for (auto const& nodeID : _nodeIDs)
     {
@@ -621,17 +612,35 @@ void Service::asyncSendMessageByP2PNodeIDs(
 // send the protocolInfo
 void Service::asyncSendProtocol(P2PSession::Ptr _session)
 {
-    auto payload = std::make_shared<bytes>();
-    m_codec->encode(m_localProtocol, *payload);
+    bcos::bytes buffer;
+    m_codec->encode(m_localProtocol, buffer);
+
+    auto payload = bcos::CompositeBufferFactory::build(buffer);
+
     auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
     message->setPacketType(GatewayMessageType::Handshake);
     auto seq = messageFactory()->newSeq();
     message->setSeq(seq);
-    message->setPayload(payload);
+    message->setWritePayload(payload);
 
-    SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
+    SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", buffer.size())
                       << LOG_KV("seq", seq);
+
     sendMessageToSession(_session, message, Options(), nullptr);
+}
+
+// receive the heartbeat msg
+void Service::Service::onReceiveHeartbeat(
+    NetworkException, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr)
+{
+    std::string endpoint = "unknown";
+    if (_session)
+    {
+        endpoint = _session->session()->nodeIPEndpoint().address();
+    }
+
+    SERVICE_LOG(TRACE) << LOG_BADGE("onReceiveHeartbeat") << LOG_DESC("receive heartbeat message")
+                       << LOG_KV("endpoint", endpoint);
 }
 
 // receive the protocolInfo
@@ -647,8 +656,8 @@ void Service::onReceiveProtocol(
     }
     try
     {
-        auto payload = _message->payload();
-        auto protocolInfo = m_codec->decode(bytesConstRef(payload->data(), payload->size()));
+        auto payload = _message->readPayload()->asRefBuffer();
+        auto protocolInfo = m_codec->decode(payload);
         // negotiated version
         if (protocolInfo->minVersion() > m_localProtocol->maxVersion() ||
             protocolInfo->maxVersion() < m_localProtocol->minVersion())

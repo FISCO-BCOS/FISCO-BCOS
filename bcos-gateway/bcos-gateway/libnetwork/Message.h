@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "bcos-utilities/CompositeBuffer.h"
 #include <bcos-utilities/Common.h>
 #include <set>
 #include <string>
@@ -34,8 +35,13 @@ class MessageExtAttributes
 {
 public:
     using Ptr = std::shared_ptr<MessageExtAttributes>;
+    using ConstPtr = std::shared_ptr<const MessageExtAttributes>;
 
-public:
+    MessageExtAttributes() = default;
+    MessageExtAttributes(const MessageExtAttributes&) = delete;
+    MessageExtAttributes(MessageExtAttributes&&) = delete;
+    MessageExtAttributes& operator=(MessageExtAttributes&&) = delete;
+    MessageExtAttributes& operator=(const MessageExtAttributes&) = delete;
     virtual ~MessageExtAttributes() = default;
 };
 
@@ -43,8 +49,13 @@ class Message
 {
 public:
     using Ptr = std::shared_ptr<Message>;
+    using ConstPtr = std::shared_ptr<const Message>;
 
-public:
+    Message() = default;
+    Message(const Message&) = delete;
+    Message(Message&&) = delete;
+    Message& operator=(Message&&) = delete;
+    Message& operator=(const Message&) = delete;
     virtual ~Message() = default;
 
     virtual uint32_t length() const = 0;
@@ -53,13 +64,17 @@ public:
     virtual uint16_t packetType() const = 0;
     virtual uint16_t ext() const = 0;
     virtual bool isRespPacket() const = 0;
-    virtual bool encode(bcos::bytes& _buffer) = 0;
-    virtual ssize_t decode(bytesConstRef _buffer) = 0;
 
-    virtual std::string const& srcP2PNodeID() const = 0;
-    virtual std::string const& dstP2PNodeID() const = 0;
+    [[deprecated("use encode(bcos::CompositeBuffer& _buffer)")]] virtual bool encode(
+        bcos::bytes& _buffer) = 0;
+    virtual bool encode(bcos::CompositeBuffer& _buffer) = 0;
+    virtual int32_t decode(bytesConstRef _buffer) = 0;
 
     virtual MessageExtAttributes::Ptr extAttributes() = 0;
+
+    // TODO: move the follow interfaces to P2PMessage
+    virtual std::string const& srcP2PNodeID() const = 0;
+    virtual std::string const& dstP2PNodeID() const = 0;
 };
 
 class MessageFactory
@@ -75,14 +90,15 @@ public:
 
     virtual ~MessageFactory() = default;
     virtual Message::Ptr buildMessage() = 0;
+    virtual Message::Ptr buildMessage(uint16_t _type, CompositeBuffer::Ptr _data) = 0;
 
-public:
     virtual uint32_t newSeq()
     {
         uint32_t seq = ++m_seq;
         return seq;
     }
 
+private:
     std::atomic<uint32_t> m_seq = {1};
 };
 
