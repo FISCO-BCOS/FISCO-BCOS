@@ -44,20 +44,12 @@ public:
     std::vector<protocol::ExecutionMessage::UniquePtr> dumpAndClear()
     {
         auto results = std::vector<protocol::ExecutionMessage::UniquePtr>();
-        results.resize(m_contextID2Result.size());
-
-        int64_t startContextID = std::numeric_limits<int64_t>::max();
-
-        for (auto it = m_contextID2Result.begin(); it != m_contextID2Result.end(); it++)
-        {
-            startContextID = std::min(it->first, startContextID);
-        }
-
+        results.reserve(m_contextID2Result.size());
         for (auto it = m_contextID2Result.begin(); it != m_contextID2Result.end(); it++)
         {
             auto contextID = it->first;
             auto& output = it->second;
-            results[contextID - startContextID] = std::move(output);
+            results.emplace_back(std::move(output));
         }
 
         m_contextID2Result.clear();
