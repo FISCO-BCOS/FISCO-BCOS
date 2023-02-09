@@ -321,7 +321,7 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
     initFixture();
     std::promise<bool> p1;
     auto f1 = p1.get_future();
-    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, BlockNumber _number) {
+    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
         BOOST_CHECK(_error == nullptr);
         BOOST_CHECK_EQUAL(_number, 0);
         p1.set_value(true);
@@ -332,11 +332,12 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
     m_ledger->asyncGetBlockHashByNumber(0, [&](Error::Ptr _error, crypto::HashType _hash) {
         BOOST_CHECK(_error == nullptr);
         BOOST_CHECK(_hash != HashType(""));
-        m_ledger->asyncGetBlockNumberByHash(_hash, [&](Error::Ptr _error, BlockNumber _number) {
-            BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_number, 0);
-            p2.set_value(true);
-        });
+        m_ledger->asyncGetBlockNumberByHash(
+            _hash, [&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
+                BOOST_CHECK(_error == nullptr);
+                BOOST_CHECK_EQUAL(_number, 0);
+                p2.set_value(true);
+            });
     });
 
     std::promise<bool> p3;
@@ -362,8 +363,8 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 
     std::promise<bool> p5;
     auto f5 = p5.get_future();
-    m_ledger->asyncGetSystemConfigByKey(
-        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+    m_ledger->asyncGetSystemConfigByKey(SYSTEM_KEY_TX_COUNT_LIMIT,
+        [&](Error::Ptr _error, std::string _value, bcos::protocol::BlockNumber _number) {
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK_EQUAL(_value, "1000");
             BOOST_CHECK_EQUAL(_number, 0);
@@ -392,7 +393,7 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
     initFixture(V3_0_VERSION_STR);
     std::promise<bool> p1;
     auto f1 = p1.get_future();
-    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, BlockNumber _number) {
+    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
         BOOST_CHECK(_error == nullptr);
         BOOST_CHECK_EQUAL(_number, 0);
         p1.set_value(true);
@@ -403,11 +404,12 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
     m_ledger->asyncGetBlockHashByNumber(0, [&](Error::Ptr _error, crypto::HashType _hash) {
         BOOST_CHECK(_error == nullptr);
         BOOST_CHECK(_hash != HashType(""));
-        m_ledger->asyncGetBlockNumberByHash(_hash, [&](Error::Ptr _error, BlockNumber _number) {
-            BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_number, 0);
-            p2.set_value(true);
-        });
+        m_ledger->asyncGetBlockNumberByHash(
+            _hash, [&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
+                BOOST_CHECK(_error == nullptr);
+                BOOST_CHECK_EQUAL(_number, 0);
+                p2.set_value(true);
+            });
     });
 
     std::promise<bool> p3;
@@ -433,8 +435,8 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
 
     std::promise<bool> p5;
     auto f5 = p5.get_future();
-    m_ledger->asyncGetSystemConfigByKey(
-        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+    m_ledger->asyncGetSystemConfigByKey(SYSTEM_KEY_TX_COUNT_LIMIT,
+        [&](Error::Ptr _error, std::string _value, bcos::protocol::BlockNumber _number) {
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK_EQUAL(_value, "1000");
             BOOST_CHECK_EQUAL(_number, 0);
@@ -485,7 +487,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumber)
 {
     std::promise<bool> p1;
     auto f1 = p1.get_future();
-    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, BlockNumber _number) {
+    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
         BOOST_CHECK(_error != nullptr);
         BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
         BOOST_CHECK_EQUAL(_number, -1);
@@ -554,16 +556,17 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     // error hash
-    m_ledger->asyncGetBlockNumberByHash(HashType(), [&](Error::Ptr _error, BlockNumber _number) {
-        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
-        BOOST_CHECK_EQUAL(_number, -1);
-        p1.set_value(true);
-    });
+    m_ledger->asyncGetBlockNumberByHash(
+        HashType(), [&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
+            BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
+            BOOST_CHECK_EQUAL(_number, -1);
+            p1.set_value(true);
+        });
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetBlockNumberByHash(
-        HashType("123"), [&](Error::Ptr _error, BlockNumber _number) {
+        HashType("123"), [&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
             BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_number, -1);
             p2.set_value(true);
@@ -586,7 +589,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
                     BOOST_CHECK(!error);
 
                     m_ledger->asyncGetBlockNumberByHash(
-                        hash, [&](Error::Ptr error, BlockNumber number) {
+                        hash, [&](Error::Ptr error, bcos::protocol::BlockNumber number) {
                             BOOST_CHECK(!error);
                             BOOST_CHECK_EQUAL(number, -1);
 
@@ -1099,8 +1102,8 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
 
     std::promise<bool> p1;
     auto f1 = p1.get_future();
-    m_ledger->asyncGetSystemConfigByKey(
-        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+    m_ledger->asyncGetSystemConfigByKey(SYSTEM_KEY_TX_COUNT_LIMIT,
+        [&](Error::Ptr _error, std::string _value, bcos::protocol::BlockNumber _number) {
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK_EQUAL(_value, "1000");
             BOOST_CHECK_EQUAL(_number, 0);
@@ -1130,8 +1133,8 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     table.setRow(SYSTEM_KEY_TX_COUNT_LIMIT, newEntry);
 
     std::promise<bool> pp2;
-    m_ledger->asyncGetSystemConfigByKey(
-        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+    m_ledger->asyncGetSystemConfigByKey(SYSTEM_KEY_TX_COUNT_LIMIT,
+        [&](Error::Ptr _error, std::string _value, bcos::protocol::BlockNumber _number) {
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK_EQUAL(_value, "2000");
             BOOST_CHECK_EQUAL(_number, 5);
@@ -1143,7 +1146,7 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     auto f3 = p3.get_future();
     // get error key
     m_ledger->asyncGetSystemConfigByKey(
-        "test", [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+        "test", [&](Error::Ptr _error, std::string _value, bcos::protocol::BlockNumber _number) {
             BOOST_CHECK(_error->errorCode() == LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_value, "");
             BOOST_CHECK_EQUAL(_number, -1);

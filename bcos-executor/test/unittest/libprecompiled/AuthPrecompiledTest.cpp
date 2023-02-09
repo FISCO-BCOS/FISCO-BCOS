@@ -103,8 +103,8 @@ public:
         commitBlock(2);
     }
 
-    ExecutionMessage::UniquePtr deployHelloInAuthCheck(std::string newAddress, BlockNumber _number,
-        Address _address = Address(), bool _noAuth = false)
+    ExecutionMessage::UniquePtr deployHelloInAuthCheck(std::string newAddress,
+        bcos::protocol::BlockNumber _number, Address _address = Address(), bool _noAuth = false)
     {
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
@@ -200,7 +200,7 @@ public:
     }
 
     ExecutionMessage::UniquePtr deployHello2InAuthCheck(
-        std::string newAddress, BlockNumber _number, Address _address = Address())
+        std::string newAddress, bcos::protocol::BlockNumber _number, Address _address = Address())
     {
         bytes input;
         boost::algorithm::unhex(h2, std::back_inserter(input));
@@ -1342,7 +1342,7 @@ BOOST_FIXTURE_TEST_SUITE(precompiledPermissionTest, PermissionPrecompiledFixture
 BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 {
     deployHello();
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
     // simple get
     {
         auto result = helloGet(number++, 1000);
@@ -1351,7 +1351,7 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 
     // add method acl type
     {
-        BlockNumber _number = 3;
+        bcos::protocol::BlockNumber _number = 3;
 
         // not found
         auto r1 = getMethodAuth(number++, Address(helloAddress), "set(string)");
@@ -1474,7 +1474,7 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
 
     // add method acl type
     {
-        BlockNumber _number = 4;
+        bcos::protocol::BlockNumber _number = 4;
         // not found
         auto r1 = getMethodAuth(_number++, Address(helloAddress), "set(string)");
         BOOST_CHECK(
@@ -1584,7 +1584,7 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
 
     // add method acl type
     {
-        BlockNumber _number = 3;
+        bcos::protocol::BlockNumber _number = 3;
         // get admin
         {
             auto result = getAdmin(_number++, 1000, Address(helloAddress));
@@ -1680,7 +1680,7 @@ BOOST_AUTO_TEST_CASE(testDeployWhiteList)
 
     // add deploy acl type
     {
-        BlockNumber _number = 3;
+        bcos::protocol::BlockNumber _number = 3;
         // set deploy acl type
         {
             auto result = setDeployType(_number++, 1000, AuthType::WHITE_LIST_MODE);
@@ -1748,7 +1748,7 @@ BOOST_AUTO_TEST_CASE(testDeployBlackList)
 
     // add deploy acl type
     {
-        BlockNumber _number = 3;
+        bcos::protocol::BlockNumber _number = 3;
         // set deploy acl type
         {
             auto result = setDeployType(_number++, 1000, AuthType::BLACK_LIST_MODE);
@@ -1872,7 +1872,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
 
 BOOST_AUTO_TEST_CASE(testDeployAdmin)
 {
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     Address admin = Address("0x1234567890123456789012345678901234567890");
     auto result =
         deployHello2InAuthCheck("1234654b49838bd3e9466c85a4cc3428c9601235", _number++, admin);
@@ -1894,7 +1894,7 @@ BOOST_AUTO_TEST_CASE(testDeployAdmin)
 BOOST_AUTO_TEST_CASE(testContractStatus)
 {
     deployHello();
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // frozen
     {
         auto r1 = setContractStatus(_number++, Address(helloAddress), true);
@@ -1943,7 +1943,7 @@ BOOST_AUTO_TEST_CASE(testContractStatusInKeyPage)
     setIsWasm(false, true, true);
 
     deployHello();
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // frozen
     {
         auto r1 = setContractStatus(_number++, Address(helloAddress), true);
@@ -1992,7 +1992,7 @@ BOOST_AUTO_TEST_CASE(testContractAbolish)
     setIsWasm(false, true, true, BlockVersion::V3_2_VERSION);
 
     deployHello();
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // frozen
     {
         auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Frozen);
@@ -2070,7 +2070,7 @@ BOOST_AUTO_TEST_CASE(testInitAuth)
     // 3.2 version, not set auth
     setIsWasm(false, false, true, BlockVersion::V3_2_VERSION);
     deployHello();
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // init in 3.2, not exist address
     auto re = initAuth(_number++, admin);

@@ -35,7 +35,7 @@ PBFTLogSync::PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftC
 {}
 
 void PBFTLogSync::requestCommittedProposals(
-    PublicPtr _from, BlockNumber _startIndex, size_t _offset)
+    PublicPtr _from, bcos::protocol::BlockNumber _startIndex, size_t _offset)
 {
     auto pbftRequest = m_config->pbftMessageFactory()->populateFrom(
         PacketType::CommittedProposalRequest, _startIndex, _offset);

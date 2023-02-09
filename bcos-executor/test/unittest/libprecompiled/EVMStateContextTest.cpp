@@ -156,7 +156,7 @@ BOOST_FIXTURE_TEST_SUITE(EVMStateContextTest, EVMStateContextFixture)
 BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
 {
     deployTest();
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
     // sha256
     {
         std::string stringData = "abcd";
