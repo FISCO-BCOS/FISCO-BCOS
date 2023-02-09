@@ -50,7 +50,7 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
 
 
 TxPool::Ptr TxPoolFactory::createTxPool(
-    size_t _notifyWorkerNum, size_t _verifierWorkerNum, int64_t _txsExpirationTime)
+    size_t _notifyWorkerNum, size_t _verifierWorkerNum, uint64_t _txsExpirationTime)
 {
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
     auto txpoolNonceChecker = std::make_shared<TxPoolNonceChecker>();

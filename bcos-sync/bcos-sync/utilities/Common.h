@@ -23,10 +23,13 @@
 #include <tbb/parallel_for.h>
 
 #define BLKSYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BLOCK SYNC")
-namespace bcos
+namespace bcos::sync
 {
-namespace sync
-{
+static constexpr const size_t MAX_DOWNLOAD_BLOCK_QUEUE_SIZE = 256;
+static constexpr const size_t MAX_DOWNLOAD_REQUEST_QUEUE_SIZE = 1000;
+// the max number of blocks this node can request to
+static constexpr const size_t MAX_REQUEST_BLOCKS_COUNT = 8;
+static constexpr const size_t DOWNLOAD_TIMEOUT_TTL = 200;
 enum BlockSyncPacketType : int32_t
 {
     BlockStatusPacket = 0x00,
@@ -45,5 +48,4 @@ enum class BlockSyncMsgVersion
     // v2 add archived number
     v2
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

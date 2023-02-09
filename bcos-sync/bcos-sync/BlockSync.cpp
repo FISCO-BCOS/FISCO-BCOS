@@ -162,11 +162,15 @@ void BlockSync::stop()
 
 void BlockSync::printSyncInfo()
 {
+    if (c_fileLogLevel != TRACE) [[likely]]
+    {
+        return;
+    }
     auto peers = m_syncStatus->peers();
-    std::string peer_str;
+    std::stringstream peer_str;
     for (auto const& peer : *peers)
     {
-        peer_str += peer->shortHex() + "/";
+        peer_str<< peer->shortHex() << "/";
     }
     BLKSYNC_LOG(TRACE) << "\n[Sync Info] --------------------------------------------\n"
                        << "            IsSyncing:    " << isSyncing() << "\n"
@@ -176,7 +180,7 @@ void BlockSync::printSyncInfo()
                        << "            Peers size:   " << peers->size() << "\n"
                        << "[Peer Info] --------------------------------------------\n"
                        << "    Host: " << m_config->nodeID()->shortHex() << "\n"
-                       << "    Peer: " << peer_str << "\n"
+                       << "    Peer: " << peer_str.str() << "\n"
                        << "            --------------------------------------------";
 }
 
