@@ -294,11 +294,6 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
                     << LOG_DESC("add prepared cache") << LOG_KV("blockNumber", blockNumber)
                     << LOG_KV("timestamp", timestamp);
             }
-            EXECUTOR_NAME_LOG(DEBUG)
-                << BLOCK_NUMBER(blockNumber) << LOG_BADGE("DAGFlow")
-                << LOG_DESC("preExecuteTransaction prepareDagFlow finish")
-                << LOG_KV("blockNumber", blockNumber) << LOG_KV("timestamp", timestamp)
-                << LOG_KV("cost", (utcTime() - recordT));
 
             callback(nullptr);
         }
