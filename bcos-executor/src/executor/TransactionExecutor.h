@@ -123,6 +123,13 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override;
 
+    void preExecuteTransactions(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(bcos::Error::UniquePtr)> callback) override{
+        // do nothing
+    };
+
     void dmcExecuteTransactions(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
