@@ -274,78 +274,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
 
         if (!txHashes->empty())
         {
-            m_txpool->asyncFillBlock(txHashes,
-                [this, cache, cacheGuard, blockContext, executiveFactory, startT, contractAddress,
-                    timestamp, indexes = std::move(indexes), fillInputs = std::move(fillInputs),
-                    callParametersList = std::move(callParametersList),
-                    callback = std::move(callback), txHashes,
-                    blockNumber](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
-                    auto fillTxsT = (utcTime() - startT);
-
-                    if (!m_isRunning)
-                    {
-                        callback(BCOS_ERROR_UNIQUE_PTR(
-                            ExecuteError::STOPPED, "TransactionExecutor is not running"));
-                        return;
-                    }
-
-
-                    if (error)
-                    {
-                        auto errorMessage = "[" + m_name + "] asyncFillBlock failed";
-                        EXECUTOR_NAME_LOG(ERROR)
-                            << BLOCK_NUMBER(blockNumber) << errorMessage << error->errorMessage();
-                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                            ExecuteError::PREPARE_ERROR, errorMessage, *error));
-                        return;
-                    }
-                    auto recordT = utcTime();
-                    tbb::parallel_for(tbb::blocked_range<size_t>(0U, transactions->size()),
-                        [this, &transactions, &callParametersList, &indexes, &fillInputs](
-                            auto const& range) {
-                            for (auto i = range.begin(); i < range.end(); ++i)
-                            {
-                                assert(transactions->at(i));
-                                callParametersList->at(indexes[i]) =
-                                    createCallParameters(*fillInputs->at(i), *transactions->at(i));
-                            }
-                        });
-
-                    auto prepareT = utcTime() - recordT;
-                    recordT = utcTime();
-
-                    EXECUTOR_NAME_LOG(DEBUG)
-                        << BLOCK_NUMBER(blockNumber) << LOG_BADGE("preExeBlock")
-                        << LOG_BADGE("DAGFlow")
-                        << LOG_DESC("preExecuteTransaction fillblock finish")
-                        << LOG_KV("fillTxsT", fillTxsT) << LOG_KV("prepareT", prepareT)
-                        << LOG_KV("blockNumber", blockNumber) << LOG_KV("timestamp", timestamp)
-                        << LOG_KV("dmcT", (utcTime() - recordT));
-                    recordT = utcTime();
-
-                    auto executiveFlow = std::dynamic_pointer_cast<ExecutiveDagFlow>(
-                        getExecutiveFlow(blockContext, contractAddress, true, false));
-                    auto dagFlow = ExecutiveDagFlow::prepareDagFlow(
-                        *blockContext, executiveFactory, *callParametersList, m_abiCache);
-                    {
-                        WriteGuard l(x_preparedCache);
-
-                        cache->inputs = callParametersList;
-                        cache->dagFlow = dagFlow;
-
-                        EXECUTOR_NAME_LOG(DEBUG)
-                            << BLOCK_NUMBER(blockNumber) << LOG_BADGE("preExeBlock")
-                            << LOG_DESC("add prepared cache") << LOG_KV("blockNumber", blockNumber)
-                            << LOG_KV("timestamp", timestamp);
-                    }
-                    EXECUTOR_NAME_LOG(DEBUG)
-                        << BLOCK_NUMBER(blockNumber) << LOG_BADGE("preExeBlock")
-                        << LOG_DESC("preExecuteTransaction prepareDagFlow finish")
-                        << LOG_KV("blockNumber", blockNumber) << LOG_KV("timestamp", timestamp)
-                        << LOG_KV("cost", (utcTime() - recordT));
-
-                    callback(nullptr);
-                });
+            // will push in next PR
         }
         else
         {
