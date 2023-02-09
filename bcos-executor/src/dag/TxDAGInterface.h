@@ -54,7 +54,7 @@ enum EnvKind : std::uint8_t
     Caller = 0,
     Origin,
     Now,
-    BlockNumber,
+    BlkNumber,
     Addr,
 };
 

@@ -81,7 +81,7 @@ void BlockExecutive::prepare()
     }
 
     // prepare all executors
-    if (!m_hasDAG)
+    if (needPrepareExecutor())
     {
         // prepare DMC executor
         serialPrepareExecutor();
@@ -504,7 +504,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
             auto status = std::make_shared<CommitStatus>();
             // self + ledger(txs receipts) + executors = 1 + 1 + executors
-            status->total = 2 + m_scheduler->m_executorManager->size();
+            status->total = 2 + getExecutorSize();
             status->checkAndCommit = [this, callback](const CommitStatus& status) {
                 if (!m_isRunning)
                 {
@@ -595,7 +595,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                         << BLOCK_NUMBER(number())
                         << "primary prepare finished, call executor prepare"
                         << LOG_KV("startTimeStamp", startTimeStamp)
-                        << LOG_KV("executors", m_scheduler->m_executorManager->size())
+                        << LOG_KV("executors", getExecutorSize())
                         << LOG_KV("success", status->success) << LOG_KV("failed", status->failed);
                     bcos::protocol::TwoPCParams executorParams;
                     executorParams.number = number();
@@ -1122,7 +1122,7 @@ void BlockExecutive::onExecuteFinish(
             auto executedBlockHeader =
                 m_blockFactory->blockHeaderFactory()->populateBlockHeader(m_block->blockHeader());
             executedBlockHeader->setStateRoot(hash);
-            executedBlockHeader->setGasUsed(m_gasUsed);
+            executedBlockHeader->setGasUsed(m_gasUsed.load());
             executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot(*m_hashImpl));
             executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot(*m_hashImpl));
             executedBlockHeader->calculateHash(*m_hashImpl);
@@ -1137,7 +1137,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
 {
     auto startTime = utcTime();
     auto status = std::make_shared<CommitStatus>();
-    status->total = m_scheduler->m_executorManager->size();
+    status->total = getExecutorSize();
     status->checkAndCommit = [this, startTime, callback = std::move(callback)](
                                  const CommitStatus& status) {
         if (!m_isRunning)
@@ -1157,49 +1157,47 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
         }
 
         SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
-                            << "NextBlock success"
-                            << LOG_KV("executorNum", m_scheduler->m_executorManager->size())
+                            << "NextBlock success" << LOG_KV("executorNum", getExecutorSize())
                             << LOG_KV("timeCost", utcTime() - startTime);
         callback(nullptr);
     };
     SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace") << "NextBlock request"
-                        << LOG_KV("executorNum", m_scheduler->m_executorManager->size());
+                        << LOG_KV("executorNum", getExecutorSize());
 
     // for (auto& it : *(m_scheduler->m_executorManager))
-    m_scheduler->m_executorManager->forEachExecutor(
-        [this, status](
-            std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
-            auto blockHeader = m_block->blockHeaderConst();
-            executor->nextBlockHeader(
-                m_schedulerTermId, blockHeader, [this, status](bcos::Error::Ptr&& error) {
+    forEachExecutor([this, status](std::string,
+                        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
+        auto blockHeader = m_block->blockHeaderConst();
+        executor->nextBlockHeader(
+            m_schedulerTermId, blockHeader, [this, status](bcos::Error::Ptr&& error) {
+                {
+                    WriteGuard lock(status->x_lock);
+                    if (error)
                     {
-                        WriteGuard lock(status->x_lock);
-                        if (error)
-                        {
-                            SCHEDULER_LOG(ERROR)
-                                << BLOCK_NUMBER(number()) << "Next block executor error!"
-                                << error->errorMessage();
-                            ++status->failed;
+                        SCHEDULER_LOG(ERROR)
+                            << BLOCK_NUMBER(number()) << "Next block executor error!"
+                            << error->errorMessage();
+                        ++status->failed;
 
-                            if (error->errorCode() ==
-                                bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
-                            {
-                                triggerSwitch();
-                            }
-                        }
-                        else
+                        if (error->errorCode() ==
+                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                         {
-                            ++status->success;
-                        }
-
-                        if (status->success + status->failed < status->total)
-                        {
-                            return;
+                            triggerSwitch();
                         }
                     }
-                    status->checkAndCommit(*status);
-                });
-        });
+                    else
+                    {
+                        ++status->success;
+                    }
+
+                    if (status->success + status->failed < status->total)
+                    {
+                        return;
+                    }
+                }
+                status->checkAndCommit(*status);
+            });
+    });
 }
 
 void BlockExecutive::batchGetHashes(
@@ -1208,7 +1206,7 @@ void BlockExecutive::batchGetHashes(
     auto totalHash = std::make_shared<h256>();
 
     auto status = std::make_shared<CommitStatus>();
-    status->total = m_scheduler->m_executorManager->size();  // all executors
+    status->total = getExecutorSize();  // all executors
     status->checkAndCommit = [this, totalHash, callback = std::move(callback)](
                                  const CommitStatus& status) {
         if (!m_isRunning)
@@ -1234,41 +1232,40 @@ void BlockExecutive::batchGetHashes(
 
     // for (auto& it : *(m_scheduler->m_executorManager))
 
-    m_scheduler->m_executorManager->forEachExecutor(
-        [this, status, totalHash](
-            std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
-            executor->getHash(
-                number(), [status, totalHash](bcos::Error::Ptr&& error, crypto::HashType&& hash) {
+    forEachExecutor([this, status, totalHash](std::string,
+                        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
+        executor->getHash(
+            number(), [status, totalHash](bcos::Error::Ptr&& error, crypto::HashType&& hash) {
+                {
+                    WriteGuard lock(status->x_lock);
+                    if (error)
                     {
-                        WriteGuard lock(status->x_lock);
-                        if (error)
-                        {
-                            SCHEDULER_LOG(ERROR) << "GetHash error!" << error->errorMessage();
-                            ++status->failed;
-                        }
-                        else
-                        {
-                            ++status->success;
-                            SCHEDULER_LOG(DEBUG) << "GetHash success, success: " << status->success;
-
-                            *totalHash ^= hash;
-                        }
-
-                        if (status->success + status->failed < status->total)
-                        {
-                            return;
-                        }
+                        SCHEDULER_LOG(ERROR) << "GetHash error!" << error->errorMessage();
+                        ++status->failed;
                     }
-                    status->checkAndCommit(*status);
-                });
-        });
+                    else
+                    {
+                        ++status->success;
+                        SCHEDULER_LOG(DEBUG) << "GetHash success, success: " << status->success;
+
+                        *totalHash ^= hash;
+                    }
+
+                    if (status->success + status->failed < status->total)
+                    {
+                        return;
+                    }
+                }
+                status->checkAndCommit(*status);
+            });
+    });
 }
 
 void BlockExecutive::batchBlockCommit(
     uint64_t rollbackVersion, std::function<void(Error::UniquePtr)> callback)
 {
     auto status = std::make_shared<CommitStatus>();
-    status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
+    status->total = 1 + getExecutorSize();  // self + all executors
     status->checkAndCommit = [this, callback](const CommitStatus& status) {
         if (!m_isRunning)
         {
@@ -1389,7 +1386,7 @@ void BlockExecutive::batchBlockRollback(
     uint64_t version, std::function<void(Error::UniquePtr)> callback)
 {
     auto status = std::make_shared<CommitStatus>();
-    status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
+    status->total = 1 + getExecutorSize();  // self + all executors
     status->checkAndCommit = [this, callback = std::move(callback)](const CommitStatus& status) {
         if (!m_isRunning)
         {
@@ -1437,7 +1434,7 @@ void BlockExecutive::batchBlockRollback(
             else
             {
                 // for (auto& it : *(m_scheduler->m_executorManager))
-                m_scheduler->m_executorManager->forEachExecutor(
+                forEachExecutor(
                     [this, version, number, status](std::string,
                         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
                         bcos::protocol::TwoPCParams executorParams;
@@ -1485,6 +1482,15 @@ void BlockExecutive::batchBlockRollback(
 }
 
 
+DmcExecutor::Ptr BlockExecutive::buildDmcExecutor(const std::string& name,
+    const std::string& contractAddress,
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
+{
+    auto dmcExecutor = std::make_shared<DmcExecutor>(name, contractAddress, m_block, executor,
+        m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder);
+    return dmcExecutor;
+}
+
 DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractAddress)
 {
     {
@@ -1527,8 +1533,7 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             m_dmcRecorder = std::make_shared<DmcStepRecorder>();
         }
 
-        auto dmcExecutor = std::make_shared<DmcExecutor>(executorInfo->name, contractAddress,
-            m_block, executor, m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder);
+        auto dmcExecutor = buildDmcExecutor(executorInfo->name, contractAddress, executor);
         m_dmcExecutors.emplace(contractAddress, dmcExecutor);
 
         // register functions
@@ -1595,7 +1600,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     {
         txGasUsed = 0;
     }
-    m_gasUsed += txGasUsed;
+    m_gasUsed.fetch_add(txGasUsed);
     auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
         std::string(output->newEVMContractAddress()), output->takeLogEntries(), output->status(),
         output->data(), m_block->blockHeaderConst()->number());
@@ -1705,4 +1710,21 @@ std::string BlockExecutive::preprocessAddress(const std::string_view& address)
 
     // boost::to_lower(out); no need to be lower
     return out;
+}
+
+bcos::storage::TransactionalStorageInterface::Ptr BlockExecutive::getStorage()
+{
+    return m_scheduler->m_storage;
+}
+
+size_t BlockExecutive::getExecutorSize()
+{
+    return m_scheduler->m_executorManager->size();
+}
+
+void BlockExecutive::forEachExecutor(
+    std::function<void(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr)>
+        handleExecutor)
+{
+    m_scheduler->m_executorManager->forEachExecutor(std::move(handleExecutor));
 }
