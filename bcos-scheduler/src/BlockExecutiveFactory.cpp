@@ -22,6 +22,8 @@
 #include "BlockExecutiveFactory.h"
 #include "BlockExecutive.h"
 #include "SerialBlockExecutive.h"
+#include "ShardingBlockExecutive.h"
+#include <bcos-framework/protocol/Protocol.h>
 
 
 using namespace std;
@@ -57,10 +59,20 @@ std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Blo
 {
     if (m_isSerialExecute)
     {
-        auto serialBlockExecutive = std::make_shared<SerialBlockExecutive>(block, scheduler,
-            startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,
-            _gasLimit, _syncBlock);
-        return serialBlockExecutive;
+        if (block->blockHeaderConst()->version() >= (uint32_t)BlockVersion::V3_3_VERSION)
+        {
+            auto shardingBlockExecutive = std::make_shared<ShardingBlockExecutive>(block, scheduler,
+                startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,
+                _gasLimit, _syncBlock);
+            return shardingBlockExecutive;
+        }
+        else
+        {
+            auto serialBlockExecutive = std::make_shared<SerialBlockExecutive>(block, scheduler,
+                startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,
+                _gasLimit, _syncBlock);
+            return serialBlockExecutive;
+        }
     }
     else
     {

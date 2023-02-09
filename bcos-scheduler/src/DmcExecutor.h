@@ -35,7 +35,7 @@
 //#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
-class DmcExecutor
+class DmcExecutor : public std::enable_shared_from_this<DmcExecutor>
 {
 public:
     using MessageHint = bcos::scheduler::ExecutivePool::MessageHint;
@@ -126,6 +126,7 @@ public:
         // do nothing
     }
 
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr getExecutor() { return m_executor; }
 
 protected:
     virtual void executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,
