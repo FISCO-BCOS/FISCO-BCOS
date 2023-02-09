@@ -23,9 +23,7 @@
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-tool/NodeTimeMaintenance.h"
 
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockSyncFactory
 {
@@ -39,7 +37,7 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::consensus::ConsensusInterface::Ptr _consensus,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
-    virtual ~BlockSyncFactory() {}
+    virtual ~BlockSyncFactory() = default;
 
     virtual BlockSync::Ptr createBlockSync();
 
@@ -54,5 +52,4 @@ protected:
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

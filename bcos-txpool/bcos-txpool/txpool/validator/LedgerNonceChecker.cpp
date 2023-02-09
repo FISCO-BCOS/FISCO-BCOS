@@ -24,9 +24,9 @@ using namespace bcos::protocol;
 using namespace bcos::txpool;
 
 void LedgerNonceChecker::initNonceCache(
-    std::map<int64_t, bcos::protocol::NonceListPtr> _initialNonces)
+    std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr> > _initialNonces)
 {
-    for (auto const& it : _initialNonces)
+    for (auto const& it : *_initialNonces)
     {
         m_blockNonceCache[it.first] = it.second;
         TxPoolNonceChecker::batchInsert(it.first, it.second);
@@ -71,8 +71,8 @@ void LedgerNonceChecker::batchInsert(BlockNumber _batchId, NonceListPtr const& _
     // insert the latest nonces
     TxPoolNonceChecker::batchInsert(_batchId, _nonceList);
 
-    WriteGuard l(x_blockNonceCache);
-    if (!m_blockNonceCache.count(_batchId))
+    WriteGuard lock(x_blockNonceCache);
+    if (!m_blockNonceCache.contains(_batchId))
     {
         m_blockNonceCache[_batchId] = _nonceList;
         NONCECHECKER_LOG(DEBUG) << LOG_DESC("batchInsert nonceList") << LOG_KV("batchId", _batchId)
@@ -84,7 +84,7 @@ void LedgerNonceChecker::batchInsert(BlockNumber _batchId, NonceListPtr const& _
         return;
     }
     // remove the expired nonces
-    if (!m_blockNonceCache.count(batchToBeRemoved))
+    if (!m_blockNonceCache.contains(batchToBeRemoved))
     {
         NONCECHECKER_LOG(WARNING) << LOG_DESC("batchInsert: miss cache when remove expired cache")
                                   << LOG_KV("batchToBeRemoved", batchToBeRemoved);
