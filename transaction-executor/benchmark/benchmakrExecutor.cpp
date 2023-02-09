@@ -17,6 +17,7 @@ using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_executor;
 
 using Storage = MemoryStorage<StateKey, StateValue, ORDERED>;
+using ConcurrentStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | CONCURRENT)>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
 bcos::crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
@@ -91,14 +92,17 @@ static void call_setInt(benchmark::State& state)
 
     bcos::codec::abi::ContractABICodec abiCodec(
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
-    auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(10000));
-    transaction.mutableInner().data.input.assign(input.begin(), input.end());
-    transaction.mutableInner().data.to = contractAddress;
+    // auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(10000));
+    // transaction.mutableInner().data.input.assign(input.begin(), input.end());
+    // transaction.mutableInner().data.to = contractAddress;
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         int contextID = 0;
         for (auto const& it : state)
         {
+            auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(contextID));
+            transaction.mutableInner().data.input.assign(input.begin(), input.end());
+            transaction.mutableInner().data.to = contractAddress;
             [[maybe_unused]] auto receipt =
                 co_await fixture.executor.execute(fixture.blockHeader, transaction, ++contextID);
         }
@@ -115,14 +119,15 @@ static void call_setString(benchmark::State& state)
 
     bcos::codec::abi::ContractABICodec abiCodec(
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
-    auto input = abiCodec.abiIn("setString(string)", std::string("Hello world, fisco-bcos!"));
-    transaction.mutableInner().data.input.assign(input.begin(), input.end());
-    transaction.mutableInner().data.to = contractAddress;
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         int contextID = 0;
         for (auto const& it : state)
         {
+            auto input = abiCodec.abiIn(
+                "setString(string)", fmt::format("Hello world, fisco-bcos! {}", contextID));
+            transaction.mutableInner().data.input.assign(input.begin(), input.end());
+            transaction.mutableInner().data.to = contractAddress;
             [[maybe_unused]] auto receipt =
                 co_await fixture.executor.execute(fixture.blockHeader, transaction, ++contextID);
         }

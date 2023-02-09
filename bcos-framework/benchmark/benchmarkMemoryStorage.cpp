@@ -75,7 +75,6 @@ static void read(benchmark::State& state)
                 anyStorage);
         }());
     }
-    // Storage storage;
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         co_await std::visit(
@@ -90,6 +89,34 @@ static void read(benchmark::State& state)
                     // [[maybe_unused]] auto value = co_await storage2::readOne(storage,
                     //     fixture.allKeys[(i + fixture.allKeys.size()) % fixture.allKeys.size()]);
 
+                    ++i;
+                }
+                co_return;
+            },
+            anyStorage);
+
+        co_return;
+    }(state));
+}
+
+template <class Storage>
+static void write(benchmark::State& state)
+{
+    if (state.thread_index() == 0)
+    {
+        fixture.prepareData(1000 * 10000);
+        anyStorage.emplace<Storage>();
+    }
+
+    task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        co_await std::visit(
+            [&](auto& storage) -> task::Task<void> {
+                auto i = 100 * 10000 * state.thread_index();
+                for (auto const& it : state)
+                {
+                    auto index = (i + fixture.allKeys.size()) % fixture.allKeys.size();
+                    co_await storage.write(storage2::single(fixture.allKeys[index]),
+                        storage2::single(fixture.allValues[index]));
                     ++i;
                 }
                 co_return;
@@ -174,16 +201,15 @@ static void readTBBMap(benchmark::State& state)
     }
 }
 
-BENCHMARK(readTBBHashMap)->Arg(100000)->Arg(1000000)->Threads(1)->Threads(8)->Threads(16);
-BENCHMARK(readTBBUnorderedMap)->Arg(100000)->Arg(1000000)->Threads(1)->Threads(8)->Threads(16);
-BENCHMARK(readTBBMap)->Arg(100000)->Arg(1000000)->Threads(1)->Threads(8)->Threads(16);
+BENCHMARK(readTBBHashMap)->Arg(100000)->Arg(1000000)->Threads(1)->Threads(8);
+BENCHMARK(readTBBUnorderedMap)->Arg(100000)->Arg(1000000)->Threads(1)->Threads(8);
+BENCHMARK(readTBBMap)->Arg(100000)->Arg(1000000)->Threads(1)->Threads(8);
 BENCHMARK(read<MemoryStorage<Key, storage::Entry, Attribute(ORDERED)>>)->Arg(100000)->Arg(1000000);
 BENCHMARK(read<MemoryStorage<Key, storage::Entry, Attribute(ORDERED | CONCURRENT), std::hash<Key>>>)
     ->Arg(100000)
     ->Arg(1000000)
     ->Threads(1)
-    ->Threads(8)
-    ->Threads(16);
+    ->Threads(8);
 // BENCHMARK(
 //     read<MemoryStorage<int, storage::Entry, Attribute(ORDERED | CONCURRENT | MRU),
 //     std::hash<int>>>)
@@ -197,8 +223,18 @@ BENCHMARK(read<MemoryStorage<Key, storage::Entry, Attribute(CONCURRENT), std::ha
     ->Arg(100000)
     ->Arg(1000000)
     ->Threads(1)
-    ->Threads(8)
-    ->Threads(16);
+    ->Threads(8);
+
+BENCHMARK(write<MemoryStorage<Key, storage::Entry, Attribute(ORDERED)>>);
+BENCHMARK(
+    write<MemoryStorage<Key, storage::Entry, Attribute(ORDERED | CONCURRENT), std::hash<Key>>>)
+    ->Threads(1)
+    ->Threads(8);
+BENCHMARK(write<MemoryStorage<Key, storage::Entry>>);
+BENCHMARK(write<MemoryStorage<Key, storage::Entry, Attribute(CONCURRENT), std::hash<Key>>>)
+    ->Threads(1)
+    ->Threads(8);
+
 // BENCHMARK(read<MemoryStorage<int, storage::Entry, Attribute(CONCURRENT | MRU), std::hash<int>>>)
 //     ->Arg(100000)
 //     ->Arg(1000000)

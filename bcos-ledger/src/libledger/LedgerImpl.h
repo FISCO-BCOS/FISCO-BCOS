@@ -191,7 +191,9 @@ private:
                     }
 
                     auto field = entries[index]->getField(0);
-                    bcos::concepts::serialize::decode(field, out[index]);
+                    auto bytesRef =
+                        bcos::bytesConstRef((const bcos::byte*)field.data(), field.size());
+                    bcos::concepts::serialize::decode(bytesRef, out[index]);
                 }
             });
 

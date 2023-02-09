@@ -1,46 +1,10 @@
 #pragma once
 
-#include "Ledger.h"
-#include "bcos-framework/storage2/StringPool.h"
-#include "bcos-task/Task.h"
-#include <bcos-concepts/Basic.h>
-#include <bcos-concepts/ByteBuffer.h>
-#include <bcos-concepts/Exception.h>
-#include <bcos-concepts/Hash.h>
-#include <bcos-concepts/ledger/Ledger.h>
-#include <bcos-concepts/protocol/Block.h>
-#include <bcos-concepts/storage/Storage.h>
-#include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-crypto/merkle/Merkle.h>
-#include <bcos-executor/src/Common.h>
-#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include "LedgerImpl.h"
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
-#include <bcos-table/src/StateStorageFactory.h>
-#include <bcos-tool/bcos-tool/VersionConverter.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Ranges.h>
-#include <tbb/blocked_range.h>
-#include <tbb/parallel_for.h>
-#include <boost/lexical_cast.hpp>
-#include <boost/throw_exception.hpp>
-#include <atomic>
-#include <future>
-#include <range/v3/view/transform.hpp>
-#include <stdexcept>
-#include <tuple>
-#include <type_traits>
 
 namespace bcos::ledger
 {
-
-// clang-format off
-struct NotFoundTransaction : public bcos::error::Exception {};
-struct UnexpectedRowIndex : public bcos::error::Exception {};
-struct MismatchTransactionCount : public bcos::error::Exception {};
-struct MismatchParentHash: public bcos::error::Exception {};
-struct NotFoundBlockHeader: public bcos::error::Exception {};
-struct GetABIError : public bcos::error::Exception {};
-// clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::transaction_executor::StateStorage Storage,
     protocol::IsBlockFactory BlockFactory>
@@ -60,9 +24,9 @@ public:
     template <bcos::concepts::ledger::DataFlag... Flags>
     task::Task<void> setBlock(protocol::IsBlock auto const& block)
     {
-        LEDGER_LOG(INFO) << "setBlock: " << block.blockHeader()->number();
+        LEDGER_LOG(INFO) << "setBlock: " << block.blockHeaderConst()->number();
 
-        auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeader()->number());
+        auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeaderConst()->number());
         (co_await setBlockData<Flags>(blockNumberStr, block), ...);
         co_return;
     }
@@ -165,7 +129,7 @@ public:
 
         // number 2 block hash
         bcos::storage::Entry hashEntry;
-        hashEntry.set(blockHeader->hash());
+        hashEntry.set(concepts::bytebuffer::toView(blockHeader->hash()));
         co_await storage2::writeOne(m_storage,
             transaction_executor::StateKey{
                 storage2::string_pool::makeStringID(m_tableNamePool, SYS_NUMBER_2_HASH),
@@ -178,8 +142,7 @@ public:
         co_await storage2::writeOne(m_storage,
             transaction_executor::StateKey{
                 storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_NUMBER),
-                std::string_view{
-                    block.blockHeader.dataHash.data(), block.blockHeader.dataHash.size()}},
+                concepts::bytebuffer::toView(block.blockHeaderConst()->hash())},
             std::move(hash2NumberEntry));
 
         // current number

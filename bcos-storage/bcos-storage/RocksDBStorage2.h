@@ -78,6 +78,7 @@ public:
         }
         task::AwaitableValue<KeyType const&> key() const
         {
+            // TODO: Store keys and return key
             BOOST_THROW_EXCEPTION(UnsupportedMethod{});
         }
         task::AwaitableValue<ValueType> value() const

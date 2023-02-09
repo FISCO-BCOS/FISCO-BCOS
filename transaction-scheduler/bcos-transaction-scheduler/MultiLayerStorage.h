@@ -49,6 +49,12 @@ public:
     class ReadIterator
     {
     private:
+        utilities::AnyHolder<std::remove_cvref_t<KeyRange>> m_keyRange;
+        MultiLayerStorage& m_storage;
+        RANGES::iterator_t<KeyRange> m_keyRangeIt;
+        mutable std::variant<std::monostate, storage2::ReadIteratorType<StorageType>...> m_innerIt;
+        bool m_started = false;
+
         // Query from top to buttom
         task::Task<void> query(Key key) const
         {
@@ -97,12 +103,6 @@ public:
             co_return false;
         }
 
-        utilities::AnyHolder<std::remove_cvref_t<KeyRange>> m_keyRange;
-        MultiLayerStorage& m_storage;
-        RANGES::iterator_t<KeyRange> m_keyRangeIt;
-        mutable std::variant<std::monostate, storage2::ReadIteratorType<StorageType>...> m_innerIt;
-        bool m_started = false;
-
     public:
         using Key = MultiLayerStorage::Key const&;
         using Value = MultiLayerStorage::Value const&;
@@ -132,6 +132,7 @@ public:
             if (!m_started)
             {
                 m_started = true;
+                m_keyRangeIt = RANGES::begin(m_keyRange.get());
                 return m_keyRangeIt != RANGES::end(m_keyRange.get());
             }
             return ++m_keyRangeIt != RANGES::end(m_keyRange.get());

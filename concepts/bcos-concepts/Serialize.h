@@ -49,8 +49,8 @@ struct decode
 {
     void operator()(bcos::concepts::bytebuffer::ByteBuffer auto const& input, auto&& object) const
     {
-        using ObjectType = std::remove_cvref_t<decltype(object)>;
         using BufferType = std::remove_cvref_t<decltype(input)>;
+        using ObjectType = std::remove_cvref_t<decltype(object)>;
 
         if constexpr (HasMemberFunc<ObjectType, BufferType>)
         {

@@ -6,7 +6,6 @@
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
-#include <bcos-framework/storage2/OldStorageWrapper.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
 #include <queue>

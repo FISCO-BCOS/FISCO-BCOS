@@ -163,13 +163,7 @@ public:
     {
         return false;
     }
-    constexpr Value await_resume() noexcept
-    {
-        if constexpr (!std::is_void_v<Value>)
-        {
-            return std::move(m_value);
-        }
-    }
+    constexpr Value await_resume() noexcept { return std::move(m_value); }
 
     const Value& value() const { return m_value; }
     Value& value() { return m_value; }

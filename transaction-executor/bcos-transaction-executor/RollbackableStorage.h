@@ -2,48 +2,48 @@
 
 #include "bcos-task/Trait.h"
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <boost/container/small_vector.hpp>
 
 namespace bcos::transaction_executor
 {
 
-// Rollbackable crtp base
 template <StateStorage Storage>
 class Rollbackable
 {
 private:
+    constexpr static size_t MOSTLY_STEPS = 8;
     struct Record
     {
         StateKey key;
-        std::optional<StateValue> value;
+        std::optional<StateValue> oldValue;
     };
-    std::forward_list<Record> m_records;
+    boost::container::small_vector<Record, MOSTLY_STEPS> m_records;
     Storage& m_storage;
 
 public:
-    using Savepoint = typename std::forward_list<Record>::const_iterator;
+    using Savepoint = int64_t;
     using Key = typename Storage::Key;
     using Value = typename Storage::Value;
 
     Rollbackable(Storage& storage) : m_storage(storage) {}
 
-    Savepoint current() const { return m_records.cbegin(); }
+    Savepoint current() const { return static_cast<int64_t>(m_records.size()); }
     task::Task<void> rollback(Savepoint savepoint)
     {
-        auto it = m_records.begin();
-        while (it != savepoint)
+        for (auto index = static_cast<int64_t>(m_records.size()); index > savepoint; --index)
         {
-            auto& record = *it;
-            if (record.value)
+            assert(index > 0);
+            auto& record = m_records[index - 1];
+            if (record.oldValue)
             {
                 co_await m_storage.write(
-                    storage2::single(record.key), storage2::single(*record.value));
+                    storage2::single(record.key), storage2::single(*record.oldValue));
             }
             else
             {
                 co_await m_storage.remove(storage2::single(record.key));
             }
-            m_records.pop_front();
-            it = m_records.begin();
+            m_records.pop_back();
         }
         co_return;
     }
@@ -70,11 +70,11 @@ public:
             auto keyIt = RANGES::begin(keys);
             while (co_await storageIt.next())
             {
-                auto& record = m_records.emplace_front(Record{.key = *(keyIt++), .value = {}});
+                auto& record = m_records.emplace_back(Record{.key = *(keyIt++), .oldValue = {}});
                 if (co_await storageIt.hasValue())
                 {
                     // Update exists value, store the old value
-                    record.value.emplace(co_await storageIt.value());
+                    record.oldValue.emplace(co_await storageIt.value());
                 }
             }
         }
@@ -92,12 +92,12 @@ public:
             auto keyIt = RANGES::begin(keys);
             while (co_await storageIt.next())
             {
-                auto& record = m_records.emplace_front();
+                auto& record = m_records.emplace_back();
                 record.key = *(keyIt++);
                 if (co_await storageIt.hasValue())
                 {
                     // Update exists value, store the old value
-                    record.value.emplace(co_await storageIt.value());
+                    record.oldValue.emplace(co_await storageIt.value());
                 }
             }
         }
