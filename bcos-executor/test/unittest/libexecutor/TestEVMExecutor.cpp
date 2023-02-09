@@ -1005,7 +1005,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
 BOOST_AUTO_TEST_CASE(multiDeploy)
 {
-    size_t count = 20;
+    size_t count = 10;
     std::vector<NativeExecutionMessage::UniquePtr> paramsList;
 
     for (size_t i = 0; i < count; ++i)

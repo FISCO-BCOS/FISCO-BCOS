@@ -1360,7 +1360,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                                          << LOG_DESC("use `Now`") << LOG_KV("now", now);
                 break;
             }
-            case EnvKind::BlockNumber:
+            case EnvKind::BlkNumber:
             {
                 auto blockNumber = _blockContext->number();
                 auto bytes = static_cast<bcos::byte*>(static_cast<void*>(&blockNumber));
