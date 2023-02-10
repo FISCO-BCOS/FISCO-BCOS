@@ -19,7 +19,7 @@
 
 namespace bcos::ledger
 {
-
+struct GetBlockFailed: public bcos::error::Exception {};
 class LedgerClientImpl : public bcos::concepts::ledger::LedgerBase<LedgerClientImpl>
 {
     friend bcos::concepts::ledger::LedgerBase<LedgerClientImpl>;
@@ -50,13 +50,29 @@ private:
         (processGetBlockFlags<Flags>(request.onlyHeader), ...);
 
         bcostars::ResponseBlock response;
-        auto nodeID = co_await p2p().randomSelectNode();
-        co_await p2p().sendMessageByNodeID(
-            bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
-
-        if (response.error.errorCode)
-            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
-
+        auto nodeIDs = co_await p2p().getAllNodeID();
+        size_t nodeCount = 0;
+        for(auto& nodeID : nodeIDs)
+        {
+            co_await p2p().sendMessageByNodeID(
+                bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
+            if(response.error.errorCode)
+            {
+                LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
+                                       << "response errorCode: " << response.error.errorCode
+                                       << " " << response.error.errorMessage;
+                ++nodeCount;
+            }
+            else
+            {
+                break;
+            }
+        }
+        if(nodeCount == nodeIDs.size())
+        {
+            BOOST_THROW_EXCEPTION(GetBlockFailed{}
+                                      << bcos::error::ErrorMessage{"lightNode request allNode getBlock failed!"});
+        }
         std::swap(response.block, block);
     }
 
