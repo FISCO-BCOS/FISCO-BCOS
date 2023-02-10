@@ -192,7 +192,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 {
     {
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
-        BOOST_CHECK(!rateLimiterConfig.enableRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
     }
 
     {
@@ -211,9 +211,9 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 13);
         BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 12345);
 
-        BOOST_CHECK(rateLimiterConfig.enableRateLimit());
-        BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
-        BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
+        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 10 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
@@ -257,16 +257,16 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
-        BOOST_CHECK(rateLimiterConfig.enableRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
 
         BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
         BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
         BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 20);
         BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 60000);
 
-        BOOST_CHECK(rateLimiterConfig.enableRateLimit());
-        BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
-        BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
+        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 3 * 1024 * 1024 / 8);
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
