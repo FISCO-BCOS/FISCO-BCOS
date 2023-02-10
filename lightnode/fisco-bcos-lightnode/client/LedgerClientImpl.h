@@ -61,20 +61,19 @@ private:
                 LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
                                        << "response errorCode: " << response.error.errorCode
                                        << " " << response.error.errorMessage;
-                ++failedNodeCount;
+                continue;
             }
             else
             {
-                break;
+               std::swap(response.block, block);
+               co_return;
             }
         }
-        if(failedNodeCount == nodeIDs.size())
-        {
-            response.block = {};
-            LIGHTNODE_LOG(ERROR) << "lightNode getBlock to allNode failed!"
+
+        response.block = {};
+        LIGHTNODE_LOG(ERROR) << "lightNode getBlock to allNode failed!"
                                    <<  LOG_KV("response errorCode",response.error.errorCode);
-            co_return;
-        }
+
         std::swap(response.block, block);
     }
 
