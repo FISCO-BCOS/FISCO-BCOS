@@ -51,7 +51,7 @@ private:
 
         bcostars::ResponseBlock response;
         auto nodeIDs = co_await p2p().getAllNodeID();
-        size_t nodeCount = 0;
+        size_t failedNodeCount = 0;
         for(auto& nodeID : nodeIDs)
         {
             co_await p2p().sendMessageByNodeID(
@@ -61,17 +61,19 @@ private:
                 LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
                                        << "response errorCode: " << response.error.errorCode
                                        << " " << response.error.errorMessage;
-                ++nodeCount;
+                ++failedNodeCount;
             }
             else
             {
                 break;
             }
         }
-        if(nodeCount == nodeIDs.size())
+        if(failedNodeCount == nodeIDs.size())
         {
-            BOOST_THROW_EXCEPTION(GetBlockFailed{}
-                                      << bcos::error::ErrorMessage{"lightNode request allNode getBlock failed!"});
+            response.block = {};
+            LIGHTNODE_LOG(ERROR) << "lightNode getBlock to allNode failed!"
+                                   <<  LOG_KV("response errorCode",response.error.errorCode);
+            co_return;
         }
         std::swap(response.block, block);
     }
