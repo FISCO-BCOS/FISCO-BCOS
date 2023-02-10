@@ -375,7 +375,8 @@ void Gateway::onReceiveP2PMessage(
     // moduleID
     auto moduleID = options->moduleID();
 
-    m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+    // TODO: add incoming msg qps check
+    // m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
 
     auto srcNodeID = options->srcNodeID();
     const auto& dstNodeIDs = options->dstNodeIDs();
@@ -423,7 +424,8 @@ void Gateway::onReceiveBroadcastMessage(
     // moduleID
     uint16_t moduleID = options->moduleID();
 
-    m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+    // TODO: add incoming msg qps check
+    //  m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
 
     auto srcNodeIDPtr =
         m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));

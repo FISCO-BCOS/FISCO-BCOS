@@ -22,11 +22,12 @@
 
 #pragma once
 
+#include "bcos-gateway/libratelimit/TimeWindowRateLimiter.h"
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libratelimit/DistributedRateLimiter.h>
 #include <bcos-gateway/libratelimit/RateLimiterInterface.h>
 #include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
 #include <sw/redis++/redis++.h>
-#include <cstddef>
 
 namespace bcos
 {
@@ -42,31 +43,65 @@ public:
     using ConstPtr = std::shared_ptr<const RateLimiterFactory>;
     using UniquePtr = std::unique_ptr<const RateLimiterFactory>;
 
-public:
+    // constructor
     RateLimiterFactory() = default;
-    RateLimiterFactory(std::shared_ptr<sw::redis::Redis> _redis) : m_redis(_redis) {}
+    RateLimiterFactory(const RateLimiterFactory&) = delete;
+    RateLimiterFactory(RateLimiterFactory&&) = delete;
+    RateLimiterFactory& operator=(const RateLimiterFactory&) = delete;
+    RateLimiterFactory& operator=(RateLimiterFactory&&) = delete;
+    ~RateLimiterFactory() = default;
 
-public:
+    // redis interface, for distributed rate limiter
+    void setRedis(std::shared_ptr<sw::redis::Redis>& _redis) { m_redis = _redis; }
     std::shared_ptr<sw::redis::Redis> redis() const { return m_redis; }
 
-public:
     static std::string toTokenKey(const std::string& _baseKey)
     {
         return "FISCO-BCOS 3.0 Gateway RateLimiter: " + _baseKey;
     }
 
-public:
-    RateLimiterInterface::Ptr buildTokenBucketRateLimiter(int64_t _maxPermits)
+    // time window rate limiter
+    RateLimiterInterface::Ptr buildTimeWindowRateLimiter(
+        int64_t _maxPermits, int32_t _timeWindowMS = 1000, bool _allowExceedMaxPermitSize = false)
     {
-        auto rateLimiter = std::make_shared<TokenBucketRateLimiter>(_maxPermits);
+        BCOS_LOG(INFO) << LOG_BADGE("buildTimeWindowRateLimiter")
+                       << LOG_KV("maxPermits", _maxPermits) << LOG_KV("timeWindowMS", _timeWindowMS)
+                       << LOG_KV("allowExceedMaxPermitSize", _allowExceedMaxPermitSize);
+
+        auto rateLimiter = std::make_shared<TimeWindowRateLimiter>(
+            _maxPermits, _timeWindowMS, _allowExceedMaxPermitSize);
+        (void)m_redis;
         return rateLimiter;
     }
 
-    RateLimiterInterface::Ptr buildRedisDistributedRateLimiter(const std::string& _key,
-        int64_t _maxPermits, int32_t _interval, bool _enableCache, int32_t _cachePercent)
+    // token bucket rate limiter
+    [[deprecated("use buildTimeWindowRateLimiter")]] RateLimiterInterface::Ptr
+    buildTokenBucketRateLimiter(int64_t _maxPermits)
     {
-        auto rateLimiter = std::make_shared<DistributedRateLimiter>(
-            m_redis, _key, _maxPermits, _interval, _enableCache, _cachePercent);
+        BCOS_LOG(INFO) << LOG_BADGE("buildTokenBucketRateLimiter")
+                       << LOG_KV("maxPermits", _maxPermits);
+
+        auto rateLimiter = std::make_shared<TokenBucketRateLimiter>(_maxPermits);
+        (void)m_redis;
+        return rateLimiter;
+    }
+
+    // redis distributed rate limiter
+    RateLimiterInterface::Ptr buildDistributedRateLimiter(const std::string& _distributedKey,
+        int64_t _maxPermitsSize, int32_t _intervalSec, bool _allowExceedMaxPermitSize,
+        bool _enableLocalCache, int32_t _localCachePercent)
+    {
+        BCOS_LOG(INFO) << LOG_BADGE("buildDistributedRateLimiter")
+                       << LOG_KV("distributedKey", _distributedKey)
+                       << LOG_KV("maxPermitsSize", _maxPermitsSize)
+                       << LOG_KV("allowExceedMaxPermitSize", _allowExceedMaxPermitSize)
+                       << LOG_KV("intervalSec", _intervalSec)
+                       << LOG_KV("enableLocalCache", _enableLocalCache)
+                       << LOG_KV("localCachePercent", _localCachePercent);
+
+        auto rateLimiter =
+            std::make_shared<DistributedRateLimiter>(m_redis, _distributedKey, _maxPermitsSize,
+                _allowExceedMaxPermitSize, _intervalSec, _enableLocalCache, _localCachePercent);
         return rateLimiter;
     }
 

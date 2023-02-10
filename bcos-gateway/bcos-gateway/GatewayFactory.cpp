@@ -497,7 +497,8 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     std::shared_ptr<sw::redis::Redis> _redis)
 {
     // rate limiter factory
-    auto rateLimiterFactory = std::make_shared<ratelimiter::RateLimiterFactory>(_redis);
+    auto rateLimiterFactory = std::make_shared<ratelimiter::RateLimiterFactory>();
+    rateLimiterFactory->setRedis(_redis);
     // rate limiter manager
     auto rateLimiterManager = std::make_shared<ratelimiter::RateLimiterManager>(_rateLimiterConfig);
 
@@ -530,8 +531,9 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
             ratelimiter::RateLimiterInterface::Ptr rateLimiterInterface = nullptr;
             if (_rateLimiterConfig.enableDistributedRatelimit)
             {
-                rateLimiterInterface = rateLimiterFactory->buildRedisDistributedRateLimiter(
+                rateLimiterInterface = rateLimiterFactory->buildDistributedRateLimiter(
                     rateLimiterFactory->toTokenKey(group), bandWidth, 1,
+                    _rateLimiterConfig.allowExceedMaxPermitSize,
                     _rateLimiterConfig.enableDistributedRateLimitCache,
                     _rateLimiterConfig.distributedRateLimitCachePercent);
             }
@@ -725,9 +727,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                     return true;
                 }
 
-                auto endpoint = _session->nodeIPEndpoint().address();
-                auto msgLength = _message->length();
-                gatewayRateLimiter->checkInComing(endpoint, msgLength);
+                // TODO: add incoming msg qps check
+                // auto endpoint = _session->nodeIPEndpoint().address();
+                // auto msgLength = _message->length();
+                // gatewayRateLimiter->checkInComing(endpoint, msgLength);
 
                 return true;
             });

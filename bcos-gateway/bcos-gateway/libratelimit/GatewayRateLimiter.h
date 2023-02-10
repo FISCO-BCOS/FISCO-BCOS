@@ -64,8 +64,11 @@ public:
             return;
         }
         m_running = true;
-        if (m_rateLimiterManager->rateLimiterConfig().enableRateLimit() &&
-            m_rateLimiterStat)
+
+        auto enableOutRateLimit = m_rateLimiterManager->rateLimiterConfig().enableOutRateLimit();
+        auto enableInRateLimit = m_rateLimiterManager->rateLimiterConfig().enableInRateLimit();
+
+        if ((enableInRateLimit || enableOutRateLimit) && m_rateLimiterStat)
         {
             m_rateLimiterStat->start();
         }
