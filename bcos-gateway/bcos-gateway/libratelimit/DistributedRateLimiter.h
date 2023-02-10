@@ -62,14 +62,6 @@ public:
         m_localCachePercent(_localCachePercent)
 
     {
-        GATEWAY_LOG(INFO) << LOG_BADGE("DistributedRateLimiter::NEWOBJ")
-                          << LOG_DESC("construct distributed rate limiter")
-                          << LOG_KV("rateLimiterKey", _rateLimiterKey)
-                          << LOG_KV("intervalSec", _intervalSec)
-                          << LOG_KV("maxPermitsSize", _maxPermitsSize)
-                          << LOG_KV("enableLocalCache", _enableLocalCache)
-                          << LOG_KV("localCachePercent", _localCachePercent);
-
         if (m_enableLocalCache)
         {
             m_clearCacheTimer = std::make_shared<Timer>(_intervalSec * 1000);

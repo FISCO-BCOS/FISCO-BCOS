@@ -86,7 +86,7 @@ public:
             if (e.errorCode() != P2PExceptionType::Success)
             {
                 // bandwidth overflow , do'not try again
-                if (e.errorCode() == P2PExceptionType::BandwidthOverFlow)
+                if (e.errorCode() == P2PExceptionType::OutBWOverflow)
                 {
                     if (self->m_respFunc)
                     {

@@ -12,10 +12,12 @@
  */
 
 #pragma once
+#include "bcos-utilities/Error.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <boost/asio.hpp>
+#include <optional>
 
 namespace bcos
 {
@@ -41,10 +43,8 @@ public:
     virtual void setMessageHandler(
         std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler) = 0;
 
-    // handle before sending message, if the check fails, meaning false is returned, the message is
-    // not sent, and the SessionCallbackFunc will be performed
     virtual void setBeforeMessageHandler(
-        std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> handler) = 0;
+        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> handler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 

@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "bcos-utilities/Error.h"
 #include "bcos-utilities/ObjectCounter.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionCallback.h>
@@ -83,7 +84,7 @@ public:
     // handle before sending message, if the check fails, meaning false is returned, the message is
     // not sent, and the SessionCallbackFunc will be performed
     void setBeforeMessageHandler(
-        std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> handler) override
+        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> handler) override
     {
         m_beforeMessageHandler = handler;
     }
@@ -146,7 +147,8 @@ private:
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
 
-    std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)>
+        m_beforeMessageHandler;
 
     uint64_t m_shutDownTimeThres = 50000;
     // 1min

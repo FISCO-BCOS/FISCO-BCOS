@@ -192,7 +192,32 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 {
     {
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
+        BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
+        BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
+        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
         BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInP2pBasicMsgLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+    }
+
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        config->initRateLimitConfig(pt);
+        auto rateLimiterConfig = config->rateLimiterConfig();
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
+        BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
+        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInP2pBasicMsgLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
     }
 
     {
@@ -205,19 +230,24 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         config->initRateLimitConfig(pt);
 
         auto rateLimiterConfig = config->rateLimiterConfig();
+        auto timeWindowSec = rateLimiterConfig.timeWindowSec;
 
+        BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 3);
         BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
         BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
         BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 13);
         BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 12345);
 
         BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableInRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableInP2pBasicMsgLimit());
         BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
         BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_CHECK(rateLimiterConfig.allowExceedMaxPermitSize);
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 10 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 5 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, config->doubleMBToBit(10));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(5));
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 4);
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
@@ -231,19 +261,34 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 3);
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.ip2BwLimit.find("192.108.0.1")->second, 1 * 1024 * 1024 / 8);
+            rateLimiterConfig.ip2BwLimit.find("192.108.0.1")->second, config->doubleMBToBit(1));
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.ip2BwLimit.find("192.108.0.2")->second, 2 * 1024 * 1024 / 8);
+            rateLimiterConfig.ip2BwLimit.find("192.108.0.2")->second, config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.ip2BwLimit.find("192.108.0.3")->second, 3 * 1024 * 1024 / 8);
+            rateLimiterConfig.ip2BwLimit.find("192.108.0.3")->second, config->doubleMBToBit(3));
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.group2BwLimit.size(), 3);
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.group2BwLimit.find("group0")->second, 2 * 1024 * 1024 / 8);
+            rateLimiterConfig.group2BwLimit.find("group0")->second, config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.group2BwLimit.find("group1")->second, 2 * 1024 * 1024 / 8);
+            rateLimiterConfig.group2BwLimit.find("group1")->second, config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(
-            rateLimiterConfig.group2BwLimit.find("group2")->second, 2 * 1024 * 1024 / 8);
+            rateLimiterConfig.group2BwLimit.find("group2")->second, config->doubleMBToBit(2));
+
+        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(5));
+        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(7));
+        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(8));
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.p2pBasicMsgTypes.size(), 5);  // 1,2,3,6,9
+        BOOST_CHECK(rateLimiterConfig.p2pBasicMsgTypes.contains(1));
+        BOOST_CHECK(!rateLimiterConfig.p2pBasicMsgTypes.contains(4));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.p2pBasicMsgQPS, 123);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.p2pModuleMsgQPS, 555);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[1], 123);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[5], 456);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[7], 789);
     }
 
     {
@@ -268,9 +313,9 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
         BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, 3 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, 1 * 1024 * 1024 / 8);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, config->doubleMBToBit(3));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(1));
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 3);
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
