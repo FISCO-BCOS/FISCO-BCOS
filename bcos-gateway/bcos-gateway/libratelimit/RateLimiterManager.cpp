@@ -63,7 +63,7 @@ bool RateLimiterManager::removeRateLimiter(const std::string& _rateLimiterKey)
 
 RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::string& _group)
 {
-    if (!m_rateLimiterConfig.enableGroupRateLimit)
+    if (!m_rateLimiterConfig.enableOutGroupRateLimit())
     {
         return nullptr;
     }
@@ -120,7 +120,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
 
 RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::string& _connIP)
 {
-    if (!m_rateLimiterConfig.enableConRateLimit)
+    if (!m_rateLimiterConfig.enableOutConnRateLimit())
     {
         return nullptr;
     }

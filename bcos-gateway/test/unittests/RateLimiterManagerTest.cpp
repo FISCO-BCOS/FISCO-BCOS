@@ -95,12 +95,12 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager)
     auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();
 
-    BOOST_CHECK(!rateLimiterConfig.enableRateLimit());
+    BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
     BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
     BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
 
-    BOOST_CHECK(!rateLimiterConfig.enableConRateLimit);
-    BOOST_CHECK(!rateLimiterConfig.enableGroupRateLimit);
+    BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
+    BOOST_CHECK(!rateLimiterConfig.enableOutGroupRateLimit());
     BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
 
     BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") == nullptr);
@@ -128,9 +128,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerDefaultConfig)
     bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
     auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
 
-    BOOST_CHECK(!rateLimiterConfig.enableRateLimit());
-    BOOST_CHECK(!rateLimiterConfig.enableConRateLimit);
-    BOOST_CHECK(!rateLimiterConfig.enableGroupRateLimit);
+    BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
+    BOOST_CHECK(!rateLimiterConfig.enableOutGroupRateLimit());
+    BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
     BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
     BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
 
@@ -154,9 +154,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
     auto config = std::make_shared<GatewayConfig>();
     config->initRateLimitConfig(pt);
 
-    BOOST_CHECK(config->rateLimiterConfig().enableRateLimit());
-    BOOST_CHECK(config->rateLimiterConfig().enableConRateLimit);
-    BOOST_CHECK(config->rateLimiterConfig().enableGroupRateLimit);
+    BOOST_CHECK(config->rateLimiterConfig().enableOutRateLimit());
+    BOOST_CHECK(config->rateLimiterConfig().enableOutConnRateLimit());
+    BOOST_CHECK(config->rateLimiterConfig().enableOutGroupRateLimit());
     BOOST_CHECK(config->rateLimiterConfig().enableDistributedRatelimit);
     BOOST_CHECK(config->rateLimiterConfig().enableDistributedRateLimitCache);
     BOOST_CHECK_EQUAL(config->rateLimiterConfig().distributedRateLimitCachePercent, 13);
@@ -211,8 +211,8 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
             auto rateLimiterManager =
                 gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
 
-            BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
-            BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
+            BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
+            BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
             BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
             BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
 
@@ -223,9 +223,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
             BOOST_CHECK_EQUAL(
                 distributedRateLimiter0->rateLimitKey(), rateLimiterFactory->toTokenKey("group0"));
             BOOST_CHECK_EQUAL(distributedRateLimiter0->enableLocalCache(), true);
-            BOOST_CHECK_EQUAL(distributedRateLimiter0->localCachePercent(), 13);
-            BOOST_CHECK_EQUAL(distributedRateLimiter0->interval(), 1);
-            BOOST_CHECK_EQUAL(distributedRateLimiter0->maxPermits(), 2 * 1024 * 1024 / 8);
+            BOOST_CHECK_EQUAL(distributedRateLimiter0->localCachePercent(), 15);
+            BOOST_CHECK_EQUAL(distributedRateLimiter0->intervalSec(), 1);
+            BOOST_CHECK_EQUAL(distributedRateLimiter0->maxPermitsSize(), 2 * 1024 * 1024 / 8);
 
             auto distributedRateLimiter1 =
                 std::dynamic_pointer_cast<ratelimiter::DistributedRateLimiter>(
@@ -234,9 +234,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
             BOOST_CHECK_EQUAL(
                 distributedRateLimiter1->rateLimitKey(), rateLimiterFactory->toTokenKey("group1"));
             BOOST_CHECK_EQUAL(distributedRateLimiter1->enableLocalCache(), true);
-            BOOST_CHECK_EQUAL(distributedRateLimiter1->localCachePercent(), 13);
-            BOOST_CHECK_EQUAL(distributedRateLimiter1->interval(), 1);
-            BOOST_CHECK_EQUAL(distributedRateLimiter1->maxPermits(), 2 * 1024 * 1024 / 8);
+            BOOST_CHECK_EQUAL(distributedRateLimiter1->localCachePercent(), 15);
+            BOOST_CHECK_EQUAL(distributedRateLimiter1->intervalSec(), 1);
+            BOOST_CHECK_EQUAL(distributedRateLimiter1->maxPermitsSize(), 2 * 1024 * 1024 / 8);
 
             auto distributedRateLimiter2 =
                 std::dynamic_pointer_cast<ratelimiter::DistributedRateLimiter>(
@@ -245,9 +245,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
             BOOST_CHECK_EQUAL(
                 distributedRateLimiter2->rateLimitKey(), rateLimiterFactory->toTokenKey("group3"));
             BOOST_CHECK_EQUAL(distributedRateLimiter2->enableLocalCache(), true);
-            BOOST_CHECK_EQUAL(distributedRateLimiter2->localCachePercent(), 13);
-            BOOST_CHECK_EQUAL(distributedRateLimiter2->interval(), 1);
-            BOOST_CHECK_EQUAL(distributedRateLimiter2->maxPermits(), 5 * 1024 * 1024 / 8);
+            BOOST_CHECK_EQUAL(distributedRateLimiter2->localCachePercent(), 15);
+            BOOST_CHECK_EQUAL(distributedRateLimiter2->intervalSec(), 1);
+            BOOST_CHECK_EQUAL(distributedRateLimiter2->maxPermitsSize(), 5 * 1024 * 1024 / 8);
         }
     }
 
@@ -294,15 +294,15 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv4)
             auto rateLimiterManager =
                 gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
 
-            BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
-            BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
+            BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
+            BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
             BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
             BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
 
             auto rateLimiter0 = std::dynamic_pointer_cast<ratelimiter::TokenBucketRateLimiter>(
                 rateLimiterManager->getConnRateLimiter("192.108.0.1"));
-
             BOOST_CHECK_EQUAL(rateLimiter0->maxQPS(), 1 * 1024 * 1024 / 8);
+
 
             auto rateLimiter1 = std::dynamic_pointer_cast<ratelimiter::TokenBucketRateLimiter>(
                 rateLimiterManager->getConnRateLimiter("192.108.0.2"));
@@ -344,9 +344,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
     BOOST_CHECK(rateLimiterConfig.connOutgoingBwLimit > 0);
     BOOST_CHECK(rateLimiterConfig.groupOutgoingBwLimit > 0);
 
-    BOOST_CHECK(rateLimiterConfig.enableRateLimit());
-    BOOST_CHECK(rateLimiterConfig.enableConRateLimit);
-    BOOST_CHECK(rateLimiterConfig.enableGroupRateLimit);
+    BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
+    BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
+    BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
     BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
     BOOST_CHECK_EQUAL(rateLimiterConfig.enableDistributedRateLimitCache, true);
     BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 20);
