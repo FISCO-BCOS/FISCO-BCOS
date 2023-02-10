@@ -21,12 +21,12 @@
 
 
 #pragma once
+#include <boost/container_hash/hash.hpp>
 #include <functional>
 #include <map>
-#include <unordered_map>
 #include <set>
+#include <unordered_map>
 #include <vector>
-#include <boost/container_hash/hash.hpp>
 
 namespace bcos
 {
@@ -53,8 +53,8 @@ public:
 
     virtual void traverseDag(OnConflictHandler const& _onConflict,
         OnFirstConflictHandler const& _onFirstConflict,
-        OnEmptyConflictHandler const& _onEmptyConflict,
-        OnAllConflictHandler const& _onAllConflict) = 0;
+        OnEmptyConflictHandler const& _onEmptyConflict, OnAllConflictHandler const& _onAllConflict,
+        bool clearDepIfAllConflict = false) = 0;
 };
 
 class CriticalFields : public virtual CriticalFieldsInterface
@@ -74,10 +74,11 @@ public:
 
     void traverseDag(OnConflictHandler const& _onConflict,
         OnFirstConflictHandler const& _onFirstConflict,
-        OnEmptyConflictHandler const& _onEmptyConflict,
-        OnAllConflictHandler const& _onAllConflict) override
+        OnEmptyConflictHandler const& _onEmptyConflict, OnAllConflictHandler const& _onAllConflict,
+        bool clearDepIfAllConflict = false) override
     {
-        auto dependencies = std::unordered_map<std::vector<uint8_t>, std::vector<size_t>, boost::hash<std::vector<uint8_t>>>();
+        auto dependencies = std::unordered_map<std::vector<uint8_t>, std::vector<size_t>,
+            boost::hash<std::vector<uint8_t>>>();
 
         for (ID id = 0; id < m_criticals.size(); ++id)
         {
@@ -86,6 +87,10 @@ public:
             if (criticals == nullptr)
             {
                 _onAllConflict(id);
+                if (clearDepIfAllConflict)
+                {
+                    dependencies.clear();
+                }
             }
             else if (criticals->empty())
             {

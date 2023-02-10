@@ -832,7 +832,7 @@ BOOST_FIXTURE_TEST_SUITE(shardPrecompiledTest, ShardPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(makeShardTest)
 {
     init(false);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     {
         auto result = makeShard(_number++, "hello");
@@ -867,7 +867,7 @@ BOOST_AUTO_TEST_CASE(makeShardTest)
 BOOST_AUTO_TEST_CASE(makeShardWasmTest)
 {
     init(true);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     {
         auto result = makeShard(_number++, "hello");
@@ -902,7 +902,7 @@ BOOST_AUTO_TEST_CASE(makeShardWasmTest)
 BOOST_AUTO_TEST_CASE(couldNotMakeShardTest)
 {
     init(false, protocol::BlockVersion::V3_3_VERSION);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // must could not mkShard shard in normal BFS precompiled
     {
         auto result = mkdir(_number++, "/shards/hello", CODE_FILE_BUILD_DIR_FAILED, true);
@@ -915,7 +915,7 @@ BOOST_AUTO_TEST_CASE(couldNotMakeShardTest)
 BOOST_AUTO_TEST_CASE(linkShardTest)
 {
     init(false);
-    BlockNumber number = 3;
+    bcos::protocol::BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
     std::string shardName = "hello";
@@ -992,7 +992,7 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
 BOOST_AUTO_TEST_CASE(getContractShardErrorTest)
 {
     init(false);
-    BlockNumber number = 3;
+    bcos::protocol::BlockNumber number = 3;
     // invalid contract address
     {
         auto shardInfo = getContractShard(number++, "kkkkk", CODE_FILE_INVALID_PATH);

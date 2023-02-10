@@ -94,8 +94,14 @@ public:
         blockFactory = createBlockFactory(cryptoSuite);
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
         header->setNumber(1);
-        ledger = std::make_shared<MockLedger>();
+        ledger = std::make_shared<MockLedger>(storage);
         ledger->setBlockNumber(header->number() - 1);
+        std::promise<bool> p;
+        Entry authEntry;
+        authEntry.setObject(SystemConfigEntry(_isCheckAuth ? "1" : "0", 0));
+        storage->asyncSetRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_AUTH_CHECK_STATUS,
+            std::move(authEntry), [&p](auto&& e) { p.set_value(true); });
+        p.get_future().get();
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
@@ -697,6 +703,9 @@ public:
         return result2;
     };
 
+public:
+    CodecWrapper::Ptr codec;
+    
 protected:
     crypto::Hash::Ptr hashImpl;
     crypto::Hash::Ptr smHashImpl;
@@ -710,7 +719,6 @@ protected:
     std::shared_ptr<MockLedger> ledger;
     KeyPairInterface::Ptr keyPair;
 
-    CodecWrapper::Ptr codec;
     int64_t gas = MockLedger::TX_GAS_LIMIT;
     bool isWasm = false;
     std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";

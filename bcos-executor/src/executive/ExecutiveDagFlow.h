@@ -21,21 +21,110 @@
 
 #pragma once
 
-#include "ExecutiveStackFlow.h"
+
+#include "../dag/CriticalFields.h"
+#include "../dag/TxDAGFlow.h"
+#include "../dag/TxDAGInterface.h"
+#include "ExecutiveFactory.h"
+#include "ExecutiveFlowInterface.h"
+#include "ExecutiveState.h"
+#include <tbb/concurrent_unordered_map.h>
+#include <gsl/util>
+#include <vector>
 namespace bcos::executor
 {
 
-class ExecutiveDagFlow : public ExecutiveStackFlow
+
+class ExecutiveDagFlow : public virtual ExecutiveFlowInterface,
+                         public std::enable_shared_from_this<ExecutiveDagFlow>
 {
 public:
     using Ptr = std::shared_ptr<ExecutiveDagFlow>;
 
-    ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory) : ExecutiveStackFlow(executiveFactory)
+    ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory,
+        std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
+      : m_executiveFactory(executiveFactory), m_abiCache(abiCache)
     {}
-    ~ExecutiveDagFlow() override = default;
+    virtual ~ExecutiveDagFlow() = default;
 
-    // std::shared_ptr<TransactionExecutive> buildExecutive(CallParameters::UniquePtr& input)
-    // override;
+    void submit(CallParameters::UniquePtr txInput) override;
+    void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;
+
+    void asyncRun(
+        // onTxReturn(output)
+        std::function<void(CallParameters::UniquePtr)> onTxReturn,
+
+        // onFinished(success, errorMessage)
+        std::function<void(bcos::Error::UniquePtr)> onFinished) override;
+
+    void stop() override
+    {
+        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveDagFlow";
+        if (!m_isRunning)
+        {
+            EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
+            return;
+        }
+
+        m_isRunning = false;
+        ExecutiveFlowInterface::stop();
+    };
+
+    void setDagFlowIfNotExists(TxDAGFlow::Ptr dagFlow)
+    {
+        bcos::RecursiveGuard lock(x_lock);
+        if (!m_dagFlow)
+        {
+            m_dagFlow = dagFlow;
+        }
+    }
+
+    static TxDAGFlow::Ptr prepareDagFlow(BlockContext& blockContext,
+        ExecutiveFactory::Ptr executiveFactory,
+        std::vector<std::unique_ptr<CallParameters>>& inputs,
+        std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
+    {
+        critical::CriticalFieldsInterface::Ptr criticals =
+            generateDagCriticals(blockContext, executiveFactory, inputs, abiCache);
+        return generateDagFlow(blockContext, criticals);
+    }
+
+protected:
+    void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
+        std::function<void(bcos::Error::UniquePtr)> onFinished);
+
+    static critical::CriticalFieldsInterface::Ptr generateDagCriticals(BlockContext& blockContext,
+        ExecutiveFactory::Ptr executiveFactory,
+        std::vector<std::unique_ptr<CallParameters>>& inputs,
+        std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache);
+
+    static TxDAGFlow::Ptr generateDagFlow(
+        const BlockContext& blockContext, critical::CriticalFieldsInterface::Ptr criticals);
+
+    static bytes getComponentBytes(
+        size_t index, const std::string& typeName, const bytesConstRef& data);
+
+    static std::shared_ptr<std::vector<bytes>> extractConflictFields(const FunctionAbi& functionAbi,
+        const CallParameters& params, const BlockContext& blockContext);
+
+    template <class F>
+    void asyncTo(F f)
+    {
+        // call super function
+        ExecutiveFlowInterface::asyncTo<F>(std::move(f));
+    }
+
+    std::shared_ptr<std::vector<CallParameters::UniquePtr>> m_inputs = nullptr;
+    TxDAGFlow::Ptr m_dagFlow;
+    ExecutiveState::Ptr m_pausedExecutive;
+    std::function<void(CallParameters::UniquePtr)> f_onTxReturn;
+
+    ExecutiveFactory::Ptr m_executiveFactory;
+    mutable bcos::RecursiveMutex x_lock;
+    bool m_isRunning = true;
+    std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> m_abiCache;
+
+    unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
 };
 
 

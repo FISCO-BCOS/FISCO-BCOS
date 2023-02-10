@@ -183,45 +183,6 @@ public:
         return result2;
     };
 
-    ExecutionMessage::UniquePtr list(
-        protocol::BlockNumber _number, std::string const& path, int _errorCode = 0)
-    {
-        bytes in = codec->encodeWithSig("list(string)", path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
-        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-        auto hash = tx->hash();
-        txpool->hash2Transaction.emplace(hash, tx);
-        auto params2 = std::make_unique<NativeExecutionMessage>();
-        params2->setTransactionHash(hash);
-        params2->setContextID(1000);
-        params2->setSeq(1000);
-        params2->setDepth(0);
-        params2->setFrom(sender);
-        params2->setTo(isWasm ? BFS_NAME : BFS_ADDRESS);
-        params2->setOrigin(sender);
-        params2->setStaticCall(false);
-        params2->setGasAvailable(gas);
-        params2->setData(std::move(in));
-        params2->setType(NativeExecutionMessage::TXHASH);
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise2.set_value(std::move(result));
-            });
-        auto result2 = executePromise2.get_future().get();
-        if (_errorCode != 0)
-        {
-            std::vector<BfsTuple> empty;
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode), empty));
-        }
-
-        commitBlock(_number);
-        return result2;
-    };
-
     ExecutionMessage::UniquePtr openTable(
         protocol::BlockNumber _number, std::string const& _path, int _errorCode = 0)
     {
@@ -778,13 +739,726 @@ static void generateRandomVector(
     }
 }
 
+static void countTest(TableFactoryPrecompiledV320Fixture* fixture, const int INSERT_COUNT,
+    const int INTERVAL, const int VALID_COUNT, const int VALID_COUNT_PER_SECTION,
+    bcos::protocol::BlockNumber& number, const std::map<uint32_t, uint32_t>& randomSet)
+{
+    auto callAddress = fixture->tableTestAddress;
+
+    // (<= && <= && ==) or (<= && <= && !=)
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2);
+        std::uniform_int_distribution<uint32_t> distribution2(
+            randomSet.size() / 2, randomSet.size());
+        uint32_t low = distribution1(gen);
+        uint32_t high = distribution2(gen);
+        uint32_t validCount = 0;
+        std::string lowKey;
+        std::string highKey;
+        uint32_t counter = 0;
+        for (auto iter = randomSet.begin(); iter != randomSet.end(); ++iter)
+        {
+            ++counter;
+            if (counter == low)
+            {
+                validCount = iter->second;
+                lowKey = std::to_string(iter->first);
+            }
+            if (counter == high)
+            {
+                validCount = iter->second - validCount + 1;
+                highKey = std::to_string(iter->first);
+                break;
+            }
+        }
+        // lowKey <= key <= highKey && value == "yes"
+        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GE, "id", lowKey};
+        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::LE, "id", highKey};
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+        ConditionTupleV320 cond4 = {(uint8_t)storage::Condition::Comparator::NE, "value", "yes"};
+        auto r1 = fixture->count(number++, {cond1, cond2, cond3}, callAddress);
+        uint32_t countRes = 0;
+        fixture->codec->decode(r1->data(), countRes);
+        BOOST_TEST(countRes == validCount);
+
+        // lowKey <= key <= highKey && value != "yes"
+        low = boost::lexical_cast<uint32_t>(lowKey);
+        high = boost::lexical_cast<uint32_t>(highKey);
+        uint32_t total = high - low + 1;
+        auto r2 = fixture->count(number++, {cond1, cond2, cond4}, callAddress);
+        countRes = 0;
+        fixture->codec->decode(r2->data(), countRes);
+        BOOST_CHECK(countRes == total - validCount);
+    }
+
+    // (< && < && ==) or (< && < && !=)
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2 - 1);
+        std::uniform_int_distribution<uint32_t> distribution2(
+            randomSet.size() / 2 + 1, randomSet.size());
+        uint32_t low = distribution1(gen);
+        uint32_t high = distribution2(gen);
+        uint32_t validCount = 0;
+        std::string lowKey;
+        std::string highKey;
+        uint32_t counter = 0;
+        for (auto iter = randomSet.begin(); iter != randomSet.end(); ++iter)
+        {
+            ++counter;
+            if (counter == low)
+            {
+                validCount = iter->second;
+                lowKey = std::to_string(iter->first);
+            }
+            if (counter == high)
+            {
+                validCount = iter->second - validCount - 1;
+                highKey = std::to_string(iter->first);
+                break;
+            }
+        }
+
+        // lowKey < key < highKey && value == "yes"
+        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GT, "id", lowKey};
+        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::LT, "id", highKey};
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+        ConditionTupleV320 cond4 = {(uint8_t)storage::Condition::Comparator::NE, "value", "yes"};
+        auto r1 = fixture->count(number++, {cond1, cond2, cond3}, callAddress);
+        uint32_t countRes = 0;
+        fixture->codec->decode(r1->data(), countRes);
+        BOOST_CHECK(countRes == validCount);
+
+        // lowKey < key < highKey && value != "yes"
+        low = boost::lexical_cast<uint32_t>(lowKey);
+        high = boost::lexical_cast<uint32_t>(highKey);
+        uint32_t total = high - low - 1;
+        auto r2 = fixture->count(number++, {cond1, cond2, cond4}, callAddress);
+        countRes = 0;
+        fixture->codec->decode(r2->data(), countRes);
+        BOOST_CHECK(countRes == total - validCount);
+    }
+
+    // 0 <= key <= 987
+    {
+        uint32_t low = 0;
+        uint32_t high = 987;
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LE, "id", std::to_string(high)};
+        auto r1 = fixture->count(number++, {cond1, cond2}, callAddress);
+        uint32_t countRes = 0;
+        fixture->codec->decode(r1->data(), countRes);
+        BOOST_TEST(countRes == high - low + 1);
+    }
+
+    // value == "yes"
+    {
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+        auto r1 = fixture->count(number++, {cond3}, callAddress);
+        uint32_t countRes = 0;
+        fixture->codec->decode(r1->data(), countRes);
+        BOOST_TEST(countRes == VALID_COUNT);
+    }
+
+    // value == "no"
+    {
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "no"};
+        auto r1 = fixture->count(number++, {cond3}, callAddress);
+        uint32_t countRes = 0;
+        fixture->codec->decode(r1->data(), countRes);
+        BOOST_TEST(countRes == INSERT_COUNT - VALID_COUNT);
+    }
+
+    // The index of condition out of range
+    {
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+        // index out of range
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
+        auto r1 = fixture->count(number++, {cond1, cond2, cond3}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // empty condition
+    {
+        auto r1 = fixture->count(number++, {}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // condition with undefined cmp
+    {
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+        ConditionTupleV320 cond3 = {10, "value", "yes"};
+        auto r1 = fixture->count(number++, {cond1, cond2, cond3}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // count, non numeric key
+    {
+        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
+        auto r1 = fixture->count(number++, {cond1}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
+        auto r2 = fixture->count(number++, {cond2}, callAddress);
+        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        ConditionTupleV320 cond3 = {
+            (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
+        auto r3 = fixture->count(number++, {cond3}, callAddress);
+        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        // LONG_MIN - 1
+        ConditionTupleV320 cond4 = {
+            (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
+        auto r4 = fixture->count(number++, {cond4}, callAddress);
+        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // count, negative key
+    {
+        fixture->insert(number++, "-10", {"no"}, callAddress);
+        fixture->insert(number++, "-9223372036854775808", {"no"}, callAddress);
+
+        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GE, "id", "-10"};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", "-9223372036854775808"};
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::LT, "id", "50"};
+
+        auto r1 = fixture->count(number++, {cond1, cond3}, callAddress);
+        uint32_t countRes = 0;
+        fixture->codec->decode(r1->data(), countRes);
+        BOOST_TEST(countRes == 51);
+
+        auto r2 = fixture->count(number++, {cond2, cond3}, callAddress);
+        countRes = 0;
+        fixture->codec->decode(r2->data(), countRes);
+        BOOST_TEST(countRes == 52);
+    }
+}
+
+
+static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
+    const int INSERT_COUNT, const int INTERVAL, const int VALID_COUNT,
+    const int VALID_COUNT_PER_SECTION, bcos::protocol::BlockNumber& number,
+    const std::map<uint32_t, uint32_t>& randomSet)
+{
+    auto callAddress = fixture->tableTestAddress;
+    // select by condition——check limit and count
+    {
+        uint32_t limitOffset = 0;
+        uint32_t limitCount = 50;
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+        LimitTuple limit = {limitOffset, limitCount};
+        auto r1 = fixture->selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
+        std::vector<EntryTuple> entries;
+        fixture->codec->decode(r1->data(), entries);
+        uint32_t count = 0;
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            EntryTuple& entry = entries[i];
+            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
+            auto iter = randomSet.find(key);
+            if (iter == randomSet.end() || iter->second != i + limitOffset)
+                break;
+            ++count;
+        }
+        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
+    }
+
+    {
+        uint32_t limitOffset = 10;
+        uint32_t limitCount = 75;
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+        LimitTuple limit = {limitOffset, limitCount};
+        auto r1 = fixture->selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
+        std::vector<EntryTuple> entries;
+        fixture->codec->decode(r1->data(), entries);
+        uint32_t count = 0;
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            EntryTuple& entry = entries[i];
+            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
+            auto iter = randomSet.find(key);
+            if (iter == randomSet.end() || iter->second != i + limitOffset)
+                break;
+            ++count;
+        }
+
+        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
+    }
+
+    {
+        uint32_t limitOffset = 461;
+        uint32_t limitCount = 75;
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+        LimitTuple limit = {limitOffset, limitCount};
+        auto r1 = fixture->selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
+        std::vector<EntryTuple> entries;
+        fixture->codec->decode(r1->data(), entries);
+        uint32_t count = 0;
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            EntryTuple& entry = entries[i];
+            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
+            auto iter = randomSet.find(key);
+            if (iter == randomSet.end() || iter->second != i + limitOffset)
+                break;
+            ++count;
+        }
+
+        BOOST_CHECK(
+            entries.size() == (VALID_COUNT - limitOffset) && count == (VALID_COUNT - limitOffset));
+    }
+
+    // select by condition limitCount < USER_TABLE_MIN_LIMIT_COUNT
+    {
+        uint32_t limitOffset = 0;
+        uint32_t limitCount = 49;
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+        LimitTuple limit = {limitOffset, limitCount};
+        auto r1 = fixture->selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
+        std::vector<EntryTuple> entries;
+        fixture->codec->decode(r1->data(), entries);
+        uint32_t count = 0;
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            EntryTuple& entry = entries[i];
+            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
+            auto iter = randomSet.find(key);
+            if (iter == randomSet.end() || iter->second != i + limitOffset)
+                break;
+            ++count;
+        }
+
+        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
+    }
+
+    // select by condition limitCount == 0
+    {
+        uint32_t limitOffset = 0;
+        uint32_t limitCount = 0;
+        // lexicographical order， 1～INSERT_COUNT
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+        LimitTuple limit = {limitOffset, limitCount};
+        auto r1 = fixture->selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
+        std::vector<EntryTuple> entries;
+        fixture->codec->decode(r1->data(), entries);
+        uint32_t count = 0;
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            EntryTuple& entry = entries[i];
+            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
+            auto iter = randomSet.find(key);
+            if (iter == randomSet.end() || iter->second != i + limitOffset)
+                break;
+            ++count;
+        }
+
+        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
+    }
+
+    {
+        // check not use key condition
+        uint32_t count1 = 0;
+        {
+            uint32_t limitOffset = 461;
+            uint32_t limitCount = 75;
+            ConditionTupleV320 cond1 = {
+                (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+            ConditionTupleV320 cond2 = {
+                (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+            ConditionTupleV320 cond3 = {
+                (uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+            LimitTuple limit = {limitOffset, limitCount};
+            auto r1 =
+                fixture->selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
+            std::vector<EntryTuple> entries;
+            fixture->codec->decode(r1->data(), entries);
+
+            for (size_t i = 0; i < entries.size(); ++i)
+            {
+                EntryTuple& entry = entries[i];
+                uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
+                auto iter = randomSet.find(key);
+                if (iter == randomSet.end() || iter->second != i + limitOffset)
+                    break;
+                ++count1;
+            }
+            BOOST_CHECK(entries.size() == (VALID_COUNT - limitOffset) &&
+                        count1 == (VALID_COUNT - limitOffset));
+        }
+        uint32_t count2 = 0;
+        {
+            uint32_t limitOffset = 461;
+            uint32_t limitCount = 75;
+            ConditionTupleV320 cond3 = {
+                (uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
+            LimitTuple limit = {limitOffset, limitCount};
+            auto r1 = fixture->selectByCondition(number++, {cond3}, limit, callAddress);
+            std::vector<EntryTuple> entries;
+            fixture->codec->decode(r1->data(), entries);
+
+            for (size_t i = 0; i < entries.size(); ++i)
+            {
+                EntryTuple& entry = entries[i];
+                uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
+                auto iter = randomSet.find(key);
+                if (iter == randomSet.end() || iter->second != i + limitOffset)
+                    break;
+                ++count2;
+            }
+            BOOST_CHECK(entries.size() == (VALID_COUNT - limitOffset) &&
+                        count2 == (VALID_COUNT - limitOffset));
+        }
+        BOOST_CHECK(count1 == count2);
+    }
+
+    // empty condition
+    {
+        LimitTuple limit = {0, 10};
+        auto r1 = fixture->selectByCondition(number++, {}, limit, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        auto r2 = fixture->count(number++, {}, callAddress);
+        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // condition with undefined cmp
+    {
+        ConditionTupleV320 cond1 = {100, "id", "90"};
+        LimitTuple limit = {0, 10};
+        auto r1 = fixture->selectByCondition(number++, {cond1}, limit, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // limit overflow
+    {
+        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "90"};
+        LimitTuple limit = {0, 10000};
+        auto r1 = fixture->selectByCondition(number++, {cond1}, limit, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // The index of condition out of range
+    {
+        LimitTuple limit = {0, 50};
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+        // index out of range  0 <= idx <= 1
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
+        auto r1 = fixture->selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // select, non numeric key
+    {
+        LimitTuple limit = {0, 50};
+        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
+        auto r1 = fixture->selectByCondition(number++, {cond1}, limit, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
+        auto r2 = fixture->selectByCondition(number++, {cond2}, limit, callAddress);
+        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        ConditionTupleV320 cond3 = {
+            (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
+        auto r3 = fixture->selectByCondition(number++, {cond3}, limit, callAddress);
+        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        // LONG_MIN - 1
+        ConditionTupleV320 cond4 = {
+            (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
+        auto r4 = fixture->selectByCondition(number++, {cond4}, limit, callAddress);
+        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // select, negative key
+    {
+        LimitTuple limit = {0, 100};
+        fixture->insert(number++, "-10", {"no"}, callAddress);
+        fixture->insert(number++, "-9223372036854775808", {"no"}, callAddress);
+
+        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GE, "id", "-10"};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", "-9223372036854775808"};
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::LT, "id", "50"};
+        ConditionTupleV320 cond4 = {(uint8_t)storage::Condition::Comparator::NE, "value", "xx"};
+        std::vector<std::string> target1 = {"-10"};
+        std::vector<std::string> target2 = {"-9223372036854775808", "-10"};
+
+        for (int i = 0; i < 50; ++i)
+        {
+            target1.push_back(std::to_string(i));
+            target2.push_back(std::to_string(i));
+        }
+
+        auto checkFunc = [](std::vector<std::string>& target, std::vector<EntryTuple> entries) {
+            if (target.size() != entries.size())
+                return false;
+            for (size_t i = 0; i < target.size(); ++i)
+            {
+                if (target[i] != std::get<0>(entries[i]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        {
+            std::vector<EntryTuple> entries1;
+            auto r1 = fixture->selectByCondition(number++, {cond1, cond3}, limit, callAddress);
+            fixture->codec->decode(r1->data(), entries1);
+            BOOST_CHECK(checkFunc(target1, entries1));
+
+            std::vector<EntryTuple> entries2;
+            auto r2 = fixture->selectByCondition(number++, {cond2, cond3}, limit, callAddress);
+            fixture->codec->decode(r2->data(), entries2);
+            BOOST_CHECK(checkFunc(target2, entries2));
+        }
+
+        // use value condition
+        {
+            std::vector<EntryTuple> entries1;
+            auto r1 =
+                fixture->selectByCondition(number++, {cond1, cond3, cond4}, limit, callAddress);
+            fixture->codec->decode(r1->data(), entries1);
+            BOOST_CHECK(checkFunc(target1, entries1));
+
+            std::vector<EntryTuple> entries2;
+            auto r2 =
+                fixture->selectByCondition(number++, {cond2, cond3, cond4}, limit, callAddress);
+            fixture->codec->decode(r2->data(), entries2);
+            BOOST_CHECK(checkFunc(target2, entries2));
+        }
+    }
+}
+
+static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
+    const int INSERT_COUNT, const int INTERVAL, const int VALID_COUNT,
+    const int VALID_COUNT_PER_SECTION, bcos::protocol::BlockNumber& number,
+    const std::map<uint32_t, uint32_t>& randomSet)
+{
+    auto callAddress = fixture->tableTestAddress;
+    {
+        auto updateFunc = [fixture, &number, &callAddress](uint32_t low, uint32_t high,
+                              uint32_t offset, uint32_t count, const std::string& target,
+                              const std::string& value) {
+            ConditionTupleV320 cond1 = {
+                (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
+            ConditionTupleV320 cond2 = {
+                (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(high)};
+            ConditionTupleV320 cond3 = {
+                (uint8_t)storage::Condition::Comparator::EQ, "value", value};
+            LimitTuple limit = {offset, count};
+            UpdateFieldTuple updateFieldTuple1 = {"value", target};
+            auto r1 = fixture->updateByCondition(
+                number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
+            int32_t affectRows = 0;
+            fixture->codec->decode(r1->data(), affectRows);
+            return affectRows;
+        };
+
+        auto countFunc = [fixture, &number, &callAddress](const std::string& value) {
+            ConditionTupleV320 cond = {(uint8_t)storage::Condition::Comparator::EQ, "value", value};
+            auto r1 = fixture->count(number++, {cond}, callAddress);
+            uint32_t rows = 0;
+            fixture->codec->decode(r1->data(), rows);
+            return rows;
+        };
+        int32_t countBeforeUpdate = countFunc("yes");
+        // update value = "update" where (key >= 500 && key < 1500) && (value == "yes")
+        int32_t affectRows1 = updateFunc(500, 1500, 126, 20, "update", "yes");
+        int32_t countAfterUpdate = countFunc("update");
+        // update value = "yes" where (key >= 0 && key < 10000) && (value == "update")
+        int32_t affectRows2 = updateFunc(0, INSERT_COUNT, 0, VALID_COUNT, "yes", "update");
+        int32_t countAfterRecover = countFunc("yes");
+        BOOST_CHECK(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
+                    affectRows1 == 20 && countBeforeUpdate == countAfterRecover &&
+                    countBeforeUpdate == VALID_COUNT);
+    }
+
+    // limitcount == 0
+    {
+        auto updateFunc = [fixture, &number, &callAddress](uint32_t low, uint32_t high,
+                              uint32_t offset, uint32_t count, const std::string& target,
+                              const std::string& value) {
+            ConditionTupleV320 cond1 = {
+                (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
+            ConditionTupleV320 cond2 = {
+                (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(high)};
+            ConditionTupleV320 cond3 = {
+                (uint8_t)storage::Condition::Comparator::EQ, "value", value};
+            LimitTuple limit = {offset, count};
+            UpdateFieldTuple updateFieldTuple1 = {"value", target};
+            auto r1 = fixture->updateByCondition(
+                number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
+            int32_t affectRows = 0;
+            fixture->codec->decode(r1->data(), affectRows);
+            return affectRows;
+        };
+
+        auto countFunc = [fixture, &number, &callAddress](const std::string& value) {
+            ConditionTupleV320 cond = {(uint8_t)storage::Condition::Comparator::EQ, "value", value};
+            auto r1 = fixture->count(number++, {cond}, callAddress);
+            uint32_t rows = 0;
+            fixture->codec->decode(r1->data(), rows);
+            return rows;
+        };
+        int32_t countBeforeUpdate = countFunc("yes");
+        // update value = "update" where (key >= 5000 && key < 6000) && (value == "yes")
+        int32_t affectRows1 = updateFunc(500, 1500, 0, 0, "update", "yes");
+        int32_t countAfterUpdate = countFunc("update");
+        // update value = "yes" where (key >= 0 && key < 10000) && (value == "update")
+        int32_t affectRows2 = updateFunc(0, INSERT_COUNT, 0, 0, "yes", "update");
+        int32_t countAfterRecover = countFunc("yes");
+        BOOST_CHECK(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
+                    affectRows1 == 0 && countBeforeUpdate == countAfterRecover &&
+                    countBeforeUpdate == VALID_COUNT);
+    }
+
+    // empty condition
+    {
+        LimitTuple limit = {0, 10};
+        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
+        auto r1 = fixture->updateByCondition(number++, {}, limit, {updateFieldTuple1}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // condition with undefined cmp
+    {
+        ConditionTupleV320 cond1 = {100, "id", "90"};
+        LimitTuple limit = {0, 10};
+        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
+        auto r1 =
+            fixture->updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // limit overflow
+    {
+        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "90"};
+        LimitTuple limit = {0, 10000};
+        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
+        auto r1 =
+            fixture->updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // The index of condition out of range
+    {
+        LimitTuple limit = {0, 50};
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
+        ConditionTupleV320 cond2 = {
+            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
+        // index out of range  0 <= idx <= 1
+        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
+        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
+        auto r1 = fixture->updateByCondition(
+            number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // update, non numeric key
+    {
+        UpdateFieldTuple updateFieldTuple = {"value", "update"};
+        LimitTuple limit = {0, 50};
+        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
+        auto r1 =
+            fixture->updateByCondition(number++, {cond1}, limit, {updateFieldTuple}, callAddress);
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
+        auto r2 =
+            fixture->updateByCondition(number++, {cond2}, limit, {updateFieldTuple}, callAddress);
+        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        ConditionTupleV320 cond3 = {
+            (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
+        auto r3 =
+            fixture->updateByCondition(number++, {cond3}, limit, {updateFieldTuple}, callAddress);
+        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+
+        // LONG_MIN - 1
+        ConditionTupleV320 cond4 = {
+            (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
+        auto r4 =
+            fixture->updateByCondition(number++, {cond4}, limit, {updateFieldTuple}, callAddress);
+        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+
+    // update, negative key
+    {
+        LimitTuple limit = {0, 100};
+        UpdateFieldTuple updateFieldTuple = {"value", "updatexx"};
+        fixture->insert(number++, "-10", {"no"}, callAddress);
+        fixture->insert(number++, "-100", {"no"}, callAddress);
+        fixture->insert(number++, "-1000", {"no"}, callAddress);
+        fixture->insert(number++, "-9223372036854775808", {"no"}, callAddress);
+
+        ConditionTupleV320 cond1 = {
+            (uint8_t)storage::Condition::Comparator::GE, "id", "-9223372036854775808"};
+        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::LE, "id", "-10"};
+        ConditionTupleV320 cond3 = {
+            (uint8_t)storage::Condition::Comparator::EQ, "value", "updatexx"};
+
+        auto r1 = fixture->updateByCondition(
+            number++, {cond1, cond2}, limit, {updateFieldTuple}, callAddress);
+        uint32_t affectRows = 0;
+        fixture->codec->decode(r1->data(), affectRows);
+        BOOST_CHECK(affectRows == 4);
+
+        std::vector<EntryTuple> entries;
+        auto r2 = fixture->selectByCondition(number++, {cond3}, limit, callAddress);
+        fixture->codec->decode(r2->data(), entries);
+        BOOST_CHECK(std::get<0>(entries[0]) == "-9223372036854775808");
+        BOOST_CHECK(std::get<0>(entries[1]) == "-1000");
+        BOOST_CHECK(std::get<0>(entries[2]) == "-100");
+        BOOST_CHECK(std::get<0>(entries[3]) == "-10");
+    }
+}
 
 BOOST_FIXTURE_TEST_SUITE(precompiledTableTestV320, TableFactoryPrecompiledV320Fixture)
 
 BOOST_AUTO_TEST_CASE(createTableTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -875,7 +1549,7 @@ BOOST_AUTO_TEST_CASE(createTableTest)
 BOOST_AUTO_TEST_CASE(createTableWasmTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -963,12 +1637,11 @@ BOOST_AUTO_TEST_CASE(createTableWasmTest)
     }
 }
 
-
 BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
 {
     // Lexicographic Order
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1000,11 +1673,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longKey = "0";
-        for (int j = 0; j < USER_TABLE_KEY_VALUE_MAX_LENGTH; ++j)
-        {
-            longKey += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_KEY_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longKey = ss.str();
         auto r1 = insert(number++, longKey, {"test1", "test2"}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1013,11 +1684,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "id111", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1049,7 +1718,7 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
 BOOST_AUTO_TEST_CASE(insertNumericalOrderTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test_1", 1, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1099,11 +1768,9 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrderTest)
     // insert too long value
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "3", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1131,7 +1798,7 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
     // Lexicographic Order
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1163,11 +1830,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longKey = "0";
-        for (int j = 0; j < USER_TABLE_KEY_VALUE_MAX_LENGTH; ++j)
-        {
-            longKey += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_KEY_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longKey = ss.str();
         auto r1 = insert(number++, longKey, {"test1", "test2"}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1176,11 +1841,9 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
     // insert too long key
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "id111", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1213,7 +1876,7 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrdeWasmTest)
     // Numerical Order
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test_1", 1, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1263,11 +1926,9 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrdeWasmTest)
     // insert too long value
     {
         boost::log::core::get()->set_logging_enabled(false);
-        std::string longValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            longValue += "0";
-        }
+        std::stringstream ss;
+        ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
+        std::string longValue = ss.str();
         auto r1 = insert(number++, "3", {"test1", longValue}, callAddress);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
@@ -1298,7 +1959,7 @@ BOOST_AUTO_TEST_CASE(selectLexicographicOrderTest)
         return stream.str();
     };
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1327,7 +1988,7 @@ BOOST_AUTO_TEST_CASE(selectLexicographicOrderTest)
 BOOST_AUTO_TEST_CASE(selectNumericalOrderTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 1, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1393,7 +2054,7 @@ BOOST_AUTO_TEST_CASE(selectLexicographicOrderWasmTest)
         return stream.str();
     };
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1423,7 +2084,7 @@ BOOST_AUTO_TEST_CASE(selectNumericalOrderWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 1, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1483,7 +2144,7 @@ BOOST_AUTO_TEST_CASE(selectNumericalOrderWasmTest)
 BOOST_AUTO_TEST_CASE(updateLexicographicOrderTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1529,11 +2190,9 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1548,7 +2207,7 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderTest)
 BOOST_AUTO_TEST_CASE(updateNumericalOrderTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 1, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1594,11 +2253,9 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1651,7 +2308,7 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1697,11 +2354,9 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderWasmTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1717,7 +2372,7 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 1, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1763,11 +2418,9 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderWasmTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1819,7 +2472,7 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderWasmTest)
 BOOST_AUTO_TEST_CASE(removeLexicographicOrderTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1850,7 +2503,7 @@ BOOST_AUTO_TEST_CASE(removeLexicographicOrderTest)
 BOOST_AUTO_TEST_CASE(removeNumericalOrderTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 1, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1916,7 +2569,7 @@ BOOST_AUTO_TEST_CASE(removeLexicographicOrderWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 0, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1948,7 +2601,7 @@ BOOST_AUTO_TEST_CASE(removeNumericalOrderWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", 1, "id", {"item_name", "item_id"}, callAddress);
     }
@@ -2010,1234 +2663,28 @@ BOOST_AUTO_TEST_CASE(removeNumericalOrderWasmTest)
     }
 }
 
-BOOST_AUTO_TEST_CASE(countTest)
+BOOST_AUTO_TEST_CASE(tableConditionOP)
 {
-    const int INSERT_COUNT = 10000;
+    const int INSERT_COUNT = 2000;
+    const int INTERVAL = 500;
+    const int VALID_COUNT = 500;
+    const int VALID_COUNT_PER_SECTION = VALID_COUNT / (INSERT_COUNT / INTERVAL);
 
+    bcos::protocol::BlockNumber number = 1;
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
     {
-        // Numerical Order
-        creatTable(number++, "t_test_condv320", 1, "id", {"value"}, callAddress);
-    }
-
-    std::map<uint32_t, uint32_t> randomSet;
-    int start = 0;
-    int end = 499;
-    for (int i = 0; i < INSERT_COUNT / 500; i++)
-    {
-        generateRandomVector(25, start, end, randomSet);
-        start += 500;
-        end += 500;
-    }
-
-    boost::log::core::get()->set_logging_enabled(false);
-    for (int j = 0; j < INSERT_COUNT; ++j)
-    {
-        std::string value = "no";
-        if (randomSet.contains(j))
-        {
-            value = "yes";
-        }
-        insert(number++, std::to_string(j), {value}, callAddress);
-    }
-    boost::log::core::get()->set_logging_enabled(true);
-
-    // (<= && <= && ==) or (<= && <= && !=)
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2);
-        std::uniform_int_distribution<uint32_t> distribution2(
-            randomSet.size() / 2, randomSet.size());
-        uint32_t low = distribution1(gen);
-        uint32_t high = distribution2(gen);
-        uint32_t validCount = 0;
-        std::string lowKey;
-        std::string highKey;
-        uint32_t counter = 0;
-        for (auto iter = randomSet.begin(); iter != randomSet.end(); ++iter)
-        {
-            ++counter;
-            if (counter == low)
-            {
-                validCount = iter->second;
-                lowKey = std::to_string(iter->first);
-            }
-            if (counter == high)
-            {
-                validCount = iter->second - validCount + 1;
-                highKey = std::to_string(iter->first);
-                break;
-            }
-        }
-        // lowKey <= key <= highKey && value == "yes"
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GE, "id", lowKey};
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::LE, "id", highKey};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        ConditionTupleV320 cond4 = {(uint8_t)storage::Condition::Comparator::NE, "value", "yes"};
-        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == validCount);
-
-        // lowKey <= key <= highKey && value != "yes"
-        low = boost::lexical_cast<uint32_t>(lowKey);
-        high = boost::lexical_cast<uint32_t>(highKey);
-        uint32_t total = high - low + 1;
-        auto r2 = count(number++, {cond1, cond2, cond4}, callAddress);
-        countRes = 0;
-        codec->decode(r2->data(), countRes);
-        BOOST_CHECK(countRes == total - validCount);
-    }
-
-    // (< && < && ==) or (< && < && !=)
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2 - 1);
-        std::uniform_int_distribution<uint32_t> distribution2(
-            randomSet.size() / 2 + 1, randomSet.size());
-        uint32_t low = distribution1(gen);
-        uint32_t high = distribution2(gen);
-        uint32_t validCount = 0;
-        std::string lowKey;
-        std::string highKey;
-        uint32_t counter = 0;
-        for (auto iter = randomSet.begin(); iter != randomSet.end(); ++iter)
-        {
-            ++counter;
-            if (counter == low)
-            {
-                validCount = iter->second;
-                lowKey = std::to_string(iter->first);
-            }
-            if (counter == high)
-            {
-                validCount = iter->second - validCount - 1;
-                highKey = std::to_string(iter->first);
-                break;
-            }
-        }
-
-        // lowKey < key < highKey && value == "yes"
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GT, "id", lowKey};
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::LT, "id", highKey};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        ConditionTupleV320 cond4 = {(uint8_t)storage::Condition::Comparator::NE, "value", "yes"};
-        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_CHECK(countRes == validCount);
-
-        // lowKey < key < highKey && value != "yes"
-        low = boost::lexical_cast<uint32_t>(lowKey);
-        high = boost::lexical_cast<uint32_t>(highKey);
-        uint32_t total = high - low - 1;
-        auto r2 = count(number++, {cond1, cond2, cond4}, callAddress);
-        countRes = 0;
-        codec->decode(r2->data(), countRes);
-        BOOST_CHECK(countRes == total - validCount);
-    }
-
-    // 0 <= key <= 1001
-    {
-        uint32_t low = 0;
-        uint32_t high = 1001;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LE, "id", std::to_string(high)};
-        auto r1 = count(number++, {cond1, cond2}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == high - low + 1);
-    }
-
-    // value == "yes"
-    {
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        auto r1 = count(number++, {cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == 25 * (INSERT_COUNT / 500));
-    }
-
-    // value == "no"
-    {
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "no"};
-        auto r1 = count(number++, {cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == (500 - 25) * (INSERT_COUNT / 500));
-    }
-
-    // The index of condition out of range
-    {
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        // index out of range
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
-        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // empty condition
-    {
-        auto r1 = count(number++, {}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // condition with undefined cmp
-    {
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {10, "value", "yes"};
-        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // count, non numeric key
-    {
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
-        auto r1 = count(number++, {cond1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
-        auto r2 = count(number++, {cond2}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond3 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
-        auto r3 = count(number++, {cond3}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        // LONG_MIN - 1
-        ConditionTupleV320 cond4 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
-        auto r4 = count(number++, {cond4}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // count, negative key
-    {
-        insert(number++, "-10", {"no"}, callAddress);
-        insert(number++, "-9223372036854775808", {"no"}, callAddress);
-
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GE, "id", "-10"};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", "-9223372036854775808"};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::LT, "id", "50"};
-
-        auto r1 = count(number++, {cond1, cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == 51);
-
-        auto r2 = count(number++, {cond2, cond3}, callAddress);
-        countRes = 0;
-        codec->decode(r2->data(), countRes);
-        BOOST_TEST(countRes == 52);
-    }
-}
-
-BOOST_AUTO_TEST_CASE(countWasmTest)
-{
-    init(true);
-    const int INSERT_COUNT = 10000;
-
-    auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
-    {
-        // Numerical Order
-        creatTable(number++, "t_test_condv320", 1, "id", {"value"}, callAddress);
-    }
-
-    std::map<uint32_t, uint32_t> randomSet;
-    int start = 0;
-    int end = 499;
-    for (int i = 0; i < INSERT_COUNT / 500; i++)
-    {
-        generateRandomVector(25, start, end, randomSet);
-        start += 500;
-        end += 500;
-    }
-
-    boost::log::core::get()->set_logging_enabled(false);
-    for (int j = 0; j < INSERT_COUNT; ++j)
-    {
-        std::string value = "no";
-        if (randomSet.contains(j))
-        {
-            value = "yes";
-        }
-        insert(number++, std::to_string(j), {value}, callAddress);
-    }
-    boost::log::core::get()->set_logging_enabled(true);
-
-    // (<= && <= && ==) or (<= && <= && !=)
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2);
-        std::uniform_int_distribution<uint32_t> distribution2(
-            randomSet.size() / 2, randomSet.size());
-        uint32_t low = distribution1(gen);
-        uint32_t high = distribution2(gen);
-        uint32_t validCount = 0;
-        std::string lowKey;
-        std::string highKey;
-        uint32_t counter = 0;
-        for (auto iter = randomSet.begin(); iter != randomSet.end(); ++iter)
-        {
-            ++counter;
-            if (counter == low)
-            {
-                validCount = iter->second;
-                lowKey = std::to_string(iter->first);
-            }
-            if (counter == high)
-            {
-                validCount = iter->second - validCount + 1;
-                highKey = std::to_string(iter->first);
-                break;
-            }
-        }
-        // lowKey <= key <= highKey && value == "yes"
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GE, "id", lowKey};
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::LE, "id", highKey};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        ConditionTupleV320 cond4 = {(uint8_t)storage::Condition::Comparator::NE, "value", "yes"};
-        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == validCount);
-
-        // lowKey <= key <= highKey && value != "yes"
-        low = boost::lexical_cast<uint32_t>(lowKey);
-        high = boost::lexical_cast<uint32_t>(highKey);
-        uint32_t total = high - low + 1;
-        auto r2 = count(number++, {cond1, cond2, cond4}, callAddress);
-        countRes = 0;
-        codec->decode(r2->data(), countRes);
-        BOOST_CHECK(countRes == total - validCount);
-    }
-
-    // (< && < && ==) or (< && < && !=)
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<uint32_t> distribution1(1, randomSet.size() / 2 - 1);
-        std::uniform_int_distribution<uint32_t> distribution2(
-            randomSet.size() / 2 + 1, randomSet.size());
-        uint32_t low = distribution1(gen);
-        uint32_t high = distribution2(gen);
-        uint32_t validCount = 0;
-        std::string lowKey;
-        std::string highKey;
-        uint32_t counter = 0;
-        for (auto iter = randomSet.begin(); iter != randomSet.end(); ++iter)
-        {
-            ++counter;
-            if (counter == low)
-            {
-                validCount = iter->second;
-                lowKey = std::to_string(iter->first);
-            }
-            if (counter == high)
-            {
-                validCount = iter->second - validCount - 1;
-                highKey = std::to_string(iter->first);
-                break;
-            }
-        }
-
-        // lowKey < key < highKey && value == "yes"
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GT, "id", lowKey};
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::LT, "id", highKey};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        ConditionTupleV320 cond4 = {(uint8_t)storage::Condition::Comparator::NE, "value", "yes"};
-        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_CHECK(countRes == validCount);
-
-        // lowKey < key < highKey && value != "yes"
-        low = boost::lexical_cast<uint32_t>(lowKey);
-        high = boost::lexical_cast<uint32_t>(highKey);
-        uint32_t total = high - low - 1;
-        auto r2 = count(number++, {cond1, cond2, cond4}, callAddress);
-        countRes = 0;
-        codec->decode(r2->data(), countRes);
-        BOOST_CHECK(countRes == total - validCount);
-    }
-
-    // 0 <= key <= 1001
-    {
-        uint32_t low = 0;
-        uint32_t high = 1001;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LE, "id", std::to_string(high)};
-        auto r1 = count(number++, {cond1, cond2}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == high - low + 1);
-    }
-
-    // value == "yes"
-    {
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        auto r1 = count(number++, {cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == 25 * (INSERT_COUNT / 500));
-    }
-
-    // value == "no"
-    {
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "no"};
-        auto r1 = count(number++, {cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == (500 - 25) * (INSERT_COUNT / 500));
-    }
-
-    // The index of condition out of range
-    {
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        // index out of range
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
-        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // empty condition
-    {
-        auto r1 = count(number++, {}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // condition with undefined cmp
-    {
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {10, "value", "yes"};
-        auto r1 = count(number++, {cond1, cond2, cond3}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // count, non numeric key
-    {
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
-        auto r1 = count(number++, {cond1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
-        auto r2 = count(number++, {cond2}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond3 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
-        auto r3 = count(number++, {cond3}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        // LONG_MIN - 1
-        ConditionTupleV320 cond4 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
-        auto r4 = count(number++, {cond4}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // count, negative key
-    {
-        insert(number++, "-10", {"no"}, callAddress);
-        insert(number++, "-9223372036854775808", {"no"}, callAddress);
-
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GE, "id", "-10"};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", "-9223372036854775808"};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::LT, "id", "50"};
-
-        auto r1 = count(number++, {cond1, cond3}, callAddress);
-        uint32_t countRes = 0;
-        codec->decode(r1->data(), countRes);
-        BOOST_TEST(countRes == 51);
-
-        auto r2 = count(number++, {cond2, cond3}, callAddress);
-        countRes = 0;
-        codec->decode(r2->data(), countRes);
-        BOOST_TEST(countRes == 52);
-    }
-}
-
-BOOST_AUTO_TEST_CASE(selectByCondTest)
-{
-    /// INSERT_COUNT should > 100
-    const int INSERT_COUNT = 10000;
-
-    auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
-    {
-        // Numerical Order
-        creatTable(number++, "t_test_condv320", 1, "id", {"value"}, callAddress);
-    }
-
-    std::map<uint32_t, uint32_t> randomSet;
-    int start = 0;
-    int end = 499;
-    for (int i = 0; i < INSERT_COUNT / 500; i++)
-    {
-        generateRandomVector(25, start, end, randomSet);
-        start += 500;
-        end += 500;
-    }
-
-    for (int j = 0; j < INSERT_COUNT; ++j)
-    {
-        boost::log::core::get()->set_logging_enabled(false);
-        std::string value = "no";
-        if (randomSet.contains(j))
-        {
-            value = "yes";
-        }
-        insert(number++, std::to_string(j), {value}, callAddress);
-        boost::log::core::get()->set_logging_enabled(true);
-    }
-
-    // select by condition——check limit and count
-    {
-        uint32_t limitOffset = 0;
-        uint32_t limitCount = 50;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    {
-        uint32_t limitOffset = 10;
-        uint32_t limitCount = 75;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    {
-        uint32_t limitOffset = 37;
-        uint32_t limitCount = 75;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    {
-        uint32_t limitOffset = 461;
-        uint32_t limitCount = 75;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == (500 - limitOffset) && count == (500 - limitOffset));
-    }
-
-    // select by condition limitCount < USER_TABLE_MIN_LIMIT_COUNT
-    {
-        uint32_t limitOffset = 0;
-        uint32_t limitCount = 49;
-        // lexicographical order， 1～INSERT_COUNT
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    // select by condition limitCount == 0
-    {
-        uint32_t limitOffset = 0;
-        uint32_t limitCount = 0;
-        // lexicographical order， 1～INSERT_COUNT
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    {
-        // check not use key condition
-        uint32_t count1 = 0;
-        {
-            uint32_t limitOffset = 461;
-            uint32_t limitCount = 75;
-            ConditionTupleV320 cond1 = {
-                (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-            ConditionTupleV320 cond2 = {
-                (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-            ConditionTupleV320 cond3 = {
-                (uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-            LimitTuple limit = {limitOffset, limitCount};
-            auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-            std::vector<EntryTuple> entries;
-            codec->decode(r1->data(), entries);
-
-            for (size_t i = 0; i < entries.size(); ++i)
-            {
-                EntryTuple& entry = entries[i];
-                uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-                auto iter = randomSet.find(key);
-                if (iter == randomSet.end() || iter->second != i + limitOffset)
-                    break;
-                ++count1;
-            }
-            BOOST_CHECK(entries.size() == (500 - limitOffset) && count1 == (500 - limitOffset));
-        }
-        uint32_t count2 = 0;
-        {
-            uint32_t limitOffset = 461;
-            uint32_t limitCount = 75;
-            ConditionTupleV320 cond3 = {
-                (uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-            LimitTuple limit = {limitOffset, limitCount};
-            auto r1 = selectByCondition(number++, {cond3}, limit, callAddress);
-            std::vector<EntryTuple> entries;
-            codec->decode(r1->data(), entries);
-
-            for (size_t i = 0; i < entries.size(); ++i)
-            {
-                EntryTuple& entry = entries[i];
-                uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-                auto iter = randomSet.find(key);
-                if (iter == randomSet.end() || iter->second != i + limitOffset)
-                    break;
-                ++count2;
-            }
-            BOOST_CHECK(entries.size() == (500 - limitOffset) && count2 == (500 - limitOffset));
-        }
-        BOOST_CHECK(count1 == count2);
-    }
-
-    // empty condition
-    {
-        LimitTuple limit = {0, 10};
-        auto r1 = selectByCondition(number++, {}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        auto r2 = count(number++, {}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // condition with undefined cmp
-    {
-        ConditionTupleV320 cond1 = {100, "id", "90"};
-        LimitTuple limit = {0, 10};
-        auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // limit overflow
-    {
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "90"};
-        LimitTuple limit = {0, 10000};
-        auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // The index of condition out of range
-    {
-        LimitTuple limit = {0, 50};
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        // index out of range  0 <= idx <= 1
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // select, non numeric key
-    {
-        LimitTuple limit = {0, 50};
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
-        auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
-        auto r2 = selectByCondition(number++, {cond2}, limit, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond3 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
-        auto r3 = selectByCondition(number++, {cond3}, limit, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        // LONG_MIN - 1
-        ConditionTupleV320 cond4 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
-        auto r4 = selectByCondition(number++, {cond4}, limit, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // select, negative key
-    {
-        LimitTuple limit = {0, 100};
-        insert(number++, "-10", {"no"}, callAddress);
-        insert(number++, "-9223372036854775808", {"no"}, callAddress);
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GE, "id", "-10"};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", "-9223372036854775808"};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::LT, "id", "50"};
-        ConditionTupleV320 cond4 = {(uint8_t)storage::Condition::Comparator::NE, "value", "xx"};
-        std::vector<std::string> target1 = {"-10"};
-        std::vector<std::string> target2 = {"-9223372036854775808", "-10"};
-
-        for (int i = 0; i < 50; ++i)
-        {
-            target1.push_back(std::to_string(i));
-            target2.push_back(std::to_string(i));
-        }
-
-        auto checkFunc = [](std::vector<std::string>& target, std::vector<EntryTuple> entries) {
-            if (target.size() != entries.size())
-                return false;
-            for (size_t i = 0; i < target.size(); ++i)
-            {
-                if (target[i] != std::get<0>(entries[i]))
-                {
-                    return false;
-                }
-            }
-            return true;
-        };
-
-        {
-            std::vector<EntryTuple> entries1;
-            auto r1 = selectByCondition(number++, {cond1, cond3}, limit, callAddress);
-            codec->decode(r1->data(), entries1);
-            BOOST_CHECK(checkFunc(target1, entries1));
-
-            std::vector<EntryTuple> entries2;
-            auto r2 = selectByCondition(number++, {cond2, cond3}, limit, callAddress);
-            codec->decode(r2->data(), entries2);
-            BOOST_CHECK(checkFunc(target2, entries2));
-        }
-
-        // use value condition
-        {
-            std::vector<EntryTuple> entries1;
-            auto r1 = selectByCondition(number++, {cond1, cond3, cond4}, limit, callAddress);
-            codec->decode(r1->data(), entries1);
-            BOOST_CHECK(checkFunc(target1, entries1));
-
-            std::vector<EntryTuple> entries2;
-            auto r2 = selectByCondition(number++, {cond2, cond3, cond4}, limit, callAddress);
-            codec->decode(r2->data(), entries2);
-            BOOST_CHECK(checkFunc(target2, entries2));
-        }
-    }
-}
-
-BOOST_AUTO_TEST_CASE(selectByCondWasmTest)
-{
-    init(true);
-    /// INSERT_COUNT should > 100
-    const int INSERT_COUNT = 10000;
-
-    auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
-    {
-        // Numerical Order
-        creatTable(number++, "t_test_condv320", 1, "id", {"value"}, callAddress);
-    }
-
-    std::map<uint32_t, uint32_t> randomSet;
-    int start = 0;
-    int end = 499;
-    for (int i = 0; i < INSERT_COUNT / 500; i++)
-    {
-        generateRandomVector(25, start, end, randomSet);
-        start += 500;
-        end += 500;
-    }
-
-    for (int j = 0; j < INSERT_COUNT; ++j)
-    {
-        boost::log::core::get()->set_logging_enabled(false);
-        std::string value = "no";
-        if (randomSet.contains(j))
-        {
-            value = "yes";
-        }
-        insert(number++, std::to_string(j), {value}, callAddress);
-        boost::log::core::get()->set_logging_enabled(true);
-    }
-
-    // select by condition——check limit and count
-    {
-        uint32_t limitOffset = 0;
-        uint32_t limitCount = 50;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    {
-        uint32_t limitOffset = 10;
-        uint32_t limitCount = 75;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    {
-        uint32_t limitOffset = 37;
-        uint32_t limitCount = 75;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    {
-        uint32_t limitOffset = 461;
-        uint32_t limitCount = 75;
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == (500 - limitOffset) && count == (500 - limitOffset));
-    }
-
-    // select by condition limitCount < USER_TABLE_MIN_LIMIT_COUNT
-    {
-        uint32_t limitOffset = 0;
-        uint32_t limitCount = 49;
-        // lexicographical order， 1～INSERT_COUNT
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    // select by condition limitCount == 0
-    {
-        uint32_t limitOffset = 0;
-        uint32_t limitCount = 0;
-        // lexicographical order， 1～INSERT_COUNT
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-        LimitTuple limit = {limitOffset, limitCount};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        std::vector<EntryTuple> entries;
-        codec->decode(r1->data(), entries);
-        uint32_t count = 0;
-        for (size_t i = 0; i < entries.size(); ++i)
-        {
-            EntryTuple& entry = entries[i];
-            uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-            auto iter = randomSet.find(key);
-            if (iter == randomSet.end() || iter->second != i + limitOffset)
-                break;
-            ++count;
-        }
-
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
-    }
-
-    {
-        // check not use key condition
-        uint32_t count1 = 0;
-        {
-            uint32_t limitOffset = 461;
-            uint32_t limitCount = 75;
-            ConditionTupleV320 cond1 = {
-                (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-            ConditionTupleV320 cond2 = {
-                (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-            ConditionTupleV320 cond3 = {
-                (uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-            LimitTuple limit = {limitOffset, limitCount};
-            auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-            std::vector<EntryTuple> entries;
-            codec->decode(r1->data(), entries);
-
-            for (size_t i = 0; i < entries.size(); ++i)
-            {
-                EntryTuple& entry = entries[i];
-                uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-                auto iter = randomSet.find(key);
-                if (iter == randomSet.end() || iter->second != i + limitOffset)
-                    break;
-                ++count1;
-            }
-            BOOST_CHECK(entries.size() == (500 - limitOffset) && count1 == (500 - limitOffset));
-        }
-        uint32_t count2 = 0;
-        {
-            uint32_t limitOffset = 461;
-            uint32_t limitCount = 75;
-            ConditionTupleV320 cond3 = {
-                (uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
-            LimitTuple limit = {limitOffset, limitCount};
-            auto r1 = selectByCondition(number++, {cond3}, limit, callAddress);
-            std::vector<EntryTuple> entries;
-            codec->decode(r1->data(), entries);
-
-            for (size_t i = 0; i < entries.size(); ++i)
-            {
-                EntryTuple& entry = entries[i];
-                uint32_t key = boost::lexical_cast<uint32_t>(std::get<0>(entry));
-                auto iter = randomSet.find(key);
-                if (iter == randomSet.end() || iter->second != i + limitOffset)
-                    break;
-                ++count2;
-            }
-            BOOST_CHECK(entries.size() == (500 - limitOffset) && count2 == (500 - limitOffset));
-        }
-        BOOST_CHECK(count1 == count2);
-    }
-
-    // empty condition
-    {
-        LimitTuple limit = {0, 10};
-        auto r1 = selectByCondition(number++, {}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        auto r2 = count(number++, {}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // condition with undefined cmp
-    {
-        ConditionTupleV320 cond1 = {100, "id", "90"};
-        LimitTuple limit = {0, 10};
-        auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // limit overflow
-    {
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "90"};
-        LimitTuple limit = {0, 10000};
-        auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // The index of condition out of range
-    {
-        LimitTuple limit = {0, 50};
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        // index out of range  0 <= idx <= 1
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
-        auto r1 = selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // select, non numeric key
-    {
-        LimitTuple limit = {0, 50};
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
-        auto r1 = selectByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
-        auto r2 = selectByCondition(number++, {cond2}, limit, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond3 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
-        auto r3 = selectByCondition(number++, {cond3}, limit, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        // LONG_MIN - 1
-        ConditionTupleV320 cond4 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
-        auto r4 = selectByCondition(number++, {cond4}, limit, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // select, negative key
-    {
-        LimitTuple limit = {0, 100};
-        insert(number++, "-10", {"no"}, callAddress);
-        insert(number++, "-9223372036854775808", {"no"}, callAddress);
-
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::GE, "id", "-10"};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", "-9223372036854775808"};
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::LT, "id", "50"};
-        ConditionTupleV320 cond4 = {(uint8_t)storage::Condition::Comparator::NE, "value", "xx"};
-        std::vector<std::string> target1 = {"-10"};
-        std::vector<std::string> target2 = {"-9223372036854775808", "-10"};
-
-        for (int i = 0; i < 50; ++i)
-        {
-            target1.push_back(std::to_string(i));
-            target2.push_back(std::to_string(i));
-        }
-
-        auto checkFunc = [](std::vector<std::string>& target, std::vector<EntryTuple> entries) {
-            if (target.size() != entries.size())
-                return false;
-            for (size_t i = 0; i < target.size(); ++i)
-            {
-                if (target[i] != std::get<0>(entries[i]))
-                {
-                    return false;
-                }
-            }
-            return true;
-        };
-
-        {
-            std::vector<EntryTuple> entries1;
-            auto r1 = selectByCondition(number++, {cond1, cond3}, limit, callAddress);
-            codec->decode(r1->data(), entries1);
-            BOOST_CHECK(checkFunc(target1, entries1));
-
-            std::vector<EntryTuple> entries2;
-            auto r2 = selectByCondition(number++, {cond2, cond3}, limit, callAddress);
-            codec->decode(r2->data(), entries2);
-            BOOST_CHECK(checkFunc(target2, entries2));
-        }
-
-        // use value condition
-        {
-            std::vector<EntryTuple> entries1;
-            auto r1 = selectByCondition(number++, {cond1, cond3, cond4}, limit, callAddress);
-            codec->decode(r1->data(), entries1);
-            BOOST_CHECK(checkFunc(target1, entries1));
-
-            std::vector<EntryTuple> entries2;
-            auto r2 = selectByCondition(number++, {cond2, cond3, cond4}, limit, callAddress);
-            codec->decode(r2->data(), entries2);
-            BOOST_CHECK(checkFunc(target2, entries2));
-        }
-    }
-}
-
-BOOST_AUTO_TEST_CASE(updateByCondTest)
-{
-    const int INSERT_COUNT = 10000;
-    auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
-    {
-        // Numerical Order
         creatTable(number++, "t_test_condv320", 1, "id", {"value"}, callAddress);
     }
 
     // prepare data
     std::map<uint32_t, uint32_t> randomSet;
     int start = 0;
-    int end = 499;
-    for (int i = 0; i < INSERT_COUNT / 500; i++)
+    int end = INTERVAL - 1;
+    for (int i = 0; i < INSERT_COUNT / INTERVAL; i++)
     {
-        generateRandomVector(25, start, end, randomSet);
-        start += 500;
-        end += 500;
+        generateRandomVector(VALID_COUNT_PER_SECTION, start, end, randomSet);
+        start += INTERVAL;
+        end += INTERVAL;
     }
 
     for (int j = 0; j < INSERT_COUNT; ++j)
@@ -3252,199 +2699,37 @@ BOOST_AUTO_TEST_CASE(updateByCondTest)
         boost::log::core::get()->set_logging_enabled(true);
     }
 
-    {
-        auto updateFunc = [this, &number, &callAddress](uint32_t low, uint32_t high,
-                              uint32_t offset, uint32_t count, const std::string& target,
-                              const std::string& value) {
-            ConditionTupleV320 cond1 = {
-                (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
-            ConditionTupleV320 cond2 = {
-                (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(high)};
-            ConditionTupleV320 cond3 = {
-                (uint8_t)storage::Condition::Comparator::EQ, "value", value};
-            LimitTuple limit = {offset, count};
-            UpdateFieldTuple updateFieldTuple1 = {"value", target};
-            auto r1 = updateByCondition(
-                number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
-            int32_t affectRows = 0;
-            codec->decode(r1->data(), affectRows);
-            return affectRows;
-        };
-
-        auto countFunc = [this, &number, &callAddress](const std::string& value) {
-            ConditionTupleV320 cond = {(uint8_t)storage::Condition::Comparator::EQ, "value", value};
-            auto r1 = count(number++, {cond}, callAddress);
-            uint32_t rows = 0;
-            codec->decode(r1->data(), rows);
-            return rows;
-        };
-        uint32_t countBeforeUpdate = countFunc("yes");
-        // update value = "update" where (key >= 5000 && key < 6000) && (value == "yes")
-        uint32_t affectRows1 = updateFunc(5000, 6000, 26, 20, "update", "yes");
-        uint32_t countAfterUpdate = countFunc("update");
-        // update value = "yes" where (key >= 0 && key < 10000) && (value == "update")
-        uint32_t affectRows2 = updateFunc(0, 10000, 0, 500, "yes", "update");
-        uint32_t countAfterRecover = countFunc("yes");
-        BOOST_CHECK(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
-                    affectRows1 == 20 && countBeforeUpdate == countAfterRecover &&
-                    countBeforeUpdate == 500);
-    }
-
-    // limitcount == 0
-    {
-        auto updateFunc = [this, &number, &callAddress](uint32_t low, uint32_t high,
-                              uint32_t offset, uint32_t count, const std::string& target,
-                              const std::string& value) {
-            ConditionTupleV320 cond1 = {
-                (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
-            ConditionTupleV320 cond2 = {
-                (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(high)};
-            ConditionTupleV320 cond3 = {
-                (uint8_t)storage::Condition::Comparator::EQ, "value", value};
-            LimitTuple limit = {offset, count};
-            UpdateFieldTuple updateFieldTuple1 = {"value", target};
-            auto r1 = updateByCondition(
-                number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
-            int32_t affectRows = 0;
-            codec->decode(r1->data(), affectRows);
-            return affectRows;
-        };
-
-        auto countFunc = [this, &number, &callAddress](const std::string& value) {
-            ConditionTupleV320 cond = {(uint8_t)storage::Condition::Comparator::EQ, "value", value};
-            auto r1 = count(number++, {cond}, callAddress);
-            uint32_t rows = 0;
-            codec->decode(r1->data(), rows);
-            return rows;
-        };
-        uint32_t countBeforeUpdate = countFunc("yes");
-        // update value = "update" where (key >= 5000 && key < 6000) && (value == "yes")
-        uint32_t affectRows1 = updateFunc(5000, 6000, 0, 0, "update", "yes");
-        uint32_t countAfterUpdate = countFunc("update");
-        // update value = "yes" where (key >= 0 && key < 10000) && (value == "update")
-        uint32_t affectRows2 = updateFunc(0, 10000, 0, 0, "yes", "update");
-        uint32_t countAfterRecover = countFunc("yes");
-        BOOST_CHECK(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
-                    affectRows1 == 0 && countBeforeUpdate == countAfterRecover &&
-                    countBeforeUpdate == 500);
-    }
-
-    // empty condition
-    {
-        LimitTuple limit = {0, 10};
-        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
-        auto r1 = updateByCondition(number++, {}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // condition with undefined cmp
-    {
-        ConditionTupleV320 cond1 = {100, "id", "90"};
-        LimitTuple limit = {0, 10};
-        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
-        auto r1 = updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // limit overflow
-    {
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "90"};
-        LimitTuple limit = {0, 10000};
-        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
-        auto r1 = updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // The index of condition out of range
-    {
-        LimitTuple limit = {0, 50};
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        // index out of range  0 <= idx <= 1
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
-        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
-        auto r1 = updateByCondition(
-            number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // update, non numeric key
-    {
-        UpdateFieldTuple updateFieldTuple = {"value", "update"};
-        LimitTuple limit = {0, 50};
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
-        auto r1 = updateByCondition(number++, {cond1}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
-        auto r2 = updateByCondition(number++, {cond2}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond3 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
-        auto r3 = updateByCondition(number++, {cond3}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        // LONG_MIN - 1
-        ConditionTupleV320 cond4 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
-        auto r4 = updateByCondition(number++, {cond4}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // update, negative key
-    {
-        LimitTuple limit = {0, 100};
-        UpdateFieldTuple updateFieldTuple = {"value", "updatexx"};
-        insert(number++, "-10", {"no"}, callAddress);
-        insert(number++, "-100", {"no"}, callAddress);
-        insert(number++, "-1000", {"no"}, callAddress);
-        insert(number++, "-9223372036854775808", {"no"}, callAddress);
-
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", "-9223372036854775808"};
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::LE, "id", "-10"};
-        ConditionTupleV320 cond3 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "value", "updatexx"};
-
-        auto r1 =
-            updateByCondition(number++, {cond1, cond2}, limit, {updateFieldTuple}, callAddress);
-        uint32_t affectRows = 0;
-        codec->decode(r1->data(), affectRows);
-        BOOST_CHECK(affectRows == 4);
-
-        std::vector<EntryTuple> entries;
-        auto r2 = selectByCondition(number++, {cond3}, limit, callAddress);
-        codec->decode(r2->data(), entries);
-        BOOST_CHECK(std::get<0>(entries[0]) == "-9223372036854775808");
-        BOOST_CHECK(std::get<0>(entries[1]) == "-1000");
-        BOOST_CHECK(std::get<0>(entries[2]) == "-100");
-        BOOST_CHECK(std::get<0>(entries[3]) == "-10");
-    }
+    countTest(
+        this, INSERT_COUNT, INTERVAL, VALID_COUNT, VALID_COUNT_PER_SECTION, number, randomSet);
+    selectByConditionTest(
+        this, INSERT_COUNT, INTERVAL, VALID_COUNT, VALID_COUNT_PER_SECTION, number, randomSet);
+    updateByConditionTest(
+        this, INSERT_COUNT, INTERVAL, VALID_COUNT, VALID_COUNT_PER_SECTION, number, randomSet);
 }
 
-BOOST_AUTO_TEST_CASE(updateByCondWasmTest)
+BOOST_AUTO_TEST_CASE(tableWasmConditionOP)
 {
     init(true);
-    const int INSERT_COUNT = 10000;
+    const int INSERT_COUNT = 2000;
+    const int INTERVAL = 500;
+    const int VALID_COUNT = 500;
+    const int VALID_COUNT_PER_SECTION = VALID_COUNT / (INSERT_COUNT / INTERVAL);
+
+    bcos::protocol::BlockNumber number = 1;
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
     {
-        // Numerical Order
         creatTable(number++, "t_test_condv320", 1, "id", {"value"}, callAddress);
     }
 
     // prepare data
     std::map<uint32_t, uint32_t> randomSet;
     int start = 0;
-    int end = 499;
-    for (int i = 0; i < INSERT_COUNT / 500; i++)
+    int end = INTERVAL - 1;
+    for (int i = 0; i < INSERT_COUNT / INTERVAL; i++)
     {
-        generateRandomVector(25, start, end, randomSet);
-        start += 500;
-        end += 500;
+        generateRandomVector(VALID_COUNT_PER_SECTION, start, end, randomSet);
+        start += INTERVAL;
+        end += INTERVAL;
     }
 
     for (int j = 0; j < INSERT_COUNT; ++j)
@@ -3459,197 +2744,36 @@ BOOST_AUTO_TEST_CASE(updateByCondWasmTest)
         boost::log::core::get()->set_logging_enabled(true);
     }
 
-    {
-        auto updateFunc = [this, &number, &callAddress](uint32_t low, uint32_t high,
-                              uint32_t offset, uint32_t count, const std::string& target,
-                              const std::string& value) {
-            ConditionTupleV320 cond1 = {
-                (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
-            ConditionTupleV320 cond2 = {
-                (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(high)};
-            ConditionTupleV320 cond3 = {
-                (uint8_t)storage::Condition::Comparator::EQ, "value", value};
-            LimitTuple limit = {offset, count};
-            UpdateFieldTuple updateFieldTuple1 = {"value", target};
-            auto r1 = updateByCondition(
-                number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
-            int32_t affectRows = 0;
-            codec->decode(r1->data(), affectRows);
-            return affectRows;
-        };
-
-        auto countFunc = [this, &number, &callAddress](const std::string& value) {
-            ConditionTupleV320 cond = {(uint8_t)storage::Condition::Comparator::EQ, "value", value};
-            auto r1 = count(number++, {cond}, callAddress);
-            uint32_t rows = 0;
-            codec->decode(r1->data(), rows);
-            return rows;
-        };
-        uint32_t countBeforeUpdate = countFunc("yes");
-        // update value = "update" where (key >= 5000 && key < 6000) && (value == "yes")
-        uint32_t affectRows1 = updateFunc(5000, 6000, 26, 20, "update", "yes");
-        uint32_t countAfterUpdate = countFunc("update");
-        // update value = "yes" where (key >= 0 && key < 10000) && (value == "update")
-        uint32_t affectRows2 = updateFunc(0, 10000, 0, 500, "yes", "update");
-        uint32_t countAfterRecover = countFunc("yes");
-        BOOST_CHECK(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
-                    affectRows1 == 20 && countBeforeUpdate == countAfterRecover &&
-                    countBeforeUpdate == 500);
-    }
-
-    // limitcount == 0
-    {
-        auto updateFunc = [this, &number, &callAddress](uint32_t low, uint32_t high,
-                              uint32_t offset, uint32_t count, const std::string& target,
-                              const std::string& value) {
-            ConditionTupleV320 cond1 = {
-                (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
-            ConditionTupleV320 cond2 = {
-                (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(high)};
-            ConditionTupleV320 cond3 = {
-                (uint8_t)storage::Condition::Comparator::EQ, "value", value};
-            LimitTuple limit = {offset, count};
-            UpdateFieldTuple updateFieldTuple1 = {"value", target};
-            auto r1 = updateByCondition(
-                number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
-            int32_t affectRows = 0;
-            codec->decode(r1->data(), affectRows);
-            return affectRows;
-        };
-
-        auto countFunc = [this, &number, &callAddress](const std::string& value) {
-            ConditionTupleV320 cond = {(uint8_t)storage::Condition::Comparator::EQ, "value", value};
-            auto r1 = count(number++, {cond}, callAddress);
-            uint32_t rows = 0;
-            codec->decode(r1->data(), rows);
-            return rows;
-        };
-        uint32_t countBeforeUpdate = countFunc("yes");
-        // update value = "update" where (key >= 5000 && key < 6000) && (value == "yes")
-        uint32_t affectRows1 = updateFunc(5000, 6000, 0, 0, "update", "yes");
-        uint32_t countAfterUpdate = countFunc("update");
-        // update value = "yes" where (key >= 0 && key < 10000) && (value == "update")
-        uint32_t affectRows2 = updateFunc(0, 10000, 0, 0, "yes", "update");
-        uint32_t countAfterRecover = countFunc("yes");
-        BOOST_CHECK(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
-                    affectRows1 == 0 && countBeforeUpdate == countAfterRecover &&
-                    countBeforeUpdate == 500);
-    }
-
-    // empty condition
-    {
-        LimitTuple limit = {0, 10};
-        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
-        auto r1 = updateByCondition(number++, {}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // condition with undefined cmp
-    {
-        ConditionTupleV320 cond1 = {100, "id", "90"};
-        LimitTuple limit = {0, 10};
-        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
-        auto r1 = updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // limit overflow
-    {
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "90"};
-        LimitTuple limit = {0, 10000};
-        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
-        auto r1 = updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // The index of condition out of range
-    {
-        LimitTuple limit = {0, 50};
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
-        ConditionTupleV320 cond2 = {
-            (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
-        // index out of range  0 <= idx <= 1
-        ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
-        UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
-        auto r1 = updateByCondition(
-            number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // update, non numeric key
-    {
-        UpdateFieldTuple updateFieldTuple = {"value", "update"};
-        LimitTuple limit = {0, 50};
-        ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
-        auto r1 = updateByCondition(number++, {cond1}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
-        auto r2 = updateByCondition(number++, {cond2}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        ConditionTupleV320 cond3 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
-        auto r3 = updateByCondition(number++, {cond3}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
-
-        // LONG_MIN - 1
-        ConditionTupleV320 cond4 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
-        auto r4 = updateByCondition(number++, {cond4}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // update, negative key
-    {
-        LimitTuple limit = {0, 100};
-        UpdateFieldTuple updateFieldTuple = {"value", "updatexx"};
-        insert(number++, "-10", {"no"}, callAddress);
-        insert(number++, "-100", {"no"}, callAddress);
-        insert(number++, "-1000", {"no"}, callAddress);
-        insert(number++, "-9223372036854775808", {"no"}, callAddress);
-
-        ConditionTupleV320 cond1 = {
-            (uint8_t)storage::Condition::Comparator::GE, "id", "-9223372036854775808"};
-        ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::LE, "id", "-10"};
-        ConditionTupleV320 cond3 = {
-            (uint8_t)storage::Condition::Comparator::EQ, "value", "updatexx"};
-
-        auto r1 =
-            updateByCondition(number++, {cond1, cond2}, limit, {updateFieldTuple}, callAddress);
-        uint32_t affectRows = 0;
-        codec->decode(r1->data(), affectRows);
-        BOOST_CHECK(affectRows == 4);
-
-        std::vector<EntryTuple> entries;
-        auto r2 = selectByCondition(number++, {cond3}, limit, callAddress);
-        codec->decode(r2->data(), entries);
-        BOOST_CHECK(std::get<0>(entries[0]) == "-9223372036854775808");
-        BOOST_CHECK(std::get<0>(entries[1]) == "-1000");
-        BOOST_CHECK(std::get<0>(entries[2]) == "-100");
-        BOOST_CHECK(std::get<0>(entries[3]) == "-10");
-    }
+    countTest(
+        this, INSERT_COUNT, INTERVAL, VALID_COUNT, VALID_COUNT_PER_SECTION, number, randomSet);
+    selectByConditionTest(
+        this, INSERT_COUNT, INTERVAL, VALID_COUNT, VALID_COUNT_PER_SECTION, number, randomSet);
+    updateByConditionTest(
+        this, INSERT_COUNT, INTERVAL, VALID_COUNT, VALID_COUNT_PER_SECTION, number, randomSet);
 }
 
 BOOST_AUTO_TEST_CASE(removeByCondTest)
 {
-    const int INSERT_COUNT = 10000;
+    const int INSERT_COUNT = 1000;
+    const int INTERVAL = 500;
+    const int VALID_COUNT = 500;
+    const int VALID_COUNT_PER_SECTION = VALID_COUNT / (INSERT_COUNT / INTERVAL);
+
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
-        creatTable(number++, "t_test_condv320", 1, "id", {"value"}, callAddress);
+        creatTable(number++, "t_test_condv320_remove", 1, "id", {"value"}, callAddress);
     }
 
     // prepare data
     std::map<uint32_t, uint32_t> randomSet;
     int start = 0;
-    int end = 499;
-    for (int i = 0; i < INSERT_COUNT / 500; i++)
+    int end = INTERVAL - 1;
+    for (int i = 0; i < INSERT_COUNT / INTERVAL; i++)
     {
-        generateRandomVector(25, start, end, randomSet);
-        start += 500;
-        end += 500;
+        generateRandomVector(VALID_COUNT_PER_SECTION, start, end, randomSet);
+        start += INTERVAL;
+        end += INTERVAL;
     }
 
     for (int j = 0; j < INSERT_COUNT; ++j)
@@ -3730,7 +2854,7 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == 500 - entries.size());
+        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
@@ -3785,7 +2909,7 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == 500 - entries.size());
+        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
@@ -3838,7 +2962,7 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == 500 - entries.size());
+        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
@@ -3946,22 +3070,26 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
 BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
 {
     init(true);
-    const int INSERT_COUNT = 10000;
+    const int INSERT_COUNT = 1000;
+    const int INTERVAL = 500;
+    const int VALID_COUNT = 500;
+    const int VALID_COUNT_PER_SECTION = VALID_COUNT / (INSERT_COUNT / INTERVAL);
+
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
-        creatTable(number++, "t_test_condv320", 1, "id", {"value"}, callAddress);
+        creatTable(number++, "t_test_condv320_remove", 1, "id", {"value"}, callAddress);
     }
 
     // prepare data
     std::map<uint32_t, uint32_t> randomSet;
     int start = 0;
-    int end = 499;
-    for (int i = 0; i < INSERT_COUNT / 500; i++)
+    int end = INTERVAL - 1;
+    for (int i = 0; i < INSERT_COUNT / INTERVAL; i++)
     {
-        generateRandomVector(25, start, end, randomSet);
-        start += 500;
-        end += 500;
+        generateRandomVector(VALID_COUNT_PER_SECTION, start, end, randomSet);
+        start += INTERVAL;
+        end += INTERVAL;
     }
 
     for (int j = 0; j < INSERT_COUNT; ++j)
@@ -4042,7 +3170,7 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == 500 - entries.size());
+        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
@@ -4097,7 +3225,7 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == 500 - entries.size());
+        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
@@ -4150,7 +3278,7 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == 500 - entries.size());
+        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
@@ -4259,9 +3387,9 @@ BOOST_AUTO_TEST_CASE(containsTest)
 {
     auto callAddress = tableTestAddress;
     const int INSERT_COUNT = 500;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
-        creatTable(number++, "t_test_condv320", 0, "id", {"v1", "v2"}, callAddress);
+        creatTable(number++, "t_test_condv320_contains", 0, "id", {"v1", "v2"}, callAddress);
     }
 
     auto _fillZeros = [](int _num) {
@@ -4438,9 +3566,9 @@ BOOST_AUTO_TEST_CASE(containsWasmTest)
 
     auto callAddress = tableTestAddress;
     const int INSERT_COUNT = 500;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
-        creatTable(number++, "t_test_condv320", 0, "id", {"v1", "v2"}, callAddress);
+        creatTable(number++, "t_test_condv320_contains", 0, "id", {"v1", "v2"}, callAddress);
     }
 
     auto _fillZeros = [](int _num) {

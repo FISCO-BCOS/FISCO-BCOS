@@ -26,16 +26,16 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/CallbackCollectionHandler.h>
 
-namespace bcos
-{
-namespace txpool
+#include <utility>
+
+namespace bcos::txpool
 {
 class TxPoolStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<TxPoolStorageInterface>;
     TxPoolStorageInterface() = default;
-    virtual ~TxPoolStorageInterface() {}
+    virtual ~TxPoolStorageInterface() = default;
 
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) = 0;
@@ -94,7 +94,7 @@ public:
     virtual void registerUnsealedTxsNotifier(
         std::function<void(size_t, std::function<void(Error::Ptr)>)> _unsealedTxsNotifier)
     {
-        m_unsealedTxsNotifier = _unsealedTxsNotifier;
+        m_unsealedTxsNotifier = std::move(_unsealedTxsNotifier);
     }
 
     virtual void stop() = 0;
@@ -109,7 +109,7 @@ public:
 
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch)
     {
-        m_txsCleanUpSwitch = _txsCleanUpSwitch;
+        m_txsCleanUpSwitch = std::move(_txsCleanUpSwitch);
     }
 
 protected:
@@ -119,5 +119,4 @@ protected:
     // Determine to periodically clean up expired transactions or not
     std::function<bool()> m_txsCleanUpSwitch;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

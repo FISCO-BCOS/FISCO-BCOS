@@ -69,10 +69,11 @@ const std::string DistributedRateLimiter::LUA_SCRIPT = R"(
  * @param _requiredPermits
  * @return void
  */
-void DistributedRateLimiter::acquire(int64_t _requiredPermits)
+bool DistributedRateLimiter::acquire(int64_t _requiredPermits)
 {
     // Note: This operation is not supported
     std::ignore = _requiredPermits;
+    return false;
 }
 
 /**

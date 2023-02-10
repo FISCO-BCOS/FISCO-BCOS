@@ -81,7 +81,7 @@ public:
         // --------------------------------
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-        executor->dmcExecuteTransaction(
+        executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
@@ -90,47 +90,21 @@ public:
 
         auto result = executePromise.get_future().get();
 
-        /// call Auth manager to check deploy auth
-        result->setSeq(1001);
-
-        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(
-            std::move(result), [&](bcos::Error::UniquePtr&& error,
-                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise2.set_value(std::move(result));
-            });
-
-        auto result2 = executePromise2.get_future().get();
-
-        /// callback to create context
-        result2->setSeq(1000);
-
-        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(
-            std::move(result2), [&](bcos::Error::UniquePtr&& error,
-                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise3.set_value(std::move(result));
-            });
-
-        auto result3 = executePromise3.get_future().get();
-
-        BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::FINISHED);
-        BOOST_CHECK_EQUAL(result3->contextID(), 99);
-        BOOST_CHECK_EQUAL(result3->seq(), 1000);
-        BOOST_CHECK_EQUAL(result3->create(), false);
-        BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), helloAddress);
-        BOOST_CHECK_EQUAL(result3->origin(), sender);
-        BOOST_CHECK_EQUAL(result3->from(), helloAddress);
-        BOOST_CHECK(result3->to() == sender);
-        BOOST_CHECK_LT(result3->gasAvailable(), gas);
+        BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result->contextID(), 99);
+        BOOST_CHECK_EQUAL(result->seq(), 1000);
+        BOOST_CHECK_EQUAL(result->create(), false);
+        BOOST_CHECK_EQUAL(result->newEVMContractAddress(), helloAddress);
+        BOOST_CHECK_EQUAL(result->origin(), sender);
+        BOOST_CHECK_EQUAL(result->from(), helloAddress);
+        BOOST_CHECK(result->to() == sender);
+        BOOST_CHECK_LT(result->gasAvailable(), gas);
 
         commitBlock(2);
     }
 
-    ExecutionMessage::UniquePtr deployHelloInAuthCheck(std::string newAddress, BlockNumber _number,
-        Address _address = Address(), bool _noAuth = false)
+    ExecutionMessage::UniquePtr deployHelloInAuthCheck(std::string newAddress,
+        bcos::protocol::BlockNumber _number, Address _address = Address(), bool _noAuth = false)
     {
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
@@ -226,7 +200,7 @@ public:
     }
 
     ExecutionMessage::UniquePtr deployHello2InAuthCheck(
-        std::string newAddress, BlockNumber _number, Address _address = Address())
+        std::string newAddress, bcos::protocol::BlockNumber _number, Address _address = Address())
     {
         bytes input;
         boost::algorithm::unhex(h2, std::back_inserter(input));
@@ -1310,6 +1284,46 @@ public:
         return result2;
     };
 
+    ExecutionMessage::UniquePtr initAuth(
+        protocol::BlockNumber _number, std::string const& _address, int _errorCode = 0)
+    {
+        nextBlock(_number, m_blockVersion);
+        bytes in = codec->encodeWithSig("initAuth(string)", _address);
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto hash = tx->hash();
+        txpool->hash2Transaction[hash] = tx;
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto params2 = std::make_unique<NativeExecutionMessage>();
+        params2->setTransactionHash(hash);
+        params2->setContextID(_number);
+        params2->setSeq(1000);
+        params2->setDepth(0);
+        params2->setFrom(sender);
+        params2->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params2->setOrigin(sender);
+        params2->setStaticCall(false);
+        params2->setGasAvailable(gas);
+        params2->setData(std::move(in));
+        params2->setType(NativeExecutionMessage::TXHASH);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->executeTransaction(std::move(params2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+        // call precompiled
+        result2->setSeq(1001);
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
+
+        commitBlock(_number);
+        return result2;
+    };
+
 
     std::string sender;
     std::string helloAddress;
@@ -1328,7 +1342,7 @@ BOOST_FIXTURE_TEST_SUITE(precompiledPermissionTest, PermissionPrecompiledFixture
 BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 {
     deployHello();
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
     // simple get
     {
         auto result = helloGet(number++, 1000);
@@ -1337,7 +1351,7 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 
     // add method acl type
     {
-        BlockNumber _number = 3;
+        bcos::protocol::BlockNumber _number = 3;
 
         // not found
         auto r1 = getMethodAuth(number++, Address(helloAddress), "set(string)");
@@ -1460,7 +1474,7 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
 
     // add method acl type
     {
-        BlockNumber _number = 4;
+        bcos::protocol::BlockNumber _number = 4;
         // not found
         auto r1 = getMethodAuth(_number++, Address(helloAddress), "set(string)");
         BOOST_CHECK(
@@ -1570,7 +1584,7 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
 
     // add method acl type
     {
-        BlockNumber _number = 3;
+        bcos::protocol::BlockNumber _number = 3;
         // get admin
         {
             auto result = getAdmin(_number++, 1000, Address(helloAddress));
@@ -1666,7 +1680,7 @@ BOOST_AUTO_TEST_CASE(testDeployWhiteList)
 
     // add deploy acl type
     {
-        BlockNumber _number = 3;
+        bcos::protocol::BlockNumber _number = 3;
         // set deploy acl type
         {
             auto result = setDeployType(_number++, 1000, AuthType::WHITE_LIST_MODE);
@@ -1734,7 +1748,7 @@ BOOST_AUTO_TEST_CASE(testDeployBlackList)
 
     // add deploy acl type
     {
-        BlockNumber _number = 3;
+        bcos::protocol::BlockNumber _number = 3;
         // set deploy acl type
         {
             auto result = setDeployType(_number++, 1000, AuthType::BLACK_LIST_MODE);
@@ -1858,7 +1872,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
 
 BOOST_AUTO_TEST_CASE(testDeployAdmin)
 {
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     Address admin = Address("0x1234567890123456789012345678901234567890");
     auto result =
         deployHello2InAuthCheck("1234654b49838bd3e9466c85a4cc3428c9601235", _number++, admin);
@@ -1880,7 +1894,7 @@ BOOST_AUTO_TEST_CASE(testDeployAdmin)
 BOOST_AUTO_TEST_CASE(testContractStatus)
 {
     deployHello();
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // frozen
     {
         auto r1 = setContractStatus(_number++, Address(helloAddress), true);
@@ -1929,7 +1943,7 @@ BOOST_AUTO_TEST_CASE(testContractStatusInKeyPage)
     setIsWasm(false, true, true);
 
     deployHello();
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // frozen
     {
         auto r1 = setContractStatus(_number++, Address(helloAddress), true);
@@ -1978,7 +1992,7 @@ BOOST_AUTO_TEST_CASE(testContractAbolish)
     setIsWasm(false, true, true, BlockVersion::V3_2_VERSION);
 
     deployHello();
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // frozen
     {
         auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Frozen);
@@ -2049,6 +2063,73 @@ BOOST_AUTO_TEST_CASE(testContractAbolish)
         auto r3 = setContractStatus(_number++, Address(helloAddress), true);
         BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
+}
+
+BOOST_AUTO_TEST_CASE(testInitAuth)
+{
+    // 3.2 version, not set auth
+    setIsWasm(false, false, true, BlockVersion::V3_2_VERSION);
+    deployHello();
+    bcos::protocol::BlockNumber _number = 3;
+
+    // init in 3.2, not exist address
+    auto re = initAuth(_number++, admin);
+    BOOST_CHECK(re->status() == (int32_t)TransactionStatus::CallAddressError);
+
+    helloSet(_number++, 3, "test");
+    helloGet(_number++, 3);
+
+    // update to 3.3
+    m_blockVersion = BlockVersion::V3_3_VERSION;
+
+    // init auth contract
+    boost::log::core::get()->set_logging_enabled(false);
+    initAuth(_number++, admin);
+    boost::log::core::get()->set_logging_enabled(true);
+
+    // call CommitteeManager
+    {
+        _number++;
+        nextBlock(_number);
+        bytes in = codec->encodeWithSig("createUpdateGovernorProposal(address,uint32,uint256)",
+            admin, codec::toString32(h256(uint32_t(2))), u256(2));
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+
+        Address _admin(admin);
+        tx->forceSender(_admin.asBytes());
+
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        // force cover write
+        txpool->hash2Transaction[hash] = tx;
+        auto params2 = std::make_unique<NativeExecutionMessage>();
+        params2->setTransactionHash(hash);
+        params2->setContextID(100);
+        params2->setSeq(1000);
+        params2->setDepth(0);
+        params2->setFrom(sender);
+        params2->setTo(precompiled::AUTH_COMMITTEE_ADDRESS);
+        params2->setOrigin(sender);
+        params2->setStaticCall(false);
+        params2->setGasAvailable(gas);
+        params2->setData(std::move(in));
+        params2->setType(NativeExecutionMessage::TXHASH);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->executeTransaction(std::move(params2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+
+        BOOST_CHECK(result2->status() == 0);
+        commitBlock(_number);
+    }
+
+    // init again, it should throw
+    auto re2 = initAuth(_number++, admin);
+    BOOST_CHECK(re2->status() == (int32_t)TransactionStatus::PrecompiledError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

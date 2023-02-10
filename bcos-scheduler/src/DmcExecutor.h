@@ -63,13 +63,15 @@ public:
         m_dmcRecorder(dmcRecorder)
     {}
 
-    void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
+    virtual ~DmcExecutor() = default;
+
+    virtual void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
     bool prepare();        // return true if has schedule out message
     bool unlockPrepare();  // return true if need to detect deadlock
     void releaseOutdatedLock();
     bool detectLockAndRevert();  // return true if detect a tx and revert
 
-    void go(std::function<void(bcos::Error::UniquePtr, Status)> callback);
+    virtual void go(std::function<void(bcos::Error::UniquePtr, Status)> callback);
     bool hasFinished() { return m_executivePool.empty(); }
 
     void scheduleIn(ExecutiveState::Ptr executive);
@@ -95,6 +97,12 @@ public:
         f_onGetCodeEvent = std::move(onGetCodeEvent);
     }
 
+    void setIsSameAddrHandler(
+        std::function<bool(const std::string_view&, const std::string_view&)> isSameAddrFunc)
+    {
+        f_isSameAddr = std::move(isSameAddrFunc);
+    }
+
     void triggerSwitch()
     {
         if (f_onNeedSwitchEvent)
@@ -113,6 +121,27 @@ public:
             });
     }
 
+    virtual void preExecute()
+    {
+        // do nothing
+    }
+
+
+protected:
+    virtual void executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback);
+
+    virtual void executorExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+
+        // called every time at all tx stop( pause or finish)
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback);
+
+    void handleCreateMessage(protocol::ExecutionMessage::UniquePtr& message, int64_t currentSeq);
+
 private:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
     void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
@@ -123,7 +152,7 @@ private:
     std::string newEVMAddress(
         const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
 
-private:
+protected:
     std::string m_name;
     std::string m_contractAddress;
     bcos::protocol::Block::Ptr m_block;
@@ -140,6 +169,8 @@ private:
     std::function<void()> f_onNeedSwitchEvent;
     std::function<void(ExecutiveState::Ptr)> f_onSchedulerOut;
     std::function<bcos::bytes(std::string_view)> f_onGetCodeEvent;
+    std::function<bool(const std::string_view&, const std::string_view&)> f_isSameAddr =
+        [](const std::string_view& a, const std::string_view& b) { return a.compare(b) == 0; };
 };
 
 }  // namespace bcos::scheduler

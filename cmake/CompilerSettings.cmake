@@ -42,7 +42,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     add_compile_options(-Wno-error=deprecated-declarations)
 
     add_compile_options(-fno-omit-frame-pointer)
-    
+
     if(NOT APPLE)
         set(CMAKE_CXX_VISIBILITY_PRESET hidden)
         add_compile_options(-fvisibility=hidden)
@@ -106,6 +106,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
 
         add_compile_options(-fPIC)
+        add_compile_options(-Wno-error=restrict)
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG "-O -g")
@@ -166,8 +167,8 @@ if(ALLOCATOR STREQUAL "tcmalloc")
     # pkg_check_modules(tcmalloc REQUIRED libtcmalloc)
     # link_libraries(${tcmalloc_LINK_LIBRARIES})
 elseif(ALLOCATOR STREQUAL "jemalloc")
-    find_package(jemalloc REQUIRED)
-    link_libraries(jemalloc)
+    find_library(JEMalloc_LIB jemalloc ${VCPKG_INSTALLED_DIR} REQUIRED)
+    link_libraries(${JEMalloc_LIB})
 elseif(ALLOCATOR STREQUAL "mimalloc")
     find_package(mimalloc REQUIRED)
     link_libraries(mimalloc)

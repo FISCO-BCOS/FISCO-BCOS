@@ -1,4 +1,4 @@
-file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp testDmcStepRecorder.cpp testExecutivePool.cpp testDmcExecutor.cpp testSchedulerImpl.cpp testBlockExecutive.cpp)
+file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp testDmcStepRecorder.cpp testExecutivePool.cpp testDmcExecutor.cpp testSchedulerImpl.cpp testBlockExecutive.cpp testShardingBlockExecutive.cpp)
 
 # cmake settings
 set(TEST_BINARY_NAME test-scheduler)

@@ -21,6 +21,7 @@
 
 #pragma once
 #include "../executive/TransactionExecutive.h"
+#include "../precompiled/common/Utilities.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledGas.h"
 #include "bcos-framework/storage/Table.h"
@@ -169,6 +170,12 @@ protected:
         protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
     {
         selector2Func.insert({_selector, {_minVersion, std::move(_func)}});
+    }
+
+    void registerFunc(std::string const& _funcName, PrecompiledParams _func,
+        protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
+    {
+        selector2Func.insert({getFuncSelector(_funcName), {_minVersion, std::move(_func)}});
     }
 
     template <class F>

@@ -154,7 +154,7 @@ public:
      * @param _requiredPermits
      * @return void
      */
-    void acquire(int64_t _requiredPermits) override;
+    bool acquire(int64_t _requiredPermits) override;
 
     /**
      * @brief

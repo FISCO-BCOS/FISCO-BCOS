@@ -63,12 +63,12 @@ extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::seve
 
 enum LogLevel
 {
-    FATAL = boost::log::trivial::fatal,
-    ERROR = boost::log::trivial::error,
-    WARNING = boost::log::trivial::warning,
-    INFO = boost::log::trivial::info,
+    TRACE = boost::log::trivial::trace,
     DEBUG = boost::log::trivial::debug,
-    TRACE = boost::log::trivial::trace
+    INFO = boost::log::trivial::info,
+    WARNING = boost::log::trivial::warning,
+    ERROR = boost::log::trivial::error,
+    FATAL = boost::log::trivial::fatal,
 };
 
 extern LogLevel c_fileLogLevel;

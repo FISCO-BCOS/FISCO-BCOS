@@ -21,6 +21,7 @@
 
 #include "ExecutiveFactory.h"
 #include "CoroutineTransactionExecutive.h"
+#include "ShardingTransactionExecutive.h"
 #include "TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
@@ -45,13 +46,11 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
         executive = std::make_shared<TransactionExecutive>(
             m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
     }
-    executive->setConstantPrecompiled(m_constantPrecompiled);
-    executive->setEVMPrecompiled(m_precompiledContract);
-    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
 
-    registerExtPrecompiled(executive);
+    setParams(executive);
     return executive;
 }
+
 void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
 {
     // Code below has moved to initEvmEnvironment & initWasmEnvironment in TransactionExecutor.cpp:
@@ -63,4 +62,32 @@ void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecuti
 
     // TODO: register User developed Precompiled contract
     // registerUserPrecompiled(context);
+}
+
+void ExecutiveFactory::setParams(std::shared_ptr<TransactionExecutive> executive)
+{
+    executive->setConstantPrecompiled(m_constantPrecompiled);
+    executive->setEVMPrecompiled(m_precompiledContract);
+    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
+
+    registerExtPrecompiled(executive);
+}
+
+std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
+    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine)
+{
+    if (useCoroutine)
+    {
+        auto executive = std::make_shared<ShardingTransactionExecutive>(
+            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        setParams(executive);
+        return executive;
+    }
+    else
+    {
+        auto executive = std::make_shared<TransactionExecutive>(
+            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        setParams(executive);
+        return executive;
+    }
 }

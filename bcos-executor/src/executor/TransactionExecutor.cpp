@@ -99,8 +99,12 @@
 #include <shared_mutex>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
+#ifdef USE_TCMALLOC
+#include "gperftools/malloc_extension.h"
+#endif
 
 using namespace bcos;
 using namespace std;
@@ -129,7 +133,7 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_cachedStorage(std::move(cachedStorage)),
     m_backendStorage(std::move(backendStorage)),
     m_executionMessageFactory(std::move(executionMessageFactory)),
-    m_stateStorageFactory(stateStorageFactory),
+    m_stateStorageFactory(std::move(stateStorageFactory)),
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
     m_isWasm(isWasm),
@@ -139,8 +143,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 {
     assert(m_backendStorage);
     m_ledgerCache->fetchCompatibilityVersion();
-    m_ledgerCache->fetchAuthCheckStatus();
-    m_isAuthCheck = m_isAuthCheck || m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
 #ifdef WITH_WASM
@@ -149,6 +151,12 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
     setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
+    if (versionCompareTo(
+            m_ledgerCache->ledgerConfig()->compatibilityVersion(), BlockVersion::V3_3_VERSION) >= 0)
+    {
+        m_ledgerCache->fetchAuthCheckStatus();
+        m_isAuthCheck = m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+    }
     assert(!m_constantPrecompiled->empty());
     assert(m_builtInPrecompiled);
     start();
@@ -242,7 +250,7 @@ void TransactionExecutor::initEvmEnvironment()
     m_constantPrecompiled->insert(
         {BFS_ADDRESS, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl)});
     /// auth precompiled
-    if (m_isAuthCheck)
+    if (m_isAuthCheck || versionCompareTo(m_blockVersion, BlockVersion::V3_3_VERSION) >= 0)
     {
         m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
             std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, m_isWasm)});
@@ -952,7 +960,7 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
                 auto message =
                     (boost::format("Unsupported message type: %d") % params->type()).str();
                 EXECUTOR_NAME_LOG(ERROR)
-                    << BLOCK_NUMBER(blockNumber) << "DAG Execute error, " << message;
+                    << BLOCK_NUMBER(blockNumber) << "Execute error, " << message;
                 // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
                 break;
             }
@@ -1352,7 +1360,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                                          << LOG_DESC("use `Now`") << LOG_KV("now", now);
                 break;
             }
-            case EnvKind::BlockNumber:
+            case EnvKind::BlkNumber:
             {
                 auto blockNumber = _blockContext->number();
                 auto bytes = static_cast<bcos::byte*>(static_cast<void*>(&blockNumber));
@@ -1859,10 +1867,19 @@ void TransactionExecutor::commit(
         m_ledgerCache->fetchCompatibilityVersion();
 
         setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
-        m_ledgerCache->fetchAuthCheckStatus();
+        if (versionCompareTo(m_ledgerCache->ledgerConfig()->compatibilityVersion(),
+                BlockVersion::V3_3_VERSION) >= 0)
+        {
+            m_ledgerCache->fetchAuthCheckStatus();
+            m_isAuthCheck = m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+        }
         removeCommittedState();
 
         callback(nullptr);
+#ifdef USE_TCMALLOC
+        // EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "TCMalloc release";
+        // MallocExtension::instance()->ReleaseFreeMemory();
+#endif
     });
 }
 
@@ -2169,7 +2186,8 @@ void TransactionExecutor::getABI(
 }
 
 ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
-    std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine)
+    std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
+    bool isStaticCall)
 {
     EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
     bcos::RecursiveGuard lock(x_executiveFlowLock);
@@ -2296,8 +2314,11 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
 
                 auto callParameters = createCallParameters(*input, *tx);
 
-                ExecutiveFlowInterface::Ptr executiveFlow =
-                    getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
+                ExecutiveFlowInterface::Ptr executiveFlow;
+
+                executiveFlow = getExecutiveFlow(blockContext, callParameters->receiveAddress,
+                    useCoroutine, input->staticCall());
+
                 executiveFlow->submit(std::move(callParameters));
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -2334,8 +2355,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     case bcos::protocol::ExecutionMessage::KEY_LOCK:
     {
         auto callParameters = createCallParameters(*input, input->staticCall());
-        ExecutiveFlowInterface::Ptr executiveFlow =
-            getExecutiveFlow(blockContext, callParameters->receiveAddress, useCoroutine);
+        ExecutiveFlowInterface::Ptr executiveFlow = getExecutiveFlow(
+            blockContext, callParameters->receiveAddress, useCoroutine, input->staticCall());
         executiveFlow->submit(std::move(callParameters));
         asyncExecuteExecutiveFlow(executiveFlow,
             [this, callback = std::move(callback)](bcos::Error::UniquePtr&& error,
@@ -2668,7 +2689,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 {
     // DAG run
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
-    txDag->init(criticals, [this, &inputs, &executionResults](ID id) {
+    txDag->setExecuteTxFunc([this, &inputs, &executionResults](ID id) {
         if (!m_isRunning)
         {
             return;
@@ -2702,6 +2723,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
                 << "executeTransactionsWithCriticals error: " << boost::diagnostic_information(e);
         }
     });
+
+    txDag->init(criticals);
 
     txDag->run(m_DAGThreadNum);
 }

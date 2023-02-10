@@ -272,6 +272,74 @@ public:
         });
     }
 
+    void preExecuteTransactions(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(bcos::Error::UniquePtr)> callback) override
+    {
+        if (hasStopped())
+        {
+            std::string message = "preExecuteTransactions: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
+        if (schedulerTermId < m_schedulerTermId)
+        {
+            // Call from an outdated scheduler instance
+            // Just return without callback, because run callback may trigger a new switch, thus
+            // some message will be outdated and trigger switch again and again.
+            EXECUTOR_LOG(INFO)
+                << LOG_DESC(
+                       "preExecuteTransactions: not refreshExecutor for invalid schedulerTermId")
+                << LOG_KV("termId", schedulerTermId) << LOG_KV("currentTermId", m_schedulerTermId);
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                "old executor has been stopped"));
+            return;
+        }
+
+        try
+        {
+            refreshExecutor(schedulerTermId);
+        }
+        catch (Exception const& _e)
+        {
+            EXECUTOR_LOG(ERROR) << LOG_DESC(
+                                       "preExecuteTransactions: not refreshExecutor for exception")
+                                << LOG_KV("toTermId", schedulerTermId)
+                                << LOG_KV("currentTermId", m_schedulerTermId)
+                                << diagnostic_information(_e);
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                bcos::executor::ExecuteError::INTERNAL_ERROR, "refreshExecutor exception"));
+            return;
+        }
+
+        auto inputsVec =
+            std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
+        for (auto i = 0u; i < inputs.size(); i++)
+        {
+            inputsVec->emplace_back(std::move(inputs[i]));
+        }
+        m_pool.enqueue(
+            [executor = m_executor, schedulerTermId, blockHeader = std::move(blockHeader),
+                contractAddress = std::move(contractAddress), inputsVec,
+                callback = std::move(callback)] {
+                // create a holder
+                auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                             std::move(callback)](
+                                                 bcos::Error::UniquePtr error) {
+                    EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                        << LOG_KV("ptr count", executorHolder.use_count());
+                    callback(std::move(error));
+                };
+
+                // execute the function
+                executor->preExecuteTransactions(schedulerTermId, blockHeader, contractAddress,
+                    *inputsVec, std::move(_holdExecutorCallback));
+            });
+    }
+
     void dmcExecuteTransactions(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(

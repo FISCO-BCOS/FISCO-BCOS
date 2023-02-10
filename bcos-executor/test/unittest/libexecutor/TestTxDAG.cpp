@@ -20,6 +20,7 @@
  */
 
 #include "../../../src/dag/TxDAG2.h"
+#include "../../../src/dag/TxDAGFlow.h"
 #include "TxDAG.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
@@ -44,7 +45,15 @@ CriticalFieldsInterface::Ptr makeCriticals(
     CriticalFields::Ptr criticals = make_shared<CriticalFields>(_totalTx);
     for (int i = 0; i < _totalTx; i++)
     {
-        criticals->put(i, make_shared<CriticalFields::CriticalField>(_id2CriticalFunc(i)));
+        vector<bytes> currentCriticals = _id2CriticalFunc(i);
+        if (!currentCriticals.empty())
+        {
+            criticals->put(i, make_shared<CriticalFields::CriticalField>(currentCriticals));
+        }
+        else
+        {
+            criticals->put(i, nullptr);
+        }
     }
     return criticals;
 }
@@ -54,12 +63,15 @@ void testTxDAG(
 {
     auto startTime = utcSteadyTime();
     cout << endl << name << " test start" << endl;
-    _txDag->init(criticals, [&](ID id) {
+
+    auto executeTxFunc = [&](ID id) {
         if (id % 100000 == 0)
         {
             std::cout << " [" << id << "] ";
         }
-    });
+    };
+    _txDag->setExecuteTxFunc(std::move(executeTxFunc));
+    _txDag->init(criticals);
     auto initTime = utcSteadyTime();
     try
     {
@@ -83,14 +95,17 @@ void runDagTest(shared_ptr<TxDAGInterface> _txDag, int _total,
     // ./test-bcos-executor --run_test=TestTxDAG/TestRun
     CriticalFieldsInterface::Ptr criticals = makeCriticals(_total, _id2CriticalFunc);
 
-    _txDag->init(criticals, [&](ID id) {
+    auto executeTxFunc = [&](ID id) {
         _beforeRunCheck(id);
         if (id % 1000 == 0)
         {
             std::cout << " [" << id << "] ";
         }
         _afterRunCheck(id);
-    });
+    };
+
+    _txDag->setExecuteTxFunc(std::move(executeTxFunc));
+    _txDag->init(criticals);
 
     try
     {
@@ -110,7 +125,14 @@ void txDagTest(shared_ptr<TxDAGInterface> txDag)
 
     std::mutex testMutex;
     auto id2CriticalFun = [&](ID id) -> vector<bytes> {
-        return {bytes{static_cast<uint8_t>(id % criticalNum)}};
+        if ((id % criticalNum) == 1)
+        {
+            return {};
+        }
+        else
+        {
+            return {bytes{static_cast<uint8_t>(id % criticalNum)}};
+        }
     };
     auto beforeRunCheck = [&](ID id) {
         std::unique_lock lock(testMutex);
@@ -238,6 +260,12 @@ BOOST_AUTO_TEST_CASE(TestRun4)
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
     // FIXME
     // txDagDeepTreeTest(txDag);
+}
+
+BOOST_AUTO_TEST_CASE(TestRun5)
+{
+    shared_ptr<TxDAGInterface> txDag = make_shared<TxDAGFlow>();
+    txDagTest(txDag);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

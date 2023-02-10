@@ -254,6 +254,48 @@ void ExecutorServiceClient::executeTransactions(std::string contractAddress,
             new Callback(m_callbackPool, std::move(callback)), contractAddress, tarsInputs);
 }
 
+void ExecutorServiceClient::preExecuteTransactions(int64_t schedulerTermId,
+    const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
+    gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+    std::function<void(bcos::Error::UniquePtr)> callback)
+{
+    class Callback : public ExecutorServicePrxCallback
+    {
+    public:
+        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+            std::function<void(bcos::Error::UniquePtr)>&& _callback)
+          : m_callback(threadPool, std::move(_callback))
+        {}
+        ~Callback() override {}
+
+        void callback_preExecuteTransactions(const bcostars::Error& ret) override
+        {
+            m_callback(toUniqueBcosError(ret));
+        }
+
+        void callback_preExecuteTransactions_exception(tars::Int32 ret) override
+        {
+            m_callback(toUniqueBcosError(ret));
+        }
+
+    private:
+        AsyncCallback<bcos::Error::UniquePtr> m_callback;
+    };
+
+    auto blockHeaderImpl =
+        std::dynamic_pointer_cast<const bcostars::protocol::BlockHeaderImpl>(blockHeader);
+    std::vector<bcostars::ExecutionMessage> tarsInputs;
+    for (auto const& it : inputs)
+    {
+        auto& executionMsgImpl = dynamic_cast<bcostars::protocol::ExecutionMessageImpl&>(*it);
+        tarsInputs.emplace_back(executionMsgImpl.inner());
+    }
+    // timeout is 2min
+    m_prx->tars_set_timeout(2 * 60 * 1000)
+        ->async_preExecuteTransactions(new Callback(m_callbackPool, std::move(callback)),
+            schedulerTermId, blockHeaderImpl->inner(), contractAddress, tarsInputs);
+}
+
 void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
     gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
     std::function<void(

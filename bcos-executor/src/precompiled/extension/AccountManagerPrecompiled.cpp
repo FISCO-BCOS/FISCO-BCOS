@@ -82,7 +82,7 @@ void AccountManagerPrecompiled::createAccountWithStatus(
     auto input = codec.encode(accountTableName, codeString);
 
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
-        _callParameters->m_codeAddress, accountHex, false, true, _callParameters->m_gasLeft, false,
+        _callParameters->m_codeAddress, accountHex, false, true, _callParameters->m_gasLeft, true,
         std::string(ACCOUNT_ABI));
 
     if (response->status != (int32_t)TransactionStatus::None)

@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
@@ -26,7 +27,9 @@ namespace gateway
 class Host;
 class SocketFace;
 
-class Session : public SessionFace, public std::enable_shared_from_this<Session>
+class Session : public SessionFace,
+                public std::enable_shared_from_this<Session>,
+                public bcos::ObjectCounter<Session>
 {
 public:
     Session(size_t _bufferSize = 4096);

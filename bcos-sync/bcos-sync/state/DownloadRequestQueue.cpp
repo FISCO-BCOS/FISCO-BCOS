@@ -27,8 +27,8 @@ using namespace bcos::protocol;
 
 void DownloadRequestQueue::push(BlockNumber _fromNumber, size_t _size)
 {
-    UpgradableGuard l(x_reqQueue);
-    // Note: the requester must has retry logic
+    UpgradableGuard lock(x_reqQueue);
+    // Note: the requester must have retry logic
     if (m_reqQueue.size() >= m_config->maxDownloadRequestQueueSize())
     {
         BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
@@ -38,7 +38,7 @@ void DownloadRequestQueue::push(BlockNumber _fromNumber, size_t _size)
                            << LOG_KV("nodeId", m_config->nodeID()->shortHex());
         return;
     }
-    UpgradeGuard ul(l);
+    UpgradeGuard ulock(lock);
     m_reqQueue.push(std::make_shared<DownloadRequest>(_fromNumber, _size));
     BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                        << LOG_DESC("Push request in reqQueue req") << LOG_KV("from", _fromNumber)
@@ -51,7 +51,7 @@ void DownloadRequestQueue::push(BlockNumber _fromNumber, size_t _size)
 
 DownloadRequest::Ptr DownloadRequestQueue::topAndPop()
 {
-    WriteGuard l(x_reqQueue);
+    WriteGuard lock(x_reqQueue);
     if (m_reqQueue.empty())
     {
         return nullptr;

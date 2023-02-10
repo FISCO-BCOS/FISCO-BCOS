@@ -21,6 +21,7 @@
 #pragma once
 
 #include "bcos-txpool/TxPoolConfig.h"
+#include "bcos-txpool/txpool/utilities/Common.h"
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_unordered_map.h>
@@ -35,7 +36,7 @@ class MemoryStorage : public TxPoolStorageInterface,
 public:
     // the default txsExpirationTime is 10 minutes
     explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
-        int64_t _txsExpirationTime = 10 * 60 * 1000);
+        uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override = default;
 
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
@@ -45,6 +46,7 @@ public:
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
 
     bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) override;
+    // invoke when scheduler finished block executed and notify txpool new block result
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
     bcos::protocol::Transaction::Ptr removeSubmittedTx(
@@ -53,6 +55,7 @@ public:
     bcos::protocol::TransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
 
+    // FIXME: deprecated, after using txpool::broadcastPushTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
@@ -70,6 +73,7 @@ public:
     }
     void clear() override;
 
+    // FIXME: deprecated, after using txpool::broadcastPushTransaction
     bcos::crypto::HashListPtr filterUnknownTxs(
         bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
@@ -80,7 +84,6 @@ public:
 
     void stop() override;
     void start() override;
-    void printPendingTxs() override;
 
     std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
         bcos::protocol::Block::Ptr _block) override;
@@ -128,7 +131,6 @@ protected:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag);
 
-protected:
     TxPoolConfig::Ptr m_config;
 
     tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
@@ -145,19 +147,13 @@ protected:
     mutable SharedMutex x_missedTxs;
     std::atomic<size_t> m_sealedTxsSize = {0};
 
-    size_t c_maxRetryTime = 3;
-
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
-    std::atomic_bool m_printed = {false};
     uint64_t m_blockNumberUpdatedTime;
 
     // the txs expiration time, default is 10 minutes
-    int64_t m_txsExpirationTime = 10 * 60 * 1000;
+    uint64_t m_txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME;
     // timer to clear up the expired txs in-period
     std::shared_ptr<Timer> m_cleanUpTimer;
-    // Maximum number of transactions traversed by m_cleanUpTimer,
-    // The limit set here is to minimize the impact of the cleanup operation on txpool performance
-    uint64_t c_maxTraverseTxsNum = 10000;
 
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};

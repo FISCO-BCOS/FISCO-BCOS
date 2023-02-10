@@ -23,9 +23,7 @@
 #include "TxPoolConfig.h"
 #include "sync/TransactionSyncConfig.h"
 #include <bcos-framework/txpool/TxPoolInterface.h>
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class TxPoolFactory
 {
@@ -38,9 +36,9 @@ public:
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger, std::string const& _groupId,
         std::string const& _chainId, int64_t _blockLimit);
 
-    virtual ~TxPoolFactory() {}
+    virtual ~TxPoolFactory() = default;
     TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 1,
-        int64_t _txsExpirationTime = 10 * 60 * 1000);
+        uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
 
 private:
     bcos::crypto::NodeIDPtr m_nodeId;
@@ -51,7 +49,6 @@ private:
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;
     std::string m_groupId;
     std::string m_chainId;
-    int64_t m_blockLimit = 1000;
+    int64_t m_blockLimit = DEFAULT_BLOCK_LIMIT;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

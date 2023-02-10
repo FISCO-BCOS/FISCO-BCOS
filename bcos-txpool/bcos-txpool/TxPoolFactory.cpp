@@ -37,12 +37,12 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
     bcos::front::FrontServiceInterface::Ptr _frontService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::string const& _groupId,
     std::string const& _chainId, int64_t _blockLimit)
-  : m_nodeId(_nodeId),
-    m_cryptoSuite(_cryptoSuite),
-    m_txResultFactory(_txResultFactory),
-    m_blockFactory(_blockFactory),
-    m_frontService(_frontService),
-    m_ledger(_ledger),
+  : m_nodeId(std::move(_nodeId)),
+    m_cryptoSuite(std::move(_cryptoSuite)),
+    m_txResultFactory(std::move(_txResultFactory)),
+    m_blockFactory(std::move(_blockFactory)),
+    m_frontService(std::move(_frontService)),
+    m_ledger(std::move(_ledger)),
     m_groupId(_groupId),
     m_chainId(_chainId),
     m_blockLimit(_blockLimit)
@@ -50,7 +50,7 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
 
 
 TxPool::Ptr TxPoolFactory::createTxPool(
-    size_t _notifyWorkerNum, size_t _verifierWorkerNum, int64_t _txsExpirationTime)
+    size_t _notifyWorkerNum, size_t _verifierWorkerNum, uint64_t _txsExpirationTime)
 {
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
     auto txpoolNonceChecker = std::make_shared<TxPoolNonceChecker>();

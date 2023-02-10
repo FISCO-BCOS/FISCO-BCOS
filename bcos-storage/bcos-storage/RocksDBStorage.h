@@ -87,5 +87,6 @@ private:
 
     // Security Storage
     bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
+    bool enableRocksDBMemoryStatistics = false;
 };
 }  // namespace bcos::storage

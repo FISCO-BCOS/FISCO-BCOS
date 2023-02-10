@@ -23,6 +23,7 @@
 #include "libinitializer/Initializer.h"
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
+#include <bcos-utilities/ObjectAllocatorMonitor.h>
 namespace bcos
 {
 namespace node
@@ -52,6 +53,7 @@ private:
 
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     bcos::rpc::RPCInterface::Ptr m_rpc;
+    bcos::ObjectAllocatorMonitor::Ptr m_objMonitor;
 };
 }  // namespace node
 }  // namespace bcos
