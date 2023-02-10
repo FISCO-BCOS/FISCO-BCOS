@@ -77,7 +77,7 @@ jobs:
           nohup tiup playground v5.4.2 --mode tikv-slim --without-monitor &
           sleep 30 && cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
       - name: Integration test - Air
-        run: cd tools && bash .ci/ci_check_air.sh
+        run: cd tools && bash .ci/ci_check_air.sh ${{ github.ref }}
       - name: Integration test - Pro
-        run: cd tools && bash .ci/ci_check_pro.sh
+        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.ref }}
 

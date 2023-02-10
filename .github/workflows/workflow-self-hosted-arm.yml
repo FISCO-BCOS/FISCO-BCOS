@@ -68,6 +68,6 @@ jobs:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
 
       - name: Integration test - Air
-        run: cd tools && bash .ci/ci_check_air.sh
+        run: cd tools && bash .ci/ci_check_air.sh ${{ github.ref }}
       - name: Integration test - Pro
-        run: cd tools && bash .ci/ci_check_pro.sh
+        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.ref }}
