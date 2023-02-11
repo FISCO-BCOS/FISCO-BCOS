@@ -66,18 +66,22 @@ public:
     // config for rate limit
     struct RateLimiterConfig
     {
-        bool enableGroupRateLimit = false;
-        bool enableConRateLimit = false;
+        // time window for rate limiter
+        int32_t timeWindowSec = 1;
+        // allow outgoing msg exceed max permit size
+        bool allowExceedMaxPermitSize = false;
 
-        // if turn on distributed ratelimit
-        bool enableDistributedRatelimit = false;
-        //
-        bool enableDistributedRateLimitCache = true;
-        //
-        int32_t distributedRateLimitCachePercent = 20;
         // stat reporter interval, unit: ms
         int32_t statInterval = 60000;
 
+        // distributed ratelimit switch
+        bool enableDistributedRatelimit = false;
+        // distributed ratelimit local cache switch
+        bool enableDistributedRateLimitCache = true;
+        // distributed ratelimit local cache percent
+        int32_t distributedRateLimitCachePercent = 20;
+
+        //-------------- output bandwidth ratelimit begin------------------
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
 
@@ -93,9 +97,19 @@ public:
 
         // the message of modules that do not limit bandwidth
         std::set<uint16_t> modulesWithoutLimit;
+        //-------------- output bandwidth ratelimit end-------------------
+
+        //-------------- incoming qps ratelimit begin---------------------
+
+        int32_t p2pBasicMsgQPS = -1;
+        std::set<uint16_t> p2pBasicMsgTypes;
+        int32_t p2pModuleMsgQPS = -1;
+        std::unordered_map<uint16_t, int32_t> moduleMsg2QPSLimit;
+
+        //-------------- incoming qps ratelimit end-----------------------
 
         // whether any configuration takes effect
-        bool enableRateLimit() const
+        bool enableOutRateLimit() const
         {
             if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
             {
@@ -108,6 +122,45 @@ public:
             }
 
             return false;
+        }
+
+        bool enableOutGroupRateLimit() const
+        {
+            return groupOutgoingBwLimit > 0 || !group2BwLimit.empty();
+        }
+
+        bool enableOutConnRateLimit() const
+        {
+            return connOutgoingBwLimit > 0 || !ip2BwLimit.empty();
+        }
+
+        bool enableInRateLimit() const
+        {
+            if (p2pBasicMsgQPS > 0 || p2pModuleMsgQPS > 0)
+            {
+                return true;
+            }
+
+            if (!moduleMsg2QPSLimit.empty())
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+
+        bool enableInP2pBasicMsgLimit() const { return p2pBasicMsgQPS > 0; }
+
+        bool enableInP2pModuleMsgLimit(uint16_t _moduleID) const
+        {
+            if (p2pModuleMsgQPS <= 0 && moduleMsg2QPSLimit.empty())
+            {
+                return false;
+            }
+
+            // TODO: should optimized set lookup ??
+            return p2pModuleMsgQPS > 0 || moduleMsg2QPSLimit.contains(_moduleID);
         }
     };
 

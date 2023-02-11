@@ -43,6 +43,7 @@ enum GatewayMessageType : int16_t
     RouterTableResponse = 0xb,
     RouterTableRequest = 0xc,
     ForwardMessage = 0xd,
+    All = 0x7f
 };
 /**
  * @brief client end endpoint. Node will connect to NodeIPEndpoint.
