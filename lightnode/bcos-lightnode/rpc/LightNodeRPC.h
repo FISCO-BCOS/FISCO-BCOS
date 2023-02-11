@@ -278,7 +278,12 @@ public:
             {
                 co_await self->remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
                     blockNumber, block);
-
+                if (RANGES::empty(block.transactionsMetaData))
+                {
+                    auto error = bcos::Error();
+                    self->toErrorResp(error, respFunc);
+                    co_return;
+                }
                 if (!RANGES::empty(block.transactionsMetaData))
                 {
                     // Check transaction merkle
@@ -338,6 +343,8 @@ public:
 
                 respFunc(nullptr, resp);
             }
+
+
         }(this, onlyHeader, blockNumber, std::move(respFunc)));
     }
 
