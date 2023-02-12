@@ -198,6 +198,12 @@ void ContractAuthMgrPrecompiled::getAdmin(
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("contract ACL table not found") << LOG_KV("table", path);
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
+        {
+            // return empty admin by default
+            _callParameters->setExecResult(codec.encode(std::string(EMPTY_ADDRESS)));
+            return;
+        }
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract address not found."));
     }
     auto entry = table->getRow(ADMIN_FIELD);
@@ -221,7 +227,7 @@ void ContractAuthMgrPrecompiled::resetAdmin(
     /// evm:  resetAdmin(address path,address admin) => int256
     /// wasm: resetAdmin(string  path,string  admin) => int256
 
-    std::string path;
+    std::string address;
     std::string admin;
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
@@ -230,23 +236,40 @@ void ContractAuthMgrPrecompiled::resetAdmin(
         Address contractAddress;
         Address adminAddress;
         codec.decode(_callParameters->params(), contractAddress, adminAddress);
-        path = contractAddress.hex();
+        address = contractAddress.hex();
         admin = adminAddress.hex();
     }
     else
     {
-        codec.decode(_callParameters->params(), path, admin);
+        codec.decode(_callParameters->params(), address, admin);
     }
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
                            << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("resetAdmin")
-                           << LOG_KV("path", path) << LOG_KV("admin", admin);
-    path = getAuthTableName(path);
+                           << LOG_KV("address", address) << LOG_KV("admin", admin);
+    auto path = getAuthTableName(address);
     auto table = _executive->storage().openTable(path);
     if (!table || !table->getRow(ADMIN_FIELD))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("contract ACL table not found") << LOG_KV("path", path);
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract address not found."));
+        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
+        {
+            if (!_executive->storage().openTable(getContractTableName(USER_APPS_PREFIX, address)))
+                [[unlikely]]
+            {
+                // not exist contract address
+                BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract address not found."));
+            }
+            // exist contract but not init auth table
+            table = _executive->storage().createTable(path, "value");
+            Entry statusEntry;
+            statusEntry.importFields({std::string{CONTRACT_NORMAL}});
+            table->setRow(STATUS_FIELD, std::move(statusEntry));
+        }
+        else
+        {
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract address not found."));
+        }
     }
     auto newEntry = table->newEntry();
     newEntry.setField(SYS_VALUE, admin);
@@ -583,15 +606,15 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
     bytesConstRef _func) const
 {
     auto table = _executive->storage().openTable(_path);
-    // _table can't be nullopt
-    auto entry = table->getRow(METHOD_AUTH_TYPE);
-    if (!entry || entry->getField(SYS_VALUE).empty())
+    if (!table || !table->getRow(METHOD_AUTH_TYPE) ||
+        table->getRow(METHOD_AUTH_TYPE)->getField(SYS_VALUE).empty()) [[unlikely]]
     {
         PRECOMPILED_LOG(TRACE)
             << LOG_BADGE("ContractAuthMgrPrecompiled")
             << LOG_DESC("no acl strategy exist, should set the method access auth type firstly");
         return (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST;
     }
+    auto entry = table->getRow(METHOD_AUTH_TYPE);
     std::string authTypeStr = std::string(entry->getField(SYS_VALUE));
     std::map<bytes, uint8_t> authTypeMap;
     try
@@ -664,9 +687,9 @@ void ContractAuthMgrPrecompiled::setContractStatus(
         address = contractAddress.hex();
     }
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                           << LOG_BADGE("ContractAuthMgrPrecompiled")
-                           << LOG_DESC("setContractStatus") << LOG_KV("address", address)
-                           << LOG_KV("isFreeze", isFreeze);
+                          << LOG_BADGE("ContractAuthMgrPrecompiled")
+                          << LOG_DESC("setContractStatus") << LOG_KV("address", address)
+                          << LOG_KV("isFreeze", isFreeze);
     auto path = getAuthTableName(address);
     auto table = _executive->storage().openTable(path);
     if (!table)
@@ -719,9 +742,9 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
         address = contractAddress.hex();
     }
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                           << LOG_BADGE("ContractAuthMgrPrecompiled")
-                           << LOG_DESC("setContractStatus") << LOG_KV("address", address)
-                           << LOG_KV("status", std::to_string(status));
+                          << LOG_BADGE("ContractAuthMgrPrecompiled")
+                          << LOG_DESC("setContractStatus") << LOG_KV("address", address)
+                          << LOG_KV("status", std::to_string(status));
     auto path = getAuthTableName(address);
     auto table = _executive->storage().openTable(path);
     if (!table) [[unlikely]]

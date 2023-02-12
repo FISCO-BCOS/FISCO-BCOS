@@ -1595,7 +1595,14 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
         {
             auto result =
                 getAdmin(_number++, 1000, Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PrecompiledError);
+            if (versionCompareTo(m_blockVersion, BlockVersion::V3_3_VERSION) >= 0)
+            {
+                BOOST_CHECK(result->data().toBytes() == codec->encode(Address(std::string(EMPTY_ADDRESS))));
+            }
+            else
+            {
+                BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PrecompiledError);
+            }
         }
         // set method acl type
         {

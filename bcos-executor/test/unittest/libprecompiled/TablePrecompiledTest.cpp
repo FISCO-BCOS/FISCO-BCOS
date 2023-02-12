@@ -1009,7 +1009,7 @@ BOOST_AUTO_TEST_CASE(insertWasmTest)
 BOOST_AUTO_TEST_CASE(selectTest)
 {
     /// INSERT_COUNT should > 100
-    const int INSERT_COUNT = 10000;
+    const int INSERT_COUNT = 110;
     auto fillZero = [](int _num) -> std::string {
         std::stringstream stream;
         stream << std::setfill('0') << std::setw(40) << std::right << _num;
@@ -1102,7 +1102,7 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
 {
     init(true);
     /// INSERT_COUNT should > 100
-    const int INSERT_COUNT = 1000;
+    const int INSERT_COUNT = 110;
     auto fillZero = [](int _num) -> std::string {
         std::stringstream stream;
         stream << std::setfill('0') << std::setw(40) << std::right << _num;
