@@ -1,6 +1,8 @@
 #pragma once
 #include "../protocol/Block.h"
 #include "../storage/Storage.h"
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-task/Trait.h>
 #include <bcos-utilities/Ranges.h>
 #include <concepts>
 
@@ -121,5 +123,13 @@ private:
 template <class Impl>
 concept Ledger = std::derived_from<Impl, LedgerBase<Impl>> ||
     std::derived_from<typename Impl::element_type, LedgerBase<typename Impl::element_type>>;
+
+template <class Impl>
+concept IsLedger = requires(Impl&& impl)
+{
+    requires task::IsAwaitable<decltype(impl.template setBlock<ALL>(
+        std::declval<protocol::Block>()))>;
+    requires std::same_as<task::AwaitableReturnType<decltype(impl.getStatus)>, Status>;
+};
 
 }  // namespace bcos::concepts::ledger

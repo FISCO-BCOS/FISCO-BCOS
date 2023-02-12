@@ -29,14 +29,12 @@ private:
 
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
 
-    std::shared_ptr<MutableStorage> m_mutableStorage;                // Mutable storage
-    std::list<std::shared_ptr<MutableStorage>> m_immutableStorages;  // Read only storages
+    std::shared_ptr<MutableStorage> m_mutableStorage;
+    std::list<std::shared_ptr<MutableStorage>> m_immutableStorages;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
-        std::add_lvalue_reference_t<CachedStorage>,
-        std::monostate>
-        m_cacheStorage;               // Cache
-                                      // storage
-    BackendStorage m_backendStorage;  // Backend storage
+        std::add_lvalue_reference_t<CachedStorage>, std::monostate>
+        m_cacheStorage;
+    BackendStorage m_backendStorage;
 
     std::mutex m_immutablesMutex;
     std::mutex m_mergeMutex;
@@ -124,7 +122,7 @@ public:
         ReadIterator(ReadIterator&& rhs) noexcept = default;
         ReadIterator& operator=(const ReadIterator&) = delete;
         ReadIterator& operator=(ReadIterator&&) noexcept = default;
-        ~ReadIterator() = default;
+        ~ReadIterator() noexcept = default;
 
         task::AwaitableValue<bool> next()
         {
@@ -294,7 +292,7 @@ public:
         }
     }
 
-    MutableStorage& top()
+    MutableStorage& mutableStorage()
     {
         if (!m_mutableStorage)
         {
@@ -302,5 +300,6 @@ public:
         }
         return *m_mutableStorage;
     }
+    BackendStorage& backendStorage() { return m_backendStorage; }
 };
 }  // namespace bcos::transaction_scheduler

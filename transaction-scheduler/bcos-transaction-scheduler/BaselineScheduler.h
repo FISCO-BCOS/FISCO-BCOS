@@ -1,10 +1,11 @@
 #pragma once
 
 #include "SchedulerBaseImpl.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
+#include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
-#include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
@@ -16,13 +17,14 @@ namespace bcos::transaction_scheduler
 #define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
 template <class SchedulerImpl, protocol::IsBlockFactory BlockFactory,
-    protocol::IsBlockHeaderFactory BlockHeaderFactory, ledger::IsLedger Ledger>
+    protocol::IsBlockHeaderFactory BlockHeaderFactory, concepts::ledger::IsLedger Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
     SchedulerImpl m_schedulerImpl;
     std::shared_ptr<BlockFactory> m_blockFactory;
     BlockHeaderFactory m_blockHeaderFactory;
+    Ledger& m_ledger;
     crypto::Hash const& m_hashImpl;
 
     int64_t m_lastExecutedBlockNumber = -1;
@@ -40,10 +42,11 @@ private:
 
 public:
     BaselineScheduler(SchedulerImpl& schedulerImpl, std::shared_ptr<BlockFactory> blockFactory,
-        BlockHeaderFactory& blockHeaderFactory, crypto::Hash const& hashImpl)
+        BlockHeaderFactory& blockHeaderFactory, Ledger& ledger, crypto::Hash const& hashImpl)
       : m_schedulerImpl(schedulerImpl),
         m_blockFactory(std::move(blockFactory)),
         m_blockHeaderFactory(blockHeaderFactory),
+        m_ledger(ledger),
         m_hashImpl(hashImpl)
     {}
     BaselineScheduler(const BaselineScheduler&) = delete;
@@ -156,9 +159,8 @@ public:
                 if (self->m_lastcommittedBlockNumber != -1 &&
                     blockHeader->number() - self->m_lastcommittedBlockNumber != 1)
                 {
-                    auto message =
-                        fmt::format("Discontinuous commit block number! expect: {} input: {}",
-                            self->m_lastcommittedBlockNumber + 1, blockHeader->number());
+                    auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
+                        blockHeader->number(), self->m_lastcommittedBlockNumber + 1);
 
                     commitLock.unlock();
                     SCHEDULER_LOG(INFO) << message;
@@ -170,12 +172,18 @@ public:
 
                 auto& result = self->m_results.back();
 
-                auto& mutableStorage = self->m_schedulerImpl.multiLayerStorage().top();
-                auto oldStorage = std::make_shared<storage2::OldStorageWrapper>(mutableStorage);
-                Ledger ledger(self->m_blockFactory, oldStorage);
-                ledger.asyncPrewriteBlock(oldStorage, nullptr, result.m_block, []() {
-                    // Nothing to do
-                });
+                // Write block and receipt
+                co_await self->m_ledger.template setBlock<concepts::ledger::HEADER,
+                    concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
+                    concepts::ledger::NONCES>(result.block);
+
+                // Write status
+                co_await self->m_schedulerImpl.commit();
+
+                commitLock.unlock();
+                callback(nullptr,
+                    std::make_shared<ledger::LedgerConfig>(co_await self->m_ledger.getConfig()));
+                co_return;
             }
             catch (bcos::Error& e)
             {}
@@ -193,6 +201,8 @@ public:
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
             auto receipt = co_await self->m_schedulerImpl.call(*transaction);
+
+            callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));
     }
 

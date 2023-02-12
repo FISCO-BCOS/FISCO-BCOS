@@ -67,7 +67,6 @@ private:
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 256L * 1024 * 1024;  // For mru
-    // using Mutex = std::mutex;
     using Mutex = std::mutex;
     using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;

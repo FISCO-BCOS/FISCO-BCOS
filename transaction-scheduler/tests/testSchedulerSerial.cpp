@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         auto transactions =
-            RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](int i) {
+            RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](int index) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(
                     [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             }) |

@@ -36,7 +36,7 @@ public:
         protocol::IsBlockHeader auto const& blockHeader, crypto::Hash const& hashImpl)
     {
         // State root
-        auto mutableStorage = m_multiLayerStorage.top();
+        auto mutableStorage = m_multiLayerStorage.mutableStorage();
         auto it = co_await mutableStorage.seek(transaction_executor::EMPTY_STATE_KEY);
         bcos::h256 hash;
         while (co_await it.next())

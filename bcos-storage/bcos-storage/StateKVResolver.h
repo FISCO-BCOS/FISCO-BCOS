@@ -31,7 +31,7 @@ struct StateKeyResolver
     Key: mostly 32 byte
     Split: ":" 1byte
 
-    All: 25 + 1 + 32 = 58, expand to 640
+    All: 25 + 1 + 32 = 58, expand to 64
     */
     constexpr static size_t SMALL = 64;
     using DBKey = boost::container::small_vector<char, SMALL>;
@@ -56,7 +56,7 @@ struct StateKeyResolver
 
     transaction_executor::StateKey decode(concepts::bytebuffer::ByteBuffer auto const& buffer)
     {
-        auto it = RANGES::find(buffer, ':');
+        auto it = RANGES::find(buffer, TABLE_KEY_SPLIT);
         if (it == RANGES::end(buffer))
         {
             BOOST_THROW_EXCEPTION(InvalidStateKey{} << error::ErrorMessage(

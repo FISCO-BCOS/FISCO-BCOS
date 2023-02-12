@@ -22,9 +22,7 @@
 #include "../consensus/ConsensusNodeInterface.h"
 #include "../protocol/ProtocolTypeDef.h"
 
-namespace bcos
-{
-namespace ledger
+namespace bcos::ledger
 {
 class LedgerConfig
 {
@@ -34,7 +32,7 @@ public:
       : m_consensusNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
         m_observerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>())
     {}
-    virtual ~LedgerConfig() {}
+    virtual ~LedgerConfig() = default;
 
     virtual void setConsensusNodeList(bcos::consensus::ConsensusNodeList const& _consensusNodeList)
     {
@@ -118,5 +116,4 @@ protected:
     int64_t m_txsSize = -1;
     uint32_t m_authCheckStatus = 0;
 };
-}  // namespace ledger
-}  // namespace bcos
+}  // namespace bcos::ledger

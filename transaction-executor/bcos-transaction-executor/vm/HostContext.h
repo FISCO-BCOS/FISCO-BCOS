@@ -90,7 +90,7 @@ public:
         }
 
         constexpr static evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
-        metrics = &ethMetrics;
+        metrics = &ethMetrics;  // TODO: To be delete
     }
     ~HostContext() noexcept = default;
 

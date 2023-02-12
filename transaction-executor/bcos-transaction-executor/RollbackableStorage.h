@@ -11,7 +11,7 @@ template <StateStorage Storage>
 class Rollbackable
 {
 private:
-    constexpr static size_t MOSTLY_STEPS = 8;
+    constexpr static size_t MOSTLY_STEPS = 7;
     struct Record
     {
         StateKey key;

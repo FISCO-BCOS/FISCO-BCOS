@@ -2,6 +2,7 @@
 #include "bcos-concepts/Exception.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/storage2/Storage.h>
+#include <bcos-utilities/AnyHolder.h>
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <boost/container/small_vector.hpp>
@@ -72,14 +73,12 @@ public:
         task::AwaitableValue<bool> hasValue() const
         {
             auto exists = m_status[m_index].ok();
-            task::AwaitableValue<bool> hasValueAwaitable(false);
-            hasValueAwaitable.value() = exists;
+            task::AwaitableValue<bool> hasValueAwaitable(!!exists);
             return hasValueAwaitable;
         }
         task::AwaitableValue<KeyType const&> key() const
         {
-            // TODO: Store keys and return key
-            BOOST_THROW_EXCEPTION(UnsupportedMethod{});
+            static_assert(!sizeof(*this), "Unsupported method!");
         }
         task::AwaitableValue<ValueType> value() const
         {
@@ -89,7 +88,7 @@ public:
         }
     };
 
-    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto&& keys)
+    auto read(RANGES::input_range auto const& keys) -> task::AwaitableValue<ReadIterator>
     {
         task::AwaitableValue<ReadIterator> readIteratorAwaitable({});
         auto& readIterator = readIteratorAwaitable.value();

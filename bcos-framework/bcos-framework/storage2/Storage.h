@@ -17,7 +17,7 @@ namespace bcos::storage2
 {
 
 template <class IteratorType>
-concept ReadIterator = requires(IteratorType iterator)
+concept ReadIterator = requires(IteratorType&& iterator)
 {
     requires std::convertible_to < task::AwaitableReturnType<decltype(iterator.next())>,
     bool > ;

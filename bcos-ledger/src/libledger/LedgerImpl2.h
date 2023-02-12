@@ -1,7 +1,14 @@
 #pragma once
 
 #include "LedgerImpl.h"
+#include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/storage2/StringPool.h"
+#include "bcos-tool/ConsensusNode.h"
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <boost/container/small_vector.hpp>
+#include <boost/throw_exception.hpp>
+#include <iterator>
 
 namespace bcos::ledger
 {
@@ -14,100 +21,7 @@ private:
     Storage& m_storage;
     BlockFactory& m_blockFactory;
     transaction_executor::TableNamePool& m_tableNamePool;
-
-public:
-    LedgerImpl2(Storage& storage, BlockFactory& blockFactory,
-        transaction_executor::TableNamePool& tableNamePool)
-      : m_storage(storage), m_blockFactory(blockFactory), m_tableNamePool(tableNamePool)
-    {}
-
-    template <bcos::concepts::ledger::DataFlag... Flags>
-    task::Task<void> setBlock(protocol::IsBlock auto const& block)
-    {
-        LEDGER_LOG(INFO) << "setBlock: " << block.blockHeaderConst()->number();
-
-        auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeaderConst()->number());
-        (co_await setBlockData<Flags>(blockNumberStr, block), ...);
-        co_return;
-    }
-
-    task::Task<bcos::concepts::ledger::Status> getStatus()
-    {
-        LEDGER_LOG(TRACE) << "getStatus";
-
-        auto it = co_await m_storage.read(
-            std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT, SYS_KEY_TOTAL_FAILED_TRANSACTION,
-                SYS_KEY_CURRENT_NUMBER}) |
-            RANGES::views::transform([this](std::string_view key) {
-                return transaction_executor::StateKey{
-                    storage2::string_pool::makeStringID(m_tableNamePool, SYS_CURRENT_STATE), key};
-            }));
-
-        bcos::concepts::ledger::Status status;
-        int i = 0;
-        while (co_await it.next())
-        {
-            auto&& entry = co_await it.value();
-            int64_t value = 0;
-            if (entry)
-            {
-                value = boost::lexical_cast<int64_t>(entry.get());
-            }
-            switch (i)
-            {
-            case 0:
-                status.total = value;
-                break;
-            case 1:
-                status.failed = value;
-                break;
-            case 2:
-                status.blockNumber = value;
-                break;
-            default:
-                BOOST_THROW_EXCEPTION(
-                    UnexpectedRowIndex{} << bcos::error::ErrorMessage{
-                        "Unexpected getRows index: " + boost::lexical_cast<std::string>(i)});
-                break;
-            }
-            ++i;
-        }
-
-        LEDGER_LOG(TRACE) << "getStatus result: " << status.total << " | " << status.failed << " | "
-                          << status.blockNumber;
-
-        co_return status;
-    }
-
-    template <bool isTransaction>
-    task::Task<void> setTransactions(RANGES::range auto&& hashes, RANGES::range auto&& buffers)
-    {
-        if (RANGES::size(buffers) != RANGES::size(hashes))
-        {
-            BOOST_THROW_EXCEPTION(
-                MismatchTransactionCount{} << bcos::error::ErrorMessage{"No match count"});
-        }
-        auto tableNameID =
-            isTransaction ?
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_TX) :
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_RECEIPT);
-
-        LEDGER_LOG(INFO) << "setTransactionBuffers: " << tableNameID << " " << RANGES::size(hashes);
-
-        co_await m_storage.write(
-            hashes | RANGES::views::transform([this, &tableNameID](auto const& hash) {
-                return transaction_executor::StateKey{
-                    tableNameID, std::string_view(std::data(hash), RANGES::size(hash))};
-            }),
-            buffers | RANGES::views::transform([this](auto&& buffer) {
-                storage::Entry entry;
-                entry.set(std::forward<decltype(buffer)>(buffer));
-
-                return entry;
-            }));
-
-        co_return;
-    }
+    decltype(m_blockFactory.cryptoSuite()->keyFactory()) m_keyFactory;
 
     template <std::same_as<bcos::concepts::ledger::HEADER>>
     task::Task<void> setBlockData(
@@ -252,7 +166,7 @@ public:
 
                            return buffer;
                        });
-        co_await setTransactions<false>(hashes, buffers);
+        co_await setTransactions<true>(hashes, buffers);
     }
 
     template <std::same_as<concepts::ledger::RECEIPTS>>
@@ -261,7 +175,7 @@ public:
     {
         LEDGER_LOG(DEBUG) << "setBlockData receipts: " << blockNumberKey;
 
-        if (std::empty(block.transactionsMetaData))
+        if (block.transactionsMetaDataSize())
         {
             LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
             co_return;
@@ -269,10 +183,10 @@ public:
 
         size_t totalTransactionCount = 0;
         size_t failedTransactionCount = 0;
-        for (uint64_t i = 0; i < block.transactionsMetaDataSize(); ++i)
+        for (uint64_t i = 0; i < block.receiptsSize(); ++i)
         {
-            auto receipt = block.receipt[i];
-            if (receipt.data.status != 0)
+            auto receipt = block.receipt(i);
+            if (receipt->status() != 0)
             {
                 ++failedTransactionCount;
             }
@@ -323,7 +237,7 @@ public:
         }
 
         LEDGER_LOG(INFO) << LOG_DESC("setBlock")
-                         << LOG_KV("number", block.blockHeader.data.blockNumber)
+                         << LOG_KV("number", block.blockHeaderConst()->number())
                          << LOG_KV("totalTxs", transactionCount.total)
                          << LOG_KV("failedTxs", transactionCount.failed)
                          << LOG_KV("incTxs", totalTransactionCount)
@@ -341,6 +255,182 @@ public:
         co_await setBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
         co_await setBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
         co_await setBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+    }
+
+public:
+    LedgerImpl2(Storage& storage, BlockFactory& blockFactory,
+        transaction_executor::TableNamePool& tableNamePool)
+      : m_storage(storage),
+        m_blockFactory(blockFactory),
+        m_tableNamePool(tableNamePool),
+        m_keyFactory(m_blockFactory.cryptoSuite()->keyFactory())
+    {}
+
+    template <bcos::concepts::ledger::DataFlag... Flags>
+    task::Task<void> setBlock(protocol::IsBlock auto const& block)
+    {
+        LEDGER_LOG(INFO) << "setBlock: " << block.blockHeaderConst()->number();
+
+        auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeaderConst()->number());
+        (co_await setBlockData<Flags>(blockNumberStr, block), ...);
+        co_return;
+    }
+
+    task::Task<ledger::LedgerConfig> getConfig()
+    {
+        auto sysConsensusID = storage2::string_pool::makeStringID(m_tableNamePool, SYS_CONSENSUS);
+
+        // NodeList
+        auto entry = co_await storage2::readOne(
+            m_storage, std::tuple{sysConsensusID, std::string_view("key")});
+        auto value = entry->get();
+        boost::iostreams::stream<boost::iostreams::array_source> inputStream(
+            value.data(), value.size());
+        boost::archive::binary_iarchive archive(inputStream,
+            boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
+        std::vector<ConsensusNode> consensusList;
+        archive >> consensusList;
+
+        ledger::LedgerConfig ledgerConfig;
+        for (auto& node : consensusList)
+        {
+            constexpr static size_t MOSTLY_KEY_LENGTH = 32;
+            boost::container::small_vector<char, MOSTLY_KEY_LENGTH> nodeIDBin;
+
+            boost::algorithm::unhex(
+                node.nodeID.begin(), node.nodeID.end(), std::back_inserter(nodeIDBin));
+
+            auto nodeID = m_keyFactory->createKey(nodeIDBin);
+            auto consensusNode = std::make_shared<consensus::ConsensusNode>(
+                node.nodeID, node.weight.convert_to<uint64_t>());
+            if (node.type == CONSENSUS_SEALER)
+            {
+                ledgerConfig.mutableConsensusNodeList().emplace_back(std::move(consensusNode));
+            }
+            else
+            {
+                ledgerConfig.mutableObserverList()->emplace_back(std::move(consensusNode));
+            }
+        }
+
+        constexpr static auto systemConfigKeys =
+            std::to_array({SYSTEM_KEY_TX_COUNT_LIMIT, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
+                SYSTEM_KEY_TX_GAS_LIMIT, SYSTEM_KEY_COMPATIBILITY_VERSION});
+        auto systemConfigTableID = storage2::string_pool::makeStringID(m_tableNamePool, SYS_CONFIG);
+        auto it = co_await m_storage.read(
+            systemConfigKeys | RANGES::transform([&systemConfigTableID](auto& key) {
+                return std::tuple{systemConfigTableID, key};
+            }));
+        int index = 0;
+        while (co_await it.next())
+        {
+            if (!it.hasValue())
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error("Missing system key!"));
+            }
+            auto& entry = co_await it.value();
+            auto [value, number] = entry->template getObject<SystemConfigEntry>();
+
+            switch (index++)
+            {
+            case 0:
+                ledgerConfig.setBlockTxCountLimit(value);
+                break;
+            case 1:
+                ledgerConfig.setLeaderSwitchPeriod(value);
+                break;
+            case 2:
+                ledgerConfig.setGasLimit(value);
+                break;
+            case 3:
+                ledgerConfig.setCompatibilityVersion(value);
+                break;
+            default:
+                BOOST_THROW_EXCEPTION(UnexpectedRowIndex{});
+                break;
+            }
+        }
+
+        auto status = co_await getStatus();
+        ledgerConfig.setBlockNumber(status.blockNumber);
+
+        co_return ledgerConfig;
+    }
+
+    task::Task<bcos::concepts::ledger::Status> getStatus()
+    {
+        LEDGER_LOG(TRACE) << "getStatus";
+        constexpr static auto statusKeys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
+            SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
+
+        auto sysCurrentID = storage2::string_pool::makeStringID(m_tableNamePool, SYS_CURRENT_STATE);
+        auto it = co_await m_storage.read(
+            statusKeys | RANGES::views::transform([&sysCurrentID](std::string_view key) {
+                return transaction_executor::StateKey{sysCurrentID, key};
+            }));
+
+        bcos::concepts::ledger::Status status;
+        int i = 0;
+        while (co_await it.next())
+        {
+            int64_t value = 0;
+            if (co_await it.hasValue())
+            {
+                auto&& entry = co_await it.value();
+                value = boost::lexical_cast<int64_t>(entry.get());
+            }
+
+            switch (i++)
+            {
+            case 0:
+                status.total = value;
+                break;
+            case 1:
+                status.failed = value;
+                break;
+            case 2:
+                status.blockNumber = value;
+                break;
+            default:
+                BOOST_THROW_EXCEPTION(UnexpectedRowIndex{});
+                break;
+            }
+        }
+
+        LEDGER_LOG(TRACE) << "getStatus result: " << status.total << " | " << status.failed << " | "
+                          << status.blockNumber;
+
+        co_return status;
+    }
+
+    template <bool isTransaction>
+    task::Task<void> setTransactions(RANGES::range auto&& hashes, RANGES::range auto&& buffers)
+    {
+        if (RANGES::size(buffers) != RANGES::size(hashes))
+        {
+            BOOST_THROW_EXCEPTION(
+                MismatchTransactionCount{} << bcos::error::ErrorMessage{"No match count"});
+        }
+        auto tableNameID =
+            isTransaction ?
+                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_TX) :
+                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_RECEIPT);
+
+        LEDGER_LOG(INFO) << "setTransactionBuffers: " << tableNameID << " " << RANGES::size(hashes);
+
+        co_await m_storage.write(
+            hashes | RANGES::views::transform([this, &tableNameID](auto const& hash) {
+                return transaction_executor::StateKey{tableNameID,
+                    std::string_view((const char*)std::data(hash), RANGES::size(hash))};
+            }),
+            buffers | RANGES::views::transform([this](auto&& buffer) {
+                storage::Entry entry;
+                entry.set(std::forward<decltype(buffer)>(buffer));
+
+                return entry;
+            }));
+
+        co_return;
     }
 };
 
