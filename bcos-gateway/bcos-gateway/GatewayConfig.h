@@ -104,7 +104,7 @@ public:
         int32_t p2pBasicMsgQPS = -1;
         std::set<uint16_t> p2pBasicMsgTypes;
         int32_t p2pModuleMsgQPS = -1;
-        std::unordered_map<uint16_t, int32_t> moduleMsg2QPSLimit;
+        std::unordered_map<uint16_t, int32_t> moduleMsg2QPS;
 
         //-------------- incoming qps ratelimit end-----------------------
 
@@ -141,7 +141,7 @@ public:
                 return true;
             }
 
-            if (!moduleMsg2QPSLimit.empty())
+            if (!moduleMsg2QPS.empty())
             {
                 return true;
             }
@@ -154,13 +154,13 @@ public:
 
         bool enableInP2pModuleMsgLimit(uint16_t _moduleID) const
         {
-            if (p2pModuleMsgQPS <= 0 && moduleMsg2QPSLimit.empty())
+            if (p2pModuleMsgQPS <= 0 && moduleMsg2QPS.empty())
             {
                 return false;
             }
 
             // TODO: should optimized set lookup ??
-            return p2pModuleMsgQPS > 0 || moduleMsg2QPSLimit.contains(_moduleID);
+            return p2pModuleMsgQPS > 0 || moduleMsg2QPS.contains(_moduleID);
         }
     };
 

@@ -456,11 +456,12 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
         boost::split(
             modules, strModulesWithoutLimit, boost::is_any_of(","), boost::token_compress_on);
 
-        for (auto module : modules)
+        for (auto& module : modules)
         {
             boost::trim(module);
             boost::algorithm::to_lower(module);
             auto optModuleID = protocol::stringToModuleID(module);
+            // TODO: modify module name to module id
             if (!optModuleID.has_value())
             {
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
@@ -482,10 +483,7 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     else
     {
         auto bandwidth = boost::lexical_cast<double>(value);
-        if (bandwidth > 0)
-        {
-            totalOutgoingBwLimit = doubleMBToBit(bandwidth);
-        }
+        totalOutgoingBwLimit = doubleMBToBit(bandwidth);
 
         GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the total_outgoing_bw_limit has been initialized")
                                  << LOG_KV("value", value) << LOG_KV("bandwidth", bandwidth)
@@ -502,10 +500,7 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     else
     {
         auto bandwidth = boost::lexical_cast<double>(value);
-        if (bandwidth > 0)
-        {
-            connOutgoingBwLimit = doubleMBToBit(bandwidth);
-        }
+        connOutgoingBwLimit = doubleMBToBit(bandwidth);
 
         GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the conn_outgoing_bw_limit has been initialized")
                                  << LOG_KV("value", value) << LOG_KV("bandwidth", bandwidth)
@@ -586,7 +581,7 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
         << LOG_KV("group_outgoing_bw_limit", groupOutgoingBwLimit)
         << LOG_KV("conn_outgoing_bw_limit_x.x.x.x", m_rateLimiterConfig.ip2BwLimit.size())
         << LOG_KV("group_outgoing_bw_limit_xx", m_rateLimiterConfig.group2BwLimit.size())
-        << LOG_KV("modules_without_bw_limit", m_rateLimiterConfig.modulesWithoutLimit.size());
+        << LOG_KV("modules_without_bw_limit size", m_rateLimiterConfig.modulesWithoutLimit.size());
 
     // --------------------------------- outgoing end -------------------------------------------
 
@@ -632,11 +627,9 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     // incoming_p2p_basic_msg_type_qps_limit = -1
     int32_t p2pBasicMsgQPS =
         _pt.get<int32_t>("flow_control.incoming_p2p_basic_msg_type_qps_limit", -1);
-
     // incoming_module_msg_type_qps_limit = -1
     int32_t moduleMsgQPS = _pt.get<int32_t>("flow_control.incoming_module_msg_type_qps_limit", -1);
-
-    // ip => bandwidth && group => bandwidth
+    // module id => qps
     if (_pt.get_child_optional("flow_control"))
     {
         for (auto const& it : _pt.get_child("flow_control"))
@@ -646,7 +639,6 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
 
             boost::trim(key);
             boost::trim(value);
-
             if (boost::starts_with(key, "incoming_module_qps_limit_"))
             {
                 // incoming_module_qps_limit_xxxx =
@@ -655,7 +647,7 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
                 auto qps = boost::lexical_cast<int>(value);
                 if (qps > 0)
                 {
-                    m_rateLimiterConfig.moduleMsg2QPSLimit[module] = qps;
+                    m_rateLimiterConfig.moduleMsg2QPS[module] = qps;
 
                     GATEWAY_CONFIG_LOG(INFO)
                         << LOG_BADGE("initRateLimiterConfig") << LOG_DESC("add module qps limit")
@@ -669,8 +661,8 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
                              << LOG_DESC("the incoming qps rate limit")
                              << LOG_KV("incoming_p2p_basic_msg_type_qps_limit", p2pBasicMsgQPS)
                              << LOG_KV("incoming_module_msg_type_qps_limit", p2pBasicMsgQPS)
-                             << LOG_KV("incoming_module_qps_limit_xxx",
-                                    m_rateLimiterConfig.moduleMsg2QPSLimit.size());
+                             << LOG_KV("incoming_module_qps_limit_xxx size",
+                                    m_rateLimiterConfig.moduleMsg2QPS.size());
 
     // --------------------------------- incoming end -------------------------------------------
 

@@ -82,7 +82,6 @@ public:
     const static std::string TOTAL_INCOMING;
     const static std::string TOTAL_OUTGOING;
 
-public:
     using Ptr = std::shared_ptr<RateLimiterStat>;
     using ConstPtr = std::shared_ptr<const RateLimiterStat>;
 
@@ -91,12 +90,13 @@ public:
     void stop();
 
 public:
-    void updateInComing(const std::string& _endpoint, uint64_t _dataSize);
-    void updateInComing(const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize);
+    void updateInComing(const std::string& _endpoint, uint64_t _dataSize, bool _suc);
+    void updateInComing(
+        const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool _suc);
 
-    void updateOutGoing(const std::string& _endpoint, uint64_t _dataSize, bool suc);
+    void updateOutGoing(const std::string& _endpoint, uint64_t _dataSize, bool _suc);
     void updateOutGoing(
-        const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc);
+        const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool _suc);
 
 public:
     std::string toGroupKey(const std::string& _groupID);
@@ -107,9 +107,8 @@ public:
 
     std::pair<std::string, std::string> inAndOutStat(uint32_t _intervalMS);
 
-public:
-    const std::unordered_map<std::string, Stat>& inStat() { return m_inStat; }
-    const std::unordered_map<std::string, Stat>& outStat() { return m_outStat; }
+    const std::unordered_map<std::string, Stat>& inStat() const { return m_inStat; }
+    const std::unordered_map<std::string, Stat>& outStat() const { return m_outStat; }
 
     int32_t statInterval() const { return m_statInterval; }
     void setStatInterval(int32_t _statInterval) { m_statInterval = _statInterval; }
@@ -117,14 +116,16 @@ public:
 private:
     bool m_running = false;
 
-    // TODO: How to clean up the disconnected connections
     std::mutex m_inLock;
     std::mutex m_outLock;
+
+    // TODO: How to clean up the disconnected connections
     std::unordered_map<std::string, Stat> m_inStat;
     std::unordered_map<std::string, Stat> m_outStat;
 
-    // report period, default 1 min
-    int32_t m_statInterval = 60000;
+    // ratelimiter stat report period, default 1 min
+    constexpr static int32_t DEFAULT_STAT_INTERVAL_MS = 60000;
+    int32_t m_statInterval{DEFAULT_STAT_INTERVAL_MS};
     // the timer that periodically report the stat
     std::shared_ptr<Timer> m_statTimer;
 };

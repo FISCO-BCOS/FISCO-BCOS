@@ -24,8 +24,10 @@
 #include "bcos-gateway/libratelimit/RateLimiterFactory.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/Common.h>
+#include <array>
 #include <shared_mutex>
 #include <unordered_map>
+#include <utility>
 
 namespace bcos
 {
@@ -37,29 +39,31 @@ namespace ratelimiter
 class RateLimiterManager
 {
 public:
+    const static std::string TOTAL_OUTGOING_KEY;
+
     using Ptr = std::shared_ptr<RateLimiterManager>;
     using ConstPtr = std::shared_ptr<const RateLimiterManager>;
     using UniquePtr = std::unique_ptr<RateLimiterManager>;
 
-public:
-    const static std::string TOTAL_OUTGOING_KEY;
-
-public:
     RateLimiterManager(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
       : m_rateLimiterConfig(_rateLimiterConfig)
-    {}
+    {
+        initP2pBasicMsgTypes();
+    }
 
-public:
     RateLimiterInterface::Ptr getRateLimiter(const std::string& _rateLimiterKey);
 
-    bool registerRateLimiter(
+    std::pair<bool, RateLimiterInterface::Ptr> registerRateLimiter(
         const std::string& _rateLimiterKey, RateLimiterInterface::Ptr _rateLimiter);
     bool removeRateLimiter(const std::string& _rateLimiterKey);
 
     RateLimiterInterface::Ptr getGroupRateLimiter(const std::string& _group);
     RateLimiterInterface::Ptr getConnRateLimiter(const std::string& _connIP);
 
-public:
+    RateLimiterInterface::Ptr getInRateLimiter(const std::string& _connIP, uint16_t _packageType);
+    RateLimiterInterface::Ptr getInRateLimiter(
+        const std::string& _groupID, uint16_t _moduleID, bool /***/);
+
     ratelimiter::RateLimiterFactory::Ptr rateLimiterFactory() const { return m_rateLimiterFactory; }
     void setRateLimiterFactory(ratelimiter::RateLimiterFactory::Ptr& _rateLimiterFactory)
     {
@@ -81,7 +85,51 @@ public:
         return m_rateLimiterConfig;
     }
 
+    void resetP2pBasicMsgTypes(const std::set<uint16_t>& _p2pBasicMsgTypes)
+    {
+        m_p2pBasicMsgTypes.fill(false);
+        for (const auto& t : _p2pBasicMsgTypes)
+        {
+            if (t < GatewayMessageType::All)
+            {
+                m_p2pBasicMsgTypes.at(t) = true;
+            }
+        }
+    }
+
+    bool enableOutGroupRateLimit() const { return m_enableOutGroupRateLimit; }
+    bool enableOutConRateLimit() const { return m_enableOutConRateLimit; }
+    bool enableInRateLimit() const { return m_enableInRateLimit; }
+
+    void setEnableOutGroupRateLimit(bool _enableOutGroupRateLimit)
+    {
+        m_enableOutGroupRateLimit = _enableOutGroupRateLimit;
+    }
+    void setEnableOutConRateLimit(bool _enableOutConRateLimit)
+    {
+        m_enableOutConRateLimit = _enableOutConRateLimit;
+    }
+    void setEnableInRateLimit(bool _enableInRateLimit) { m_enableInRateLimit = _enableInRateLimit; }
+
+    //----------------------------------------------------------------------
+    void initP2pBasicMsgTypes();
+
+    bool isP2pBasicMsgType(uint16_t _type)
+    {
+        if (_type >= GatewayMessageType::All)
+        {
+            return false;
+        }
+
+        return m_p2pBasicMsgTypes.at(_type);
+    }
+    //----------------------------------------------------------------------
+
 private:
+    bool m_enableOutGroupRateLimit = false;
+    bool m_enableOutConRateLimit = false;
+    bool m_enableInRateLimit = false;
+
     //   factory for RateLimiterInterface
     ratelimiter::RateLimiterFactory::Ptr m_rateLimiterFactory;
 
@@ -92,6 +140,8 @@ private:
 
     // the message of modules that do not limit bandwidth
     std::set<uint16_t> m_modulesWithoutLimit;
+
+    std::array<bool, GatewayMessageType::All> m_p2pBasicMsgTypes{};
 
     GatewayConfig::RateLimiterConfig m_rateLimiterConfig;
 };
