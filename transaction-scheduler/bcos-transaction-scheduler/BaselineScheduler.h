@@ -17,13 +17,13 @@ namespace bcos::transaction_scheduler
 #define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
 template <class SchedulerImpl, protocol::IsBlockFactory BlockFactory,
-    protocol::IsBlockHeaderFactory BlockHeaderFactory, concepts::ledger::IsLedger Ledger>
+    concepts::ledger::IsLedger Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
-    SchedulerImpl m_schedulerImpl;
-    std::shared_ptr<BlockFactory> m_blockFactory;
-    BlockHeaderFactory m_blockHeaderFactory;
+    SchedulerImpl& m_schedulerImpl;
+    BlockFactory& m_blockFactory;
+    decltype(m_blockFactory.blockHeaderFactory()) m_blockHeaderFactory;
     Ledger& m_ledger;
     crypto::Hash const& m_hashImpl;
 
@@ -41,11 +41,11 @@ private:
     std::mutex m_resultsMutex;
 
 public:
-    BaselineScheduler(SchedulerImpl& schedulerImpl, std::shared_ptr<BlockFactory> blockFactory,
-        BlockHeaderFactory& blockHeaderFactory, Ledger& ledger, crypto::Hash const& hashImpl)
+    BaselineScheduler(SchedulerImpl& schedulerImpl, BlockFactory& blockFactory, Ledger& ledger,
+        crypto::Hash const& hashImpl)
       : m_schedulerImpl(schedulerImpl),
-        m_blockFactory(std::move(blockFactory)),
-        m_blockHeaderFactory(blockHeaderFactory),
+        m_blockFactory(blockFactory),
+        m_blockHeaderFactory(m_blockFactory.blockHeaderFactory()),
         m_ledger(ledger),
         m_hashImpl(hashImpl)
     {}
@@ -56,7 +56,7 @@ public:
     ~BaselineScheduler() override = default;
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>
             callback) override
     {
         task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block,
@@ -77,7 +77,7 @@ public:
                 }
 
                 auto blockHeader = block->blockHeaderConst();
-                if (self->m_executingBlockNumber != -1 &&
+                if (self->m_lastExecutedBlockNumber != -1 &&
                     blockHeader->number() - self->m_lastExecutedBlockNumber != 1)
                 {
                     auto message =
@@ -92,20 +92,21 @@ public:
                     co_return;
                 }
 
-                self->m_executingBlockNumber = blockHeader->number();
-                self->m_schedulerImpl.start();
+                self->m_lastExecutedBlockNumber = blockHeader->number();
+                co_await self->m_schedulerImpl.start();
                 auto blockHeaderPtr = block->blockHeaderConst();
                 auto transactions =
                     RANGES::iota_view<uint64_t, uint64_t>(0LU, block->transactionsSize()) |
                     RANGES::views::transform(
                         [&block](uint64_t index) { return block->transaction(index); }) |
                     RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
-                auto receipts = co_await self->m_schedulerImpl.execute(*blockHeaderPtr,
-                    transactions | RANGES::views::transform(
-                                       [](protocol::Transaction::ConstPtr const& transactionPtr) {
-                                           return *transactionPtr;
-                                       }));
-                auto stateRoot = self->m_schedulerImpl.finish(*blockHeaderPtr, self->m_hashImpl);
+                auto receipts = co_await self->m_schedulerImpl.execute(
+                    *blockHeaderPtr, transactions | RANGES::views::transform([
+                    ](protocol::Transaction::ConstPtr const& transactionPtr) -> auto& {
+                        return *transactionPtr;
+                    }));
+                auto stateRoot =
+                    co_await self->m_schedulerImpl.finish(*blockHeaderPtr, self->m_hashImpl);
 
                 bcos::u256 totalGas = 0;
                 for (auto& receipt : receipts)
@@ -113,18 +114,20 @@ public:
                     totalGas += receipt->gasUsed();
                     block->appendReceipt(std::move(receipt));
                 }
-                block->setBlockHeader(self->m_blockHeaderFactory.populateBlockHeader(blockHeader));
+                block->setBlockHeader(self->m_blockHeaderFactory->populateBlockHeader(blockHeader));
 
                 auto newBlockHeader = block->blockHeader();
                 newBlockHeader->setStateRoot(stateRoot);
                 newBlockHeader->setGasUsed(totalGas);
+
+                // TODO: 交易和回执root跟交易顺序有关系，分片后需要组合顺序再计算
                 newBlockHeader->setTxsRoot(block->calculateTransactionRoot(self->m_hashImpl));
                 newBlockHeader->setReceiptsRoot(block->calculateReceiptRoot(self->m_hashImpl));
                 newBlockHeader->calculateHash(self->m_hashImpl);
 
-                std::unique_lock queueLock(self->m_queueMutex);
-                self->m_results->push({.m_block = std::move(block)});
-                queueLock.unlock();
+                std::unique_lock resultsLock(self->m_resultsMutex);
+                self->m_results.push({.m_block = std::move(block)});
+                resultsLock.unlock();
                 executeLock.unlock();
 
                 callback(nullptr, std::move(newBlockHeader), false);
@@ -151,7 +154,7 @@ public:
                     SCHEDULER_LOG(INFO) << message;
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                        nullptr, false);
+                        nullptr);
 
                     co_return;
                 }
@@ -166,7 +169,7 @@ public:
                     SCHEDULER_LOG(INFO) << message;
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
-                        nullptr, false);
+                        nullptr);
                     co_return;
                 }
 
@@ -175,7 +178,7 @@ public:
                 // Write block and receipt
                 co_await self->m_ledger.template setBlock<concepts::ledger::HEADER,
                     concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
-                    concepts::ledger::NONCES>(result.block);
+                    concepts::ledger::NONCES>(result.m_block);
 
                 // Write status
                 co_await self->m_schedulerImpl.commit();

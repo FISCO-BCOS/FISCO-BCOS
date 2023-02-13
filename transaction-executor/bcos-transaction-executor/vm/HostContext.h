@@ -370,6 +370,11 @@ public:
         HostContext hostcontext(m_rollbackableStorage, m_tableNamePool, m_blockHeader, message,
             m_origin, m_contextID, m_seq + 1);
 
+        // TODO: 跨协程调用
+        // if constexpr () ...
+        // ExternalCaller externalCaller;
+        // co_await externalCaller.execute();
+
         auto result = co_await hostcontext.execute();
         if (result.status_code == EVMC_SUCCESS)
         {

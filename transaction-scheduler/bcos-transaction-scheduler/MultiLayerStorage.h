@@ -30,7 +30,7 @@ private:
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
 
     std::shared_ptr<MutableStorage> m_mutableStorage;
-    std::list<std::shared_ptr<MutableStorage>> m_immutableStorages;
+    std::list<std::shared_ptr<MutableStorage>> m_immutableStorages;  // Ledger read data from here
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::add_lvalue_reference_t<CachedStorage>, std::monostate>
         m_cacheStorage;
@@ -223,7 +223,7 @@ public:
 
     MultiLayerStorage fork() const
     {
-        std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);
+        std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);  // TODO: 读提交完还是执行完
         MultiLayerStorage levelStorage(m_backendStorage);
         levelStorage.m_immutableStorages = m_immutableStorages;
 
@@ -277,6 +277,7 @@ public:
         m_immutableStorages.pop_back();
         immutablesLock.unlock();
 
+        // TODO: Transactional
         auto it = co_await immutableStorage->seek(transaction_executor::EMPTY_STATE_KEY);
         while (co_await it.next())
         {

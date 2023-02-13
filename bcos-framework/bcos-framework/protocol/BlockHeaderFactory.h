@@ -33,7 +33,7 @@ public:
     virtual BlockHeader::Ptr createBlockHeader(bytesConstRef _data) = 0;
     virtual BlockHeader::Ptr createBlockHeader(BlockNumber _number) = 0;
 
-    virtual BlockHeader::Ptr populateBlockHeader(const BlockHeader::Ptr& _blockHeader)
+    virtual BlockHeader::Ptr populateBlockHeader(const BlockHeader::ConstPtr& _blockHeader)
     {
         auto header = createBlockHeader();
         header->setVersion(_blockHeader->version());

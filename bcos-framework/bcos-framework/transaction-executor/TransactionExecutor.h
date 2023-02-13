@@ -34,7 +34,7 @@ public:
     std::string_view operator()() const& { return toStringView(); }
 };
 
-using StateKey = std::tuple<TableNameID, SmallKey>;
+using StateKey = std::tuple<TableNameID, SmallKey>;  // TODO: 计算最多支持多少表名
 using StateValue = storage::Entry;
 
 const static auto EMPTY_STATE_KEY = std::tuple{TableNameID(), std::string_view()};

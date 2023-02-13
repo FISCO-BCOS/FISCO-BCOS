@@ -70,14 +70,17 @@ public:
     task::Task<void> commit() { co_await m_multiLayerStorage.mergeAndPopImmutableBack(); }
 
     task::Task<protocol::ReceiptFactoryReturnType<ReceiptFactory>> call(
-        protocol::IsBlockHeader auto const& blockHeader,
         protocol::IsTransaction auto const& transaction)
     {
         auto storage = m_multiLayerStorage.fork();
         m_multiLayerStorage.newMutable();
 
-        Executor executor(storage, m_receiptFactory);
-        co_return co_await executor.execute(blockHeader, transaction, 0);
+        // Create a empty blockHeader, put block number, version
+
+        // Executor executor(storage, m_receiptFactory);
+        // co_return co_await executor.execute(blockHeader, transaction, 0);
+
+        co_return {};
     }
 
     decltype(m_multiLayerStorage)& multiLayerStorage() & { return m_multiLayerStorage; }

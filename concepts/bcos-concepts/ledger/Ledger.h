@@ -129,7 +129,7 @@ concept IsLedger = requires(Impl&& impl)
 {
     requires task::IsAwaitable<decltype(impl.template setBlock<ALL>(
         std::declval<protocol::Block>()))>;
-    requires std::same_as<task::AwaitableReturnType<decltype(impl.getStatus)>, Status>;
+    requires std::same_as<task::AwaitableReturnType<decltype(impl.getStatus())>, Status>;
 };
 
 }  // namespace bcos::concepts::ledger
