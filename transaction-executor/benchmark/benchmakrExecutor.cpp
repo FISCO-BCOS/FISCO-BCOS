@@ -17,7 +17,6 @@ using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_executor;
 
 using Storage = MemoryStorage<StateKey, StateValue, ORDERED>;
-using ConcurrentStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | CONCURRENT)>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
 bcos::crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
@@ -25,15 +24,15 @@ bcos::crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
 struct Fixture
 {
     Fixture()
-      : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
+      : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
-        receiptFactory(cryptoSuite),
-        executor(storage, receiptFactory, tableNamePool),
+        m_receiptFactory(m_cryptoSuite),
+        executor(backendStorage, m_receiptFactory, m_tableNamePool),
         blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             std::make_shared<bcos::crypto::Keccak256>();
-        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(m_helloworldBytecodeBinary));
     }
 
     std::string deployContract()
@@ -43,7 +42,7 @@ struct Fixture
             bcostars::protocol::TransactionImpl createTransaction(
                 [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             createTransaction.mutableInner().data.input.assign(
-                helloworldBytecodeBinary.begin(), helloworldBytecodeBinary.end());
+                m_helloworldBytecodeBinary.begin(), m_helloworldBytecodeBinary.end());
             auto receipt = co_await executor.execute(blockHeader, createTransaction, 0);
             contractAddress = receipt->contractAddress();
         }());
@@ -51,12 +50,12 @@ struct Fixture
         return contractAddress;
     }
 
-    bcos::crypto::CryptoSuite::Ptr cryptoSuite;
-    Storage storage;
-    ReceiptFactory receiptFactory;
-    TableNamePool tableNamePool;
+    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    Storage backendStorage;
+    ReceiptFactory m_receiptFactory;
+    TableNamePool m_tableNamePool;
     bcos::transaction_executor::TransactionExecutorImpl<Storage, ReceiptFactory> executor;
-    bcos::bytes helloworldBytecodeBinary;
+    bcos::bytes m_helloworldBytecodeBinary;
 
     bcostars::BlockHeader tarsBlockHeader;
     bcostars::protocol::BlockHeaderImpl blockHeader;
@@ -69,7 +68,7 @@ static void create(benchmark::State& state)
     bcostars::protocol::TransactionImpl transaction(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
     transaction.mutableInner().data.input.assign(
-        fixture.helloworldBytecodeBinary.begin(), fixture.helloworldBytecodeBinary.end());
+        fixture.m_helloworldBytecodeBinary.begin(), fixture.m_helloworldBytecodeBinary.end());
 
     task::syncWait([&fixture](benchmark::State& state,
                        decltype(transaction)& transaction) -> task::Task<void> {

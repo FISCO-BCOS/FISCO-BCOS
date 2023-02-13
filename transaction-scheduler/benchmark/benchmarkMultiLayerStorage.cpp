@@ -20,7 +20,7 @@ struct TableNameHash
 
 struct Fixture
 {
-    Fixture() : levelStorage(std::forward<decltype(backendStorage)>(backendStorage)) {}
+    Fixture() : levelStorage(std::forward<decltype(m_backendStorage)>(m_backendStorage)) {}
 
     void prepareData(int64_t count, int layer = 0)
     {
@@ -28,7 +28,7 @@ struct Fixture
         // Write count data
         task::syncWait([this](int64_t count) -> task::Task<void> {
             allKeys = RANGES::iota_view<int, int>(0, count) |
-                      RANGES::views::transform([tableNamePool = &tableNamePool](int num) {
+                      RANGES::views::transform([tableNamePool = &m_tableNamePool](int num) {
                           return transaction_executor::StateKey{
                               storage2::string_pool::makeStringID(*tableNamePool, "test_table"),
                               fmt::format("key: {}", num)};
@@ -58,8 +58,8 @@ struct Fixture
     using BackendStorage = MemoryStorage<transaction_executor::StateKey,
         transaction_executor::StateValue, Attribute(ORDERED | CONCURRENT), TableNameHash>;
 
-    transaction_executor::TableNamePool tableNamePool;
-    BackendStorage backendStorage;
+    transaction_executor::TableNamePool m_tableNamePool;
+    BackendStorage m_backendStorage;
     MultiLayerStorage<MutableStorage, BackendStorage> levelStorage;
     std::vector<bcos::transaction_executor::StateKey> allKeys;
 };
@@ -113,7 +113,7 @@ static void write1(benchmark::State& state)
             entry.set(fmt::format("value: {}", i));
             co_await storage2::writeOne(fixture.levelStorage,
                 transaction_executor::StateKey{
-                    storage2::string_pool::makeStringID(fixture.tableNamePool, "test_table"),
+                    storage2::string_pool::makeStringID(fixture.m_tableNamePool, "test_table"),
                     fmt::format("key: {}", i)},
                 std::move(entry));
             ++i;

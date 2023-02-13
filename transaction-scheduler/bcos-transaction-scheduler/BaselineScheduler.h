@@ -16,14 +16,13 @@ namespace bcos::transaction_scheduler
 
 #define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
-template <class SchedulerImpl, protocol::IsBlockFactory BlockFactory,
+template <class SchedulerImpl, protocol::IsBlockHeaderFactory BlockHeaderFactory,
     concepts::ledger::IsLedger Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
     SchedulerImpl& m_schedulerImpl;
-    BlockFactory& m_blockFactory;
-    decltype(m_blockFactory.blockHeaderFactory()) m_blockHeaderFactory;
+    BlockHeaderFactory& m_blockHeaderFactory;
     Ledger& m_ledger;
     crypto::Hash const& m_hashImpl;
 
@@ -41,11 +40,10 @@ private:
     std::mutex m_resultsMutex;
 
 public:
-    BaselineScheduler(SchedulerImpl& schedulerImpl, BlockFactory& blockFactory, Ledger& ledger,
-        crypto::Hash const& hashImpl)
+    BaselineScheduler(SchedulerImpl& schedulerImpl, BlockHeaderFactory& blockFactory,
+        Ledger& ledger, crypto::Hash const& hashImpl)
       : m_schedulerImpl(schedulerImpl),
-        m_blockFactory(blockFactory),
-        m_blockHeaderFactory(m_blockFactory.blockHeaderFactory()),
+        m_blockHeaderFactory(blockFactory),
         m_ledger(ledger),
         m_hashImpl(hashImpl)
     {}
@@ -114,7 +112,7 @@ public:
                     totalGas += receipt->gasUsed();
                     block->appendReceipt(std::move(receipt));
                 }
-                block->setBlockHeader(self->m_blockHeaderFactory->populateBlockHeader(blockHeader));
+                block->setBlockHeader(self->m_blockHeaderFactory.populateBlockHeader(blockHeader));
 
                 auto newBlockHeader = block->blockHeader();
                 newBlockHeader->setStateRoot(stateRoot);

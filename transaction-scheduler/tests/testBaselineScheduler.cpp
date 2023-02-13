@@ -76,7 +76,7 @@ public:
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
         blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory)),
-        baselineScheduler(mockScheduler, *blockFactory, mockLedger, *hashImpl)
+        baselineScheduler(mockScheduler, *blockHeaderFactory, mockLedger, *hashImpl)
     {}
 
     TableNamePool tableNamePool;
@@ -90,7 +90,7 @@ public:
 
     MockScheduler mockScheduler;
     MockLedger mockLedger;
-    BaselineScheduler<MockScheduler, bcostars::protocol::BlockFactoryImpl, MockLedger>
+    BaselineScheduler<MockScheduler, bcostars::protocol::BlockHeaderFactoryImpl, MockLedger>
         baselineScheduler;
 };
 
