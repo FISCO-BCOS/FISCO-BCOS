@@ -27,6 +27,7 @@
 #include "../dag/TxDAGInterface.h"
 #include "ExecutiveFactory.h"
 #include "ExecutiveFlowInterface.h"
+#include "ExecutiveStackFlow.h"
 #include "ExecutiveState.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <gsl/util>
@@ -35,27 +36,20 @@ namespace bcos::executor
 {
 
 
-class ExecutiveDagFlow : public virtual ExecutiveFlowInterface,
-                         public std::enable_shared_from_this<ExecutiveDagFlow>
+class ExecutiveDagFlow : public ExecutiveStackFlow
 {
 public:
     using Ptr = std::shared_ptr<ExecutiveDagFlow>;
 
     ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory,
         std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
-      : m_executiveFactory(executiveFactory), m_abiCache(abiCache)
+      : ExecutiveStackFlow(executiveFactory), m_abiCache(abiCache)
     {}
     virtual ~ExecutiveDagFlow() = default;
 
     void submit(CallParameters::UniquePtr txInput) override;
     void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;
 
-    void asyncRun(
-        // onTxReturn(output)
-        std::function<void(CallParameters::UniquePtr)> onTxReturn,
-
-        // onFinished(success, errorMessage)
-        std::function<void(bcos::Error::UniquePtr)> onFinished) override;
 
     void stop() override
     {
@@ -67,7 +61,7 @@ public:
         }
 
         m_isRunning = false;
-        ExecutiveFlowInterface::stop();
+        ExecutiveStackFlow::stop();
     };
 
     void setDagFlowIfNotExists(TxDAGFlow::Ptr dagFlow)
@@ -90,8 +84,7 @@ public:
     }
 
 protected:
-    void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
-        std::function<void(bcos::Error::UniquePtr)> onFinished);
+    void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn) override;
 
     static critical::CriticalFieldsInterface::Ptr generateDagCriticals(BlockContext& blockContext,
         ExecutiveFactory::Ptr executiveFactory,
@@ -116,12 +109,9 @@ protected:
 
     std::shared_ptr<std::vector<CallParameters::UniquePtr>> m_inputs = nullptr;
     TxDAGFlow::Ptr m_dagFlow;
-    ExecutiveState::Ptr m_pausedExecutive;
     std::function<void(CallParameters::UniquePtr)> f_onTxReturn;
-
-    ExecutiveFactory::Ptr m_executiveFactory;
     mutable bcos::RecursiveMutex x_lock;
-    bool m_isRunning = true;
+
     std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> m_abiCache;
 
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
