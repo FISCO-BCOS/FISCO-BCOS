@@ -54,7 +54,8 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
         {
             EXECUTIVE_LOG(INFO) << LOG_BADGE("Sharding")
                                 << "ShardingTransactionExecutive call other shard: "
-                                << LOG_KV("toShard", toShardName) << input->toFullString();
+                                << LOG_KV("toShard", toShardName)
+                                << LOG_KV("input", input->toFullString());
             return CoroutineTransactionExecutive::externalCall(std::move(input));
         }
     }
