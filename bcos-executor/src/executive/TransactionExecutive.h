@@ -210,8 +210,8 @@ protected:
     int32_t checkContractAvailable(const CallParameters::UniquePtr& callParameters);
     uint8_t checkAccountAvailable(const CallParameters::UniquePtr& callParameters);
 
-    void creatAuthTable(
-        std::string_view _tableName, std::string_view _origin, std::string_view _sender);
+    void creatAuthTable(std::string_view _tableName, std::string_view _origin,
+        std::string_view _sender, uint32_t _version);
 
     bool buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
         std::string_view _sender, std::string_view _type, int64_t gasLeft);
