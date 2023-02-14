@@ -1,3 +1,4 @@
+#include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
@@ -13,6 +14,7 @@
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
 #include <transaction-executor/tests/TestBytecode.h>
+#include <range/v3/view/any_view.hpp>
 #include <range/v3/view/single.hpp>
 
 using namespace bcos;
@@ -29,10 +31,13 @@ struct TableNameHash
     }
 };
 
-using Storage = MemoryStorage<StateKey, StateValue, ORDERED>;
+using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage =
     MemoryStorage<StateKey, StateValue, Attribute(ORDERED | CONCURRENT), TableNameHash>;
+using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
+
+bcos::crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
 
 struct Fixture
 {
@@ -47,7 +52,8 @@ struct Fixture
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(m_cryptoSuite)),
         m_blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             m_cryptoSuite, m_blockHeaderFactory, m_transactionFactory, m_receiptFactory)),
-        m_scheduler(m_backendStorage, *m_receiptFactory, m_tableNamePool)
+        m_multiLayerStorage(m_backendStorage),
+        m_scheduler(m_multiLayerStorage, *m_receiptFactory, m_tableNamePool)
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             std::make_shared<bcos::crypto::Keccak256>();
@@ -65,21 +71,56 @@ struct Fixture
 
             auto block = m_blockFactory->createBlock();
             auto blockHeader = block->blockHeader();
-            blockHeader->setNumber(100);
+            blockHeader->setNumber(1);
             blockHeader->calculateHash(*m_cryptoSuite->hashImpl());
 
-            // block->appendTransaction(std::make_shared<bcostars::protocol::TransactionImpl>(
-            //     std::move(createTransaction)));
-
-            auto transactions = RANGES::single_view(std::addressof(createTransaction)) |
-                                RANGES::views::transform([](auto* ptr) -> auto& { return *ptr; });
+            auto transactions =
+                RANGES::single_view(std::addressof(createTransaction)) |
+                RANGES::views::transform([](auto* ptr) -> auto const& { return *ptr; });
+            m_scheduler.start();
             auto receipts = co_await m_scheduler.execute(*block->blockHeaderConst(), transactions);
+            co_await m_scheduler.finish(*blockHeader, *(m_cryptoSuite->hashImpl()));
             co_await m_scheduler.commit();
 
             contractAddress = receipts[0]->contractAddress();
         }());
 
         return contractAddress;
+    }
+
+    void clear() { m_transactions.clear(); }
+
+    void prepareIssue(size_t count)
+    {
+        task::syncWait([this](size_t count) -> task::Task<void> {
+            std::mt19937_64 rng(std::random_device{}());
+
+            // Generation accounts
+            m_addresses = RANGES::iota_view<size_t, size_t>(0, count) |
+                          RANGES::views::transform([&rng](size_t index) {
+                              bcos::h160 address;
+                              address.generateRandomFixedBytesByEngine(rng);
+                              return address;
+                          }) |
+                          RANGES::to<decltype(m_addresses)>();
+
+            bcos::codec::abi::ContractABICodec abiCodec(
+                bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+            m_transactions =
+                m_addresses | RANGES::views::transform([&abiCodec](const Address& address) {
+                    auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
+                        [inner = bcostars::Transaction()]() mutable {
+                            return std::addressof(inner);
+                        });
+                    auto& inner = transaction->mutableInner();
+
+                    auto input = abiCodec.abiIn("issue(address, int)", address, s256(10000));
+                    inner.data.input.assign(input.begin(), input.end());
+                    return transaction;
+                }) |
+                RANGES::to<decltype(m_transactions)>();
+            co_return;
+        }(count));
     }
 
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
@@ -90,16 +131,46 @@ struct Fixture
     std::shared_ptr<bcostars::protocol::BlockFactoryImpl> m_blockFactory;
 
     BackendStorage m_backendStorage;
+    MultiLayerStorageType m_multiLayerStorage;
+
     TableNamePool m_tableNamePool;
     bcos::bytes m_helloworldBytecodeBinary;
 
-    SchedulerSerialImpl<BackendStorage, ReceiptFactory,
-        TransactionExecutorImpl<Storage, ReceiptFactory>>
+    SchedulerSerialImpl<MultiLayerStorageType, ReceiptFactory,
+        TransactionExecutorImpl<MultiLayerStorageType, ReceiptFactory>>
         m_scheduler;
+
+    std::vector<Address> m_addresses;
+    std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>> m_transactions;
 };
 
-static void serialExecute(benchmark::State& state)
+static void serialScheduler(benchmark::State& state)
 {
     Fixture fixture;
     fixture.deployContract();
+    fixture.prepareIssue(state.range(0));
+
+    int i = 1;
+    task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        for (auto const& it : state)
+        {
+            bcostars::protocol::BlockHeaderImpl blockHeader(
+                [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+            blockHeader.setNumber(i++);
+
+            fixture.m_scheduler.start();
+            [[maybe_unused]] auto receipts = co_await fixture.m_scheduler.execute(blockHeader,
+                fixture.m_transactions |
+                    RANGES::views::transform(
+                        [](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
+                            -> auto& { return *transaction; }));
+            co_await fixture.m_scheduler.finish(blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
+        }
+
+        co_return;
+    }(state));
 }
+
+// static void parallelScheduler(benchmark::State& state) {}
+
+BENCHMARK(serialScheduler)->Arg(1000)->Arg(10000)->Arg(100000);

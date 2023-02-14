@@ -20,7 +20,7 @@ struct TableNameHash
 
 struct Fixture
 {
-    Fixture() : levelStorage(std::forward<decltype(m_backendStorage)>(m_backendStorage)) {}
+    Fixture() : levelStorage(m_backendStorage) {}
 
     void prepareData(int64_t count, int layer = 0)
     {
@@ -60,7 +60,7 @@ struct Fixture
 
     transaction_executor::TableNamePool m_tableNamePool;
     BackendStorage m_backendStorage;
-    MultiLayerStorage<MutableStorage, BackendStorage> levelStorage;
+    MultiLayerStorage<MutableStorage, void, BackendStorage> levelStorage;
     std::vector<bcos::transaction_executor::StateKey> allKeys;
 };
 
@@ -123,8 +123,8 @@ static void write1(benchmark::State& state)
     }(state));
 }
 
-BENCHMARK(read1)->Arg(100000)->Arg(1000000);
-BENCHMARK(read10)->Arg(100000)->Arg(1000000);
+BENCHMARK(read1)->Arg(10000)->Arg(1000000)->Arg(1000000);
+BENCHMARK(read10)->Arg(10000)->Arg(1000000)->Arg(1000000);
 BENCHMARK(write1);
 
 BENCHMARK_MAIN();

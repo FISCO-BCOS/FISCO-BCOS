@@ -54,11 +54,11 @@ public:
         co_return co_await m_storage.read(keys);
     }
 
-    auto seek(auto const& key)
-        -> task::Task<task::AwaitableReturnType<decltype(m_storage.seek(key))>>
-    {
-        co_return co_await m_storage.seek(key);
-    }
+    // auto seek(auto const& key)
+    //     -> task::Task<task::AwaitableReturnType<decltype(m_storage.seek(key))>>
+    // {
+    //     co_return co_await m_storage.seek(key);
+    // }
 
     auto write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.write(

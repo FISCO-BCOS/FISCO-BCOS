@@ -33,8 +33,8 @@ template <class StorageType>
 concept ReadableStorage = requires(StorageType&& impl)
 {
     typename StorageType::Key;
-    requires ReadIterator<task::AwaitableReturnType<decltype(impl.read(
-        RANGES::any_view<typename StorageType::Key>()))>>;
+    requires ReadIterator<
+        task::AwaitableReturnType<decltype(impl.read(std::vector<typename StorageType::Key>()))>>;
 };
 
 template <class StorageType>
@@ -42,8 +42,8 @@ concept WriteableStorage = requires(StorageType&& impl)
 {
     typename StorageType::Key;
     typename StorageType::Value;
-    requires task::IsAwaitable<decltype(impl.write(RANGES::any_view<typename StorageType::Key>(),
-        RANGES::any_view<typename StorageType::Value>()))>;
+    requires task::IsAwaitable<decltype(impl.write(
+        std::vector<typename StorageType::Key>(), std::vector<typename StorageType::Value>()))>;
 };
 
 template <class StorageType>
@@ -51,7 +51,7 @@ concept SeekableStorage = requires(StorageType&& impl)
 {
     typename StorageType::Key;
     requires ReadIterator<
-        task::AwaitableReturnType<decltype(impl.seek(std::declval<StorageType::Key>()))>>;
+        task::AwaitableReturnType<decltype(impl.seek(std::declval<typename StorageType::Key>()))>>;
 };
 
 template <class StorageType>

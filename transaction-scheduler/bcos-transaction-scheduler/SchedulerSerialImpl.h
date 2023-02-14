@@ -4,25 +4,16 @@
 
 namespace bcos::transaction_scheduler
 {
-template <bcos::transaction_executor::StateStorage BackendStorage,
+template <transaction_executor::StateStorage MultiLayerStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
-    bcos::transaction_executor::TransactionExecutor<BackendStorage, ReceiptFactory> Executor,
-    bcos::transaction_executor::StateStorage MutableStorage = storage2::memory_storage::
-        MemoryStorage<transaction_executor::StateKey, transaction_executor::StateValue,
-            storage2::memory_storage::Attribute(
-                storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION)>>
-class SchedulerSerialImpl
-  : public SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor, MutableStorage>
+    bcos::transaction_executor::TransactionExecutor<MultiLayerStorage, ReceiptFactory> Executor>
+class SchedulerSerialImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
 public:
-    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
-        MutableStorage>::SchedulerBaseImpl;
-    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
-        MutableStorage>::multiLayerStorage;
-    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
-        MutableStorage>::receiptFactory;
-    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
-        MutableStorage>::tableNamePool;
+    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::SchedulerBaseImpl;
+    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::multiLayerStorage;
+    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::receiptFactory;
+    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::tableNamePool;
 
     task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> execute(
         protocol::IsBlockHeader auto const& blockHeader,

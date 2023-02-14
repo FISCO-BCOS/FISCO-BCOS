@@ -136,12 +136,12 @@ public:
     {
         if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            auto codeHash = co_await storage2::readOne(
+            auto codeHashEntry = co_await storage2::readOne(
                 m_rollbackableStorage, StateKey{getTableNameID(address), ACCOUNT_CODE_HASH});
-            if (codeHash)
+            if (codeHashEntry)
             {
                 auto codeEntry = co_await storage2::readOne(
-                    m_rollbackableStorage, StateKey{m_codeTable, codeHash->get().get()});
+                    m_rollbackableStorage, StateKey{m_codeTable, codeHashEntry->get().get()});
                 if (codeEntry)
                 {
                     co_return std::move(codeEntry);

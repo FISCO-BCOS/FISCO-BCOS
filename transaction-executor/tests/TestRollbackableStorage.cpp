@@ -20,7 +20,9 @@ BOOST_AUTO_TEST_CASE(addRollback)
     task::syncWait([]() -> task::Task<void> {
         string_pool::FixedStringPool pool;
         memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> memoryStorage;
+
         Rollbackable rollbackableStorage(memoryStorage);
+        static_assert(storage2::ReadableStorage<decltype(rollbackableStorage)>, "No match type!");
 
         auto tableID = makeStringID(pool, "table1");
         auto point = rollbackableStorage.current();

@@ -166,6 +166,10 @@ public:
     MemoryStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(withConcurrent)
       : m_buckets(std::min(buckets, getBucketSize()))
     {}
+    MemoryStorage(const MemoryStorage&) = delete;
+    MemoryStorage(MemoryStorage&&) noexcept = default;
+    MemoryStorage& operator=(const MemoryStorage&) = delete;
+    MemoryStorage& operator=(MemoryStorage&&) = default;
 
     void setMaxCapacity(int64_t capacity) requires withMRU { m_maxCapacity = capacity; }
 

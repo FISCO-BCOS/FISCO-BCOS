@@ -17,13 +17,12 @@ struct NotExistsMutableStorageError : public bcos::Error {};
 struct NotExistsImmutableStorageError : public bcos::Error {};
 // clang-format on
 
-template <transaction_executor::StateStorage MutableStorage,
-    transaction_executor::StateStorage BackendStorage, class CachedStorage = void>
-class MultiLayerStorage
+template <transaction_executor::StateStorage MutableStorage, class CachedStorage,
+    transaction_executor::StateStorage BackendStorage>
+requires((std::is_void_v<CachedStorage> || (transaction_executor::StateStorage<CachedStorage>)) &&
+         storage2::SeekableStorage<MutableStorage>) class MultiLayerStorage
 {
 private:
-    static_assert(
-        std::is_void_v<CachedStorage> || (transaction_executor::StateStorage<CachedStorage>));
     static_assert(std::same_as<typename MutableStorage::Key, typename BackendStorage::Key>);
     static_assert(std::same_as<typename MutableStorage::Value, typename BackendStorage::Value>);
 
@@ -34,7 +33,7 @@ private:
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::add_lvalue_reference_t<CachedStorage>, std::monostate>
         m_cacheStorage;
-    BackendStorage m_backendStorage;
+    BackendStorage& m_backendStorage;
 
     std::mutex m_immutablesMutex;
     std::mutex m_mergeMutex;
@@ -106,9 +105,7 @@ public:
         using Value = MultiLayerStorage::Value const&;
 
         ReadIterator(KeyRange&& keyRange, MultiLayerStorage& storage)
-          : m_keyRange(std::forward<decltype(keyRange)>(keyRange)),
-            m_storage(storage),
-            m_keyRangeIt(RANGES::begin(m_keyRange.get()))
+          : m_keyRange(std::forward<decltype(keyRange)>(keyRange)), m_storage(storage)
         {
             if constexpr (withCacheStorage)
             {
@@ -179,8 +176,8 @@ public:
         void release() {}
     };
 
-    MultiLayerStorage(BackendStorage backendStorage) requires(!withCacheStorage)
-      : m_backendStorage(std::forward<BackendStorage>(backendStorage))
+    MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
+      : m_backendStorage(backendStorage)
     {}
 
     MultiLayerStorage(BackendStorage& backendStorage,

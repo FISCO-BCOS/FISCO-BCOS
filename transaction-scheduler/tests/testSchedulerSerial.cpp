@@ -1,5 +1,6 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
@@ -13,6 +14,7 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
+template <class Storage, class ReceiptFactory>
 struct MockExecutor
 {
     MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
@@ -29,6 +31,8 @@ struct MockExecutor
 class TestSchedulerSerialFixture
 {
 public:
+    using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
+        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
@@ -37,14 +41,21 @@ public:
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
-        scheduler(backendStorage, receiptFactory, tableNamePool)
+        multiLayerStorage(backendStorage),
+        scheduler(multiLayerStorage, receiptFactory, tableNamePool)
     {}
 
     TableNamePool tableNamePool;
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    SchedulerSerialImpl<BackendStorage, decltype(receiptFactory), MockExecutor> scheduler;
+
+    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+
+    SchedulerSerialImpl<decltype(multiLayerStorage), decltype(receiptFactory),
+        MockExecutor<decltype(multiLayerStorage), decltype(receiptFactory)>>
+        scheduler;
+    
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 };
 

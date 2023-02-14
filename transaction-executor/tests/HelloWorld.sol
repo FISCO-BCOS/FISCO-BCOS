@@ -25,7 +25,22 @@ contract DelegateCallTarget {
 contract HelloWorld {
     int m_intValue;
     string m_stringValue;
+    mapping (address => int) m_accounts;
+
     event EventExample(int value1, string value2);
+
+    function balance(address to) public view returns(int) {
+        return m_accounts[to];
+    }
+
+    function issue(address to, int count) public {
+        m_accounts[to] += count;
+    }
+
+    function transfer(address from, address to, int count) public {
+        m_accounts[from] -= count;
+        m_accounts[to] += count;
+    }
 
     function getInt() public view returns(int) {
         return m_intValue;

@@ -16,7 +16,7 @@ using namespace bcos;
 using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_executor;
 
-using Storage = MemoryStorage<StateKey, StateValue, ORDERED>;
+using MutableStorage = MemoryStorage<StateKey, StateValue, ORDERED>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
 bcos::crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
@@ -51,10 +51,10 @@ struct Fixture
     }
 
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-    Storage backendStorage;
+    MutableStorage backendStorage;
     ReceiptFactory m_receiptFactory;
     TableNamePool m_tableNamePool;
-    bcos::transaction_executor::TransactionExecutorImpl<Storage, ReceiptFactory> executor;
+    bcos::transaction_executor::TransactionExecutorImpl<MutableStorage, ReceiptFactory> executor;
     bcos::bytes m_helloworldBytecodeBinary;
 
     bcostars::BlockHeader tarsBlockHeader;

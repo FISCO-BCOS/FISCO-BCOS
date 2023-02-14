@@ -4,27 +4,20 @@
 
 namespace bcos::transaction_scheduler
 {
-template <bcos::transaction_executor::StateStorage BackendStorage,
+template <transaction_executor::StateStorage MultiLayerStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
-    bcos::transaction_executor::TransactionExecutor<BackendStorage, ReceiptFactory> Executor,
-    bcos::transaction_executor::StateStorage MutableStorage = storage2::memory_storage::
-        MemoryStorage<transaction_executor::StateKey, transaction_executor::StateValue,
-            storage2::memory_storage::Attribute(
-                storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION)>>
-class SchedulerParallelImpl
-  : public SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor, MutableStorage>
+    bcos::transaction_executor::TransactionExecutor<MultiLayerStorage, ReceiptFactory> Executor>
+class SchedulerSerialImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
 public:
-    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
-        MutableStorage>::SchedulerBaseImpl;
-    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
-        MutableStorage>::multiLayerStorage;
-    using SchedulerBaseImpl<BackendStorage, ReceiptFactory, Executor,
-        MutableStorage>::receiptFactory;
+    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::SchedulerBaseImpl;
+    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::multiLayerStorage;
+    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::receiptFactory;
+    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::tableNamePool;
 
-    task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> executeTransactions(
+    task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> execute(
         protocol::IsBlockHeader auto const& blockHeader,
-        RANGES::input_range auto const& transactions)
+        RANGES::input_range auto const& transactions)  // protocol::Transaction
     {
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)
@@ -33,7 +26,7 @@ public:
         }
 
         int contextID = 0;
-        Executor executor(multiLayerStorage(), receiptFactory());
+        Executor executor(multiLayerStorage(), receiptFactory(), tableNamePool());
         for (auto const& transaction : transactions)
         {
             receipts.emplace_back(co_await executor.execute(blockHeader, transaction, contextID++));
@@ -41,7 +34,5 @@ public:
 
         co_return receipts;
     }
-
-    size_t m_windowSize;
 };
 }  // namespace bcos::transaction_scheduler

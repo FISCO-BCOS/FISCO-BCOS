@@ -262,26 +262,27 @@ public:
                 auto value = get();
                 bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
                 entryHash = hashImpl.hash(ref);
-                if (c_fileLogLevel <= TRACE)
-                {
-                    STORAGE_LOG(TRACE)
-                        << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
-                        << toHex(value) << LOG_KV("hash", entryHash.abridged());
-                }
+                // if (c_fileLogLevel <= TRACE)
+                // {
+                //     STORAGE_LOG(TRACE)
+                //         << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << "
+                //         | "
+                //         << toHex(value) << LOG_KV("hash", entryHash.abridged());
+                // }
             }
             else if (m_status == Entry::DELETED)
             {
                 entryHash = bcos::crypto::HashType(0x1);
-                if (c_fileLogLevel <= TRACE)
-                {
-                    STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
-                                       << toHex(key) << LOG_KV("hash", entryHash.abridged());
-                }
+                // if (c_fileLogLevel <= TRACE)
+                // {
+                //     STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
+                //                        << toHex(key) << LOG_KV("hash", entryHash.abridged());
+                // }
             }
             else
             {
-                STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | "
-                                   << toHex(key) << " | " << (int)m_status;
+                // STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | "
+                //                    << toHex(key) << " | " << (int)m_status;
             }
         }
         return entryHash;

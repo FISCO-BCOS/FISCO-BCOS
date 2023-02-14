@@ -30,13 +30,13 @@ public:
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         TableNameHash>;
 
-    TestLevelStorageFixture()
-      : multiLayerStorage(std::forward<decltype(backendStorage)>(backendStorage))
-    {}
+    TestLevelStorageFixture() : multiLayerStorage(backendStorage) {}
 
     TableNamePool tableNamePool;
     BackendStorage backendStorage;
-    MultiLayerStorage<MutableStorage, BackendStorage> multiLayerStorage;
+    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+
+    static_assert(storage2::ReadableStorage<decltype(multiLayerStorage)>, "No match storage!");
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestLevelStorage, TestLevelStorageFixture)

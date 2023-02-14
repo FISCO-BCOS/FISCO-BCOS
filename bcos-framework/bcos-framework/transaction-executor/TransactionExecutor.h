@@ -48,13 +48,14 @@ concept StateStorage = requires()
 
 template <class TransactionExecutorType, class Storage, class ReceiptFactory>
 concept TransactionExecutor = requires(TransactionExecutorType executor,
-    const protocol::BlockHeader& blockHeader, const protocol::Transaction& transaction)
+    const protocol::BlockHeader& blockHeader, Storage& storage, ReceiptFactory& receiptFactory)
 {
     requires StateStorage<Storage>;
     requires protocol::IsTransactionReceiptFactory<ReceiptFactory>;
 
-    requires std::same_as<
-        task::AwaitableReturnType<decltype(executor.execute(blockHeader, transaction, 0))>,
+    // TransactionExecutorType::TransactionExecutorType(storage, receiptFactory);
+    requires std::same_as<task::AwaitableReturnType<decltype(executor.execute(
+                              blockHeader, std::declval<protocol::Transaction>(), 0))>,
         protocol::ReceiptFactoryReturnType<ReceiptFactory>>;
 };
 

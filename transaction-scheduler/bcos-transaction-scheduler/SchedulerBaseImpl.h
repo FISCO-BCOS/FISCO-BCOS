@@ -1,5 +1,6 @@
 #pragma once
 #include "MultiLayerStorage.h"
+#include "bcos-table/src/StateStorage.h"
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
@@ -12,21 +13,20 @@
 namespace bcos::transaction_scheduler
 {
 
-template <bcos::transaction_executor::StateStorage BackendStorage,
+template <transaction_executor::StateStorage MultiLayerStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
-    bcos::transaction_executor::TransactionExecutor<BackendStorage, ReceiptFactory> Executor,
-    bcos::transaction_executor::StateStorage MutableStorage>
+    bcos::transaction_executor::TransactionExecutor<MultiLayerStorage, ReceiptFactory> Executor>
 class SchedulerBaseImpl
 {
 private:
-    MultiLayerStorage<MutableStorage, BackendStorage> m_multiLayerStorage;
+    MultiLayerStorage& m_multiLayerStorage;
     ReceiptFactory& m_receiptFactory;
     transaction_executor::TableNamePool& m_tableNamePool;
 
 public:
-    SchedulerBaseImpl(BackendStorage& backendStorage, ReceiptFactory& receiptFactory,
+    SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage, ReceiptFactory& receiptFactory,
         transaction_executor::TableNamePool& tableNamePool)
-      : m_multiLayerStorage(std::forward<BackendStorage>(backendStorage)),
+      : m_multiLayerStorage(multiLayerStorage),
         m_receiptFactory(receiptFactory),
         m_tableNamePool(tableNamePool)
     {}
@@ -36,7 +36,7 @@ public:
         protocol::IsBlockHeader auto const& blockHeader, crypto::Hash const& hashImpl)
     {
         // State root
-        auto mutableStorage = m_multiLayerStorage.mutableStorage();
+        auto& mutableStorage = m_multiLayerStorage.mutableStorage();
         auto it = co_await mutableStorage.seek(transaction_executor::EMPTY_STATE_KEY);
         bcos::h256 hash;
         while (co_await it.next())
