@@ -720,9 +720,9 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
             // bandwidth limit check
             auto result = gatewayRateLimiter->checkOutGoing(endpoint, groupID, moduleID, msgLength);
-            return result ? std::make_optional(
-                                bcos::Error::buildError("", OutBWOverflow, result.value())) :
-                            std::nullopt;
+            return result.has_value() ? std::make_optional(bcos::Error::buildError(
+                                            "", OutBWOverflow, result.value())) :
+                                        std::nullopt;
         });
 
         service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,

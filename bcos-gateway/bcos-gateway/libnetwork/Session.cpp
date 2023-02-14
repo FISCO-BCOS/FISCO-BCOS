@@ -85,12 +85,13 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     if (auto result =
             (m_beforeMessageHandler ? m_beforeMessageHandler(session, message) : std::nullopt))
     {
-        auto error = result.value();
-        if (callback)
+        if (callback && result.has_value())
         {
-            server->threadPool()->enqueue([callback, error] {
-                callback(
-                    NetworkException((int)error.errorCode(), error.errorMessage()), Message::Ptr());
+            auto error = result.value();
+            auto errorCode = error.errorCode();
+            auto errorMessage = error.errorMessage();
+            server->threadPool()->enqueue([callback, errorCode, errorMessage] {
+                callback(NetworkException((int64_t)errorCode, errorMessage), Message::Ptr());
             });
         }
         return;
