@@ -50,8 +50,7 @@ public:
         m_constantPrecompiled(constantPrecompiled),
         m_builtInPrecompiled(builtInPrecompiled),
         m_blockContext(blockContext),
-        m_gasInjector(gasInjector),
-        m_pool(std::make_shared<bcos::ThreadPool>("executive", 128))
+        m_gasInjector(gasInjector)
 
     {}
 
@@ -83,7 +82,6 @@ protected:
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     std::weak_ptr<BlockContext> m_blockContext;
     std::shared_ptr<wasm::GasInjector> m_gasInjector;
-    bcos::ThreadPool::Ptr m_pool;
 };
 
 class ShardingExecutiveFactory : public ExecutiveFactory
