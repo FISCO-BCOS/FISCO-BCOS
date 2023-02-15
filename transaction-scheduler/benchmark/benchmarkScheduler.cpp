@@ -10,6 +10,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-executor/TransactionExecutorImpl.h>
 #include <bcos-transaction-scheduler/MultiLayerStorage.h>
+#include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
@@ -58,7 +59,8 @@ struct Fixture
         m_blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             m_cryptoSuite, m_blockHeaderFactory, m_transactionFactory, m_receiptFactory)),
         m_multiLayerStorage(m_backendStorage),
-        m_scheduler(m_multiLayerStorage, *m_receiptFactory, m_tableNamePool)
+        m_scheduler(m_multiLayerStorage, *m_receiptFactory, m_tableNamePool),
+        m_parallelScheduler(m_multiLayerStorage, *m_receiptFactory, m_tableNamePool)
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             std::make_shared<bcos::crypto::Keccak256>();
@@ -207,6 +209,8 @@ struct Fixture
     bcos::bytes m_helloworldBytecodeBinary;
 
     SchedulerSerialImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl> m_scheduler;
+    SchedulerParallelImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl>
+        m_parallelScheduler;
 
     std::string m_contractAddress;
     std::vector<Address> m_addresses;

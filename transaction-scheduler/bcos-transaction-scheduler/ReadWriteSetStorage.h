@@ -19,15 +19,12 @@ private:
     [[no_unique_address]] std::conditional_t<enableWriteSet, std::set<typename Storage::Key>, Empty>
         m_writeSet;
 
-    void putSet(std::set<transaction_executor::StateKey>& set, RANGES::input_range auto const& keys)
+    void putSet(decltype(m_readSet)& set, auto&& key)
     {
-        for (auto&& key : keys)
+        auto it = set.lower_bound(key);
+        if (it == set.end() || *it != key)
         {
-            auto it = set.lower_bound(key);
-            if (it == set.end() || *it != key)
-            {
-                set.emplace_hint(it, key);
-            }
+            set.emplace_hint(it, std::forward<decltype(key)>(key));
         }
     }
 
@@ -83,7 +80,10 @@ public:
     {
         if constexpr (enableReadSet)
         {
-            putSet(m_readSet, keys);
+            for (auto&& key : keys)
+            {
+                putSet(m_readSet, std::forward<decltype(key)>(key));
+            }
         }
         co_return co_await m_storage.read(keys);
     }
@@ -94,7 +94,10 @@ public:
     {
         if constexpr (enableWriteSet)
         {
-            putSet(m_writeSet, keys);
+            for (auto&& key : keys)
+            {
+                putSet(m_writeSet, std::forward<decltype(key)>(key));
+            }
         }
         co_return co_await m_storage.write(
             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
@@ -105,7 +108,10 @@ public:
     {
         if constexpr (enableWriteSet)
         {
-            putSet(m_writeSet, keys);
+            for (auto&& key : keys)
+            {
+                putSet(m_writeSet, std::forward<decltype(key)>(key));
+            }
         }
         co_return co_await m_storage.remove(keys);
     }
