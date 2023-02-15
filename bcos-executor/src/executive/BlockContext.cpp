@@ -63,6 +63,13 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
   : BlockContext(storage, ledgerCache, _hashImpl, _current->number(), _current->hash(),
         _current->timestamp(), _current->version(), _schedule, _isWasm, _isAuthCheck)
 {
+    if (_current->number() > 0 && !_current->parentInfo().empty())
+    {
+        auto view = _current->parentInfo();
+        auto it = view.begin();
+        m_parentHash = (*it).blockHash;
+    }
+
     m_keyPageIgnoreTables = std::move(_keyPageIgnoreTables);
 }
 

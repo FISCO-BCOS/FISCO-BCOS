@@ -104,6 +104,28 @@ enum ProtocolVersion : uint32_t
     V2 = 2,
 };
 
+enum ConsensusType : uint32_t
+{
+    PBFT_TYPE = 1,
+    RPBFT_TYPE = 2,
+};
+
+static constexpr const std::string_view PBFT_STR = "pbft";
+static constexpr const std::string_view RPBFT_STR = "rpbft";
+
+inline uint32_t consensusTypeFromString(std::string const& consensus)
+{
+    if (consensus == PBFT_STR)
+    {
+        return ConsensusType::PBFT_TYPE;
+    }
+    if (consensus == RPBFT_STR)
+    {
+        return ConsensusType::RPBFT_TYPE;
+    }
+    return 0;
+}
+
 // BlockVersion only present the data version with format major.minor.patch of 3 bytes, data should
 // be compatible with the same major.minor version, the patch version should always be compatible,
 // the last byte is reserved, so 3.1.0 is 0x03010000 and is compatible with 3.1.1 which is
@@ -111,6 +133,7 @@ enum ProtocolVersion : uint32_t
 
 enum class BlockVersion : uint32_t
 {
+    V3_4_VERSION = 0x03040000,
     V3_3_VERSION = 0x03030000,
     V3_2_VERSION = 0x03020000,
     V3_1_VERSION = 0x03010000,
@@ -124,11 +147,12 @@ const std::string V3_0_VERSION_STR = "3.0.0";
 const std::string V3_1_VERSION_STR = "3.1.0";
 const std::string V3_2_VERSION_STR = "3.2.0";
 const std::string V3_3_VERSION_STR = "3.3.0";
+const std::string V3_4_VERSION_STR = "3.4.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
-const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_3_VERSION;
-const std::string DEFAULT_VERSION_STR = V3_3_VERSION_STR;
+const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_4_VERSION;
+const std::string DEFAULT_VERSION_STR = V3_4_VERSION_STR;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
@@ -178,6 +202,9 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion
         break;
     case bcos::protocol::BlockVersion::V3_3_VERSION:
         _out << V3_3_VERSION_STR;
+        break;
+    case bcos::protocol::BlockVersion::V3_4_VERSION:
+        _out << V3_4_VERSION_STR;
         break;
     default:
         _out << "Unknown";

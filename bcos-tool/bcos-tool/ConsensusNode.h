@@ -15,10 +15,10 @@ namespace bcos::ledger
 {
 struct ConsensusNode
 {
-    ConsensusNode(){};
+    ConsensusNode() = default;
     ConsensusNode(std::string _nodeID, u256 _weight, std::string _type, std::string _enableNumber)
       : nodeID(std::move(_nodeID)),
-        weight(_weight),
+        weight(std::move(_weight)),
         type(std::move(_type)),
         enableNumber(std::move(_enableNumber))
     {}
