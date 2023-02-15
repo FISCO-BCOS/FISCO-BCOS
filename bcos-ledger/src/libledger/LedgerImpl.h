@@ -29,6 +29,7 @@
 
 namespace bcos::ledger
 {
+static constexpr const size_t LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT = 50;
 
 // clang-format off
 struct NotFoundTransaction : public bcos::error::Exception {};
@@ -64,6 +65,13 @@ private:
 
         auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
         (co_await getBlockData<Flags>(blockNumberStr, block), ...);
+    }
+    template <bcos::concepts::ledger::DataFlag... Flags>
+    task::Task<void> impl_getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block, bcos::crypto::NodeIDs const& nodeList)
+    {
+        assert(false); // never reach here
+        co_return;
     }
 
     template <bcos::concepts::ledger::DataFlag... Flags>
@@ -240,6 +248,13 @@ private:
         co_return status;
     }
 
+    task::Task<std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber>> impl_getAllPeersStatus()
+    {
+        std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber> allPeersStatus;
+        assert(false); //never reach here
+        co_return allPeersStatus;
+    }
+
     template <bool isTransaction>
     task::Task<void> impl_setTransactions(RANGES::range auto hashes, RANGES::range auto buffers)
     {
@@ -272,62 +287,147 @@ private:
         auto& sourceLedger = bcos::concepts::getRef(source);
 
         auto status = co_await impl_getStatus();
-        auto sourceStatus = co_await sourceLedger.getStatus();
+        auto allPeersStatus = co_await sourceLedger.getAllPeersStatus();
+        //select nodeList to getBlock，current blockNumber add 50
+        bcos::protocol::BlockNumber requestBlockNumber = LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT + status.blockNumber;
+        bcos::protocol::BlockNumber maxBlockNumber = 0;
+        crypto::NodeIDPtr maxBlockNumberNodeID;
+        crypto::NodeIDs requestNodeIDList;
+        bool sync = false;
+
+        //select nodeList to getBlock，current blockNumber add 50 or select maxBlockNumberNode to getBlock
+        for(auto& nodeStatus : allPeersStatus)
+        {
+            if(nodeStatus.second > status.blockNumber && nodeStatus.second > maxBlockNumber)
+            {
+                sync = true;
+                maxBlockNumberNodeID = nodeStatus.first;
+                maxBlockNumber = nodeStatus.second;
+            }
+            if(nodeStatus.second > requestBlockNumber){
+               requestNodeIDList.push_back(nodeStatus.first);
+            }
+        }
+        LEDGER_LOG(DEBUG) << LOG_KV( "requestNodeIDList size：",requestNodeIDList.size())
+                          << LOG_KV("current blockNumber:",status.blockNumber)
+                          << LOG_KV( "maxBlocKNumber：", maxBlockNumber);
 
         std::optional<BlockType> parentBlock;
         size_t syncedBlock = 0;
-        for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
-             ++blockNumber)
-        {
-            LEDGER_LOG(INFO) << "Syncing block from remote: " << blockNumber << " | "
-                             << sourceStatus.blockNumber << " | " << onlyHeader;
-            BlockType block;
-            if (onlyHeader)
+        // The difference between currentBlockNumber and maxBlockNumber is less than 50, synchronize to the node holding the highest block
+        if(sync && requestNodeIDList.size() == 0){
+            for (auto blockNumber = status.blockNumber + 1; blockNumber <= maxBlockNumber;
+                 ++blockNumber)
             {
-                co_await sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(
-                    blockNumber, block);
-            }
-            else
-            {
-                co_await sourceLedger.template getBlock<bcos::concepts::ledger::ALL>(
-                    blockNumber, block);
-            }
-
-            if (blockNumber > 0)  // Ignore verify genesis block
-            {
-                if (!parentBlock)
+                LEDGER_LOG(INFO) << "Syncing block from remote: " << blockNumber << " | "
+                                 << maxBlockNumber << " | " << onlyHeader;
+                BlockType block;
+                crypto::NodeIDs nodeList;
+                nodeList.push_back(maxBlockNumberNodeID);
+                if (onlyHeader)
                 {
-                    parentBlock = BlockType();
-                    co_await impl_getBlock<bcos::concepts::ledger::HEADER>(
-                        blockNumber - 1, *parentBlock);
+                    co_await sourceLedger.template getBlockByNodeList<bcos::concepts::ledger::HEADER>(
+                        blockNumber, block, nodeList);
+                }
+                else
+                {
+                    co_await sourceLedger.template getBlockByNodeList<bcos::concepts::ledger::ALL>(
+                        blockNumber, block, nodeList);
                 }
 
-                std::array<std::byte, Hasher::HASH_SIZE> parentHash;
-                bcos::concepts::hash::calculate<Hasher>(*parentBlock, parentHash);
-
-                if (RANGES::empty(block.blockHeader.data.parentInfo) ||
-                    (block.blockHeader.data.parentInfo[0].blockNumber !=
-                        parentBlock->blockHeader.data.blockNumber) ||
-                    !bcos::concepts::bytebuffer::equalTo(
-                        block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                if (blockNumber > 0)  // Ignore verify genesis block
                 {
-                    LEDGER_LOG(ERROR) << "ParentHash mismatch!";
-                    BOOST_THROW_EXCEPTION(
-                        MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
+                    if (!parentBlock)
+                    {
+                        parentBlock = BlockType();
+                        co_await impl_getBlock<bcos::concepts::ledger::HEADER>(
+                            blockNumber - 1, *parentBlock);
+                    }
+
+                    std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+                    bcos::concepts::hash::calculate<Hasher>(*parentBlock, parentHash);
+
+                    if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+                        (block.blockHeader.data.parentInfo[0].blockNumber !=
+                         parentBlock->blockHeader.data.blockNumber) ||
+                        !bcos::concepts::bytebuffer::equalTo(
+                            block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                    {
+                        LEDGER_LOG(ERROR) << "ParentHash mismatch!";
+                        BOOST_THROW_EXCEPTION(
+                            MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
+                    }
                 }
-            }
 
-            if (onlyHeader)
-            {
-                co_await impl_setBlock<bcos::concepts::ledger::HEADER>(block);
-            }
-            else
-            {
-                co_await impl_setBlock<bcos::concepts::ledger::ALL>(block);
-            }
+                if (onlyHeader)
+                {
+                    co_await impl_setBlock<bcos::concepts::ledger::HEADER>(block);
+                }
+                else
+                {
+                    co_await impl_setBlock<bcos::concepts::ledger::ALL>(block);
+                }
 
-            parentBlock = std::move(block);
-            ++syncedBlock;
+                parentBlock = std::move(block);
+                ++syncedBlock;
+            }
+        }
+
+        // the difference between currentBlock and the maxBlockNumber >= 50, randomly select node to synchronize
+        if(sync && requestNodeIDList.size() > 0){
+            for (auto blockNumber = status.blockNumber + 1; blockNumber <= requestBlockNumber;
+                 ++blockNumber)
+            {
+                LEDGER_LOG(INFO) << "Syncing block from remote: " << blockNumber << " | "
+                                 << requestBlockNumber << " | " << onlyHeader;
+                BlockType block;
+                if (onlyHeader)
+                {
+                    co_await sourceLedger.template getBlockByNodeList<bcos::concepts::ledger::HEADER>(
+                        blockNumber, block, requestNodeIDList);
+                }
+                else
+                {
+                    co_await sourceLedger.template getBlockByNodeList<bcos::concepts::ledger::ALL>(
+                        blockNumber, block, requestNodeIDList);
+                }
+
+                if (blockNumber > 0)  // Ignore verify genesis block
+                {
+                    if (!parentBlock)
+                    {
+                        parentBlock = BlockType();
+                        co_await impl_getBlock<bcos::concepts::ledger::HEADER>(
+                            blockNumber - 1, *parentBlock);
+                    }
+
+                    std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+                    bcos::concepts::hash::calculate<Hasher>(*parentBlock, parentHash);
+
+                    if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+                        (block.blockHeader.data.parentInfo[0].blockNumber !=
+                         parentBlock->blockHeader.data.blockNumber) ||
+                        !bcos::concepts::bytebuffer::equalTo(
+                            block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                    {
+                        LEDGER_LOG(ERROR) << "ParentHash mismatch!";
+                        BOOST_THROW_EXCEPTION(
+                            MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
+                    }
+                }
+
+                if (onlyHeader)
+                {
+                    co_await impl_setBlock<bcos::concepts::ledger::HEADER>(block);
+                }
+                else
+                {
+                    co_await impl_setBlock<bcos::concepts::ledger::ALL>(block);
+                }
+
+                parentBlock = std::move(block);
+                ++syncedBlock;
+            }
         }
 
         co_return syncedBlock;
