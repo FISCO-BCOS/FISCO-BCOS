@@ -89,11 +89,12 @@ void BlockExecutive::prepare()
 
     m_hasPrepared = true;
 
-    SCHEDULER_LOG(INFO) << METRIC << LOG_BADGE("BlockTrace") << "preExeBlock success"
-                        << BLOCK_NUMBER(number())
-                        << LOG_KV("blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
-                        << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
-                        << LOG_KV("timeCost", (utcTime() - startT));
+    SCHEDULER_LOG(DEBUG) << METRIC << LOG_BADGE("BlockTrace") << BLOCK_NUMBER(number())
+                         << "preExeBlock success"
+                         << LOG_KV(
+                                "blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
+                         << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
+                         << LOG_KV("timeCost", (utcTime() - startT));
 }
 
 bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
@@ -717,7 +718,7 @@ void BlockExecutive::asyncNotify(
 void BlockExecutive::saveMessage(
     std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG)
 {
-    registerAndGetDmcExecutor(address)->submit(std::move(message), withDAG);
+    registerAndGetDmcExecutor(std::move(address))->submit(std::move(message), withDAG);
 }
 
 void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)

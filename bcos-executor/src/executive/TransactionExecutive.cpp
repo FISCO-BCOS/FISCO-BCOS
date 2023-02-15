@@ -193,9 +193,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         return std::move(output);
     }
 
-    auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext, m_evmPrecompiled,
-        m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
-    auto executive = executiveFactory->build(input->codeAddress, m_contextID, newSeq, false);
+
+    auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq, false);
 
     auto output = executive->start(std::move(input));
 

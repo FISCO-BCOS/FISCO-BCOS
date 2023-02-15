@@ -65,7 +65,11 @@ inline bool isFromThisOrSDK(
 {
     return _callParameters->m_origin == _callParameters->m_sender ||
            _callParameters->m_sender == thisAddress || _callParameters->m_staticCall;
-    // return true;  // TODO: remove this test code
+}
+
+inline bool isFromThis(PrecompiledExecResult::Ptr _callParameters, const std::string& thisAddress)
+{
+    return _callParameters->m_sender == thisAddress || _callParameters->m_staticCall;
 }
 
 std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
@@ -108,7 +112,21 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
     }
     else
     {
-        return BFSPrecompiled::call(_executive, _callParameters);
+        if (isFromThis(_callParameters, getThisAddress(blockContext->isWasm())))
+        {
+            return BFSPrecompiled::call(_executive, _callParameters);
+        }
+        else
+        {
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("ShardPrecompiled")
+                << LOG_DESC("call: BFS request should only call from ShardPrecompiled")
+                << LOG_KV("origin", _callParameters->m_origin)
+                << LOG_KV("sender", _callParameters->m_sender);
+            auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_SENDER_ERROR)));
+            return _callParameters;
+        }
     }
 
     return _callParameters;

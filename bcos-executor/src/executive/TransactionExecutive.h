@@ -157,6 +157,16 @@ protected:
     CallParameters::UniquePtr callDynamicPrecompiled(
         CallParameters::UniquePtr callParameters, const std::string& code);
 
+    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
+        int64_t contextID, int64_t seq, bool useCoroutine = true)
+    {
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext, m_evmPrecompiled,
+            m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+
+
+        return executiveFactory->build(_contractAddress, contextID, seq, useCoroutine);
+    }
+
     void revert();
 
     CallParameters::UniquePtr parseEVMCResult(
