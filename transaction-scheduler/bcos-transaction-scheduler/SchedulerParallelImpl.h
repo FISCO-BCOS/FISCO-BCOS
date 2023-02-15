@@ -6,7 +6,7 @@ namespace bcos::transaction_scheduler
 {
 template <transaction_executor::StateStorage MultiLayerStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
-    bcos::transaction_executor::TransactionExecutor<MultiLayerStorage, ReceiptFactory> Executor>
+    template <typename, typename> class Executor>
 class SchedulerSerialImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
 public:

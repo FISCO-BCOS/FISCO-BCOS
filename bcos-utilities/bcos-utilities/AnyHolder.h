@@ -4,6 +4,7 @@
 #include <bcos-utilities/Overloaded.h>
 #include <boost/throw_exception.hpp>
 #include <functional>
+#include <type_traits>
 #include <variant>
 
 namespace bcos::utilities
@@ -18,29 +19,40 @@ template <class Value>
 class AnyHolder
 {
 private:
-    std::variant<Value, std::reference_wrapper<Value>, std::reference_wrapper<Value const>> m_value;
+    using ValueType = std::remove_cvref_t<Value>;
+    std::variant<ValueType, ValueType const, std::reference_wrapper<ValueType>,
+        std::reference_wrapper<ValueType const>>
+        m_value;
 
 public:
-    AnyHolder(Value&& object) : m_value(std::forward<Value>(object)) {}
-    AnyHolder(Value& object) : m_value(std::reference_wrapper<Value>(object)) {}
-    AnyHolder(Value const& object) : m_value(std::reference_wrapper<Value const>(object)) {}
+    AnyHolder(ValueType&& object) : m_value(std::forward<Value>(object)) {}
+    AnyHolder(ValueType& object) : m_value(std::reference_wrapper<ValueType>(object)) {}
+    AnyHolder(ValueType const& object) : m_value(std::reference_wrapper<ValueType const>(object)) {}
 
-    Value& get() &
+    ValueType& get() & requires(!std::is_const_v<std::remove_reference_t<Value>>)
     {
         return std::visit(
-            overloaded([](Value& ref) -> Value& { return ref; },
-                [](std::reference_wrapper<Value>& ref) -> Value& { return ref.get(); },
-                [](std::reference_wrapper<Value const> ref) -> Value& {
+            overloaded([](ValueType& ref) -> ValueType& { return ref; },
+                [](ValueType const& ref) -> ValueType& {
+                    BOOST_THROW_EXCEPTION(ReferenceFromConstError{});
+                },
+                [](std::reference_wrapper<ValueType>& ref) -> ValueType& { return ref.get(); },
+                [](std::reference_wrapper<ValueType const>& ref) -> ValueType& {
                     BOOST_THROW_EXCEPTION(ReferenceFromConstError{});
                 }),
             m_value);
     }
-    Value const& get() const&
+    ValueType const& get() const&
     {
         return std::visit(
-            overloaded([](Value& ref) -> Value const& { return ref; },
-                [](std::reference_wrapper<Value>& ref) -> Value const& { return ref.get(); },
-                [](std::reference_wrapper<Value const> ref) -> Value const& { return ref.get(); }),
+            overloaded([](ValueType& ref) -> ValueType const& { return ref; },
+                [](ValueType const& ref) -> ValueType const& { return ref; },
+                [](std::reference_wrapper<ValueType> const& ref) -> ValueType const& {
+                    return ref.get();
+                },
+                [](std::reference_wrapper<ValueType const> const& ref) -> ValueType const& {
+                    return ref.get();
+                }),
             m_value);
     }
 

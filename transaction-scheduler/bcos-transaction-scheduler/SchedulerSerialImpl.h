@@ -6,7 +6,7 @@ namespace bcos::transaction_scheduler
 {
 template <transaction_executor::StateStorage MultiLayerStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
-    bcos::transaction_executor::TransactionExecutor<MultiLayerStorage, ReceiptFactory> Executor>
+    template <typename, typename> class Executor>
 class SchedulerSerialImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
 public:
@@ -26,7 +26,8 @@ public:
         }
 
         int contextID = 0;
-        Executor executor(multiLayerStorage(), receiptFactory(), tableNamePool());
+        Executor<MultiLayerStorage, ReceiptFactory> executor(
+            multiLayerStorage(), receiptFactory(), tableNamePool());
         for (auto const& transaction : transactions)
         {
             receipts.emplace_back(co_await executor.execute(blockHeader, transaction, contextID++));

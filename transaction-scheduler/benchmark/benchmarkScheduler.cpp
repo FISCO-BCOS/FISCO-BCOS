@@ -14,13 +14,18 @@
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
 #include <transaction-executor/tests/TestBytecode.h>
+#include <boost/throw_exception.hpp>
 #include <range/v3/view/any_view.hpp>
+#include <range/v3/view/chunk.hpp>
 #include <range/v3/view/single.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_scheduler;
 using namespace bcos::transaction_executor;
+
+constexpr static s256 singleIssue(1000000);
+constexpr static s256 singleTransfer(1);
 
 struct TableNameHash
 {
@@ -60,10 +65,9 @@ struct Fixture
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(m_helloworldBytecodeBinary));
     }
 
-    std::string deployContract()
+    void deployContract()
     {
-        std::string contractAddress;
-        task::syncWait([this, &contractAddress]() -> task::Task<void> {
+        task::syncWait([this]() -> task::Task<void> {
             bcostars::protocol::TransactionImpl createTransaction(
                 [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             createTransaction.mutableInner().data.input.assign(
@@ -79,52 +83,118 @@ struct Fixture
                 RANGES::views::transform([](auto* ptr) -> auto const& { return *ptr; });
             m_scheduler.start();
             auto receipts = co_await m_scheduler.execute(*block->blockHeaderConst(), transactions);
+            if (receipts[0]->status() != 0)
+            {
+                fmt::print("deployContract unexpected receipt status: {}, {}\n",
+                    receipts[0]->status(), receipts[0]->message());
+                co_return;
+            }
+
             co_await m_scheduler.finish(*blockHeader, *(m_cryptoSuite->hashImpl()));
             co_await m_scheduler.commit();
 
-            contractAddress = receipts[0]->contractAddress();
+            m_contractAddress = receipts[0]->contractAddress();
         }());
-
-        return contractAddress;
     }
 
-    void clear() { m_transactions.clear(); }
+    void prepareAddresses(size_t count)
+    {
+        std::mt19937_64 rng(std::random_device{}());
+
+        // Generation accounts
+        m_addresses = RANGES::iota_view<size_t, size_t>(0, count) |
+                      RANGES::views::transform([&rng](size_t index) {
+                          bcos::h160 address;
+                          address.generateRandomFixedBytesByEngine(rng);
+                          return address;
+                      }) |
+                      RANGES::to<decltype(m_addresses)>();
+    }
 
     void prepareIssue(size_t count)
     {
-        task::syncWait([this](size_t count) -> task::Task<void> {
-            std::mt19937_64 rng(std::random_device{}());
+        bcos::codec::abi::ContractABICodec abiCodec(
+            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+        m_transactions =
+            m_addresses | RANGES::views::transform([this, &abiCodec](const Address& address) {
+                auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
+                    [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+                auto& inner = transaction->mutableInner();
 
-            // Generation accounts
-            m_addresses = RANGES::iota_view<size_t, size_t>(0, count) |
-                          RANGES::views::transform([&rng](size_t index) {
-                              bcos::h160 address;
-                              address.generateRandomFixedBytesByEngine(rng);
-                              return address;
-                          }) |
-                          RANGES::to<decltype(m_addresses)>();
+                inner.data.to = m_contractAddress;
+                auto input = abiCodec.abiIn("issue(address,int256)", address, singleIssue);
+                inner.data.input.assign(input.begin(), input.end());
+                return transaction;
+            }) |
+            RANGES::to<decltype(m_transactions)>();
+    }
 
-            bcos::codec::abi::ContractABICodec abiCodec(
-                bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
-            m_transactions =
-                m_addresses | RANGES::views::transform([&abiCodec](const Address& address) {
-                    auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
-                        [inner = bcostars::Transaction()]() mutable {
-                            return std::addressof(inner);
-                        });
-                    auto& inner = transaction->mutableInner();
+    void prepareTransfer(size_t count)
+    {
+        bcos::codec::abi::ContractABICodec abiCodec(
+            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+        m_transactions =
+            m_addresses | RANGES::views::chunk(2) |
+            RANGES::views::transform([this, &abiCodec](auto&& range) {
+                auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
+                    [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+                auto& inner = transaction->mutableInner();
+                inner.data.to = m_contractAddress;
+                auto& fromAddress = range[0];
+                auto& toAddress = range[1];
 
-                    auto input = abiCodec.abiIn("issue(address, int)", address, s256(10000));
-                    inner.data.input.assign(input.begin(), input.end());
-                    return transaction;
-                }) |
-                RANGES::to<decltype(m_transactions)>();
-            co_return;
-        }(count));
+                auto input = abiCodec.abiIn(
+                    "transfer(address,address,int256)", fromAddress, toAddress, singleTransfer);
+                inner.data.input.assign(input.begin(), input.end());
+                return transaction;
+            }) |
+            RANGES::to<decltype(m_transactions)>();
+    }
+
+    task::Task<std::vector<s256>> balances()
+    {
+        bcos::codec::abi::ContractABICodec abiCodec(
+            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+        // Verify the data
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setNumber(0);
+
+        auto checkTransactions = m_addresses | RANGES::views::transform([&](const auto& address) {
+            auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
+                [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+            auto& inner = transaction->mutableInner();
+            inner.data.to = m_contractAddress;
+
+            auto input = abiCodec.abiIn("balance(address)", address);
+            inner.data.input.assign(input.begin(), input.end());
+            return transaction;
+        }) | RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+
+        m_scheduler.start();
+        auto receipts =
+            co_await m_scheduler.execute(blockHeader, checkTransactions | RANGES::views::transform([
+            ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction) -> auto& {
+                return *transaction;
+            }));
+        co_await m_scheduler.finish(blockHeader, *(m_cryptoSuite->hashImpl()));
+
+        auto balances = receipts | RANGES::views::transform([&abiCodec](auto const& receipt) {
+            if (receipt->status() != 0)
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error(fmt::format(
+                    "Unexpected receipt status: {}, {}\n", receipt->status(), receipt->message())));
+            }
+
+            s256 balance;
+            abiCodec.abiOut(receipt->output(), balance);
+            return balance;
+        }) | RANGES::to<std::vector<s256>>();
+
+        co_return balances;
     }
 
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-
     std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> m_blockHeaderFactory;
     std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> m_transactionFactory;
     std::shared_ptr<bcostars::protocol::TransactionReceiptFactoryImpl> m_receiptFactory;
@@ -136,27 +206,90 @@ struct Fixture
     TableNamePool m_tableNamePool;
     bcos::bytes m_helloworldBytecodeBinary;
 
-    SchedulerSerialImpl<MultiLayerStorageType, ReceiptFactory,
-        TransactionExecutorImpl<MultiLayerStorageType, ReceiptFactory>>
-        m_scheduler;
+    SchedulerSerialImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl> m_scheduler;
 
+    std::string m_contractAddress;
     std::vector<Address> m_addresses;
     std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>> m_transactions;
 };
 
-static void serialScheduler(benchmark::State& state)
+template <bool parallel = false>
+static void issue(benchmark::State& state)
 {
     Fixture fixture;
     fixture.deployContract();
-    fixture.prepareIssue(state.range(0));
 
-    int i = 1;
+    auto count = state.range(0);
+    fixture.prepareAddresses(count);
+    fixture.prepareIssue(count);
+
+    int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         for (auto const& it : state)
         {
             bcostars::protocol::BlockHeaderImpl blockHeader(
                 [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-            blockHeader.setNumber(i++);
+            blockHeader.setNumber((i++) + 1);
+
+            fixture.m_scheduler.start();
+            [[maybe_unused]] auto receipts = co_await fixture.m_scheduler.execute(blockHeader,
+                fixture.m_transactions |
+                    RANGES::views::transform(
+                        [](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
+                            -> auto& { return *transaction; }));
+
+            co_await fixture.m_scheduler.finish(blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
+            co_await fixture.m_scheduler.commit();
+        }
+
+        auto balances = co_await fixture.balances();
+        for (auto& balance : balances)
+        {
+            if (balance != singleIssue * i)
+            {
+                BOOST_THROW_EXCEPTION(
+                    std::runtime_error(fmt::format("Balance not equal to expected! {}",
+                        balance.template convert_to<std::string>())));
+            }
+        }
+    }(state));
+}
+
+template <bool parallel = false>
+static void transfer(benchmark::State& state)
+{
+    Fixture fixture;
+    fixture.deployContract();
+
+    auto count = state.range(0) * 2;
+    fixture.prepareAddresses(count);
+    fixture.prepareIssue(count);
+
+    int i = 0;
+    task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        // First issue
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setNumber(0);
+
+        fixture.m_scheduler.start();
+        [[maybe_unused]] auto receipts = co_await fixture.m_scheduler.execute(
+            blockHeader, fixture.m_transactions | RANGES::views::transform([
+            ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction) -> auto& {
+                return *transaction;
+            }));
+        co_await fixture.m_scheduler.finish(blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
+        co_await fixture.m_scheduler.commit();
+
+        fixture.m_transactions.clear();
+        fixture.prepareTransfer(count);
+
+        // Start transfer
+        for (auto const& it : state)
+        {
+            bcostars::protocol::BlockHeaderImpl blockHeader(
+                [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+            blockHeader.setNumber((i++) + 1);
 
             fixture.m_scheduler.start();
             [[maybe_unused]] auto receipts = co_await fixture.m_scheduler.execute(blockHeader,
@@ -165,6 +298,29 @@ static void serialScheduler(benchmark::State& state)
                         [](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                             -> auto& { return *transaction; }));
             co_await fixture.m_scheduler.finish(blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
+            co_await fixture.m_scheduler.commit();
+        }
+
+        // Check
+        auto balances = co_await fixture.balances();
+        for (auto&& range : balances | RANGES::views::chunk(2))
+        {
+            auto& from = range[0];
+            auto& to = range[1];
+
+            if (from != singleIssue - singleTransfer * i)
+            {
+                BOOST_THROW_EXCEPTION(
+                    std::runtime_error(fmt::format("From balance not equal to expected! {}",
+                        from.template convert_to<std::string>())));
+            }
+
+            if (to != singleIssue + singleTransfer * i)
+            {
+                BOOST_THROW_EXCEPTION(
+                    std::runtime_error(fmt::format("To balance not equal to expected! {}",
+                        to.template convert_to<std::string>())));
+            }
         }
 
         co_return;
@@ -172,5 +328,7 @@ static void serialScheduler(benchmark::State& state)
 }
 
 // static void parallelScheduler(benchmark::State& state) {}
-
-BENCHMARK(serialScheduler)->Arg(1000)->Arg(10000)->Arg(100000);
+constexpr static bool SERIAL = false;
+constexpr static bool PARALLEL = true;
+BENCHMARK(issue<SERIAL>)->Arg(1000)->Arg(10000);
+BENCHMARK(transfer<SERIAL>)->Arg(1000)->Arg(10000);

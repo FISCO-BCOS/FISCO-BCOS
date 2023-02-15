@@ -46,7 +46,7 @@ public:
     class ReadIterator
     {
     private:
-        utilities::AnyHolder<std::remove_cvref_t<KeyRange>> m_keyRange;
+        utilities::AnyHolder<KeyRange> m_keyRange;
         MultiLayerStorage& m_storage;
         RANGES::iterator_t<KeyRange> m_keyRangeIt;
         mutable std::variant<std::monostate, storage2::ReadIteratorType<StorageType>...> m_innerIt;

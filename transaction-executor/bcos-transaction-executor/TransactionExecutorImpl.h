@@ -10,6 +10,7 @@
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/type_traits/aligned_storage.hpp>
 #include <iterator>
 #include <type_traits>
@@ -97,6 +98,7 @@ public:
         {
             auto receipt = m_receiptFactory.createReceipt(
                 0, {}, {}, EVMC_INTERNAL_ERROR, {}, blockHeader.number());
+            receipt->setMessage(boost::diagnostic_information(e));
             co_return receipt;
         }
     }

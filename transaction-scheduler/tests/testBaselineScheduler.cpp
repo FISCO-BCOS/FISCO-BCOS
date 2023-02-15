@@ -55,7 +55,11 @@ struct MockLedger
         co_return bcos::concepts::ledger::Status{};
     }
 
-    task::Task<ledger::LedgerConfig> getConfig() { co_return ledger::LedgerConfig{}; }
+    task::Task<ledger::LedgerConfig> getConfig()
+    {
+        auto ledgerConfig = ledger::LedgerConfig();
+        co_return ledgerConfig;
+    }
 };
 
 class TestBaselineSchedulerFixture

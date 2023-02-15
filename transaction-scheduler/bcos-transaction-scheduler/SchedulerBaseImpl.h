@@ -15,7 +15,7 @@ namespace bcos::transaction_scheduler
 
 template <transaction_executor::StateStorage MultiLayerStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
-    bcos::transaction_executor::TransactionExecutor<MultiLayerStorage, ReceiptFactory> Executor>
+    template <typename, typename> class Executor>
 class SchedulerBaseImpl
 {
 private:
@@ -77,7 +77,7 @@ public:
 
         // Create a empty blockHeader, put block number, version
 
-        // Executor executor(storage, m_receiptFactory);
+        Executor<MultiLayerStorage, ReceiptFactory> executor(storage, m_receiptFactory);
         // co_return co_await executor.execute(blockHeader, transaction, 0);
 
         co_return {};

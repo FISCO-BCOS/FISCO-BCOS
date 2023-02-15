@@ -104,8 +104,8 @@ protected:
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
     bcos::crypto::HashType m_hash;
-    bcos::protocol::BlockNumber m_blockNumber;
-    uint64_t m_blockTxCountLimit;
+    bcos::protocol::BlockNumber m_blockNumber = 0;
+    uint64_t m_blockTxCountLimit = 0;
     uint64_t m_leaderSwitchPeriod = 1;
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {3000000000, 0};
     // the compatibilityVersion

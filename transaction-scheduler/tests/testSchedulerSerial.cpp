@@ -52,10 +52,9 @@ public:
 
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
 
-    SchedulerSerialImpl<decltype(multiLayerStorage), decltype(receiptFactory),
-        MockExecutor<decltype(multiLayerStorage), decltype(receiptFactory)>>
+    SchedulerSerialImpl<decltype(multiLayerStorage), decltype(receiptFactory), MockExecutor>
         scheduler;
-    
+
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 };
 
