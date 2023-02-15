@@ -77,71 +77,6 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
     }
 }
 
-
-#if 0
-void ExecutiveDagFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
-    std::function<void(bcos::Error::UniquePtr)> onFinished)
-{
-    try
-    {
-        auto contextID =
-            m_pausedExecutive ? m_pausedExecutive->getContextID() : (*m_inputs)[0]->contextID;
-        for (; contextID < (int64_t)m_inputs->size(); contextID++)
-        {
-            if (!m_isRunning)
-            {
-                DAGFLOW_LOG(DEBUG) << "ExecutiveDagFlow has stopped during running";
-                onFinished(BCOS_ERROR_UNIQUE_PTR(
-                    ExecuteError::STOPPED, "ExecutiveDagFlow has stopped during running"));
-                return;
-            }
-
-
-            // run evm
-            ExecutiveState::Ptr executiveState;
-            if (!m_pausedExecutive)
-            {
-                auto& txInput = (*m_inputs)[contextID];
-                executiveState =
-                    std::make_shared<ExecutiveState>(m_executiveFactory, std::move(txInput));
-            }
-            else
-            {
-                executiveState = std::move(m_pausedExecutive);
-            }
-
-            auto seq = executiveState->getSeq();
-            DAGFLOW_LOG(DEBUG) << "Execute tx:" << contextID << " | " << seq;
-
-            auto output = executiveState->go();
-
-            // set result
-            output->contextID = contextID;
-            output->seq = seq;
-
-            if (output->type == CallParameters::MESSAGE || output->type == CallParameters::KEY_LOCK)
-            {
-                m_pausedExecutive = std::move(executiveState);
-                // call back
-                DAGFLOW_LOG(DEBUG) << "execute tx externalCall" << output->toString();
-                onTxReturn(std::move(output));
-                break;
-            }
-
-            // call back
-            DAGFLOW_LOG(DEBUG) << "execute tx finish" << output->toString();
-            onTxReturn(std::move(output));
-        }
-
-        onFinished(nullptr);
-    }
-    catch (std::exception& e)
-    {
-        DAGFLOW_LOG(ERROR) << "ExecutiveDagFlow run error: " << boost::diagnostic_information(e);
-        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveDagFlow run error", e));
-    }
-}
-#else
 void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn)
 {
     m_dagFlow->setExecuteTxFunc([this](ID id) {
@@ -175,8 +110,6 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
             else
             {
                 // run normal tx
-
-
                 auto& input = (*m_inputs)[id];
                 DAGFLOW_LOG(TRACE) << LOG_DESC("Execute tx: start normal tx") << input->toString()
                                    << LOG_KV("to", input->receiveAddress)
@@ -221,7 +154,6 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
         m_dagFlow = nullptr;
     }
 }
-#endif
 
 critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
     BlockContext& blockContext, ExecutiveFactory::Ptr executiveFactory,

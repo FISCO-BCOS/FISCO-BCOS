@@ -65,7 +65,11 @@ inline bool isFromThisOrSDK(
 {
     return _callParameters->m_origin == _callParameters->m_sender ||
            _callParameters->m_sender == thisAddress || _callParameters->m_staticCall;
-    // return true;  // TODO: remove this test code
+}
+
+inline bool isFromThis(PrecompiledExecResult::Ptr _callParameters, const std::string& thisAddress)
+{
+    return _callParameters->m_sender == thisAddress || _callParameters->m_staticCall;
 }
 
 std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
@@ -79,9 +83,9 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
                                  << LOG_DESC("call: request should only call from SDK")
                                  << LOG_KV("origin", _callParameters->m_origin)
                                  << LOG_KV("sender", _callParameters->m_sender);
-        auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_SENDER_ERROR)));
-        return _callParameters;
+
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("ShardPrecompiled call: request should only call from SDK"));
     }
 
     uint32_t func = getParamFunc(_callParameters->input());
@@ -108,7 +112,21 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
     }
     else
     {
-        return BFSPrecompiled::call(_executive, _callParameters);
+        if (isFromThis(_callParameters, getThisAddress(blockContext->isWasm())))
+        {
+            return BFSPrecompiled::call(_executive, _callParameters);
+        }
+        else
+        {
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("ShardPrecompiled")
+                << LOG_DESC("call: BFS request should only call from ShardPrecompiled")
+                << LOG_KV("origin", _callParameters->m_origin)
+                << LOG_KV("sender", _callParameters->m_sender);
+
+            BOOST_THROW_EXCEPTION(PrecompiledError(
+                "ShardPrecompiled call: BFS request should only call from ShardPrecompiled"));
+        }
     }
 
     return _callParameters;
@@ -132,7 +150,8 @@ void ShardingPrecompiled::makeShard(
                                  << LOG_DESC(
                                         "makeShard: Shard name should not be a path, please check")
                                  << LOG_KV("shardName", shardName);
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_TYPE)));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("makeShard: Shard name should not be a path, please check"));
         return;
     }
 
@@ -165,7 +184,8 @@ void ShardingPrecompiled::linkShard(
                                  << LOG_DESC(
                                         "linkShard: Shard name should not be a path, please check")
                                  << LOG_KV("shardName", shardName);
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_TYPE)));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("linkShard: Shard name should not be a path, please check"));
         return;
     }
 
@@ -175,7 +195,8 @@ void ShardingPrecompiled::linkShard(
                                << LOG_DESC("linkShard: invalid contract address")
                                << LOG_KV("contractAddress", contractAddress);
 
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("linkShard: invalid contract address: " + contractAddress));
         return;
     }
 
@@ -189,7 +210,8 @@ void ShardingPrecompiled::linkShard(
                                << LOG_KV("contractAddress", contractAddress)
                                << LOG_KV("historyShard", historyShard);
 
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_ALREADY_EXIST)));
+        BOOST_THROW_EXCEPTION(PrecompiledError(
+            "linkShard: contract has already belongs to a shard: " + historyShard));
         return;
     }
 
@@ -230,8 +252,8 @@ void ShardingPrecompiled::getContractShard(
                                << LOG_DESC("getContractShard: invalid contract address")
                                << LOG_KV("contractAddress", contractAddress);
 
-        _callParameters->setExecResult(
-            codec.encode(int32_t(CODE_FILE_INVALID_PATH), std::string()));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("getContractShard: invalid contract address: " + contractAddress));
         return;
     }
 
