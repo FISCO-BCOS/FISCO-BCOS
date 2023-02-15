@@ -22,7 +22,7 @@
 #include "../executive/BlockContext.h"
 #include "../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
-//#include "common/WorkingSealerManagerImpl.h"
+#include "common/WorkingSealerManagerImpl.h"
 #include <bcos-framework/storage/Table.h>
 #include <bcos-tool/ConsensusNode.h>
 #include <boost/core/ignore_unused.hpp>

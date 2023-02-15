@@ -192,6 +192,82 @@ protected:
 
 protected:
     std::shared_ptr<PrecompiledGasFactory> m_precompiledGasFactory;
+
+private:
+    template <typename F>
+    void Invoker(F func, const std::shared_ptr<executor::TransactionExecutive>& executive,
+        PrecompiledExecResult::Ptr const& callParameters)
+    {
+        _Invoker(func, executive, callParameters);
+    }
+    template <typename R, typename T, typename... Args>
+    void _Invoker(R (T::*func)(Args...),
+        const std::shared_ptr<executor::TransactionExecutive>& executive,
+        PrecompiledExecResult::Ptr const& callParameters)
+    {
+        using ArgsType = std::tuple<typename std::decay_t<Args>...>;
+        ArgsType tuple;
+        Deserialize(callParameters->params(), tuple);
+        CallFunc<R>(
+            func, (T*)this, callParameters, tuple, std::make_index_sequence<sizeof...(Args)>{});
+    }
+
+    template <typename Tuple, std::size_t... I>
+    void _Deserialize(
+        bytesConstRef dataRef, CodecWrapper const& codec, Tuple& tup, std::index_sequence<I...>)
+    {
+        codec.decode(dataRef, std::get<I>(tup)...);
+    }
+
+    template <typename... Args>
+    void Deserialize(bytesConstRef dataRef, CodecWrapper const& codec, std::tuple<Args...>& val)
+    {
+        _Deserialize(dataRef, val, std::make_index_sequence<sizeof...(Args)>{});
+    }
+
+    template <typename P>
+    void SetCallResult(P& val, PrecompiledExecResult::Ptr res, CodecWrapper const& codec)
+    {
+        res->setExecResult(codec.encode(val));
+    }
+
+    template <typename Tuple, std::size_t... I>
+    void _SetCallResult(PrecompiledExecResult::Ptr res, CodecWrapper const& codec, Tuple& tup,
+        std::index_sequence<I...>)
+    {
+        res->setExecResult(codec.encode(std::get<I>(tup)...));
+    }
+
+    template <typename... Args>
+    void SetCallResult(
+        std::tuple<Args...>& val, PrecompiledExecResult::Ptr res, CodecWrapper const& codec)
+    {
+        _SetCallResult(res, val, std::make_index_sequence<sizeof...(Args)>{});
+    }
+
+    template <typename R, typename T, typename F, typename Tuple, std::size_t... I>
+    void CallFunc(F func, T* pObj, const std::shared_ptr<executor::TransactionExecutive>& executive,
+        PrecompiledExecResult::Ptr const& res, Tuple& tup, std::index_sequence<I...>)
+    {
+        auto blockContext = executive->blockContext().lock();
+        CodecWrapper codec(blockContext->hashHandler(), blockContext->isWasm());
+        try
+        {
+            if constexpr (std::is_same_v<R, void>)
+            {
+                (pObj->*func)(std::get<I>(tup)...);
+            }
+            else if constexpr (!std::is_same_v<R, void>)
+            {
+                R ret = (pObj->*func)(std::get<I>(tup)...);
+                SetCallResult(std::move(ret), res);
+            }
+        }
+        catch (const std::exception& e)
+        {
+            res->setExecResult(codec.encode(std::string(e.what())));
+        }
+    }
 };
 
 }  // namespace precompiled

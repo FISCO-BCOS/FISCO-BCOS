@@ -39,8 +39,7 @@ constexpr const char* const CSS_METHOD_ADD_SEALER = "addSealer(string,uint256)";
 constexpr const char* const CSS_METHOD_ADD_SER = "addObserver(string)";
 constexpr const char* const CSS_METHOD_REMOVE = "remove(string)";
 constexpr const char* const CSS_METHOD_SET_WEIGHT = "setWeight(string,uint256)";
-constexpr const char* const WSM_METHOD_ROTATE_STR =
-    "rotateWorkingSealer(std::string, std::string, std::string)";
+constexpr const char* const WSM_METHOD_ROTATE_STR = "rotateWorkingSealer(string,string,string)";
 const auto NODE_LENGTH = 128U;
 
 ConsensusPrecompiled::ConsensusPrecompiled(const crypto::Hash::Ptr& _hashImpl)
@@ -381,12 +380,10 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     codec.decode(_callParameters->params(), vrfPublicKey, vrfInput, vrfProof);
     try
     {
-#if 0
         WorkingSealerManagerImpl sealerManger;
         sealerManger.createVRFInfo(
             std::move(vrfProof), std::move(vrfPublicKey), std::move(vrfInput));
         sealerManger.rotateWorkingSealer(_executive, _callParameters);
-#endif
     }
     catch (std::exception const& _e)
     {
