@@ -48,7 +48,7 @@ public:
     private:
         utilities::AnyHolder<KeyRange> m_keyRange;
         MultiLayerStorage& m_storage;
-        RANGES::iterator_t<KeyRange> m_keyRangeIt;
+        RANGES::iterator_t<KeyRange const> m_keyRangeIt;
         mutable std::variant<std::monostate, storage2::ReadIteratorType<StorageType>...> m_innerIt;
         bool m_started = false;
 
@@ -104,7 +104,7 @@ public:
         using Key = MultiLayerStorage::Key const&;
         using Value = MultiLayerStorage::Value const&;
 
-        ReadIterator(KeyRange&& keyRange, MultiLayerStorage& storage)
+        ReadIterator(auto&& keyRange, MultiLayerStorage& storage)
           : m_keyRange(std::forward<decltype(keyRange)>(keyRange)), m_storage(storage)
         {
             if constexpr (withCacheStorage)
@@ -127,7 +127,9 @@ public:
             if (!m_started)
             {
                 m_started = true;
-                m_keyRangeIt = RANGES::begin(m_keyRange.get());
+
+                auto& range = m_keyRange.get();
+                m_keyRangeIt = RANGES::begin(range);
                 return m_keyRangeIt != RANGES::end(m_keyRange.get());
             }
             return ++m_keyRangeIt != RANGES::end(m_keyRange.get());
@@ -186,11 +188,15 @@ public:
             cacheStorage) requires(withCacheStorage)
       : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
     {}
+    MultiLayerStorage(const MultiLayerStorage&) = delete;
+    MultiLayerStorage(MultiLayerStorage&&) = delete;
+    MultiLayerStorage& operator=(const MultiLayerStorage&) = delete;
+    MultiLayerStorage& operator=(MultiLayerStorage&&) = delete;
 
-    auto read(RANGES::input_range auto&& keys)
-        -> task::AwaitableValue<ReadIterator<decltype(keys), BackendStorage, MutableStorage>>
+    auto read(RANGES::input_range auto&& keys) -> task::AwaitableValue<
+        ReadIterator<std::remove_cvref_t<decltype(keys)>, BackendStorage, MutableStorage>>
     {
-        auto it = ReadIterator<decltype(keys), BackendStorage, MutableStorage>(
+        auto it = ReadIterator<std::remove_cvref_t<decltype(keys)>, BackendStorage, MutableStorage>(
             std::forward<decltype(keys)>(keys), *this);
         return task::AwaitableValue<decltype(it)>(std::move(it));
     }
@@ -218,13 +224,13 @@ public:
         co_return;
     }
 
-    MultiLayerStorage fork() const
+    std::unique_ptr<MultiLayerStorage> fork()
     {
         std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);  // TODO: 读提交完还是执行完
-        MultiLayerStorage levelStorage(m_backendStorage);
-        levelStorage.m_immutableStorages = m_immutableStorages;
+        auto newMultiLayerStorage = std::make_unique<MultiLayerStorage>(m_backendStorage);
+        newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
 
-        return levelStorage;
+        return newMultiLayerStorage;
     }
 
     template <class... Args>

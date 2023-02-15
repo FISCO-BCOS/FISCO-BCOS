@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_CASE(hold)
     AnyHolder<int> refHolder(i);
     BOOST_CHECK_EQUAL(std::addressof(refHolder.get()), std::addressof(i));
 
-    AnyHolder valueHolder(std::move(value));
+    AnyHolder<std::string> valueHolder(std::move(value));
     BOOST_CHECK_NE(std::addressof(valueHolder.get()), std::addressof(value));
     BOOST_CHECK_EQUAL(valueHolder.get(), "Hello world!");
 }

@@ -2,7 +2,6 @@
 #include "bcos-concepts/Exception.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/storage2/Storage.h>
-#include <bcos-utilities/AnyHolder.h>
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <boost/container/small_vector.hpp>

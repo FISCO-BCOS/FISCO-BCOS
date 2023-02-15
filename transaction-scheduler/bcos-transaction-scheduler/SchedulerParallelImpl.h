@@ -20,39 +20,40 @@ private:
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto modify
     size_t m_maxThreads = DEFAULT_MAX_THREADS;  // Maybe auto modify
 
-    using ChunkStorage = std::tuple<ReadWriteSetStorage<MultiLayerStorage>, MultiLayerStorage>;
+    struct ChunkStorage
+    {
+        ReadWriteSetStorage<MultiLayerStorage> readWriteSetStorage;
+        std::unique_ptr<MultiLayerStorage> multiLayerStorage;
+    };
     using ChunkExecuteReturn =
         std::tuple<ChunkStorage, std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>>;
 
-    ChunkExecuteReturn chunkExecute(protocol::IsBlockHeader auto const& blockHeader,
+    task::Task<ChunkExecuteReturn> chunkExecute(protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto&& transactions, int startContextID)
     {
         auto myStorage = multiLayerStorage().fork();
-        myStorage.newMutable();
-        ReadWriteSetStorage<MultiLayerStorage> readWriteSetStorage(myStorage);
+        myStorage->newMutable();
+        ReadWriteSetStorage<MultiLayerStorage> readWriteSetStorage(*myStorage);
 
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> chunkReceipts;
         chunkReceipts.reserve(RANGES::size(transactions));
-        task::syncWait([&readWriteSetStorage](decltype(chunkReceipts)& chunkReceipts,
-                           decltype(transactions)& transactions, decltype(blockHeader)& blockHeader,
-                           int contextID) -> task::Task<void> {
-            Executor<decltype(readWriteSetStorage), ReceiptFactory> executor(
-                readWriteSetStorage, receiptFactory(), tableNamePool());
-            for (auto const& transaction : transactions)
-            {
-                chunkReceipts.emplace_back(
-                    co_await executor.execute(blockHeader, transaction, contextID++));
-            }
-        }(chunkReceipts, transactions, blockHeader, startContextID));
+        Executor<decltype(readWriteSetStorage), ReceiptFactory> executor(
+            readWriteSetStorage, receiptFactory(), tableNamePool());
+        for (auto const& transaction : transactions)
+        {
+            chunkReceipts.emplace_back(
+                co_await executor.execute(blockHeader, transaction, startContextID++));
+        }
 
-        return {ChunkStorage{std::move(readWriteSetStorage), std::move(myStorage)},
-            std::move(chunkReceipts)};  // Notice the m_storage of readWriteSetStorage will be
-                                        // invalid
+        auto chunkStorage = ChunkStorage{.readWriteSetStorage = std::move(readWriteSetStorage),
+            .multiLayerStorage = std::move(myStorage)};
+
+        co_return ChunkExecuteReturn{std::move(chunkStorage), std::move(chunkReceipts)};
     }
 
-    void mergeStorage(auto const& fromStorage, auto& toStorage)
+    task::Task<void> mergeStorage(auto& fromStorage, auto& toStorage)
     {
-        auto it = co_await fromStorage->seek(transaction_executor::EMPTY_STATE_KEY);
+        auto it = co_await fromStorage.seek(transaction_executor::EMPTY_STATE_KEY);
         while (co_await it.next())
         {
             if (co_await it.hasValue())
@@ -87,17 +88,16 @@ public:
         auto chunkIt = RANGES::begin(chunks);
         auto chunkEnd = RANGES::end(chunks);
 
-        multiLayerStorage().newMutable();
-
-        std::vector<ChunkExecuteReturn> executedStorages;
+        std::vector<ChunkStorage> executedStorages;
         while (chunkIt != chunkEnd)
         {
             std::atomic_bool aborted = false;
             auto currentChunk = chunkIt;
             tbb::parallel_pipeline(m_maxThreads,
-                tbb::make_filter<void, RANGES::range_value_t<decltype(chunks)>>(
+                tbb::make_filter<void, std::tuple<RANGES::range_value_t<decltype(chunks)>, int>>(
                     tbb::filter::serial_in_order,
-                    [&](tbb::flow_control& control) -> RANGES::range_value_t<decltype(chunks)> {
+                    [&](tbb::flow_control& control)
+                        -> std::tuple<RANGES::range_value_t<decltype(chunks)>, int> {
                         if (currentChunk == chunkEnd || aborted)
                         {
                             control.stop();
@@ -107,9 +107,10 @@ public:
                     }) &
                     tbb::make_filter<std::tuple<RANGES::range_value_t<decltype(chunks)>, int>,
                         ChunkExecuteReturn>(tbb::filter::parallel,
-                        [&](RANGES::range_value_t<decltype(chunks)> const& input) {
+                        [&](std::tuple<RANGES::range_value_t<decltype(chunks)>, int> const& input) {
                             auto&& [transactions, startContextID] = input;
-                            return chunkExecute(blockHeader, transactions, startContextID);
+                            return task::syncWait(
+                                chunkExecute(blockHeader, transactions, startContextID));
                         }) &
                     tbb::make_filter<ChunkExecuteReturn, void>(
                         tbb::filter::serial_in_order, [&](auto&& chunkResult) {
@@ -131,13 +132,13 @@ public:
                                     }
                                 }
 
+                                task::syncWait(mergeStorage(myStorage->mutableStorage(),
+                                    multiLayerStorage().mutableStorage()));
+
                                 executedStorages.emplace_back(std::move(chunkStorage));
                                 receipts.insert(receipts.end(),
                                     std::make_move_iterator(chunkReceipts.begin()),
-                                    std::make_move_iterator(chunkResult.end()));
-
-                                mergeStorage(myStorage.mutableStorage(),
-                                    multiLayerStorage().mutableStorage());
+                                    std::make_move_iterator(chunkReceipts.end()));
 
                                 RANGES::advance(chunkIt, 1);
                             }
