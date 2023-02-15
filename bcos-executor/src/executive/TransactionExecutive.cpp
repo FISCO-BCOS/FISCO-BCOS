@@ -411,6 +411,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         EXECUTIVE_LOG(INFO) << "create contract table " << LOG_KV("table", tableName)
                             << LOG_KV("sender", callParameters->senderAddress);
         if (blockContext->isAuthCheck() ||
+            blockContext->blockVersion() <=> BlockVersion::V3_3_VERSION > 0 ||
             versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
         {
             // Create auth table, always create auth table when version >= 3.3.0
