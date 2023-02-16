@@ -48,6 +48,18 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
             // get dagFlow from cache
             auto number = m_blockContext->number();
             auto timestamp = m_blockContext->timestamp();
+
+            if (!inputs.empty())
+            {
+                EXECUTOR_NAME_LOG(DEBUG)
+                    << LOG_BADGE("preExeBlock") << "Input is not empty, execute directly"
+                    << LOG_KV("number", number) << LOG_KV("timestamp", timestamp)
+                    << LOG_KV("shard", contractAddress);
+                TransactionExecutor::executeTransactions(
+                    contractAddress, std::move(inputs), std::move(callback));
+                break;
+            }
+
             PreExeCache::Ptr cache;
             {
                 // get dagFlow if it has been prepared beforehand

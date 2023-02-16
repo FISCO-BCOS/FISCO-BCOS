@@ -193,9 +193,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         return std::move(output);
     }
 
-    auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext, m_evmPrecompiled,
-        m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
-    auto executive = executiveFactory->build(input->codeAddress, m_contextID, newSeq, false);
+
+    auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq, false);
 
     auto output = executive->start(std::move(input));
 
@@ -399,7 +398,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                 versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0))
         {
             // Create auth table
-            creatAuthTable(tableName, response->origin, std::move(sender));
+            creatAuthTable(
+                tableName, response->origin, std::move(sender), blockContext->blockVersion());
         }
         return {nullptr, std::move(response)};
     }
@@ -413,7 +413,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
         {
             // Create auth table, always create auth table when version >= 3.3.0
-            creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress);
+            creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress,
+                blockContext->blockVersion());
         }
 
         if (blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_3_VERSION))
@@ -1273,13 +1274,20 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     return callResults;
 }
 
-void TransactionExecutive::creatAuthTable(
-    std::string_view _tableName, std::string_view _origin, std::string_view _sender)
+void TransactionExecutive::creatAuthTable(std::string_view _tableName, std::string_view _origin,
+    std::string_view _sender, uint32_t version)
 {
     // Create the access table
     //  /sys/ not create
-    if (_tableName.starts_with(precompiled::SYS_ADDRESS_PREFIX) ||
-        _tableName.starts_with(USER_SYS_PREFIX))
+    if (version <=> BlockVersion::V3_3_VERSION >= 0 &&
+        (_tableName.starts_with(precompiled::SYS_ADDRESS_PREFIX) ||
+            _tableName.starts_with(USER_SYS_PREFIX)))
+    {
+        return;
+    }
+    if (version <=> BlockVersion::V3_3_VERSION < 0 &&
+        (_tableName.starts_with(USER_SYS_PREFIX) ||
+            _sender.starts_with(precompiled::SYS_ADDRESS_PREFIX)))
     {
         return;
     }
