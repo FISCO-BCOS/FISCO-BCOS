@@ -111,6 +111,8 @@ bool HsmSM2Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashT
 bool HsmSM2Crypto::verify(
     PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
+    std::string pubKeyStr(_pubKey->mutableData());
+
     // get provider
     CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
 
@@ -166,7 +168,7 @@ std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesCo
         h256 r;
         h256 s;
     } in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
+    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(in)));
     // verify the signature
     auto signatureData = std::make_shared<SignatureDataWithPub>(in.r, in.s, in.pub.ref());
     try

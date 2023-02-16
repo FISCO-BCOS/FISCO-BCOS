@@ -1282,6 +1282,8 @@ generate_common_ini() {
     ; url of the key center, in format of ip:port
     ;key_center_url=
     ;cipher_data_key=
+    ; HSM key index for encrypt/decrypt
+    ;enc_key_index = 
 
 [consensus]
     ; min block generation time(ms)

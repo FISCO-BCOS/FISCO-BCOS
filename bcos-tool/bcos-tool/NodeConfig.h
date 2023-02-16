@@ -112,6 +112,7 @@ public:
     bool const& hsmEnable() const { return m_hsmEnable; }
     std::string const& hsmLibPath() const { return m_hsmLibPath; }
     int const& keyIndex() const { return m_keyIndex; }
+    int const& encKeyIndex() const { return m_encKeyIndex; }
     std::string const& password() const { return m_password; }
 
     size_t minSealTime() const { return m_minSealTime; }
@@ -287,6 +288,7 @@ private:
     bool m_hsmEnable;
     std::string m_hsmLibPath;
     int m_keyIndex;
+    int m_encKeyIndex;
     std::string m_password;
 
     // storage security configuration

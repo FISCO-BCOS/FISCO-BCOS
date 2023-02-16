@@ -74,3 +74,59 @@ bcos::bytesPointer HsmSM4Crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
     CRYPTO_LOG(DEBUG) << "[HsmSM4Crypto::Decrypt] Decrypt Success";
     return decryptedData;
 }
+
+bcos::bytesPointer HsmSM4Crypto::HsmSM4EncryptWithInternalKey(
+    const unsigned char* _plainData, size_t _plainDataSize, const unsigned int _keyIndex)
+{
+    std::vector<byte> encryptIV = {0xeb, 0xee, 0xc5, 0x68, 0x58, 0xe6, 0x04, 0xd8, 0x32, 0x7b, 0x9b,
+        0x3c, 0x10, 0xc9, 0x0c, 0xa7};
+    // Add padding
+    int nRemain = _plainDataSize % SM4_BLOCK_SIZE;
+    int paddingLen = SM4_BLOCK_SIZE - nRemain;
+    int inDataVLen = _plainDataSize + paddingLen;
+    bytes inDataV(inDataVLen);
+    memcpy(inDataV.data(), _plainData, _plainDataSize);
+    memset(inDataV.data() + _plainDataSize, paddingLen, paddingLen);
+
+    // Encrypt
+    unsigned int size;
+    auto encryptedData = std::make_shared<bytes>();
+    encryptedData->resize(inDataVLen);
+    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+    auto encryptCode = provider.EncryptWithInternalKey((unsigned int)_keyIndex, SM4_CBC,
+        encryptIV.data(), (unsigned char*)inDataV.data(), inDataVLen,
+        (unsigned char*)encryptedData->data(), &size);
+    if (encryptCode != SDR_OK)
+    {
+        CRYPTO_LOG(ERROR) << "[HsmSM4Crypto::HsmSM4EncryptWithInternalKey] encrypt ERROR "
+                          << LOG_KV("error", provider.GetErrorMessage(encryptCode));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Hsm SM4 EncryptWithInternalKey error"));
+    }
+    CRYPTO_LOG(DEBUG) << "[HsmSM4Crypto::EncryptWithInternalKey] Encrypt Success";
+
+    return encryptedData;
+}
+
+bcos::bytesPointer HsmSM4Crypto::HsmSM4DecryptWithInternalKey(
+    const unsigned char* _cipherData, size_t _cipherDataSize, const unsigned int _keyIndex)
+{
+    std::vector<byte> decryptIV = {0xeb, 0xee, 0xc5, 0x68, 0x58, 0xe6, 0x04, 0xd8, 0x32, 0x7b, 0x9b,
+        0x3c, 0x10, 0xc9, 0x0c, 0xa7};
+    auto decryptedData = std::make_shared<bytes>();
+    decryptedData->resize(_cipherDataSize);
+    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+
+    unsigned int size;
+    auto decryptCode =
+        provider.DecryptWithInternalKey((unsigned int)_keyIndex, SM4_CBC, decryptIV.data(),
+            _cipherData, _cipherDataSize, (unsigned char*)decryptedData->data(), &size);
+    if (decryptCode != SDR_OK)
+    {
+        CRYPTO_LOG(ERROR) << "[HsmSM4Crypto::HsmSM4DecryptWithInternalKey] decrypt ERROR "
+                          << LOG_KV("error", provider.GetErrorMessage(decryptCode));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Hsm SM4 DecryptWithInternalKey error"));
+    }
+    CRYPTO_LOG(DEBUG) << "[HsmSM4Crypto::DecryptWithInternalKey] Decrypt Success";
+
+    return decryptedData;
+}

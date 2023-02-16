@@ -34,6 +34,7 @@
 #include "tikv_client.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
+#include <bcos-security/bcos-security/HsmDataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
 #include <bcos-table/src/StateStorageFactory.h>
@@ -249,8 +250,14 @@ TransactionalStorageInterface::Ptr createBackendStorage(
         bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
         if (nodeConfig->storageSecurityEnable())
         {
-            dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
-            dataEncryption->init();
+            if (nodeConfig->hsmEnable())
+            {
+                dataEncryption = std::make_shared<bcos::security::HsmDataEncryption>(nodeConfig);
+            }
+            else
+            {
+                dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
+            }
         }
         if (write)
         {
@@ -455,8 +462,14 @@ int main(int argc, const char* argv[])
     bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
     if (nodeConfig->storageSecurityEnable())
     {
-        dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
-        dataEncryption->init();
+        if (nodeConfig->hsmEnable())
+        {
+            dataEncryption = std::make_shared<bcos::security::HsmDataEncryption>(nodeConfig);
+        }
+        else
+        {
+            dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
+        }
     }
 
     auto keyPageSize = nodeConfig->keyPageSize();
