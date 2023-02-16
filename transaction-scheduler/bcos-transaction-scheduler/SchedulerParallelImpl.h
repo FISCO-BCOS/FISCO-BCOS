@@ -15,10 +15,10 @@ class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Receip
 {
 private:
     constexpr static size_t DEFAULT_CHUNK_SIZE = 1000;
-    constexpr static size_t DEFAULT_MAX_THREADS = 16;
+    constexpr static size_t DEFAULT_MAX_THREADS = 24;
 
-    size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto modify
-    size_t m_maxThreads = DEFAULT_MAX_THREADS;  // Maybe auto modify
+    size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto adjust
+    size_t m_maxThreads = DEFAULT_MAX_THREADS;  // Maybe auto adjust
 
     struct ChunkStorage
     {

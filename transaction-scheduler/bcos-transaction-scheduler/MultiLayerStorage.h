@@ -48,7 +48,7 @@ public:
     private:
         utilities::AnyHolder<KeyRange> m_keyRange;
         MultiLayerStorage& m_storage;
-        RANGES::iterator_t<KeyRange const> m_keyRangeIt;
+        decltype(RANGES::begin(m_keyRange.get())) m_keyRangeIt;
         mutable std::variant<std::monostate, storage2::ReadIteratorType<StorageType>...> m_innerIt;
         bool m_started = false;
 
@@ -101,8 +101,8 @@ public:
         }
 
     public:
-        using Key = MultiLayerStorage::Key const&;
-        using Value = MultiLayerStorage::Value const&;
+        using Key = typename storage2::ReadIteratorType<MutableStorage>::Key;
+        using Value = typename storage2::ReadIteratorType<MutableStorage>::Value;
 
         ReadIterator(auto&& keyRange, MultiLayerStorage& storage)
           : m_keyRange(std::forward<decltype(keyRange)>(keyRange)), m_storage(storage)

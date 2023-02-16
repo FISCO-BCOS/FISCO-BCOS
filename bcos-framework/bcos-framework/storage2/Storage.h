@@ -104,8 +104,7 @@ auto readOne(ReadableStorage auto& storage, auto const& key)
     using ValueType = ValueOrReferenceWrapper<
         typename task::AwaitableReturnType<decltype(storage.read(storage2::single(key)))>::Value>;
 
-    auto keys = storage2::single(key);
-    auto it = co_await storage.read(keys);
+    auto it = co_await storage.read(storage2::single(key));
     co_await it.next();
     std::optional<ValueType> result;
     if (co_await it.hasValue())

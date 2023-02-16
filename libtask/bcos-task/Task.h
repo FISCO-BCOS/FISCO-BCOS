@@ -157,7 +157,7 @@ template <class Value>
 class [[nodiscard]] AwaitableValue
 {
 public:
-    AwaitableValue(Value&& value) : m_value(std::forward<Value>(value)) {}
+    AwaitableValue(Value value) : m_value(std::move(value)) {}
     constexpr static bool await_ready() noexcept { return true; }
     constexpr static bool await_suspend([[maybe_unused]] CO_STD::coroutine_handle<> handle) noexcept
     {

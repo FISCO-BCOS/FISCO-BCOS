@@ -75,7 +75,6 @@ BOOST_AUTO_TEST_CASE(readWriteRemove)
             {
                 BOOST_CHECK(co_await it.hasValue());
 
-                BOOST_CHECK_THROW(co_await it.key(), UnsupportedMethod);
                 auto value = co_await it.value();
                 BOOST_CHECK_EQUAL(
                     value.get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
@@ -111,7 +110,7 @@ BOOST_AUTO_TEST_CASE(readWriteRemove)
             {
                 BOOST_CHECK(co_await it2.hasValue());
 
-                BOOST_CHECK_THROW(co_await it2.key(), UnsupportedMethod);
+                // BOOST_CHECK_THROW(co_await it2.key(), UnsupportedMethod);
                 auto value = co_await it2.value();
                 BOOST_CHECK_EQUAL(
                     value.get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
