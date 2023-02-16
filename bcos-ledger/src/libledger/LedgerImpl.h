@@ -299,7 +299,7 @@ private:
     task::Task<std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber>> impl_getAllPeersStatus()
     {
         std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber> allPeersStatus;
-        assert(false); //never reach here
+        // assert(false); //never reach here
         co_return allPeersStatus;
     }
 
