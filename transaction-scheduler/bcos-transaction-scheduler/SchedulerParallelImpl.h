@@ -29,18 +29,27 @@ private:
         std::tuple<ChunkStorage, std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>>;
 
     task::Task<ChunkExecuteReturn> chunkExecute(protocol::IsBlockHeader auto const& blockHeader,
-        RANGES::input_range auto&& transactions, int startContextID)
+        RANGES::input_range auto&& transactions, int startContextID, std::atomic_bool& abortToken)
     {
         auto myStorage = multiLayerStorage().fork();
         myStorage->newMutable();
         ReadWriteSetStorage<MultiLayerStorage> readWriteSetStorage(*myStorage);
 
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> chunkReceipts;
-        chunkReceipts.reserve(RANGES::size(transactions));
+        if constexpr (RANGES::sized_range<decltype(transactions)>)
+        {
+            chunkReceipts.reserve(RANGES::size(transactions));
+        }
+
         Executor<decltype(readWriteSetStorage), ReceiptFactory> executor(
             readWriteSetStorage, receiptFactory(), tableNamePool());
         for (auto const& transaction : transactions)
         {
+            if (abortToken)
+            {
+                break;
+            }
+
             chunkReceipts.emplace_back(
                 co_await executor.execute(blockHeader, transaction, startContextID++));
         }
@@ -75,7 +84,7 @@ public:
 
     task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> execute(
         protocol::IsBlockHeader auto const& blockHeader,
-        RANGES::input_range auto const& transactions)  // protocol::Transaction
+        RANGES::input_range auto const& transactions)
     {
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)
@@ -91,30 +100,31 @@ public:
         std::vector<ChunkStorage> executedStorages;
         while (chunkIt != chunkEnd)
         {
-            std::atomic_bool aborted = false;
+            std::atomic_bool abortToken = false;
             auto currentChunk = chunkIt;
             tbb::parallel_pipeline(m_maxThreads,
                 tbb::make_filter<void, std::tuple<RANGES::range_value_t<decltype(chunks)>, int>>(
                     tbb::filter::serial_in_order,
                     [&](tbb::flow_control& control)
                         -> std::tuple<RANGES::range_value_t<decltype(chunks)>, int> {
-                        if (currentChunk == chunkEnd || aborted)
+                        if (currentChunk == chunkEnd || abortToken)
                         {
                             control.stop();
                             return {};
                         }
-                        return {*(currentChunk++), 0};
+                        return {*(currentChunk++),
+                            m_chunkSize * RANGES::distance(currentChunk, chunkEnd)};
                     }) &
                     tbb::make_filter<std::tuple<RANGES::range_value_t<decltype(chunks)>, int>,
                         ChunkExecuteReturn>(tbb::filter::parallel,
                         [&](std::tuple<RANGES::range_value_t<decltype(chunks)>, int> const& input) {
                             auto&& [transactions, startContextID] = input;
-                            return task::syncWait(
-                                chunkExecute(blockHeader, transactions, startContextID));
+                            return task::syncWait(chunkExecute(
+                                blockHeader, transactions, startContextID, abortToken));
                         }) &
                     tbb::make_filter<ChunkExecuteReturn, void>(
                         tbb::filter::serial_in_order, [&](auto&& chunkResult) {
-                            if (!aborted)
+                            if (!abortToken)
                             {
                                 auto&& [chunkStorage, chunkReceipts] = chunkResult;
                                 auto&& [readWriteSetStorage, myStorage] = chunkStorage;
@@ -127,7 +137,7 @@ public:
                                             readWriteSetStorage))
                                     {
                                         // Abort the pipeline and retry
-                                        aborted = true;
+                                        abortToken = true;
                                         return;
                                     }
                                 }

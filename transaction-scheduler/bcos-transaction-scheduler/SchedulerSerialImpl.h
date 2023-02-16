@@ -17,7 +17,7 @@ public:
 
     task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> execute(
         protocol::IsBlockHeader auto const& blockHeader,
-        RANGES::input_range auto const& transactions)  // protocol::Transaction
+        RANGES::input_range auto const& transactions)
     {
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)

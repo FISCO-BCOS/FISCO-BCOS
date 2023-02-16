@@ -33,8 +33,10 @@ struct TableNameHash
 {
     size_t operator()(const bcos::transaction_executor::StateKey& key) const
     {
-        auto const& tableID = std::get<0>(key);
-        return std::hash<bcos::transaction_executor::TableNameID>{}(tableID);
+        // auto const& tableID = std::get<0>(key);
+        // return std::hash<bcos::transaction_executor::TableNameID>{}(tableID);
+
+        return std::hash<bcos::transaction_executor::StateKey>{}(key);
     }
 };
 

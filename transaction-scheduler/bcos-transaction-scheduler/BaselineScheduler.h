@@ -129,7 +129,6 @@ public:
                 executeLock.unlock();
 
                 callback(nullptr, std::move(newBlockHeader), false);
-
                 co_return;
             }
             catch (bcos::Error& e)
