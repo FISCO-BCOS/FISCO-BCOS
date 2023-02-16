@@ -88,6 +88,12 @@ private:
         request.onlyHeader = false;
 
         (processGetBlockFlags<Flags>(request.onlyHeader), ...);
+        // if nodeList is empty, return
+        if(nodeList.size() == 0){
+            response.block = {};
+            std::swap(response.block, block);
+            co_return;
+        }
         // random select nodeID from nodeList
         std::mt19937 rng;
         rng = std::mt19937(std::random_device{}());
