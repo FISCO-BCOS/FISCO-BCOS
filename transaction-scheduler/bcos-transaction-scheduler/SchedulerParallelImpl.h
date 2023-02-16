@@ -3,7 +3,7 @@
 #include "ReadWriteSetStorage.h"
 #include "SchedulerBaseImpl.h"
 #include <bcos-task/Wait.h>
-#include <tbb/pipeline.h>
+#include <tbb/parallel_pipeline.h>
 #include <iterator>
 
 namespace bcos::transaction_scheduler
@@ -104,7 +104,7 @@ public:
             auto currentChunk = chunkIt;
             tbb::parallel_pipeline(m_maxThreads,
                 tbb::make_filter<void, std::tuple<RANGES::range_value_t<decltype(chunks)>, int>>(
-                    tbb::filter::serial_in_order,
+                    tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control)
                         -> std::tuple<RANGES::range_value_t<decltype(chunks)>, int> {
                         if (currentChunk == chunkEnd || abortToken)
@@ -116,14 +116,14 @@ public:
                             m_chunkSize * RANGES::distance(currentChunk, chunkEnd)};
                     }) &
                     tbb::make_filter<std::tuple<RANGES::range_value_t<decltype(chunks)>, int>,
-                        ChunkExecuteReturn>(tbb::filter::parallel,
+                        ChunkExecuteReturn>(tbb::filter_mode::parallel,
                         [&](std::tuple<RANGES::range_value_t<decltype(chunks)>, int> const& input) {
                             auto&& [transactions, startContextID] = input;
                             return task::syncWait(chunkExecute(
                                 blockHeader, transactions, startContextID, abortToken));
                         }) &
                     tbb::make_filter<ChunkExecuteReturn, void>(
-                        tbb::filter::serial_in_order, [&](auto&& chunkResult) {
+                        tbb::filter_mode::serial_in_order, [&](auto&& chunkResult) {
                             if (!abortToken)
                             {
                                 auto&& [chunkStorage, chunkReceipts] = chunkResult;

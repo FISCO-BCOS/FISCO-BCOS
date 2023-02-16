@@ -74,18 +74,6 @@ public:
         const std::string& _executorName,
         const bcos::executor::ParallelTransactionExecutorInterface::Ptr& _executor);
 
-    auto begin() const
-    {
-        return boost::make_transform_iterator(m_name2Executors.cbegin(),
-            std::bind(&ExecutorManager::executorView, this, std::placeholders::_1));
-    }
-
-    auto end() const
-    {
-        return boost::make_transform_iterator(m_name2Executors.cend(),
-            std::bind(&ExecutorManager::executorView, this, std::placeholders::_1));
-    }
-
     void forEachExecutor(
         std::function<void(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr)>
             handleExecutor)
@@ -180,6 +168,14 @@ public:
         return m_name2Executors[name];
     }
 
+    auto range() const&
+    {
+        return m_name2Executors | RANGES::views::transform([](auto const& keyValue) {
+            auto&& [key, value] = keyValue;
+            return value->executor;
+        });
+    }
+
 private:
     std::shared_ptr<Timer> m_timer;
 
@@ -207,12 +203,5 @@ private:
 
     std::priority_queue<ExecutorInfo::Ptr, std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>
         m_executorPriorityQueue;
-
-
-    bcos::executor::ParallelTransactionExecutorInterface::Ptr const& executorView(
-        const decltype(m_name2Executors)::value_type& value) const
-    {
-        return value.second->executor;
-    }
 };
 }  // namespace bcos::scheduler

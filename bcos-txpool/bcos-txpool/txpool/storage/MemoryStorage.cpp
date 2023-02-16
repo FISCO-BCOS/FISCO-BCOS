@@ -22,7 +22,6 @@
 #include "bcos-utilities/Common.h"
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
-#include <tbb/pipeline.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
