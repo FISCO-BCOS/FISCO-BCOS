@@ -85,7 +85,7 @@ public:
             LEDGER_LOG(INFO) << LOG_KV("nodeID", nodeStatus.first->hex())
                              << LOG_KV("blockNumber: ", nodeStatus.second)
                              << LOG_KV("，needBlockNumber: ", needBlockNumber);
-            if(nodeStatus.second > needBlockNumber)
+            if(nodeStatus.second >= needBlockNumber)
             {
                 requestNodeIDList.push_back(nodeStatus.first);
             }
@@ -349,7 +349,9 @@ private:
         size_t syncedBlock = 0;
         auto syncBlockNumber = status.blockNumber + LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT;
         if(allPeersStatus.size() != 0 && currentMaxBlockNumber < syncBlockNumber)
+        {
             syncBlockNumber = currentMaxBlockNumber;
+        }
         // sync block
         for (auto blockNumber = status.blockNumber + 1 ; blockNumber <= syncBlockNumber;
              ++blockNumber)
