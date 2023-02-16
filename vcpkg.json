@@ -54,10 +54,6 @@
       "name": "openssl",
       "version>=": "1.1.1-tassl"
     },
-    {
-      "name": "boost-context",
-      "version>=": "1.79.0-m1"
-    },
     "fmt",
     "benchmark",
     "wedprcrypto",
@@ -133,5 +129,5 @@
       ]
     }
   },
-  "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139"
+  "builtin-baseline": "1c48ec7f49d69bb753e6afefba51368e18263255"
 }
