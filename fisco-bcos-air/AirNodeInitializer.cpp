@@ -22,6 +22,7 @@
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -122,8 +123,9 @@ void AirNodeInitializer::start()
             /*gateway start*/ bcos::gateway::Session, bcos::gateway::Socket,
             bcos::gateway::P2PMessage, bcos::gateway::P2PSession, bcos::gateway::P2PMessageV2,
             bcos::gateway::FrontServiceInfo, bcos::gateway::GatewayNodeStatus,
-            bcos::gateway::GatewayStatus, bcos::gateway::ResponseCallback,
-            bcos::gateway::Retry /*gateway end*/>(1);
+            bcos::gateway::GatewayStatus, bcos::gateway::ResponseCallback, bcos::gateway::Retry,
+            bcos::gateway::ratelimiter::TimeWindowRateLimiter,
+            bcos::gateway::ratelimiter::DistributedRateLimiter /*gateway end*/>(4);
     }
 }
 

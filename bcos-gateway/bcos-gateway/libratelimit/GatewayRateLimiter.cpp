@@ -24,8 +24,8 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::gateway::ratelimiter;
 
-std::pair<bool, std::string> GatewayRateLimiter::checkOutGoing(const std::string& _endpoint,
-    const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength)
+std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& _endpoint,
+    const std::string& _groupID, uint16_t _moduleID, int64_t _msgLength)
 {
     // endpoint of the p2p connection
     const std::string& endpoint = _endpoint;
@@ -34,7 +34,7 @@ std::pair<bool, std::string> GatewayRateLimiter::checkOutGoing(const std::string
     // moduleID of the message, zero means the message is p2p's own message
     uint16_t moduleID = _moduleID;
     // the length of the message
-    uint64_t msgLength = _msgLength;
+    int64_t msgLength = _msgLength;
 
     std::string errorMsg;
     do
@@ -137,25 +137,42 @@ std::pair<bool, std::string> GatewayRateLimiter::checkOutGoing(const std::string
         m_rateLimiterStat->updateOutGoing(endpoint, msgLength, true);
         m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, true);
 
-        return {true, ""};
+        return std::nullopt;
     } while (false);
 
     m_rateLimiterStat->updateOutGoing(endpoint, msgLength, false);
     m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, false);
 
-    return {false, errorMsg};
+    return {errorMsg};
 }
 
-std::pair<bool, std::string> GatewayRateLimiter::checkInComing(
-    const std::string& _endpoint, uint64_t _msgLength)
+std::optional<std::string> GatewayRateLimiter::checkInComing(
+    const std::string& _endpoint, uint16_t _packageType, int64_t _msgLength, bool /*unused*/)
 {
-    m_rateLimiterStat->updateInComing(_endpoint, _msgLength);
-    return {true, ""};
+    auto rateLimiter = m_rateLimiterManager->getInRateLimiter(_endpoint, _packageType);
+    bool result = true;
+    if (rateLimiter)
+    {
+        result = rateLimiter->tryAcquire(1);
+    }
+    m_rateLimiterStat->updateInComing(_endpoint, _msgLength, result);
+    return result ? std::nullopt :
+                    std::make_optional<std::string>(
+                        "qps overflow, package type: " + std::to_string(_packageType) +
+                        " ,endpoint: " + _endpoint);
 }
 
-std::pair<bool, std::string> GatewayRateLimiter::checkInComing(
-    const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength)
+std::optional<std::string> GatewayRateLimiter::checkInComing(
+    const std::string& _groupID, uint16_t _moduleID, int64_t _msgLength)
 {
-    m_rateLimiterStat->updateInComing(_groupID, _moduleID, _msgLength);
-    return {true, ""};
+    bool result = true;
+    auto rateLimiter = m_rateLimiterManager->getInRateLimiter(_groupID, _moduleID, true);
+    if (rateLimiter)
+    {
+        result = rateLimiter->tryAcquire(1);
+    }
+    m_rateLimiterStat->updateInComing(_groupID, _moduleID, _msgLength, result);
+    return result ? std::nullopt :
+                    std::make_optional<std::string>("qps overflow, groupID: " + _groupID +
+                                                    " ,moduleID: " + std::to_string(_moduleID));
 }

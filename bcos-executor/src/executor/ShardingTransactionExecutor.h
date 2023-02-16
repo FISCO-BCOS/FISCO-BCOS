@@ -19,9 +19,11 @@
  * @date: 2023-01-07
  */
 #pragma once
+#include "../dag/TxDAGFlow.h"
 #include "TransactionExecutor.h"
 namespace bcos::executor
 {
+
 class ShardingTransactionExecutor : public TransactionExecutor
 {
 public:
@@ -45,8 +47,35 @@ public:
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override;
 
+    void preExecuteTransactions(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(bcos::Error::UniquePtr)> callback) override;
+
+
     std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
-        std::shared_ptr<BlockContext> blockContext, std::string codeAddress,
-        bool useCoroutine) override;
+        std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
+        bool isStaticCall = false) override;
+
+private:
+    BlockContext::Ptr createTmpBlockContext(const protocol::BlockHeader::ConstPtr& currentHeader);
+
+private:
+    class PreExeCache
+    {
+    public:
+        using Ptr = std::shared_ptr<PreExeCache>;
+
+        std::shared_ptr<std::vector<CallParameters::UniquePtr>> inputs;
+        TxDAGFlow::Ptr dagFlow;
+        mutable bcos::SharedMutex x_cache;
+    };
+
+    // <blockNumber, timestamp> -> TxDAGFlow
+    std::map<std::tuple<bcos::protocol::BlockNumber, int64_t, const std::string>, PreExeCache::Ptr>
+        m_preparedCache;
+    mutable bcos::SharedMutex x_preparedCache;
 };
+
+
 }  // namespace bcos::executor

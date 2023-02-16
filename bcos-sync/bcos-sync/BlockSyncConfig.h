@@ -169,11 +169,11 @@ private:
     mutable SharedMutex x_knownLatestHash;
     mutable Mutex m_mutex;
 
-    std::atomic<size_t> m_maxDownloadingBlockQueueSize = 256;
-    std::atomic<size_t> m_maxDownloadRequestQueueSize = 1000;
-    // the max number of blocks this node can requested to
-    std::atomic<size_t> m_maxRequestBlocks = {8};
-    std::atomic<size_t> m_downloadTimeout = (200 * m_maxRequestBlocks);
+    std::atomic<size_t> m_maxDownloadingBlockQueueSize = MAX_DOWNLOAD_BLOCK_QUEUE_SIZE;
+    std::atomic<size_t> m_maxDownloadRequestQueueSize = MAX_DOWNLOAD_REQUEST_QUEUE_SIZE;
+    // the max number of blocks this node can request to
+    std::atomic<size_t> m_maxRequestBlocks = MAX_REQUEST_BLOCKS_COUNT;
+    std::atomic<size_t> m_downloadTimeout = (DOWNLOAD_TIMEOUT_TTL * m_maxRequestBlocks);
 
     std::atomic<size_t> m_maxShardPerPeer = {2};
     std::atomic<bcos::protocol::BlockNumber> m_committedProposalNumber = {0};

@@ -25,8 +25,8 @@
 #include "bcos-utilities/Timer.h"
 #include <bcos-gateway/libratelimit/RateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/ObjectCounter.h>
 #include <sw/redis++/redis++.h>
-#include <memory>
 #include <mutex>
 
 namespace bcos
@@ -37,7 +37,8 @@ namespace ratelimiter
 {
 
 class DistributedRateLimiter : public RateLimiterInterface,
-                               public std::enable_shared_from_this<DistributedRateLimiter>
+                               public std::enable_shared_from_this<DistributedRateLimiter>,
+                               public bcos::ObjectCounter<DistributedRateLimiter>
 {
 public:
     using Ptr = std::shared_ptr<DistributedRateLimiter>;
@@ -48,27 +49,22 @@ public:
     const static int32_t DEFAULT_LOCAL_CACHE_PERCENT = 15;
 
 public:
-    DistributedRateLimiter(std::shared_ptr<sw::redis::Redis> _redis,
-        const std::string& _rateLimiterKey, int64_t _maxPermits, int32_t _interval = 1,
+    DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>& _redis,
+        const std::string& _rateLimiterKey, int64_t _maxPermitsSize,
+        bool _allowExceedMaxPermitSize = false, int32_t _intervalSec = 1,
         bool _enableLocalCache = true, int32_t _localCachePercent = DEFAULT_LOCAL_CACHE_PERCENT)
       : m_redis(_redis),
         m_rateLimiterKey(_rateLimiterKey),
-        m_maxPermits(_maxPermits),
-        m_interval(_interval),
+        m_maxPermitsSize(_maxPermitsSize),
+        m_allowExceedMaxPermitSize(_allowExceedMaxPermitSize),
+        m_intervalSec(_intervalSec),
         m_enableLocalCache(_enableLocalCache),
         m_localCachePercent(_localCachePercent)
 
     {
-        GATEWAY_LOG(INFO) << LOG_BADGE("DistributedRateLimiter::NEWOBJ")
-                          << LOG_DESC("construct distributed rate limiter")
-                          << LOG_KV("rateLimiterKey", _rateLimiterKey)
-                          << LOG_KV("interval", _interval) << LOG_KV("maxPermits", _maxPermits)
-                          << LOG_KV("enableLocalCache", _enableLocalCache)
-                          << LOG_KV("localCachePercent", _localCachePercent);
-
         if (m_enableLocalCache)
         {
-            m_clearCacheTimer = std::make_shared<Timer>(_interval * 1000);
+            m_clearCacheTimer = std::make_shared<Timer>(_intervalSec * 1000);
             m_clearCacheTimer->registerTimeoutHandler([this]() { refreshLocalCache(); });
             m_clearCacheTimer->start();
         }
@@ -152,7 +148,7 @@ public:
      * @brief acquire permits
      *
      * @param _requiredPermits
-     * @return void
+     * @return bool
      */
     bool acquire(int64_t _requiredPermits) override;
 
@@ -205,8 +201,8 @@ public:
     void stat();
 
 public:
-    int64_t maxPermits() const { return m_maxPermits; }
-    int64_t interval() const { return m_interval; }
+    int64_t maxPermitsSize() const { return m_maxPermitsSize; }
+    int64_t intervalSec() const { return m_intervalSec; }
     bool enableLocalCache() const { return m_enableLocalCache; }
     int32_t localCachePercent() const { return m_localCachePercent; }
     std::string rateLimitKey() const { return m_rateLimiterKey; }
@@ -220,10 +216,12 @@ private:
     std::shared_ptr<sw::redis::Redis> m_redis;
     // key for distributed rate limit
     std::string m_rateLimiterKey;
-    // max token acquire in m_interval time
-    int64_t m_maxPermits;
+    // max token acquire in m_intervalSec time
+    int64_t m_maxPermitsSize;
     //
-    int32_t m_interval = 1;
+    bool m_allowExceedMaxPermitSize = false;
+    //
+    int32_t m_intervalSec = 1;
 
     // enable local cache for improve perf and reduce latency
     bool m_enableLocalCache = false;

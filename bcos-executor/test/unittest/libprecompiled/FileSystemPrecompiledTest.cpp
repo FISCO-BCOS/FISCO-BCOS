@@ -595,7 +595,7 @@ BOOST_FIXTURE_TEST_SUITE(precompiledFileSystemTest, FileSystemPrecompiledFixture
 BOOST_AUTO_TEST_CASE(lsTest)
 {
     init(false);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -688,7 +688,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
 BOOST_AUTO_TEST_CASE(lsPageTest)
 {
     init(false);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -789,7 +789,7 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
 BOOST_AUTO_TEST_CASE(lsPagWasmTest)
 {
     init(true);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -891,7 +891,7 @@ BOOST_AUTO_TEST_CASE(lsTest_3_0)
 {
     init(false, BlockVersion::V3_0_VERSION);
     m_blockVersion = BlockVersion::V3_0_VERSION;
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -950,7 +950,7 @@ BOOST_AUTO_TEST_CASE(lsTest_3_0)
 BOOST_AUTO_TEST_CASE(lsTestWasm)
 {
     init(true);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // ls dir
     {
         auto result = list(_number++, "/tables");
@@ -1008,7 +1008,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
 BOOST_AUTO_TEST_CASE(lsTestWasm_3_0)
 {
     init(true, BlockVersion::V3_0_VERSION);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // ls dir
     {
         auto result = list(_number++, "/tables");
@@ -1066,7 +1066,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm_3_0)
 BOOST_AUTO_TEST_CASE(mkdirTest)
 {
     init(false);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // simple mkdir
     {
         auto result = mkdir(_number++, "/tables/temp/test");
@@ -1126,7 +1126,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
 BOOST_AUTO_TEST_CASE(mkdirWasmTest)
 {
     init(true);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // simple mkdir
     {
         auto result = mkdir(_number++, "/tables/temp/test");
@@ -1186,7 +1186,7 @@ BOOST_AUTO_TEST_CASE(mkdirWasmTest)
 BOOST_AUTO_TEST_CASE(mkdirTest_3_0)
 {
     init(false, protocol::BlockVersion::V3_0_VERSION);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // simple mkdir
     {
         auto result = mkdir(_number++, "/tables/temp/test");
@@ -1246,7 +1246,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest_3_0)
 BOOST_AUTO_TEST_CASE(linkTest)
 {
     init(false);
-    BlockNumber number = 3;
+    bcos::protocol::BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
     std::string contractName = "Hello";
@@ -1383,7 +1383,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
 BOOST_AUTO_TEST_CASE(linkTest_3_0)
 {
     init(false, protocol::BlockVersion::V3_0_VERSION);
-    BlockNumber number = 3;
+    bcos::protocol::BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
     std::string contractName = "Hello";
@@ -1500,7 +1500,7 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
 BOOST_AUTO_TEST_CASE(rebuildBfsTest)
 {
     init(false, protocol::BlockVersion::V3_0_VERSION);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -1659,7 +1659,7 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
 BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
 {
     init(false, protocol::BlockVersion::V3_0_VERSION);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {

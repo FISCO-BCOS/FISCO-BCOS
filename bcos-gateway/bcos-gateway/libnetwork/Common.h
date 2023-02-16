@@ -66,7 +66,8 @@ enum P2PExceptionType
     ConnectError,
     DuplicateSession,
     NotInWhitelist,
-    BandwidthOverFlow,
+    OutBWOverflow,
+    InQPSOverflow,
     ALL,
 };
 

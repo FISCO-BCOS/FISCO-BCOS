@@ -84,6 +84,9 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
     auto message = execute(std::move(callParameters));
 
+    message->contextID = contextID();
+    message->seq = seq();
+
     EXECUTIVE_LOG(TRACE) << "Execute finish\t" << message->toFullString();
 
     return message;

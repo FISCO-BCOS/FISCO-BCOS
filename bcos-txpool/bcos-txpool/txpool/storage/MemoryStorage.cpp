@@ -35,12 +35,12 @@ using namespace bcos::crypto;
 using namespace bcos::protocol;
 
 MemoryStorage::MemoryStorage(
-    TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, int64_t _txsExpirationTime)
+    TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)), m_txsExpirationTime(_txsExpirationTime)
 {
     m_blockNumberUpdatedTime = utcTime();
     // Trigger a transaction cleanup operation every 3s
-    m_cleanUpTimer = std::make_shared<Timer>(3000, "txpoolTimer");
+    m_cleanUpTimer = std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer");
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
@@ -69,8 +69,8 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     transaction->setImportTime(utcTime());
     struct Awaitable
     {
-        constexpr bool await_ready() { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        [[maybe_unused]] constexpr bool await_ready() { return false; }
+        [[maybe_unused]] void await_suspend(CO_STD::coroutine_handle<> handle)
         {
             try
             {
@@ -546,7 +546,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     UpgradableGuard lock(x_txpoolMutex);
     auto lockT = utcTime() - startT;
     startT = utcTime();
-    auto currentTime = (int64_t)utcTime();
+    auto currentTime = utcTime();
     size_t traverseCount = 0;
     for (auto const& it : m_txsTable)
     {
@@ -718,11 +718,11 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
     UpgradableGuard missedTxsLock(x_missedTxs);
     for (auto const& txHash : _txsHashList)
     {
-        if (m_txsTable.count(txHash))
+        if (m_txsTable.count(txHash) > 0U)
         {
             continue;
         }
-        if (m_missedTxs.count(txHash))
+        if (m_missedTxs.count(txHash) > 0U)
         {
             continue;
         }
@@ -731,7 +731,7 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
     }
     if (m_missedTxs.size() >= m_config->poolLimit())
     {
-        UpgradeGuard ul(missedTxsLock);
+        UpgradeGuard ulock(missedTxsLock);
         m_missedTxs.clear();
     }
     return unknownTxsList;
@@ -876,7 +876,7 @@ void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
         {
             return;
         }
-        if (_retryTime >= memoryStorage->c_maxRetryTime)
+        if (_retryTime >= MAX_RETRY_NOTIFY_TIME)
         {
             return;
         }
@@ -959,9 +959,9 @@ void MemoryStorage::cleanUpExpiredTransactions()
     }
     size_t traversedTxsNum = 0;
     size_t erasedTxs = 0;
-    int64_t currentTime = utcTime();
+    uint64_t currentTime = utcTime();
     for (auto it = m_txsTable.begin();
-         traversedTxsNum <= c_maxTraverseTxsNum && it != m_txsTable.end(); it++)
+         traversedTxsNum <= MAX_TRAVERSE_TXS_COUNT && it != m_txsTable.end(); it++)
     {
         auto tx = it->second;
         if (m_invalidTxs.count(tx->hash()) > 0U)

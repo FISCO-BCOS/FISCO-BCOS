@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(precompiled_gas_test)
 {
     // call precompiled gas overflow
     gas = 1;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     auto result = openTable(number++, "error_test");
     BOOST_CHECK(result->status() == (int32_t)TransactionStatus::OutOfGas);
 }

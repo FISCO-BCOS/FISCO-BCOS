@@ -133,7 +133,7 @@ std::string RateLimiterStat::toEndPointKey(const std::string& _ep)
     return " endpoint:  " + _ep;
 }
 
-void RateLimiterStat::updateInComing(const std::string& _endpoint, uint64_t _dataSize)
+void RateLimiterStat::updateInComing(const std::string& _endpoint, uint64_t _dataSize, bool _suc)
 {
     std::string epKey = toEndPointKey(_endpoint);
     std::string totalKey = TOTAL_OUTGOING;
@@ -179,24 +179,18 @@ void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dat
 }
 
 void RateLimiterStat::updateInComing(
-    const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize)
+    const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool _suc)
 {
-    if (_groupID.empty())
+    if (_groupID.empty() && (_moduleID != 0))
     {  // amop
-        if (_moduleID != 0)
-        {
-            std::string moduleKey = toModuleKey(_moduleID);
-            std::lock_guard<std::mutex> lock(m_inLock);
+        std::string moduleKey = toModuleKey(_moduleID);
+        std::lock_guard<std::mutex> lock(m_inLock);
 
-            auto& moduleInStat = m_inStat[moduleKey];
-            moduleInStat.update(_dataSize);
-        }
+        auto& moduleInStat = m_inStat[moduleKey];
+        moduleInStat.update(_dataSize);
 
         return;
     }
-
-    // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("_groupID", _groupID)
-    //                     << LOG_KV("moduleID", _moduleID) << LOG_KV("dataSize", _dataSize);
 
     std::string groupKey = toGroupKey(_groupID);
     std::lock_guard<std::mutex> lock(m_inLock);
@@ -208,26 +202,24 @@ void RateLimiterStat::updateInComing(
 void RateLimiterStat::updateOutGoing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc)
 {
-    if (_groupID.empty())
+    if (_groupID.empty() && (_moduleID != 0))
     {
-        if (_moduleID != 0)
+        std::string moduleKey = toModuleKey(_moduleID);
+        std::lock_guard<std::mutex> lock(m_outLock);
+
+        auto& moduleOutStat = m_outStat[moduleKey];
+        moduleOutStat.update(_dataSize);
+
+        if (suc)
         {
-            std::string moduleKey = toModuleKey(_moduleID);
-            std::lock_guard<std::mutex> lock(m_outLock);
-
-            auto& moduleOutStat = m_outStat[moduleKey];
+            // update total outgoing
             moduleOutStat.update(_dataSize);
-
-            if (suc)
-            {
-                // update total outgoing
-                moduleOutStat.update(_dataSize);
-            }
-            else
-            {
-                moduleOutStat.updateFailed();
-            }
         }
+        else
+        {
+            moduleOutStat.updateFailed();
+        }
+
         return;
     }
 

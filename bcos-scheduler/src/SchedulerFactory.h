@@ -36,7 +36,7 @@ public:
             m_storage, m_executionMessageFactory, m_blockFactory, m_txPool,
             m_transactionSubmitResultFactory, m_hashImpl, m_isAuthCheck, m_isWasm,
             m_isSerialExecute, schedulerTermId);
-        scheduler->fetchGasLimit();
+        scheduler->fetchConfig();
 
         scheduler->registerBlockNumberReceiver(m_blockNumberReceiver);
         scheduler->registerTransactionNotifier(m_txNotifier);

@@ -25,6 +25,7 @@
 #include "bcos-gateway/Common.h"
 #include <bcos-gateway/libratelimit/RateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/ObjectCounter.h>
 #include <mutex>
 
 namespace bcos
@@ -34,7 +35,8 @@ namespace gateway
 namespace ratelimiter
 {
 
-class TimeWindowRateLimiter : public RateLimiterInterface
+class TimeWindowRateLimiter : public RateLimiterInterface,
+                              public bcos::ObjectCounter<TimeWindowRateLimiter>
 {
 public:
     using Ptr = std::shared_ptr<TimeWindowRateLimiter>;
@@ -42,14 +44,17 @@ public:
     using UniquePtr = std::unique_ptr<const TimeWindowRateLimiter>;
 
 public:
-    TimeWindowRateLimiter(uint64_t _maxPermitsSize, uint64_t _timeWindowMS = 1000)
+    TimeWindowRateLimiter(uint64_t _maxPermitsSize, uint64_t _timeWindowMS = 1000,
+        bool _allowExceedMaxPermitSize = false)
       : m_maxPermitsSize(_maxPermitsSize),
+        m_allowExceedMaxPermitSize(_allowExceedMaxPermitSize),
         m_currentPermitsSize(m_maxPermitsSize),
         m_timeWindowMS(_timeWindowMS),
         m_lastPermitsUpdateTime(utcSteadyTime())
     {
         RATELIMIT_LOG(INFO) << LOG_BADGE("[NEWOBJ][TimeWindowRateLimiter]")
                             << LOG_KV("maxPermitsSize", _maxPermitsSize)
+                            << LOG_KV("allowExceedMaxPermitSize", _allowExceedMaxPermitSize)
                             << LOG_KV("timeWindowMS", _timeWindowMS);
     }
 
@@ -63,6 +68,7 @@ public:
     uint64_t maxPermitsSize() const { return m_maxPermitsSize; }
     uint64_t currentPermitsSize() const { return m_currentPermitsSize; }
     uint64_t timeWindowMS() const { return m_timeWindowMS; }
+    bool allowExceedMaxPermitSize() const { return m_allowExceedMaxPermitSize; }
 
 public:
     /**
@@ -88,11 +94,14 @@ public:
      */
     void rollback(int64_t _requiredPermits) override;
 
+
 private:
     // lock for all data class member
     std::mutex m_mutex;
     //
     uint64_t m_maxPermitsSize = 0;
+    //
+    bool m_allowExceedMaxPermitSize = false;
     // stored permits
     uint64_t m_currentPermitsSize = 0;
     // default time window interval is 1s

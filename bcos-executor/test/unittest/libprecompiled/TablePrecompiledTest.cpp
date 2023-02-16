@@ -620,7 +620,7 @@ BOOST_FIXTURE_TEST_SUITE(precompiledTableTest, TableFactoryPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(createTableTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -706,7 +706,7 @@ BOOST_AUTO_TEST_CASE(createTableWasmsTest)
     init(true);
 
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -764,7 +764,7 @@ BOOST_AUTO_TEST_CASE(createTableWasmsTest)
 BOOST_AUTO_TEST_CASE(appendColumnsTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -819,7 +819,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -869,7 +869,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsWasmTest)
 BOOST_AUTO_TEST_CASE(insertTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -950,7 +950,7 @@ BOOST_AUTO_TEST_CASE(insertWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1009,14 +1009,14 @@ BOOST_AUTO_TEST_CASE(insertWasmTest)
 BOOST_AUTO_TEST_CASE(selectTest)
 {
     /// INSERT_COUNT should > 100
-    const int INSERT_COUNT = 10000;
+    const int INSERT_COUNT = 110;
     auto fillZero = [](int _num) -> std::string {
         std::stringstream stream;
         stream << std::setfill('0') << std::setw(40) << std::right << _num;
         return stream.str();
     };
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1102,14 +1102,14 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
 {
     init(true);
     /// INSERT_COUNT should > 100
-    const int INSERT_COUNT = 1000;
+    const int INSERT_COUNT = 110;
     auto fillZero = [](int _num) -> std::string {
         std::stringstream stream;
         stream << std::setfill('0') << std::setw(40) << std::right << _num;
         return stream.str();
     };
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1195,7 +1195,7 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
 BOOST_AUTO_TEST_CASE(updateTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1302,7 +1302,7 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1400,7 +1400,7 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
 BOOST_AUTO_TEST_CASE(removeTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }

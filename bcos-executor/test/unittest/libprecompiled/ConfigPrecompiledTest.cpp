@@ -268,7 +268,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         BOOST_CHECK(result3->status() == (int32_t)_errorCode);
         commitBlock(_number);
     };
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
     // simple set SYSTEM_KEY_TX_GAS_LIMIT
     {
         simpleSetFunc(

@@ -45,8 +45,9 @@ public:
 
     ~AccountPrecompiledFixture() override = default;
 
-    ExecutionMessage::UniquePtr deployHelloInAuthCheck(std::string newAddress, BlockNumber _number,
-        Address _address = Address(), bool _errorInFrozen = false)
+    ExecutionMessage::UniquePtr deployHelloInAuthCheck(std::string newAddress,
+        bcos::protocol::BlockNumber _number, Address _address = Address(),
+        bool _errorInFrozen = false)
     {
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
@@ -580,7 +581,7 @@ BOOST_AUTO_TEST_CASE(createAccountTest)
 {
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
     Address errorAccount = Address("17505f128bd4d00c2698441b1f54ef843b837211");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
     {
         auto response = setAccountStatus(number++, newAccount, 0);
         BOOST_CHECK(response->status() == 0);
@@ -648,7 +649,7 @@ BOOST_AUTO_TEST_CASE(setAccountStatusTest)
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
     Address errorAccount = Address("17505f128bd4d00c2698441b1f54ef843b837211");
     Address h1 = Address("12305f128bd4d00c2698441b1f54ef843b837123");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
 
     // setAccountStatus account not exist
     {
@@ -711,7 +712,7 @@ BOOST_AUTO_TEST_CASE(setAccountStatusErrorTest)
 {
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
     Address errorAccount = Address("17505f128bd4d00c2698441b1f54ef843b837211");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
 
     // setAccountStatus account not exist
     {
@@ -741,7 +742,7 @@ BOOST_AUTO_TEST_CASE(abolishTest)
 {
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
     Address h1 = Address("12305f128bd4d00c2698441b1f54ef843b837123");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
 
     // setAccountStatus account not exist
     {
@@ -815,7 +816,7 @@ BOOST_AUTO_TEST_CASE(abolishTest)
 BOOST_AUTO_TEST_CASE(parallelSetTest)
 {
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
 
     // setAccountStatus account not exist
     {

@@ -106,12 +106,14 @@ public:
         return dispatcher();
     }
 
+protected:
+    CallParameters::UniquePtr m_exchangeMessage = nullptr;
+
 private:
     CallParameters::UniquePtr dispatcher();
     void spawnAndCall(std::function<void(ResumeHandler)> function);
 
     std::shared_ptr<SyncStorageWrapper> m_syncStorageWrapper;
-    CallParameters::UniquePtr m_exchangeMessage = nullptr;
 
     std::optional<Coroutine::pull_type> m_pullMessage;
     std::optional<Coroutine::push_type> m_pushMessage;
