@@ -170,7 +170,7 @@ void BlockSync::printSyncInfo()
     std::stringstream peer_str;
     for (auto const& peer : *peers)
     {
-        peer_str<< peer->shortHex() << "/";
+        peer_str << peer->shortHex() << "/";
     }
     BLKSYNC_LOG(TRACE) << "\n[Sync Info] --------------------------------------------\n"
                        << "            IsSyncing:    " << isSyncing() << "\n"
@@ -418,7 +418,7 @@ void BlockSync::onPeerStatus(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
 
 void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)
 {
-    auto blockMsg = m_config->msgFactory()->createBlocksMsg(_syncMsg);
+    auto blockMsg = m_config->msgFactory()->createBlocksMsg(std::move(_syncMsg));
     BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                        << LOG_DESC("Receive peer block packet")
                        << LOG_KV("peer", _nodeID->shortHex());
