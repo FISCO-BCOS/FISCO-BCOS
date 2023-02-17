@@ -289,7 +289,7 @@ void TransactionExecutor::initEvmEnvironment()
         {DISCRETE_ZKP_ADDRESS, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
 
 
-    if (m_blockVersion != (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_1_VERSION)
     {
         // Only 3.1 goes here, here is a bug, ignore init test precompiled
     }
@@ -359,7 +359,7 @@ void TransactionExecutor::initWasmEnvironment()
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_NAME, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
-    if (m_blockVersion != (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_1_VERSION)
     {
         // Only 3.1 goes here, here is a bug, ignore init test precompiled
     }
@@ -373,7 +373,7 @@ void TransactionExecutor::initWasmEnvironment()
 
 void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)
 {
-    if (m_blockVersion != (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_1_VERSION)
     {
         // Only 3.1 goes here, here is a bug, ignore init test precompiled
     }
