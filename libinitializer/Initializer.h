@@ -19,6 +19,7 @@
  * @date 2021-06-11
  */
 #pragma once
+#include "BaselineSchedulerInitializer.h"
 #include "FrontServiceInitializer.h"
 #include "PBFTInitializer.h"
 #include "ProPBFTInitializer.h"

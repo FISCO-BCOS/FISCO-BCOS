@@ -65,6 +65,9 @@ public:
         [[no_unique_address]] ValueResolver m_valueResolver;
 
     public:
+        using Key = KeyType const&;
+        using Value = ValueType;
+
         task::AwaitableValue<bool> next()
         {
             return !(static_cast<size_t>(++m_index) == m_results.size());
@@ -75,13 +78,13 @@ public:
             task::AwaitableValue<bool> hasValueAwaitable(!!exists);
             return hasValueAwaitable;
         }
-        task::AwaitableValue<KeyType const&> key() const
+        task::AwaitableValue<Key> key() const
         {
             static_assert(!sizeof(*this), "Unsupported method!");
         }
-        task::AwaitableValue<ValueType> value() const
+        task::AwaitableValue<Value> value() const
         {
-            task::AwaitableValue<ValueType> valueAwaitable(
+            task::AwaitableValue<Value> valueAwaitable(
                 m_valueResolver.decode(m_results[m_index].ToStringView()));
             return valueAwaitable;
         }

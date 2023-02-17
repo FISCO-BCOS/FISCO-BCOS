@@ -41,7 +41,8 @@ public:
 };
 
 template <class T>
-concept IsTransactionReceiptFactory = std::derived_from<T, TransactionReceiptFactory>;
+concept IsTransactionReceiptFactory =
+    std::derived_from<T, TransactionReceiptFactory> || std::same_as<T, TransactionReceiptFactory>;
 
 template <IsTransactionReceiptFactory ReceiptFactory>
 struct ReceiptFactoryReturnTrait
