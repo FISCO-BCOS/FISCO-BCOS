@@ -139,6 +139,7 @@ bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
                 BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                    << LOG_DESC("Flush block to the queue")
                                    << LOG_KV("number", blockHeader->number())
+                                   << LOG_KV("configNum", m_config->blockNumber())
                                    << LOG_KV("nodeId", m_config->nodeID()->shortHex());
             }
         }
