@@ -79,6 +79,8 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
 
 void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn)
 {
+    auto startT = utcTime();
+    auto txsSize = m_inputs->size();
     m_dagFlow->setExecuteTxFunc([this](ID id) {
         try
         {
@@ -111,7 +113,7 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
             {
                 // run normal tx
                 auto& input = (*m_inputs)[id];
-                DAGFLOW_LOG(TRACE) << LOG_DESC("Execute tx: start normal tx") << input->toString()
+                DAGFLOW_LOG(DEBUG) << LOG_DESC("Execute tx: start normal tx") << input->toString()
                                    << LOG_KV("to", input->receiveAddress)
                                    << LOG_KV("data", toHexStringWithPrefix(input->data));
 
@@ -153,6 +155,8 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
         m_inputs = nullptr;
         m_dagFlow = nullptr;
     }
+    DAGFLOW_LOG(INFO) << LOG_DESC("runOriginFlow finish") << LOG_KV("txsSize", txsSize)
+                      << LOG_KV("cost", utcTime() - startT);
 }
 
 critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(

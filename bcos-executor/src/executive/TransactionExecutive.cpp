@@ -81,6 +81,8 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
     }
 
     m_storageWrapper = std::make_shared<StorageWrapper>(blockContext->storage(), m_recoder);
+    m_storageWrapper->setCodeCache(blockContext->getCodeCache());
+    m_storageWrapper->setCodeHashCache(blockContext->getCodeHashCache());
 
     auto message = execute(std::move(callParameters));
 
