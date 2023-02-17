@@ -20,7 +20,6 @@
  */
 
 #pragma once
-
 #include "../Common.h"
 #include "ExecutiveFactory.h"
 #include "ExecutiveFlowInterface.h"
@@ -29,6 +28,7 @@
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage/EntryCache.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <tbb/concurrent_unordered_map.h>
@@ -130,6 +130,9 @@ public:
 
     auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
 
+    storage::EntryCachePtr getCodeCache() { return m_codeCache; }
+    storage::EntryCachePtr getCodeHashCache() { return m_codeHashCache; }
+
 private:
     mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
@@ -150,6 +153,9 @@ private:
     std::set<std::string> m_suicides;  // contract address need to selfdestruct
     mutable bcos::SharedMutex x_suicides;
     std::shared_ptr<VMFactory> m_vmFactory;
+
+    storage::EntryCachePtr m_codeCache = std::make_shared<storage::EntryCache>();
+    storage::EntryCachePtr m_codeHashCache = std::make_shared<storage::EntryCache>();
 };
 
 }  // namespace executor

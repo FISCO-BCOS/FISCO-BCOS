@@ -1,8 +1,10 @@
 #pragma once
 
+#include "bcos-framework/storage/EntryCache.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
+#include <tbb/concurrent_unordered_map.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/throw_exception.hpp>
 #include <optional>
@@ -18,6 +20,8 @@ using GetRowsResponse = std::tuple<Error::UniquePtr, std::vector<std::optional<s
 using SetRowResponse = std::tuple<Error::UniquePtr>;
 using OpenTableResponse = std::tuple<Error::UniquePtr, std::optional<storage::Table>>;
 
+constexpr static std::string_view M_SYS_CODE_BINARY{"s_code_binary"};
+constexpr static std::string_view M_ACCOUNT_CODE_HASH{"codeHash"};
 
 class StorageWrapper
 {
@@ -55,7 +59,7 @@ public:
         return std::move(keys);
     }
 
-    virtual std::optional<storage::Entry> getRow(
+    std::optional<storage::Entry> getRowInternal(
         const std::string_view& table, const std::string_view& _key)
     {
         GetRowResponse value;
@@ -71,6 +75,47 @@ public:
         }
 
         return std::move(entry);
+    }
+
+    virtual std::optional<storage::Entry> getRow(
+        const std::string_view& table, const std::string_view& _key)
+    {
+        if (m_codeCache && table.compare(M_SYS_CODE_BINARY) == 0)
+        {
+            auto it = m_codeCache->find(std::string(_key));
+            if (it != m_codeCache->end())
+            {
+                return it->second;
+            }
+
+            auto code = getRowInternal(table, _key);
+            if (code.has_value())
+            {
+                m_codeCache->emplace(std::string(_key), code);
+            }
+
+            return code;
+        }
+        else if (m_codeHashCache && _key.compare(M_ACCOUNT_CODE_HASH) == 0)
+        {
+            auto it = m_codeHashCache->find(std::string(table));
+            if (it != m_codeHashCache->end())
+            {
+                return it->second;
+            }
+
+            auto codeHash = getRowInternal(table, _key);
+            if (codeHash.has_value())
+            {
+                m_codeHashCache->emplace(std::string(table), codeHash);
+            }
+
+            return codeHash;
+        }
+        else
+        {
+            return getRowInternal(table, _key);
+        }
     }
 
     virtual std::vector<std::optional<storage::Entry>> getRows(const std::string_view& table,
@@ -162,8 +207,14 @@ public:
 
     void setRecoder(storage::Recoder::Ptr recoder) { m_storage->setRecoder(std::move(recoder)); }
 
+    void setCodeCache(EntryCachePtr cache) { m_codeCache = cache; }
+    void setCodeHashCache(EntryCachePtr cache) { m_codeHashCache = cache; }
+
 private:
     storage::StateStorageInterface::Ptr m_storage;
     bcos::storage::Recoder::Ptr m_recoder;
+
+    EntryCachePtr m_codeCache;
+    EntryCachePtr m_codeHashCache;
 };
 }  // namespace bcos::storage

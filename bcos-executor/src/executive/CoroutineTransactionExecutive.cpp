@@ -23,6 +23,8 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::start(CallParameters::U
             m_recoder);
 
         m_storageWrapper = m_syncStorageWrapper;  // must set to base class
+        m_storageWrapper->setCodeCache(blockContext->getCodeCache());
+        m_storageWrapper->setCodeHashCache(blockContext->getCodeHashCache());
 
 
         if (!callParameters->keyLocks.empty())
