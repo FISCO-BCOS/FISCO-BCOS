@@ -74,6 +74,11 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_AUTH_CHECK_STATUS, [defaultCmp](int64_t _value,
                                                                           uint32_t version) {
         defaultCmp(SYSTEM_KEY_AUTH_CHECK_STATUS, _value, 0, version, BlockVersion::V3_3_VERSION);
+        if (_value > (decltype(_value))UINT8_MAX)[[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(PrecompiledError(
+                "Invalid status value, must less than " + std::to_string(UINT8_MAX)));
+        }
     }));
     // for compatibility
     // Note: the compatibility_version is not compatibility
