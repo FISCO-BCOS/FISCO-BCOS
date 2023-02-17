@@ -72,6 +72,14 @@ inline bool isFromThis(PrecompiledExecResult::Ptr _callParameters, const std::st
     return _callParameters->m_sender == thisAddress || _callParameters->m_staticCall;
 }
 
+inline bool isSuccess(PrecompiledExecResult::Ptr _callParameters, CodecWrapper& codec)
+{
+    s256 m;
+    codec.decode(ref(_callParameters->execResult()), m);
+
+    return m == s256((int)CODE_SUCCESS);
+}
+
 std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
@@ -127,6 +135,15 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
             BOOST_THROW_EXCEPTION(PrecompiledError(
                 "ShardPrecompiled call: BFS request should only call from ShardPrecompiled"));
         }
+    }
+
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+
+
+    if (!isSuccess(_callParameters, codec))
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("call error");
+        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled call error"));
     }
 
     return _callParameters;
