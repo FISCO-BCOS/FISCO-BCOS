@@ -9,7 +9,7 @@ void ShardingDmcExecutor::submit(protocol::ExecutionMessage::UniquePtr message, 
     (void)withDAG;  // no need to use this param
     handleCreateMessage(message, 0);
     m_preparedMessages->emplace_back(std::move(message));
-};
+}
 
 void ShardingDmcExecutor::dagGo(std::function<void(bcos::Error::UniquePtr, Status)> callback)
 {
@@ -144,7 +144,7 @@ void ShardingDmcExecutor::executorCall(bcos::protocol::ExecutionMessage::UniqueP
         callback)
 {
     m_executor->call(std::move(input), std::move(callback));
-};
+}
 
 void ShardingDmcExecutor::executorExecuteTransactions(std::string contractAddress,
     gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
@@ -156,7 +156,7 @@ void ShardingDmcExecutor::executorExecuteTransactions(std::string contractAddres
 {
     m_executor->executeTransactions(
         std::move(contractAddress), std::move(inputs), std::move(callback));
-};
+}
 
 
 void ShardingDmcExecutor::preExecute()
