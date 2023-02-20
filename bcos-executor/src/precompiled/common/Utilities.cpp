@@ -281,11 +281,24 @@ bool precompiled::checkPathValid(
 {
     if (_path.empty()) [[unlikely]]
         return false;
-    if (_path.length() > FS_PATH_MAX_LENGTH) [[unlikely]]
+
+    if (versionCompareTo(version, BlockVersion::V3_3_VERSION) >= 0) [[unlikely]]
+    {
+        if (_path.length() > FS_PATH_MAX_LENGTH_330)
+        {
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("checkPathValid")
+                                   << LOG_DESC("path too long, over flow FS_PATH_MAX_LENGTH_330")
+                                   << LOG_KV("limit", FS_PATH_MAX_LENGTH_330)
+                                   << LOG_KV("len", _path.length()) << LOG_KV("path", _path);
+            return false;
+        }
+    }
+    else if (_path.length() > FS_PATH_MAX_LENGTH) [[unlikely]]
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("checkPathValid")
                                << LOG_DESC("path too long, over flow FS_PATH_MAX_LENGTH")
-                               << LOG_KV("path", _path);
+                               << LOG_KV("limit", FS_PATH_MAX_LENGTH)
+                               << LOG_KV("len", _path.length()) << LOG_KV("path", _path);
         return false;
     }
     if (_path == "/")
