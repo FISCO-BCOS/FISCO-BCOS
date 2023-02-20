@@ -74,7 +74,6 @@ public:
 
     virtual void initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc);
 
-public:
     virtual void init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
         std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion,
@@ -98,7 +97,7 @@ private:
     std::shared_ptr<LightNodeInitializer> m_lightNodeInitializer;
 #endif
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    std::shared_ptr<bcos::scheduler::SchedulerManager> m_scheduler;
+    std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
     std::string const c_consensusStorageDBName = "consensus_log";
     std::string const c_fileSeparator = "/";

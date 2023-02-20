@@ -14,7 +14,7 @@
 namespace bcos::transaction_scheduler
 {
 
-#define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
+#define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
 template <class SchedulerImpl, protocol::IsBlockHeaderFactory BlockHeaderFactory,
     concepts::ledger::IsLedger Ledger>
@@ -66,7 +66,7 @@ public:
                 {
                     auto message = fmt::format(
                         "Another block:{} is executing!", self->m_lastExecutedBlockNumber);
-                    SCHEDULER_LOG(INFO) << message;
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                         nullptr, false);
@@ -83,7 +83,7 @@ public:
                             self->m_lastExecutedBlockNumber + 1, blockHeader->number());
 
                     executeLock.unlock();
-                    SCHEDULER_LOG(INFO) << message;
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
                         nullptr, false);
@@ -91,7 +91,7 @@ public:
                 }
 
                 self->m_lastExecutedBlockNumber = blockHeader->number();
-                co_await self->m_schedulerImpl.start();
+                self->m_schedulerImpl.start();
                 auto blockHeaderPtr = block->blockHeaderConst();
                 auto transactions =
                     RANGES::iota_view<uint64_t, uint64_t>(0LU, block->transactionsSize()) |
@@ -148,7 +148,7 @@ public:
                 {
                     auto message = fmt::format(
                         "Another block:{} is committing!", self->m_lastcommittedBlockNumber);
-                    SCHEDULER_LOG(INFO) << message;
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                         nullptr);
@@ -163,7 +163,7 @@ public:
                         blockHeader->number(), self->m_lastcommittedBlockNumber + 1);
 
                     commitLock.unlock();
-                    SCHEDULER_LOG(INFO) << message;
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
                         nullptr);
@@ -175,7 +175,7 @@ public:
                 // Write block and receipt
                 co_await self->m_ledger.template setBlock<concepts::ledger::HEADER,
                     concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
-                    concepts::ledger::NONCES>(result.m_block);
+                    concepts::ledger::NONCES>(*(result.m_block));
 
                 // Write status
                 co_await self->m_schedulerImpl.commit();
@@ -200,7 +200,9 @@ public:
     {
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
-            auto receipt = co_await self->m_schedulerImpl.call(*transaction);
+            auto blockHeader = self->m_blockHeaderFactory.createBlockHeader();
+
+            auto receipt = co_await self->m_schedulerImpl.call(*blockHeader, *transaction);
 
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));

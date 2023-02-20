@@ -76,7 +76,8 @@ public:
         auto storage = m_multiLayerStorage.fork();
         m_multiLayerStorage.newMutable();
 
-        Executor<MultiLayerStorage, ReceiptFactory> executor(storage, m_receiptFactory);
+        Executor<MultiLayerStorage, ReceiptFactory> executor(
+            *storage, m_receiptFactory, m_tableNamePool);
         co_return co_await executor.execute(blockHeader, transaction, 0);
     }
 

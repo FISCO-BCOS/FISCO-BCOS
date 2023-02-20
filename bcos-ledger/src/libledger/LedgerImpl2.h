@@ -2,6 +2,7 @@
 
 #include "LedgerImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage2/StringPool.h"
 #include "bcos-tool/ConsensusNode.h"
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -104,7 +105,7 @@ private:
         {
             for (size_t i = 0; i < block.transactionsMetaDataSize(); ++i)
             {
-                auto originTransactionMetaData = block->transactionMetaData(i);
+                auto originTransactionMetaData = block.transactionMetaData(i);
                 auto transactionMetaData =
                     m_blockFactory.createTransactionMetaData(originTransactionMetaData->hash(),
                         std::string(originTransactionMetaData->to()));
@@ -113,16 +114,16 @@ private:
         }
         else if (block.transactionsSize() > 0)
         {
-            for (size_t i = 0; i < block->transactionsSize(); ++i)
+            for (size_t i = 0; i < block.transactionsSize(); ++i)
             {
-                auto transaction = block->transaction(i);
-                auto transactionMetaData = m_blockFactory->createTransactionMetaData(
+                auto transaction = block.transaction(i);
+                auto transactionMetaData = m_blockFactory.createTransactionMetaData(
                     transaction->hash(), std::string(transaction->to()));
                 transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
             }
         }
 
-        if (transactionsBlock.transactionsMetaDataSize() == 0)
+        if (transactionsBlock->transactionsMetaDataSize() == 0)
         {
             LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
             co_return;
@@ -295,14 +296,14 @@ public:
         for (auto& node : consensusList)
         {
             constexpr static size_t MOSTLY_KEY_LENGTH = 32;
-            boost::container::small_vector<char, MOSTLY_KEY_LENGTH> nodeIDBin;
-
+            boost::container::small_vector<bcos::byte, MOSTLY_KEY_LENGTH> nodeIDBin;
             boost::algorithm::unhex(
                 node.nodeID.begin(), node.nodeID.end(), std::back_inserter(nodeIDBin));
 
-            auto nodeID = m_keyFactory->createKey(nodeIDBin);
+            auto nodeID =
+                m_keyFactory->createKey(bytesConstRef(nodeIDBin.data(), nodeIDBin.size()));
             auto consensusNode = std::make_shared<consensus::ConsensusNode>(
-                node.nodeID, node.weight.convert_to<uint64_t>());
+                nodeID, node.weight.convert_to<uint64_t>());
             if (node.type == CONSENSUS_SEALER)
             {
                 ledgerConfig.mutableConsensusNodeList().emplace_back(std::move(consensusNode));
@@ -318,18 +319,23 @@ public:
                 SYSTEM_KEY_TX_GAS_LIMIT, SYSTEM_KEY_COMPATIBILITY_VERSION});
         auto systemConfigTableID = storage2::string_pool::makeStringID(m_tableNamePool, SYS_CONFIG);
         auto it = co_await m_storage.read(
-            systemConfigKeys | RANGES::transform([&systemConfigTableID](auto& key) {
-                return std::tuple{systemConfigTableID, key};
-            }));
+            systemConfigKeys |
+            RANGES::views::transform(
+                [&systemConfigTableID](
+                    auto& key) -> std::tuple<transaction_executor::TableNameID, std::string_view> {
+                    return std::tuple<transaction_executor::TableNameID, std::string_view>{
+                        systemConfigTableID, key};
+                }));
         int index = 0;
         while (co_await it.next())
         {
-            if (!it.hasValue())
+            if (!co_await it.hasValue())
             {
                 BOOST_THROW_EXCEPTION(std::runtime_error("Missing system key!"));
             }
-            auto& entry = co_await it.value();
-            auto [value, number] = entry->template getObject<SystemConfigEntry>();
+            auto&& entry = co_await it.value();
+            auto [strValue, number] = entry.template getObject<SystemConfigEntry>();
+            auto value = boost::lexical_cast<uint64_t>(strValue);
 
             switch (index++)
             {
@@ -340,7 +346,7 @@ public:
                 ledgerConfig.setLeaderSwitchPeriod(value);
                 break;
             case 2:
-                ledgerConfig.setGasLimit(value);
+                ledgerConfig.setGasLimit({value, number});
                 break;
             case 3:
                 ledgerConfig.setCompatibilityVersion(value);

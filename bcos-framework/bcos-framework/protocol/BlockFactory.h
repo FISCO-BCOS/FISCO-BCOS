@@ -61,5 +61,6 @@ public:
 };
 
 template <class T>
-concept IsBlockFactory = std::derived_from<T, BlockFactory> || std::same_as<T, BlockFactory>;
+concept IsBlockFactory =
+    std::derived_from<T, BlockFactory> || std::same_as<std::remove_cvref_t<T>, BlockFactory>;
 }  // namespace bcos::protocol

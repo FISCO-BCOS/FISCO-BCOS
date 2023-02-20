@@ -55,7 +55,8 @@ struct NotFoundCodeError : public bcos::Error {};
 
 inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 {
-    return toEvmC(GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
+    return transaction_executor::toEvmC(
+        GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
 template <StateStorage Storage, protocol::IsBlockHeader BlockHeader>
@@ -109,7 +110,7 @@ public:
         evmc_bytes32 result;
         if (co_await it.hasValue())
         {
-            auto& entry = co_await it.value();
+            auto&& entry = co_await it.value();
             auto field = entry.getField(0);
             std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
         }
@@ -141,7 +142,7 @@ public:
             if (codeHashEntry)
             {
                 auto codeEntry = co_await storage2::readOne(
-                    m_rollbackableStorage, StateKey{m_codeTable, codeHashEntry->get().get()});
+                    m_rollbackableStorage, StateKey{m_codeTable, codeHashEntry->get()});
                 if (codeEntry)
                 {
                     co_return std::move(codeEntry);
@@ -251,7 +252,7 @@ public:
                 m_rollbackableStorage, StateKey{getTableNameID(address), ACCOUNT_CODE_HASH});
             if (codeHashEntry)
             {
-                auto view = codeHashEntry->get().get();
+                auto view = codeHashEntry->get();
                 h256 codeHash((const bcos::byte*)view.data(), view.size());
                 co_return codeHash;
             }

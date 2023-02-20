@@ -95,6 +95,7 @@ public:
         int contextID = 0;
         auto chunks = transactions | RANGES::views::chunk(m_chunkSize);
         auto chunkIt = RANGES::begin(chunks);
+        auto chunkBegin = chunkIt;
         auto chunkEnd = RANGES::end(chunks);
 
         std::vector<ChunkStorage> executedStorages;
@@ -113,7 +114,7 @@ public:
                             return {};
                         }
                         return {*(currentChunk++),
-                            m_chunkSize * RANGES::distance(currentChunk, chunkEnd)};
+                            m_chunkSize * RANGES::distance(chunkBegin, currentChunk)};
                     }) &
                     tbb::make_filter<std::tuple<RANGES::range_value_t<decltype(chunks)>, int>,
                         ChunkExecuteReturn>(tbb::filter_mode::parallel,
@@ -131,7 +132,7 @@ public:
 
                                 if (!executedStorages.empty())
                                 {
-                                    auto&& [prevReadWriteSetStorage, oldStorage] =
+                                    auto& [prevReadWriteSetStorage, oldStorage] =
                                         executedStorages.back();
                                     if (prevReadWriteSetStorage.hasRAWIntersection(
                                             readWriteSetStorage))

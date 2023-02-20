@@ -79,7 +79,7 @@ evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* _context,
     [[maybe_unused]] const evmc_address* _addr) noexcept
 {
     // always return 0
-    return toEvmC(h256(0));
+    return transaction_executor::toEvmC(h256(0));
 }
 
 template <class HostContextType>
@@ -93,7 +93,7 @@ template <class HostContextType>
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    return toEvmC(task::syncWait(hostContext.codeHashAt(*_addr)));
+    return transaction_executor::toEvmC(task::syncWait(hostContext.codeHashAt(*_addr)));
 }
 
 template <class HostContextType>
@@ -166,7 +166,7 @@ template <class HostContextType>
 evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
 {
     auto& hostContext = static_cast<HostContextType&>(*_txContextPtr);
-    return toEvmC(task::syncWait(hostContext.blockHash(_number)));
+    return transaction_executor::toEvmC(task::syncWait(hostContext.blockHash(_number)));
 }
 
 template <class HostContextType>

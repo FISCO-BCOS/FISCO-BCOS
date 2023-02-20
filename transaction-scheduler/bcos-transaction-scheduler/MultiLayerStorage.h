@@ -102,7 +102,7 @@ public:
 
     public:
         using Key = typename storage2::ReadIteratorType<MutableStorage>::Key;
-        using Value = typename storage2::ReadIteratorType<MutableStorage>::Value;
+        using Value = typename storage2::ReadIteratorType<BackendStorage>::Value;
 
         ReadIterator(auto&& keyRange, MultiLayerStorage& storage)
           : m_keyRange(std::forward<decltype(keyRange)>(keyRange)), m_storage(storage)
