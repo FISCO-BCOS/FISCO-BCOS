@@ -155,12 +155,12 @@ std::shared_ptr<DmcExecutor> ShardingBlockExecutive::registerAndGetDmcExecutor(
 {
     auto shardName = getContractShard(contractAddress);
     auto dmcExecutor = BlockExecutive::registerAndGetDmcExecutor(shardName);
-    dmcExecutor->setIsSameAddrHandler( //TODO: check is same shard
+    dmcExecutor->setIsSameAddrHandler(  // TODO: check is same shard
         [this](const std::string_view& addr, const std::string_view& shard) {
             return getContractShard(std::string(addr)) == shard;
         });
     return dmcExecutor;
-};
+}
 
 DmcExecutor::Ptr ShardingBlockExecutive::buildDmcExecutor(const std::string& name,
     const std::string& contractAddress,
