@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "ShardingTransactionExecutor.h"
 #include "TransactionExecutor.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
@@ -95,7 +96,8 @@ public:
 
     TransactionExecutor::Ptr build()
     {
-        auto executor = std::make_shared<TransactionExecutor>(m_ledger, m_txpool,
+        //  TODO: config to enable dag
+        auto executor = std::make_shared<GreedyTransactionExecutor>(m_ledger, m_txpool,
             m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
             m_executionMessageFactory, m_stateStorageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,
             m_vmFactory, m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
