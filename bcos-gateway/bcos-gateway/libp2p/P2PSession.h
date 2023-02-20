@@ -31,7 +31,7 @@ public:
 
     virtual void start();
     virtual void stop(DisconnectReason reason);
-    virtual bool actived() { return m_run; }
+    virtual bool active() { return m_run; }
     virtual void heartBeat();
 
     virtual SessionFace::Ptr session() { return m_session; }

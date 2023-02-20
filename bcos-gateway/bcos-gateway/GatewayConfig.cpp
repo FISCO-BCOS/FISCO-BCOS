@@ -200,7 +200,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       nodes_file=nodes.json
       */
     m_uuid = _pt.get<std::string>("p2p.uuid", "");
-    if (_uuidRequired && m_uuid.size() == 0)
+    if (_uuidRequired && m_uuid.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "initP2PConfig: invalid uuid! Must be non-empty!"));
@@ -216,7 +216,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     }
 
     // not set the nodePath, load from the config
-    if (m_nodePath.size() == 0)
+    if (m_nodePath.empty())
     {
         m_nodePath = _pt.get<std::string>("p2p.nodes_path", "./");
     }
@@ -247,7 +247,7 @@ void GatewayConfig::loadP2pConnectedNodes()
                 "initP2PConfig: unable to read nodes json file, path=" + nodeFilePath));
     }
 
-    parseConnectedJson(*jsonContent.get(), nodes);
+    parseConnectedJson(*jsonContent, nodes);
     m_connectedNodes = nodes;
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("loadP2pConnectedNodes ok!")

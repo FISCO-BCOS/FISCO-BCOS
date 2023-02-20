@@ -175,7 +175,7 @@ void Service::onConnect(
 
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(p2pID);
-    if (it != m_sessions.end() && it->second->actived())
+    if (it != m_sessions.end() && it->second->active())
     {
         SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", p2pID);
         updateStaticNodes(session->socket(), p2pID);
@@ -464,7 +464,7 @@ void Service::asyncSendMessageByNodeID(
         RecursiveGuard l(x_sessions);
         auto it = m_sessions.find(nodeID);
 
-        if (it != m_sessions.end() && it->second->actived())
+        if (it != m_sessions.end() && it->second->active())
         {
             if (message->seq() == 0)
             {
@@ -481,7 +481,7 @@ void Service::asyncSendMessageByNodeID(
                 NetworkException e(-1, "send message failed for no network established");
                 callback(e, nullptr, nullptr);
             }
-            SERVICE_LOG(WARNING) << "Node inactived" << LOG_KV("nodeid", nodeID);
+            SERVICE_LOG(WARNING) << "Node inactive" << LOG_KV("nodeid", nodeID);
         }
     }
     catch (std::exception& e)
@@ -546,14 +546,10 @@ bool Service::isConnected(P2pID const& nodeID) const
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
 
-    if (it != m_sessions.end() && it->second->actived())
-    {
-        return true;
-    }
-    return false;
+    return it != m_sessions.end() && it->second->active();
 }
 
-std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef _payload)
+std::shared_ptr<P2PMessage> Service::newP2PMessage(uint16_t _type, bytesConstRef _payload)
 {
     auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
 
@@ -563,7 +559,7 @@ std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef 
     return message;
 }
 
-void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
+void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
     Options _options, P2PResponseCallback _callback)
 {
     if (!isReachable(_dstNodeID))
@@ -603,14 +599,14 @@ void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytes
 }
 
 void Service::asyncBroadcastMessageToP2PNodes(
-    int16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options)
+    uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options)
 {
     auto p2pMessage = newP2PMessage(_type, _payload);
     asyncBroadcastMessage(p2pMessage, _options);
 }
 
 void Service::asyncSendMessageByP2PNodeIDs(
-    int16_t _type, const std::vector<P2pID>& _nodeIDs, bytesConstRef _payload, Options _options)
+    uint16_t _type, const std::vector<P2pID>& _nodeIDs, bytesConstRef _payload, Options _options)
 {
     for (auto const& nodeID : _nodeIDs)
     {

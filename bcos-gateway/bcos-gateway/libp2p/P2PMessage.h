@@ -57,8 +57,11 @@ public:
     /// groupID length(2) + nodeID length(2) + dst nodeID count(1) + moduleID(2)
     const static size_t OPTIONS_MIN_LENGTH = 7;
 
-public:
     P2PMessageOptions() { m_srcNodeID = std::make_shared<bytes>(); }
+    P2PMessageOptions(const P2PMessageOptions&) = delete;
+    P2PMessageOptions(P2PMessageOptions&&) = delete;
+    P2PMessageOptions& operator=(const P2PMessageOptions&) = delete;
+    P2PMessageOptions& operator=(P2PMessageOptions&&) = delete;
 
     virtual ~P2PMessageOptions() = default;
 

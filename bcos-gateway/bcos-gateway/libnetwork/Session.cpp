@@ -59,23 +59,22 @@ NodeIPEndpoint Session::nodeIPEndpoint() const
     return m_socket->nodeIPEndpoint();
 }
 
-bool Session::actived() const
+bool Session::active() const
 {
     auto server = m_server.lock();
-    return m_actived && server && server->haveNetwork() && m_socket && m_socket->isConnected();
+    return m_active && server && server->haveNetwork() && m_socket && m_socket->isConnected();
 }
 
 void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCallbackFunc callback)
 {
     auto server = m_server.lock();
-    if (!actived())
+    if (!active())
     {
-        SESSION_LOG(WARNING) << "Session inactived";
+        SESSION_LOG(WARNING) << "Session inactive";
         if (callback)
         {
-            server->threadPool()->enqueue([callback] {
-                callback(NetworkException(-1, "Session inactived"), Message::Ptr());
-            });
+            server->threadPool()->enqueue(
+                [callback] { callback(NetworkException(-1, "Session inactive"), Message::Ptr()); });
         }
         return;
     }
@@ -124,7 +123,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                 }
             });
             handler->timeoutHandler = timeoutHandler;
-            handler->m_startTime = utcSteadyTime();
+            handler->startTime = utcSteadyTime();
         }
 
         m_sessionCallbackManager->addCallback(message->seq(), handler);
@@ -146,7 +145,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
 
 void Session::send(const std::shared_ptr<bytes>& _msg)
 {
-    if (!actived())
+    if (!active())
     {
         return;
     }
@@ -168,7 +167,7 @@ void Session::send(const std::shared_ptr<bytes>& _msg)
 
 void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr<bytes>)
 {
-    if (!actived())
+    if (!active())
     {
         return;
     }
@@ -204,7 +203,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
 
 void Session::write()
 {
-    if (!actived())
+    if (!active())
     {
         return;
     }
@@ -280,11 +279,11 @@ void Session::write()
 void Session::drop(DisconnectReason _reason)
 {
     auto server = m_server.lock();
-    if (!m_actived)
+    if (!m_active)
     {
         return;
     }
-    m_actived = false;
+    m_active = false;
 
     int errorCode = P2PExceptionType::Disconnect;
     std::string errorMsg = "Disconnect";
@@ -395,12 +394,12 @@ void Session::disconnect(DisconnectReason _reason)
 
 void Session::start()
 {
-    if (!m_actived)
+    if (!m_active)
     {
         auto server = m_server.lock();
         if (server && server->haveNetwork())
         {
-            m_actived = true;
+            m_active = true;
             m_lastWriteTime.store(utcSteadyTime());
             m_lastReadTime.store(utcSteadyTime());
             server->asioInterface()->strandPost(
@@ -416,7 +415,7 @@ void Session::start()
 void Session::doRead()
 {
     auto server = m_server.lock();
-    if (m_actived && server && server->haveNetwork())
+    if (m_active && server && server->haveNetwork())
     {
         auto self = std::weak_ptr<Session>(shared_from_this());
         auto asyncRead = [self](boost::system::error_code ec, std::size_t bytesTransferred) {
@@ -492,8 +491,8 @@ void Session::doRead()
     }
     else
     {
-        SESSION_LOG(ERROR) << LOG_DESC("callback doRead failed for session inactived")
-                           << LOG_KV("active", m_actived)
+        SESSION_LOG(ERROR) << LOG_DESC("callback doRead failed for session inactive")
+                           << LOG_KV("active", m_active)
                            << LOG_KV("haveNetwork", server->haveNetwork());
     }
 }
@@ -538,7 +537,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             }
             auto server = session->m_server.lock();
             // in-activate session
-            if (!session->m_actived || !server || !server->haveNetwork())
+            if (!session->m_active || !server || !server->haveNetwork())
             {
                 return;
             }
