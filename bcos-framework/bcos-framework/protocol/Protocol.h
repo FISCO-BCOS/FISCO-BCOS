@@ -160,6 +160,18 @@ constexpr auto operator<=>(std::variant<uint32_t, BlockVersion> const& _v1, Bloc
     return flag;
 }
 
+constexpr bool operator >= (std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2){
+    auto flag = false;
+    std::visit(
+        [&_v2, &flag](auto&& arg) {
+            auto ver1 = static_cast<uint32_t>(arg);
+            auto ver2 = static_cast<uint32_t>(_v2);
+            flag = (ver1 >= ver2);
+        },
+        _v1);
+    return flag;
+}
+
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion const& _version)
 {
     switch (_version)
