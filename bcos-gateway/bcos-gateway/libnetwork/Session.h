@@ -34,7 +34,13 @@ class Session : public SessionFace,
 {
 public:
     Session(size_t _bufferSize = 4096);
-    virtual ~Session();
+
+    Session(const Session&) = delete;
+    Session(Session&&) = delete;
+    Session& operator=(Session&&) = delete;
+    Session& operator=(const Session&) = delete;
+
+    ~Session() override;
 
     using Ptr = std::shared_ptr<Session>;
 
@@ -46,10 +52,10 @@ public:
 
     NodeIPEndpoint nodeIPEndpoint() const override;
 
-    bool actived() const override;
+    bool active() const override;
 
     virtual std::weak_ptr<Host> host() { return m_server; }
-    virtual void setHost(std::weak_ptr<Host> host) { m_server = host; }
+    virtual void setHost(std::weak_ptr<Host> host) { m_server = std::move(host); }
 
     std::shared_ptr<SocketFace> socket() override { return m_socket; }
     virtual void setSocket(const std::shared_ptr<SocketFace>& socket) { m_socket = socket; }
@@ -141,7 +147,7 @@ private:
 
     mutable bcos::Mutex x_info;
 
-    bool m_actived = false;
+    bool m_active = false;
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
 

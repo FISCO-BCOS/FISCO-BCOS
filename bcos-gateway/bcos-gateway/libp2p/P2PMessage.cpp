@@ -50,7 +50,7 @@ bool P2PMessageOptions::encode(bytes& _buffer)
         return false;
     }
 
-    for (auto dstNodeID : m_dstNodeIDs)
+    for (const auto& dstNodeID : m_dstNodeIDs)
     {
         if (!dstNodeID || dstNodeID->empty() || (dstNodeID->size() > MAX_NODEID_LENGTH))
         {

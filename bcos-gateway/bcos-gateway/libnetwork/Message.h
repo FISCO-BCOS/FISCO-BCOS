@@ -34,8 +34,13 @@ class MessageExtAttributes
 {
 public:
     using Ptr = std::shared_ptr<MessageExtAttributes>;
+    using ConstPtr = std::shared_ptr<const MessageExtAttributes>;
 
-public:
+    MessageExtAttributes() = default;
+    MessageExtAttributes(const MessageExtAttributes&) = delete;
+    MessageExtAttributes(MessageExtAttributes&&) = delete;
+    MessageExtAttributes& operator=(MessageExtAttributes&&) = delete;
+    MessageExtAttributes& operator=(const MessageExtAttributes&) = delete;
     virtual ~MessageExtAttributes() = default;
 };
 
@@ -43,8 +48,13 @@ class Message
 {
 public:
     using Ptr = std::shared_ptr<Message>;
+    using ConstPtr = std::shared_ptr<const Message>;
 
-public:
+    Message() = default;
+    Message(const Message&) = delete;
+    Message(Message&&) = delete;
+    Message& operator=(Message&&) = delete;
+    Message& operator=(const Message&) = delete;
     virtual ~Message() = default;
 
     virtual uint32_t length() const = 0;
@@ -83,6 +93,7 @@ public:
         return seq;
     }
 
+private:
     std::atomic<uint32_t> m_seq = {1};
 };
 
