@@ -1885,13 +1885,12 @@ void TransactionExecutor::commit(
 
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
         m_ledgerCache->fetchCompatibilityVersion();
-
-        setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
-        if (versionCompareTo(m_ledgerCache->ledgerConfig()->compatibilityVersion(),
-                BlockVersion::V3_3_VERSION) >= 0)
+        auto version = m_ledgerCache->ledgerConfig()->compatibilityVersion();
+        setBlockVersion(version);
+        if (version >= BlockVersion::V3_3_VERSION)
         {
             m_ledgerCache->fetchAuthCheckStatus();
-            m_isAuthCheck = m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+            m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
         }
         removeCommittedState();
 
