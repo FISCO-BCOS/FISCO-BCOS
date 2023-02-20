@@ -21,13 +21,13 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
-#include <mutex>
 
 namespace bcos
 {
 namespace crypto
 {
 const int SM4_BLOCK_SIZE = 16;
+const int SM4_IV_DATA_SIZE = 16;
 
 class HsmSM4Crypto : public SymmetricEncryption
 {
@@ -68,21 +68,12 @@ public:
         size_t _ivDataSize);
 
     // encrypt decrypt with internal key
-    bytesPointer symmetricEncryptWithInternalKey(
-        const unsigned char* _plainData, size_t _plainDataSize, const unsigned int _keyIndex)
-    {
-        return HsmSM4EncryptWithInternalKey(_plainData, _plainDataSize, _keyIndex);
-    }
-    bytesPointer symmetricDecryptWithInternalKey(
-        const unsigned char* _plainData, size_t _plainDataSize, const unsigned int _keyIndex)
-    {
-        return HsmSM4DecryptWithInternalKey(_plainData, _plainDataSize, _keyIndex);
-    }
-
-    bcos::bytesPointer HsmSM4EncryptWithInternalKey(
-        const unsigned char* _plainData, size_t _plainDataSize, const unsigned int _keyIndex);
-    bcos::bytesPointer HsmSM4DecryptWithInternalKey(
-        const unsigned char* _cipherData, size_t _cipherDataSize, const unsigned int _keyIndex);
+    bytesPointer symmetricEncryptWithInternalKey(const unsigned char* _plainData,
+        size_t _plainDataSize, const unsigned int _keyIndex, const unsigned char* _ivData,
+        size_t _ivDataSize);
+    bytesPointer symmetricDecryptWithInternalKey(const unsigned char* _plainData,
+        size_t _plainDataSize, const unsigned int _keyIndex, const unsigned char* _ivData,
+        size_t _ivDataSize);
 
 private:
     std::string m_hsmLibPath;

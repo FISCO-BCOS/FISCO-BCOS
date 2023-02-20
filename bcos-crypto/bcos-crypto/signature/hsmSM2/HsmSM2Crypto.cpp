@@ -111,8 +111,6 @@ bool HsmSM2Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashT
 bool HsmSM2Crypto::verify(
     PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    std::string pubKeyStr(_pubKey->mutableData());
-
     // get provider
     CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
 

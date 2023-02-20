@@ -39,6 +39,7 @@ namespace security
 HsmDataEncryption::HsmDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
 {
     m_nodeConfig = nodeConfig;
+    m_compatibilityVersion = m_nodeConfig->compatibilityVersion();
     m_hsmLibPath = m_nodeConfig->hsmLibPath();
     m_encKeyIndex = m_nodeConfig->encKeyIndex();
     m_symmetricEncrypt = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
@@ -46,86 +47,43 @@ HsmDataEncryption::HsmDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfi
 
 std::shared_ptr<bytes> HsmDataEncryption::decryptContents(const std::shared_ptr<bytes>& content)
 {
-    std::shared_ptr<bytes> decFileBytes;
-    try
-    {
-        std::string encContextsStr((const char*)content->data(), content->size());
+    // TODO: add implement
 
-        bytes encFileBytes = fromHex(encContextsStr);
-        BCOS_LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
-                        << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
-
-        bytesPointer decFileBytesBase64Ptr =
-            m_symmetricEncrypt->symmetricDecryptWithInternalKey((const unsigned char*)encFileBytes.data(),
-                encFileBytes.size(), m_encKeyIndex);
-
-        BCOS_LOG(DEBUG) << "[HsmDataEncryption][ENCFILE] EncryptedFile Base64 key: "
-                        << asString(*decFileBytesBase64Ptr) << endl;
-        decFileBytes = base64DecodeBytes(asString(*decFileBytesBase64Ptr));
-    }
-    catch (exception& e)
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("[HsmDataEncryption][ENCFILE] EncryptedFile error")
-                        << LOG_KV("what", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(EncryptedFileError());
-    }
-
-    return decFileBytes;
+    return nullptr;
 }
 
 std::shared_ptr<bytes> HsmDataEncryption::decryptFile(const std::string& filename)
 {
-    std::shared_ptr<bytes> decFileBytes;
-    try
-    {
-        std::shared_ptr<bytes> keyContent = readContents(boost::filesystem::path(filename));
-
-        std::string encContextsStr((const char*)keyContent->data(), keyContent->size());
-
-        bytes encFileBytes = fromHex(encContextsStr);
-        BCOS_LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
-                        << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
-
-        bytesPointer decFileBytesBase64Ptr =
-            m_symmetricEncrypt->symmetricDecryptWithInternalKey((const unsigned char*)encFileBytes.data(),
-                encFileBytes.size(), m_encKeyIndex);
-
-        BCOS_LOG(DEBUG) << "[HsmDataEncryption][ENCFILE] EncryptedFile Base64 key: "
-                        << asString(*decFileBytesBase64Ptr) << endl;
-        decFileBytes = base64DecodeBytes(asString(*decFileBytesBase64Ptr));
-    }
-    catch (exception& e)
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("[HsmDataEncryption][ENCFILE] EncryptedFile error")
-                        << LOG_KV("what", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(EncryptedFileError());
-    }
-
-    return decFileBytes;
+    // TODO: add implement
+    return nullptr;
 }
 
-std::string HsmDataEncryption::encrypt(const std::string& data)
+std::string HsmDataEncryption::encrypt(uint8_t* data, size_t size)
 {
-    bytesPointer encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
-        reinterpret_cast<const unsigned char*>(data.data()), data.size(), m_encKeyIndex);
+    random_bytes_engine rbe;
+    std::vector<unsigned char> ivData(SM4_IV_DATA_SIZE);
+    std::generate(std::begin(ivData), std::end(ivData), std::ref(rbe));
+    // iv data would be changed after hsm encrypt, so keep it
+    auto originIvData = ivData;
 
-    std::string value(encData->size(), 0);
-    memcpy(value.data(), encData->data(), encData->size());
+    bytesPointer encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
+        reinterpret_cast<const unsigned char*>(data), size, m_encKeyIndex, ivData.data(),
+        SM4_IV_DATA_SIZE);
+    // append iv data to end of encData
+    std::string value((char*)encData->data(), encData->size());
+    value.insert(value.end(), originIvData.begin(), originIvData.end());
 
     return value;
 }
 
-std::string HsmDataEncryption::decrypt(const std::string& data)
+std::string HsmDataEncryption::decrypt(uint8_t* data, size_t size)
 {
+    size_t cipherDataSize = size - SM4_IV_DATA_SIZE;
     bytesPointer decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
-        reinterpret_cast<const unsigned char*>(data.data()), data.size(),
-        m_encKeyIndex);
-    std::string value(decData->size(), 0);
-    memcpy(value.data(), decData->data(), decData->size());
-    int padding = value.at(decData->size() - 1);
-    int deLen = decData->size() - padding;
+        data, cipherDataSize, m_encKeyIndex, data + cipherDataSize, SM4_IV_DATA_SIZE);
+    std::string value((char*)decData->data(), decData->size());
 
-    return value.substr(0, deLen);
+    return value;
 }
 
 }  // namespace security

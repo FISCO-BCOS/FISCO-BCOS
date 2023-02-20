@@ -45,10 +45,20 @@ public:
     std::shared_ptr<bytes> decryptFile(const std::string& filename) override;
 
     // use to encrypt/decrypt in rocksdb
-    std::string encrypt(const std::string& data) override;
-    std::string decrypt(const std::string& data) override;
-    
+    std::string encrypt(const std::string& data) override
+    {
+        return encrypt((unsigned char*)(data.data()), data.size());
+    }
+    std::string decrypt(const std::string& data) override
+    {
+        return decrypt((unsigned char*)(data.data()), data.size());
+    }
+
+    std::string encrypt(uint8_t* data, size_t size);
+    std::string decrypt(uint8_t* data, size_t size);
+
 private:
+    uint32_t m_compatibilityVersion;
     int m_encKeyIndex;
     std::string m_hsmLibPath;
     bcos::tool::NodeConfig::Ptr m_nodeConfig = nullptr;

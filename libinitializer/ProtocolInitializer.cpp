@@ -51,11 +51,11 @@ ProtocolInitializer::ProtocolInitializer()
 {}
 void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
 {
-    m_hsmEnable = _nodeConfig->hsmEnable();
+    m_enableHsm = _nodeConfig->enableHsm();
     // TODO: ed25519
     if (_nodeConfig->smCryptoType())
     {
-        if (m_hsmEnable)
+        if (m_enableHsm)
         {
             m_hsmLibPath = _nodeConfig->hsmLibPath();
             m_keyIndex = _nodeConfig->keyIndex();
@@ -78,7 +78,7 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     if (true == _nodeConfig->storageSecurityEnable())
     {
         // storage security with HSM
-        if (_nodeConfig->hsmEnable())
+        if (_nodeConfig->enableHsm())
         {
             INITIALIZER_LOG(DEBUG)
                 << LOG_DESC("storage_security.enable = true, storage security with HSM");
@@ -135,7 +135,7 @@ void ProtocolInitializer::createHsmSMCryptoSuite()
 
 void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 {
-    if (m_hsmEnable)
+    if (m_enableHsm)
     {
         // Create key pair according to the key index which inside HSM(Hardware Secure Machine)
         m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())

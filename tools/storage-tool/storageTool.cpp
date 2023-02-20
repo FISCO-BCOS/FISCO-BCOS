@@ -33,6 +33,7 @@
 #include "rocksdb/slice.h"
 #include "tikv_client.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-security/bcos-security/HsmDataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
@@ -247,10 +248,10 @@ TransactionalStorageInterface::Ptr createBackendStorage(
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
     {
-        bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
+        bcos::security::DataEncryptInterface::Ptr dataEncryption = nullptr;
         if (nodeConfig->storageSecurityEnable())
         {
-            if (nodeConfig->hsmEnable())
+            if (nodeConfig->enableHsm())
             {
                 dataEncryption = std::make_shared<bcos::security::HsmDataEncryption>(nodeConfig);
             }
@@ -459,10 +460,10 @@ int main(int argc, const char* argv[])
     }
 
     nodeConfig->loadConfig(configPath);
-    bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
+    bcos::security::DataEncryptInterface::Ptr dataEncryption = nullptr;
     if (nodeConfig->storageSecurityEnable())
     {
-        if (nodeConfig->hsmEnable())
+        if (nodeConfig->enableHsm())
         {
             dataEncryption = std::make_shared<bcos::security::HsmDataEncryption>(nodeConfig);
         }
