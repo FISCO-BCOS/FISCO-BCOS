@@ -137,15 +137,6 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
         }
     }
 
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-
-
-    if (!isSuccess(_callParameters, codec))
-    {
-        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("call error");
-        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled call error"));
-    }
-
     return _callParameters;
 }
 
@@ -178,6 +169,12 @@ void ShardingPrecompiled::makeShard(
                           << LOG_KV("mkShard", absolutePath);
 
     BFSPrecompiled::makeDirImpl(absolutePath, _executive, _callParameters);
+
+    if (!isSuccess(_callParameters, codec))
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("BFS makeDir error");
+        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled BFS makeDir error"));
+    }
 }
 
 void ShardingPrecompiled::linkShard(
@@ -246,6 +243,12 @@ void ShardingPrecompiled::linkShard(
 
     BFSPrecompiled::linkImpl(
         absolutePath, contractAddress, contractAbi, _executive, _callParameters);
+
+    if (!isSuccess(_callParameters, codec))
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("BFS link error");
+        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled BFS link error"));
+    }
 }
 
 void ShardingPrecompiled::getContractShard(
