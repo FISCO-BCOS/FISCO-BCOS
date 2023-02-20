@@ -97,7 +97,7 @@ public:
     TransactionExecutor::Ptr build()
     {
         //  TODO: config to enable dag
-        auto executor = std::make_shared<GreedyTransactionExecutor>(m_ledger, m_txpool,
+        auto executor = std::make_shared<ShardingTransactionExecutor>(m_ledger, m_txpool,
             m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
             m_executionMessageFactory, m_stateStorageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,
             m_vmFactory, m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
