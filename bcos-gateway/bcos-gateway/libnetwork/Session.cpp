@@ -68,6 +68,10 @@ bool Session::active() const
 void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCallbackFunc callback)
 {
     auto server = m_server.lock();
+    if (!server)
+    {
+        return;
+    }
     if (!active())
     {
         SESSION_LOG(WARNING) << "Session inactive";
@@ -141,6 +145,12 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     message->encode(*p_buffer);
 
     send(p_buffer);
+}
+
+std::size_t Session::writeQueueSize()
+{
+    Guard lockGuard(x_writeQueue);
+    return m_writeQueue.size();
 }
 
 void Session::send(const std::shared_ptr<bytes>& _msg)
