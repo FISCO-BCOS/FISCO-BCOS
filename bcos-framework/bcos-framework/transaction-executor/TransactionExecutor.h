@@ -9,6 +9,7 @@
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-task/Trait.h>
 #include <boost/container/small_vector.hpp>
+#include <compare>
 #include <type_traits>
 
 namespace bcos::transaction_executor
@@ -29,6 +30,11 @@ public:
         this->assign(RANGES::begin(buffer), RANGES::end(buffer));
         return *this;
     }
+    bool operator==(concepts::bytebuffer::ByteBuffer auto const& buffer)
+    {
+        auto view = concepts::bytebuffer::toView(buffer);
+        return toStringView() == view;
+    }
 
     std::string_view toStringView() const& { return {this->data(), this->size()}; }
     std::string_view operator()() const& { return toStringView(); }
@@ -36,6 +42,39 @@ public:
 
 using StateKey = std::tuple<TableNameID, SmallKey>;  // TODO: 计算最多支持多少表名
 using StateValue = storage::Entry;
+
+template <concepts::bytebuffer::ByteBuffer Buffer>
+bool operator<=>(const StateKey& stateKey, std::tuple<TableNameID, Buffer> const& rhs)
+{
+    auto const& [lhsTable, lhsKey] = stateKey;
+    auto lhsKeyView = lhsKey.toStringView();
+
+    auto const& [rhsTable, rhsKey] = rhs;
+    auto rhsKeyView = concepts::bytebuffer::toView(rhsKey);
+
+    auto tableComp = lhsTable <=> rhsTable;
+    if (tableComp != std::weak_ordering::equivalent)
+    {
+        return lhsKeyView <=> rhsKeyView;
+    }
+    return tableComp;
+}
+
+template <concepts::bytebuffer::ByteBuffer Buffer>
+bool operator==(const StateKey& stateKey, std::tuple<TableNameID, Buffer> const& rhs)
+{
+    auto const& [lhsTable, lhsKey] = stateKey;
+    auto lhsKeyView = lhsKey.toStringView();
+
+    auto const& [rhsTable, rhsKey] = rhs;
+    auto rhsKeyView = concepts::bytebuffer::toView(rhsKey);
+
+    if (lhsTable == rhsTable)
+    {
+        return lhsKeyView == rhsKeyView;
+    }
+    return false;
+}
 
 const static auto EMPTY_STATE_KEY = std::tuple{TableNameID(), std::string_view()};
 

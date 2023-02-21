@@ -128,6 +128,8 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     }
 }
 
+crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
+
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
@@ -221,24 +223,34 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
         m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
-    bool useBaselineScheduler = false;
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;  // Only use when
                                                                             // !useBaselineScheduler
-
-    if (useBaselineScheduler)
+    if (m_useBaselineScheduler)
     {
         auto anyHasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
+        bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
+            m_protocolInitializer->cryptoSuite()->hashImpl();
         std::visit(
             [&](auto& hasher) {
                 using Hasher = std::remove_cvref_t<decltype(hasher)>;
                 auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(storage);
 
-                transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>
-                    baselineSchedulerInitializer(
-                        existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory());
-                auto scheduler = baselineSchedulerInitializer.buildScheduler();
+                auto baselineSchedulerInitializer = std::make_shared<
+                    transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>(
+                    existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
+                    m_txpoolInitializer->txpool(), transactionSubmitResultFactory,
+                    [txpool = m_txpoolInitializer->txpool()](
+                        bcos::protocol::BlockNumber blockNumber,
+                        bcos::protocol::TransactionSubmitResultsPtr result,
+                        std::function<void(bcos::Error::Ptr)> callback) mutable {
+                        txpool->asyncNotifyBlockResult(
+                            blockNumber, std::move(result), std::move(callback));
+                    });
+                auto scheduler = baselineSchedulerInitializer->buildScheduler();
 
                 m_scheduler = scheduler;
+                m_baselineSchedulerInitializerHolder =
+                    [initializer = std::move(baselineSchedulerInitializer)]() {};
             },
             anyHasher);
     }
@@ -306,7 +318,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                               << LOG_KV("nodeArchType", _nodeArchType);
 
         // Note: ensure that there has at least one executor before pbft/sync execute block
-        if (!useBaselineScheduler)
+        if (!m_useBaselineScheduler)
         {
             auto storageFactory =
                 std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
@@ -316,13 +328,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 executionMessageFactory, storageFactory,
                 m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
                 m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName);
-            if (!useBaselineScheduler)
-            {
-                auto switchExecutorManager =
-                    std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
-                executorManager->addExecutor(executorName, switchExecutorManager);
-                m_switchExecutorManager = switchExecutorManager;
-            }
+            auto switchExecutorManager =
+                std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
+            executorManager->addExecutor(executorName, switchExecutorManager);
+            m_switchExecutorManager = switchExecutorManager;
         }
     }
 
@@ -430,24 +439,30 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     // init handlers
     auto nodeName = m_nodeConfig->nodeName();
     auto groupID = m_nodeConfig->groupId();
-    auto schedulerFactory =
-        dynamic_pointer_cast<scheduler::SchedulerManager>(m_scheduler)->getFactory();
-    // notify blockNumber
-    schedulerFactory->setBlockNumberReceiver(
-        [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
-            INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
-            // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
-            _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
-        });
-    // notify transactions
-    auto txpool = m_txpoolInitializer->txpool();
-    schedulerFactory->setTransactionNotifier(
-        [txpool](bcos::protocol::BlockNumber _blockNumber,
-            bcos::protocol::TransactionSubmitResultsPtr _result,
-            std::function<void(bcos::Error::Ptr)> _callback) {
-            // only response to the requester
-            txpool->asyncNotifyBlockResult(_blockNumber, _result, _callback);
-        });
+
+    if (!m_useBaselineScheduler)
+    {
+        auto schedulerFactory =
+            dynamic_pointer_cast<scheduler::SchedulerManager>(m_scheduler)->getFactory();
+        // notify blockNumber
+        schedulerFactory->setBlockNumberReceiver(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+        // notify transactions
+        auto txpool = m_txpoolInitializer->txpool();
+        schedulerFactory->setTransactionNotifier(
+            [txpool](bcos::protocol::BlockNumber _blockNumber,
+                bcos::protocol::TransactionSubmitResultsPtr _result,
+                std::function<void(bcos::Error::Ptr)> _callback) {
+                // only response to the requester
+                txpool->asyncNotifyBlockResult(_blockNumber, _result, _callback);
+            });
+    }
+    else
+    {}
     m_pbftInitializer->initNotificationHandlers(_rpc);
 }
 

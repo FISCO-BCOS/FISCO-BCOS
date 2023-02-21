@@ -62,11 +62,13 @@ public:
         boost::container::small_vector<::rocksdb::PinnableSlice, 1> m_results;
         boost::container::small_vector<::rocksdb::Status, 1> m_status;
         int64_t m_index = -1;
-        [[no_unique_address]] ValueResolver m_valueResolver;
+        ValueResolver& m_valueResolver;
 
     public:
         using Key = KeyType const&;
         using Value = ValueType;
+
+        ReadIterator(ValueResolver& valueResolver) : m_valueResolver(valueResolver) {}
 
         task::AwaitableValue<bool> next()
         {
@@ -92,7 +94,7 @@ public:
 
     auto read(RANGES::input_range auto const& keys) -> task::AwaitableValue<ReadIterator>
     {
-        task::AwaitableValue<ReadIterator> readIteratorAwaitable({});
+        task::AwaitableValue<ReadIterator> readIteratorAwaitable(ReadIterator{m_valueResolver});
         auto& readIterator = readIteratorAwaitable.value();
         if constexpr (RANGES::sized_range<decltype(keys)>)
         {

@@ -89,9 +89,6 @@ public:
         {
             isSMCrypto = true;
         }
-
-        constexpr static evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
-        metrics = &ethMetrics;  // TODO: To be delete
     }
     ~HostContext() noexcept = default;
 
@@ -137,25 +134,32 @@ public:
     {
         if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            auto codeHashEntry = co_await storage2::readOne(
-                m_rollbackableStorage, StateKey{getTableNameID(address), ACCOUNT_CODE_HASH});
-            if (codeHashEntry)
+            auto codeHashIt = co_await m_rollbackableStorage.read(
+                storage2::single(std::tuple{getTableNameID(address), ACCOUNT_CODE_HASH}));
+            co_await codeHashIt.next();
+            if (co_await codeHashIt.hasValue())
             {
-                auto codeEntry = co_await storage2::readOne(
-                    m_rollbackableStorage, StateKey{m_codeTable, codeHashEntry->get()});
-                if (codeEntry)
+                auto&& codeHashEntry = co_await codeHashIt.value();
+
+                auto codeIt = co_await m_rollbackableStorage.read(
+                    storage2::single(std::tuple{m_codeTable, codeHashEntry.get()}));
+                co_await codeIt.next();
+                if (co_await codeIt.hasValue())
                 {
-                    co_return std::move(codeEntry);
+                    auto&& codeEntry = co_await codeIt.value();
+                    co_return std::forward<decltype(codeEntry)>(codeEntry);
                 }
             }
             co_return std::optional<storage::Entry>{};
         }
 
-        auto code = co_await storage2::readOne(
-            m_rollbackableStorage, StateKey{getTableNameID(address), ACCOUNT_CODE});
-        if (code)
+        auto codeIt = co_await m_rollbackableStorage.read(
+            storage2::single(std::tuple{m_codeTable, ACCOUNT_CODE}));
+        co_await codeIt.next();
+        if (co_await codeIt.hasValue())
         {
-            co_return std::move(code);
+            auto&& codeEntry = co_await codeIt.value();
+            co_return std::forward<decltype(codeEntry)>(codeEntry);
         }
 
         co_return std::optional<storage::Entry>{};
@@ -248,11 +252,13 @@ public:
         if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             // TODO: check is precompiled
-            auto codeHashEntry = co_await storage2::readOne(
-                m_rollbackableStorage, StateKey{getTableNameID(address), ACCOUNT_CODE_HASH});
-            if (codeHashEntry)
+            auto it = co_await m_rollbackableStorage.read(
+                storage2::single(StateKey{getTableNameID(address), ACCOUNT_CODE_HASH}));
+            co_await it.next();
+            if (co_await it.hasValue())
             {
-                auto view = codeHashEntry->get();
+                auto&& codeHashEntry = co_await it.value();
+                auto view = codeHashEntry.get();
                 h256 codeHash((const bcos::byte*)view.data(), view.size());
                 co_return codeHash;
             }
@@ -260,14 +266,21 @@ public:
         co_return h256{};
     }
 
-    /// Does the account exist?
-    task::Task<bool> exists([[maybe_unused]] const std::string_view& address) { co_return true; }
+    task::Task<bool> exists([[maybe_unused]] const std::string_view& address)
+    {
+        // TODO: impl the full suport for solidity
+        co_return true;
+    }
 
     /// Return the EVM gas-price schedule for this execution context.
     VMSchedule const& vmSchedule() const { return DefaultSchedule; }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
-    task::Task<h256> blockHash(int64_t number) const { co_return h256{}; }
+    task::Task<h256> blockHash(int64_t number) const
+    {
+        // TODO: return the block hash in multilayer storage
+        co_return h256{};
+    }
     int64_t blockNumber() const { return m_blockHeader.number(); }
     uint32_t blockVersion() const { return m_blockHeader.version(); }
     uint64_t timestamp() const { return m_blockHeader.timestamp(); }

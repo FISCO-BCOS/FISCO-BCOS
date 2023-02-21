@@ -7,23 +7,40 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <queue>
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/transform.hpp>
 
 namespace bcos::transaction_scheduler
 {
 
 #define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
+// clang-format off
+struct NotFoundTransactionError: public bcos::Error {};
+// clang-format on
+
 template <class SchedulerImpl, protocol::IsBlockHeaderFactory BlockHeaderFactory,
-    concepts::ledger::IsLedger Ledger>
+    concepts::ledger::IsLedger Ledger, txpool::IsTxPool TxPool,
+    protocol::IsTransactionSubmitResultFactory TransactionSubmitResultFactory>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
     SchedulerImpl& m_schedulerImpl;
     BlockHeaderFactory& m_blockHeaderFactory;
     Ledger& m_ledger;
+    TxPool& m_txpool;
+    TransactionSubmitResultFactory& m_transactionSubmitResultFactory;
+
+    std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
+    std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
+        std::function<void(Error::Ptr)>)>
+        m_transactionNotifier;
     crypto::Hash const& m_hashImpl;
 
     int64_t m_lastExecutedBlockNumber = -1;
@@ -39,28 +56,66 @@ private:
     std::queue<ExecuteResult> m_results;
     std::mutex m_resultsMutex;
 
+    task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactionsByHash(
+        RANGES::input_range auto const& hashes)
+    {
+        auto transactions = m_txpool.getTransactions(hashes);
+
+        // auto missingHashes =
+        //     RANGES::zip_view(transactions, RANGES::iota_view<uint64_t>(0)) |
+        //     RANGES::views::filter([&hashes](auto const& item) {
+        //         auto&& [ptr, index] = item;
+        //         if (ptr == nullptr)
+        //         {
+        //             return std::tuple<bcos::h256 const&, uint64_t>(hashes[index], index);
+        //         }
+        //     }) |
+        //     RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
+
+        // if (!RANGES::empty(missingHashes))
+        // {
+        //     auto transactionsFromLedger =
+        //         m_ledger.getTransactions(missingHashes | RANGES::views::keys);
+
+        //     RANGES::zip_view(transactionsFromLedger, missingHashes | RANGES::views::values) |
+        //         RANGES::views::for_each([&transactions](auto const& item) {
+        //             auto&& [transaction, index] = item;
+        //             transactions[index] = std::move(transaction);
+        //         });
+        // }
+        co_return transactions;
+    }
+
 public:
     BaselineScheduler(SchedulerImpl& schedulerImpl, BlockHeaderFactory& blockFactory,
-        Ledger& ledger, crypto::Hash const& hashImpl)
+        Ledger& ledger, TxPool& txPool,
+        TransactionSubmitResultFactory& transactionSubmitResultFactory,
+        crypto::Hash const& hashImpl)
       : m_schedulerImpl(schedulerImpl),
         m_blockHeaderFactory(blockFactory),
         m_ledger(ledger),
+        m_txpool(txPool),
+        m_transactionSubmitResultFactory(transactionSubmitResultFactory),
         m_hashImpl(hashImpl)
     {}
     BaselineScheduler(const BaselineScheduler&) = delete;
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;
     BaselineScheduler& operator=(BaselineScheduler&&) noexcept = default;
-    ~BaselineScheduler() override = default;
+    ~BaselineScheduler() noexcept override = default;
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>
             callback) override
     {
-        task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block,
+        task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
+                BASELINE_SCHEDULER_LOG(INFO)
+                    << "Execute block: " << block->blockHeaderConst()->number() << " | " << verify
+                    << " | " << block->transactionsMetaDataSize() << " | "
+                    << block->transactionsSize();
                 std::unique_lock executeLock(self->m_executeMutex, std::try_to_lock);
                 if (!executeLock.owns_lock())
                 {
@@ -90,21 +145,33 @@ public:
                     co_return;
                 }
 
-                self->m_lastExecutedBlockNumber = blockHeader->number();
                 self->m_schedulerImpl.start();
-                auto blockHeaderPtr = block->blockHeaderConst();
-                auto transactions =
-                    RANGES::iota_view<uint64_t, uint64_t>(0LU, block->transactionsSize()) |
-                    RANGES::views::transform(
-                        [&block](uint64_t index) { return block->transaction(index); }) |
-                    RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
+
+                std::vector<protocol::Transaction::ConstPtr> transactions;
+                if (block->transactionsSize() > 0)
+                {
+                    transactions =
+                        RANGES::iota_view<uint64_t, uint64_t>(0LU, block->transactionsSize()) |
+                        RANGES::views::transform(
+                            [&block](uint64_t index) { return block->transaction(index); }) |
+                        RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
+                }
+                else
+                {
+                    transactions = co_await self->getTransactionsByHash(
+                        RANGES::iota_view<uint64_t, uint64_t>(
+                            0LU, block->transactionsMetaDataSize()) |
+                        RANGES::views::transform(
+                            [&block](uint64_t index) { return block->transactionHash(index); }));
+                }
+
                 auto receipts = co_await self->m_schedulerImpl.execute(
-                    *blockHeaderPtr, transactions | RANGES::views::transform([
+                    *blockHeader, transactions | RANGES::views::transform([
                     ](protocol::Transaction::ConstPtr const& transactionPtr) -> auto& {
                         return *transactionPtr;
                     }));
                 auto stateRoot =
-                    co_await self->m_schedulerImpl.finish(*blockHeaderPtr, self->m_hashImpl);
+                    co_await self->m_schedulerImpl.finish(*blockHeader, self->m_hashImpl);
 
                 bcos::u256 totalGas = 0;
                 for (auto& receipt : receipts)
@@ -123,6 +190,12 @@ public:
                 newBlockHeader->setReceiptsRoot(block->calculateReceiptRoot(self->m_hashImpl));
                 newBlockHeader->calculateHash(self->m_hashImpl);
 
+                BASELINE_SCHEDULER_LOG(INFO)
+                    << "Execute block finished: " << newBlockHeader->number() << " | "
+                    << newBlockHeader->hash() << " | " << stateRoot << " | "
+                    << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot();
+                self->m_lastExecutedBlockNumber = blockHeader->number();
+
                 std::unique_lock resultsLock(self->m_resultsMutex);
                 self->m_results.push({.m_block = std::move(block)});
                 resultsLock.unlock();
@@ -131,9 +204,15 @@ public:
                 callback(nullptr, std::move(newBlockHeader), false);
                 co_return;
             }
-            catch (bcos::Error& e)
-            {}
-        }(this, std::move(block), std::move(callback)));
+            catch (std::exception& e)
+            {
+                auto message =
+                    fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
+                BASELINE_SCHEDULER_LOG(ERROR) << message;
+                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                    nullptr, false);
+            }
+        }(this, std::move(block), verify, std::move(callback)));
     }
 
     void commitBlock(protocol::BlockHeader::Ptr header,
@@ -143,6 +222,7 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
+                BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << blockHeader->number();
                 std::unique_lock commitLock(self->m_commitMutex, std::try_to_lock);
                 if (!commitLock.owns_lock())
                 {
@@ -181,8 +261,42 @@ public:
                 co_await self->m_schedulerImpl.commit();
 
                 commitLock.unlock();
+
+                BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << blockHeader->number();
                 callback(nullptr,
                     std::make_shared<ledger::LedgerConfig>(co_await self->m_ledger.getConfig()));
+
+                // Notify the result
+                auto submitResults =
+                    RANGES::iota_view<uint64_t, uint64_t>(0L, result.m_block->receiptsSize()) |
+                    RANGES::views::transform([&result, self = self](uint64_t index)
+                                                 -> protocol::TransactionSubmitResult::Ptr {
+                        auto transaction = result.m_block->transaction(index);
+                        auto receipt = result.m_block->receipt(index);
+
+                        auto submitResult =
+                            self->m_transactionSubmitResultFactory.createTxSubmitResult();
+                        submitResult->setStatus(receipt->status());
+                        submitResult->setTxHash(result.m_block->transactionHash(index));
+                        submitResult->setBlockHash(result.m_block->blockHeaderConst()->hash());
+                        submitResult->setTransactionIndex(index);
+                        submitResult->setNonce(transaction->nonce());
+                        submitResult->setTransactionReceipt(std::move(
+                            std::const_pointer_cast<bcos::protocol::TransactionReceipt>(receipt)));
+                        submitResult->setSender(std::string(transaction->sender()));
+                        submitResult->setTo(std::string(transaction->to()));
+
+                        return submitResult;
+                    }) |
+                    RANGES::to<std::vector<protocol::TransactionSubmitResult::Ptr>>();
+
+                auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
+                    std::move(submitResults));
+                self->m_notifier(blockHeader->number(), std::move(submitResultsPtr),
+                    []([[maybe_unused]] const Error::Ptr& error) {
+                        BASELINE_SCHEDULER_LOG(WARNING)
+                            << "Push block notify error!" << boost::diagnostic_information(*error);
+                    });
                 co_return;
             }
             catch (bcos::Error& e)
@@ -200,8 +314,8 @@ public:
     {
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
+            // TODO: Use real block number
             auto blockHeader = self->m_blockHeaderFactory.createBlockHeader();
-
             auto receipt = co_await self->m_schedulerImpl.call(*blockHeader, *transaction);
 
             callback(nullptr, std::move(receipt));
@@ -227,13 +341,27 @@ public:
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) override
     {}
 
-    // for performance, do the things before executing block in executor.
     void preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,
         [[maybe_unused]] bool verify,
         [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
-    {}
+    {
+        callback(nullptr);
+    }
 
     void stop() override{};
+
+    void registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
+            bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
+            txNotifier)
+    {
+        m_transactionNotifier = std::move(txNotifier);
+    }
+
+    void registerBlockNumberNotifier(
+        std::function<void(bcos::protocol::BlockNumber)> blockNumberNotifier)
+    {
+        m_blockNumberNotifier = std::move(blockNumberNotifier);
+    }
 };
 
 }  // namespace bcos::transaction_scheduler

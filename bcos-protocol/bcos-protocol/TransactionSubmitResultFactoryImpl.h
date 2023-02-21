@@ -21,21 +21,18 @@
 #include "TransactionSubmitResultImpl.h"
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class TransactionSubmitResultFactoryImpl : public TransactionSubmitResultFactory
 {
 public:
     using Ptr = std::shared_ptr<TransactionSubmitResultFactoryImpl>;
     TransactionSubmitResultFactoryImpl() = default;
-    ~TransactionSubmitResultFactoryImpl() override {}
+    ~TransactionSubmitResultFactoryImpl() override = default;
 
     TransactionSubmitResult::Ptr createTxSubmitResult() override
     {
         return std::make_shared<TransactionSubmitResultImpl>();
     }
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

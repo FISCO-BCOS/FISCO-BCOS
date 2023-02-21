@@ -91,9 +91,6 @@ static void call_setInt(benchmark::State& state)
 
     bcos::codec::abi::ContractABICodec abiCodec(
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
-    // auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(10000));
-    // transaction.mutableInner().data.input.assign(input.begin(), input.end());
-    // transaction.mutableInner().data.to = contractAddress;
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         int contextID = 0;

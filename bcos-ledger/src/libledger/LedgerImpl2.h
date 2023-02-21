@@ -5,11 +5,13 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage2/StringPool.h"
 #include "bcos-tool/ConsensusNode.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
+#include <range/v3/view/transform.hpp>
 
 namespace bcos::ledger
 {
@@ -22,6 +24,9 @@ private:
     Storage& m_storage;
     BlockFactory& m_blockFactory;
     transaction_executor::TableNamePool& m_tableNamePool;
+
+    decltype(m_blockFactory.transactionFactory()) m_transactionFactory;
+    decltype(m_blockFactory.receiptFactory()) m_receiptFactory;
     decltype(m_blockFactory.cryptoSuite()->keyFactory()) m_keyFactory;
 
     template <std::same_as<bcos::concepts::ledger::HEADER>>
@@ -194,12 +199,12 @@ private:
             ++totalTransactionCount;
         }
 
-        auto hashes = RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsMetaDataSize()) |
+        auto hashes = RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
                       RANGES::views::transform([&block](uint64_t index) {
                           auto metaData = block.transactionMetaData(index);
                           return metaData->hash();
                       });
-        auto buffers = RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsSize()) |
+        auto buffers = RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsSize()) |
                        RANGES::views::transform([&block](uint64_t index) {
                            auto receipt = block.receipt(index);
                            std::vector<bcos::byte> buffer;
@@ -264,6 +269,8 @@ public:
       : m_storage(storage),
         m_blockFactory(blockFactory),
         m_tableNamePool(tableNamePool),
+        m_transactionFactory(m_blockFactory.transactionFactory()),
+        m_receiptFactory(m_blockFactory.receiptFactory()),
         m_keyFactory(m_blockFactory.cryptoSuite()->keyFactory())
     {}
 
@@ -410,6 +417,50 @@ public:
     }
 
     template <bool isTransaction>
+    task::Task<std::vector<decltype(m_transactionFactory->createTransaction(
+        std::declval<bytesConstRef>(), false, false))>>
+    getTransactions(RANGES::input_range auto const& hashes)
+    {
+        auto tableNameID =
+            isTransaction ?
+                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_TX) :
+                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_RECEIPT);
+
+        LEDGER_LOG(INFO) << "getTransactions: " << *tableNameID;
+
+        auto it =
+            co_await m_storage.read(hashes | RANGES::views::transform([&tableNameID](auto& hash) {
+                return std::tuple{tableNameID,
+                    std::string_view((const char*)RANGES::data(hash), RANGES::size(hash))};
+            }));
+
+        std::vector<decltype(m_transactionFactory->createTransaction(
+            std::declval<bytesConstRef>(), false, false))>
+            transactions;
+        if constexpr (RANGES::sized_range<decltype(hashes)>)
+        {
+            transactions.reserve(RANGES::size(hashes));
+        }
+
+        while (co_await it.next())
+        {
+            if (co_await it.hasValue())
+            {
+                auto&& entry = co_await it.value();
+                auto view = entry.get();
+                transactions.emplace_back(m_transactionFactory->createTransaction(
+                    bytesConstRef(view.data(), view.size()), false, false));
+            }
+            else
+            {
+                transactions.emplace_back({});
+            }
+        }
+
+        co_return transactions;
+    }
+
+    template <bool isTransaction>
     task::Task<void> setTransactions(RANGES::range auto&& hashes, RANGES::range auto&& buffers)
     {
         if (RANGES::size(buffers) != RANGES::size(hashes))
@@ -422,12 +473,13 @@ public:
                 storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_TX) :
                 storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_RECEIPT);
 
-        LEDGER_LOG(INFO) << "setTransactionBuffers: " << tableNameID << " " << RANGES::size(hashes);
+        LEDGER_LOG(INFO) << "setTransactionBuffers: " << *tableNameID << " "
+                         << RANGES::size(hashes);
 
         co_await m_storage.write(
             hashes | RANGES::views::transform([this, &tableNameID](auto const& hash) {
                 return transaction_executor::StateKey{tableNameID,
-                    std::string_view((const char*)std::data(hash), RANGES::size(hash))};
+                    std::string_view((const char*)RANGES::data(hash), RANGES::size(hash))};
             }),
             buffers | RANGES::views::transform([this](auto&& buffer) {
                 storage::Entry entry;

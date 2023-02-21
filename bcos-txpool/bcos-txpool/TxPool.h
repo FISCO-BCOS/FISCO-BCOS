@@ -59,7 +59,7 @@ public:
     void start() override;
     void stop() override;
 
-    // For transaction sync
+    // New interfaces ==================
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override;
 
@@ -71,7 +71,11 @@ public:
     task::Task<std::vector<protocol::Transaction::Ptr>> getMissedTransactions(
         std::vector<crypto::HashType> transactionHashes,
         bcos::crypto::NodeIDPtr fromNodeID) override;
-    // ended
+
+    std::vector<protocol::Transaction::ConstPtr> getTransactions(
+        RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+        override;
+    // ===============================
 
     // sealer module call this method for seal a block
     void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,

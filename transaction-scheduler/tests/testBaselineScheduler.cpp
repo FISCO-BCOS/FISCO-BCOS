@@ -1,3 +1,4 @@
+#include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-scheduler/test/mock/MockLedger.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
@@ -5,6 +6,8 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-transaction-scheduler/BaselineScheduler.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <boost/test/unit_test.hpp>
@@ -16,7 +19,7 @@ using namespace bcos::transaction_scheduler;
 
 struct MockScheduler
 {
-    task::Task<void> start() { co_return; }
+    void start() {}
     task::Task<std::vector<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>>> execute(
         auto&& blockHeader, auto&& transactions)
     {
@@ -36,7 +39,8 @@ struct MockScheduler
     task::Task<bcos::h256> finish(auto&& block, auto&& hashImpl) { co_return bcos::h256{}; }
     task::Task<void> commit() { co_return; }
 
-    task::Task<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>> call(auto&& transaction)
+    task::Task<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>> call(
+        auto&& block, auto&& transaction)
     {
         co_return nullptr;
     }
@@ -62,6 +66,47 @@ struct MockLedger
     }
 };
 
+struct MockTxPool : public txpool::TxPoolInterface
+{
+    void start() override {}
+    void stop() override {}
+    void asyncSealTxs(uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs,
+        std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
+            _sealCallback) override
+    {}
+    void asyncMarkTxs(bcos::crypto::HashListPtr _txsHash, bool _sealedFlag,
+        bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
+        std::function<void(Error::Ptr)> _onRecvResponse) override
+    {}
+    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID, bytesConstRef const& _block,
+        std::function<void(Error::Ptr, bool)> _onVerifyFinished) override
+    {}
+    void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
+        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) override
+    {}
+    void asyncNotifyBlockResult(bcos::protocol::BlockNumber _blockNumber,
+        bcos::protocol::TransactionSubmitResultsPtr _txsResult,
+        std::function<void(Error::Ptr)> _onNotifyFinished) override
+    {}
+    void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _id,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
+        std::function<void(Error::Ptr _error)> _onRecv) override
+    {}
+    void notifyConsensusNodeList(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
+        std::function<void(Error::Ptr)> _onRecvResponse) override
+    {}
+    void notifyObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList,
+        std::function<void(Error::Ptr)> _onRecvResponse) override
+    {}
+    void asyncGetPendingTransactionSize(
+        std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize) override
+    {}
+    void asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse) override {}
+    void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
+        std::function<void(Error::Ptr)> _onResponse) override
+    {}
+};
+
 class TestBaselineSchedulerFixture
 {
 public:
@@ -80,7 +125,17 @@ public:
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
         blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory)),
-        baselineScheduler(mockScheduler, *blockHeaderFactory, mockLedger, *hashImpl)
+        transactionSubmitResultFactory(
+            std::make_shared<protocol::TransactionSubmitResultFactoryImpl>()),
+        baselineScheduler(
+            mockScheduler, *blockHeaderFactory, mockLedger, mockTxPool,
+            *transactionSubmitResultFactory,
+            []([[maybe_unused]] bcos::protocol::BlockNumber blockNumber,
+                [[maybe_unused]] bcos::protocol::TransactionSubmitResultsPtr result,
+                [[maybe_unused]] std::function<void(bcos::Error::Ptr)> callback) {
+                // Nothing to do
+            },
+            *hashImpl)
     {}
 
     TableNamePool tableNamePool;
@@ -90,11 +145,15 @@ public:
     std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> transactionFactory;
     std::shared_ptr<bcostars::protocol::TransactionReceiptFactoryImpl> receiptFactory;
     std::shared_ptr<bcostars::protocol::BlockFactoryImpl> blockFactory;
+    std::shared_ptr<protocol::TransactionSubmitResultFactoryImpl> transactionSubmitResultFactory;
+
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 
     MockScheduler mockScheduler;
     MockLedger mockLedger;
-    BaselineScheduler<MockScheduler, bcostars::protocol::BlockHeaderFactoryImpl, MockLedger>
+    MockTxPool mockTxPool;
+    BaselineScheduler<MockScheduler, bcostars::protocol::BlockHeaderFactoryImpl, MockLedger,
+        MockTxPool, decltype(*transactionSubmitResultFactory)>
         baselineScheduler;
 };
 
@@ -115,6 +174,8 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
             BOOST_CHECK(blockHeader);
             BOOST_CHECK(!sysBlock);
         });
+    // baselineScheduler.commitBlock(blockHeader, std::function<void (Error::Ptr &&,
+    // ledger::LedgerConfig::Ptr &&)> callback)
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -15,7 +15,7 @@ class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Receip
 {
 private:
     constexpr static size_t DEFAULT_CHUNK_SIZE = 1000;
-    constexpr static size_t DEFAULT_MAX_THREADS = 24;
+    constexpr static size_t DEFAULT_MAX_THREADS = 24;  // Use hardware concurrency, window
 
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto adjust
     size_t m_maxThreads = DEFAULT_MAX_THREADS;  // Maybe auto adjust
@@ -145,7 +145,6 @@ public:
 
                                 task::syncWait(mergeStorage(myStorage->mutableStorage(),
                                     multiLayerStorage().mutableStorage()));
-
                                 executedStorages.emplace_back(std::move(chunkStorage));
                                 receipts.insert(receipts.end(),
                                     std::make_move_iterator(chunkReceipts.begin()),

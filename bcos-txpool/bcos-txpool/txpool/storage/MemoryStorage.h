@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "bcos-task/Task.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
 #include <bcos-utilities/ThreadPool.h>
@@ -39,8 +40,14 @@ public:
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override = default;
 
+    // New interfaces =============
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override;
+
+    std::vector<protocol::Transaction::ConstPtr> getTransactions(
+        RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+        override;
+    // ============================
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
