@@ -22,9 +22,6 @@ class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;
 
-    GatewayConfig() = default;
-    ~GatewayConfig() = default;
-
 public:
     // cert for ssl connection
     struct CertConfig
@@ -226,6 +223,12 @@ public:
     std::string const& uuid() const { return m_uuid; }
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 
+    void setEnableRIPProtocol(bool _enableRIPProtocol) { m_enableRIPProtocol = _enableRIPProtocol; }
+    bool enableRIPProtocol() const { return m_enableRIPProtocol; }
+
+    void setEnableCompress(bool _enableCompress) { m_enableCompress = _enableCompress; }
+    bool enableCompress() const { return m_enableCompress; }
+
     // NodeIDType:
     // h512(true == m_smSSL)
     // h2048(false == m_smSSL)
@@ -274,6 +277,10 @@ private:
     std::set<std::string> m_certBlacklist;
     // peer white list
     bool m_enableWhitelist{false};
+    // enable rip protocol
+    bool m_enableRIPProtocol{true};
+    // enable compress
+    bool m_enableCompress {true};
     std::set<std::string> m_certWhitelist;
     // cert config for ssl connection
     CertConfig m_certConfig;
