@@ -67,7 +67,7 @@ void Service::stop()
 
         /// disconnect sessions
         RecursiveGuard l(x_sessions);
-        for (auto session : m_sessions)
+        for (auto& session : m_sessions)
         {
             session.second->stop(ClientQuit);
         }
@@ -110,10 +110,19 @@ void Service::heartBeat()
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
     }
+
+    std::unordered_map<P2pID, P2PSession::Ptr> sessions;
     {
         RecursiveGuard l(x_sessions);
-        SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
-                          << LOG_KV("connected count", m_sessions.size());
+        sessions = m_sessions;
+    }
+    SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
+                      << LOG_KV("connected count", sessions.size());
+    for (auto& [p2pID, session] : sessions)
+    {
+        SERVICE_LOG(DEBUG) << METRIC << LOG_DESC("heartBeat")
+                           << LOG_KV("endpoint", session->session()->nodeIPEndpoint().address())
+                           << LOG_KV("write queue size", session->session()->writeQueueSize());
     }
 
     auto self = std::weak_ptr<Service>(shared_from_this());
@@ -194,7 +203,7 @@ void Service::onConnect(
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(session);
     p2pSession->setP2PInfo(p2pInfo);
-    p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
+    p2pSession->setService(weak_from_this());
     p2pSession->setProtocolInfo(m_localProtocol);
 
     auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
