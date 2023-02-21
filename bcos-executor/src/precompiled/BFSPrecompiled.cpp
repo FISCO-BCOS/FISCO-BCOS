@@ -738,6 +738,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("initBfs");
+    auto blockContext = _executive->blockContext().lock();
     auto table = _executive->storage().openTable(tool::FS_ROOT);
     if (table.has_value())
     {
@@ -765,7 +766,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
         std::string(tool::FS_SYS_BIN), std::string(tool::FS_DIR_FIELDS));
 
     // build /sys/
-    buildSysSubs(_executive);
+    buildSysSubs(_executive, blockContext->blockVersion());
 }
 
 void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -888,7 +889,7 @@ void BFSPrecompiled::rebuildBfs310(
     if (rebuildSys)
     {
         // build /sys/
-        buildSysSubs(_executive);
+        buildSysSubs(_executive, BlockVersion::V3_1_VERSION);
     }
 }
 
@@ -1026,11 +1027,15 @@ bool BFSPrecompiled::recursiveBuildDir(
     return true;
 }
 
-void BFSPrecompiled::buildSysSubs(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive) const
+void BFSPrecompiled::buildSysSubs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    std::variant<uint32_t, BlockVersion> toVersion) const
 {
     for (const auto& sysSub : BFS_SYS_SUBS)
     {
+        if (sysSub == CAST_NAME && versionCompareTo(toVersion, BlockVersion::V3_2_VERSION) < 0)
+        {
+            continue;
+        }
         Entry entry;
         // type, status, acl_type, acl_white, acl_black, extra
         tool::BfsFileFactory::buildDirEntry(entry, tool::LINK);
@@ -1038,10 +1043,13 @@ void BFSPrecompiled::buildSysSubs(
             tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
     }
     // build sys contract
-    for (const auto& nameAddress : SYS_NAME_ADDRESS_MAP)
+    for (const auto& [name, address] : SYS_NAME_ADDRESS_MAP)
     {
-        auto linkTable =
-            _executive->storage().createTable(std::string(nameAddress.first), SYS_VALUE_FIELDS);
-        tool::BfsFileFactory::buildLink(linkTable.value(), std::string(nameAddress.second), "");
+        if (name == CAST_NAME && versionCompareTo(toVersion, BlockVersion::V3_2_VERSION) < 0)
+        {
+            continue;
+        }
+        auto linkTable = _executive->storage().createTable(std::string(name), SYS_VALUE_FIELDS);
+        tool::BfsFileFactory::buildLink(linkTable.value(), std::string(address), "");
     }
 }

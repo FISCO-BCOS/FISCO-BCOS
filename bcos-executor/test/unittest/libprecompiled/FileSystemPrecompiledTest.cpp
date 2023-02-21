@@ -669,7 +669,14 @@ BOOST_AUTO_TEST_CASE(lsTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
         std::set<std::string> lsSet;
         for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
@@ -678,7 +685,13 @@ BOOST_AUTO_TEST_CASE(lsTest)
             lsSet.insert(item);
         }
 
-        for (auto const& sysSub : precompiled::BFS_SYS_SUBS | RANGES::views::drop(1))
+        auto take = precompiled::BFS_SYS_SUBS_COUNT;
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            take--;
+        }
+        for (auto const& sysSub :
+            precompiled::BFS_SYS_SUBS | RANGES::views::take(take) | RANGES::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
         }
@@ -770,7 +783,14 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
         std::set<std::string> lsSet;
         for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
@@ -779,14 +799,20 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
             lsSet.insert(item);
         }
 
-        for (auto const& sysSub : precompiled::BFS_SYS_SUBS | RANGES::views::drop(1))
+        auto take = precompiled::BFS_SYS_SUBS_COUNT;
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            take--;
+        }
+        for (auto const& sysSub :
+            precompiled::BFS_SYS_SUBS | RANGES::views::take(take) | RANGES::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
         }
     }
 }
 
-BOOST_AUTO_TEST_CASE(lsPagWasmeTest)
+BOOST_AUTO_TEST_CASE(lsPagWasmTest)
 {
     init(true);
     BlockNumber _number = 3;
@@ -871,7 +897,14 @@ BOOST_AUTO_TEST_CASE(lsPagWasmeTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
         std::set<std::string> lsSet;
         for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
@@ -880,7 +913,13 @@ BOOST_AUTO_TEST_CASE(lsPagWasmeTest)
             lsSet.insert(item);
         }
 
-        for (auto const& sysSub : precompiled::BFS_SYS_SUBS | RANGES::views::drop(1))
+        auto take = precompiled::BFS_SYS_SUBS_COUNT;
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            take--;
+        }
+        for (auto const& sysSub :
+            precompiled::BFS_SYS_SUBS | RANGES::views::take(take) | RANGES::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
         }
@@ -1628,7 +1667,14 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
     }
 
     // ls /apps/temp/temp2/temp3/temp4
@@ -1786,7 +1832,14 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
     }
 
     // ls /apps/temp/temp2/temp3/temp4
