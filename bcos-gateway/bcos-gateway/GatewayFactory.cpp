@@ -641,6 +641,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     BCOS_LOG(INFO) << LOG_DESC("register SIGUSR1 sig for reload p2p connected nodes config");
 
     GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("buildService") << LOG_DESC("build service end")
+                              << LOG_KV("enable rip protocol", _config->enableRIPProtocol())
                               << LOG_KV("myself pub id", pubHex);
     service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);
@@ -696,20 +697,21 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // init Gateway
         auto gateway = std::make_shared<Gateway>(
             m_chainID, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
-        auto GatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
+        auto gatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(
-            [GatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
+            [gatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
                 (void)e;
-                auto gatewayNodeManager = GatewayNodeManagerWeakPtr.lock();
+                auto gatewayNodeManager = gatewayNodeManagerWeakPtr.lock();
                 if (gatewayNodeManager && p2pSession)
                 {
                     gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
                 }
             });
+
         service->registerUnreachableHandler(
-            [GatewayNodeManagerWeakPtr](std::string const& _unreachableNode) {
-                auto nodeMgr = GatewayNodeManagerWeakPtr.lock();
+            [gatewayNodeManagerWeakPtr](std::string const& _unreachableNode) {
+                auto nodeMgr = gatewayNodeManagerWeakPtr.lock();
                 if (!nodeMgr)
                 {
                     return;
