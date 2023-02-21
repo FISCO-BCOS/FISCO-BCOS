@@ -91,7 +91,7 @@ public:
     using MessageHandler =
         std::function<void(NetworkException, std::shared_ptr<P2PSession>, P2PMessage::Ptr)>;
 
-    virtual void registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) = 0;
+    virtual bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) = 0;
 
     virtual void eraseHandlerByMsgType(uint16_t _type) = 0;
 

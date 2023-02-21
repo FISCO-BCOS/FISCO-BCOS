@@ -57,6 +57,7 @@ public:
     Message& operator=(const Message&) = delete;
     virtual ~Message() = default;
 
+    virtual uint32_t lengthDirect() const = 0;
     virtual uint32_t length() const = 0;
     virtual uint32_t seq() const = 0;
     virtual uint16_t version() const = 0;

@@ -19,17 +19,29 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::protocol;
 
-static const uint32_t CHECK_INTERVEL = 10000;
+static const uint32_t CHECK_INTERVAL = 10000;
 
 Service::Service(std::string const& _nodeID) : m_nodeID(_nodeID)
 {
+    m_msgHandlers.fill(nullptr);
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
+
+    SERVICE_LOG(INFO) << LOG_BADGE("Service::Service") << LOG_DESC("local protocol")
+                      << LOG_KV("protocolModuleID", m_localProtocol->protocolModuleID())
+                      << LOG_KV("version", m_localProtocol->version())
+                      << LOG_KV("minVersion", m_localProtocol->minVersion())
+                      << LOG_KV("maxVersion", m_localProtocol->maxVersion());
+
     m_codec = g_BCOSConfig.codec();
     // Process handshake packet logic, handshake protocol and determine
     // the version, when handshake finished the version field of P2PMessage
     // should be set
     registerHandlerByMsgType(GatewayMessageType::Handshake,
         boost::bind(&Service::onReceiveProtocol, this, boost::placeholders::_1,
+            boost::placeholders::_2, boost::placeholders::_3));
+
+    registerHandlerByMsgType(GatewayMessageType::Heartbeat,
+        boost::bind(&Service::onReceiveHeartbeat, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
 }
 
@@ -126,7 +138,7 @@ void Service::heartBeat()
     }
 
     auto self = std::weak_ptr<Service>(shared_from_this());
-    m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
+    m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVAL);
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
         {
@@ -365,24 +377,19 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
                            << LOG_KV("packetType", p2pMessage->packetType());
 
         auto packetType = p2pMessage->packetType();
+        auto ext = p2pMessage->ext();
+        auto version = p2pMessage->version();
         auto handler = getMessageHandlerByMsgType(packetType);
         if (handler)
         {
-            // TODO: use thread pool here
             handler(e, p2pSession, p2pMessage);
             return;
         }
-        switch (packetType)
-        {
-        case GatewayMessageType::Heartbeat:
-            break;
-        default:
-        {
-            SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type")
-                               << LOG_KV("packetType", packetType) << LOG_KV("seq", message->seq());
-        }
-        break;
-        };
+
+        SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type") << LOG_KV("seq", message->seq())
+                           << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
+                           << LOG_KV("version", version)
+                           << LOG_KV("dst p2p", p2pMessage->dstP2PNodeID());
     }
     catch (std::exception& e)
     {
@@ -637,6 +644,20 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
     SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
                       << LOG_KV("seq", seq);
     sendMessageToSession(_session, message, Options(), nullptr);
+}
+
+// receive the heartbeat msg
+void Service::Service::onReceiveHeartbeat(
+    NetworkException, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr)
+{
+    std::string endpoint = "unknown";
+    if (_session)
+    {
+        endpoint = _session->session()->nodeIPEndpoint().address();
+    }
+
+    SERVICE_LOG(TRACE) << LOG_BADGE("onReceiveHeartbeat") << LOG_DESC("receive heartbeat message")
+                       << LOG_KV("endpoint", endpoint);
 }
 
 // receive the protocolInfo

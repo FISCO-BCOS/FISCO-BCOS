@@ -134,6 +134,7 @@ public:
     // ~P2PMessage() override = default;
 
 public:
+    uint32_t lengthDirect() const override { return m_length; }
     uint32_t length() const override
     {
         // The length value has been set

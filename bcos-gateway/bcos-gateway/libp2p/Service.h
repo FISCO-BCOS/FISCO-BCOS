@@ -10,14 +10,15 @@
 #pragma once
 #include "bcos-utilities/ObjectCounter.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/ProtocolInfoCodec.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
-#include <map>
-#include <memory>
+#include <array>
 #include <unordered_map>
+
 
 namespace bcos
 {
@@ -131,38 +132,20 @@ public:
     void asyncSendMessageByP2PNodeIDs(uint16_t _type, const std::vector<P2pID>& _nodeIDs,
         bytesConstRef _payload, Options _options) override;
 
-    void registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) override
+    bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) override
     {
-        UpgradableGuard l(x_msgHandlers);
-        if (m_msgHandlers.count(_type) || !_msgHandler)
+        if (m_msgHandlers.at(_type))
         {
-            return;
+            return false;
         }
-        UpgradeGuard ul(l);
-        m_msgHandlers[_type] = _msgHandler;
+
+        m_msgHandlers.at(_type) = _msgHandler;
+        return true;
     }
 
-    MessageHandler getMessageHandlerByMsgType(uint16_t _type)
-    {
-        ReadGuard l(x_msgHandlers);
-        if (m_msgHandlers.count(_type))
-        {
-            return m_msgHandlers[_type];
-        }
-        return nullptr;
-    }
+    MessageHandler getMessageHandlerByMsgType(uint16_t _type) { return m_msgHandlers.at(_type); }
 
-    void eraseHandlerByMsgType(uint16_t _type) override
-    {
-        UpgradableGuard l(x_msgHandlers);
-        if (!m_msgHandlers.count(_type))
-        {
-            return;
-        }
-        UpgradeGuard ul(l);
-        m_msgHandlers.erase(_type);
-    }
-
+    void eraseHandlerByMsgType(uint16_t _type) override { m_msgHandlers.at(_type) = nullptr; }
 
     void asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
         CallbackFuncWithSession callback, Options options = Options());
@@ -187,6 +170,8 @@ protected:
     // handshake protocol
     void asyncSendProtocol(P2PSession::Ptr _session);
     void onReceiveProtocol(
+        NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+    void onReceiveHeartbeat(
         NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
 
     // handlers called when new-session
@@ -255,8 +240,7 @@ private:
 
     bool m_run = false;
 
-    std::map<int16_t, MessageHandler> m_msgHandlers;
-    mutable SharedMutex x_msgHandlers;
+    std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers;
 
     // the local protocol
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
