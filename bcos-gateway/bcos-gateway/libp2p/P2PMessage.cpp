@@ -192,6 +192,7 @@ bool P2PMessage::encode(bytes& _buffer)
     // compress payload
     std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
     bool isCompressSuccess = false;
+    // TODO: add enable_compress switch
     if (tryToCompressPayload(compressData))
     {
         isCompressSuccess = true;

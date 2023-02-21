@@ -562,88 +562,107 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     return rateLimiterManager;
 }
 
+//
+std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& _config)
+{
+    std::string nodeCert =
+        (_config->smSSL() ? _config->smCertConfig().nodeCert : _config->certConfig().nodeCert);
+    std::string pubHex;
+    if (!m_certPubHexHandler(nodeCert, pubHex))
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "GatewayFactory::init unable parse myself pub id"));
+    }
+
+    std::shared_ptr<ba::ssl::context> srvCtx =
+        (_config->smSSL() ? buildSSLContext(true, _config->smCertConfig()) :
+                            buildSSLContext(true, _config->certConfig()));
+
+    std::shared_ptr<ba::ssl::context> clientCtx =
+        (_config->smSSL() ? buildSSLContext(false, _config->smCertConfig()) :
+                            buildSSLContext(false, _config->certConfig()));
+
+    // init ASIOInterface
+    auto asioInterface = std::make_shared<ASIOInterface>();
+    auto ioServicePool = std::make_shared<IOServicePool>();
+    asioInterface->setIOServicePool(ioServicePool);
+    asioInterface->setSrvContext(srvCtx);
+    asioInterface->setClientContext(clientCtx);
+    asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
+
+    // Message Factory
+    auto messageFactory = std::make_shared<P2PMessageFactoryV2>();
+    // Session Factory
+    auto sessionFactory = std::make_shared<SessionFactory>(pubHex);
+    // KeyFactory
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    // Session Callback manager
+    auto sessionCallbackManager = std::make_shared<SessionCallbackManagerBucket>();
+
+    // init peer black list
+    PeerBlackWhitelistInterface::Ptr peerBlacklist =
+        std::make_shared<PeerBlacklist>(_config->peerBlacklist(), _config->enableBlacklist());
+    // init peer white list
+    PeerBlackWhitelistInterface::Ptr peerWhitelist =
+        std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
+
+    // init Host
+    auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
+    host->setHostPort(_config->listenIP(), _config->listenPort());
+    host->setThreadPool(std::make_shared<ThreadPool>("P2P", _config->threadPoolSize()));
+    host->setSSLContextPubHandler(m_sslContextPubHandler);
+    host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
+    host->setPeerBlacklist(peerBlacklist);
+    host->setPeerWhitelist(peerWhitelist);
+    host->setSessionCallbackManager(sessionCallbackManager);
+
+    // init Service
+
+    bool enableRIPProtocol = _config->enableRIPProtocol();
+    Service::Ptr service = nullptr;
+    if (enableRIPProtocol)
+    {
+        auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
+        service = std::make_shared<ServiceV2>(pubHex, routerTableFactory);
+    }
+    else
+    {
+        service = std::make_shared<Service>(pubHex);
+    }
+
+    service->setHost(host);
+    service->setStaticNodes(_config->connectedNodes());
+
+    GatewayP2PReloadHandler::config = _config;
+    GatewayP2PReloadHandler::service = service;
+    // register SIGUSR1 for reload connected p2p nodes config
+    signal(GATEWAY_RELOAD_P2P_CONFIG, GatewayP2PReloadHandler::handle);
+
+    BCOS_LOG(INFO) << LOG_DESC("register SIGUSR1 sig for reload p2p connected nodes config");
+
+    GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("buildService") << LOG_DESC("build service end")
+                              << LOG_KV("myself pub id", pubHex);
+    service->setMessageFactory(messageFactory);
+    service->setKeyFactory(keyFactory);
+    return service;
+}
+
 /**
  * @brief: construct Gateway
  * @param _config: config parameter object
  * @return void
  */
-// Note: _gatewayServiceName is used to check the validation of groupInfo when localRouter update
-// groupInfo
+// Note: _gatewayServiceName is used to check the validation of groupInfo when localRouter
+// update groupInfo
 std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
     bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
     std::string const& _gatewayServiceName)
 {
     try
     {
-        std::string nodeCert =
-            (_config->smSSL() ? _config->smCertConfig().nodeCert : _config->certConfig().nodeCert);
-        std::string pubHex;
-        if (!m_certPubHexHandler(nodeCert, pubHex))
-        {
-            BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                      "GatewayFactory::init unable parse myself pub id"));
-        }
-
-        std::shared_ptr<ba::ssl::context> srvCtx =
-            (_config->smSSL() ? buildSSLContext(true, _config->smCertConfig()) :
-                                buildSSLContext(true, _config->certConfig()));
-
-        std::shared_ptr<ba::ssl::context> clientCtx =
-            (_config->smSSL() ? buildSSLContext(false, _config->smCertConfig()) :
-                                buildSSLContext(false, _config->certConfig()));
-
-        // init ASIOInterface
-        auto asioInterface = std::make_shared<ASIOInterface>();
-        asioInterface->setIOServicePool(std::make_shared<IOServicePool>());
-        asioInterface->setSrvContext(srvCtx);
-        asioInterface->setClientContext(clientCtx);
-        asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
-
-        // Message Factory
-        auto messageFactory = std::make_shared<P2PMessageFactoryV2>();
-        // Session Factory
-        auto sessionFactory = std::make_shared<SessionFactory>(pubHex);
-        // KeyFactory
-        auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-        // Session Callback manager
-        auto sessionCallbackManager = std::make_shared<SessionCallbackManagerBucket>();
-
-        // init peer black list
-        PeerBlackWhitelistInterface::Ptr peerBlacklist =
-            std::make_shared<PeerBlacklist>(_config->peerBlacklist(), _config->enableBlacklist());
-        // init peer white list
-        PeerBlackWhitelistInterface::Ptr peerWhitelist =
-            std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
-
-        // init Host
-        auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
-        host->setHostPort(_config->listenIP(), _config->listenPort());
-        host->setThreadPool(std::make_shared<ThreadPool>("P2P", _config->threadPoolSize()));
-        host->setSSLContextPubHandler(m_sslContextPubHandler);
-        host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
-        host->setPeerBlacklist(peerBlacklist);
-        host->setPeerWhitelist(peerWhitelist);
-        host->setSessionCallbackManager(sessionCallbackManager);
-
-        // init Service
-        auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        auto service = std::make_shared<ServiceV2>(pubHex, routerTableFactory);
-        service->setHost(host);
-        service->setStaticNodes(_config->connectedNodes());
-
-        GatewayP2PReloadHandler::config = _config;
-        GatewayP2PReloadHandler::service = service;
-        // register SIGUSR1 for reload connected p2p nodes config
-        signal(GATEWAY_RELOAD_P2P_CONFIG, GatewayP2PReloadHandler::handle);
-
-        BCOS_LOG(INFO) << LOG_DESC("register SIGUSR1 sig for reload p2p connected nodes config");
-
-        GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init")
-                                  << LOG_KV("myself pub id", pubHex)
-                                  << LOG_KV("rpcService", m_rpcServiceName)
-                                  << LOG_KV("gatewayServiceName", _gatewayServiceName);
-        service->setMessageFactory(messageFactory);
-        service->setKeyFactory(keyFactory);
+        auto service = buildService(_config);
+        auto pubHex = service->id();
+        auto keyFactory = service->keyFactory();
 
         auto gatewayRateLimiter =
             buildGatewayRateLimiter(_config->rateLimiterConfig(), _config->redisConfig());

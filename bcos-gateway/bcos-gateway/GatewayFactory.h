@@ -75,6 +75,9 @@ public:
         const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
         std::shared_ptr<sw::redis::Redis> _redis);
 
+    // build Service
+    std::shared_ptr<Service> buildService(const GatewayConfig::Ptr& _config);
+
     /**
      * @brief construct Gateway
      *
