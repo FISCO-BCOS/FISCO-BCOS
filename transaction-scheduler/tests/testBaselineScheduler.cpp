@@ -127,15 +127,8 @@ public:
             cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory)),
         transactionSubmitResultFactory(
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>()),
-        baselineScheduler(
-            mockScheduler, *blockHeaderFactory, mockLedger, mockTxPool,
-            *transactionSubmitResultFactory,
-            []([[maybe_unused]] bcos::protocol::BlockNumber blockNumber,
-                [[maybe_unused]] bcos::protocol::TransactionSubmitResultsPtr result,
-                [[maybe_unused]] std::function<void(bcos::Error::Ptr)> callback) {
-                // Nothing to do
-            },
-            *hashImpl)
+        baselineScheduler(mockScheduler, *blockHeaderFactory, mockLedger, mockTxPool,
+            *transactionSubmitResultFactory, *hashImpl)
     {}
 
     TableNamePool tableNamePool;

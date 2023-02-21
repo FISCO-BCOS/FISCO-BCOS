@@ -292,7 +292,8 @@ public:
 
                 auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
                     std::move(submitResults));
-                self->m_notifier(blockHeader->number(), std::move(submitResultsPtr),
+                self->m_blockNumberNotifier(blockHeader->number());
+                self->m_transactionNotifier(blockHeader->number(), std::move(submitResultsPtr),
                     []([[maybe_unused]] const Error::Ptr& error) {
                         BASELINE_SCHEDULER_LOG(WARNING)
                             << "Push block notify error!" << boost::diagnostic_information(*error);

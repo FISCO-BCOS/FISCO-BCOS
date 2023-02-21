@@ -238,7 +238,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 auto baselineSchedulerInitializer = std::make_shared<
                     transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>(
                     existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
-                    m_txpoolInitializer->txpool(), transactionSubmitResultFactory,
+                    m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
+                auto scheduler = baselineSchedulerInitializer->buildScheduler();
+                scheduler->registerTransactionNotifier(
                     [txpool = m_txpoolInitializer->txpool()](
                         bcos::protocol::BlockNumber blockNumber,
                         bcos::protocol::TransactionSubmitResultsPtr result,
@@ -246,7 +248,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                         txpool->asyncNotifyBlockResult(
                             blockNumber, std::move(result), std::move(callback));
                     });
-                auto scheduler = baselineSchedulerInitializer->buildScheduler();
 
                 m_scheduler = scheduler;
                 m_baselineSchedulerInitializerHolder =
