@@ -96,10 +96,8 @@
       "description": "ETCD dependencies",
       "dependencies": [
         "etcd-cpp-apiv3",
-        {
-          "name": "grpc",
-          "version>=": "1.44.0"
-        }
+        "upb",
+        "grpc"
       ]
     },
     "tcmalloc": {
@@ -134,6 +132,14 @@
     {
       "name": "rocksdb",
       "version": "6.27.3"
+    },
+    {
+      "name": "upb",
+      "version": "2021-10-19"
+    },
+    {
+      "name": "grpc",
+      "version": "1.44.0"
     }
   ]
 }
