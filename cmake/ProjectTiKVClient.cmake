@@ -18,8 +18,13 @@ ExternalProject_Add(tikv_client_project
   CONFIGURE_COMMAND ${CARGO_COMMAND} install cxxbridge-cmd@1.0.75
   BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release && make target/${TIKV_BUILD_MODE}/libtikv_client.a
   INSTALL_COMMAND ""
+  #INSTALL_COMMAND "${CMAKE_AR} d <SOURCE_DIR>/target/${TIKV_BUILD_MODE}/libtikv_client.a error.cc.o error_utils.cc.o memory_quota.cc.o parse_address.cc.o symbolize.cc.o tcp_client_posix.cc.o tcp_posix.cc.o unix_sockets_posix.cc.o uri_parser.cc.o"
   BUILD_BYPRODUCTS <SOURCE_DIR>/target/${TIKV_BUILD_MODE}/libtikv_client.a
   # LOG_BUILD true
+)
+
+ExternalProject_Add_Step(tikv_client_project build
+  #COMMAND "${CMAKE_AR} d <SOURCE_DIR>/target/${TIKV_BUILD_MODE}/libtikv_client.a error.cc.o error_utils.cc.o memory_quota.cc.o parse_address.cc.o symbolize.cc.o tcp_client_posix.cc.o tcp_posix.cc.o unix_sockets_posix.cc.o uri_parser.cc.o"
 )
 
 ExternalProject_Get_Property(tikv_client_project SOURCE_DIR)

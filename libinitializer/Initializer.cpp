@@ -460,9 +460,8 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
                 _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
             });
         // notify transactions
-        auto txpool = m_txpoolInitializer->txpool();
         schedulerFactory->setTransactionNotifier(
-            [txpool](bcos::protocol::BlockNumber _blockNumber,
+            [txpool = m_txpoolInitializer->txpool()](bcos::protocol::BlockNumber _blockNumber,
                 bcos::protocol::TransactionSubmitResultsPtr _result,
                 std::function<void(bcos::Error::Ptr)> _callback) {
                 // only response to the requester

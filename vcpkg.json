@@ -138,6 +138,10 @@
     {
       "name": "grpc",
       "version": "1.44.0"
+    },
+    {
+      "name": "abseil",
+      "version": "20211102.1"
     }
   ]
 }
