@@ -63,8 +63,8 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd vcpkg && git checkout master
-          git pull && cd ..
+          cd ${{ env.VCPKG_ROOT }} && git checkout master
+          git pull && cd -
 
       - name: Build for linux
         run: |
