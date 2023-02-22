@@ -33,9 +33,6 @@ struct TableNameHash
 {
     size_t operator()(const bcos::transaction_executor::StateKey& key) const
     {
-        // auto const& tableID = std::get<0>(key);
-        // return std::hash<bcos::transaction_executor::TableNameID>{}(tableID);
-
         return std::hash<bcos::transaction_executor::StateKey>{}(key);
     }
 };
@@ -67,13 +64,6 @@ struct Fixture
             SchedulerParallelImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl>,
             SchedulerSerialImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl>>(
             m_multiLayerStorage, *m_receiptFactory, m_tableNamePool))
-    // m_scheduler(m_multiLayerStorage, *m_receiptFactory, m_tableNamePool),
-    // m_parallelScheduler(m_multiLayerStorage, *m_receiptFactory, m_tableNamePool)
-
-    // SchedulerSerialImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl>,
-    // SchedulerParallelImpl < MultiLayerStorageType,
-    // ReceiptFactory,
-    // TransactionExecutorImpl >>
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             std::make_shared<bcos::crypto::Keccak256>();
