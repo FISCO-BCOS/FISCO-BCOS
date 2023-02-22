@@ -2696,7 +2696,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorage(
     bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist)
 {
-    auto stateStorage = m_stateStorageFactory->createStateStorage(storage, m_blockVersion);
+    auto stateStorage = m_stateStorageFactory->createStateStorage(
+        std::move(storage), m_blockVersion, ignoreNotExist, m_keyPageIgnoreTables);
     return stateStorage;
 }
 
