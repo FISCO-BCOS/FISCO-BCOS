@@ -18,6 +18,10 @@
 namespace bcos::transaction_executor
 {
 
+// clang-format off
+struct InvalidArgumentsError: public bcos::Error {};
+// clang-format on
+
 template <StateStorage Storage, protocol::IsTransactionReceiptFactory ReceiptFactory>
 class TransactionExecutorImpl
 {
@@ -28,9 +32,20 @@ private:
         {
             return {};
         }
+        if (view.starts_with("0x"))
+        {
+            view = view.substr(2);
+        }
 
         evmc_address address;
-        boost::algorithm::unhex(view, address.bytes);
+        if (view.empty())
+        {
+            std::uninitialized_fill(address.bytes, address.bytes + sizeof(address.bytes), 0);
+        }
+        else
+        {
+            boost::algorithm::unhex(view, address.bytes);
+        }
         return address;
     }
 
@@ -63,7 +78,7 @@ public:
                 .recipient = toAddress,
                 .destination_ptr = nullptr,
                 .destination_len = 0,
-                .sender = unhexAddress(transaction.sender()),
+                .sender = {},
                 .sender_ptr = nullptr,
                 .sender_len = 0,
                 .input_data = transaction.input().data(),
@@ -71,6 +86,8 @@ public:
                 .value = {},
                 .create2_salt = {},
                 .code_address = toAddress};
+            std::uninitialized_copy(
+                transaction.sender().begin(), transaction.sender().end(), evmcMessage.sender.bytes);
 
             HostContext hostContext(rollbackableStorage, m_tableNamePool, blockHeader, evmcMessage,
                 evmcMessage.sender, contextID, 0);

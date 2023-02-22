@@ -105,6 +105,13 @@ struct MockTxPool : public txpool::TxPoolInterface
     void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) override
     {}
+
+    std::vector<protocol::Transaction::ConstPtr> getTransactions(
+        RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+        override
+    {
+        return {};
+    }
 };
 
 class TestBaselineSchedulerFixture
