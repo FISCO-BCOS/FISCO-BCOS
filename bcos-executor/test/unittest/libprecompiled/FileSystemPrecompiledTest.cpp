@@ -671,6 +671,10 @@ BOOST_AUTO_TEST_CASE(lsTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }
         else
@@ -688,6 +692,12 @@ BOOST_AUTO_TEST_CASE(lsTest)
         auto take = precompiled::BFS_SYS_SUBS_COUNT;
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            // remove cast
+            take--;
+        }
+        if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            // remove shard
             take--;
         }
         for (auto const& sysSub :
@@ -785,6 +795,10 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }
         else
@@ -802,6 +816,12 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
         auto take = precompiled::BFS_SYS_SUBS_COUNT;
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            // remove cast
+            take--;
+        }
+        if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            // remove shard
             take--;
         }
         for (auto const& sysSub :
@@ -899,6 +919,10 @@ BOOST_AUTO_TEST_CASE(lsPagWasmTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }
         else
@@ -916,6 +940,12 @@ BOOST_AUTO_TEST_CASE(lsPagWasmTest)
         auto take = precompiled::BFS_SYS_SUBS_COUNT;
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            // remove cast
+            take--;
+        }
+        if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            // remove shard
             take--;
         }
         for (auto const& sysSub :
@@ -1669,6 +1699,10 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }
         else
@@ -1833,6 +1867,10 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
         {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }

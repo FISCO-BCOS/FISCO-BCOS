@@ -1097,7 +1097,12 @@ void BFSPrecompiled::buildSysSubs(const std::shared_ptr<executor::TransactionExe
 {
     for (const auto& sysSub : BFS_SYS_SUBS)
     {
-        if (sysSub == CAST_NAME && versionCompareTo(toVersion, BlockVersion::V3_2_VERSION) < 0)
+        if (sysSub == SHARDING_PRECOMPILED_NAME && toVersion <=> BlockVersion::V3_3_VERSION < 0)
+            [[unlikely]]
+        {
+            continue;
+        }
+        if (sysSub == CAST_NAME && toVersion <=> BlockVersion::V3_2_VERSION < 0) [[unlikely]]
         {
             continue;
         }
@@ -1110,7 +1115,12 @@ void BFSPrecompiled::buildSysSubs(const std::shared_ptr<executor::TransactionExe
     // build sys contract
     for (const auto& [name, address] : SYS_NAME_ADDRESS_MAP)
     {
-        if (name == CAST_NAME && versionCompareTo(toVersion, BlockVersion::V3_2_VERSION) < 0)
+        if (name == SHARDING_PRECOMPILED_NAME && toVersion <=> BlockVersion::V3_3_VERSION < 0)
+            [[unlikely]]
+        {
+            continue;
+        }
+        if (name == CAST_NAME && toVersion <=> BlockVersion::V3_2_VERSION < 0) [[unlikely]]
         {
             continue;
         }
