@@ -153,8 +153,9 @@ public:
             co_return std::optional<storage::Entry>{};
         }
 
+        // Old logic
         auto codeIt = co_await m_rollbackableStorage.read(
-            storage2::single(std::tuple{m_codeTable, ACCOUNT_CODE}));
+            storage2::single(std::tuple{getTableNameID(address), ACCOUNT_CODE}));
         co_await codeIt.next();
         if (co_await codeIt.hasValue())
         {

@@ -132,7 +132,8 @@ private:
 
         if (transactionsBlock->transactionsMetaDataSize() == 0)
         {
-            LEDGER2_LOG(INFO) << "setBlockData not found transaction meta data!";
+            LEDGER2_LOG(INFO)
+                << "SetBlockData TRANSACTIONS_METADATA not found transaction meta data!";
             co_return;
         }
 
@@ -157,7 +158,7 @@ private:
 
         if (block.transactionsMetaDataSize() == 0)
         {
-            LEDGER2_LOG(INFO) << "setBlockData not found transaction meta data!";
+            LEDGER2_LOG(INFO) << "SetBlockData TRANSACTIONS not found transaction meta data!";
             co_return;
         }
 
@@ -185,7 +186,7 @@ private:
 
         if (block.transactionsMetaDataSize())
         {
-            LEDGER2_LOG(INFO) << "setBlockData not found transaction meta data!";
+            LEDGER2_LOG(INFO) << "SetBlockData TRANSACTIONS not found transaction meta data!";
             co_return;
         }
 

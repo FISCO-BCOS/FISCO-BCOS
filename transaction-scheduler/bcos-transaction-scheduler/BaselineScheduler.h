@@ -261,7 +261,6 @@ public:
 
                 // Write status
                 co_await self->m_schedulerImpl.commit();
-
                 commitLock.unlock();
 
                 BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << blockHeader->number();
