@@ -130,11 +130,7 @@ protected:
 
     virtual void handleRpcRequest(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
-
-    // TODO: check perf influence
-    NodeService::Ptr getNodeService(
-        std::string_view _groupID, std::string_view _nodeName, std::string_view _command);
-
+        
     template <typename T>
     void checkService(T _service, std::string_view _serviceName)
     {

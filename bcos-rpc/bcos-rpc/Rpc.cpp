@@ -19,6 +19,7 @@
  * @date 2021-07-15
  */
 
+#include "bcos-rpc/tarsrpc/TarsRpcInterface.h"
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/Common.h>
@@ -35,12 +36,14 @@ using namespace bcos::boostssl::ws;
 
 Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
     bcos::rpc::JsonRpcImpl_2_0::Ptr _jsonRpcImpl, bcos::event::EventSub::Ptr _eventSub,
-    AMOPClient::Ptr _amopClient)
+    AMOPClient::Ptr _amopClient, bcos::rpc::TarsRpcImpl::Ptr _tarsRpcImpl)
   : m_wsService(_wsService),
     m_jsonRpcImpl(_jsonRpcImpl),
     m_eventSub(_eventSub),
     m_amopClient(_amopClient),
-    m_groupManager(m_jsonRpcImpl->groupManager())
+    m_groupManager(m_jsonRpcImpl->groupManager()),
+    m_tarsRpcImpl(std::move(_tarsRpcImpl))
+
 {
     // init the local protocol
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::RpcService);
@@ -62,7 +65,7 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
         });
 
     // handshake msgHandler
-    m_wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
+    m_wsService->registerMsgHandler(bcos::protocol::MessageType::HANDSHAKE,
         boost::bind(
             &Rpc::onRecvHandshakeRequest, this, boost::placeholders::_1, boost::placeholders::_2));
 }

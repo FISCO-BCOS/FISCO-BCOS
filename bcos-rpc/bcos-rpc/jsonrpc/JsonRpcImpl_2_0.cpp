@@ -387,7 +387,7 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
     RPC_IMPL_LOG(TRACE) << LOG_DESC("call") << LOG_KV("to", _to) << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName) << LOG_KV("data", _data);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "call");
+    auto nodeService = getNodeService(_groupID, _nodeName, "call", m_groupManager);
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
     auto transaction = transactionFactory->createTransaction(
         0, std::string(_to), decodeData(_data), u256(0), 0, std::string(), std::string(), 0);
@@ -416,10 +416,11 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
 void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view nodeName,
     std::string_view data, bool requireProof, RespFunc respFunc)
 {
-    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, std::string_view nodeName,
-                   std::string_view data, bool requireProof,
+    auto groupManager = m_groupManager;
+    task::wait([groupManager](JsonRpcImpl_2_0* self, std::string_view groupID,
+                   std::string_view nodeName, std::string_view data, bool requireProof,
                    RespFunc respFunc) -> task::Task<void> {
-        auto nodeService = self->getNodeService(groupID, nodeName, "sendTransaction");
+        auto nodeService = getNodeService(groupID, nodeName, "sendTransaction", groupManager);
 
         auto txpool = nodeService->txpool();
         if (!txpool) [[unlikely]]
@@ -428,7 +429,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                 JsonRpcException(JsonRpcError::InternalError, "TXPool not available!"));
         }
 
-        auto groupInfo = self->m_groupManager->getGroupInfo(groupID);
+        auto groupInfo = groupManager->getGroupInfo(groupID);
         if (!groupInfo) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::GroupNotExist,
@@ -533,7 +534,7 @@ void JsonRpcImpl_2_0::getTransaction(std::string_view _groupID, std::string_view
     // TODO: Error hash here, need hex2bin
     hashListPtr->push_back(bcos::crypto::HashType(_txHash, bcos::crypto::HashType::FromHex));
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getTransaction");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getTransaction", m_groupManager);
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
     ledger->asyncGetBatchTxsByHashList(hashListPtr, _requireProof,
@@ -587,7 +588,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
 
     auto hash = bcos::crypto::HashType(_txHash, bcos::crypto::HashType::FromHex);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getTransactionReceipt");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getTransactionReceipt", m_groupManager);
     auto ledger = nodeService->ledger();
 
     checkService(ledger, "ledger");
@@ -671,7 +672,7 @@ void JsonRpcImpl_2_0::getBlockByHash(std::string_view _groupID, std::string_view
                         << LOG_KV("onlyHeader", _onlyHeader) << LOG_KV("onlyTxHash", _onlyTxHash)
                         << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getBlockByHash");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getBlockByHash", m_groupManager);
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
@@ -711,7 +712,7 @@ void JsonRpcImpl_2_0::getBlockByNumber(std::string_view _groupID, std::string_vi
                         << LOG_KV("onlyHeader", _onlyHeader) << LOG_KV("onlyTxHash", _onlyTxHash)
                         << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getBlockByNumber");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getBlockByNumber", m_groupManager);
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
     auto flag = _onlyHeader ?
@@ -751,7 +752,7 @@ void JsonRpcImpl_2_0::getBlockHashByNumber(
     RPC_IMPL_LOG(TRACE) << LOG_DESC("getBlockHashByNumber") << LOG_KV("blockNumber", _blockNumber)
                         << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getBlockHashByNumber");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getBlockHashByNumber", m_groupManager);
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
     ledger->asyncGetBlockHashByNumber(_blockNumber,
@@ -775,7 +776,7 @@ void JsonRpcImpl_2_0::getBlockNumber(
     RPC_IMPL_LOG(TRACE) << LOG_BADGE("getBlockNumber") << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getBlockNumber");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getBlockNumber", m_groupManager);
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
     ledger->asyncGetBlockNumber(
@@ -800,7 +801,7 @@ void JsonRpcImpl_2_0::getCode(std::string_view _groupID, std::string_view _nodeN
     RPC_IMPL_LOG(TRACE) << LOG_BADGE("getCode") << LOG_KV("contractAddress", _contractAddress)
                         << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getCode");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getCode", m_groupManager);
 
     auto groupInfo = m_groupManager->getGroupInfo(_groupID);
     if (!groupInfo) [[unlikely]]
@@ -849,7 +850,7 @@ void JsonRpcImpl_2_0::getABI(std::string_view _groupID, std::string_view _nodeNa
     RPC_IMPL_LOG(TRACE) << LOG_BADGE("getABI") << LOG_KV("contractAddress", _contractAddress)
                         << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getABI");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getABI", m_groupManager);
 
     auto groupInfo = m_groupManager->getGroupInfo(_groupID);
     if (!groupInfo) [[unlikely]]
@@ -889,7 +890,7 @@ void JsonRpcImpl_2_0::getSealerList(
     RPC_IMPL_LOG(TRACE) << LOG_BADGE("getSealerList") << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getSealerList");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getSealerList", m_groupManager);
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
     ledger->asyncGetNodeListByType(
@@ -927,7 +928,7 @@ void JsonRpcImpl_2_0::getObserverList(
     RPC_IMPL_LOG(TRACE) << LOG_BADGE("getObserverList") << LOG_KV("group", _groupID)
                         << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getObserverList");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getObserverList", m_groupManager);
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
     ledger->asyncGetNodeListByType(bcos::ledger::CONSENSUS_OBSERVER,
@@ -962,7 +963,7 @@ void JsonRpcImpl_2_0::getPbftView(
     RPC_IMPL_LOG(TRACE) << LOG_BADGE("getPbftView") << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getPbftView");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getPbftView", m_groupManager);
     auto consensus = nodeService->consensus();
     checkService(consensus, "consensus");
     consensus->asyncGetPBFTView([m_respFunc = std::move(_respFunc)](
@@ -990,7 +991,7 @@ void JsonRpcImpl_2_0::getPendingTxSize(
     RPC_IMPL_LOG(TRACE) << LOG_BADGE("getPendingTxSize") << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getPendingTxSize");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getPendingTxSize", m_groupManager);
     auto txpool = nodeService->txpool();
     checkService(txpool, "txpool");
     txpool->asyncGetPendingTransactionSize(
@@ -1018,7 +1019,7 @@ void JsonRpcImpl_2_0::getSyncStatus(
     RPC_IMPL_LOG(TRACE) << LOG_BADGE("getSyncStatus") << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getSyncStatus");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getSyncStatus", m_groupManager);
     auto sync = nodeService->sync();
     checkService(sync, "sync");
     sync->asyncGetSyncInfo(
@@ -1045,7 +1046,7 @@ void JsonRpcImpl_2_0::getConsensusStatus(
     RPC_IMPL_LOG(TRACE) << LOG_BADGE("getConsensusStatus") << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getConsensusStatus");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getConsensusStatus", m_groupManager);
     auto consensus = nodeService->consensus();
     checkService(consensus, "consensus");
     consensus->asyncGetConsensusStatus(
@@ -1072,7 +1073,7 @@ void JsonRpcImpl_2_0::getSystemConfigByKey(std::string_view _groupID, std::strin
     RPC_IMPL_LOG(TRACE) << LOG_DESC("getSystemConfigByKey") << LOG_KV("keyValue", _keyValue)
                         << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getSystemConfigByKey");
+    auto nodeService = getNodeService(_groupID, _nodeName, "getSystemConfigByKey", m_groupManager);
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
     ledger->asyncGetSystemConfigByKey(
@@ -1102,7 +1103,8 @@ void JsonRpcImpl_2_0::getTotalTransactionCount(
     RPC_IMPL_LOG(TRACE) << LOG_DESC("getTotalTransactionCount") << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName);
 
-    auto nodeService = getNodeService(_groupID, _nodeName, "getTotalTransactionCount");
+    auto nodeService =
+        getNodeService(_groupID, _nodeName, "getTotalTransactionCount", m_groupManager);
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
     ledger->asyncGetTotalTransactionCount(
@@ -1153,25 +1155,6 @@ void JsonRpcImpl_2_0::getPeers(RespFunc _respFunc)
 
         m_respFunc(_error, jResp);
     });
-}
-
-NodeService::Ptr JsonRpcImpl_2_0::getNodeService(
-    std::string_view _groupID, std::string_view _nodeName, std::string_view _command)
-{
-    auto nodeService = m_groupManager->getNodeService(_groupID, _nodeName);
-    if (!nodeService)
-    {
-        std::stringstream errorMsg;
-        errorMsg << LOG_DESC(
-                        "Invalid request for the specified node of doesn't exist or doesn't "
-                        "started!")
-                 << LOG_KV("request", _command) << LOG_KV("chain", m_groupManager->chainID())
-                 << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
-        RPC_IMPL_LOG(WARNING) << errorMsg.str();
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(JsonRpcError::NodeNotExistOrNotStarted, errorMsg.str()));
-    }
-    return nodeService;
 }
 
 // get all the groupID list

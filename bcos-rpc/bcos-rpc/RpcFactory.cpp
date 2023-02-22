@@ -32,6 +32,7 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
+#include <bcos-rpc/tarsrpc/TarsRpcInterface.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
@@ -319,6 +320,14 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     return wsService;
 }
 
+bcos::rpc::TarsRpcImpl::Ptr RpcFactory::buildTarsRpc(
+    std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
+{
+    auto tarsRpcImpl = std::make_shared<bcos::rpc::TarsRpcImpl>(_wsService);
+    tarsRpcImpl->setGroupManager(std::move(_groupManager));
+    return tarsRpcImpl;
+}
+
 bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
 {
@@ -385,9 +394,11 @@ Rpc::Ptr RpcFactory::buildRpc(int sendTxTimeout,
 {
     // JsonRpc
     auto jsonRpc = buildJsonRpc(sendTxTimeout, _wsService, _groupManager);
+    // tarsRpc
+    auto tarsRpc = buildTarsRpc(_wsService, _groupManager);
     // EventSub
     auto es = buildEventSub(_wsService, _groupManager);
-    return std::make_shared<Rpc>(_wsService, jsonRpc, es, _amopClient);
+    return std::make_shared<Rpc>(_wsService, jsonRpc, es, _amopClient, tarsRpc);
 }
 
 // Note: _rpcServiceName is used to check the validation of groupInfo when groupManager update

@@ -24,6 +24,7 @@
 #include "bcos-rpc/amop/AirAMOPClient.h"
 #include "bcos-rpc/groupmgr/AirGroupManager.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
+#include "bcos-rpc/tarsrpc/TarsRpcImpl.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/consensus/ConsensusInterface.h>
@@ -85,6 +86,9 @@ protected:
     AMOPClient::Ptr buildAirAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService);
 
 
+    bcos::rpc::TarsRpcImpl::Ptr buildTarsRpc(
+        std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
+        
     bcos::rpc::JsonRpcImpl_2_0::Ptr buildJsonRpc(int sendTxTimeout,
         std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
     bcos::event::EventSub::Ptr buildEventSub(

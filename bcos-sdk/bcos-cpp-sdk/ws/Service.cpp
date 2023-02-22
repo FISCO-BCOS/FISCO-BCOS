@@ -216,7 +216,7 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
 {
     auto message = messageFactory()->buildMessage();
     message->setSeq(messageFactory()->newSeq());
-    message->setPacketType(bcos::protocol::MessageType::HANDESHAKE);
+    message->setPacketType(bcos::protocol::MessageType::HANDSHAKE);
     bcos::rpc::HandshakeRequest request(m_localProtocol);
     auto requestData = request.encode();
     message->setPayload(requestData);

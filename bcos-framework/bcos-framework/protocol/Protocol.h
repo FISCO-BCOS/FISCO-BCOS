@@ -54,13 +54,14 @@ enum NodeArchitectureType
 
 enum MessageType
 {
-    HANDESHAKE = 0x100,         // 256
+    HANDSHAKE = 0x100,         // 256
     BLOCK_NOTIFY = 0x101,       // 257
     RPC_REQUEST = 0x102,        // 258
     GROUP_NOTIFY = 0x103,       // 259
     EVENT_SUBSCRIBE = 0x120,    // 288
     EVENT_UNSUBSCRIBE = 0x121,  // 289
     EVENT_LOG_PUSH = 0x122,     // 290
+    TARS_SEND_TRANSACTION = 0x123,     // 291
 };
 
 // TODO: Allow add new module, exchange moduleid or version

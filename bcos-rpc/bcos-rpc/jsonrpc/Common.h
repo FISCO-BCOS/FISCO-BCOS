@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-framework/multigroup/GroupInfo.h>
 #include <bcos-utilities/Error.h>
 #include <json/json.h>
@@ -161,5 +162,25 @@ inline void groupInfoListToJson(
         _response.append(item);
     }
 }
+
+inline NodeService::Ptr getNodeService(std::string_view _groupID, std::string_view _nodeName,
+    std::string_view _command, GroupManager::Ptr _groupManager)
+{
+    auto nodeService = _groupManager->getNodeService(_groupID, _nodeName);
+    if (!nodeService)
+    {
+        std::stringstream errorMsg;
+        errorMsg << LOG_DESC(
+                        "Invalid request for the specified node of doesn't exist or doesn't "
+                        "started!")
+                 << LOG_KV("request", _command) << LOG_KV("chain", _groupManager->chainID())
+                 << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
+        RPC_IMPL_LOG(WARNING) << errorMsg.str();
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::NodeNotExistOrNotStarted, errorMsg.str()));
+    }
+    return nodeService;
+}
+
 }  // namespace rpc
 }  // namespace bcos

@@ -1,0 +1,16 @@
+module bcostars
+{
+struct SendTransactionRequest
+{
+    1 optional string groupID;
+    2 optional string nodeName;
+    3 optional vector<byte> transactionData;
+};
+
+struct SendTransactionResponse
+{
+    1 optional int errorCode;
+    2 optional string errorMessage;
+    3 optional vector<byte> transactionReceiptData; 
+};
+};

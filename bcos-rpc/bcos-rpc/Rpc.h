@@ -21,6 +21,7 @@
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
+#include "bcos-rpc/tarsrpc/TarsRpcImpl.h"
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-rpc/amop/AMOPClient.h>
 #include <bcos-rpc/event/EventSub.h>
@@ -43,7 +44,7 @@ public:
     using Ptr = std::shared_ptr<Rpc>;
     Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
         bcos::rpc::JsonRpcImpl_2_0::Ptr _jsonRpcImpl, bcos::event::EventSub::Ptr _eventSub,
-        AMOPClient::Ptr _amopClient);
+        AMOPClient::Ptr _amopClient, bcos::rpc::TarsRpcImpl::Ptr _tarsRpcImpl);
 
     virtual ~Rpc() { stop(); }
 
@@ -102,6 +103,7 @@ private:
     bcos::event::EventSub::Ptr m_eventSub;
     AMOPClient::Ptr m_amopClient;
     GroupManager::Ptr m_groupManager;
+    bcos::rpc::TarsRpcImpl::Ptr m_tarsRpcImpl;
 
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
 };
