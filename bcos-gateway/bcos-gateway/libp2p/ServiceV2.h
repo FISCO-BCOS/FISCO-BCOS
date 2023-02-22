@@ -46,7 +46,7 @@ public:
     bool isReachable(P2pID const& _nodeID) const override;
 
     // handlers called when the node is unreachable
-    void registerUnreachableHandler(std::function<void(std::string)> _handler)
+    void registerUnreachableHandler(std::function<void(std::string)> _handler) override
     {
         WriteGuard l(x_unreachableHandlers);
         m_unreachableHandlers.emplace_back(_handler);

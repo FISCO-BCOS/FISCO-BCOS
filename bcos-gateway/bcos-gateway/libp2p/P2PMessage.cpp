@@ -50,7 +50,7 @@ bool P2PMessageOptions::encode(bytes& _buffer)
         return false;
     }
 
-    for (auto dstNodeID : m_dstNodeIDs)
+    for (const auto& dstNodeID : m_dstNodeIDs)
     {
         if (!dstNodeID || dstNodeID->empty() || (dstNodeID->size() > MAX_NODEID_LENGTH))
         {
@@ -192,6 +192,7 @@ bool P2PMessage::encode(bytes& _buffer)
     // compress payload
     std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
     bool isCompressSuccess = false;
+    // TODO: add enable_compress switch
     if (tryToCompressPayload(compressData))
     {
         isCompressSuccess = true;

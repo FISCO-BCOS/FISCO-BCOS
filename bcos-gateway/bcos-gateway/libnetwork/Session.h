@@ -28,13 +28,101 @@ namespace gateway
 class Host;
 class SocketFace;
 
+class SessionRecvBuffer
+{
+public:
+    SessionRecvBuffer(size_t _bufferSize) : m_recvBufferSize(_bufferSize)
+    {
+        m_recvBuffer.resize(_bufferSize);
+    }
+
+    SessionRecvBuffer(const SessionRecvBuffer&) = delete;
+    SessionRecvBuffer(SessionRecvBuffer&&) = delete;
+    SessionRecvBuffer& operator=(SessionRecvBuffer&&) = delete;
+    SessionRecvBuffer& operator=(const SessionRecvBuffer&) = delete;
+    ~SessionRecvBuffer() = default;
+
+    inline std::size_t readPos() const { return m_readPos; }
+    inline std::size_t writePos() const { return m_writePos; }
+    inline std::size_t dataSize() const { return m_writePos - m_readPos; }
+
+    inline size_t recvBufferSize() const { return m_recvBufferSize; }
+
+    void updatePos(std::size_t _offset, bool _read)
+    {
+        if (_read)
+        {
+            m_readPos += _offset;
+        }
+        else
+        {
+            m_writePos += _offset;
+        }
+    }
+
+    bool resizeBuffer(size_t _bufferSize)
+    {
+        if (_bufferSize > m_recvBufferSize)
+        {
+            m_recvBuffer.resize(_bufferSize);
+            m_recvBufferSize = _bufferSize;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    // void realloc() {}
+
+    void moveToHeader()
+    {
+        if (m_writePos > m_readPos)
+        {
+            memmove(m_recvBuffer.data(), m_recvBuffer.data() + m_readPos, m_writePos - m_readPos);
+            m_writePos -= m_readPos;
+            m_readPos = 0;
+        }
+        else if (m_writePos == m_readPos)
+        {
+            m_readPos = 0;
+            m_writePos = 0;
+        }
+    }
+
+    inline bcos::bytesConstRef asDataBuffer() const
+    {
+        return {m_recvBuffer.data() + m_readPos, m_writePos - m_readPos};
+    }
+
+    inline bcos::bytesConstRef asReadBuffer() const
+    {
+        return {m_recvBuffer.data() + m_writePos, m_recvBufferSize - m_writePos};
+    }
+
+private:
+    std::vector<byte> m_recvBuffer;
+    //
+    size_t m_recvBufferSize;
+    // read pos of the buffer
+    std::size_t m_readPos{0};
+    // write pos of the buffer
+    std::size_t m_writePos{0};
+};
+
 class Session : public SessionFace,
                 public std::enable_shared_from_this<Session>,
                 public bcos::ObjectCounter<Session>
 {
 public:
-    Session(size_t _bufferSize = 4096);
-    virtual ~Session();
+    Session(size_t _recvBufferSize = 4096);
+
+    Session(const Session&) = delete;
+    Session(Session&&) = delete;
+    Session& operator=(Session&&) = delete;
+    Session& operator=(const Session&) = delete;
+
+    ~Session() override;
 
     using Ptr = std::shared_ptr<Session>;
 
@@ -46,10 +134,11 @@ public:
 
     NodeIPEndpoint nodeIPEndpoint() const override;
 
-    bool actived() const override;
+    bool active() const override;
 
+    std::size_t writeQueueSize() override;
     virtual std::weak_ptr<Host> host() { return m_server; }
-    virtual void setHost(std::weak_ptr<Host> host) { m_server = host; }
+    virtual void setHost(std::weak_ptr<Host> host) { m_server = std::move(host); }
 
     std::shared_ptr<SocketFace> socket() override { return m_socket; }
     virtual void setSocket(const std::shared_ptr<SocketFace>& socket) { m_socket = socket; }
@@ -91,6 +180,18 @@ public:
 
     void setHostNodeID(std::string const& _hostNodeID) { m_hostNodeID = _hostNodeID; }
 
+    uint32_t maxReadDataSize() const { return m_maxReadDataSize; }
+    void setMaxReadDataSize(uint32_t _maxReadDataSize) { m_maxReadDataSize = _maxReadDataSize; }
+
+    uint32_t maxSendDataSize() const { return m_maxSendDataSize; }
+    void setMaxSendDataSize(uint32_t _maxSendDataSize) { m_maxSendDataSize = _maxSendDataSize; }
+
+    uint32_t maxSendMsgCountS() const { return m_maxSendMsgCountS; }
+    void setMaxSendMsgCountS(uint32_t _maxSendMsgCountS) { m_maxSendMsgCountS = _maxSendMsgCountS; }
+
+    uint32_t allowMaxMsgSize() const { return m_allowMaxMsgSize; }
+    void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize) { m_allowMaxMsgSize = _allowMaxMsgSize; }
+
 protected:
     virtual void checkNetworkStatus();
 
@@ -104,6 +205,16 @@ private:
 
     /// Drop the connection for the reason @a _r.
     void drop(DisconnectReason _r);
+    // ------ for optimize send message parameters  begin ---------------
+    //  // Maximum amount of data to read one time, default: 40K
+    uint32_t m_maxReadDataSize = 40 * 1024;
+    // Maximum amount of data to be sent one time, default: 1M
+    uint32_t m_maxSendDataSize = 1024 * 1024;
+    // Maximum number of packets to be sent one time, default: 10
+    uint32_t m_maxSendMsgCountS = 10;
+    //  Maximum size of message that is allowed to send or receive, default: 32M
+    uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
+    // ------ for optimize send message parameters  end ---------------
 
     /// Check error code after reading and drop peer if error code.
     bool checkRead(boost::system::error_code _ec);
@@ -141,7 +252,7 @@ private:
 
     mutable bcos::Mutex x_info;
 
-    bool m_actived = false;
+    bool m_active = false;
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
 
@@ -165,12 +276,16 @@ private:
 class SessionFactory
 {
 public:
-    SessionFactory(std::string const& _hostNodeID) : m_hostNodeID(_hostNodeID) {}
-    virtual ~SessionFactory(){};
+    SessionFactory(std::string _hostNodeID) : m_hostNodeID(std::move(_hostNodeID)) {}
+    SessionFactory(const SessionFactory&) = delete;
+    SessionFactory(SessionFactory&&) = delete;
+    SessionFactory& operator=(SessionFactory&&) = delete;
+    SessionFactory& operator=(const SessionFactory&) = delete;
+    virtual ~SessionFactory() = default;
 
-    virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
-        std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr _messageFactory,
-        SessionCallbackManagerInterface::Ptr _sessionCallbackManager)
+    virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host>& _server,
+        std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
+        SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
     {
         std::shared_ptr<Session> session = std::make_shared<Session>();
         session->setHostNodeID(m_hostNodeID);
@@ -178,6 +293,7 @@ public:
         session->setSocket(_socket);
         session->setMessageFactory(_messageFactory);
         session->setSessionCallbackManager(_sessionCallbackManager);
+        BCOS_LOG(INFO) << LOG_BADGE("SessionFactory") << LOG_DESC("create new session");
         return session;
     }
 
