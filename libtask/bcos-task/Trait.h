@@ -1,6 +1,7 @@
 #pragma once
 
 #include <type_traits>
+#include <utility>
 
 namespace bcos::task
 {
@@ -34,7 +35,7 @@ auto getAwaitable(auto&& task)
     }
     else if constexpr (HasAwaitable<TaskType>)
     {
-        return task;
+        return std::forward<decltype(task)>(task);
     }
     else
     {
