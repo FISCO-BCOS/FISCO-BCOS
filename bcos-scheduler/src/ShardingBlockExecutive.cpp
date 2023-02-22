@@ -137,6 +137,17 @@ void ShardingBlockExecutive::shardingExecute(
             return;
         }
 
+        if (batchStatus->error > 0)
+        {
+            auto message = "DAGExecute:" + boost::lexical_cast<std::string>(number()) +
+                           " with errors! " + boost::lexical_cast<std::string>(batchStatus->error);
+            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << message;
+
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::DAGError, std::move(message)), nullptr,
+                m_isSysBlock);
+            return;
+        }
+
         SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("DAGExecute success")
                             << LOG_KV("dagExecuteT", (utcTime() - startT));
 
@@ -200,8 +211,9 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
 
     if (!m_storageWrapper.has_value())
     {
+        // TODO: config using
         auto stateStorage = std::make_shared<bcos::storage::KeyPageStorage>(
-            getStorage(), 10240, m_block->blockHeaderConst()->version(), nullptr, false);
+            getStorage(), 10240, m_block->blockHeaderConst()->version(), nullptr, true);
         // auto stateStorage = std::make_shared<StateStorage>(getStorage());
         auto recorder = std::make_shared<Recoder>();
         m_storageWrapper.emplace(stateStorage, recorder);
