@@ -1,6 +1,7 @@
 #pragma once
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Trait.h>
+#include <type_traits>
 #include <variant>
 
 namespace bcos::transaction_scheduler
@@ -19,12 +20,12 @@ private:
     [[no_unique_address]] std::conditional_t<enableWriteSet, std::set<typename Storage::Key>, Empty>
         m_writeSet;
 
-    void putSet(decltype(m_readSet)& set, auto&& key)
+    void putSet(decltype(m_readSet)& set, auto const& key)
     {
         auto it = set.lower_bound(key);
         if (it == set.end() || *it != key)
         {
-            set.emplace_hint(it, std::forward<decltype(key)>(key));
+            set.emplace_hint(it, key);
         }
     }
 
@@ -75,17 +76,17 @@ public:
         return false;
     }
 
-    auto read(RANGES::input_range auto const& keys)
+    auto read(RANGES::input_range auto&& keys)
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.read(keys))>>
     {
         if constexpr (enableReadSet)
         {
-            for (auto&& key : keys)
+            for (auto&& key : std::as_const(keys))
             {
-                putSet(m_readSet, std::forward<decltype(key)>(key));
+                putSet(m_readSet, key);
             }
         }
-        co_return co_await m_storage.read(keys);
+        co_return co_await m_storage.read(std::forward<decltype(keys)>(keys));
     }
 
     auto write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
