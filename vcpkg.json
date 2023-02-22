@@ -95,9 +95,7 @@
     "etcd": {
       "description": "ETCD dependencies",
       "dependencies": [
-        "etcd-cpp-apiv3",
-        "upb",
-        "grpc"
+        "etcd-cpp-apiv3"
       ]
     },
     "tcmalloc": {
