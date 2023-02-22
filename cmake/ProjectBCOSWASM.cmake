@@ -40,6 +40,7 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
     set(BCOS_WASM_BUILD_MODE "debug")
 else()
     set(BCOS_WASM_BUILD_MODE "release")
+    set(CARGO_OPTIONS "--release")
 endif()
 
 ExternalProject_Add(bcos_wasm_project
@@ -50,7 +51,7 @@ ExternalProject_Add(bcos_wasm_project
         GIT_SHALLOW false
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release
+        BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build ${CARGO_OPTIONS}
         INSTALL_COMMAND ""
         LOG_DOWNLOAD 1
         LOG_CONFIGURE 1
@@ -64,6 +65,6 @@ set(HERA_INCLUDE_DIRS ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${HERA_INCLUDE_DIRS})  # Must exist.
 
 add_library(fbwasm STATIC IMPORTED)
-set_property(TARGET fbwasm PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/target/release/libbcos_wasm.a)
+set_property(TARGET fbwasm PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/target/${BCOS_WASM_BUILD_MODE}/libbcos_wasm.a)
 set_property(TARGET fbwasm PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SOURCE_DIR}/include)
 add_dependencies(fbwasm bcos_wasm_project evmc::instructions)

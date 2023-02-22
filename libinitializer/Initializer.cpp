@@ -249,6 +249,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                         txpool->asyncNotifyBlockResult(
                             blockNumber, std::move(result), std::move(callback));
                     });
+                m_setBaselineSchedulerBlockNumberNotifier =
+                    [scheduler](std::function<void(protocol::BlockNumber)> notifier) {
+                        scheduler->registerBlockNumberNotifier(std::move(notifier));
+                    };
 
                 m_scheduler = scheduler;
                 m_baselineSchedulerInitializerHolder =
@@ -467,7 +471,14 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
             });
     }
     else
-    {}
+    {
+        m_setBaselineSchedulerBlockNumberNotifier(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+    }
 
     m_pbftInitializer->initNotificationHandlers(_rpc);
 }
