@@ -356,6 +356,7 @@ public:
                                               const std::string_view& key, const Entry& entry)>
                                               callback) const override
     {
+        std::lock_guard<std::mutex> lock(x_cacheMutex);
         tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size()),
             [this, &onlyDirty, &callback](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
@@ -513,27 +514,31 @@ private:
         {
             return entry;
         }
-
-        entry.setStatus(Entry::NORMAL);
-        auto updateCapacity = entry.size();
-
-        auto [bucket, lock] = getBucket(table);
-        auto it = bucket->container.find(std::make_tuple(table, key));
-
-        if (it == bucket->container.end())
+        if (x_cacheMutex.try_lock())
         {
-            it = bucket->container
-                     .emplace(Data{std::string(table), std::string(key), std::move(entry)})
-                     .first;
+            entry.setStatus(Entry::NORMAL);
+            auto updateCapacity = entry.size();
 
-            bucket->capacity += updateCapacity;
-        }
-        else
-        {
-            STORAGE_LOG(DEBUG) << "Fail import existsing entry, " << table << " | " << toHex(key);
-        }
+            auto [bucket, lock] = getBucket(table);
+            auto it = bucket->container.find(std::make_tuple(table, key));
 
-        return it->entry;
+            if (it == bucket->container.end())
+            {
+                it = bucket->container
+                         .emplace(Data{std::string(table), std::string(key), std::move(entry)})
+                         .first;
+
+                bucket->capacity += updateCapacity;
+            }
+            else
+            {
+                STORAGE_LOG(DEBUG)
+                    << "Fail import existsing entry, " << table << " | " << toHex(key);
+            }
+            x_cacheMutex.unlock();
+            return it->entry;
+        }
+        return entry;
     }
 
     std::shared_ptr<StorageInterface> getPrev()
