@@ -229,6 +229,23 @@ public:
     void setEnableCompress(bool _enableCompress) { m_enableCompress = _enableCompress; }
     bool enableCompress() const { return m_enableCompress; }
 
+    uint32_t allowMaxMsgSize() const { return m_allowMaxMsgSize; }
+    void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize) { m_allowMaxMsgSize = _allowMaxMsgSize; }
+
+    uint32_t sessionRecvBufferSize() const { return m_sessionRecvBufferSize; }
+    void setSessionRecvBufferSize(uint32_t _sessionRecvBufferSize)
+    {
+        m_sessionRecvBufferSize = _sessionRecvBufferSize;
+    }
+
+    uint32_t maxReadDataSize() const { return m_maxReadDataSize; }
+    void setMaxReadDataSize(uint32_t _maxReadDataSize) { m_maxReadDataSize = _maxReadDataSize; }
+
+    uint32_t maxSendDataSize() const { return m_maxSendDataSize; }
+    void setMaxSendDataSize(uint32_t _maxSendDataSize) { m_maxSendDataSize = _maxSendDataSize; }
+
+    uint32_t maxMsgCountSendOneTime() const { return m_maxSendMsgCount; }
+    void setMaxSendMsgCount(uint32_t _maxSendMsgCount) { m_maxSendMsgCount = _maxSendMsgCount; }
     // NodeIDType:
     // h512(true == m_smSSL)
     // h2048(false == m_smSSL)
@@ -261,6 +278,14 @@ public:
     }
 
 private:
+    // The maximum size of message that is allowed to send or receive
+    uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
+    // p2p session read buffer size, default: 128k
+    uint32_t m_sessionRecvBufferSize{128 * 1024};
+    uint32_t m_maxReadDataSize = 40 * 1024;
+    uint32_t m_maxSendDataSize = 1024 * 1024;
+    uint32_t m_maxSendMsgCount = 10;
+    //
     std::string m_uuid;
     // if SM SSL connection or not
     bool m_smSSL;
@@ -280,7 +305,7 @@ private:
     // enable rip protocol
     bool m_enableRIPProtocol{true};
     // enable compress
-    bool m_enableCompress {true};
+    bool m_enableCompress{true};
     std::set<std::string> m_certWhitelist;
     // cert config for ssl connection
     CertConfig m_certConfig;
