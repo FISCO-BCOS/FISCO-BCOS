@@ -227,6 +227,8 @@ public:
     void getTarsClientProxyEndpoints(
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
+    bool enableBaselineScheduler() const { return m_enableBaselineScheduler; }
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -322,6 +324,7 @@ private:
     bool m_isSerialExecute = false;
     size_t m_vmCacheSize = 1024;
     std::string m_authAdminAddress;
+    bool m_enableBaselineScheduler = false;
 
     // Pro and Max versions run do not apply to tars admin site
     bool m_withoutTarsFramework = {false};

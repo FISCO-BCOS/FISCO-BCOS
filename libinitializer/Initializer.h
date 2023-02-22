@@ -102,8 +102,6 @@ private:
     std::string const c_consensusStorageDBName = "consensus_log";
     std::string const c_fileSeparator = "/";
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
-
-    bool m_useBaselineScheduler = true;
     std::function<void()> m_baselineSchedulerInitializerHolder;
 };
 }  // namespace initializer

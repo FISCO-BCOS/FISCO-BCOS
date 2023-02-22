@@ -681,6 +681,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 {
     m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
+    m_enableBaselineScheduler = _pt.get<bool>("executor.baseline_scheduler", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize);

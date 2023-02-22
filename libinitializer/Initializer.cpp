@@ -224,8 +224,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;  // Only use when
-                                                                            // !useBaselineScheduler
-    if (m_useBaselineScheduler)
+
+    auto useBaselineScheduler = m_nodeConfig->enableBaselineScheduler();
+    if (useBaselineScheduler)
     {
         auto anyHasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
@@ -274,7 +275,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
 #ifdef WITH_TIKV
-        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr = m_scheduler;
+        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr =
+            std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
         auto switchHandler = [scheduler = schedulerWeakPtr]() {
             if (scheduler.lock())
             {
@@ -319,7 +321,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                               << LOG_KV("nodeArchType", _nodeArchType);
 
         // Note: ensure that there has at least one executor before pbft/sync execute block
-        if (!m_useBaselineScheduler)
+        if (!useBaselineScheduler)
         {
             auto storageFactory =
                 std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
@@ -441,7 +443,8 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     auto nodeName = m_nodeConfig->nodeName();
     auto groupID = m_nodeConfig->groupId();
 
-    if (!m_useBaselineScheduler)
+    auto useBaselineScheduler = m_nodeConfig->enableBaselineScheduler();
+    if (!useBaselineScheduler)
     {
         auto schedulerFactory =
             dynamic_pointer_cast<scheduler::SchedulerManager>(m_scheduler)->getFactory();
@@ -459,11 +462,13 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
                 bcos::protocol::TransactionSubmitResultsPtr _result,
                 std::function<void(bcos::Error::Ptr)> _callback) {
                 // only response to the requester
-                txpool->asyncNotifyBlockResult(_blockNumber, _result, _callback);
+                txpool->asyncNotifyBlockResult(
+                    _blockNumber, std::move(_result), std::move(_callback));
             });
     }
     else
     {}
+
     m_pbftInitializer->initNotificationHandlers(_rpc);
 }
 
