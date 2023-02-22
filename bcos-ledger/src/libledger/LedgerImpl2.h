@@ -16,6 +16,8 @@
 namespace bcos::ledger
 {
 
+#define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
+
 template <bcos::crypto::hasher::Hasher Hasher, bcos::transaction_executor::StateStorage Storage,
     protocol::IsBlockFactory BlockFactory>
 class LedgerImpl2
@@ -33,7 +35,7 @@ private:
     task::Task<void> setBlockData(
         std::string_view blockNumberKey, protocol::IsBlock auto const& block)
     {
-        LEDGER_LOG(DEBUG) << "setBlockData header: " << blockNumberKey;
+        LEDGER2_LOG(DEBUG) << "setBlockData header: " << blockNumberKey;
         auto blockHeader = block.blockHeaderConst();
 
         // number 2 header
@@ -81,7 +83,7 @@ private:
     task::Task<void> setBlockData(
         std::string_view blockNumberKey, protocol::IsBlock auto const& block)
     {
-        LEDGER_LOG(DEBUG) << "setBlockData nonce " << blockNumberKey;
+        LEDGER2_LOG(DEBUG) << "setBlockData nonce " << blockNumberKey;
 
         auto blockNonceList = m_blockFactory.createBlock();
         blockNonceList->setNonceList(block.nonceList());
@@ -103,7 +105,7 @@ private:
     task::Task<void> setBlockData(
         std::string_view blockNumberKey, protocol::IsBlock auto const& block)
     {
-        LEDGER_LOG(DEBUG) << "setBlockData transaction metadata: " << blockNumberKey;
+        LEDGER2_LOG(DEBUG) << "setBlockData transaction metadata: " << blockNumberKey;
 
         auto transactionsBlock = m_blockFactory.createBlock();
         if (block.transactionsMetaDataSize() > 0)
@@ -130,7 +132,7 @@ private:
 
         if (transactionsBlock->transactionsMetaDataSize() == 0)
         {
-            LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
+            LEDGER2_LOG(INFO) << "setBlockData not found transaction meta data!";
             co_return;
         }
 
@@ -151,11 +153,11 @@ private:
     task::Task<void> setBlockData(
         std::string_view blockNumberKey, protocol::IsBlock auto const& block)
     {
-        LEDGER_LOG(DEBUG) << "setBlockData transactions: " << blockNumberKey;
+        LEDGER2_LOG(DEBUG) << "setBlockData transactions: " << blockNumberKey;
 
         if (block.transactionsMetaDataSize() == 0)
         {
-            LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
+            LEDGER2_LOG(INFO) << "setBlockData not found transaction meta data!";
             co_return;
         }
 
@@ -179,11 +181,11 @@ private:
     task::Task<void> setBlockData(
         std::string_view blockNumberKey, protocol::IsBlock auto const& block)
     {
-        LEDGER_LOG(DEBUG) << "setBlockData receipts: " << blockNumberKey;
+        LEDGER2_LOG(DEBUG) << "setBlockData receipts: " << blockNumberKey;
 
         if (block.transactionsMetaDataSize())
         {
-            LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
+            LEDGER2_LOG(INFO) << "setBlockData not found transaction meta data!";
             co_return;
         }
 
@@ -214,10 +216,10 @@ private:
 
         co_await setTransactions<false>(hashes, buffers);
 
-        LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
-                          << LOG_KV("number", blockNumberKey)
-                          << LOG_KV("totalCount", totalTransactionCount)
-                          << LOG_KV("failedCount", failedTransactionCount);
+        LEDGER2_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
+                           << LOG_KV("number", blockNumberKey)
+                           << LOG_KV("totalCount", totalTransactionCount)
+                           << LOG_KV("failedCount", failedTransactionCount);
 
         auto transactionCount = co_await getStatus();
         transactionCount.total += totalTransactionCount;
@@ -242,19 +244,19 @@ private:
                 std::move(failedEntry));
         }
 
-        LEDGER_LOG(INFO) << LOG_DESC("setBlock")
-                         << LOG_KV("number", block.blockHeaderConst()->number())
-                         << LOG_KV("totalTxs", transactionCount.total)
-                         << LOG_KV("failedTxs", transactionCount.failed)
-                         << LOG_KV("incTxs", totalTransactionCount)
-                         << LOG_KV("incFailedTxs", failedTransactionCount);
+        LEDGER2_LOG(INFO) << LOG_DESC("setBlock")
+                          << LOG_KV("number", block.blockHeaderConst()->number())
+                          << LOG_KV("totalTxs", transactionCount.total)
+                          << LOG_KV("failedTxs", transactionCount.failed)
+                          << LOG_KV("incTxs", totalTransactionCount)
+                          << LOG_KV("incFailedTxs", failedTransactionCount);
     }
 
     template <std::same_as<concepts::ledger::ALL>>
     task::Task<void> setBlockData(
         std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
-        LEDGER_LOG(DEBUG) << "setBlockData all: " << blockNumberKey;
+        LEDGER2_LOG(DEBUG) << "setBlockData all: " << blockNumberKey;
 
         co_await setBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
         co_await setBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
@@ -277,7 +279,7 @@ public:
     template <bcos::concepts::ledger::DataFlag... Flags>
     task::Task<void> setBlock(protocol::IsBlock auto const& block)
     {
-        LEDGER_LOG(INFO) << "setBlock: " << block.blockHeaderConst()->number();
+        LEDGER2_LOG(INFO) << "setBlock: " << block.blockHeaderConst()->number();
 
         auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeaderConst()->number());
         (co_await setBlockData<Flags>(blockNumberStr, block), ...);
@@ -342,7 +344,15 @@ public:
             }
             auto&& entry = co_await it.value();
             auto [strValue, number] = entry.template getObject<SystemConfigEntry>();
-            auto value = boost::lexical_cast<uint64_t>(strValue);
+            uint64_t value = 0;
+            try
+            {
+                value = boost::lexical_cast<uint64_t>(strValue);
+            }
+            catch (std::exception& e)
+            {
+                LEDGER2_LOG(INFO) << "Empty value, key: " << index;
+            }
 
             switch (index++)
             {
@@ -372,7 +382,7 @@ public:
 
     task::Task<bcos::concepts::ledger::Status> getStatus()
     {
-        LEDGER_LOG(TRACE) << "getStatus";
+        LEDGER2_LOG(TRACE) << "getStatus";
         constexpr static auto statusKeys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
             SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
 
@@ -410,8 +420,8 @@ public:
             }
         }
 
-        LEDGER_LOG(TRACE) << "getStatus result: " << status.total << " | " << status.failed << " | "
-                          << status.blockNumber;
+        LEDGER2_LOG(TRACE) << "getStatus result: " << status.total << " | " << status.failed
+                           << " | " << status.blockNumber;
 
         co_return status;
     }
@@ -426,7 +436,7 @@ public:
                 storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_TX) :
                 storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_RECEIPT);
 
-        LEDGER_LOG(INFO) << "getTransactions: " << *tableNameID;
+        LEDGER2_LOG(INFO) << "getTransactions: " << *tableNameID;
 
         auto it =
             co_await m_storage.read(hashes | RANGES::views::transform([&tableNameID](auto& hash) {
@@ -473,8 +483,8 @@ public:
                 storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_TX) :
                 storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_RECEIPT);
 
-        LEDGER_LOG(INFO) << "setTransactionBuffers: " << *tableNameID << " "
-                         << RANGES::size(hashes);
+        LEDGER2_LOG(INFO) << "setTransactionBuffers: " << *tableNameID << " "
+                          << RANGES::size(hashes);
 
         co_await m_storage.write(
             hashes | RANGES::views::transform([this, &tableNameID](auto const& hash) {

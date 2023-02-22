@@ -51,6 +51,7 @@ private:
 
     struct ExecuteResult
     {
+        std::vector<protocol::Transaction::ConstPtr> m_transactions;
         protocol::Block::Ptr m_block;
     };
     std::queue<ExecuteResult> m_results;
@@ -197,7 +198,8 @@ public:
                 self->m_lastExecutedBlockNumber = blockHeader->number();
 
                 std::unique_lock resultsLock(self->m_resultsMutex);
-                self->m_results.push({.m_block = std::move(block)});
+                self->m_results.push(
+                    {.m_transactions = std::move(transactions), .m_block = std::move(block)});
                 resultsLock.unlock();
                 executeLock.unlock();
 
@@ -271,7 +273,7 @@ public:
                     RANGES::iota_view<uint64_t, uint64_t>(0L, result.m_block->receiptsSize()) |
                     RANGES::views::transform([&result, self = self](uint64_t index)
                                                  -> protocol::TransactionSubmitResult::Ptr {
-                        auto transaction = result.m_block->transaction(index);
+                        auto transaction = result.m_transactions[index];
                         auto receipt = result.m_block->receipt(index);
 
                         auto submitResult =
@@ -281,8 +283,8 @@ public:
                         submitResult->setBlockHash(result.m_block->blockHeaderConst()->hash());
                         submitResult->setTransactionIndex(index);
                         submitResult->setNonce(transaction->nonce());
-                        submitResult->setTransactionReceipt(std::move(
-                            std::const_pointer_cast<bcos::protocol::TransactionReceipt>(receipt)));
+                        submitResult->setTransactionReceipt(
+                            std::const_pointer_cast<bcos::protocol::TransactionReceipt>(receipt));
                         submitResult->setSender(std::string(transaction->sender()));
                         submitResult->setTo(std::string(transaction->to()));
 
@@ -295,13 +297,23 @@ public:
                 self->m_blockNumberNotifier(blockHeader->number());
                 self->m_transactionNotifier(blockHeader->number(), std::move(submitResultsPtr),
                     []([[maybe_unused]] const Error::Ptr& error) {
-                        BASELINE_SCHEDULER_LOG(WARNING)
-                            << "Push block notify error!" << boost::diagnostic_information(*error);
+                        if (error)
+                        {
+                            BASELINE_SCHEDULER_LOG(WARNING)
+                                << "Push block notify error!"
+                                << boost::diagnostic_information(*error);
+                        }
                     });
                 co_return;
             }
-            catch (bcos::Error& e)
-            {}
+            catch (std::exception& e)
+            {
+                auto message =
+                    fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
+                BASELINE_SCHEDULER_LOG(ERROR) << message;
+                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                    nullptr);
+            }
         }(this, std::move(header), std::move(callback)));
     }
 
