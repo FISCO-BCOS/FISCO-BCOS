@@ -80,6 +80,23 @@ inline bool isSuccess(PrecompiledExecResult::Ptr _callParameters, CodecWrapper& 
     return m == s256((int)CODE_SUCCESS);
 }
 
+inline bool isFromThisOrGovernors(std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters, const std::string& thisAddress)
+{
+    if (isFromThis(_callParameters, thisAddress))
+    {
+        return true;
+    }
+
+    auto blockContext = _executive->blockContext().lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+
+    auto governors = getGovernorList(_executive, _callParameters, codec);
+    return (RANGES::find_if(governors, [&_callParameters](const Address& address) {
+        return address.hex() == _callParameters->m_sender;
+    }) != governors.end());
+}
+
 std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
@@ -94,6 +111,17 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
 
         BOOST_THROW_EXCEPTION(
             PrecompiledError("ShardPrecompiled call: request should only call from SDK"));
+    }
+
+    if (blockContext->isAuthCheck() &&
+        !isFromThisOrGovernors(_executive, _callParameters, getThisAddress(blockContext->isWasm())))
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled")
+                                 << LOG_DESC("call: Permission denied.")
+                                 << LOG_KV("origin", _callParameters->m_origin)
+                                 << LOG_KV("sender", _callParameters->m_sender);
+
+        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled call: Permission denied."));
     }
 
     uint32_t func = getParamFunc(_callParameters->input());
@@ -172,8 +200,21 @@ void ShardingPrecompiled::makeShard(
 
     if (!isSuccess(_callParameters, codec))
     {
-        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("BFS makeDir error");
-        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled BFS makeDir error"));
+        std::string message;
+        if (codec.encode(int32_t(CODE_FILE_ALREADY_EXIST)) == _callParameters->execResult())
+        {
+            message = "shard '" + shardName + "' has already exists";
+        }
+        else
+        {
+            int32_t code;
+            codec.decode(ref(_callParameters->execResult()), code);
+            message = "errorCode: " + std::to_string(code);
+        }
+
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("BFS makeDir error: ")
+                                 << message;
+        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled BFS makeDir error: " + message));
     }
 }
 
