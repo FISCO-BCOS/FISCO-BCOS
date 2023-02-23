@@ -4,7 +4,6 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <concepts>
-#include <coroutine>
 #include <exception>
 #include <functional>
 #include <type_traits>
