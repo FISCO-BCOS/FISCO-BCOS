@@ -11,7 +11,7 @@ void ShardingDmcExecutor::submit(protocol::ExecutionMessage::UniquePtr message, 
     m_preparedMessages->emplace_back(std::move(message));
 }
 
-void ShardingDmcExecutor::dagGo(std::function<void(bcos::Error::UniquePtr, Status)> callback)
+void ShardingDmcExecutor::shardGo(std::function<void(bcos::Error::UniquePtr, Status)> callback)
 {
     {
         // NOTICE: waiting for preExecute finish
@@ -100,43 +100,46 @@ void ShardingDmcExecutor::dagGo(std::function<void(bcos::Error::UniquePtr, Statu
                 }
                 else
                 {
-                    for (auto& output : outputs)
-                    {
-                        if (output->type() == protocol::ExecutionMessage::FINISHED ||
-                            output->type() == protocol::ExecutionMessage::REVERT) [[likely]]
-                        {
-                            f_onTxFinished(std::move(output));
-                        }
-                        else
-                        {
-                            DmcExecutor::submit(std::move(output), false);
-                        }
-                    }
-                    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DAGExecute: dump output finish";
-
-                    /*
-
-                        tbb::parallel_for(tbb::blocked_range<size_t>(0, outputs.size()),
-                            [this, &outputs](const tbb::blocked_range<size_t>& range) {
-                                for (size_t i = range.begin(); i != range.end(); ++i)
-                                {
-                                    auto& output = outputs[i];
-                                    if (output->type() == protocol::ExecutionMessage::FINISHED
-                       || output->type() == protocol::ExecutionMessage::REVERT)
-                                    {
-                                        f_onTxFinished(std::move(output));
-                                    }
-                                    else
-                                    {
-                                        DmcExecutor::submit(std::move(output), false);
-                                    }
-                                }
-                            });
-                            */
+                    handleShardGoOutput(std::move(outputs));
                     callback(nullptr, Status::FINISHED);
                 }
             });
     }
+}
+
+void ShardingDmcExecutor::handleShardGoOutput(
+    std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs)
+{
+    std::vector<bcos::protocol::ExecutionMessage::UniquePtr> dmcMessages;
+    // filter DMC messages and return not DMC messages directly
+    for (auto& output : outputs)
+    {
+        if (output->type() == protocol::ExecutionMessage::FINISHED ||
+            output->type() == protocol::ExecutionMessage::REVERT) [[likely]]
+        {
+            f_onTxFinished(std::move(output));
+        }
+        else
+        {
+            dmcMessages.emplace_back(std::move(output));
+        }
+    }
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DAGExecute: dump output finish";
+
+    // create executiveState
+    for (auto& dmcOutput : dmcMessages)
+    {
+        auto contextID = dmcOutput->contextID();
+        auto executiveState = std::make_shared<ExecutiveState>(contextID, nullptr, false);
+
+        auto newSeq = executiveState->currentSeq++;
+        executiveState->callStack.push(newSeq);
+
+        m_executivePool.add(contextID, executiveState);
+    }
+
+    // going to dmc logic
+    DmcExecutor::handleExecutiveOutputs(std::move(dmcMessages));
 }
 
 void ShardingDmcExecutor::executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,

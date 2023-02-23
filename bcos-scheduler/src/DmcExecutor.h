@@ -97,10 +97,10 @@ public:
         f_onGetCodeEvent = std::move(onGetCodeEvent);
     }
 
-    void setIsSameAddrHandler(
-        std::function<bool(const std::string_view&, const std::string_view&)> isSameAddrFunc)
+
+    void setGetAddrHandler(std::function<std::string(const std::string_view&)> getFromFunc)
     {
-        f_isSameAddr = std::move(isSameAddrFunc);
+        f_getAddr = std::move(getFromFunc);
     }
 
     void triggerSwitch()
@@ -142,7 +142,7 @@ protected:
 
     void handleCreateMessage(protocol::ExecutionMessage::UniquePtr& message, int64_t currentSeq);
 
-private:
+protected:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
     void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
     void scheduleOut(ExecutiveState::Ptr executiveState);
@@ -169,8 +169,8 @@ protected:
     std::function<void()> f_onNeedSwitchEvent;
     std::function<void(ExecutiveState::Ptr)> f_onSchedulerOut;
     std::function<bcos::bytes(std::string_view)> f_onGetCodeEvent;
-    std::function<bool(const std::string_view&, const std::string_view&)> f_isSameAddr =
-        [](const std::string_view& a, const std::string_view& b) { return a.compare(b) == 0; };
+    std::function<std::string(const std::string_view&)> f_getAddr =
+        [](const std::string_view& addr) { return std::string(addr); };
 };
 
 }  // namespace bcos::scheduler
