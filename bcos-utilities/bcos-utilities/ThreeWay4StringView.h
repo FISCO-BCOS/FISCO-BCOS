@@ -7,7 +7,7 @@
 
 namespace std
 {
-weak_ordering operator<=>(const string_view& lhs, const string_view& rhs)
+inline weak_ordering operator<=>(const string_view& lhs, const string_view& rhs)
 {
     auto sizeComp = lhs.size() <=> rhs.size();
     if (sizeComp != weak_ordering::equivalent)
