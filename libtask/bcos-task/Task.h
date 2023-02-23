@@ -44,7 +44,7 @@ public:
         bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
 
         template <class Promise>
-        std::coroutine_handle<> await_suspend(CO_STD::coroutine_handle<Promise> handle)
+        CO_STD::coroutine_handle<> await_suspend(CO_STD::coroutine_handle<Promise> handle)
         {
             m_handle.promise().m_continuationHandle = handle;
             m_handle.promise().m_awaitable = this;
