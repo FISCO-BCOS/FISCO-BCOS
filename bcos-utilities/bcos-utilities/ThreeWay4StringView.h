@@ -3,7 +3,6 @@
 #ifdef __APPLE__
 #include "Ranges.h"
 #include <compare>
-#include <range/v3/algorithm/lexicographical_compare.hpp>
 #include <string_view>
 
 namespace std
