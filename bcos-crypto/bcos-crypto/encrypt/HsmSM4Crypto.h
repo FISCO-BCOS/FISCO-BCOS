@@ -19,12 +19,16 @@
  * @author lucasli
  */
 #pragma once
+
 #include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
 
 namespace bcos
 {
 namespace crypto
 {
+const int SM4_BLOCK_SIZE = 16;
+const int SM4_IV_DATA_SIZE = 16;
+
 class HsmSM4Crypto : public SymmetricEncryption
 {
 public:
@@ -32,6 +36,7 @@ public:
     HsmSM4Crypto(std::string _libPath) { m_hsmLibPath = _libPath; }
     ~HsmSM4Crypto() override {}
 
+    // encrypt decrypt with external key
     bytesPointer symmetricEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
         const unsigned char* _key, size_t _keySize) override
     {
@@ -60,6 +65,14 @@ public:
         size_t _ivDataSize);
     bytesPointer HsmSM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
         const unsigned char* _key, size_t _keySize, const unsigned char* _ivData,
+        size_t _ivDataSize);
+
+    // encrypt decrypt with internal key
+    bytesPointer symmetricEncryptWithInternalKey(const unsigned char* _plainData,
+        size_t _plainDataSize, const unsigned int _keyIndex, const unsigned char* _ivData,
+        size_t _ivDataSize);
+    bytesPointer symmetricDecryptWithInternalKey(const unsigned char* _plainData,
+        size_t _plainDataSize, const unsigned int _keyIndex, const unsigned char* _ivData,
         size_t _ivDataSize);
 
 private:

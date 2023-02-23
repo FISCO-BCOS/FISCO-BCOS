@@ -70,10 +70,11 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
+    // loadSecurityConfig before loadStorageSecurityConfig for deciding whether to use HSM
+    loadSecurityConfig(_pt);
     loadStorageSecurityConfig(_pt);
 
     loadFailOverConfig(_pt, _enforceMemberID);
-    loadSecurityConfig(_pt);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
     loadOthersConfig(_pt);
@@ -491,15 +492,16 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
-    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS) [[unlikely]]
-    {
-        NodeConfig_LOG(WARNING) << LOG_DESC(
-                                       "loadTxPoolConfig: the configured txs_expiration_time "
-                                       "is smaller than default "
-                                       "consensus time, reset to the consensus time")
-                                << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
-                                << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
-    }
+    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
+        [[unlikely]]
+        {
+            NodeConfig_LOG(WARNING) << LOG_DESC(
+                                           "loadTxPoolConfig: the configured txs_expiration_time "
+                                           "is smaller than default "
+                                           "consensus time, reset to the consensus time")
+                                    << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
+                                    << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
+        }
     m_txsExpirationTime = std::max(
         {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
 
@@ -546,8 +548,8 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
-    m_hsmEnable = _pt.get<bool>("security.enable_hsm", false);
-    if (m_hsmEnable)
+    m_enableHsm = _pt.get<bool>("security.enable_hsm", false);
+    if (m_enableHsm)
     {
         m_hsmLibPath =
             _pt.get<std::string>("security.hsm_lib_path", "/usr/local/lib/libgmt0018.so");
@@ -558,7 +560,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
                              << LOG_KV("password", m_password);
     }
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_hsmEnable)
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_enableHsm)
                          << LOG_KV("privateKeyPath", m_privateKeyPath);
 }
 
@@ -580,6 +582,16 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
     {
         return;
     }
+
+    if (m_enableHsm)
+    {
+        m_encKeyIndex = _pt.get<int>("storage_security.enc_key_index");
+        NodeConfig_LOG(INFO) << LOG_DESC("loadStorageSecurityConfig in HSM model")
+                             << LOG_KV("enc_key_index", m_encKeyIndex);
+        // don't need to load key_center_url/cipher_data_key in HSM model
+        return;
+    }
+
     std::string storageSecurityKeyCenterUrl =
         _pt.get<std::string>("storage_security.key_center_url", "");
 

@@ -1,3 +1,4 @@
+
 /*
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
@@ -15,55 +16,53 @@
  *
  */
 /**
- * @brief : Data Encryption
- * @author: chuwen
- * @date: 2018-12-06
+ * @brief : HSM Data Encryption
+ * @author: lucasli
+ * @date: 2022-02-17
  */
 
 #pragma once
 #include "Common.h"
-#include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
+// #include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
+#include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/FileUtility.h>
 #include <memory>
-
 namespace bcos
 {
 namespace security
 {
-class DataEncryption : public DataEncryptInterface
+class HsmDataEncryption : public DataEncryptInterface
 {
 public:
-    using Ptr = std::shared_ptr<DataEncryption>;
-
-public:
-    DataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig);
-    DataEncryption(const std::string& dataKey, const bool smCryptoType);
-    ~DataEncryption() override {}
-
-    uint32_t compatibilityVersion() { return m_compatibilityVersion; }
-    void setCompatibilityVersion(uint32_t _compatibilityVersion)
-    {
-        m_compatibilityVersion = _compatibilityVersion;
-    }
-
-public:
-    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
+    using Ptr = std::shared_ptr<HsmDataEncryption>;
+    HsmDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig);
+    ~HsmDataEncryption() override {}
 
     // use to decrypt node.key
+    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
     std::shared_ptr<bytes> decryptFile(const std::string& filename) override;
 
     // use to encrypt/decrypt in rocksdb
-    std::string encrypt(const std::string& data) override;
-    std::string decrypt(const std::string& data) override;
+    std::string encrypt(const std::string& data) override
+    {
+        return encrypt((unsigned char*)(data.data()), data.size());
+    }
+    std::string decrypt(const std::string& data) override
+    {
+        return decrypt((unsigned char*)(data.data()), data.size());
+    }
+
+    std::string encrypt(uint8_t* data, size_t size);
+    std::string decrypt(uint8_t* data, size_t size);
 
 private:
-    bcos::tool::NodeConfig::Ptr m_nodeConfig{nullptr};
     uint32_t m_compatibilityVersion;
-
-    std::string m_dataKey;
-    bcos::crypto::SymmetricEncryption::Ptr m_symmetricEncrypt{nullptr};
+    int m_encKeyIndex;
+    std::string m_hsmLibPath;
+    bcos::tool::NodeConfig::Ptr m_nodeConfig = nullptr;
+    bcos::crypto::HsmSM4Crypto::Ptr m_symmetricEncrypt = nullptr;
 };
 
 }  // namespace security

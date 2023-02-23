@@ -37,7 +37,9 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
+#include <bcos-security/bcos-security/HsmDataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
 #include <json/value.h>
@@ -149,11 +151,17 @@ TransactionalStorageInterface::Ptr createBackendStorage(
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
     {
-        bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
+        bcos::security::DataEncryptInterface::Ptr dataEncryption = nullptr;
         if (nodeConfig->storageSecurityEnable())
         {
-            dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
-            dataEncryption->init();
+            if (nodeConfig->enableHsm())
+            {
+                dataEncryption = std::make_shared<bcos::security::HsmDataEncryption>(nodeConfig);
+            }
+            else
+            {
+                dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
+            }
         }
         if (write)
         {

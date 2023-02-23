@@ -48,7 +48,7 @@ public:
     }
 
     bcos::crypto::KeyPairInterface::Ptr keyPair() const { return m_keyPair; }
-    bool hsmEnable() const { return m_hsmEnable; }
+    bool enableHsm() const { return m_enableHsm; }
     const std::string& hsmLibPath() const { return m_hsmLibPath; }
     int keyIndex() const { return m_keyIndex; }
     const std::string& password() const { return m_password; }
@@ -68,7 +68,7 @@ private:
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     size_t c_hexedPrivateKeySize = 64;
     bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
-    bool m_hsmEnable;
+    bool m_enableHsm;
     std::string m_hsmLibPath;
     int m_keyIndex;
     std::string m_password;
