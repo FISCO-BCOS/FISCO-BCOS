@@ -181,4 +181,7 @@ using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
 
+template <class T>
+concept IsTransaction = std::derived_from<T, Transaction> || std::same_as<T, Transaction>;
+
 }  // namespace bcos::protocol

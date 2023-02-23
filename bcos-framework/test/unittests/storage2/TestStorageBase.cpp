@@ -20,12 +20,12 @@ public:
     struct SeekIterator
     {
         using Key = std::tuple<std::string_view, std::string_view>;
-        using Value = const storage::Entry*;
+        using Value = const storage::Entry&;
 
         static task::Task<bool> hasValue() { co_return true; }
         task::Task<bool> next() { co_return (++m_it) != m_end; }
         task::Task<Key> key() const { co_return m_it->first; }
-        task::Task<Value> value() const { co_return &(m_it->second); }
+        task::AwaitableValue<Value> value() const { return {m_it->second}; }
 
         std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator m_it;
         std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator m_end;
@@ -34,17 +34,15 @@ public:
     struct ReadIterator
     {
         using Key = std::tuple<std::string_view, std::string_view>;
-        using Value = const storage::Entry*;
+        using Value = const storage::Entry&;
 
         task::Task<bool> hasValue() const { co_return *m_listIt != m_end; }
         task::Task<bool> next() { co_return (++m_listIt) != m_valueIts.end(); }
         task::Task<Key> key() const { co_return (*m_listIt)->first; }
-        task::Task<Value> value() const { co_return std::addressof(((*m_listIt)->second)); }
+        task::AwaitableValue<Value> value() const { return {((*m_listIt)->second)}; }
 
-        std::vector<std::map<std::tuple<std::string, std::string>,
-            storage::Entry>::iterator>::iterator m_listIt;
-        std::vector<std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator>
-            m_valueIts;
+        std::vector<std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator>::iterator m_listIt;
+        std::vector<std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator> m_valueIts;
         std::map<std::tuple<std::string, std::string>, storage::Entry>::iterator m_end;
     };
 
@@ -126,11 +124,9 @@ BOOST_AUTO_TEST_CASE(seek)
         MockStorage mock;
         BOOST_REQUIRE_NO_THROW(
             // Write 100 keyvalues
-            co_await mock.write(
-                RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](auto num) {
-                    return std::tuple<std::string, std::string>(
-                        "table", "key:" + boost::lexical_cast<std::string>(num));
-                }),
+            co_await mock.write(RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](auto num) {
+                return std::tuple<std::string, std::string>("table", "key:" + boost::lexical_cast<std::string>(num));
+            }),
                 RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](auto num) {
                     storage::Entry entry;
                     entry.set("Hello world! " + boost::lexical_cast<std::string>(num));
@@ -165,12 +161,16 @@ BOOST_AUTO_TEST_CASE(insert)
         co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key2")),
             storage2::single(std::move(newEntry2)));
 
-        auto result = co_await mock.read(
-            storage2::single(std::tuple<std::string_view, std::string_view>("table", "key2")));
+        auto result =
+            co_await mock.read(storage2::single(std::tuple<std::string_view, std::string_view>("table", "key2")));
 
         co_await result.next();
         BOOST_REQUIRE(co_await result.hasValue());
-        BOOST_CHECK_EQUAL((co_await result.value())->get(), "fine!");
+        BOOST_CHECK_EQUAL((co_await result.value()).get(), "fine!");
+
+        auto oneResult = co_await readOne(mock, std::tuple<std::string_view, std::string_view>("table", "key2"));
+        BOOST_REQUIRE(oneResult);
+        BOOST_CHECK_EQUAL(oneResult->get().get(), "fine!");
     }());
 }
 
@@ -189,12 +189,12 @@ BOOST_AUTO_TEST_CASE(update)
         co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
             storage2::single(std::move(newEntry2)));
 
-        auto result = co_await mock.read(
-            storage2::single(std::tuple<std::string_view, std::string_view>("table", "key")));
+        auto result =
+            co_await mock.read(storage2::single(std::tuple<std::string_view, std::string_view>("table", "key")));
 
         co_await result.next();
         BOOST_REQUIRE(co_await result.hasValue());
-        BOOST_CHECK_EQUAL((co_await result.value())->get(), "fine!");
+        BOOST_CHECK_EQUAL((co_await result.value()).get(), "fine!");
     }());
 }
 
@@ -208,11 +208,10 @@ BOOST_AUTO_TEST_CASE(remove)
         co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
             storage2::single((std::move(newEntry))));
 
-        co_await mock.remove(
-            storage2::single((std::tuple<std::string_view, std::string_view>("table", "key"))));
+        co_await mock.remove(storage2::single((std::tuple<std::string_view, std::string_view>("table", "key"))));
 
-        auto result = co_await mock.read(
-            storage2::single((std::tuple<std::string_view, std::string_view>("table", "key"))));
+        auto result =
+            co_await mock.read(storage2::single((std::tuple<std::string_view, std::string_view>("table", "key"))));
 
         co_await result.next();
         BOOST_REQUIRE(!co_await result.hasValue());

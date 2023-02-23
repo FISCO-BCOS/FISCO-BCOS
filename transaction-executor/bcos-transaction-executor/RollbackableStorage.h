@@ -2,96 +2,107 @@
 
 #include "bcos-task/Trait.h"
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <boost/container/small_vector.hpp>
 
 namespace bcos::transaction_executor
 {
 
-// Rollbackable crtp base
-template <storage2::Storage<StateKey, StateValue> Storage>
-class Rollbackable : public Storage
+template <StateStorage Storage>
+class Rollbackable
 {
 private:
+    constexpr static size_t MOSTLY_STEPS = 7;
     struct Record
     {
         StateKey key;
-        std::optional<StateValue> value;
+        std::optional<StateValue> oldValue;
     };
-    std::forward_list<Record> m_records;
+    boost::container::small_vector<Record, MOSTLY_STEPS> m_records;
+    Storage& m_storage;
 
 public:
-    using Savepoint = typename std::forward_list<Record>::const_iterator;
-    using Storage::Storage;
+    using Savepoint = int64_t;
+    using Key = typename Storage::Key;
+    using Value = typename Storage::Value;
 
-    Savepoint current() const { return m_records.cbegin(); }
+    Rollbackable(Storage& storage) : m_storage(storage) {}
+
+    Savepoint current() const { return static_cast<int64_t>(m_records.size()); }
     task::Task<void> rollback(Savepoint savepoint)
     {
-        auto it = m_records.begin();
-        while (it != savepoint)
+        for (auto index = static_cast<int64_t>(m_records.size()); index > savepoint; --index)
         {
-            auto& record = *it;
-            if (record.value)
+            assert(index > 0);
+            auto& record = m_records[index - 1];
+            if (record.oldValue)
             {
-                co_await Storage::write(
-                    storage2::single(record.key), storage2::single(*record.value));
+                co_await m_storage.write(
+                    storage2::single(record.key), storage2::single(*record.oldValue));
             }
             else
             {
-                co_await Storage::remove(storage2::single(record.key));
+                co_await m_storage.remove(storage2::single(record.key));
             }
-            m_records.pop_front();
-            it = m_records.begin();
+            m_records.pop_back();
         }
         co_return;
     }
 
+    auto read(RANGES::input_range auto&& keys)
+        -> task::Task<task::AwaitableReturnType<decltype(m_storage.read(keys))>>
+    {
+        co_return co_await m_storage.read(std::forward<decltype(keys)>(keys));
+    }
+
+    // auto seek(auto const& key)
+    //     -> task::Task<task::AwaitableReturnType<decltype(m_storage.seek(key))>>
+    // {
+    //     co_return co_await m_storage.seek(key);
+    // }
+
     auto write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
-        -> task::Task<task::AwaitableReturnType<decltype(Storage::write(
+        -> task::Task<task::AwaitableReturnType<decltype(m_storage.write(
             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))>>
     {
         // Store values to history
         {
-            auto storageIt = co_await Storage::read(keys);
+            auto storageIt = co_await m_storage.read(keys);
             auto keyIt = RANGES::begin(keys);
             while (co_await storageIt.next())
             {
-                auto& record = m_records.emplace_front();
-                record.key = *(keyIt++);
+                auto& record = m_records.emplace_back(Record{.key = *(keyIt++), .oldValue = {}});
                 if (co_await storageIt.hasValue())
                 {
                     // Update exists value, store the old value
-                    record.value = {co_await storageIt.value()};
-                }
-                else
-                {
-                    record.value = {};
+                    record.oldValue.emplace(co_await storageIt.value());
                 }
             }
         }
 
-        co_return co_await Storage::write(
+        co_return co_await m_storage.write(
             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
     }
 
     auto remove(RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(Storage::remove(keys))>>
+        -> task::Task<task::AwaitableReturnType<decltype(m_storage.remove(keys))>>
     {
         // Store values to history
         {
-            auto storageIt = co_await Storage::read(keys);
+            auto storageIt = co_await m_storage.read(keys);
             auto keyIt = RANGES::begin(keys);
             while (co_await storageIt.next())
             {
-                auto& record = m_records.emplace_front();
+                auto& record = m_records.emplace_back();
                 record.key = *(keyIt++);
                 if (co_await storageIt.hasValue())
                 {
                     // Update exists value, store the old value
-                    record.value = {co_await storageIt.value()};
+                    record.oldValue.emplace(co_await storageIt.value());
                 }
             }
         }
 
-        co_return co_await Storage::remove(keys);
+        co_return co_await m_storage.remove(keys);
     }
 };
 

@@ -116,7 +116,8 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-    std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts)
+    std::function<void(Error::Ptr&&)> callback,
+    bool writeTxsAndReceipts)  // Unused flag writeTxsAndReceipts
 {
     if (!block)
     {
@@ -298,8 +299,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             });
 
         auto start = utcTime();
-        auto error =
-            m_storage->setRows(SYS_HASH_2_RECEIPT, std::move(txsHash), std::move(receiptsView));
+        auto error = m_storage->setRows(
+            SYS_HASH_2_RECEIPT, std::move(txsHash), std::move(receiptsView));  // only for tikv
         auto writeReceiptsTime = utcTime() - start;
         if (error)
         {

@@ -110,6 +110,12 @@ task::Task<std::vector<protocol::Transaction::Ptr>> TxPool::getMissedTransaction
     co_return std::vector<protocol::Transaction::Ptr>{};
 }
 
+std::vector<protocol::Transaction::ConstPtr> TxPool::getTransactions(
+    RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+{
+    return m_txpoolStorage->getTransactions(std::move(hashes));
+}
+
 bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
 {
     auto syncConfig = m_transactionSync->config();

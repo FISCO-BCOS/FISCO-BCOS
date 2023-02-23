@@ -41,7 +41,7 @@ public:
     using Ptr = std::shared_ptr<Sha3>;
     Sha3() { setHashImplType(HashImplType::Sha3); }
     virtual ~Sha3() {}
-    HashType hash(bytesConstRef _data) override { return sha3Hash(_data); }
+    HashType hash(bytesConstRef _data) const override { return sha3Hash(_data); }
     bcos::crypto::hasher::AnyHasher hasher() const override
     {
         return bcos::crypto::hasher::AnyHasher{

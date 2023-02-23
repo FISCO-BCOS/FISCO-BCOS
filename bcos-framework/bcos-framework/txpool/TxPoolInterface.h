@@ -26,11 +26,10 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
 #include <boost/throw_exception.hpp>
+#include <range/v3/view/any_view.hpp>
 #include <stdexcept>
 
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class TxPoolInterface
 {
@@ -38,7 +37,7 @@ public:
     using Ptr = std::shared_ptr<TxPoolInterface>;
 
     TxPoolInterface() = default;
-    virtual ~TxPoolInterface() {}
+    virtual ~TxPoolInterface() = default;
 
     virtual void start() = 0;
     virtual void stop() = 0;
@@ -69,6 +68,12 @@ public:
 
     virtual task::Task<std::vector<protocol::Transaction::Ptr>> getMissedTransactions(
         std::vector<crypto::HashType> transactionHashes, bcos::crypto::NodeIDPtr fromNodeID)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+    }
+
+    virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
+        RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
     }
@@ -147,5 +152,8 @@ public:
 
     virtual void tryToSyncTxsFromPeers() {}
 };
-}  // namespace txpool
-}  // namespace bcos
+
+template <class T>
+concept IsTxPool = std::derived_from<std::remove_cvref_t<T>, TxPoolInterface> ||
+    std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
+}  // namespace bcos::txpool

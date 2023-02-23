@@ -411,8 +411,9 @@ public:
                         auto& entry = it.entry;
                         if (entry.dirty())
                         {
-                            auto entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
-                                             entry.hash(it.table, it.key, hashImpl, m_blockVersion);
+                            auto entryHash =
+                                hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
+                                entry.hash(it.table, it.key, *hashImpl, m_blockVersion);
                             bucketHash ^= entryHash;
                         }
                     }

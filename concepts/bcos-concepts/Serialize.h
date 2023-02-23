@@ -11,16 +11,26 @@ namespace detail
 {
 
 template <class Object, class Buffer>
-concept HasMemberFunc = requires(Object object, Buffer& output, const Buffer& input)
+concept HasMemberFuncEncode = requires(Object object, Buffer& output, const Buffer& input)
 {
     object.encode(output);
+};
+
+template <class Object, class Buffer>
+concept HasMemberFuncDecode = requires(Object object, Buffer& output, const Buffer& input)
+{
     object.decode(input);
 };
 
 template <class Object, class Buffer>
-concept HasADL = requires(Object object, Buffer& output, const Buffer& input)
+concept HasADLEncode = requires(Object object, Buffer& output, const Buffer& input)
 {
     impl_encode(object, output);
+};
+
+template <class Object, class Buffer>
+concept HasADLDecode = requires(Object object, Buffer& output, const Buffer& input)
+{
     impl_decode(input, object);
 };
 
@@ -30,11 +40,11 @@ struct encode
     {
         using ObjectType = std::remove_cvref_t<decltype(object)>;
         using BufferType = std::remove_cvref_t<decltype(out)>;
-        if constexpr (HasMemberFunc<ObjectType, BufferType>)
+        if constexpr (HasMemberFuncEncode<ObjectType, BufferType>)
         {
             object.encode(out);
         }
-        else if constexpr (HasADL<ObjectType, BufferType>)
+        else if constexpr (HasADLEncode<ObjectType, BufferType>)
         {
             impl_encode(object, out);
         }
@@ -47,16 +57,16 @@ struct encode
 
 struct decode
 {
-    void operator()(bcos::concepts::bytebuffer::ByteBuffer auto const& input, auto&& object) const
+    void operator()(bcos::concepts::bytebuffer::ByteBuffer auto const& input, auto& object) const
     {
-        using ObjectType = std::remove_cvref_t<decltype(object)>;
         using BufferType = std::remove_cvref_t<decltype(input)>;
+        using ObjectType = std::remove_cvref_t<decltype(object)>;
 
-        if constexpr (HasMemberFunc<ObjectType, BufferType>)
+        if constexpr (HasMemberFuncDecode<ObjectType, BufferType>)
         {
             object.decode(input);
         }
-        else if constexpr (HasADL<ObjectType, BufferType>)
+        else if constexpr (HasADLDecode<ObjectType, BufferType>)
         {
             impl_decode(input, object);
         }

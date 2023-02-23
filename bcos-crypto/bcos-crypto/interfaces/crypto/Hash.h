@@ -24,9 +24,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <memory>
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 enum HashImplType : int
 {
@@ -40,8 +38,12 @@ public:
     using Ptr = std::shared_ptr<Hash>;
     using UniquePtr = std::unique_ptr<Hash>;
     Hash() = default;
-    virtual ~Hash() {}
-    virtual HashType hash(bytesConstRef _data) = 0;
+    virtual ~Hash() = default;
+    virtual HashType hash(bytesConstRef _data) const = 0;
+    HashType hash(std::string_view view) const
+    {
+        return hash(bytesConstRef((const unsigned char*)view.data(), view.size()));
+    }
     virtual HashType emptyHash()
     {
         if (HashType() == m_emptyHash)
@@ -74,5 +76,4 @@ private:
     HashType m_emptyHash = HashType();
     HashImplType m_type = Keccak256Hash;
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

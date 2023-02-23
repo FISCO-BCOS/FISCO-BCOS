@@ -1,19 +1,27 @@
 #pragma once
 #include "Basic.h"
+#include "ByteBuffer.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <boost/type_traits.hpp>
 #include <array>
+#include <range/v3/range/concepts.hpp>
 
 namespace bcos::concepts::hash
 {
 
 namespace detail
 {
+template <class ObjectType>
+concept HasMemberFunc = requires(ObjectType object)
+{
+    object.hash();
+};
+
 template <class ObjectType, class Hasher>
 concept HasADL = requires(ObjectType object, std::string out1, std::vector<char> out2,
     std::vector<unsigned char> out3, std::vector<std::byte> out4)
 {
-    bcos::crypto::hasher::Hasher<Hasher>;
+    requires bcos::crypto::hasher::Hasher<Hasher>;
     impl_calculate<Hasher>(object, out1);
     impl_calculate<Hasher>(object, out2);
     impl_calculate<Hasher>(object, out3);
@@ -27,13 +35,18 @@ struct calculate
     {
         using ObjectType = std::remove_cvref_t<decltype(object)>;
 
-        if constexpr (HasADL<ObjectType, Hasher>)
+        if constexpr (HasMemberFunc<ObjectType>)
         {
-            return impl_calculate<Hasher>(object, out);
+            auto hash = object.hash();
+            bytebuffer::assignTo(hash, out);
+        }
+        else if constexpr (HasADL<ObjectType, Hasher>)
+        {
+            impl_calculate<Hasher>(object, out);
         }
         else
         {
-            static_assert(!sizeof(object), "Not found adl!");
+            static_assert(!sizeof(object), "Not found member function or adl!");
         }
     }
 };

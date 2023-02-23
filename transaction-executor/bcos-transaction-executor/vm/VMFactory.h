@@ -22,6 +22,7 @@
 #pragma once
 #include "VMInstance.h"
 #include <evmone/evmone.h>
+#include <boost/throw_exception.hpp>
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,6 +33,10 @@ enum class VMKind
 {
     evmone,
 };
+
+// clang-format off
+struct UnknownVMError : public bcos::Error {};
+// clang-format on
 
 class VMFactory
 {
@@ -46,6 +51,8 @@ public:
         {
         case VMKind::evmone:
             return VMInstance{evmc_create_evmone()};
+        default:
+            BOOST_THROW_EXCEPTION(UnknownVMError{});
         }
     }
 };

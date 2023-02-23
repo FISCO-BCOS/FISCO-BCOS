@@ -3,6 +3,7 @@
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
 #include "bcos-ledger/src/libledger/LedgerImpl.h"
+#include "bcos-ledger/src/libledger/LedgerImpl2.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-concepts/ledger/Ledger.h>
@@ -10,6 +11,8 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-tars-protocol/tars/TransactionMetaData.h>

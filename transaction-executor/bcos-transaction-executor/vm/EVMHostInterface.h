@@ -22,7 +22,6 @@
 #pragma once
 
 #include "../Common.h"
-#include "HostContext.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <evmc/evmc.h>
@@ -53,9 +52,9 @@ evmc_bytes32 getStorage(
     auto& hostContext = static_cast<HostContextType&>(*context);
 
     // programming assert for debug
-    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
+    // assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
-    return task::syncWait(hostContext.store(key));
+    return task::syncWait(hostContext.get(key));
 }
 
 template <class HostContextType>
@@ -63,15 +62,15 @@ evmc_storage_status setStorage(evmc_host_context* context,
     [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key, const evmc_bytes32* value)
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
-    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
+    // assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
     auto status = EVMC_STORAGE_MODIFIED;
     if (value == nullptr)  // TODO: Should use 32 bytes 0
     {
         status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
+        // hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas; // TODO: add gas
     }
-    task::syncWait(hostContext.setStore(key, value));  // Interface uses native endianness
+    task::syncWait(hostContext.set(key, value));  // Interface uses native endianness
     return status;
 }
 
@@ -80,83 +79,68 @@ evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* _context,
     [[maybe_unused]] const evmc_address* _addr) noexcept
 {
     // always return 0
-    return toEvmC(h256(0));
+    return transaction_executor::toEvmC(h256(0));
 }
 
 template <class HostContextType>
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    return hostContext.codeSizeAt(fromEvmC(*_addr));
+    return task::syncWait(hostContext.codeSizeAt(*_addr));
 }
 
 template <class HostContextType>
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    return toEvmC(hostContext.codeHashAt(fromEvmC(*_addr)));
+    return transaction_executor::toEvmC(task::syncWait(hostContext.codeHashAt(*_addr)));
 }
 
-/**
- * @brief : copy code between [_codeOffset, _codeOffset + _bufferSize] to
- * bufferData if _codeOffset is larger than code length, then return 0; if
- * _codeOffset + _bufferSize is larger than the end of the code, than only copy
- * [_codeOffset, _codeEnd]
- * @param _context : evm context, including to myAddress, caller, gas, origin,
- * value, etc.
- * @param _addr: the evmc-address of the code
- * @param _codeOffset: the offset begin to copy code
- * @param _bufferData : buffer store the copied code
- * @param _bufferSize : code size to copy
- * @return size_t : return copied code size(in byte)
- */
 template <class HostContextType>
 size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_t* _bufferData,
     size_t _bufferSize)
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
 
-    hostContext.setCode(bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize));
+    task::syncWait(hostContext.setCode(bytesConstRef((bcos::byte*)_bufferData, _bufferSize)));
     return _bufferSize;
 }
 
 template <class HostContextType>
-void selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
-    const evmc_address* _beneficiary) noexcept
+bool selfdestruct(evmc_host_context* _context, [[maybe_unused]] const evmc_address* _addr,
+    [[maybe_unused]] const evmc_address* _beneficiary) noexcept
 {
-    (void)_addr;
-    (void)_beneficiary;
     auto& hostContext = static_cast<HostContextType&>(*_context);
 
     hostContext.suicide();  // FISCO BCOS has no _beneficiary
+    return false;
 }
 
 template <class HostContextType>
-void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* _data,
-    size_t _dataSize, const evmc_bytes32 _topics[], size_t _numTopics) noexcept
+void log(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, uint8_t const* data,
+    size_t dataSize, const evmc_bytes32 topics[], size_t numTopics) noexcept
 {
-    (void)_addr;
-    auto& hostContext = static_cast<HostContextType&>(*_context);
-    assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
-    h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
-    hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
+    auto& hostContext = static_cast<HostContextType&>(*context);
+    h256s hashTopics;
+    hashTopics.reserve(numTopics);
+    for (auto i : RANGES::iota_view<size_t, size_t>(0, numTopics))
+    {
+        hashTopics.emplace_back(topics[i].bytes, sizeof(evmc_bytes32));
+    }
+    hostContext.log(std::move(hashTopics), bytesConstRef{data, dataSize});
 }
 
 template <class HostContextType>
-evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
+evmc_access_status access_account(
+    [[maybe_unused]] evmc_host_context* _context, [[maybe_unused]] const evmc_address* _addr)
 {
-    std::ignore = _context;
-    std::ignore = _addr;
     return EVMC_ACCESS_COLD;
 }
 
 template <class HostContextType>
-evmc_access_status access_storage(
-    evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
+evmc_access_status access_storage([[maybe_unused]] evmc_host_context* _context,
+    [[maybe_unused]] const evmc_address* _addr, [[maybe_unused]] const evmc_bytes32* _key)
 {
-    std::ignore = _context;
-    std::ignore = _addr;
-    std::ignore = _key;
     return EVMC_ACCESS_COLD;
 }
 
@@ -164,24 +148,17 @@ template <class HostContextType>
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*_context);
-    evmc_tx_context result;
-    if (hostContext.isWasm())
-    {
-        result.tx_origin = toEvmC(hostContext.origin());
-    }
-    else
-    {
-        auto origin = fromHex(hostContext.origin());
-        result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size()));
-    }
+    evmc_tx_context result = {};
+    result.tx_origin = hostContext.origin();
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
     result.block_gas_limit = hostContext.blockGasLimit();
 
-    memset(result.tx_gas_price.bytes, 0, 32);
-    memset(result.block_coinbase.bytes, 0, 20);
-    memset(result.block_difficulty.bytes, 0, 32);
-    memset(result.chain_id.bytes, 0, 32);
+    // RANGES::fill(result.tx_gas_price.bytes, 0);
+    // RANGES::fill(result.tx_gas_price.bytes, 0);
+    // RANGES::fill(result.block_coinbase.bytes, 0);
+    // RANGES::fill(result.block_difficulty.bytes, 0);
+    // RANGES::fill(result.chain_id.bytes, 0);
     return result;
 }
 
@@ -189,47 +166,48 @@ template <class HostContextType>
 evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
 {
     auto& hostContext = static_cast<HostContextType&>(*_txContextPtr);
-    return toEvmC(hostContext.blockHash(_number));
+    return transaction_executor::toEvmC(task::syncWait(hostContext.blockHash(_number)));
 }
 
 template <class HostContextType>
-evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
+evmc_result call(evmc_host_context* context, const evmc_message* message) noexcept
 {
     // gas maybe smaller than 0 since outside gas is u256 and evmc_message is
     // int64_t so gas maybe smaller than 0 in some extreme cases
     // * origin code: assert(_msg->gas >= 0)
-    if (_msg->gas < 0)
+    if (message->gas < 0)
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", message->gas);
         BOOST_THROW_EXCEPTION(protocol::GasOverflow());
     }
 
-    auto& hostContext = static_cast<HostContextType&>(*_context);
+    auto& hostContext = static_cast<HostContextType&>(*context);
 
-    return hostContext.externalRequest(_msg);
+    return task::syncWait(hostContext.externalCall(*message));
 }
 
+template <class HostContextType>
 const evmc_host_interface* getHostInterface()
 {
     // TODO: Use type
-    return nullptr;
-    // evmc_host_interface const fnTable = {
-    //     accountExists,
-    //     getStorage,
-    //     setStorage,
-    //     getBalance,
-    //     getCodeSize,
-    //     getCodeHash,
-    //     copyCode,
-    //     selfdestruct,
-    //     call,
-    //     getTxContext,
-    //     getBlockHash,
-    //     log,
-    //     access_account,
-    //     access_storage,
-    // };
-    // return &fnTable;
+    // return nullptr;
+    static evmc_host_interface const fnTable = {
+        accountExists<HostContextType>,
+        getStorage<HostContextType>,
+        setStorage<HostContextType>,
+        getBalance<HostContextType>,
+        getCodeSize<HostContextType>,
+        getCodeHash<HostContextType>,
+        copyCode<HostContextType>,
+        selfdestruct<HostContextType>,
+        call<HostContextType>,
+        getTxContext<HostContextType>,
+        getBlockHash<HostContextType>,
+        log<HostContextType>,
+        access_account<HostContextType>,
+        access_storage<HostContextType>,
+    };
+    return &fnTable;
 }
 
 }  // namespace bcos::transaction_executor

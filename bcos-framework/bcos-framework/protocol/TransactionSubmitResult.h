@@ -20,9 +20,7 @@
 #pragma once
 #include "ProtocolTypeDef.h"
 #include "TransactionReceipt.h"
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class TransactionSubmitResult
 {
@@ -57,5 +55,4 @@ public:
 
 using TransactionSubmitResults = std::vector<TransactionSubmitResult::Ptr>;
 using TransactionSubmitResultsPtr = std::shared_ptr<TransactionSubmitResults>;
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

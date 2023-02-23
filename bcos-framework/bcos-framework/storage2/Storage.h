@@ -17,33 +17,68 @@ namespace bcos::storage2
 {
 
 template <class IteratorType>
-concept SeekIterator = requires(IteratorType iterator)
+concept ReadIterator = requires(IteratorType&& iterator)
 {
-    typename IteratorType::Key;
-    typename IteratorType::Value;
-    std::convertible_to<task::AwaitableReturnType<decltype(iterator.next())>, bool>;
-    std::same_as<typename task::AwaitableReturnType<decltype(iterator.key())>,
-        typename IteratorType::Key>;
-    std::same_as<typename task::AwaitableReturnType<decltype(iterator.value())>,
-        typename IteratorType::Value>;
+    requires std::convertible_to < task::AwaitableReturnType<decltype(iterator.next())>,
+    bool > ;
+    requires std::same_as < typename task::AwaitableReturnType<decltype(iterator.key())>,
+    typename IteratorType::Key > ;
+    requires std::same_as < typename task::AwaitableReturnType<decltype(iterator.value())>,
+    typename IteratorType::Value > ;
+    requires std::convertible_to < task::AwaitableReturnType<decltype(iterator.hasValue())>,
+    bool > ;
 };
 
-template <class IteratorType>
-concept ReadIterator = requires(IteratorType iterator)
+template <class StorageType>
+concept ReadableStorage = requires(StorageType&& impl)
 {
-    SeekIterator<IteratorType>;
-    std::convertible_to<task::AwaitableReturnType<decltype(iterator.hasValue())>, bool>;
+    typename StorageType::Key;
+    requires ReadIterator<
+        task::AwaitableReturnType<decltype(impl.read(std::vector<typename StorageType::Key>()))>>;
 };
 
-template <class StorageType, class KeyType, class ValueType>
-concept Storage = requires(StorageType&& impl, KeyType&& key)
+template <class StorageType>
+concept WriteableStorage = requires(StorageType&& impl)
 {
-    ReadIterator<task::AwaitableReturnType<decltype(impl.read(RANGES::any_view<KeyType>()))>>;
-    std::is_void_v<task::AwaitableReturnType<decltype(impl.write(
-        RANGES::any_view<KeyType>(), RANGES::any_view<ValueType>()))>>;
-    SeekIterator<task::AwaitableReturnType<decltype(impl.seek(key))>>;
-    std::is_void_v<task::AwaitableReturnType<decltype(impl.remove(RANGES::any_view<KeyType>()))>>;
+    typename StorageType::Key;
+    typename StorageType::Value;
+    requires task::IsAwaitable<decltype(impl.write(
+        std::vector<typename StorageType::Key>(), std::vector<typename StorageType::Value>()))>;
 };
+
+template <class StorageType>
+concept SeekableStorage = requires(StorageType&& impl)
+{
+    typename StorageType::Key;
+    requires ReadIterator<
+        task::AwaitableReturnType<decltype(impl.seek(std::declval<typename StorageType::Key>()))>>;
+};
+
+template <class StorageType>
+concept ErasableStorage = requires(StorageType&& impl)
+{
+    typename StorageType::Key;
+    requires task::IsAwaitable<decltype(impl.remove(
+        RANGES::any_view<typename StorageType::Key>()))>;
+};
+
+template <storage2::ReadableStorage Storage>
+struct ReadIteratorTrait
+{
+    using type = typename task::AwaitableReturnType<decltype(std::declval<Storage>().read(
+        RANGES::any_view<typename Storage::Key>()))>;
+};
+template <storage2::ReadableStorage Storage>
+using ReadIteratorType = typename ReadIteratorTrait<Storage>::type;
+
+template <storage2::SeekableStorage Storage>
+struct SeekIteratorTrait
+{
+    using type = typename task::AwaitableReturnType<decltype(std::declval<Storage>().seek(
+        std::declval<typename Storage::Key>()))>;
+};
+template <storage2::SeekableStorage Storage>
+using SeekIteratorType = typename SeekIteratorTrait<Storage>::type;
 
 auto single(auto&& value)
 {
@@ -51,5 +86,46 @@ auto single(auto&& value)
            RANGES::views::transform([](auto&& input) -> auto& { return input.get(); });
 }
 
+task::Task<bool> existsOne(ReadableStorage auto& storage, auto const& key)
+{
+    auto it = co_await storage.read(storage2::single(key));
+    co_await it.next();
+    co_return co_await it.hasValue();
+}
+
+template <class Reference>
+using ValueOrReferenceWrapper = std::conditional_t<std::is_reference_v<Reference>,
+    std::reference_wrapper<std::remove_reference_t<Reference>>, Reference>;
+
+auto readOne(ReadableStorage auto& storage, auto const& key)
+    -> task::Task<std::optional<ValueOrReferenceWrapper<
+        typename task::AwaitableReturnType<decltype(storage.read(storage2::single(key)))>::Value>>>
+{
+    using ValueType = ValueOrReferenceWrapper<
+        typename task::AwaitableReturnType<decltype(storage.read(storage2::single(key)))>::Value>;
+
+    auto it = co_await storage.read(storage2::single(key));
+    co_await it.next();
+    std::optional<ValueType> result;
+    if (co_await it.hasValue())
+    {
+        result.emplace(std::forward<ValueType>(co_await it.value()));
+    }
+
+    co_return result;
+}
+
+task::Task<void> writeOne(WriteableStorage auto& storage, auto const& key, auto&& value)
+{
+    co_await storage.write(
+        storage2::single(key), storage2::single(std::forward<decltype(value)>(value)));
+    co_return;
+}
+
+task::Task<void> removeOne(ErasableStorage auto& storage, auto const& key)
+{
+    co_await storage.remove(storage2::single(key));
+    co_return;
+}
 
 }  // namespace bcos::storage2

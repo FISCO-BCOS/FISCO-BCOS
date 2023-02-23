@@ -169,4 +169,7 @@ public:
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) = 0;
 };
+
+template <class T>
+concept IsLedger = std::derived_from<T, LedgerInterface> || std::same_as<T, LedgerInterface>;
 }  // namespace bcos::ledger

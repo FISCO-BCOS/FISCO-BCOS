@@ -19,6 +19,7 @@
  * @date 2021-06-11
  */
 #pragma once
+#include "BaselineSchedulerInitializer.h"
 #include "FrontServiceInitializer.h"
 #include "PBFTInitializer.h"
 #include "ProPBFTInitializer.h"
@@ -73,7 +74,6 @@ public:
 
     virtual void initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc);
 
-public:
     virtual void init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
         std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion,
@@ -97,11 +97,15 @@ private:
     std::shared_ptr<LightNodeInitializer> m_lightNodeInitializer;
 #endif
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    std::shared_ptr<bcos::scheduler::SchedulerManager> m_scheduler;
+    std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
     std::string const c_consensusStorageDBName = "consensus_log";
     std::string const c_fileSeparator = "/";
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
+
+    std::function<void()> m_baselineSchedulerInitializerHolder;
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setBaselineSchedulerBlockNumberNotifier;
 };
 }  // namespace initializer
 }  // namespace bcos

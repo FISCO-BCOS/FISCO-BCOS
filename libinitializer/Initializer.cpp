@@ -24,10 +24,12 @@
  * @date 2021-10-23
  */
 
-#include "Initializer.h"
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
+
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "ExecutorInitializer.h"
+#include "Initializer.h"
 #include "LedgerInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
@@ -35,8 +37,11 @@
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
+#include "bcos-storage/RocksDBStorage.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include "libinitializer/BaselineSchedulerInitializer.h"
+#include <bcos-crypto/hasher/AnyHasher2.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -59,6 +64,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <util/tc_clientsocket.h>
+#include <memory>
 #include <vector>
 
 using namespace bcos;
@@ -122,6 +128,8 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     }
 }
 
+crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
+
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
@@ -160,9 +168,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             consensusStoragePath, m_protocolInitializer->dataEncryption());
         airExecutorStorage = storage;
     }
+#ifdef WITH_TIKV
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
-#ifdef WITH_TIKV
         storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
             m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
         if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
@@ -183,8 +191,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             airExecutorStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
                 m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
         }
-#endif
     }
+#endif
     else
     {
         throw std::runtime_error("storage type not support");
@@ -207,8 +215,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
     }
-    auto executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
-        m_nodeConfig->executorServiceName(), m_nodeConfig);
 
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
@@ -217,21 +223,64 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
         m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
-    auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
-        executionMessageFactory, m_protocolInitializer->blockFactory(),
-        m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute());
+    std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;  // Only use when
 
-    int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
-                               // to a leader during startup
-    m_scheduler =
-        std::make_shared<bcos::scheduler::SchedulerManager>(schedulerSeq, factory, executorManager);
+    auto useBaselineScheduler = m_nodeConfig->enableBaselineScheduler();
+    if (useBaselineScheduler)
+    {
+        auto anyHasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
+        bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
+            m_protocolInitializer->cryptoSuite()->hashImpl();
+        std::visit(
+            [&](auto& hasher) {
+                using Hasher = std::remove_cvref_t<decltype(hasher)>;
+                auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(storage);
+
+                auto baselineSchedulerInitializer = std::make_shared<
+                    transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>(
+                    existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
+                    m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
+                auto scheduler = baselineSchedulerInitializer->buildScheduler();
+                scheduler->registerTransactionNotifier(
+                    [txpool = m_txpoolInitializer->txpool()](
+                        bcos::protocol::BlockNumber blockNumber,
+                        bcos::protocol::TransactionSubmitResultsPtr result,
+                        std::function<void(bcos::Error::Ptr)> callback) mutable {
+                        txpool->asyncNotifyBlockResult(
+                            blockNumber, std::move(result), std::move(callback));
+                    });
+                m_setBaselineSchedulerBlockNumberNotifier =
+                    [scheduler](std::function<void(protocol::BlockNumber)> notifier) {
+                        scheduler->registerBlockNumberNotifier(std::move(notifier));
+                    };
+
+                m_scheduler = scheduler;
+                m_baselineSchedulerInitializerHolder =
+                    [initializer = std::move(baselineSchedulerInitializer)]() {};
+            },
+            anyHasher);
+    }
+    else
+    {
+        executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
+            m_nodeConfig->executorServiceName(), m_nodeConfig);
+        auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
+            executionMessageFactory, m_protocolInitializer->blockFactory(),
+            m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
+            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
+            m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute());
+
+        int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
+                                   // switch to a leader during startup
+        m_scheduler = std::make_shared<bcos::scheduler::SchedulerManager>(
+            schedulerSeq, factory, executorManager);
+    }
 
     if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
 #ifdef WITH_TIKV
-        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr = m_scheduler;
+        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr =
+            std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
         auto switchHandler = [scheduler = schedulerWeakPtr]() {
             if (scheduler.lock())
             {
@@ -276,19 +325,21 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                               << LOG_KV("nodeArchType", _nodeArchType);
 
         // Note: ensure that there has at least one executor before pbft/sync execute block
-
-        auto storageFactory =
-            std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
-        std::string executorName = "executor-local";
-        auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
-            m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
-            executionMessageFactory, storageFactory,
-            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
-            m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName);
-        auto switchExecutorManager =
-            std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
-        executorManager->addExecutor(executorName, switchExecutorManager);
-        m_switchExecutorManager = switchExecutorManager;
+        if (!useBaselineScheduler)
+        {
+            auto storageFactory =
+                std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
+            std::string executorName = "executor-local";
+            auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
+                m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
+                executionMessageFactory, storageFactory,
+                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
+                m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName);
+            auto switchExecutorManager =
+                std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
+            executorManager->addExecutor(executorName, switchExecutorManager);
+            m_switchExecutorManager = switchExecutorManager;
+        }
     }
 
     // build node time synchronization tool
@@ -395,24 +446,39 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     // init handlers
     auto nodeName = m_nodeConfig->nodeName();
     auto groupID = m_nodeConfig->groupId();
-    auto schedulerFactory =
-        dynamic_pointer_cast<scheduler::SchedulerManager>(m_scheduler)->getFactory();
-    // notify blockNumber
-    schedulerFactory->setBlockNumberReceiver(
-        [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
-            INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
-            // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
-            _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
-        });
-    // notify transactions
-    auto txpool = m_txpoolInitializer->txpool();
-    schedulerFactory->setTransactionNotifier(
-        [txpool](bcos::protocol::BlockNumber _blockNumber,
-            bcos::protocol::TransactionSubmitResultsPtr _result,
-            std::function<void(bcos::Error::Ptr)> _callback) {
-            // only response to the requester
-            txpool->asyncNotifyBlockResult(_blockNumber, _result, _callback);
-        });
+
+    auto useBaselineScheduler = m_nodeConfig->enableBaselineScheduler();
+    if (!useBaselineScheduler)
+    {
+        auto schedulerFactory =
+            dynamic_pointer_cast<scheduler::SchedulerManager>(m_scheduler)->getFactory();
+        // notify blockNumber
+        schedulerFactory->setBlockNumberReceiver(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+        // notify transactions
+        schedulerFactory->setTransactionNotifier(
+            [txpool = m_txpoolInitializer->txpool()](bcos::protocol::BlockNumber _blockNumber,
+                bcos::protocol::TransactionSubmitResultsPtr _result,
+                std::function<void(bcos::Error::Ptr)> _callback) {
+                // only response to the requester
+                txpool->asyncNotifyBlockResult(
+                    _blockNumber, std::move(_result), std::move(_callback));
+            });
+    }
+    else
+    {
+        m_setBaselineSchedulerBlockNumberNotifier(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+    }
+
     m_pbftInitializer->initNotificationHandlers(_rpc);
 }
 

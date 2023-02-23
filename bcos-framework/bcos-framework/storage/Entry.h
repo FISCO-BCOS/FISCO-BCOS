@@ -94,9 +94,9 @@ public:
         setField(0, std::move(value));
     }
 
-    std::string_view get() const { return outputValueView(m_value); }
+    std::string_view get() const& { return outputValueView(m_value); }
 
-    std::string_view getField(size_t index) const
+    std::string_view getField(size_t index) const&
     {
         if (index > 0)
         {
@@ -206,12 +206,12 @@ public:
 
     bool valid() const { return m_status == Status::NORMAL; }
     crypto::HashType hash(std::string_view table, std::string_view key,
-        const bcos::crypto::Hash::Ptr& hashImpl, uint32_t blockVersion) const
+        const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const
     {
         bcos::crypto::HashType entryHash(0);
         if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            auto anyHasher = hashImpl->hasher();
+            auto anyHasher = hashImpl.hasher();
 
             std::visit(
                 [this, &table, &key, &entryHash](auto& hasher) {
@@ -261,34 +261,35 @@ public:
             {
                 auto value = get();
                 bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-                entryHash = hashImpl->hash(ref);
-                if (c_fileLogLevel <= TRACE)
-                {
-                    STORAGE_LOG(TRACE)
-                        << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
-                        << toHex(value) << LOG_KV("hash", entryHash.abridged());
-                }
+                entryHash = hashImpl.hash(ref);
+                // if (c_fileLogLevel <= TRACE)
+                // {
+                //     STORAGE_LOG(TRACE)
+                //         << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << "
+                //         | "
+                //         << toHex(value) << LOG_KV("hash", entryHash.abridged());
+                // }
             }
             else if (m_status == Entry::DELETED)
             {
                 entryHash = bcos::crypto::HashType(0x1);
-                if (c_fileLogLevel <= TRACE)
-                {
-                    STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
-                                       << toHex(key) << LOG_KV("hash", entryHash.abridged());
-                }
+                // if (c_fileLogLevel <= TRACE)
+                // {
+                //     STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
+                //                        << toHex(key) << LOG_KV("hash", entryHash.abridged());
+                // }
             }
             else
             {
-                STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | "
-                                   << toHex(key) << " | " << (int)m_status;
+                // STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | "
+                //                    << toHex(key) << " | " << (int)m_status;
             }
         }
         return entryHash;
     }
 
 private:
-    [[nodiscard]] auto outputValueView(const ValueType& value) const -> std::string_view
+    [[nodiscard]] auto outputValueView(const ValueType& value) const& -> std::string_view
     {
         std::string_view view;
         std::visit(

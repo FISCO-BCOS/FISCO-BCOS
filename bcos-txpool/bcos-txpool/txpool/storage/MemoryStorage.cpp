@@ -22,7 +22,6 @@
 #include "bcos-utilities/Common.h"
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
-#include <tbb/pipeline.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
@@ -130,6 +129,27 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     Awaitable awaitable{
         .m_transaction = transaction, .m_self = shared_from_this(), .m_submitResult = {}};
     co_return co_await awaitable;
+}
+
+std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
+    RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+{
+    std::vector<protocol::Transaction::ConstPtr> transactions;
+    transactions.reserve(RANGES::size(hashes));
+
+    ReadGuard lock(x_txpoolMutex);
+    for (auto const& hash : hashes)
+    {
+        auto it = m_txsTable.find(hash);
+        if (it == m_txsTable.end())
+        {
+            transactions.emplace_back(nullptr);
+            continue;
+        }
+        transactions.emplace_back(it->second);
+    }
+
+    return transactions;
 }
 
 TransactionStatus MemoryStorage::txpoolStorageCheck(const Transaction& transaction)
@@ -510,6 +530,7 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
     return fetchedTxs;
 }
 
+#if 1
 ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 {
     ReadGuard lock(x_txpoolMutex);
@@ -649,6 +670,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
                      << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT)
                      << LOG_KV("traverseCount", traverseCount);
 }
+#endif
 
 void MemoryStorage::removeInvalidTxs(bool lock)
 {

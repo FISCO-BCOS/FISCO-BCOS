@@ -50,7 +50,7 @@ file(MAKE_DIRECTORY ${GROUPSIG_INCLUDE_DIR})  # Must exist.
 
 find_package(cryptopp CONFIG REQUIRED)
 set_property(TARGET GroupSig PROPERTY IMPORTED_LOCATION ${GROUPSIG_LIBRARY})
-set_property(TARGET GroupSig PROPERTY INTERFACE_LINK_LIBRARIES PbcSig Pbc Gmp cryptopp-static)
+set_property(TARGET GroupSig PROPERTY INTERFACE_LINK_LIBRARIES PbcSig Pbc Gmp cryptopp::cryptopp)
 set_property(TARGET GroupSig PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${GROUPSIG_INCLUDE_DIR} ${DEPS_INCLUDE_DIR})
 add_dependencies(GroupSig GroupSigLib)
 unset(SOURCE_DIR)
