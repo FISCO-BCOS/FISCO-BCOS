@@ -1293,35 +1293,35 @@ void BlockExecutive::batchBlockCommit(
     bcos::protocol::TwoPCParams params;
     params.number = number();
     params.timestamp = 0;
-    m_scheduler->m_storage->asyncCommit(
-        params, [rollbackVersion, status, this, callback](Error::Ptr&& error, uint64_t commitTS) {
-            if (error)
-            {
+    m_scheduler->m_storage->asyncCommit(params, [rollbackVersion, status, this, callback](
+                                                    Error::Ptr&& error, uint64_t commitTS) {
+        if (error)
+        {
 // #define COMMIT_FAILED_NEED_ROLLBACK
 #ifdef COMMIT_FAILED_NEED_ROLLBACK
-                SCHEDULER_LOG(ERROR)
-                    << BLOCK_NUMBER(number()) << "Commit node storage error! need rollback"
-                    << error->errorMessage();
+            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number())
+                                 << "Commit node storage error! need rollback"
+                                 << error->errorMessage();
 
-                batchBlockRollback(rollbackVersion, [this, callback](Error::UniquePtr&& error) {
-                    if (error)
-                    {
-                        SCHEDULER_LOG(ERROR)
-                            << BLOCK_NUMBER(number())
-                            << "Rollback storage(for commit scheduler storage error) failed!"
-                            << LOG_KV("number", number()) << " " << error->errorMessage();
-                        // FATAL ERROR, NEED MANUAL FIX!
+            batchBlockRollback(rollbackVersion, [this, callback](Error::UniquePtr&& error) {
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR)
+                        << BLOCK_NUMBER(number())
+                        << "Rollback storage(for commit scheduler storage error) failed!"
+                        << LOG_KV("number", number()) << " " << error->errorMessage();
+                    // FATAL ERROR, NEED MANUAL FIX!
 
-                        callback(std::move(error));
-                        return;
-                    }
-                    else
-                    {
-                        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
-                            "Commit scheduler storage error, rollback"));
-                        return;
-                    }
-                });
+                    callback(std::move(error));
+                    return;
+                }
+                else
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                        SchedulerError::CommitError, "Commit scheduler storage error, rollback"));
+                    return;
+                }
+            });
 #else
                 SCHEDULER_LOG(WARNING)
                         << BLOCK_NUMBER(number())
@@ -1330,58 +1330,58 @@ void BlockExecutive::batchBlockCommit(
                 callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
                             "Commit scheduler storage error, just return with no rollback"));
 #endif
-                return;
-            }
-            else
-            {
-                ++status->success;
-            }
+            return;
+        }
+        else
+        {
+            ++status->success;
+        }
 
-            bcos::protocol::TwoPCParams executorParams;
-            executorParams.number = number();
-            executorParams.timestamp = commitTS;
+        bcos::protocol::TwoPCParams executorParams;
+        executorParams.number = number();
+        executorParams.timestamp = commitTS;
 
-            tbb::parallel_for_each(
-                m_scheduler->m_executorManager->range(), [&](auto const& executorIt) {
-                    SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
+        auto range = m_scheduler->m_executorManager->range();
+        for (auto const& executorIt : range)
+        {
+            SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
 
-                    executorIt->commit(executorParams, [this, status](bcos::Error::Ptr&& error) {
+            executorIt->commit(executorParams, [this, status](bcos::Error::Ptr&& error) {
+                {
+                    WriteGuard lock(status->x_lock);
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << "Commit executor error!"
+                                             << error->errorMessage();
+
+                        // executor failed is also success++
+                        // because commit has been successful after ledger commit
+                        // this executorIt->commit is just for clear storage cache.
+                        ++status->success;
+
+                        if (error->errorCode() ==
+                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                         {
-                            WriteGuard lock(status->x_lock);
-                            if (error)
-                            {
-                                SCHEDULER_LOG(ERROR)
-                                    << BLOCK_NUMBER(number()) << "Commit executor error!"
-                                    << error->errorMessage();
-
-                                // executor failed is also success++
-                                // because commit has been successful after ledger commit
-                                // this executorIt->commit is just for clear storage cache.
-                                ++status->success;
-
-                                if (error->errorCode() ==
-                                    bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
-                                {
-                                    triggerSwitch();
-                                }
-                            }
-                            else
-                            {
-                                ++status->success;
-                                SCHEDULER_LOG(DEBUG)
-                                    << BLOCK_NUMBER(number())
-                                    << "Commit executor success, success: " << status->success;
-                            }
-
-                            if (status->success + status->failed < status->total)
-                            {
-                                return;
-                            }
+                            triggerSwitch();
                         }
-                        status->checkAndCommit(*status);
-                    });
-                });
-        });
+                    }
+                    else
+                    {
+                        ++status->success;
+                        SCHEDULER_LOG(DEBUG)
+                            << BLOCK_NUMBER(number())
+                            << "Commit executor success, success: " << status->success;
+                    }
+
+                    if (status->success + status->failed < status->total)
+                    {
+                        return;
+                    }
+                }
+                status->checkAndCommit(*status);
+            });
+        }
+    });
 }
 
 void BlockExecutive::batchBlockRollback(
