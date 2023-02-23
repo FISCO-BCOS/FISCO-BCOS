@@ -278,7 +278,7 @@ public:
             {
                 co_await self->remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
                     blockNumber, block);
-                if (RANGES::empty(block.transactionsMetaData))
+                if (RANGES::empty(block.transactionsMetaData) && blockNumber != 0)
                 {
                     auto error = bcos::Error();
                     self->toErrorResp(error, respFunc);
