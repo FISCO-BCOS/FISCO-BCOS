@@ -28,7 +28,7 @@ jobs:
       - name: Prepare centos tools
         run: |
           yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel
-          yum install -y devtoolset-12 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel automake
+          yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel automake
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28
@@ -54,7 +54,6 @@ jobs:
       - name: Build for linux
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          . /opt/rh/devtoolset-12/enable
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
