@@ -10,6 +10,10 @@ on:
       - "docs/**"
       - "Changelog.md"
       - "README.md"
+    branches:
+      - release-3.*
+      - feature-3.*
+      - master
   release:
     types: [push]
 concurrency:
@@ -74,4 +78,3 @@ jobs:
           name: FISCO BCOS coverage
           fail_ci_if_error: true
           verbose: true # optional (default = false)
-
