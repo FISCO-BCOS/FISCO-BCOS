@@ -175,9 +175,11 @@ void ShardingDmcExecutor::preExecute()
 
     auto self = shared_from_this();
     m_executor->preExecuteTransactions(m_schedulerTermId, m_block->blockHeaderConst(),
-        m_contractAddress, *message, [this, preExecuteGuard, self](bcos::Error::UniquePtr error) {
+        m_contractAddress, *message,
+        [this, &message, preExecuteGuard, self](bcos::Error::UniquePtr error) {
             if (error)
             {
+                m_preparedMessages = std::move(message);  // prepare failed, move back
                 DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
                                << "send preExecute message error:" << error->errorMessage()
                                << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
@@ -190,7 +192,6 @@ void ShardingDmcExecutor::preExecute()
                                << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
                                << LOG_KV("blockNumber", m_block->blockHeader()->number())
                                << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
-                ;
             }
         });
 }
