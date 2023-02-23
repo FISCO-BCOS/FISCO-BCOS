@@ -21,6 +21,7 @@
 #include "KeyPageStorage.h"
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
+#include <mutex>
 #include <sstream>
 
 namespace bcos::storage
@@ -235,6 +236,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
         callback) const
 {
     m_size = 0;
+    std::lock_guard<std::mutex> lock(x_cacheMutex);
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size(), 32),
         [this, &onlyDirty, &callback](const tbb::blocked_range<size_t>& range) {
             for (auto i = range.begin(); i != range.end(); ++i)
@@ -1000,25 +1002,29 @@ auto KeyPageStorage::importExistingEntry(std::string_view table, std::string_vie
         return entry;
     }
 
-    // entry.setDirty(false);
-    entry.setStatus(Entry::NORMAL);
-    KeyPage_LOG(DEBUG) << "import entry, " << table << " | " << toHex(key);
-    auto [bucket, lock] = getMutBucket(table, key);
-    boost::ignore_unused(lock);
-    auto it = bucket->container.find(std::make_pair(std::string(table), std::string(key)));
-    if (it == bucket->container.end())
+    if (x_cacheMutex.try_lock())
     {
-        auto d = std::make_shared<Data>(
-            std::string(table), std::string(key), std::move(entry), Data::Type::NormalEntry);
-        auto tableKey = std::make_pair(std::string(table), std::string(key));
-        it = bucket->container.emplace(std::make_pair(std::move(tableKey), std::move(d))).first;
+        // entry.setDirty(false);
+        entry.setStatus(Entry::NORMAL);
+        KeyPage_LOG(DEBUG) << "import entry, " << table << " | " << toHex(key);
+        auto [bucket, lock] = getMutBucket(table, key);
+        boost::ignore_unused(lock);
+        auto it = bucket->container.find(std::make_pair(std::string(table), std::string(key)));
+        if (it == bucket->container.end())
+        {
+            auto d = std::make_shared<Data>(
+                std::string(table), std::string(key), std::move(entry), Data::Type::NormalEntry);
+            auto tableKey = std::make_pair(std::string(table), std::string(key));
+            it = bucket->container.emplace(std::make_pair(std::move(tableKey), std::move(d))).first;
+        }
+        else
+        {
+            KeyPage_LOG(DEBUG) << "Fail import existing entry, " << table << " | " << toHex(key);
+        }
+        x_cacheMutex.unlock();
+        return it->second->entry;
     }
-    else
-    {
-        KeyPage_LOG(DEBUG) << "Fail import existsing entry, " << table << " | " << toHex(key);
-    }
-
-    return it->second->entry;
+    return entry;
 }
 
 auto KeyPageStorage::count(const std::string_view& table) -> std::pair<size_t, Error::Ptr>
