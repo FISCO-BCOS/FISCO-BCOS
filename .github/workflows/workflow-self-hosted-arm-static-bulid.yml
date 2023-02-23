@@ -49,8 +49,8 @@ jobs:
       - name: update vcpkg
         run: |
           cd vcpkg
-          git pull
           git checkout master
+          git pull
           cd ..
 
       - name: Build for linux
