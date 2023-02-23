@@ -319,7 +319,9 @@ public:
     void status(
         [[maybe_unused]] std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>
             callback) override
-    {}
+    {
+        callback({}, {});
+    }
 
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback) override
@@ -341,17 +343,26 @@ public:
 
     void unregisterExecutor([[maybe_unused]] const std::string& name,
         [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
-    {}
+    {
+        callback(nullptr);
+    }
 
-    void reset([[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override {}
+    void reset([[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
+    {
+        callback(nullptr);
+    }
 
     void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override
-    {}
+    {
+        callback(nullptr, {});
+    }
 
     void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) override
-    {}
+    {
+        callback(nullptr, {});
+    }
 
     void preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,
         [[maybe_unused]] bool verify,

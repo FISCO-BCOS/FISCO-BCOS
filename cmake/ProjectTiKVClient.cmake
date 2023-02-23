@@ -2,14 +2,14 @@ include(ExternalProject)
 include(GNUInstallDirs)
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    set(TIKV_BUILD_MODE  "debug")
+    set(TIKV_BUILD_MODE "debug")
 else()
     set(TIKV_BUILD_MODE "release")
 endif()
 
 find_program(CARGO_COMMAND NAMES cargo REQUIRED PATHS "${USER_HOME}\\.cargo\\bin")
 
-ExternalProject_Add(tikv_client_project
+ExternalProject_Add(tikv_client_project2
   PREFIX ${CMAKE_SOURCE_DIR}/deps
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git
   GIT_TAG        63f78ebc451f6059a243481f4fe37b89bdb101a8
@@ -22,12 +22,8 @@ ExternalProject_Add(tikv_client_project
   # LOG_BUILD true
 )
 
-ExternalProject_Add_Step(tikv_client_project build
-  
-)
-
-ExternalProject_Get_Property(tikv_client_project SOURCE_DIR)
-ExternalProject_Get_Property(tikv_client_project BINARY_DIR)
+ExternalProject_Get_Property(tikv_client_project2 SOURCE_DIR)
+ExternalProject_Get_Property(tikv_client_project2 BINARY_DIR)
 set(KVCLIENT_INCLUDE_DIRS ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${KVCLIENT_INCLUDE_DIRS})  # Must exist.
 
