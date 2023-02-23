@@ -33,4 +33,4 @@ add_library(kv_client INTERFACE IMPORTED)
 set_property(TARGET kv_client PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${KVCLIENT_INCLUDE_DIRS})
 set_property(TARGET kv_client PROPERTY INTERFACE_LINK_LIBRARIES ${SOURCE_DIR}/target/${TIKV_BUILD_MODE}/libtikv_client.a OpenSSL::SSL OpenSSL::Crypto)
 
-add_dependencies(kv_client tikv_client_project)
+add_dependencies(kv_client tikv_client_project2)
