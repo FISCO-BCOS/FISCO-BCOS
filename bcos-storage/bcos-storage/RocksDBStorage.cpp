@@ -404,14 +404,13 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
             return;
         }
         auto end = utcSteadyTime();
-        callback(nullptr, 0, "");
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare finished")
                                   << LOG_KV("blockNumber", param.number) << LOG_KV("put", putCount)
                                   << LOG_KV("delete", deleteCount)
                                   << LOG_KV("startTS", param.timestamp)
                                   << LOG_KV("encode(ms)", encode - start)
-                                  << LOG_KV("time(ms)", end - start)
-                                  << LOG_KV("callback time(ms)", utcSteadyTime() - end);
+                                  << LOG_KV("time(ms)", end - start);
+        callback(nullptr, 0, "");
     }
     catch (const std::exception& e)
     {

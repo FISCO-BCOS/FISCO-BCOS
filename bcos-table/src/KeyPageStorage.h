@@ -261,12 +261,12 @@ public:
             }
             return *this;
         }
-        TableMeta(TableMeta&& t) { pages = std::move(t.pages); }
-        TableMeta& operator=(TableMeta&& t)
+        TableMeta(TableMeta&& meta) noexcept : pages(std::move(meta.pages)) {}
+        TableMeta& operator=(TableMeta&& meta) noexcept
         {
-            if (this != &t)
+            if (this != &meta)
             {
-                pages = std::move(t.pages);
+                pages = std::move(meta.pages);
             }
             return *this;
         }
@@ -1070,6 +1070,22 @@ public:
             {  // sys table entry
             }
         };
+        KeyPageStorage::Page* getPage()
+        {
+            if (type == Type::Page)
+            {
+                return &std::get<0>(data);
+            }
+            return nullptr;
+        }
+        KeyPageStorage::TableMeta* getTableMeta()
+        {
+            if (type == Type::TableMeta)
+            {
+                return &std::get<1>(data);
+            }
+            return nullptr;
+        }
         Data(const Data& d) = default;
         Data& operator=(const Data& d) = default;
         Data(Data&& d) = default;
