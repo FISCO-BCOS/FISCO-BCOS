@@ -30,10 +30,12 @@
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
     do                                                                                       \
     {                                                                                        \
-        if ((offset) > (length))                                                             \
+        if (std::cmp_greater((offset), (length)))                                            \
         {                                                                                    \
             throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) + \
-                                    " ,length: " + std::to_string(length));                  \
+                                    " ,length: " + std::to_string(length) +                  \
+                                    " ,file: " + __FILE__ + " ,func: " + __func__ +          \
+                                    " ,line: " + std::to_string(__LINE__));                  \
         }                                                                                    \
     } while (0);
 
@@ -73,7 +75,7 @@ public:
     const static size_t MAX_DST_NODEID_COUNT = 255;
 
     bool encode(bytes& _buffer);
-    ssize_t decode(bytesConstRef _buffer);
+    int32_t decode(bytesConstRef _buffer);
 
 public:
     uint16_t moduleID() const { return m_moduleID; }
@@ -175,14 +177,15 @@ public:
 
     void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
     bool encode(bytes& _buffer) override;
-    ssize_t decode(bytesConstRef _buffer) override;
+    bool encode(EncodedMessage& _buffer) override;
+    int32_t decode(bytesConstRef _buffer) override;
     bool isRespPacket() const override
     {
         return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
     }
 
     // compress payload if payload need to be compressed
-    bool tryToCompressPayload(std::shared_ptr<bytes> compressData);
+    bool tryToCompressPayload(bytes& compressData);
 
     bool hasOptions() const
     {

@@ -132,9 +132,19 @@ void Service::heartBeat()
                       << LOG_KV("connected count", sessions.size());
     for (auto& [p2pID, session] : sessions)
     {
-        SERVICE_LOG(DEBUG) << METRIC << LOG_DESC("heartBeat")
-                           << LOG_KV("endpoint", session->session()->nodeIPEndpoint().address())
-                           << LOG_KV("write queue size", session->session()->writeQueueSize());
+        auto queueSize = session->session()->writeQueueSize();
+        if (queueSize > 0)
+        {
+            SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
+                              << LOG_KV("endpoint", session->session()->nodeIPEndpoint())
+                              << LOG_KV("write queue size", queueSize);
+        }
+        else
+        {
+            SERVICE_LOG(DEBUG) << METRIC << LOG_DESC("heartBeat")
+                               << LOG_KV("endpoint", session->session()->nodeIPEndpoint())
+                               << LOG_KV("write queue size", queueSize);
+        }
     }
 
     auto self = std::weak_ptr<Service>(shared_from_this());

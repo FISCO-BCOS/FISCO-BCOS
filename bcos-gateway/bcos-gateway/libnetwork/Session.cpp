@@ -7,7 +7,9 @@
  * @date 2018
  */
 
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/CompositeBuffer.h"
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOIn...
 #include <bcos-gateway/libnetwork/Common.h>         // for SESSIO...
 #include <bcos-gateway/libnetwork/Host.h>           // for Host
@@ -18,14 +20,19 @@
 #include <cstddef>
 #include <fstream>
 #include <iterator>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::gateway;
 
-Session::Session(size_t _bufferSize) : bufferSize(_bufferSize)
+Session::Session(size_t _recvBufferSize)
+  : m_maxRecvBufferSize(_recvBufferSize < MIN_SESSION_RECV_BUFFER_SIZE ?
+                            MIN_SESSION_RECV_BUFFER_SIZE :
+                            _recvBufferSize),
+    m_recvBuffer(MIN_SESSION_RECV_BUFFER_SIZE)
 {
-    SESSION_LOG(INFO) << "[Session::Session] this=" << this;
-    m_recvBuffer.resize(bufferSize);
+    SESSION_LOG(INFO) << "[Session::Session] this=" << this
+                      << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
     m_idleCheckTimer = std::make_shared<bcos::Timer>(m_idleTimeInterval, "idleChecker");
     m_idleCheckTimer->registerTimeoutHandler([this]() { checkNetworkStatus(); });
 }
@@ -83,17 +90,33 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         return;
     }
 
+    // Notice: check message size overflow, if msg->length() > allowMaxMsgSize()
+    if (message->length() > allowMaxMsgSize())
+    {
+        SESSION_LOG(WARNING) << LOG_BADGE("asyncSendMessage") << LOG_DESC("msg size overflow")
+                             << LOG_KV("msgSize", message->length())
+                             << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
+        if (callback)
+        {
+            server->threadPool()->enqueue([callback] {
+                callback(NetworkException(-1, "Msg size overflow"), Message::Ptr());
+            });
+        }
+        return;
+    }
+
     auto session = shared_from_this();
 
     if (auto result =
             (m_beforeMessageHandler ? m_beforeMessageHandler(session, message) : std::nullopt))
     {
-        auto error = result.value();
-        if (callback)
+        if (callback && result.has_value())
         {
-            server->threadPool()->enqueue([callback, error] {
-                callback(
-                    NetworkException((int)error.errorCode(), error.errorMessage()), Message::Ptr());
+            auto error = result.value();
+            auto errorCode = error.errorCode();
+            auto errorMessage = error.errorMessage();
+            server->threadPool()->enqueue([callback, errorCode, errorMessage] {
+                callback(NetworkException((int64_t)errorCode, errorMessage), Message::Ptr());
             });
         }
         return;
@@ -133,18 +156,18 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         m_sessionCallbackManager->addCallback(message->seq(), handler);
     }
 
+    EncodedMessage::Ptr encodedMessage = std::make_shared<EncodedMessage>();
+    message->encode(*encodedMessage);
+
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
         SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
                            << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq())
                            << LOG_KV("packetType", message->packetType())
-                           << LOG_KV("resp", message->isRespPacket());
+                           << LOG_KV("ext", message->ext());
     }
 
-    std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
-    message->encode(*p_buffer);
-
-    send(p_buffer);
+    send(encodedMessage);
 }
 
 std::size_t Session::writeQueueSize()
@@ -153,7 +176,7 @@ std::size_t Session::writeQueueSize()
     return m_writeQueue.size();
 }
 
-void Session::send(const std::shared_ptr<bytes>& _msg)
+void Session::send(EncodedMessage::Ptr& _encodedMsg)
 {
     if (!active())
     {
@@ -165,17 +188,15 @@ void Session::send(const std::shared_ptr<bytes>& _msg)
         return;
     }
 
-    // SESSION_LOG(TRACE) << "send" << LOG_KV("writeQueue size", m_writeQueue.size());
     {
         Guard lockGuard(x_writeQueue);
-
-        m_writeQueue.push(make_pair(_msg, u256(utcTime())));
+        m_writeQueue.push_back(std::move(_encodedMsg));
     }
 
     write();
 }
 
-void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr<bytes>)
+void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
 {
     if (!active())
     {
@@ -198,6 +219,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
             {
                 m_writing = false;
             }
+            m_writeConstBuffer.clear();
         }
 
         write();
@@ -211,6 +233,63 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
     }
 }
 
+/**
+ * @brief The packets that can be sent are obtained based on the configured policy
+ *
+ * @param encodedMsgs
+ * @param _maxSendDataSize
+ * @param _maxSendMsgCount
+ * @return std::size_t
+ */
+std::size_t Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& encodedMsgs,
+    uint32_t _maxSendDataSize, uint32_t _maxSendMsgCount)  // NOLINT
+{
+    // Desc: Try to send multi packets one time to improve the efficiency of sending
+    // data
+    uint64_t totalDataSize = 0;
+    encodedMsgs.clear();
+    encodedMsgs.reserve(_maxSendMsgCount);
+
+    do
+    {
+        // Notice: lock m_writeQueue in the caller
+        if (m_writeQueue.empty())
+        {
+            break;
+        }
+
+        // msg count will overflow
+        if (encodedMsgs.size() >= _maxSendMsgCount)
+        {
+            break;
+        }
+
+        EncodedMessage::Ptr encodedMsg = m_writeQueue.front();
+        totalDataSize += encodedMsg->dataSize();
+
+        // data size will overflow
+        if (totalDataSize > _maxSendDataSize)
+        {
+            // At least one msg pkg
+            if (encodedMsgs.empty())
+            {
+                encodedMsgs.push_back(std::move(encodedMsg));
+                m_writeQueue.pop_front();
+            }
+            else
+            {
+                totalDataSize -= encodedMsg->dataSize();
+            }
+            break;
+        }
+
+        encodedMsgs.push_back(std::move(encodedMsg));
+        m_writeQueue.pop_front();
+    } while (true);
+
+    return totalDataSize;
+}
+
 void Session::write()
 {
     if (!active())
@@ -220,8 +299,9 @@ void Session::write()
 
     try
     {
-        Guard l(x_writeQueue);
+        std::vector<EncodedMessage::Ptr> encodedMsgs;
 
+        Guard lockGuard(x_writeQueue);
         if (m_writing)
         {
             return;
@@ -229,37 +309,35 @@ void Session::write()
 
         m_writing = true;
 
-        std::pair<std::shared_ptr<bytes>, u256> task;
-        u256 enter_time = u256(0);
-
         if (m_writeQueue.empty())
         {
             m_writing = false;
             return;
         }
 
-        task = m_writeQueue.top();
-        m_writeQueue.pop();
-
-        enter_time = task.second;
-        auto buffer = task.first;
+        m_writeConstBuffer.clear();
+        // Try to send multi packets one time to improve the efficiency of sending
+        // data
+        tryPopSomeEncodedMsgs(encodedMsgs, m_maxSendDataSize, m_maxSendMsgCountS);
 
         auto server = m_server.lock();
         if (server && server->haveNetwork())
         {
             if (m_socket->isConnected())
             {
-                // asio::buffer referecne buffer, so buffer need alive before
+                // asio::buffer reference buffer, so buffer need alive before
                 // asio::buffer be used
                 auto self = std::weak_ptr<Session>(shared_from_this());
-                server->asioInterface()->asyncWrite(m_socket, boost::asio::buffer(*buffer),
-                    [self, buffer](const boost::system::error_code _error, std::size_t _size) {
+
+                toMultiBuffers(m_writeConstBuffer, encodedMsgs);
+                server->asioInterface()->asyncWrite(m_socket, m_writeConstBuffer,
+                    [self, encodedMsgs](const boost::system::error_code _error, std::size_t _size) {
                         auto session = self.lock();
                         if (!session)
                         {
                             return;
                         }
-                        session->onWrite(_error, _size, buffer);
+                        session->onWrite(_error, _size);
                     });
             }
             else
@@ -429,47 +507,94 @@ void Session::doRead()
     {
         auto self = std::weak_ptr<Session>(shared_from_this());
         auto asyncRead = [self](boost::system::error_code ec, std::size_t bytesTransferred) {
-            auto s = self.lock();
-            if (s)
+            auto session = self.lock();
+            if (session)
             {
                 if (ec)
                 {
                     SESSION_LOG(WARNING)
-                        << LOG_DESC("doRead error") << LOG_KV("endpoint", s->nodeIPEndpoint())
+                        << LOG_DESC("doRead error") << LOG_KV("endpoint", session->nodeIPEndpoint())
                         << LOG_KV("message", ec.message());
-                    s->drop(TCPError);
+                    session->drop(TCPError);
                     return;
                 }
-                s->m_lastReadTime.store(utcSteadyTime());
-                s->m_data.insert(s->m_data.end(), s->m_recvBuffer.begin(),
-                    s->m_recvBuffer.begin() + bytesTransferred);
+
+                session->m_lastReadTime.store(utcSteadyTime());
+
+                auto& recvBuffer = session->recvBuffer();
+                recvBuffer.onWrite(bytesTransferred);
 
                 while (true)
                 {
-                    Message::Ptr message = s->m_messageFactory->buildMessage();
+                    Message::Ptr message = session->m_messageFactory->buildMessage();
                     try
                     {
+                        auto writeBuffer = recvBuffer.asWriteBuffer();
+                        auto readBuffer = recvBuffer.asReadBuffer();
                         // Note: the decode function may throw exception
-                        ssize_t result =
-                            message->decode(bytesConstRef(s->m_data.data(), s->m_data.size()));
+                        ssize_t result = message->decode(readBuffer);
                         if (result > 0)
                         {
-                            /// SESSION_LOG(TRACE) << "Decode success: " << result;
                             NetworkException e(P2PExceptionType::Success, "Success");
-                            s->onMessage(e, message);
-                            s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
+                            session->onMessage(e, message);
+                            recvBuffer.onRead(result);
                         }
                         else if (result == 0)
                         {
-                            s->doRead();
+                            auto length = message->lengthDirect();
+                            if (length > session->allowMaxMsgSize())
+                            {
+                                SESSION_LOG(ERROR)
+                                    << LOG_BADGE("doRead")
+                                    << LOG_DESC("the message size exceeded the allow maximum value")
+                                    << LOG_KV("msgSize", message->length())
+                                    << LOG_KV("allowMaxMsgSize", session->allowMaxMsgSize());
+
+                                session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                                                       "ProtocolError(msg overflow)"),
+                                    message);
+                                break;
+                            }
+
+                            if ((length > recvBuffer.recvBufferSize()) ||
+                                (length > writeBuffer.size()) ||
+                                session->maxReadDataSize() > writeBuffer.size())
+                            {
+                                recvBuffer.moveToHeader();
+
+                                // the write buffer is not enough, move the left data to recv
+                                // buffer header for waiting for the next read
+                                if (length >= recvBuffer.recvBufferSize())
+                                {
+                                    auto resizeRecvBufferSize = 2 * length;
+                                    if (resizeRecvBufferSize > session->m_maxRecvBufferSize)
+                                    {
+                                        resizeRecvBufferSize = session->m_maxRecvBufferSize;
+                                    }
+                                    recvBuffer.resizeBuffer(resizeRecvBufferSize);
+
+                                    SESSION_LOG(INFO)
+                                        << LOG_BADGE("doRead")
+                                        << LOG_DESC(
+                                               "the current recv buffer size is not enough for "
+                                               "the "
+                                               "next message, resize the recv buffer")
+                                        << LOG_KV("msgSize", length)
+                                        << LOG_KV("resizeRecvBufferSize", resizeRecvBufferSize)
+                                        << LOG_KV("allowMaxMsgSize", session->allowMaxMsgSize());
+                                }
+                            }
+
+                            session->doRead();
                             break;
                         }
                         else
                         {
                             SESSION_LOG(ERROR)
-                                << LOG_DESC("Decode message error") << LOG_KV("result", result);
-                            s->onMessage(
-                                NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
+                                << LOG_BADGE("doRead") << LOG_DESC("decode message error")
+                                << LOG_KV("result", result);
+                            session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                                                   "ProtocolError(decode msg error)"),
                                 message);
                             break;
                         }
@@ -478,8 +603,8 @@ void Session::doRead()
                     {
                         SESSION_LOG(ERROR) << LOG_DESC("Decode message exception")
                                            << LOG_KV("error", boost::diagnostic_information(e));
-                        s->onMessage(
-                            NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
+                        session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                                               "ProtocolError(decode msg exception)"),
                             message);
                         break;
                     }
@@ -489,8 +614,11 @@ void Session::doRead()
 
         if (m_socket->isConnected())
         {
+            auto writeBuffer = m_recvBuffer.asWriteBuffer();
+            std::size_t readSize =
+                (writeBuffer.size() > m_maxReadDataSize ? m_maxReadDataSize : writeBuffer.size());
             server->asioInterface()->asyncReadSome(
-                m_socket, boost::asio::buffer(m_recvBuffer, m_recvBuffer.size()), asyncRead);
+                m_socket, boost::asio::buffer((void*)writeBuffer.data(), readSize), asyncRead);
         }
         else
         {
@@ -538,7 +666,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
         }
         try
         {
-            // the forwarding message
+            // TODO: move the logic to Service for deal with the forwarding message
             if (!message->dstP2PNodeID().empty() &&
                 message->dstP2PNodeID() != session->m_hostNodeID)
             {
