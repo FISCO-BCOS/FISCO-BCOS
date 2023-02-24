@@ -48,10 +48,10 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd vcpkg
+          cd  /home/ci/actions-runner/_work/FISCO-BCOS/FISCO-BCOS/vcpkg
           git checkout master
           git pull
-          cd ..
+          cd -
 
       - name: Build for linux
         run: |
