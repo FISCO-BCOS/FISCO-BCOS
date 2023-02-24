@@ -13,6 +13,7 @@ namespace bcos::transaction_scheduler
 
 // clang-format off
 struct DuplicateMutableStorageError : public bcos::Error {};
+struct NonExistsKeyIteratorError: public bcos::Error {};
 struct NotExistsMutableStorageError : public bcos::Error {};
 struct NotExistsImmutableStorageError : public bcos::Error {};
 // clang-format on
@@ -158,6 +159,7 @@ public:
                     {
                         co_return co_await iterator.key();
                     }
+                    BOOST_THROW_EXCEPTION(NonExistsKeyIteratorError{});
                 },
                 m_innerIt);
         }
@@ -171,6 +173,7 @@ public:
                     {
                         co_return co_await iterator.value();
                     }
+                    BOOST_THROW_EXCEPTION(NonExistsKeyIteratorError{});
                 },
                 m_innerIt);
         }

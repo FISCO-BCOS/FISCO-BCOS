@@ -488,11 +488,11 @@ public:
                           << RANGES::size(hashes);
 
         co_await m_storage.write(
-            hashes | RANGES::views::transform([this, &tableNameID](auto const& hash) {
+            hashes | RANGES::views::transform([&tableNameID](auto const& hash) {
                 return transaction_executor::StateKey{tableNameID,
                     std::string_view((const char*)RANGES::data(hash), RANGES::size(hash))};
             }),
-            buffers | RANGES::views::transform([this](auto&& buffer) {
+            buffers | RANGES::views::transform([](auto&& buffer) {
                 storage::Entry entry;
                 entry.set(std::forward<decltype(buffer)>(buffer));
 

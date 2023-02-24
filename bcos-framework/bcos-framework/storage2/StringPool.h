@@ -2,6 +2,7 @@
 
 #include "MemoryStorage.h"
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/ThreeWay4StringView.h>
 #include <boost/container/static_vector.hpp>
 #include <boost/container_hash/hash_fwd.hpp>
 #include <boost/functional/hash.hpp>

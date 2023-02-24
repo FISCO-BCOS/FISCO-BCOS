@@ -1,7 +1,6 @@
 #pragma once
 #include "Task.h"
 #include "Trait.h"
-#include <coroutine>
 #include <exception>
 #include <future>
 #include <iostream>
