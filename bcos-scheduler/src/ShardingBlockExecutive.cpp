@@ -100,7 +100,7 @@ void ShardingBlockExecutive::shardingExecute(
             batchStatus->error++;
             batchStatus->errorMessage = error.get()->errorMessage();
             SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << LOG_BADGE("ShardingExecutor")
-                                 << "dagGo() with error"
+                                 << "shardGo() with error"
                                  << LOG_KV("code", error ? error->errorCode() : -1)
                                  << LOG_KV("msg", error ? error.get()->errorMessage() : "null");
         }
@@ -157,7 +157,7 @@ void ShardingBlockExecutive::shardingExecute(
     tbb::parallel_for_each(
         m_dmcExecutors.begin(), m_dmcExecutors.end(), [&executorCallback](auto const& executorIt) {
             std::dynamic_pointer_cast<ShardingDmcExecutor>(executorIt.second)
-                ->dagGo(executorCallback);
+                ->shardGo(executorCallback);
         });
 }
 
@@ -166,10 +166,8 @@ std::shared_ptr<DmcExecutor> ShardingBlockExecutive::registerAndGetDmcExecutor(
 {
     auto shardName = getContractShard(contractAddress);
     auto dmcExecutor = BlockExecutive::registerAndGetDmcExecutor(shardName);
-    dmcExecutor->setIsSameAddrHandler(  // TODO: check is same shard
-        [this](const std::string_view& addr, const std::string_view& shard) {
-            return getContractShard(std::string(addr)) == shard;
-        });
+    dmcExecutor->setGetAddrHandler(
+        [this](const std::string_view& addr) { return getContractShard(std::string(addr)); });
     return dmcExecutor;
 }
 
