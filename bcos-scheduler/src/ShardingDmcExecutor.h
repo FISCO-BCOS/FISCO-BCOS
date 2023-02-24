@@ -43,7 +43,7 @@ public:
 
     void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG) override;
 
-    void dagGo(std::function<void(bcos::Error::UniquePtr, Status)> callback);
+    void shardGo(std::function<void(bcos::Error::UniquePtr, Status)> callback);
 
     void executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
@@ -59,6 +59,8 @@ public:
     void preExecute() override;
 
 private:
+    void handleShardGoOutput(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
+
     std::shared_ptr<std::vector<protocol::ExecutionMessage::UniquePtr>> m_preparedMessages =
         std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
     int64_t m_schedulerTermId;

@@ -28,15 +28,24 @@ void ExecutiveDagFlow::submit(CallParameters::UniquePtr txInput)
     auto executiveState = m_executives[{contextID, seq}];
     if (executiveState == nullptr)
     {
-        DAGFLOW_LOG(DEBUG) << "submit: new tx" << txInput->toString();
-        (*m_inputs)[contextID] = std::move(txInput);
+        DAGFLOW_LOG(DEBUG) << "submit: new dmc tx" << txInput->toString();
+        //(*m_inputs)[contextID] = std::move(txInput);
+        executiveState = std::make_shared<ExecutiveState>(m_executiveFactory, std::move(txInput));
+        m_executives[{contextID, seq}] = executiveState;
     }
     else
     {
-        DAGFLOW_LOG(DEBUG) << "submit: resume tx" << txInput->toString();
+        DAGFLOW_LOG(DEBUG) << "submit: resume dmc tx" << txInput->toString();
         // update resume params
         executiveState->setResumeParam(std::move(txInput));
+    }
 
+    if (seq == 0 && type == CallParameters::MESSAGE)
+    {
+        assert(false);  // never goes here, this submit function is just for update waitingFlow
+    }
+    else
+    {
         // the tx is not first run:
         // 1. created by sending from a contract
         // 2. is a revert message, seq = 0 but type = REVERT
