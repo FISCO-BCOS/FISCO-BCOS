@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
     env:
-      VCPKG_ROOT: ~/cache/vcpkg
+      VCPKG_ROOT: /home/ci/actions-runner/_work/FISCO-BCOS/FISCO-BCOS/vcpkg
       DEPS_ROOT: ~/cache/deps
     steps:
       - uses: actions/checkout@v3
