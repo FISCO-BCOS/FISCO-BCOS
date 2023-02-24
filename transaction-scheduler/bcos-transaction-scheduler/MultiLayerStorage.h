@@ -227,11 +227,15 @@ public:
         co_return;
     }
 
-    std::unique_ptr<MultiLayerStorage> fork()
+    std::unique_ptr<MultiLayerStorage> fork(bool withImmutables)
     {
-        std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);  // TODO: 读提交完还是执行完
+        std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);
         auto newMultiLayerStorage = std::make_unique<MultiLayerStorage>(m_backendStorage);
-        newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
+
+        if (withImmutables)
+        {
+            newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
+        }
 
         return newMultiLayerStorage;
     }
@@ -252,11 +256,11 @@ public:
 
     void pushMutableToImmutableFront()
     {
+        std::unique_lock lock(m_immutablesMutex);
         if (!m_mutableStorage)
         {
             BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
         }
-        std::unique_lock lock(m_immutablesMutex);
         m_immutableStorages.push_front(m_mutableStorage);
         m_mutableStorage.reset();
     }

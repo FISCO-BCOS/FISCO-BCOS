@@ -186,7 +186,6 @@ public:
                 newBlockHeader->setStateRoot(stateRoot);
                 newBlockHeader->setGasUsed(totalGas);
 
-                // TODO: 交易和回执root跟交易顺序有关系，分片后需要组合顺序再计算
                 newBlockHeader->setTxsRoot(block->calculateTransactionRoot(self->m_hashImpl));
                 newBlockHeader->setReceiptsRoot(block->calculateReceiptRoot(self->m_hashImpl));
                 newBlockHeader->calculateHash(self->m_hashImpl);
