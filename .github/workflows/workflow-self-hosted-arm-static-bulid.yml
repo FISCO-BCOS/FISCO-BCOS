@@ -48,7 +48,7 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd  /home/ci/actions-runner/_work/FISCO-BCOS/FISCO-BCOS/vcpkg
+          cd ${{ env.VCPKG_ROOT }}
           git checkout master
           git pull
           cd -
