@@ -33,8 +33,8 @@ template <class StorageType>
 concept ReadableStorage = requires(StorageType&& impl)
 {
     typename StorageType::Key;
-    requires ReadIterator<
-        task::AwaitableReturnType<decltype(impl.read(std::vector<typename StorageType::Key>()))>>;
+    requires ReadIterator<task::AwaitableReturnType<decltype(impl.read(
+        std::declval<std::vector<typename StorageType::Key>>()))>>;
 };
 
 template <class StorageType>
@@ -59,14 +59,14 @@ concept ErasableStorage = requires(StorageType&& impl)
 {
     typename StorageType::Key;
     requires task::IsAwaitable<decltype(impl.remove(
-        RANGES::any_view<typename StorageType::Key>()))>;
+        std::declval<std::vector<typename StorageType::Key>>()))>;
 };
 
 template <storage2::ReadableStorage Storage>
 struct ReadIteratorTrait
 {
     using type = typename task::AwaitableReturnType<decltype(std::declval<Storage>().read(
-        RANGES::any_view<typename Storage::Key>()))>;
+        std::declval<std::vector<typename Storage::Key>>()))>;
 };
 template <storage2::ReadableStorage Storage>
 using ReadIteratorType = typename ReadIteratorTrait<Storage>::type;

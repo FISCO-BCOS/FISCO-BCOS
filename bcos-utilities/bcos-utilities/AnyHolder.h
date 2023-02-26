@@ -18,12 +18,15 @@ template <class ValueType>
 class AnyHolder
 {
 private:
-    std::variant<ValueType, ValueType*, ValueType const*> m_value;
+    std::variant<std::monostate, ValueType, ValueType*, ValueType const*> m_value;
 
 public:
+    AnyHolder() = default;
     AnyHolder(ValueType&& object) : m_value(std::forward<ValueType>(object)) {}
     AnyHolder(ValueType& object) : m_value(std::addressof(object)) {}
     AnyHolder(ValueType const& object) : m_value(std::addressof(object)) {}
+
+    bool hasValue() const { return !std::holds_alternative<std::monostate>(m_value); }
 
     ValueType const& get() const&
     {

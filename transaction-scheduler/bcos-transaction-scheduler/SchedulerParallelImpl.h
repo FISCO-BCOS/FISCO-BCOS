@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
 #include "SchedulerBaseImpl.h"
 #include <bcos-task/Wait.h>
@@ -21,10 +22,14 @@ private:
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto adjust
     size_t m_maxThreads = DEFAULT_MAX_THREADS;  // Maybe auto adjust
 
+    using ChunkExecuteStorage =
+        transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
+            MultiLayerStorage>;
+
     struct ChunkStorage
     {
-        ReadWriteSetStorage<MultiLayerStorage> readWriteSetStorage;
-        std::unique_ptr<MultiLayerStorage> multiLayerStorage;
+        ReadWriteSetStorage<ChunkExecuteStorage> readWriteSetStorage;
+        std::unique_ptr<ChunkExecuteStorage> multiLayerStorage;
     };
     using ChunkExecuteReturn =
         std::tuple<ChunkStorage, std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>>;
@@ -32,9 +37,9 @@ private:
     task::Task<ChunkExecuteReturn> chunkExecute(protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto&& transactions, int startContextID, std::atomic_bool& abortToken)
     {
-        auto myStorage = multiLayerStorage().fork(true);
+        auto myStorage = std::make_unique<ChunkExecuteStorage>(multiLayerStorage());
         myStorage->newMutable();
-        ReadWriteSetStorage<MultiLayerStorage> readWriteSetStorage(*myStorage);
+        ReadWriteSetStorage<ChunkExecuteStorage> readWriteSetStorage(*myStorage);
 
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> chunkReceipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)

@@ -175,6 +175,13 @@ public:
 
     class ReadIterator
     {
+    private:
+        int64_t m_index = -1;
+        boost::container::small_vector<const Data*, 1> m_iterators;
+        [[no_unique_address]] std::conditional_t<withConcurrent,
+            boost::container::small_vector<Lock, 1>, Empty>
+            m_bucketLocks;
+
     public:
         friend class MemoryStorage;
         using Key = const KeyType&;
@@ -205,7 +212,7 @@ public:
         }
         task::AwaitableValue<bool> hasValue() const
         {
-            auto data = m_iterators[m_index];
+            auto* data = m_iterators[m_index];
             if constexpr (withLogicalDeletion)
             {
                 if (data != nullptr && std::holds_alternative<Deleted>(data->value))
@@ -223,13 +230,6 @@ public:
                 m_bucketLocks.clear();
             }
         }
-
-    private:
-        int64_t m_index = -1;
-        boost::container::small_vector<const Data*, 1> m_iterators;
-        [[no_unique_address]] std::conditional_t<withConcurrent,
-            boost::container::small_vector<Lock, 1>, Empty>
-            m_bucketLocks;
     };
 
     class SeekIterator
@@ -369,9 +369,9 @@ public:
             }
             if (it != index.end() && it->key == key)
             {
-                auto& existsValue = it->value;
                 if constexpr (withMRU)
                 {
+                    auto& existsValue = it->value;
                     updatedCapacity -= getSize(existsValue);
                 }
 

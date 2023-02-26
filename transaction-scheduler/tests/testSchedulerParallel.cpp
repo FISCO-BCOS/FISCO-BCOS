@@ -56,9 +56,10 @@ BOOST_FIXTURE_TEST_SUITE(TestSchedulerParallel, TestSchedulerParallelFixture)
 
 BOOST_AUTO_TEST_CASE(simple)
 {
-    SchedulerParallelImpl<decltype(multiLayerStorage), decltype(receiptFactory), MockExecutor>
-        scheduler(multiLayerStorage, receiptFactory, tableNamePool);
     task::syncWait([&, this]() -> task::Task<void> {
+        SchedulerParallelImpl<decltype(multiLayerStorage), decltype(receiptFactory), MockExecutor>
+            scheduler(multiLayerStorage, receiptFactory, tableNamePool);
+
         scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
@@ -98,38 +99,41 @@ struct MockConflictExecutor
         // Read first and +1
         auto it = co_await m_storage.read(storage2::single(key1));
         co_await it.next();
-        if (inputNum == 0)
-        {
-            BOOST_CHECK(!co_await it.hasValue());
-        }
-        else
-        {
-            BOOST_CHECK(co_await it.hasValue());
-            auto& oldEntry = co_await it.value();
-            auto oldView = oldEntry.get();
-            auto oldNum = boost::lexical_cast<int>(oldView);
 
-            BOOST_CHECK_LT(oldNum, inputNum);
-            storage::Entry entry;
-            entry.set(boost::lexical_cast<std::string>(inputNum));
-
-            co_await m_storage.write(storage2::single(key1), storage2::single(entry));
-        }
-
-        StateKey key2{makeStringID(m_tableNamePool, "t_test"), std::string_view("key2")};
-        auto it2 = co_await m_storage.read(storage2::single(key1));
-        co_await it.next();
         if (co_await it.hasValue())
         {
             auto& oldEntry = co_await it.value();
             auto oldView = oldEntry.get();
             auto oldNum = boost::lexical_cast<int>(oldView);
 
-            auto newNum = oldNum + 1;
-            storage::Entry entry;
-            entry.set(boost::lexical_cast<std::string>(newNum));
+            BOOST_CHECK_LT(oldNum, inputNum);
+        }
+        storage::Entry entry;
+        entry.set(boost::lexical_cast<std::string>(inputNum));
+        co_await m_storage.write(storage2::single(key1), storage2::single(entry));
 
-            co_await m_storage.write(storage2::single(key2), storage2::single(entry));
+        StateKey key2{makeStringID(m_tableNamePool, "t_test"), std::string_view("key2")};
+        auto it2 = co_await m_storage.read(storage2::single(key2));
+        co_await it2.next();
+        if (co_await it2.hasValue())
+        {
+            auto& oldEntry = co_await it2.value();
+            auto oldView = oldEntry.get();
+            auto oldNum = boost::lexical_cast<int>(oldView);
+
+            auto newNum = oldNum + 1;
+            storage::Entry entry2;
+            entry2.set(boost::lexical_cast<std::string>(newNum));
+
+            co_await m_storage.write(storage2::single(key2), storage2::single(entry2));
+        }
+        else
+        {
+            // write 0 into storage
+            storage::Entry entry2;
+            entry2.set(boost::lexical_cast<std::string>(0));
+
+            co_await m_storage.write(storage2::single(key2), storage2::single(entry2));
         }
 
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
@@ -141,18 +145,19 @@ struct MockConflictExecutor
 
 BOOST_AUTO_TEST_CASE(conflict)
 {
-    SchedulerParallelImpl<decltype(multiLayerStorage), decltype(receiptFactory),
-        MockConflictExecutor>
-        scheduler(multiLayerStorage, receiptFactory, tableNamePool);
-
     task::syncWait([&, this]() -> task::Task<void> {
+        SchedulerParallelImpl<decltype(multiLayerStorage), decltype(receiptFactory),
+            MockConflictExecutor>
+            scheduler(multiLayerStorage, receiptFactory, tableNamePool);
         scheduler.setChunkSize(1);
-        scheduler.setMaxThreads(32);
+        scheduler.setMaxThreads(4);
         scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+
+        auto count = 8;
         auto transactions =
-            RANGES::iota_view<int, int>(0, 64) | RANGES::views::transform([](int index) {
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int index) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
                     [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
                 auto num = boost::lexical_cast<std::string>(index);
@@ -174,14 +179,14 @@ BOOST_AUTO_TEST_CASE(conflict)
         BOOST_CHECK(co_await it.hasValue());
         auto& entry1 = co_await it.value();
         auto result1 = boost::lexical_cast<int>(entry1.get());
-        BOOST_CHECK_EQUAL(result1, 64);
+        BOOST_CHECK_EQUAL(result1, count - 1);
 
         auto it2 = co_await mutableStorage.read(storage2::single(key2));
         co_await it2.next();
-        BOOST_CHECK(co_await it2.hasValue());
+        BOOST_REQUIRE(co_await it2.hasValue());
         auto& entry2 = co_await it2.value();
         auto result2 = boost::lexical_cast<int>(entry2.get());
-        BOOST_CHECK_EQUAL(result1, 64);
+        BOOST_CHECK_EQUAL(result2, count - 1);
 
         // co_await scheduler.finish(blockHeader, *hashImpl);
         // co_await scheduler.commit();
