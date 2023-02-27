@@ -593,7 +593,9 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // Message Factory
     auto messageFactory = std::make_shared<P2PMessageFactoryV2>();
     // Session Factory
-    auto sessionFactory = std::make_shared<SessionFactory>(pubHex);
+    auto sessionFactory = std::make_shared<SessionFactory>(pubHex, _config->sessionRecvBufferSize(),
+        _config->allowMaxMsgSize(), _config->maxReadDataSize(), _config->maxSendDataSize(),
+        _config->maxMsgCountSendOneTime());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // Session Callback manager

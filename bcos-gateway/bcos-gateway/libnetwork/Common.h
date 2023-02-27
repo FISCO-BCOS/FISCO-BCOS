@@ -131,7 +131,7 @@ inline std::string reasonOf(DisconnectReason _reason)
     case NoDisconnect:
         return "(No disconnect has happened.)";
     case IdleWaitTimeout:
-        return "(Idle connection for no network io happens during 5s time "
+        return "(Idle connection for no network io happens during 60s time "
                "intervals.)";
     default:
         return "Unknown reason.";

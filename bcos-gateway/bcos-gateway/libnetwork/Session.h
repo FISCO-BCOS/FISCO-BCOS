@@ -6,6 +6,10 @@
 
 #pragma once
 
+#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/CompositeBuffer.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/ObjectCounter.h"
 #include <bcos-gateway/libnetwork/Common.h>
@@ -15,6 +19,7 @@
 #include <bcos-utilities/Timer.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
+#include <cstddef>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -28,7 +33,7 @@ namespace gateway
 class Host;
 class SocketFace;
 
-class SessionRecvBuffer
+class SessionRecvBuffer : public bcos::ObjectCounter<SessionRecvBuffer>
 {
 public:
     SessionRecvBuffer(size_t _bufferSize) : m_recvBufferSize(_bufferSize)
@@ -48,17 +53,27 @@ public:
 
     inline size_t recvBufferSize() const { return m_recvBufferSize; }
 
-    void updatePos(std::size_t _offset, bool _read)
+    bool onRead(std::size_t _dataSize)
     {
-        if (_read)
+        if (m_readPos + _dataSize <= m_writePos)
         {
-            m_readPos += _offset;
+            m_readPos += _dataSize;
+            return true;
         }
-        else
-        {
-            m_writePos += _offset;
-        }
+        return false;
     }
+
+
+    bool onWrite(std::size_t _dataSize)
+    {
+        if (m_writePos + _dataSize <= m_recvBufferSize)
+        {
+            m_writePos += _dataSize;
+            return true;
+        }
+        return false;
+    }
+
 
     bool resizeBuffer(size_t _bufferSize)
     {
@@ -90,17 +105,20 @@ public:
         }
     }
 
-    inline bcos::bytesConstRef asDataBuffer() const
+    inline bcos::bytesConstRef asReadBuffer() const
     {
         return {m_recvBuffer.data() + m_readPos, m_writePos - m_readPos};
     }
 
-    inline bcos::bytesConstRef asReadBuffer() const
+    inline bcos::bytesConstRef asWriteBuffer() const
     {
         return {m_recvBuffer.data() + m_writePos, m_recvBufferSize - m_writePos};
     }
 
 private:
+    // 0         readPos    writePos       m_recvBufferSize
+    // |___________|__________|____________|
+    //
     std::vector<byte> m_recvBuffer;
     //
     size_t m_recvBufferSize;
@@ -115,7 +133,10 @@ class Session : public SessionFace,
                 public bcos::ObjectCounter<Session>
 {
 public:
-    Session(size_t _recvBufferSize = 4096);
+    constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE =
+        static_cast<std::size_t>(512 * 1024);
+
+    Session(size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE);
 
     Session(const Session&) = delete;
     Session(Session&&) = delete;
@@ -129,14 +150,15 @@ public:
     void start() override;
     void disconnect(DisconnectReason _reason) override;
 
-    void asyncSendMessage(
-        Message::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) override;
+    void asyncSendMessage(Message::Ptr message, Options options,
+        SessionCallbackFunc callback = SessionCallbackFunc()) override;
 
     NodeIPEndpoint nodeIPEndpoint() const override;
 
     bool active() const override;
 
     std::size_t writeQueueSize() override;
+
     virtual std::weak_ptr<Host> host() { return m_server; }
     virtual void setHost(std::weak_ptr<Host> host) { m_server = std::move(host); }
 
@@ -170,8 +192,8 @@ public:
         m_messageHandler = messageHandler;
     }
 
-    // handle before sending message, if the check fails, meaning false is returned, the message is
-    // not sent, and the SessionCallbackFunc will be performed
+    // handle before sending message, if the check fails, meaning false is returned, the message
+    // is not sent, and the SessionCallbackFunc will be performed
     void setBeforeMessageHandler(
         std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> handler) override
     {
@@ -192,19 +214,32 @@ public:
     uint32_t allowMaxMsgSize() const { return m_allowMaxMsgSize; }
     void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize) { m_allowMaxMsgSize = _allowMaxMsgSize; }
 
+    SessionRecvBuffer& recvBuffer() { return m_recvBuffer; }
+    const SessionRecvBuffer& recvBuffer() const { return m_recvBuffer; }
+    /**
+     * @brief The packets that can be sent are obtained based on the configured policy
+     *
+     * @param encodedMsgs
+     * @param _maxSendDataSize
+     * @param _maxSendMsgCount
+     * @return std::size_t
+     */
+    std::size_t tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& encodedMsgs,
+        uint32_t _maxSendDataSize, uint32_t _maxSendMsgCount);
+
 protected:
     virtual void checkNetworkStatus();
 
 private:
-    void send(const std::shared_ptr<bytes>& _msg);
+    void send(EncodedMessage::Ptr& _encoder);
 
     void doRead();
-    std::vector<byte> m_data;  ///< Buffer for ingress packet data.
-    std::vector<byte> m_recvBuffer;
-    const size_t bufferSize;
 
-    /// Drop the connection for the reason @a _r.
-    void drop(DisconnectReason _r);
+    std::size_t m_maxRecvBufferSize;
+    SessionRecvBuffer m_recvBuffer;
+
+    std::vector<boost::asio::const_buffer> m_writeConstBuffer;
+
     // ------ for optimize send message parameters  begin ---------------
     //  // Maximum amount of data to read one time, default: 40K
     uint32_t m_maxReadDataSize = 40 * 1024;
@@ -216,6 +251,9 @@ private:
     uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
     // ------ for optimize send message parameters  end ---------------
 
+    /// Drop the connection for the reason @a _reason.
+    void drop(DisconnectReason _reason);
+
     /// Check error code after reading and drop peer if error code.
     bool checkRead(boost::system::error_code _ec);
 
@@ -223,7 +261,7 @@ private:
 
     /// Perform a single round of the write operation. This could end up calling
     /// itself asynchronously.
-    void onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer);
+    void onWrite(boost::system::error_code ec, std::size_t length);
     void write();
 
     /// call by doRead() to deal with message
@@ -234,19 +272,7 @@ private:
 
     MessageFactory::Ptr m_messageFactory;
 
-    class QueueCompare
-    {
-    public:
-        bool operator()(const std::pair<std::shared_ptr<bytes>, u256>&,
-            const std::pair<std::shared_ptr<bytes>, u256>&) const
-        {
-            return false;
-        }
-    };
-
-    boost::heap::priority_queue<std::pair<std::shared_ptr<bytes>, u256>,
-        boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
-        m_writeQueue;
+    std::list<EncodedMessage::Ptr> m_writeQueue;
     std::atomic_bool m_writing = {false};
     bcos::Mutex x_writeQueue;
 
@@ -276,7 +302,16 @@ private:
 class SessionFactory
 {
 public:
-    SessionFactory(std::string _hostNodeID) : m_hostNodeID(std::move(_hostNodeID)) {}
+    SessionFactory(std::string _hostNodeID, uint32_t _sessionRecvBufferSize,  // NOLINT
+        uint32_t _allowMaxMsgSize, uint32_t _maxReadDataSize, uint32_t _maxSendDataSize,
+        uint32_t _maxSendMsgCountS)
+      : m_hostNodeID(std::move(_hostNodeID)),
+        m_sessionRecvBufferSize(_sessionRecvBufferSize),
+        m_allowMaxMsgSize(_allowMaxMsgSize),
+        m_maxReadDataSize(_maxReadDataSize),
+        m_maxSendDataSize(_maxSendDataSize),
+        m_maxSendMsgCountS(_maxSendMsgCountS)
+    {}
     SessionFactory(const SessionFactory&) = delete;
     SessionFactory(SessionFactory&&) = delete;
     SessionFactory& operator=(SessionFactory&&) = delete;
@@ -287,18 +322,32 @@ public:
         std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
         SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
     {
-        std::shared_ptr<Session> session = std::make_shared<Session>();
+        std::shared_ptr<Session> session = std::make_shared<Session>(m_sessionRecvBufferSize);
         session->setHostNodeID(m_hostNodeID);
         session->setHost(_server);
         session->setSocket(_socket);
         session->setMessageFactory(_messageFactory);
         session->setSessionCallbackManager(_sessionCallbackManager);
-        BCOS_LOG(INFO) << LOG_BADGE("SessionFactory") << LOG_DESC("create new session");
+        session->setAllowMaxMsgSize(m_allowMaxMsgSize);
+        session->setMaxReadDataSize(m_maxReadDataSize);
+        session->setMaxSendDataSize(m_maxSendDataSize);
+        session->setMaxSendMsgCountS(m_maxSendMsgCountS);
+        BCOS_LOG(INFO) << LOG_BADGE("SessionFactory") << LOG_DESC("create new session")
+                       << LOG_KV("sessionRecvBufferSize", m_sessionRecvBufferSize)
+                       << LOG_KV("allowMaxMsgSize", m_allowMaxMsgSize)
+                       << LOG_KV("maxReadDataSize", m_maxReadDataSize)
+                       << LOG_KV("maxSendDataSize", m_maxSendDataSize)
+                       << LOG_KV("maxSendMsgCountS", m_maxSendMsgCountS);
         return session;
     }
 
 private:
     std::string m_hostNodeID;
+    uint32_t m_sessionRecvBufferSize;
+    uint32_t m_allowMaxMsgSize{0};
+    uint32_t m_maxReadDataSize{0};
+    uint32_t m_maxSendDataSize{0};
+    uint32_t m_maxSendMsgCountS{0};
 };
 
 }  // namespace gateway

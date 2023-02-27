@@ -97,10 +97,10 @@ bool P2PMessageOptions::encode(bytes& _buffer)
 ///       src nodeID        : bytes
 ///       src nodeID count  :1 bytes
 ///       dst nodeIDs       : bytes
-ssize_t P2PMessageOptions::decode(bytesConstRef _buffer)
+int32_t P2PMessageOptions::decode(bytesConstRef _buffer)
 {
-    size_t offset = 0;
-    size_t length = _buffer.size();
+    int32_t offset = 0;
+    std::size_t length = _buffer.size();
 
     try
     {
@@ -184,13 +184,48 @@ bool P2PMessage::encodeHeader(bytes& _buffer)
     return true;
 }
 
-bool P2PMessage::encode(bytes& _buffer)
+bool P2PMessage::encode(EncodedMessage& _buffer)
+{
+    // compress payload
+    // bcos::bytes compressData;
+    // bool isCompressSuccess = false;
+    // TODO: add enable_compress switch
+    // if (tryToCompressPayload(compressData))
+    // {
+    //     isCompressSuccess = true;
+    // }
+    bytes headerBuffer;
+    if (!encodeHeader(headerBuffer))
+    {
+        return false;
+    }
+    // encode options
+    if (hasOptions() && !m_options->encode(headerBuffer))
+    {
+        return false;
+    }
+
+    auto headerSize = headerBuffer.size();
+    auto payloadSize = m_payload ? m_payload->size() : 0;
+    m_length = headerSize + payloadSize;
+    // calc total length and modify the length value in the buffer
+    auto length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)(m_length));
+    // update length
+    std::copy((byte*)&length, (byte*)&length + 4, headerBuffer.data());
+
+    _buffer.header = std::move(headerBuffer);
+    _buffer.payload = m_payload;
+
+    return true;
+}
+
+bool P2PMessage::encode(bcos::bytes& _buffer)
 {
     bytes emptyBuffer;
     _buffer.swap(emptyBuffer);
 
     // compress payload
-    std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
+    bcos::bytes compressData;
     bool isCompressSuccess = false;
     // TODO: add enable_compress switch
     if (tryToCompressPayload(compressData))
@@ -212,10 +247,10 @@ bool P2PMessage::encode(bytes& _buffer)
     if (isCompressSuccess)
     {
         P2PMSG_LOG(TRACE) << LOG_DESC("compress payload success")
-                          << LOG_KV("compressedData", (char*)compressData->data())
+                          << LOG_KV("compressedData", (char*)compressData.data())
                           << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
                           << LOG_KV("seq", m_seq);
-        _buffer.insert(_buffer.end(), compressData->begin(), compressData->end());
+        _buffer.insert(_buffer.end(), compressData.begin(), compressData.end());
     }
     else
     {
@@ -233,7 +268,7 @@ bool P2PMessage::encode(bytes& _buffer)
 }
 
 /// compress the payload data to be sended
-bool P2PMessage::tryToCompressPayload(std::shared_ptr<bytes> compressData)
+bool P2PMessage::tryToCompressPayload(bytes& compressData)
 {
     if (m_payload->size() <= bcos::gateway::c_compressThreshold)
     {
@@ -246,7 +281,7 @@ bool P2PMessage::tryToCompressPayload(std::shared_ptr<bytes> compressData)
     }
 
     bool isCompressSuccess =
-        ZstdCompress::compress(ref(*m_payload), *compressData, bcos::gateway::c_zstdCompressLevel);
+        ZstdCompress::compress(ref(*m_payload), compressData, bcos::gateway::c_zstdCompressLevel);
     if (!isCompressSuccess)
     {
         return false;
@@ -286,7 +321,7 @@ int32_t P2PMessage::decodeHeader(bytesConstRef _buffer)
     return offset;
 }
 
-ssize_t P2PMessage::decode(bytesConstRef _buffer)
+int32_t P2PMessage::decode(bytesConstRef _buffer)
 {
     // check if packet header fully received
     if (_buffer.size() < P2PMessage::MESSAGE_HEADER_LENGTH)
@@ -295,6 +330,10 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
     }
 
     int32_t offset = decodeHeader(_buffer);
+    if (offset <= 0)
+    {
+        return offset;
+    }
 
     // check if packet header fully received
     if (_buffer.size() < m_length)
@@ -349,5 +388,5 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
         m_payload = std::move(rawData);
     }
 
-    return m_length;
+    return (int32_t)m_length;
 }

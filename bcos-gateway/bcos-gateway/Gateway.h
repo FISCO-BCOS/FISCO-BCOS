@@ -37,8 +37,6 @@ namespace bcos
 {
 namespace gateway
 {
-
-
 class Retry : public std::enable_shared_from_this<Retry>, public ObjectCounter<Retry>
 {
 public:
@@ -161,10 +159,7 @@ public:
     ErrorRespFunc m_respFunc;
 };
 
-
-class Gateway : public GatewayInterface,
-                public std::enable_shared_from_this<Gateway>,
-                public bcos::ObjectCounter<Gateway>
+class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gateway>
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;

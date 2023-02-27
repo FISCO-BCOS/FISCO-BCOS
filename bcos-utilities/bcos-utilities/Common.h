@@ -142,14 +142,22 @@ inline bool isalNumStr(std::string const& _stringData)
 
 inline double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
 {
-    auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _intervalMS;
-    return avgRate;
+    if (_intervalMS > 0)
+    {
+        auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _intervalMS;
+        return avgRate;
+    }
+    return 0;
 }
 
 inline uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
 {
-    auto qps = _requestCount * 1000 / _intervalMS;
-    return qps;
+    if (_intervalMS > 0)
+    {
+        auto qps = _requestCount * 1000 / _intervalMS;
+        return qps;
+    }
+    return 0;
 }
 
 /// Get the current time in seconds since the epoch in UTC(ms)
@@ -160,7 +168,7 @@ uint64_t utcSteadyTime();
 uint64_t utcTimeUs();
 uint64_t utcSteadyTimeUs();
 
-// get the current datatime
+// get the current data time
 std::string getCurrentDateTime();
 
 struct Exception;
