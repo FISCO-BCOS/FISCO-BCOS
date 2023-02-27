@@ -344,7 +344,6 @@ public:
             co_await setCode(bytesConstRef(result.output_data, result.output_size));
             result.create_address = m_newContractAddress;
         }
-
         co_return result;
     }
 

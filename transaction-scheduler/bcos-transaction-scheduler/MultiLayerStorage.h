@@ -257,11 +257,6 @@ public:
         m_mutableStorage = std::make_unique<MutableStorageType>(args...);
     }
 
-    void setMutable(std::unique_ptr<MutableStorageType> mutableStorage)
-    {
-        m_mutableStorage = std::move(mutableStorage);
-    }
-
     void dropMutable() { m_mutableStorage.reset(); }
 
     void pushMutableToImmutableFront()

@@ -193,7 +193,8 @@ public:
                 BASELINE_SCHEDULER_LOG(INFO)
                     << "Execute block finished: " << newBlockHeader->number() << " | "
                     << newBlockHeader->hash() << " | " << stateRoot << " | "
-                    << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot();
+                    << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot() << " | "
+                    << totalGas;
                 self->m_lastExecutedBlockNumber = blockHeader->number();
 
                 std::unique_lock resultsLock(self->m_resultsMutex);

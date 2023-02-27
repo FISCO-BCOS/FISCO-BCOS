@@ -15,7 +15,6 @@
 #include <forward_list>
 #include <functional>
 #include <mutex>
-#include <new>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <set>
 #include <shared_mutex>
@@ -74,7 +73,8 @@ private:
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
 
-    struct Data
+    constexpr static int MOSTLY_CACHELINE_SIZE = 64;
+    struct alignas(MOSTLY_CACHELINE_SIZE) Data
     {
         KeyType key;
         [[no_unique_address]] DataValueType value;
@@ -88,7 +88,8 @@ private:
             boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
 
-    struct Bucket
+
+    struct alignas(MOSTLY_CACHELINE_SIZE) Bucket
     {
         Container container;
         [[no_unique_address]] BucketMutex mutex;  // For concurrent

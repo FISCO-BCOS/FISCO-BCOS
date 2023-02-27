@@ -92,7 +92,13 @@ public:
             HostContext hostContext(rollbackableStorage, m_tableNamePool, blockHeader, evmcMessage,
                 evmcMessage.sender, contextID, 0);
             auto evmcResult = co_await hostContext.execute();
+            struct Defer
+            {
+                ~Defer() { releaseResult(m_evmcResult); }
+                decltype(evmcResult)& m_evmcResult;
+            } defer{.m_evmcResult = evmcResult};
 
+            bcos::bytesConstRef output;
             std::string newContractAddress;
             if (!RANGES::equal(evmcResult.create_address.bytes, EMPTY_ADDRESS.bytes))
             {
@@ -101,14 +107,16 @@ public:
                     evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
                     std::back_inserter(newContractAddress));
             }
+            else
+            {
+                output = {evmcResult.output_data, evmcResult.output_size};
+            }
 
             auto const& logEntries = hostContext.logs();
-            auto receipt = m_receiptFactory.createReceipt(evmcResult.gas_left,
-                std::move(newContractAddress), logEntries, evmcResult.status_code,
-                bcos::bytesConstRef(evmcResult.output_data, evmcResult.output_size),
-                blockHeader.number());
+            auto receipt =
+                m_receiptFactory.createReceipt(evmcResult.gas_left, std::move(newContractAddress),
+                    logEntries, evmcResult.status_code, output, blockHeader.number());
 
-            releaseResult(evmcResult);
             co_return receipt;
         }
         catch (std::exception& e)

@@ -17,7 +17,7 @@ class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Receip
 {
 private:
     constexpr static size_t DEFAULT_CHUNK_SIZE = 100;
-    constexpr static size_t DEFAULT_MAX_THREADS = 16;  // Use hardware concurrency, window
+    constexpr static size_t DEFAULT_MAX_THREADS = 1;  // Use hardware concurrency, window
 
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto adjust
     size_t m_maxThreads = DEFAULT_MAX_THREADS;  // Maybe auto adjust
@@ -102,12 +102,10 @@ public:
         auto chunkBegin = chunkIt;
         auto chunkEnd = RANGES::end(chunks);
 
-        std::optional<ChunkStorage> lastExecutedStorages;
-        std::unique_ptr<typename MultiLayerStorage::MutableStorage> mergedStorage;
+        std::vector<ChunkStorage> executedStorages;
+        executedStorages.reserve(RANGES::size(chunks));
         while (chunkIt != chunkEnd)
         {
-            mergedStorage = std::make_unique<typename MultiLayerStorage::MutableStorage>();
-
             std::atomic_bool abortToken = false;
             auto currentChunk = chunkIt;
             tbb::parallel_pipeline(m_maxThreads,
@@ -146,24 +144,20 @@ public:
                                 auto&& [chunkStorage, chunkReceipts] = *chunkResult;
                                 auto&& [readWriteSetStorage, storage] = chunkStorage;
 
-                                if (lastExecutedStorages)
+                                if (!executedStorages.empty())
                                 {
                                     auto& [prevReadWriteSetStorage, oldStorage] =
-                                        *lastExecutedStorages;
+                                        executedStorages.back();
                                     if (prevReadWriteSetStorage.hasRAWIntersection(
                                             readWriteSetStorage))
                                     {
                                         // Abort the pipeline
                                         abortToken = true;
-                                        lastExecutedStorages.reset();
                                         return;
                                     }
                                 }
 
-                                task::syncWait(mergeStorage(storage->mutableStorage(),
-                                    *mergedStorage));  // cause multi thread
-                                                       // problem
-                                lastExecutedStorages.emplace(std::move(chunkStorage));
+                                executedStorages.emplace_back(std::move(chunkStorage));
                                 receipts.insert(receipts.end(),
                                     std::make_move_iterator(chunkReceipts.begin()),
                                     std::make_move_iterator(chunkReceipts.end()));
@@ -171,8 +165,12 @@ public:
                                 RANGES::advance(chunkIt, 1);
                             }
                         }));
-
-            multiLayerStorage().setMutable(std::move(mergedStorage));
+            for (auto& [rwStorage, executedStorage] : executedStorages)
+            {
+                co_await mergeStorage(
+                    executedStorage->mutableStorage(), multiLayerStorage().mutableStorage());
+            }
+            executedStorages.clear();
         }
 
         co_return receipts;
