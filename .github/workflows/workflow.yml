@@ -50,8 +50,6 @@ jobs:
           key: build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             build-${{ matrix.os }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            build-${{ matrix.os }}-${{ github.base_ref }}-
-            build-${{ matrix.os }}-
       - name: Build for windows
         if: runner.os == 'Windows'
         run: |
