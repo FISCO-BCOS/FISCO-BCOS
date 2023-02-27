@@ -59,9 +59,11 @@ private:
             else
             {
                 outputMissingIndexes.emplace_back(RANGES::size(outputValues));
-                outputValues.emplace_back(utilities::AnyHolder<ValueType>{});
+                auto emptyValue = utilities::AnyHolder<ValueType>();
+                outputValues.emplace_back(std::move(emptyValue));
             }
         }
+        co_return;
     }
 
     task::Task<void> readMissingBatch(auto& storage, RANGES::input_range auto const& inputKeys,
@@ -85,6 +87,7 @@ private:
             }
             RANGES::advance(missingIt, 1);
         }
+        co_return;
     }
 
 public:
@@ -152,54 +155,60 @@ public:
         if (m_mutableStorage)
         {
             co_await readBatch(*m_mutableStorage, keys, values, outputMissingIndexes);
+            if (RANGES::empty(outputMissingIndexes))
+            {
+                co_return iterator;
+            }
         }
 
-        if (!RANGES::empty(outputMissingIndexes) || RANGES::empty(values))
+        for (auto& immutableStorage : m_immutableStorages)
         {
-            for (auto& immutableStorage : m_immutableStorages)
+            if (RANGES::empty(values))
             {
-                if (RANGES::empty(values))
-                {
-                    co_await readBatch(*immutableStorage, keys, values, outputMissingIndexes);
-                }
-                else
-                {
-                    missingIndexes.swap(outputMissingIndexes);
-                    co_await readMissingBatch(
-                        *immutableStorage, keys, values, missingIndexes, outputMissingIndexes);
-                }
+                co_await readBatch(*immutableStorage, keys, values, outputMissingIndexes);
             }
+            else
+            {
+                missingIndexes.swap(outputMissingIndexes);
+                outputMissingIndexes.clear();
+                co_await readMissingBatch(
+                    *immutableStorage, keys, values, missingIndexes, outputMissingIndexes);
+            }
+            if (RANGES::empty(outputMissingIndexes))
+            {
+                co_return iterator;
+            }
+        }
 
-            if constexpr (withCacheStorage)
+        if constexpr (withCacheStorage)
+        {
+            if (RANGES::empty(values))
             {
-                if (!RANGES::empty(outputMissingIndexes) || RANGES::empty(values))
-                {
-                    if (RANGES::empty(values))
-                    {
-                        co_await readBatch(m_cacheStorage, keys, values, outputMissingIndexes);
-                    }
-                    else
-                    {
-                        missingIndexes.swap(outputMissingIndexes);
-                        co_await readMissingBatch(
-                            m_cacheStorage, keys, values, missingIndexes, outputMissingIndexes);
-                    }
-                }
+                co_await readBatch(m_cacheStorage, keys, values, outputMissingIndexes);
             }
+            else
+            {
+                missingIndexes.swap(outputMissingIndexes);
+                outputMissingIndexes.clear();
+                co_await readMissingBatch(
+                    m_cacheStorage, keys, values, missingIndexes, outputMissingIndexes);
+            }
+            if (RANGES::empty(outputMissingIndexes))
+            {
+                co_return iterator;
+            }
+        }
 
-            if (!RANGES::empty(outputMissingIndexes) || RANGES::empty(values))
-            {
-                if (RANGES::empty(values))
-                {
-                    co_await readBatch(m_backendStorage, keys, values, outputMissingIndexes);
-                }
-                else
-                {
-                    missingIndexes.swap(outputMissingIndexes);
-                    co_await readMissingBatch(
-                        m_backendStorage, keys, values, missingIndexes, outputMissingIndexes);
-                }
-            }
+        if (RANGES::empty(values))
+        {
+            co_await readBatch(m_backendStorage, keys, values, outputMissingIndexes);
+        }
+        else
+        {
+            missingIndexes.swap(outputMissingIndexes);
+            outputMissingIndexes.clear();
+            co_await readMissingBatch(
+                m_backendStorage, keys, values, missingIndexes, outputMissingIndexes);
         }
 
         co_return iterator;
@@ -246,6 +255,11 @@ public:
         }
 
         m_mutableStorage = std::make_unique<MutableStorageType>(args...);
+    }
+
+    void setMutable(std::unique_ptr<MutableStorageType> mutableStorage)
+    {
+        m_mutableStorage = std::move(mutableStorage);
     }
 
     void dropMutable() { m_mutableStorage.reset(); }

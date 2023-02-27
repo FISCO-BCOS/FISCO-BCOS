@@ -21,7 +21,7 @@ private:
     std::variant<std::monostate, ValueType, ValueType*, ValueType const*> m_value;
 
 public:
-    AnyHolder() = default;
+    AnyHolder() : m_value(std::monostate()) {}
     AnyHolder(ValueType&& object) : m_value(std::forward<ValueType>(object)) {}
     AnyHolder(ValueType& object) : m_value(std::addressof(object)) {}
     AnyHolder(ValueType const& object) : m_value(std::addressof(object)) {}

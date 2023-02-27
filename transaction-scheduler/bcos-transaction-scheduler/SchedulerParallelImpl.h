@@ -16,7 +16,7 @@ template <transaction_executor::StateStorage MultiLayerStorage,
 class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
 private:
-    constexpr static size_t DEFAULT_CHUNK_SIZE = 1000;
+    constexpr static size_t DEFAULT_CHUNK_SIZE = 100;
     constexpr static size_t DEFAULT_MAX_THREADS = 16;  // Use hardware concurrency, window
 
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto adjust
@@ -103,8 +103,11 @@ public:
         auto chunkEnd = RANGES::end(chunks);
 
         std::optional<ChunkStorage> lastExecutedStorages;
+        std::unique_ptr<typename MultiLayerStorage::MutableStorage> mergedStorage;
         while (chunkIt != chunkEnd)
         {
+            mergedStorage = std::make_unique<typename MultiLayerStorage::MutableStorage>();
+
             std::atomic_bool abortToken = false;
             auto currentChunk = chunkIt;
             tbb::parallel_pipeline(m_maxThreads,
@@ -158,7 +161,8 @@ public:
                                 }
 
                                 task::syncWait(mergeStorage(storage->mutableStorage(),
-                                    multiLayerStorage().mutableStorage()));
+                                    *mergedStorage));  // cause multi thread
+                                                       // problem
                                 lastExecutedStorages.emplace(std::move(chunkStorage));
                                 receipts.insert(receipts.end(),
                                     std::make_move_iterator(chunkReceipts.begin()),
@@ -167,6 +171,8 @@ public:
                                 RANGES::advance(chunkIt, 1);
                             }
                         }));
+
+            multiLayerStorage().setMutable(std::move(mergedStorage));
         }
 
         co_return receipts;
