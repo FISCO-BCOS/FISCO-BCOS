@@ -21,11 +21,9 @@ private:
 
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto adjust
     size_t m_maxThreads = DEFAULT_MAX_THREADS;  // Maybe auto adjust
-
     using ChunkExecuteStorage =
         transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
             MultiLayerStorage>;
-
     struct ChunkStorage
     {
         ReadWriteSetStorage<ChunkExecuteStorage> readWriteSetStorage;
