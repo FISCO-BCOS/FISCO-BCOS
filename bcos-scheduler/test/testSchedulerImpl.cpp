@@ -500,10 +500,10 @@ BOOST_AUTO_TEST_CASE(call)
     bcos::crypto::KeyPairInterface::Ptr keyPair =
         blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
     auto tx = blockFactory->transactionFactory()->createTransaction(0, "address_to",
-        bytes(inputStr.begin(), inputStr.end()), 200, 300, "chain", "group", 500, keyPair);
+        bytes(inputStr.begin(), inputStr.end()), std::to_string(200), 300, "chain", "group", 500, keyPair);
 
     auto empty_to = blockFactory->transactionFactory()->createTransaction(
-        0, "", bytes(inputStr.begin(), inputStr.end()), 200, 300, "chain", "group", 500, keyPair);
+        0, "", bytes(inputStr.begin(), inputStr.end()), std::to_string(200), 300, "chain", "group", 500, keyPair);
 
     // call
     {
@@ -569,7 +569,7 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto tx = blockFactory->transactionFactory()->createTransaction(
-        3, precompiled::AUTH_COMMITTEE_ADDRESS, {}, u256(1), 500, "chainId", "groupId", utcTime());
+        3, precompiled::AUTH_COMMITTEE_ADDRESS, {}, std::to_string(1), 500, "chainId", "groupId", utcTime());
     block->appendTransaction(std::move(tx));
 
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
@@ -595,7 +595,7 @@ BOOST_AUTO_TEST_CASE(testCallSysContract)
     executorManager->addExecutor("executor1", executor1);
 
     auto tx = blockFactory->transactionFactory()->createTransaction(
-        3, precompiled::AUTH_COMMITTEE_ADDRESS, {}, u256(1), 500, "chainId", "groupId", utcTime());
+        3, precompiled::AUTH_COMMITTEE_ADDRESS, {}, std::to_string(1), 500, "chainId", "groupId", utcTime());
 
     bcos::protocol::TransactionReceipt::Ptr receipt;
 

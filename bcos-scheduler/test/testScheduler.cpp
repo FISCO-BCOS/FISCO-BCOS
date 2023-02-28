@@ -331,7 +331,7 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     {
         bytes input;
         auto tx = transactionFactory->createTransaction(20,
-            "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, 100, 200, "chainID",
+            "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, std::to_string(100), 200, "chainID",
             "groupID", 400, keyPair);
         tx->setAttribute(bcos::protocol::Transaction::Attribute::DAG);
         block->appendTransaction(tx);

@@ -60,7 +60,7 @@ void testSubmitAndRemoveTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     tbb::parallel_for(tbb::blocked_range<int>(0, _count), [&](const tbb::blocked_range<int>& _r) {
         for (auto i = _r.begin(); i < _r.end(); i++)
         {
-            auto tx = fakeTransaction(_cryptoSuite, 1000 + i,
+            auto tx = fakeTransaction(_cryptoSuite, std::to_string(1000 + i),
                 ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
             ~txpool->submitTransaction(tx);
             auto result = std::make_shared<TransactionSubmitResultImpl>();

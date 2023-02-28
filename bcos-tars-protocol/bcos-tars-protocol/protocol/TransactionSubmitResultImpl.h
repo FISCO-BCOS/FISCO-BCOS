@@ -87,7 +87,7 @@ public:
     {
         return bcos::protocol::NonceType(m_inner()->nonce);
     }
-    void setNonce(bcos::protocol::NonceType nonce) override { m_inner()->nonce = nonce.str(); }
+    void setNonce(bcos::protocol::NonceType nonce) override { m_inner()->nonce = std::move(nonce); }
 
     bcos::protocol::TransactionReceipt::Ptr transactionReceipt() const override
     {

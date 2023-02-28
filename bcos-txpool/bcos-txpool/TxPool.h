@@ -45,8 +45,8 @@ public:
         m_transactionFactory(m_config->blockFactory()->transactionFactory()),
         m_ledger(m_config->ledger())
     {
-        m_worker = std::make_shared<ThreadPool>("submitter", verifierWorkerNum);
-        m_verifier = std::make_shared<ThreadPool>("verifier", 4);
+        m_worker = std::make_shared<ThreadPool>("submitter", 4);
+        m_verifier = std::make_shared<ThreadPool>("verifier", 2);
         m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
         // worker to pre-store-txs
         m_txsPreStore = std::make_shared<ThreadPool>("txsPreStore", 1);
