@@ -418,8 +418,9 @@ void BlockSync::onPeerStatus(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
 
 void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)
 {
+    auto number = _syncMsg->number();
     auto blockMsg = m_config->msgFactory()->createBlocksMsg(std::move(_syncMsg));
-    BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+    BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << BLOCK_NUMBER(number) << LOG_BADGE("BlockSync")
                        << LOG_DESC("Receive peer block packet")
                        << LOG_KV("peer", _nodeID->shortHex());
     m_downloadingQueue->push(blockMsg);
@@ -632,8 +633,8 @@ void BlockSync::maintainDownloadingQueue()
         auto blockHeader = block->blockHeader();
         auto header = block->blockHeader();
         auto signature = header->signatureList();
-        BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_DESC("BlockSync: applyBlock")
-                          << LOG_KV("execNum", blockHeader->number())
+        BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << BLOCK_NUMBER(blockHeader->number())
+                          << LOG_DESC("BlockSync: applyBlock")
                           << LOG_KV("hash", blockHeader->hash().abridged())
                           << LOG_KV("node", m_config->nodeID()->shortHex())
                           << LOG_KV("signatureSize", signature.size())
@@ -708,8 +709,8 @@ void BlockSync::fetchAndSendBlock(
                 config->frontService()->asyncSendMessageByNodeID(
                     ModuleID::BlockSync, _peer, ref(*(blocksReq->encode())), 0, nullptr);
                 BLKSYNC_LOG(DEBUG)
-                    << LOG_DESC("fetchAndSendBlock: response block")
-                    << LOG_KV("toPeer", _peer->shortHex()) << LOG_KV("number", _number)
+                    << BLOCK_NUMBER(_number) << LOG_DESC("fetchAndSendBlock: response block")
+                    << LOG_KV("toPeer", _peer->shortHex())
                     << LOG_KV("hash", blockHeader->hash().abridged())
                     << LOG_KV("signatureSize", signature.size())
                     << LOG_KV("transactionsSize", _block->transactionsSize());

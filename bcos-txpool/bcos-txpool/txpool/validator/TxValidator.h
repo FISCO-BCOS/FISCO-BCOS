@@ -46,10 +46,10 @@ public:
         bcos::protocol::Transaction::ConstPtr _tx) override;
 
 protected:
-    virtual bool isSystemTransaction(bcos::protocol::Transaction::ConstPtr _tx)
+    virtual inline bool isSystemTransaction(bcos::protocol::Transaction::ConstPtr const& _tx)
     {
         auto txAddress = _tx->to();
-        return bcos::precompiled::c_systemTxsAddress.contains(std::string(txAddress));
+        return bcos::precompiled::c_systemTxsAddress.contains(txAddress);
     }
 
 private:

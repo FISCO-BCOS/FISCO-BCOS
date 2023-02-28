@@ -1010,7 +1010,7 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
 
 bool TransactionExecutive::isPrecompiled(const std::string& address) const
 {
-    return m_constantPrecompiled->count(address) > 0;
+    return m_constantPrecompiled->contains(address);
 }
 
 std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const

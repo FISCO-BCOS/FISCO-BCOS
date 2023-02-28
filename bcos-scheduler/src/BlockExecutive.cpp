@@ -110,8 +110,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     if (!m_isSysBlock)
     {
         auto toAddress = tx->to();
-        if (bcos::precompiled::c_systemTxsAddress.count(
-                std::string(toAddress.begin(), toAddress.end())))
+        if (bcos::precompiled::c_systemTxsAddress.contains(toAddress))
         {
             m_isSysBlock.store(true);
         }
@@ -146,7 +145,8 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     }
     message->setDepth(0);
     message->setGasAvailable(m_gasLimit);
-    if (precompiled::c_systemTxsAddress.count({tx->to().data(), tx->to().size()}))
+    auto toAddress = tx->to();
+    if (precompiled::c_systemTxsAddress.contains(toAddress))
     {
         message->setGasAvailable(TRANSACTION_GAS);
     }
@@ -241,8 +241,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
                     message->setDepth(0);
                     message->setGasAvailable(m_gasLimit);
-                    if (precompiled::c_systemTxsAddress.count(
-                            {metaData->to().data(), metaData->to().size()}))
+                    auto toAddress = metaData->to();
+                    if (precompiled::c_systemTxsAddress.contains(toAddress))
                     {
                         message->setGasAvailable(TRANSACTION_GAS);
                     }
@@ -1596,8 +1596,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
 {
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
-    if (bcos::precompiled::c_systemTxsAddress.find(output->from()) !=
-        bcos::precompiled::c_systemTxsAddress.end())
+    if (bcos::precompiled::c_systemTxsAddress.contains(output->from()))
     {
         txGasUsed = 0;
     }
