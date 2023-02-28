@@ -74,7 +74,7 @@ public:
         protocol::IsTransaction auto const& transaction)
     {
         auto storage = m_multiLayerStorage.fork();
-        m_multiLayerStorage.newMutable();
+        storage->newMutable();
 
         Executor<MultiLayerStorage, ReceiptFactory> executor(
             *storage, m_receiptFactory, m_tableNamePool);

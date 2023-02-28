@@ -21,7 +21,7 @@ struct TableNameHash
     }
 };
 
-class TestLevelStorageFixture
+class TestMultiLayerStorageFixture
 {
 public:
     using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
@@ -30,7 +30,7 @@ public:
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         TableNameHash>;
 
-    TestLevelStorageFixture() : multiLayerStorage(backendStorage) {}
+    TestMultiLayerStorageFixture() : multiLayerStorage(backendStorage) {}
 
     TableNamePool tableNamePool;
     BackendStorage backendStorage;
@@ -39,7 +39,7 @@ public:
     static_assert(storage2::ReadableStorage<decltype(multiLayerStorage)>, "No match storage!");
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestLevelStorage, TestLevelStorageFixture)
+BOOST_FIXTURE_TEST_SUITE(TestMultiLayerStorage, TestMultiLayerStorageFixture)
 
 BOOST_AUTO_TEST_CASE(noMutable)
 {
@@ -73,10 +73,6 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
         auto it = co_await multiLayerStorage.read(keyViews);
 
         co_await it.next();
-        const auto& iteratorKey = co_await it.key();
-        BOOST_CHECK_EQUAL(std::get<0>(iteratorKey), std::get<0>(key));
-        BOOST_CHECK_EQUAL(std::get<1>(iteratorKey).toStringView(), std::get<1>(key).toStringView());
-
         const auto& iteratorValue = co_await it.value();
         BOOST_CHECK_EQUAL(iteratorValue.get(), entry.get());
 
@@ -95,7 +91,6 @@ BOOST_AUTO_TEST_CASE(merge)
             multiLayerStorage.pushMutableToImmutableFront(), NotExistsMutableStorageError);
 
         multiLayerStorage.newMutable();
-
         auto toKey = RANGES::views::transform([tableNamePool = &tableNamePool](int num) {
             return StateKey{storage2::string_pool::makeStringID(*tableNamePool, "test_table"),
                 fmt::format("key: {}", num)};
@@ -122,11 +117,6 @@ BOOST_AUTO_TEST_CASE(merge)
         int i = 0;
         while (co_await it.next())
         {
-            auto const& key = co_await it.key();
-            BOOST_CHECK_EQUAL(*std::get<0>(key),
-                *(storage2::string_pool::makeStringID(tableNamePool, "test_table")));
-            BOOST_CHECK_EQUAL(std::get<1>(key).toStringView(), fmt::format("key: {}", i));
-
             auto const& value = co_await it.value();
             BOOST_CHECK_EQUAL(value.get(), fmt::format("value: {}", i));
             ++i;

@@ -65,6 +65,7 @@
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <util/tc_clientsocket.h>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 using namespace bcos;
@@ -236,27 +237,59 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 using Hasher = std::remove_cvref_t<decltype(hasher)>;
                 auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(storage);
 
-                auto baselineSchedulerInitializer = std::make_shared<
-                    transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>(
-                    existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
-                    m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
-                auto scheduler = baselineSchedulerInitializer->buildScheduler();
-                scheduler->registerTransactionNotifier(
-                    [txpool = m_txpoolInitializer->txpool()](
-                        bcos::protocol::BlockNumber blockNumber,
-                        bcos::protocol::TransactionSubmitResultsPtr result,
-                        std::function<void(bcos::Error::Ptr)> callback) mutable {
-                        txpool->asyncNotifyBlockResult(
-                            blockNumber, std::move(result), std::move(callback));
-                    });
-                m_setBaselineSchedulerBlockNumberNotifier =
-                    [scheduler](std::function<void(protocol::BlockNumber)> notifier) {
-                        scheduler->registerBlockNumberNotifier(std::move(notifier));
-                    };
+                std::variant<std::shared_ptr<transaction_scheduler::BaselineSchedulerInitializer<
+                                 Hasher, false>>,
+                    std::shared_ptr<
+                        transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>>
+                    baselineSchedulerInitializer;
 
-                m_scheduler = scheduler;
-                m_baselineSchedulerInitializerHolder =
-                    [initializer = std::move(baselineSchedulerInitializer)]() {};
+                auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
+                if (baselineSchedulerConfig.parallel)
+                {
+                    baselineSchedulerInitializer = std::make_shared<
+                        transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>(
+                        existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
+                        m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
+                }
+                else
+                {
+                    baselineSchedulerInitializer = std::make_shared<
+                        transaction_scheduler::BaselineSchedulerInitializer<Hasher, false>>(
+                        existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
+                        m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
+                }
+                std::visit(
+                    [&, this](auto& initializer) {
+                        auto scheduler = initializer->buildScheduler();
+                        if constexpr (std::same_as<decltype(initializer),
+                                          std::shared_ptr<transaction_scheduler::
+                                                  BaselineSchedulerInitializer<Hasher, true>>>)
+                        {
+                            if (baselineSchedulerConfig.parallel)
+                            {
+                                scheduler->setChunkSize(baselineSchedulerConfig.chunkSize);
+                                scheduler->setMaxThreads(baselineSchedulerConfig.maxThread);
+                            }
+                        }
+
+                        scheduler->registerTransactionNotifier(
+                            [txpool = m_txpoolInitializer->txpool()](
+                                bcos::protocol::BlockNumber blockNumber,
+                                bcos::protocol::TransactionSubmitResultsPtr result,
+                                std::function<void(bcos::Error::Ptr)> callback) mutable {
+                                txpool->asyncNotifyBlockResult(
+                                    blockNumber, std::move(result), std::move(callback));
+                            });
+                        m_setBaselineSchedulerBlockNumberNotifier =
+                            [scheduler](std::function<void(protocol::BlockNumber)> notifier) {
+                                scheduler->registerBlockNumberNotifier(std::move(notifier));
+                            };
+
+                        m_scheduler = scheduler;
+                        m_baselineSchedulerInitializerHolder = [initializer =
+                                                                       std::move(initializer)]() {};
+                    },
+                    baselineSchedulerInitializer);
             },
             anyHasher);
     }

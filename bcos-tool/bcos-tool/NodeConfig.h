@@ -228,6 +228,13 @@ public:
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
     bool enableBaselineScheduler() const { return m_enableBaselineScheduler; }
+    struct BaselineSchedulerConfig
+    {
+        int parallel = 0;
+        int chunkSize = 0;
+        int maxThread = 0;
+    };
+    BaselineSchedulerConfig baselineSchedulerConfig() const { return m_baselineSchedulerConfig; }
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
@@ -325,6 +332,7 @@ private:
     size_t m_vmCacheSize = 1024;
     std::string m_authAdminAddress;
     bool m_enableBaselineScheduler = false;
+    BaselineSchedulerConfig m_baselineSchedulerConfig;
 
     // Pro and Max versions run do not apply to tars admin site
     bool m_withoutTarsFramework = {false};

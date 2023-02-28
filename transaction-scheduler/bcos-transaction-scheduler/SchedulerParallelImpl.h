@@ -1,10 +1,12 @@
 #pragma once
 
+#include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
 #include "SchedulerBaseImpl.h"
 #include <bcos-task/Wait.h>
 #include <tbb/parallel_pipeline.h>
 #include <iterator>
+#include <range/v3/range/concepts.hpp>
 
 namespace bcos::transaction_scheduler
 {
@@ -15,15 +17,17 @@ class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Receip
 {
 private:
     constexpr static size_t DEFAULT_CHUNK_SIZE = 1000;
-    constexpr static size_t DEFAULT_MAX_THREADS = 24;  // Use hardware concurrency, window
+    constexpr static size_t DEFAULT_MAX_THREADS = 16;  // Use hardware concurrency, window
 
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto adjust
     size_t m_maxThreads = DEFAULT_MAX_THREADS;  // Maybe auto adjust
-
+    using ChunkExecuteStorage =
+        transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
+            MultiLayerStorage>;
     struct ChunkStorage
     {
-        ReadWriteSetStorage<MultiLayerStorage> readWriteSetStorage;
-        std::unique_ptr<MultiLayerStorage> multiLayerStorage;
+        ReadWriteSetStorage<ChunkExecuteStorage> readWriteSetStorage;
+        std::unique_ptr<ChunkExecuteStorage> multiLayerStorage;
     };
     using ChunkExecuteReturn =
         std::tuple<ChunkStorage, std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>>;
@@ -31,9 +35,9 @@ private:
     task::Task<ChunkExecuteReturn> chunkExecute(protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto&& transactions, int startContextID, std::atomic_bool& abortToken)
     {
-        auto myStorage = multiLayerStorage().fork();
+        auto myStorage = std::make_unique<ChunkExecuteStorage>(multiLayerStorage());
         myStorage->newMutable();
-        ReadWriteSetStorage<MultiLayerStorage> readWriteSetStorage(*myStorage);
+        ReadWriteSetStorage<ChunkExecuteStorage> readWriteSetStorage(*myStorage);
 
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> chunkReceipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)
@@ -56,7 +60,6 @@ private:
 
         auto chunkStorage = ChunkStorage{.readWriteSetStorage = std::move(readWriteSetStorage),
             .multiLayerStorage = std::move(myStorage)};
-
         co_return ChunkExecuteReturn{std::move(chunkStorage), std::move(chunkReceipts)};
     }
 
@@ -95,57 +98,68 @@ public:
         int contextID = 0;
         auto chunks = transactions | RANGES::views::chunk(m_chunkSize);
         auto chunkIt = RANGES::begin(chunks);
+
         auto chunkBegin = chunkIt;
         auto chunkEnd = RANGES::end(chunks);
 
-        std::vector<ChunkStorage> executedStorages;
+        std::optional<ChunkStorage> lastExecutedStorages;
         while (chunkIt != chunkEnd)
         {
             std::atomic_bool abortToken = false;
             auto currentChunk = chunkIt;
             tbb::parallel_pipeline(m_maxThreads,
-                tbb::make_filter<void, std::tuple<RANGES::range_value_t<decltype(chunks)>, int>>(
+                tbb::make_filter<void,
+                    std::optional<std::tuple<RANGES::range_value_t<decltype(chunks)>, int>>>(
                     tbb::filter_mode::serial_in_order,
-                    [&](tbb::flow_control& control)
-                        -> std::tuple<RANGES::range_value_t<decltype(chunks)>, int> {
+                    [&](tbb::flow_control& control) {
                         if (currentChunk == chunkEnd || abortToken)
                         {
                             control.stop();
-                            return {};
+                            return std::optional<
+                                std::tuple<RANGES::range_value_t<decltype(chunks)>, int>>{};
                         }
-                        return {*(currentChunk++),
-                            m_chunkSize * RANGES::distance(chunkBegin, currentChunk)};
+                        auto chunk = currentChunk;
+                        RANGES::advance(currentChunk, 1);
+                        return std::make_optional(
+                            std::tuple<RANGES::range_value_t<decltype(chunks)>, int>{
+                                *chunk, m_chunkSize * RANGES::distance(chunkBegin, chunk)});
                     }) &
-                    tbb::make_filter<std::tuple<RANGES::range_value_t<decltype(chunks)>, int>,
-                        ChunkExecuteReturn>(tbb::filter_mode::parallel,
-                        [&](std::tuple<RANGES::range_value_t<decltype(chunks)>, int> const& input) {
-                            auto&& [transactions, startContextID] = input;
-                            return task::syncWait(chunkExecute(
-                                blockHeader, transactions, startContextID, abortToken));
-                        }) &
-                    tbb::make_filter<ChunkExecuteReturn, void>(
-                        tbb::filter_mode::serial_in_order, [&](auto&& chunkResult) {
-                            if (!abortToken)
+                    tbb::make_filter<
+                        std::optional<std::tuple<RANGES::range_value_t<decltype(chunks)>, int>>,
+                        std::optional<ChunkExecuteReturn>>(tbb::filter_mode::parallel,
+                        [&](auto&& input) {
+                            if (input && !abortToken)
                             {
-                                auto&& [chunkStorage, chunkReceipts] = chunkResult;
-                                auto&& [readWriteSetStorage, myStorage] = chunkStorage;
+                                auto&& [transactions, startContextID] = *input;
+                                return std::make_optional(task::syncWait(chunkExecute(
+                                    blockHeader, transactions, startContextID, abortToken)));
+                            }
+                            return std::optional<ChunkExecuteReturn>{};
+                        }) &
+                    tbb::make_filter<std::optional<ChunkExecuteReturn>, void>(
+                        tbb::filter_mode::serial_in_order, [&](auto&& chunkResult) {
+                            if (chunkResult && !abortToken)
+                            {
+                                auto&& [chunkStorage, chunkReceipts] = *chunkResult;
+                                auto&& [readWriteSetStorage, storage] = chunkStorage;
 
-                                if (!executedStorages.empty())
+                                if (lastExecutedStorages)
                                 {
                                     auto& [prevReadWriteSetStorage, oldStorage] =
-                                        executedStorages.back();
+                                        *lastExecutedStorages;
                                     if (prevReadWriteSetStorage.hasRAWIntersection(
                                             readWriteSetStorage))
                                     {
-                                        // Abort the pipeline and retry
+                                        // Abort the pipeline
                                         abortToken = true;
+                                        lastExecutedStorages.reset();
                                         return;
                                     }
                                 }
 
-                                task::syncWait(mergeStorage(myStorage->mutableStorage(),
+                                task::syncWait(mergeStorage(storage->mutableStorage(),
                                     multiLayerStorage().mutableStorage()));
-                                executedStorages.emplace_back(std::move(chunkStorage));
+                                lastExecutedStorages.emplace(std::move(chunkStorage));
                                 receipts.insert(receipts.end(),
                                     std::make_move_iterator(chunkReceipts.begin()),
                                     std::make_move_iterator(chunkReceipts.end()));

@@ -1,7 +1,10 @@
 #pragma once
+#include "bcos-framework/storage2/Storage.h"
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-utilities/AnyHolder.h>
+#include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
+#include <iterator>
 #include <range/v3/range/access.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <stdexcept>
@@ -16,21 +19,24 @@ struct DuplicateMutableStorageError : public bcos::Error {};
 struct NonExistsKeyIteratorError: public bcos::Error {};
 struct NotExistsMutableStorageError : public bcos::Error {};
 struct NotExistsImmutableStorageError : public bcos::Error {};
+struct UnsupportedMethod : public bcos::Error {};
 // clang-format on
 
-template <transaction_executor::StateStorage MutableStorage, class CachedStorage,
+template <transaction_executor::StateStorage MutableStorageType, class CachedStorage,
     transaction_executor::StateStorage BackendStorage>
 requires((std::is_void_v<CachedStorage> || (transaction_executor::StateStorage<CachedStorage>)) &&
-         storage2::SeekableStorage<MutableStorage>) class MultiLayerStorage
+         storage2::SeekableStorage<MutableStorageType>) class MultiLayerStorage
 {
 private:
-    static_assert(std::same_as<typename MutableStorage::Key, typename BackendStorage::Key>);
-    static_assert(std::same_as<typename MutableStorage::Value, typename BackendStorage::Value>);
-
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
+    using KeyType = std::remove_cvref_t<typename MutableStorageType::Key>;
+    using ValueType = std::remove_cvref_t<typename MutableStorageType::Value>;
+    static_assert(std::same_as<typename MutableStorageType::Key, typename BackendStorage::Key>);
+    static_assert(std::same_as<typename MutableStorageType::Value, typename BackendStorage::Value>);
 
-    std::shared_ptr<MutableStorage> m_mutableStorage;
-    std::list<std::shared_ptr<MutableStorage>> m_immutableStorages;  // Ledger read data from here
+    std::unique_ptr<MutableStorageType> m_mutableStorage;
+    std::list<std::unique_ptr<MutableStorageType>> m_immutableStorages;  // Ledger read data from
+                                                                         // here
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::add_lvalue_reference_t<CachedStorage>, std::monostate>
         m_cacheStorage;
@@ -39,82 +45,64 @@ private:
     std::mutex m_immutablesMutex;
     std::mutex m_mergeMutex;
 
-public:
-    using Key = typename MutableStorage::Key;
-    using Value = typename MutableStorage::Value;
-
-    template <RANGES::input_range KeyRange, transaction_executor::StateStorage... StorageType>
-    class ReadIterator
+    task::Task<void> readBatch(auto& storage, RANGES::input_range auto const& inputKeys,
+        RANGES::range auto& outputValues, RANGES::range auto& outputMissingIndexes)
     {
-    private:
-        utilities::AnyHolder<KeyRange> m_keyRange;
-        MultiLayerStorage& m_storage;
-        decltype(RANGES::begin(m_keyRange.get())) m_keyRangeIt;
-        mutable std::variant<std::monostate, storage2::ReadIteratorType<StorageType>...> m_innerIt;
-        bool m_started = false;
+        auto it = co_await storage.read(inputKeys);
 
-        // Query from top to buttom
-        task::Task<void> query(Key key) const
+        while (co_await it.next())
         {
-            if (m_innerIt.index() != 0)
-            {
-                co_return;
-            }
-
-            if (m_storage.m_mutableStorage &&
-                co_await queryAndSetIt(*m_storage.m_mutableStorage, key))
-            {
-                co_return;
-            }
-
-            for (auto& storage : m_storage.m_immutableStorages)
-            {
-                if (co_await queryAndSetIt(*storage, key))
-                {
-                    co_return;
-                }
-            }
-
-            if constexpr (withCacheStorage)
-            {
-                if (co_await queryAndSetIt(m_storage.m_cacheStorage, key))
-                {
-                    co_return;
-                }
-            }
-
-            if (co_await queryAndSetIt(m_storage.m_backendStorage, key))
-            {
-                co_return;
-            }
-        }
-
-        task::Task<bool> queryAndSetIt(auto& storage, auto const& key) const
-        {
-            auto it = co_await storage.read(storage2::single(key));
-            co_await it.next();
             if (co_await it.hasValue())
             {
-                m_innerIt.template emplace<decltype(it)>(std::move(it));
-                co_return true;
+                outputValues.emplace_back(co_await it.value());
             }
-            co_return false;
+            else
+            {
+                outputMissingIndexes.emplace_back(RANGES::size(outputValues));
+                outputValues.emplace_back(utilities::AnyHolder<ValueType>{});
+            }
         }
+    }
+
+    task::Task<void> readMissingBatch(auto& storage, RANGES::input_range auto const& inputKeys,
+        RANGES::range auto& outputValues, RANGES::range auto const& missingIndexes,
+        RANGES::range auto& outputMissingIndexes)
+    {
+        auto it = co_await storage.read(
+            missingIndexes |
+            RANGES::views::transform([&inputKeys](auto&& index) { return inputKeys[index]; }));
+        auto missingIt = RANGES::begin(missingIndexes);
+
+        while (co_await it.next())
+        {
+            if (co_await it.hasValue())
+            {
+                outputValues[*missingIt] = co_await it.value();
+            }
+            else
+            {
+                outputMissingIndexes.emplace_back(*missingIt);
+            }
+            RANGES::advance(missingIt, 1);
+        }
+    }
+
+public:
+    using MutableStorage = MutableStorageType;
+
+    class ReadIterator
+    {
+        friend class MultiLayerStorage;
+
+    private:
+        boost::container::small_vector<utilities::AnyHolder<ValueType>, 1> m_values;
+        int64_t m_index = -1;
 
     public:
-        using Key = typename storage2::ReadIteratorType<MutableStorage>::Key;
-        using Value = typename storage2::ReadIteratorType<BackendStorage>::Value;
+        using Key = std::remove_cvref_t<typename MultiLayerStorage::KeyType> const&;
+        using Value = std::remove_cvref_t<typename MultiLayerStorage::ValueType> const&;
 
-        ReadIterator(auto&& keyRange, MultiLayerStorage& storage)
-          : m_keyRange(std::forward<decltype(keyRange)>(keyRange)), m_storage(storage)
-        {
-            if constexpr (withCacheStorage)
-            {
-                static_assert(
-                    std::is_same_v<typename MutableStorage::Key, typename CachedStorage::Key> &&
-                    std::is_same_v<typename MutableStorage::Value, typename CachedStorage::Value>);
-            }
-        }
+        ReadIterator() = default;
 
         ReadIterator(const ReadIterator&) = delete;
         ReadIterator(ReadIterator&& rhs) noexcept = default;
@@ -124,62 +112,15 @@ public:
 
         task::AwaitableValue<bool> next()
         {
-            m_innerIt = std::monostate{};
-            if (!m_started)
-            {
-                m_started = true;
-
-                auto& range = m_keyRange.get();
-                m_keyRangeIt = RANGES::begin(range);
-                return m_keyRangeIt != RANGES::end(m_keyRange.get());
-            }
-            return ++m_keyRangeIt != RANGES::end(m_keyRange.get());
+            return {static_cast<size_t>(++m_index) != m_values.size()};
         }
-        task::Task<bool> hasValue() const
-        {
-            co_await query(*m_keyRangeIt);
-            co_return co_await std::visit(
-                [](auto&& iterator) -> task::Task<bool> {
-                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
-                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
-                    {
-                        co_return co_await iterator.hasValue();
-                    }
-                    co_return false;
-                },
-                m_innerIt);
-        }
-        task::Task<Key> key() const
-        {
-            co_await query(*m_keyRangeIt);
-            co_return co_await std::visit(
-                [](auto&& iterator) -> task::Task<Key> {
-                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
-                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
-                    {
-                        co_return co_await iterator.key();
-                    }
-                    BOOST_THROW_EXCEPTION(NonExistsKeyIteratorError{});
-                },
-                m_innerIt);
-        }
-        task::Task<Value> value() const
-        {
-            co_await query(*m_keyRangeIt);
-            co_return co_await std::visit(
-                [](auto&& iterator) -> task::Task<Value> {
-                    using IteratorType = std::remove_cvref_t<decltype(iterator)>;
-                    if constexpr (!std::is_same_v<std::monostate, IteratorType>)
-                    {
-                        co_return co_await iterator.value();
-                    }
-                    BOOST_THROW_EXCEPTION(NonExistsKeyIteratorError{});
-                },
-                m_innerIt);
-        }
-
-        void release() {}
+        task::AwaitableValue<Key> key() const { BOOST_THROW_EXCEPTION(UnsupportedMethod{}); }
+        task::AwaitableValue<Value> value() const { return {m_values[m_index].get()}; }
+        task::AwaitableValue<bool> hasValue() const { return {m_values[m_index].hasValue()}; }
     };
+
+    using Key = KeyType;
+    using Value = ValueType;
 
     MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
@@ -196,12 +137,72 @@ public:
     MultiLayerStorage& operator=(const MultiLayerStorage&) = delete;
     MultiLayerStorage& operator=(MultiLayerStorage&&) = delete;
 
-    auto read(RANGES::input_range auto&& keys) -> task::AwaitableValue<
-        ReadIterator<std::remove_cvref_t<decltype(keys)>, BackendStorage, MutableStorage>>
+    task::Task<ReadIterator> read(RANGES::input_range auto const& keys)
     {
-        auto it = ReadIterator<std::remove_cvref_t<decltype(keys)>, BackendStorage, MutableStorage>(
-            std::forward<decltype(keys)>(keys), *this);
-        return task::AwaitableValue<decltype(it)>(std::move(it));
+        ReadIterator iterator;
+        if constexpr (RANGES::sized_range<decltype(keys)>)
+        {
+            iterator.m_values.reserve(RANGES::size(keys));
+        }
+        auto& values = iterator.m_values;
+
+        boost::container::small_vector<size_t, 1> missingIndexes;
+        decltype(missingIndexes) outputMissingIndexes;
+
+        if (m_mutableStorage)
+        {
+            co_await readBatch(*m_mutableStorage, keys, values, outputMissingIndexes);
+        }
+
+        if (!RANGES::empty(outputMissingIndexes) || RANGES::empty(values))
+        {
+            for (auto& immutableStorage : m_immutableStorages)
+            {
+                if (RANGES::empty(values))
+                {
+                    co_await readBatch(*immutableStorage, keys, values, outputMissingIndexes);
+                }
+                else
+                {
+                    missingIndexes.swap(outputMissingIndexes);
+                    co_await readMissingBatch(
+                        *immutableStorage, keys, values, missingIndexes, outputMissingIndexes);
+                }
+            }
+
+            if constexpr (withCacheStorage)
+            {
+                if (!RANGES::empty(outputMissingIndexes) || RANGES::empty(values))
+                {
+                    if (RANGES::empty(values))
+                    {
+                        co_await readBatch(m_cacheStorage, keys, values, outputMissingIndexes);
+                    }
+                    else
+                    {
+                        missingIndexes.swap(outputMissingIndexes);
+                        co_await readMissingBatch(
+                            m_cacheStorage, keys, values, missingIndexes, outputMissingIndexes);
+                    }
+                }
+            }
+
+            if (!RANGES::empty(outputMissingIndexes) || RANGES::empty(values))
+            {
+                if (RANGES::empty(values))
+                {
+                    co_await readBatch(m_backendStorage, keys, values, outputMissingIndexes);
+                }
+                else
+                {
+                    missingIndexes.swap(outputMissingIndexes);
+                    co_await readMissingBatch(
+                        m_backendStorage, keys, values, missingIndexes, outputMissingIndexes);
+                }
+            }
+        }
+
+        co_return iterator;
     }
 
     task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
@@ -229,9 +230,8 @@ public:
 
     std::unique_ptr<MultiLayerStorage> fork()
     {
-        std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);  // TODO: 读提交完还是执行完
+        std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);
         auto newMultiLayerStorage = std::make_unique<MultiLayerStorage>(m_backendStorage);
-        newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
 
         return newMultiLayerStorage;
     }
@@ -245,7 +245,7 @@ public:
             BOOST_THROW_EXCEPTION(DuplicateMutableStorageError{});
         }
 
-        m_mutableStorage = std::make_shared<MutableStorage>(args...);
+        m_mutableStorage = std::make_unique<MutableStorageType>(args...);
     }
 
     void dropMutable() { m_mutableStorage.reset(); }
@@ -257,7 +257,7 @@ public:
             BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
         }
         std::unique_lock lock(m_immutablesMutex);
-        m_immutableStorages.push_front(m_mutableStorage);
+        m_immutableStorages.push_front(std::move(m_mutableStorage));
         m_mutableStorage.reset();
     }
 
@@ -299,7 +299,7 @@ public:
         }
     }
 
-    MutableStorage& mutableStorage()
+    MutableStorageType& mutableStorage()
     {
         if (!m_mutableStorage)
         {
