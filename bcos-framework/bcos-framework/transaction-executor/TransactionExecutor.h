@@ -76,8 +76,6 @@ bool operator==(const StateKey& stateKey, std::tuple<TableNameID, Buffer> const&
     return false;
 }
 
-const static auto EMPTY_STATE_KEY = std::tuple{TableNameID(), std::string_view()};
-
 template <class StorageType>
 concept StateStorage = requires()
 {

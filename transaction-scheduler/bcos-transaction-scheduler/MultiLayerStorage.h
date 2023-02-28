@@ -1,5 +1,6 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-task/Trait.h"
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-utilities/AnyHolder.h>
 #include <boost/container/small_vector.hpp>
@@ -7,6 +8,8 @@
 #include <iterator>
 #include <range/v3/range/access.hpp>
 #include <range/v3/range_fwd.hpp>
+#include <range/v3/view/any_view.hpp>
+#include <range/v3/view/transform.hpp>
 #include <stdexcept>
 #include <type_traits>
 #include <variant>
@@ -45,50 +48,90 @@ private:
     std::mutex m_immutablesMutex;
     std::mutex m_mergeMutex;
 
-    task::Task<void> readBatch(auto& storage, RANGES::input_range auto const& inputKeys,
-        RANGES::range auto& outputValues, RANGES::range auto& outputMissingIndexes)
-    {
-        auto it = co_await storage.read(inputKeys);
 
+    task::Task<boost::container::small_vector<int64_t, 1>> readStorage(
+        RANGES::input_range auto const& keys, RANGES::input_range auto& outputValues, auto& storage)
+    {
+        auto it = co_await storage.read(keys);
+        boost::container::small_vector<int64_t, 1> missingIndexes;
+
+        int64_t index = 0;
         while (co_await it.next())
         {
             if (co_await it.hasValue())
             {
-                outputValues.emplace_back(co_await it.value());
+                outputValues[index] = co_await it.value();
             }
             else
             {
-                outputMissingIndexes.emplace_back(RANGES::size(outputValues));
-                auto emptyValue = utilities::AnyHolder<ValueType>();
-                outputValues.emplace_back(std::move(emptyValue));
+                missingIndexes.emplace_back(index);
             }
+            ++index;
         }
-        co_return;
+        co_return missingIndexes;
     }
 
-    task::Task<void> readMissingBatch(auto& storage, RANGES::input_range auto const& inputKeys,
-        RANGES::range auto& outputValues, RANGES::range auto const& missingIndexes,
-        RANGES::range auto& outputMissingIndexes)
+    task::Task<boost::container::small_vector<int64_t, 1>> readStorageRange(
+        RANGES::input_range auto const& keys, RANGES::input_range auto& values,
+        RANGES::range auto& storages)
     {
-        auto it = co_await storage.read(
-            missingIndexes |
-            RANGES::views::transform([&inputKeys](auto&& index) { return inputKeys[index]; }));
-        auto missingIt = RANGES::begin(missingIndexes);
+        auto& storage = RANGES::front(storages);
+        auto nextRange = storages | RANGES::views::drop(1);
 
-        while (co_await it.next())
+        auto missingIndexes = co_await readStorage(keys, values, storage);
+        if (RANGES::empty(missingIndexes) || RANGES::empty(nextRange))
         {
-            if (co_await it.hasValue())
-            {
-                outputValues[*missingIt] = co_await it.value();
-            }
-            else
-            {
-                outputMissingIndexes.emplace_back(*missingIt);
-            }
-            RANGES::advance(missingIt, 1);
+            co_return missingIndexes;
         }
-        co_return;
+
+        auto missingKeys = missingIndexes |
+                           RANGES::views::transform([&keys](int64_t index) { return keys[index]; });
+        auto missingValues =
+            missingIndexes | RANGES::views::transform([&values](int64_t index) mutable -> auto& {
+                return values[index];
+            });
+
+        co_return co_await readStorageRange(missingKeys, missingValues, nextRange);
     }
+
+    // TODO: Solve the oom of compiler
+    //  task::Task<void> readMultiStorage([[maybe_unused]] RANGES::input_range auto const& keys,
+    //      [[maybe_unused]] RANGES::input_range auto& values)
+    //  {
+    //      co_return;
+    //  }
+    //  template <class Storage, class... Storages>
+    //  task::Task<void> readMultiStorage(RANGES::input_range auto const& keys,
+    //      RANGES::input_range auto& values, Storage& storage, Storages&... storages)
+    //  {
+    //      using StorageType = std::remove_cvref_t<Storage>;
+
+    //     boost::container::small_vector<int64_t, 1> missingIndexes;
+    //     if constexpr (std::is_same_v<StorageType, decltype(m_immutableStorages)>)
+    //     {
+    //         auto immutableStorages =
+    //             storage | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; });
+    //         missingIndexes = co_await readStorageRange(keys, values, immutableStorages);
+    //     }
+    //     else
+    //     {
+    //         missingIndexes = co_await readStorage(keys, values, storage);
+    //     }
+
+    //     if (RANGES::empty(missingIndexes))
+    //     {
+    //         co_return;
+    //     }
+
+    //     auto missingKeys = missingIndexes |
+    //                        RANGES::views::transform([&keys](int64_t index) { return keys[index];
+    //                        });
+    //     auto missingValues =
+    //         missingIndexes | RANGES::views::transform([&values](int64_t index) mutable -> auto& {
+    //             return values[index];
+    //         });
+    //     co_await readMultiStorage(missingKeys, missingValues, storages...);
+    // }
 
 public:
     using MutableStorage = MutableStorageType;
@@ -143,72 +186,67 @@ public:
     task::Task<ReadIterator> read(RANGES::input_range auto const& keys)
     {
         ReadIterator iterator;
-        if constexpr (RANGES::sized_range<decltype(keys)>)
-        {
-            iterator.m_values.reserve(RANGES::size(keys));
-        }
+        iterator.m_values.resize(RANGES::size(keys));
         auto& values = iterator.m_values;
 
-        boost::container::small_vector<size_t, 1> missingIndexes;
-        decltype(missingIndexes) outputMissingIndexes;
-
+        boost::container::small_vector<int64_t, 1> missingIndexes;
         if (m_mutableStorage)
         {
-            co_await readBatch(*m_mutableStorage, keys, values, outputMissingIndexes);
-            if (RANGES::empty(outputMissingIndexes))
+            missingIndexes = co_await readStorage(keys, values, *m_mutableStorage);
+            if (RANGES::empty(missingIndexes))
             {
                 co_return iterator;
             }
         }
 
-        for (auto& immutableStorage : m_immutableStorages)
+        auto missingKeys = missingIndexes |
+                           RANGES::views::transform([&keys](int64_t index) { return keys[index]; });
+        auto missingValues =
+            missingIndexes | RANGES::views::transform([&values](int64_t index) mutable -> auto& {
+                return values[index];
+            });
+        if (!m_immutableStorages.empty())
         {
-            if (RANGES::empty(values))
+            auto immutableStorages = m_immutableStorages | RANGES::views::transform([
+            ](auto& ptr) -> auto& { return *ptr; });
+            if (!m_mutableStorage)
             {
-                co_await readBatch(*immutableStorage, keys, values, outputMissingIndexes);
+                missingIndexes = co_await readStorageRange(keys, values, immutableStorages);
             }
             else
             {
-                missingIndexes.swap(outputMissingIndexes);
-                outputMissingIndexes.clear();
-                co_await readMissingBatch(
-                    *immutableStorage, keys, values, missingIndexes, outputMissingIndexes);
+                missingIndexes =
+                    co_await readStorageRange(missingKeys, missingValues, immutableStorages);
             }
-            if (RANGES::empty(outputMissingIndexes))
+
+            if (RANGES::empty(missingIndexes))
             {
                 co_return iterator;
             }
         }
 
-        if constexpr (withCacheStorage)
+        auto missingKeys2 =
+            missingIndexes |
+            RANGES::views::transform([&missingKeys](int64_t index) { return missingKeys[index]; });
+        auto missingValues2 =
+            missingIndexes |
+            RANGES::views::transform([&missingValues](int64_t index) mutable -> auto& {
+                return missingValues[index];
+            });
+        if (m_immutableStorages.empty())
         {
-            if (RANGES::empty(values))
-            {
-                co_await readBatch(m_cacheStorage, keys, values, outputMissingIndexes);
-            }
-            else
-            {
-                missingIndexes.swap(outputMissingIndexes);
-                outputMissingIndexes.clear();
-                co_await readMissingBatch(
-                    m_cacheStorage, keys, values, missingIndexes, outputMissingIndexes);
-            }
-            if (RANGES::empty(outputMissingIndexes))
-            {
-                co_return iterator;
-            }
-        }
-
-        if (RANGES::empty(values))
-        {
-            co_await readBatch(m_backendStorage, keys, values, outputMissingIndexes);
+            missingIndexes = co_await readStorage(keys, values, m_backendStorage);
         }
         else
         {
-            missingIndexes.swap(outputMissingIndexes);
-            outputMissingIndexes.clear();
-            co_await readMissingBatch(
-                m_backendStorage, keys, values, missingIndexes, outputMissingIndexes);
+            auto missingKeys = missingIndexes | RANGES::views::transform(
+                                                    [&keys](int64_t index) { return keys[index]; });
+            auto missingValues =
+                missingIndexes |
+                RANGES::views::transform([&values](int64_t index) mutable -> auto& {
+                    return values[index];
+                });
+            missingIndexes = co_await readStorage(missingKeys2, missingValues2, m_backendStorage);
         }
 
         co_return iterator;
@@ -293,7 +331,7 @@ public:
         immutablesLock.unlock();
 
         // TODO: Transactional
-        auto it = co_await immutableStorage->seek(transaction_executor::EMPTY_STATE_KEY);
+        auto it = co_await immutableStorage->seek(storage2::STORAGE_BEGIN);
         while (co_await it.next())
         {
             if (co_await it.hasValue())

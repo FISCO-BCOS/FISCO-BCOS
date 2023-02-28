@@ -37,7 +37,7 @@ public:
     {
         // State root
         auto& mutableStorage = m_multiLayerStorage.mutableStorage();
-        auto it = co_await mutableStorage.seek(transaction_executor::EMPTY_STATE_KEY);
+        auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
         bcos::h256 hash;
         while (co_await it.next())
         {

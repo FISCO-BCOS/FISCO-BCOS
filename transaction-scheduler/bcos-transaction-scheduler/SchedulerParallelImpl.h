@@ -3,6 +3,7 @@
 #include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
 #include "SchedulerBaseImpl.h"
+#include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Wait.h>
 #include <tbb/parallel_pipeline.h>
 #include <iterator>
@@ -10,6 +11,9 @@
 
 namespace bcos::transaction_scheduler
 {
+
+#define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
+
 template <transaction_executor::StateStorage MultiLayerStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
     template <typename, typename> class Executor>
@@ -17,7 +21,7 @@ class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Receip
 {
 private:
     constexpr static size_t DEFAULT_CHUNK_SIZE = 100;
-    constexpr static size_t DEFAULT_MAX_THREADS = 1;  // Use hardware concurrency, window
+    constexpr static size_t DEFAULT_MAX_THREADS = 16;  // Use hardware concurrency, window
 
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;    // Maybe auto adjust
     size_t m_maxThreads = DEFAULT_MAX_THREADS;  // Maybe auto adjust
@@ -33,7 +37,8 @@ private:
         std::tuple<ChunkStorage, std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>>;
 
     task::Task<ChunkExecuteReturn> chunkExecute(protocol::IsBlockHeader auto const& blockHeader,
-        RANGES::input_range auto&& transactions, int startContextID, std::atomic_bool& abortToken)
+        RANGES::input_range auto const& transactions, int startContextID,
+        std::atomic_bool& abortToken)
     {
         auto myStorage = std::make_unique<ChunkExecuteStorage>(multiLayerStorage());
         myStorage->newMutable();
@@ -65,7 +70,8 @@ private:
 
     task::Task<void> mergeStorage(auto& fromStorage, auto& toStorage)
     {
-        auto it = co_await fromStorage.seek(transaction_executor::EMPTY_STATE_KEY);
+        auto it = co_await fromStorage.seek(storage2::STORAGE_BEGIN);
+        size_t count = 0;
         while (co_await it.next())
         {
             if (co_await it.hasValue())
@@ -76,7 +82,10 @@ private:
             {
                 co_await storage2::removeOne(toStorage, co_await it.key());
             }
+            ++count;
         }
+
+        PARALLEL_SCHEDULER_LOG(DEBUG) << "Merged " << count << " entries";
     }
 
 public:
@@ -95,7 +104,6 @@ public:
             receipts.reserve(RANGES::size(transactions));
         }
 
-        int contextID = 0;
         auto chunks = transactions | RANGES::views::chunk(m_chunkSize);
         auto chunkIt = RANGES::begin(chunks);
 
@@ -131,7 +139,9 @@ public:
                         [&](auto&& input) {
                             if (input && !abortToken)
                             {
+                                PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk executing...";
                                 auto&& [transactions, startContextID] = *input;
+                                PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk execute finished";
                                 return std::make_optional(task::syncWait(chunkExecute(
                                     blockHeader, transactions, startContextID, abortToken)));
                             }
@@ -142,7 +152,7 @@ public:
                             if (chunkResult && !abortToken)
                             {
                                 auto&& [chunkStorage, chunkReceipts] = *chunkResult;
-                                auto&& [readWriteSetStorage, storage] = chunkStorage;
+                                auto&& [readWriteSetStorage, _] = chunkStorage;
 
                                 if (!executedStorages.empty())
                                 {
@@ -152,6 +162,8 @@ public:
                                             readWriteSetStorage))
                                     {
                                         // Abort the pipeline
+                                        PARALLEL_SCHEDULER_LOG(DEBUG)
+                                            << "Detected raw intersection, abort";
                                         abortToken = true;
                                         return;
                                     }
@@ -165,7 +177,8 @@ public:
                                 RANGES::advance(chunkIt, 1);
                             }
                         }));
-            for (auto& [rwStorage, executedStorage] : executedStorages)
+            PARALLEL_SCHEDULER_LOG(DEBUG) << "Mergeing storage...";
+            for (auto& [_, executedStorage] : executedStorages)
             {
                 co_await mergeStorage(
                     executedStorage->mutableStorage(), multiLayerStorage().mutableStorage());

@@ -87,8 +87,6 @@ private:
         boost::multi_index_container<Data,
             boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
-
-
     struct alignas(MOSTLY_CACHELINE_SIZE) Bucket
     {
         Container container;
@@ -106,7 +104,6 @@ private:
         {
             return std::make_tuple(std::ref(m_buckets[0]), Lock(Empty{}));
         }
-
         auto index = getBucketIndex(key);
 
         auto& bucket = m_buckets[index];
@@ -170,7 +167,7 @@ public:
     MemoryStorage(const MemoryStorage&) = delete;
     MemoryStorage(MemoryStorage&&) noexcept = default;
     MemoryStorage& operator=(const MemoryStorage&) = delete;
-    MemoryStorage& operator=(MemoryStorage&&) = default;
+    MemoryStorage& operator=(MemoryStorage&&) noexcept = default;
 
     void setMaxCapacity(int64_t capacity) requires withMRU { m_maxCapacity = capacity; }
 
@@ -330,7 +327,16 @@ public:
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
 
-        auto it = index.lower_bound(key);
+        decltype(index.begin()) it;
+        if constexpr (std::is_same_v<storage2::STORAGE_BEGIN_TYPE,
+                          std::remove_cvref_t<decltype(key)>>)
+        {
+            it = index.begin();
+        }
+        else
+        {
+            it = index.lower_bound(key);
+        }
 
         task::AwaitableValue<SeekIterator> output({});
         auto& seekIt = output.value();
