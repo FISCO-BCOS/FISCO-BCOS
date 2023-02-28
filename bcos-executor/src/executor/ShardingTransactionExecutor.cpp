@@ -148,11 +148,11 @@ BlockContext::Ptr ShardingTransactionExecutor::createTmpBlockContext(
 
     if (m_cachedStorage)
     {
-        stateStorage = createStateStorage(m_cachedStorage);
+        stateStorage = createStateStorage(m_cachedStorage, true);
     }
     else
     {
-        stateStorage = createStateStorage(m_backendStorage);
+        stateStorage = createStateStorage(m_backendStorage, true);
     }
 
     return createBlockContext(currentHeader, stateStorage);
