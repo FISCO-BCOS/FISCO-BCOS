@@ -171,11 +171,17 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         << LOG_KV("version", (bcos::protocol::BlockVersion)(block->version()))
                         << LOG_KV("waitT", waitT);
 
-    auto callback = [requestBlockNumber, _callback = std::move(_callback)](bcos::Error::Ptr&& error,
-                        bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
+    auto callback = [this, requestBlockNumber, _callback = std::move(_callback)](
+                        bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& blockHeader,
+                        bool _sysBlock) {
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber)
                              << "ExecuteBlock response"
                              << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
+        if (!error)
+        {
+            tryExecuteBlock(requestBlockNumber + 1, blockHeader->hash());
+        }
+
         _callback(error == nullptr ? nullptr : std::move(error), std::move(blockHeader), _sysBlock);
     };
 
@@ -760,6 +766,7 @@ BlockExecutive::Ptr SchedulerImpl::getPreparedBlock(
     }
 }
 
+
 void SchedulerImpl::setPreparedBlock(
     bcos::protocol::BlockNumber blockNumber, int64_t timestamp, BlockExecutive::Ptr blockExecutive)
 {
@@ -1087,4 +1094,57 @@ void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
         // cast must be success
         m_blockVersion = bcos::tool::toVersionNumber(value);
     }
+}
+
+BlockExecutive::Ptr SchedulerImpl::getLatestPreparedBlock(bcos::protocol::BlockNumber blockNumber)
+{
+    bcos::ReadGuard readGuard(x_preparedBlockMutex);
+
+    auto needBlocksMapIt = m_preparedBlocks.find(blockNumber);
+    if (needBlocksMapIt == m_preparedBlocks.end())
+    {
+        return nullptr;
+    }
+    else
+    {
+        // get the biggest timestamp block
+        auto blockIt = needBlocksMapIt->second.end();
+        blockIt--;
+        return blockIt->second;
+    }
+}
+
+void SchedulerImpl::tryExecuteBlock(
+    bcos::protocol::BlockNumber number, bcos::crypto::HashType parentHash)
+{
+    m_worker.enqueue([this, number, &parentHash]() {
+        if (!m_isRunning)
+        {
+            return;
+        }
+        auto blockExecutive = getLatestPreparedBlock(number);
+        if (!blockExecutive)
+        {
+            return;
+        }
+        auto block = blockExecutive->block();
+        if (!block)
+        {
+            return;
+        }
+        bcos::protocol::ParentInfoList parentInfoList;
+        bcos::protocol::ParentInfo parentInfo{number, std::move(parentHash)};
+        parentInfoList.push_back(parentInfo);
+        block->blockHeader()->setParentInfo(parentInfoList);
+
+        auto timestamp = block->blockHeaderConst()->timestamp();
+        SCHEDULER_LOG(INFO) << "tryExecuteBlock request" << LOG_KV("number", number)
+                            << LOG_KV("timestamp", timestamp);
+        executeBlock(block, false,
+            [number, timestamp](bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&& blockHeader,
+                bool _sysBlock) {
+                SCHEDULER_LOG(INFO) << "tryExecuteBlock success" << LOG_KV("number", number)
+                                    << LOG_KV("timestamp", timestamp);
+            });
+    });
 }
