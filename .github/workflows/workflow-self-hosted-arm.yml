@@ -55,7 +55,7 @@ jobs:
       - name: update vcpkg
         run: |
           cd vcpkg
-          git checkout master
+          git checkout 1c48ec7f49d69bb753e6afefba51368e18263255
           cd -
 
       - name: Build for linux
