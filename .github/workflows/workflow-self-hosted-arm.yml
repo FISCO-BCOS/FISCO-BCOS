@@ -54,9 +54,8 @@ jobs:
 
       - name: update vcpkg
         run: |
-          su ci
           cd vcpkg
-          git checkout master && git pull && cd - && exit
+          git checkout master && git pull && cd -
 
 
       - name: Build for linux
