@@ -553,6 +553,7 @@ Usage:
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
     -z <Generate tar packet>            [Optional] Pack the data on the chain to generate tar packet
+    -n <node key path>                  [Optional] set the path of the node key file to load nodeid
     -N <node path>                      [Optional] set the path of the node modified to multi ca mode
     -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -h Help
