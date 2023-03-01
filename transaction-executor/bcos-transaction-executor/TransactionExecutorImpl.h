@@ -18,6 +18,8 @@
 namespace bcos::transaction_executor
 {
 
+#define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
+
 // clang-format off
 struct InvalidArgumentsError: public bcos::Error {};
 // clang-format on
@@ -94,7 +96,7 @@ public:
             auto evmcResult = co_await hostContext.execute();
             struct Defer
             {
-                ~Defer() { releaseResult(m_evmcResult); }
+                ~Defer() noexcept { releaseResult(m_evmcResult); }
                 decltype(evmcResult)& m_evmcResult;
             } defer{.m_evmcResult = evmcResult};
 
@@ -112,6 +114,11 @@ public:
                 output = {evmcResult.output_data, evmcResult.output_size};
             }
 
+            if (evmcResult.status_code != 0)
+            {
+                TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
+            }
+
             auto const& logEntries = hostContext.logs();
             auto receipt =
                 m_receiptFactory.createReceipt(evmcResult.gas_left, std::move(newContractAddress),
@@ -121,6 +128,9 @@ public:
         }
         catch (std::exception& e)
         {
+            TRANSACTION_EXECUTOR_LOG(DEBUG)
+                << "Execute exception: " << boost::diagnostic_information(e);
+
             auto receipt = m_receiptFactory.createReceipt(
                 0, {}, {}, EVMC_INTERNAL_ERROR, {}, blockHeader.number());
             receipt->setMessage(boost::diagnostic_information(e));

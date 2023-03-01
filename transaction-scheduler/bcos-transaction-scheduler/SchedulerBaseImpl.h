@@ -81,7 +81,7 @@ public:
         co_return co_await executor.execute(blockHeader, transaction, 0);
     }
 
-    decltype(m_multiLayerStorage)& multiLayerStorage() & { return m_multiLayerStorage; }
+    MultiLayerStorage& multiLayerStorage() & { return m_multiLayerStorage; }
     decltype(m_receiptFactory)& receiptFactory() & { return m_receiptFactory; }
     transaction_executor::TableNamePool& tableNamePool() & { return m_tableNamePool; }
 };

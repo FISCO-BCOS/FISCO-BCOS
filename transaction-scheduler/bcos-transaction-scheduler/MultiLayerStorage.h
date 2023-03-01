@@ -138,12 +138,9 @@ public:
     task::Task<ReadIterator> read(RANGES::input_range auto const& keys)
     {
         ReadIterator iterator;
-        for (auto&& key : keys)
-        {
-            iterator.m_keys.emplace_back(key);
-        }
-        iterator.m_values.resize(RANGES::size(keys));
-        auto myKeys = iterator.m_keys;
+        iterator.m_keys = keys | RANGES::to<decltype(iterator.m_keys)>();
+        iterator.m_values.resize(RANGES::size(iterator.m_keys));
+        auto const& myKeys = iterator.m_keys;
         auto& myValues = iterator.m_values;
 
         boost::container::small_vector<std::tuple<const RANGES::range_value_t<decltype(myKeys)>*,

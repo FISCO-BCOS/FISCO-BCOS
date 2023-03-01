@@ -162,7 +162,14 @@ private:
             co_return;
         }
 
-        auto hashes = RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsMetaDataSize()) |
+        if (block.transactionsMetaDataSize() != block.transactionsSize())
+        {
+            LEDGER2_LOG(INFO)
+                << "SetBlockData TRANSACTIONS not equal transaction metas and transactions!";
+            co_return;
+        }
+
+        auto hashes = RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsSize()) |
                       RANGES::views::transform([&block](uint64_t index) {
                           auto metaData = block.transactionMetaData(index);
                           return metaData->hash();
@@ -184,9 +191,9 @@ private:
     {
         LEDGER2_LOG(DEBUG) << "setBlockData receipts: " << blockNumberKey;
 
-        if (block.transactionsMetaDataSize())
+        if (block.transactionsMetaDataSize() == 0)
         {
-            LEDGER2_LOG(INFO) << "SetBlockData TRANSACTIONS not found transaction meta data!";
+            LEDGER2_LOG(INFO) << "SetBlockData RECEIPTS not found transaction meta data!";
             co_return;
         }
 
@@ -207,13 +214,14 @@ private:
                           auto metaData = block.transactionMetaData(index);
                           return metaData->hash();
                       });
-        auto buffers = RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsSize()) |
-                       RANGES::views::transform([&block](uint64_t index) {
-                           auto receipt = block.receipt(index);
-                           std::vector<bcos::byte> buffer;
-                           bcos::concepts::serialize::encode(*receipt, buffer);
-                           return buffer;
-                       });
+        auto buffers =
+            RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
+            RANGES::views::transform([&block](uint64_t index) {
+                auto receipt = block.receipt(index);
+                std::vector<bcos::byte> buffer;
+                bcos::concepts::serialize::encode(*receipt, buffer);
+                return buffer;
+            });
 
         co_await setTransactions<false>(hashes, buffers);
 
@@ -477,7 +485,7 @@ public:
         if (RANGES::size(buffers) != RANGES::size(hashes))
         {
             BOOST_THROW_EXCEPTION(
-                MismatchTransactionCount{} << bcos::error::ErrorMessage{"No match count"});
+                MismatchTransactionCount{} << bcos::error::ErrorMessage{"No match count!"});
         }
         auto tableNameID =
             isTransaction ?
