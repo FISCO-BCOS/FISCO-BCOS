@@ -45,7 +45,7 @@ FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _no
 
     // make the threadpool configurable
     auto threadPool =
-        std::make_shared<ThreadPool>("frontService", 4);
+        std::make_shared<ThreadPool>("frontService", std::thread::hardware_concurrency());
     frontServiceFactory->setThreadPool(threadPool);
     m_front = frontServiceFactory->buildFrontService(
         m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());

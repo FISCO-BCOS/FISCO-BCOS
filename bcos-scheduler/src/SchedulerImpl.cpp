@@ -1136,6 +1136,7 @@ void SchedulerImpl::tryExecuteBlock(
         bcos::protocol::ParentInfo parentInfo{number, std::move(parentHash)};
         parentInfoList.push_back(parentInfo);
         block->blockHeader()->setParentInfo(parentInfoList);
+        block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
         auto timestamp = block->blockHeaderConst()->timestamp();
         SCHEDULER_LOG(INFO) << "tryExecuteBlock request" << LOG_KV("number", number)
