@@ -85,7 +85,7 @@ public:
     virtual std::string_view chainId() const = 0;
     virtual std::string_view groupId() const = 0;
     virtual int64_t blockLimit() const = 0;
-    virtual u256 nonce() const = 0;
+    virtual const std::string& nonce() const = 0;
     virtual std::string_view to() const = 0;
     virtual std::string_view abi() const = 0;
 

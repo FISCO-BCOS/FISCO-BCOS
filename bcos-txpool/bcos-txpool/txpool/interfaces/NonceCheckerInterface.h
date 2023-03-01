@@ -42,7 +42,7 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::protocol::NonceListPtr const& _nonceList) = 0;
     virtual void batchRemove(bcos::protocol::NonceList const& _nonceList) = 0;
     virtual void batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
-        std::hash<bcos::crypto::HashType>> const& _nonceList) = 0;
+        std::hash<bcos::protocol::NonceType>> const& _nonceList) = 0;
     virtual void insert(bcos::protocol::NonceType const& _nonce) = 0;
 
 protected:

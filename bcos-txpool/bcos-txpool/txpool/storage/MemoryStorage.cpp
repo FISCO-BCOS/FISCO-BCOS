@@ -419,7 +419,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
         {
             auto const& txResult = it;
             auto tx = removeWithoutLock(txResult->txHash());
-            if (!tx && txResult->nonce() != NonceType(-1))
+            if (!tx && !txResult->nonce().empty())
             {
                 nonceList.emplace_back(txResult->nonce());
             }
@@ -610,11 +610,11 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         txMetaData->setAttribute(tx->attribute());
         if (tx->systemTx())
         {
-            _sysTxsList->appendTransactionMetaData(txMetaData);
+            _sysTxsList->appendTransactionMetaData(std::move(txMetaData));
         }
         else
         {
-            _txsList->appendTransactionMetaData(txMetaData);
+            _txsList->appendTransactionMetaData(std::move(txMetaData));
         }
         if (!tx->sealed())
         {

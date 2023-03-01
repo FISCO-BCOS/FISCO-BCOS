@@ -55,7 +55,7 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(cryptoBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -199,7 +199,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         bytesConstRef dataRef(stringData);
         bytes encodedData = codec->encodeWithSig("sm3(bytes)", dataRef.toBytes());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto txHash = tx->hash();
         txpool->hash2Transaction.emplace(txHash, tx);
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         bytesConstRef dataRef(stringData);
         bytes encodedData = codec->encodeWithSig("keccak256Hash(bytes)", dataRef.toBytes());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto txHash = tx->hash();
         txpool->hash2Transaction.emplace(txHash, tx);
@@ -363,7 +363,7 @@ BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
         bytesConstRef dataRef(stringData);
         bytes encodedData = codec->encodeWithSig("getSha256(bytes)", dataRef.toBytes());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto txHash = tx->hash();
         txpool->hash2Transaction.emplace(txHash, tx);

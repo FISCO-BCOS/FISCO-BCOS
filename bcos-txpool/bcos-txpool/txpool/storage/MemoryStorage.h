@@ -140,7 +140,7 @@ protected:
 
     tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
         m_invalidTxs;
-    tbb::concurrent_unordered_set<bcos::protocol::NonceType, std::hash<bcos::crypto::HashType>>
+    tbb::concurrent_unordered_set<bcos::protocol::NonceType, std::hash<bcos::protocol::NonceType>>
         m_invalidNonces;
     tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
         m_missedTxs;
