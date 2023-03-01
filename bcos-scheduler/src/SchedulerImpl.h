@@ -12,10 +12,10 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
 #include <future>
 #include <list>
-
 
 namespace bcos::scheduler
 {
@@ -56,7 +56,8 @@ public:
         m_isAuthCheck(isAuthCheck),
         m_isWasm(isWasm),
         m_isSerialExecute(isSerialExecute),
-        m_schedulerTermId(schedulerTermId)
+        m_schedulerTermId(schedulerTermId),
+        m_worker("scheduler", 1)
     {
         start();
     }
@@ -165,6 +166,9 @@ private:
 
     bcos::protocol::BlockNumber getCurrentBlockNumber();
 
+    BlockExecutive::Ptr getLatestPreparedBlock(bcos::protocol::BlockNumber blockNumber);
+    void tryExecuteBlock(bcos::protocol::BlockNumber number, bcos::crypto::HashType parentHash);
+
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
 
@@ -224,5 +228,7 @@ private:
     bool m_isRunning = false;
 
     std::function<void(int64_t)> f_onNeedSwitchEvent;
+
+    bcos::ThreadPool m_worker;
 };
 }  // namespace bcos::scheduler

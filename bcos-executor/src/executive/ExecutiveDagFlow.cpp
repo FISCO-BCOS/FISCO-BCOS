@@ -77,8 +77,8 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
     else
     {
         // is dmc resume input
-        m_inputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
-        m_inputs->resize(txInputs->size());
+        // m_inputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
+        // m_inputs->resize(txInputs->size());
         for (auto& txInput : *txInputs)
         {
             submit(std::move(txInput));
