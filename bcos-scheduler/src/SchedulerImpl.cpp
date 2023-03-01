@@ -176,6 +176,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         bool _sysBlock) {
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber)
                              << "ExecuteBlock response"
+
                              << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
         if (!error)
         {
@@ -1117,6 +1118,8 @@ BlockExecutive::Ptr SchedulerImpl::getLatestPreparedBlock(bcos::protocol::BlockN
 void SchedulerImpl::tryExecuteBlock(
     bcos::protocol::BlockNumber number, bcos::crypto::HashType parentHash)
 {
+    return;  // TODO: Fix blockHash bug here
+
     m_worker.enqueue([this, number, &parentHash]() {
         if (!m_isRunning)
         {

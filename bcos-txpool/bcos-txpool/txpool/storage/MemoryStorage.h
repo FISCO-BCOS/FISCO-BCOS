@@ -22,14 +22,31 @@
 
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
+#include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
-#include <tbb/concurrent_unordered_map.h>
-#include <tbb/concurrent_unordered_set.h>
+#include <tbb/concurrent_hash_map.h>
+#include <tbb/concurrent_queue.h>
 #include <boost/thread/pthread/shared_mutex.hpp>
 
 namespace bcos::txpool
 {
+
+class HashCompare
+{
+public:
+    size_t hash(const bcos::crypto::HashType& x) const
+    {
+        uint64_t const* data = reinterpret_cast<uint64_t const*>(x.data());
+        return boost::hash_range(data, data + 4);
+    }
+    // True if strings are equal
+    bool equal(const bcos::crypto::HashType& x, const bcos::crypto::HashType& y) const
+    {
+        return x == y;
+    }
+};
+
 class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
 {
@@ -60,17 +77,8 @@ public:
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
-    bool exist(bcos::crypto::HashType const& _txHash) override
-    {
-        ReadGuard lock(x_txpoolMutex);
-        auto it = m_txsTable.find(_txHash);
-        return it != m_txsTable.end();
-    }
-    size_t size() const override
-    {
-        ReadGuard l(x_txpoolMutex);
-        return m_txsTable.size();
-    }
+    bool exist(bcos::crypto::HashType const& _txHash) override { return m_txsTable.count(_txHash); }
+    size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 
     // FIXME: deprecated, after using txpool::broadcastPushTransaction
@@ -133,10 +141,13 @@ protected:
 
     TxPoolConfig::Ptr m_config;
 
-    tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
-        std::hash<bcos::crypto::HashType>>
+    using TxsTableAccessor = tbb::concurrent_hash_map<bcos::crypto::HashType,
+        bcos::protocol::Transaction::Ptr, HashCompare>::accessor;
+    tbb::concurrent_hash_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr, HashCompare>
         m_txsTable;
     mutable SharedMutex x_txpoolMutex;
+
+    tbb::concurrent_bounded_queue<bcos::protocol::Transaction::Ptr> m_tx2Seal;
 
     tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
         m_invalidTxs;
