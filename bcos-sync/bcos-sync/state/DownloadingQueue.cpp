@@ -422,8 +422,8 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
             }
             if (_ret)
             {
-                BLKSYNC_LOG(INFO) << LOG_DESC("asyncCheckBlock success, try to commit the block")
-                                  << LOG_KV("blockNumber", blockHeader->number())
+                BLKSYNC_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
+                                  << LOG_DESC("asyncCheckBlock success, try to commit the block")
                                   << LOG_KV("hash", blockHeader->hash().abridged());
                 downloadQueue->commitBlock(_block);
                 return;
@@ -554,7 +554,8 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             {
                 downloadingQueue->m_config->setExecutedBlock(blockHeader->number());
             }
-            BLKSYNC_LOG(INFO) << METRIC << LOG_DESC("commitBlockState success")
+            BLKSYNC_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << METRIC
+                              << LOG_DESC("commitBlockState success")
                               << LOG_KV("number", blockHeader->number())
                               << LOG_KV("hash", blockHeader->hash().abridged())
                               << LOG_KV(
