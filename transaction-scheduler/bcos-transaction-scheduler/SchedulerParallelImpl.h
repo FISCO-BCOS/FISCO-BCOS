@@ -116,6 +116,8 @@ public:
         {
             std::atomic_bool abortToken = false;
             auto currentChunk = chunkIt;
+
+            PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
             tbb::parallel_pipeline(m_maxThreads,
                 tbb::make_filter<void,
                     std::optional<std::tuple<RANGES::range_value_t<decltype(chunks)>, int>>>(
@@ -139,43 +141,46 @@ public:
                         [&](auto&& input) {
                             if (input && !abortToken)
                             {
-                                PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk executing...";
                                 auto&& [transactions, startContextID] = *input;
-                                PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk execute finished";
-                                return std::make_optional(task::syncWait(chunkExecute(
+                                PARALLEL_SCHEDULER_LOG(DEBUG)
+                                    << "Chunk " << startContextID << " executing...";
+                                auto result = std::make_optional(task::syncWait(chunkExecute(
                                     blockHeader, transactions, startContextID, abortToken)));
+                                PARALLEL_SCHEDULER_LOG(DEBUG)
+                                    << "Chunk " << startContextID << " execute finished";
+                                return result;
                             }
                             return std::optional<ChunkExecuteReturn>{};
                         }) &
                     tbb::make_filter<std::optional<ChunkExecuteReturn>, void>(
                         tbb::filter_mode::serial_in_order, [&](auto&& chunkResult) {
-                            if (chunkResult && !abortToken)
+                            if (!chunkResult || !abortToken)
                             {
-                                auto&& [chunkStorage, chunkReceipts] = *chunkResult;
-                                auto&& [readWriteSetStorage, _] = chunkStorage;
-
-                                if (!executedStorages.empty())
-                                {
-                                    auto& [prevReadWriteSetStorage, oldStorage] =
-                                        executedStorages.back();
-                                    if (prevReadWriteSetStorage.hasRAWIntersection(
-                                            readWriteSetStorage))
-                                    {
-                                        // Abort the pipeline
-                                        PARALLEL_SCHEDULER_LOG(DEBUG)
-                                            << "Detected raw intersection, abort";
-                                        abortToken = true;
-                                        return;
-                                    }
-                                }
-
-                                executedStorages.emplace_back(std::move(chunkStorage));
-                                receipts.insert(receipts.end(),
-                                    std::make_move_iterator(chunkReceipts.begin()),
-                                    std::make_move_iterator(chunkReceipts.end()));
-
-                                RANGES::advance(chunkIt, 1);
+                                return;
                             }
+                            auto&& [chunkStorage, chunkReceipts] = *chunkResult;
+                            auto&& [readWriteSetStorage, _] = chunkStorage;
+
+                            if (!executedStorages.empty())
+                            {
+                                auto& [prevReadWriteSetStorage, oldStorage] =
+                                    executedStorages.back();
+                                if (prevReadWriteSetStorage.hasRAWIntersection(readWriteSetStorage))
+                                {
+                                    // Abort the pipeline
+                                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                                        << "Detected RAW intersection, abort";
+                                    abortToken = true;
+                                    return;
+                                }
+                            }
+
+                            executedStorages.emplace_back(std::move(chunkStorage));
+                            receipts.insert(receipts.end(),
+                                std::make_move_iterator(chunkReceipts.begin()),
+                                std::make_move_iterator(chunkReceipts.end()));
+
+                            RANGES::advance(chunkIt, 1);
                         }));
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Mergeing storage...";
             for (auto& [_, executedStorage] : executedStorages)
