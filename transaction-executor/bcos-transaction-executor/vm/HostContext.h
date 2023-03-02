@@ -49,6 +49,8 @@
 namespace bcos::transaction_executor
 {
 
+#define HOST_CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("HOST_CONTEXT")
+
 // clang-format off
 struct NotFoundCodeError : public bcos::Error {};
 // clang-format on
@@ -147,7 +149,7 @@ public:
                 if (co_await codeIt.hasValue())
                 {
                     auto&& codeEntry = co_await codeIt.value();
-                    co_return std::forward<decltype(codeEntry)>(codeEntry);
+                    co_return std::make_optional<storage::Entry>(codeEntry);
                 }
             }
             co_return std::optional<storage::Entry>{};
@@ -350,13 +352,15 @@ public:
     task::Task<evmc_result> call()
     {
         auto codeEntry = co_await code(m_message.code_address);
-        if (!codeEntry)
+        if (!codeEntry || codeEntry->size() == 0)
         {
             BOOST_THROW_EXCEPTION(
                 NotFoundCodeError{} << bcos::Error::ErrorMessage(
                     std::string("Not found contract code: ").append(*m_myContractTable)));
         }
         auto code = codeEntry->get();
+        HOST_CONTEXT_LOG(DEBUG) << "Code size: " << code.size()
+                                << " hash: " << GlobalHashImpl::g_hashImpl->hash(code);
 
         auto vmInstance = VMFactory::create();
         auto mode = toRevision(vmSchedule());

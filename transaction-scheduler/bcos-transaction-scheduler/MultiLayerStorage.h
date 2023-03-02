@@ -71,7 +71,7 @@ private:
         {
             if (co_await it.hasValue())
             {
-                *valueIt = co_await it.value();
+                (*valueIt).emplace(co_await it.value());
             }
             else
             {
@@ -93,7 +93,7 @@ public:
 
     private:
         boost::container::small_vector<KeyType, 1> m_keys;
-        boost::container::small_vector<utilities::AnyHolder<ValueType>, 1> m_values;
+        boost::container::small_vector<std::optional<ValueType>, 1> m_values;
         int64_t m_index = -1;
 
     public:
@@ -113,8 +113,8 @@ public:
             return {static_cast<size_t>(++m_index) != m_values.size()};
         }
         task::AwaitableValue<Key> key() const { return {m_keys[m_index]}; }
-        task::AwaitableValue<Value> value() const { return {m_values[m_index].get()}; }
-        task::AwaitableValue<bool> hasValue() const { return {m_values[m_index].hasValue()}; }
+        task::AwaitableValue<Value> value() const { return {*(m_values[m_index])}; }
+        task::AwaitableValue<bool> hasValue() const { return {m_values[m_index].has_value()}; }
     };
 
     using Key = KeyType;

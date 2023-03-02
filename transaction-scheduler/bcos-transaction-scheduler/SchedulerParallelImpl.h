@@ -136,7 +136,7 @@ public:
                     tbb::make_filter<
                         std::optional<std::tuple<RANGES::range_value_t<decltype(chunks)>, int64_t>>,
                         std::optional<ChunkExecuteReturn>>(tbb::filter_mode::parallel,
-                        [&](auto&& input) {
+                        [&](auto input) {
                             if (input && !abortToken)
                             {
                                 auto& [transactions, startContextID] = *input;
@@ -151,7 +151,7 @@ public:
                             return std::optional<ChunkExecuteReturn>{};
                         }) &
                     tbb::make_filter<std::optional<ChunkExecuteReturn>, void>(
-                        tbb::filter_mode::serial_in_order, [&](auto&& chunkResult) {
+                        tbb::filter_mode::serial_in_order, [&](auto chunkResult) {
                             if (!chunkResult || abortToken)
                             {
                                 return;
@@ -177,8 +177,6 @@ public:
                                 << "Inserting receipts... " << chunkReceipts.size();
                             receipts.insert(
                                 receipts.end(), chunkReceipts.begin(), chunkReceipts.end());
-                            PARALLEL_SCHEDULER_LOG(DEBUG)
-                                << "Insert receipts finished " << chunkReceipts.size();
                             executedChunk.emplace_back(std::move(*chunkResult));
                             ++chunkIt;
                         }));
