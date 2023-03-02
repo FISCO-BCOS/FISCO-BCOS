@@ -359,8 +359,6 @@ public:
                     std::string("Not found contract code: ").append(*m_myContractTable)));
         }
         auto code = codeEntry->get();
-        HOST_CONTEXT_LOG(DEBUG) << "Code size: " << code.size()
-                                << " hash: " << GlobalHashImpl::g_hashImpl->hash(code);
 
         auto vmInstance = VMFactory::create();
         auto mode = toRevision(vmSchedule());

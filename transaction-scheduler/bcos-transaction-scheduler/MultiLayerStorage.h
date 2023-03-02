@@ -3,7 +3,6 @@
 #include "bcos-task/Trait.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
-#include <bcos-utilities/AnyHolder.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
