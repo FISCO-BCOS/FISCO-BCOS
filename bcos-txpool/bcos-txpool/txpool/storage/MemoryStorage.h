@@ -77,7 +77,10 @@ public:
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
-    bool exist(bcos::crypto::HashType const& _txHash) override { return m_txsTable.count(_txHash); }
+    bool exist(bcos::crypto::HashType const& _txHash) override
+    {
+        return m_txsTable.count(_txHash) > 0U;
+    }
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 
