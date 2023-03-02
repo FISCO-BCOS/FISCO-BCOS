@@ -1,4 +1,5 @@
 #include "bcos-framework/storage/Entry.h"
+#include "storage2/StringPool.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
@@ -71,11 +72,11 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
         storage::Entry newEntry;
         newEntry.set("Hello map!");
         co_await storage.write(
-            storage2::single(std::tuple<std::string, std::string>("table", "key:5")),
-            storage2::single(std::move(newEntry)));
+            storage2::singleView(std::tuple<std::string, std::string>("table", "key:5")),
+            storage2::singleView(std::move(newEntry)));
 
         auto result = co_await storage.read(
-            storage2::single(std::tuple<std::string, std::string>("table", "key:5")));
+            storage2::singleView(std::tuple<std::string, std::string>("table", "key:5")));
         co_await result.next();
         BOOST_REQUIRE(co_await result.hasValue());
         BOOST_CHECK_EQUAL((co_await result.value()).get(), "Hello map!");
@@ -138,7 +139,7 @@ BOOST_AUTO_TEST_CASE(mru)
 
         // write 10 100byte value
         storage::Entry entry;
-        entry.set(std::string('a', 10));
+        entry.set(std::string(100, 'a'));
         co_await storage.write(RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view(entry));
 
         // ensure 10 are useable
@@ -153,8 +154,8 @@ BOOST_AUTO_TEST_CASE(mru)
         it.release();
 
         // ensure 0 is erased
-        co_await storage.write(storage2::single(10), storage2::single(entry));
-        auto notExists = co_await storage.read(storage2::single(0));
+        co_await storage.write(storage2::singleView(10), storage2::singleView(entry));
+        auto notExists = co_await storage.read(storage2::singleView(0));
         co_await notExists.next();
         BOOST_REQUIRE(!co_await notExists.hasValue());
         notExists.release();
@@ -222,6 +223,93 @@ BOOST_AUTO_TEST_CASE(logicalDeletion)
         BOOST_CHECK_EQUAL(i, 100);
 
         co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(range)
+{
+    task::syncWait([]() -> task::Task<void> {
+        constexpr static int count = 100;
+
+        MemoryStorage<std::tuple<std::string, std::string>, storage::Entry, ORDERED> storage;
+        co_await storage.write(
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(num));
+            }),
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
+                storage::Entry entry;
+                entry.set("Hello world!" + boost::lexical_cast<std::string>(num));
+                return entry;
+            }));
+
+        auto readIt = co_await storage.read(
+            RANGES::iota_view<int, int>(0, 10) | RANGES::views::transform([](int i) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(i));
+            }));
+        auto readRange = readIt.range();
+        for (auto&& [kv, num] : RANGES::zip_view(readRange, RANGES::iota_view<size_t>(0)))
+        {
+            auto& [key, value] = kv;
+            BOOST_CHECK(key);
+            BOOST_CHECK(value);
+
+            auto& [tableName, keyName] = *key;
+            BOOST_CHECK_EQUAL(tableName, "table");
+            BOOST_CHECK_EQUAL(keyName, "key:" + boost::lexical_cast<std::string>(num));
+            BOOST_CHECK_EQUAL(value->get(), "Hello world!" + boost::lexical_cast<std::string>(num));
+            BOOST_CHECK_LT(num, 10);
+        }
+
+        auto seekIt = co_await storage.seek(storage2::STORAGE_BEGIN);
+        auto seekRange = seekIt.range();
+
+        for (auto&& [kv, num] : RANGES::zip_view(seekRange, RANGES::iota_view<size_t>(0)))
+        {
+            auto& [key, value] = kv;
+            BOOST_CHECK(key);
+            BOOST_CHECK(value);
+
+            auto& [tableName, keyName] = *key;
+            // BOOST_CHECK_EQUAL(tableName, "table");
+            // BOOST_CHECK_EQUAL(keyName, "key:" + boost::lexical_cast<std::string>(num));
+            // BOOST_CHECK_EQUAL(value->get(), "Hello world!" +
+            // boost::lexical_cast<std::string>(num));
+            BOOST_CHECK_LT(num, 100);
+        }
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(merge)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MemoryStorage<int, int, ORDERED> storage1;
+        MemoryStorage<int, int, ORDERED> storage2;
+
+        storage1.write(RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
+        storage2.write(RANGES::iota_view<int, int>(9, 19), RANGES::repeat_view<int>(200));
+
+        storage1.merge(storage2);
+        auto it = co_await storage1.seek(bcos::storage2::STORAGE_BEGIN);
+        int i = 0;
+        while (co_await it.next())
+        {
+            auto keyNum = co_await it.key();
+            auto valueNum = co_await it.value();
+
+            BOOST_CHECK_EQUAL(keyNum, i);
+            if (keyNum > 8)
+            {
+                BOOST_CHECK_EQUAL(valueNum, 200);
+            }
+            else
+            {
+                BOOST_CHECK_EQUAL(valueNum, 100);
+            }
+            ++i;
+        }
+        BOOST_CHECK_EQUAL(i, 19);
     }());
 }
 

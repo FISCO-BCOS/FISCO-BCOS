@@ -1347,3 +1347,131 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
         _respFunc(_error, jResp);
     });
 }
+
+void JsonRpcImpl_2_0::getPeerBlacklist(RespFunc _respFunc)
+{
+    RPC_IMPL_LOG(TRACE) << LOG_DESC("getPeerBlacklist");
+    auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
+    m_gatewayInterface->asyncGetPeerBlacklist(
+        [m_respFunc = std::move(_respFunc), self](
+            Error::Ptr _error, const std::set<std::string>& _strList, const bool _enable) {
+            auto rpc = self.lock();
+            if (!rpc)
+            {
+                return;
+            }
+            Json::Value jResp;
+            if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
+            {
+                jResp["peerBlacklist"] = Json::arrayValue;
+                for (auto& str : _strList)
+                {
+                    jResp["peerBlacklist"].append(str);
+                }
+                jResp["enable"] = _enable;
+                m_respFunc(nullptr, jResp);
+            }
+            else
+            {
+                RPC_IMPL_LOG(ERROR)
+                    << LOG_BADGE("getPeerBlacklist")
+                    << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
+                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success");
+            }
+
+            m_respFunc(_error, jResp);
+        });
+}
+
+void JsonRpcImpl_2_0::setPeerBlacklist(
+    const set<std::string>& _strList, const bool _enable, RespFunc _respFunc)
+{
+    RPC_IMPL_LOG(TRACE) << LOG_DESC("setPeerBlacklist");
+    auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
+    m_gatewayInterface->asyncSetPeerBlacklist(
+        _strList, _enable, [m_respFunc = std::move(_respFunc), self](Error::Ptr _error) {
+            auto rpc = self.lock();
+            if (!rpc)
+            {
+                return;
+            }
+            Json::Value jResp;
+            if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
+            {
+                m_respFunc(_error, jResp);
+            }
+            else
+            {
+                RPC_IMPL_LOG(ERROR)
+                    << LOG_BADGE("getPeerBlacklist")
+                    << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
+                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success");
+            }
+
+            m_respFunc(_error, jResp);
+        });
+}
+
+void JsonRpcImpl_2_0::getPeerWhitelist(RespFunc _respFunc)
+{
+    RPC_IMPL_LOG(TRACE) << LOG_DESC("getPeerWhitelist");
+    auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
+    m_gatewayInterface->asyncGetPeerWhitelist(
+        [m_respFunc = std::move(_respFunc), self](
+            Error::Ptr _error, const std::set<std::string>& _strList, const bool _enable) {
+            auto rpc = self.lock();
+            if (!rpc)
+            {
+                return;
+            }
+            Json::Value jResp;
+            if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
+            {
+                jResp["peerWhitelist"] = Json::arrayValue;
+                for (auto& str : _strList)
+                {
+                    jResp["peerWhitelist"].append(str);
+                }
+                jResp["enable"] = _enable;
+                m_respFunc(nullptr, jResp);
+            }
+            else
+            {
+                RPC_IMPL_LOG(ERROR)
+                    << LOG_BADGE("getPeerWhitelist")
+                    << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
+                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success");
+            }
+
+            m_respFunc(_error, jResp);
+        });
+}
+
+void JsonRpcImpl_2_0::setPeerWhitelist(
+    const set<std::string>& _strList, const bool _enable, RespFunc _respFunc)
+{
+    RPC_IMPL_LOG(TRACE) << LOG_DESC("setPeerWhitelist");
+    auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
+    m_gatewayInterface->asyncSetPeerWhitelist(
+        _strList, _enable, [m_respFunc = std::move(_respFunc), self](Error::Ptr _error) {
+            auto rpc = self.lock();
+            if (!rpc)
+            {
+                return;
+            }
+            Json::Value jResp;
+            if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
+            {
+                m_respFunc(_error, jResp);
+            }
+            else
+            {
+                RPC_IMPL_LOG(ERROR)
+                    << LOG_BADGE("getPeerWhitelist")
+                    << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
+                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success");
+            }
+
+            m_respFunc(_error, jResp);
+        });
+}

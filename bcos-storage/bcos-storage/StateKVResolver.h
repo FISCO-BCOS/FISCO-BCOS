@@ -1,4 +1,5 @@
 #pragma once
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Exception.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
@@ -56,16 +57,16 @@ struct StateKeyResolver
 
     transaction_executor::StateKey decode(concepts::bytebuffer::ByteBuffer auto const& buffer)
     {
-        auto it = RANGES::find(buffer, TABLE_KEY_SPLIT);
-        if (it == RANGES::end(buffer))
+        std::string_view view = concepts::bytebuffer::toView(buffer);
+        auto pos = view.find(TABLE_KEY_SPLIT);
+        if (pos == std::string_view::npos)
         {
             BOOST_THROW_EXCEPTION(InvalidStateKey{} << error::ErrorMessage(
                                       fmt::format("Invalid state key! {}", buffer)));
         }
 
-        auto tableRange = RANGES::subrange<decltype(buffer)>(RANGES::begin(buffer), it);
-        RANGES::advance(it);
-        auto keyRange = RANGES::subrange<decltype(buffer)>(it, RANGES::end(buffer));
+        auto tableRange = view.substr(0, pos);
+        auto keyRange = view.substr(pos + 1, view.size());
 
         if (RANGES::empty(tableRange) || RANGES::empty(keyRange))
         {
@@ -73,10 +74,13 @@ struct StateKeyResolver
                                       fmt::format("Empty table or key!", buffer)));
         }
 
-        auto stateKey = transaction_executor::StateKey{
+        transaction_executor::SmallKey key(
+            std::string_view(RANGES::data(keyRange), RANGES::size(keyRange)));
+
+        auto stateKey = std::make_tuple(
             makeStringID(
                 m_stringPool, std::string_view(RANGES::data(tableRange), RANGES::size(tableRange))),
-            SmallKey(keyRange)};
+            key);
         return stateKey;
     }
 };

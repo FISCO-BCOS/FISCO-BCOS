@@ -528,6 +528,38 @@ public:
         }(this, std::move(respFunc)));
     }
 
+    void getPeerBlacklist(RespFunc _respFunc)
+    {
+        LIGHTNODE_LOG(INFO) << "RPC get peer black list request";
+
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+
+    void setPeerBlacklist(const std::set<std::string>& _strList, const bool _enable, RespFunc _respFunc)
+    {
+        LIGHTNODE_LOG(INFO) << "RPC set peer black list request";
+
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+
+    void getPeerWhitelist(RespFunc _respFunc)
+    {
+        LIGHTNODE_LOG(INFO) << "RPC get peer white list request";
+
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+
+    void setPeerWhitelist(const std::set<std::string>& _strList, const bool _enable, RespFunc _respFunc)
+    {
+        LIGHTNODE_LOG(INFO) << "RPC set peer white list request";
+
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+
 private:
     auto& localLedger() { return bcos::concepts::getRef(m_localLedger); }
     auto& remoteLedger() { return bcos::concepts::getRef(m_remoteLedger); }

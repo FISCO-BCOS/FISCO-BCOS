@@ -52,6 +52,8 @@ enum DisconnectReason
     UserReason = 0x10,
     IdleWaitTimeout = 0x11,
     NegotiateFailed = 0x12,
+    InBlacklistReason = 0x13,
+    NotInWhitelistReason = 0x14,
     NoDisconnect = 0xffff
 };
 
@@ -68,7 +70,7 @@ enum P2PExceptionType
     NotInWhitelist,
     OutBWOverflow,
     InQPSOverflow,
-    ALL,
+    ALL
 };
 
 //

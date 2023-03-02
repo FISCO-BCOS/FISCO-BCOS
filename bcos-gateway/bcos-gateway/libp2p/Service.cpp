@@ -227,6 +227,9 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     }
 
     RecursiveGuard l(x_sessions);
+
+    std::cout << "Service::onDisconnect, m_sessions.size(): " << m_sessions.size() << std::endl;
+
     auto it = m_sessions.find(p2pSession->p2pID());
     if (it != m_sessions.end() && it->second == p2pSession)
     {
@@ -462,6 +465,7 @@ void Service::asyncSendMessageByNodeID(
         }
 
         RecursiveGuard l(x_sessions);
+
         auto it = m_sessions.find(nodeID);
 
         if (it != m_sessions.end() && it->second->actived())
@@ -680,5 +684,59 @@ void Service::onReceiveProtocol(
                              << LOG_KV("peer", _session ? _session->p2pID() : "unknown")
                              << LOG_KV("packetType", _message->packetType())
                              << LOG_KV("seq", _message->seq());
+    }
+}
+
+void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable)
+{
+    // update the config
+    m_host->peerBlacklist()->update(_strList, _enable);
+    // disconnect nodes in the blacklist
+    if (true == _enable)
+    {
+        RecursiveGuard l(x_sessions);
+        auto s = m_sessions;  // make a copy in case m_sessions changes in onMessage cause iterator
+                              // invalidation
+        for (auto session : s)
+        {
+            auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
+            if (_strList.end() == _strList.find(p2pIdWithoutExtInfo))
+            {
+                continue;
+            }
+
+            SERVICE_LOG(INFO) << LOG_DESC("updatePeerBlacklist, disconnect peer in blacklist")
+                              << LOG_KV("peer", p2pIdWithoutExtInfo);
+
+            updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
+            session.second->session()->disconnect(DisconnectReason::InBlacklistReason);
+        }
+    }
+}
+
+void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable)
+{
+    // update the config
+    m_host->peerWhitelist()->update(_strList, _enable);
+    // disconnect nodes not in the whitelist
+    if (true == _enable)
+    {
+        RecursiveGuard l(x_sessions);
+        auto s = m_sessions;  // make a copy in case m_sessions changes in onMessage cause iterator
+                              // invalidation
+        for (auto session : s)
+        {
+            auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
+            if (_strList.end() != _strList.find(p2pIdWithoutExtInfo))
+            {
+                continue;
+            }
+
+            SERVICE_LOG(INFO) << LOG_DESC("updatePeerWhitelist, disconnect peer not in whitelist")
+                              << LOG_KV("peer", p2pIdWithoutExtInfo);
+
+            updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
+            session.second->session()->disconnect(DisconnectReason::NotInWhitelistReason);
+        }
     }
 }

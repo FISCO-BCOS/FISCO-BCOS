@@ -26,6 +26,7 @@
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
+#include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
 #include <bcos-gateway/libp2p/Service.h>
@@ -168,12 +169,12 @@ class Gateway : public GatewayInterface,
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;
-    Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
+    Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
         std::string _gatewayServiceName = "localGateway")
       : m_gatewayServiceName(_gatewayServiceName),
-        m_chainID(_chainID),
+        m_gatewayConfig(_gatewayConfig),
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop),
@@ -257,6 +258,45 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         bytesConstRef _payload, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
+    /**
+     * @brief get blacklist
+     * @param _strList: the blacklist node list
+     * @param _enable: whether to enable blacklist
+     * @param _callback
+     * @return void
+     */
+    void asyncGetPeerBlacklist(
+        std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback);
+
+    /**
+     * @brief set blacklist
+     * @param _strList: the blacklist node list
+     * @param _enable: whether to enable blacklist
+     * @param _callback
+     * @return void
+     */
+    void asyncSetPeerBlacklist(const std::set<std::string>& _strList, bool _enable,
+        std::function<void(Error::Ptr)> _callback);
+
+    /**
+     * @brief get whitelist
+     * @param _strList: the whitelist node list
+     * @param _enable: whether to enable whitelist
+     * @param _callback
+     * @return void
+     */
+    void asyncGetPeerWhitelist(
+        std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback);
+
+    /**
+     * @brief set whitelist
+     * @param _strList: the whitelist node list
+     * @param _enable: whether to enable whitelist
+     * @param _callback
+     * @return void
+     */
+    void asyncSetPeerWhitelist(const std::set<std::string>& _strList, bool _enable,
+        std::function<void(Error::Ptr)> _callback);
 
     P2PInterface::Ptr p2pInterface() const { return m_p2pInterface; }
     GatewayNodeManager::Ptr gatewayNodeManager() { return m_gatewayNodeManager; }
@@ -328,7 +368,7 @@ protected:
 
 private:
     std::string m_gatewayServiceName;
-    std::string m_chainID;
+    GatewayConfig::Ptr m_gatewayConfig;
     // p2p service interface
     P2PInterface::Ptr m_p2pInterface;
     // GatewayNodeManager

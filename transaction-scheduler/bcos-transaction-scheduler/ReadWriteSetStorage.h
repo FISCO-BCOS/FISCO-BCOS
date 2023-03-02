@@ -15,9 +15,11 @@ private:
     using Empty = std::monostate;
 
     Storage& m_storage;
-    [[no_unique_address]] std::conditional_t<enableReadSet, std::set<typename Storage::Key>, Empty>
+    [[no_unique_address]] std::conditional_t<enableReadSet,
+        std::set<typename Storage::Key, std::less<>>, Empty>
         m_readSet;
-    [[no_unique_address]] std::conditional_t<enableWriteSet, std::set<typename Storage::Key>, Empty>
+    [[no_unique_address]] std::conditional_t<enableWriteSet,
+        std::set<typename Storage::Key, std::less<>>, Empty>
         m_writeSet;
 
     void putSet(decltype(m_readSet)& set, auto const& key)
@@ -76,17 +78,17 @@ public:
         return false;
     }
 
-    auto read(RANGES::input_range auto&& keys)
+    auto read(RANGES::input_range auto const& keys)
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.read(keys))>>
     {
         if constexpr (enableReadSet)
         {
-            for (auto&& key : std::as_const(keys))
+            for (auto&& key : keys)
             {
                 putSet(m_readSet, key);
             }
         }
-        co_return co_await m_storage.read(std::forward<decltype(keys)>(keys));
+        co_return co_await m_storage.read(keys);
     }
 
     auto write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)

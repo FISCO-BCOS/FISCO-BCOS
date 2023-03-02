@@ -64,6 +64,15 @@ void JsonRpcInterface::initMethod()
     m_methodToFunc["getGroupNodeInfo"] = std::bind(
         &JsonRpcInterface::getGroupNodeInfoI, this, std::placeholders::_1, std::placeholders::_2);
 
+    m_methodToFunc["getPeerBlacklist"] = std::bind(
+        &JsonRpcInterface::getPeerBlacklistI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["setPeerBlacklist"] = std::bind(
+        &JsonRpcInterface::setPeerBlacklistI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getPeerWhitelist"] = std::bind(
+        &JsonRpcInterface::getPeerWhitelistI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["setPeerWhitelist"] = std::bind(
+        &JsonRpcInterface::setPeerWhitelistI, this, std::placeholders::_1, std::placeholders::_2);
+
     for (const auto& method : m_methodToFunc)
     {
         RPC_IMPL_LOG(INFO) << LOG_BADGE("initMethod") << LOG_KV("method", method.first);

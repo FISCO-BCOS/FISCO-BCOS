@@ -3,9 +3,10 @@
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-ledger/src/libledger/LedgerImpl2.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
@@ -25,12 +26,18 @@ private:
         transaction_executor::StateValue,
         storage2::memory_storage::Attribute(
             storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION)>;
+    using CacheStorage = storage2::memory_storage::MemoryStorage<transaction_executor::StateKey,
+        transaction_executor::StateValue,
+        storage2::memory_storage::Attribute(
+            storage2::memory_storage::CONCURRENT | storage2::memory_storage::MRU),
+        std::hash<bcos::transaction_executor::StateKey>>;
 
     std::shared_ptr<protocol::BlockFactory> m_blockFactory;
     std::shared_ptr<txpool::TxPoolInterface> m_txpool;
     std::shared_ptr<protocol::TransactionSubmitResultFactory> m_transactionSubmitResultFactory;
 
     transaction_executor::TableNamePool m_tableNamePool;
+    CacheStorage m_cacheStorage;
     storage2::rocksdb::RocksDBStorage2<transaction_executor::StateKey,
         transaction_executor::StateValue, storage2::rocksdb::StateKeyResolver,
         storage2::rocksdb::StateValueResolver>
@@ -38,7 +45,7 @@ private:
     bcos::ledger::LedgerImpl2<Hasher, decltype(m_rocksDBStorage), decltype(*m_blockFactory)>
         m_ledger;
 
-    MultiLayerStorage<MutableStorage, void, decltype(m_rocksDBStorage)> m_multiLayerStorage;
+    MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)> m_multiLayerStorage;
 
     std::conditional_t<enableParallel,
         SchedulerParallelImpl<decltype(m_multiLayerStorage),
@@ -60,7 +67,7 @@ public:
         m_rocksDBStorage(rocksDB, storage2::rocksdb::StateKeyResolver{m_tableNamePool},
             storage2::rocksdb::StateValueResolver{}),
         m_ledger(m_rocksDBStorage, *m_blockFactory, m_tableNamePool),
-        m_multiLayerStorage(m_rocksDBStorage),
+        m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
         m_scheduler(m_multiLayerStorage, *m_blockFactory->receiptFactory(), m_tableNamePool)
     {}
 

@@ -1610,7 +1610,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
             });
         bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
             blockHeaderFuture.get_future().get();
-        auto initialGenesisData = m_genesisBlockHeader->extraData().toString();
+        auto initialGenesisData = m_genesisBlockHeader->extraData().toStringView();
         // check genesisData whether inconsistent with initialGenesisData
         if (initialGenesisData == _genesisData)
         {

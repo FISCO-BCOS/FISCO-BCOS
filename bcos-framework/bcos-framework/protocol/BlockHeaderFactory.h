@@ -48,8 +48,7 @@ public:
         header->setSignatureList(_blockHeader->signatureList());
         header->setConsensusWeights(_blockHeader->consensusWeights());
         header->setParentInfo(_blockHeader->parentInfo());
-        auto extraData = _blockHeader->extraData().toBytes();
-        header->setExtraData(std::move(extraData));
+        header->setExtraData(_blockHeader->extraData().toBytes());
         return header;
     }
 };
