@@ -18,10 +18,10 @@
 
 #include "FileUtility.h"
 #include <stdio.h>
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <cstdlib>
 #include <fstream>
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp> 
 using namespace std;
 
 namespace bcos
@@ -59,4 +59,67 @@ std::shared_ptr<string> readContentsToString(boost::filesystem::path const& _fil
 {
     return genericReadContents<string>(_file);
 }
+
+std::shared_ptr<std::vector<std::string>> readAllLinesFromFile(std::string const& _file)
+{
+    std::shared_ptr<std::vector<std::string>> lines = std::make_shared<std::vector<std::string>>();
+
+    std::ifstream fileIn(_file);
+    if (false == fileIn.is_open())
+    {
+        return lines;
+    }
+
+    while (false == fileIn.eof())
+    {
+        std::string line;
+        std::getline(fileIn, line);
+
+        lines->emplace_back(std::move(line));
+    }
+    fileIn.close();
+
+    return lines;
+}
+
+template <typename T>
+bool genericWriteContents(boost::filesystem::path const& _file, std::shared_ptr<T> _contents)
+{
+    boost::filesystem::ofstream fileStream(_file, std::ofstream::binary);
+    if (!fileStream)
+    {
+        return false;
+    }
+    fileStream.write(reinterpret_cast<char*>(_contents->data()), _contents->size());
+    return true;
+}
+
+bool writeContents(boost::filesystem::path const& _file, std::shared_ptr<bytes> _contents)
+{
+    return genericWriteContents<bytes>(_file, _contents);
+}
+
+bool writeContentsByString(
+    boost::filesystem::path const& _file, std::shared_ptr<std::string> _contents)
+{
+    return genericWriteContents<string>(_file, _contents);
+}
+
+bool writeAllLinesToFile(std::string const& _file, std::shared_ptr<std::vector<std::string>> _lines)
+{
+    std::ofstream fileOut(_file);
+    if (false == fileOut.is_open())
+    {
+        return false;
+    }
+
+    for (auto& line : *_lines)
+    {
+        fileOut << line << std::endl;
+    }
+    fileOut.close();
+
+    return true;
+}
+
 }  // namespace bcos

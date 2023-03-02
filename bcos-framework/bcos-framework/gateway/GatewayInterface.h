@@ -108,6 +108,46 @@ public:
     virtual void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
         int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
 
+    /**
+     * @brief get blacklist
+     * @param _strList: the blacklist node list
+     * @param _enable: whether to enable blacklist
+     * @param _callback
+     * @return void
+     */
+    virtual void asyncGetPeerBlacklist(
+        std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback) = 0;
+
+    /**
+     * @brief set blacklist
+     * @param _strList: the blacklist node list
+     * @param _enable: whether to enable blacklist
+     * @param _callback
+     * @return void
+     */
+    virtual void asyncSetPeerBlacklist(const std::set<std::string>& _strList, bool _enable,
+        std::function<void(Error::Ptr)> _callback) = 0;
+
+    /**
+     * @brief get whitelist
+     * @param _strList: the whitelist node list
+     * @param _enable: whether to enable whitelist
+     * @param _callback
+     * @return void
+     */
+    virtual void asyncGetPeerWhitelist(
+        std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback) = 0;
+
+    /**
+     * @brief set whitelist
+     * @param _strList: the whitelist node list
+     * @param _enable: whether to enable whitelist
+     * @param _callback
+     * @return void
+     */
+    virtual void asyncSetPeerWhitelist(const std::set<std::string>& _strList, bool _enable,
+        std::function<void(Error::Ptr)> _callback) = 0;
+
     /// multi-group related interfaces
 
     /**

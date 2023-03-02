@@ -86,6 +86,7 @@ protected:
             addConfig("ssl.crt");
             gatewayConfig->initCertConfig(pt);
         }
+        gatewayConfig->setConfigFile(_configPath);
 
         // nodes.json
         addConfig("nodes.json");

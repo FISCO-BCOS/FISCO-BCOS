@@ -63,3 +63,85 @@ bcostars::Error GatewayServiceServer::asyncRemoveTopic(const std::string& _clien
         });
     return bcostars::Error();
 }
+
+bcostars::Error GatewayServiceServer::asyncGetPeerBlacklist(std::vector<std::string>&, bool&,
+                                      tars::TarsCurrentPtr current)
+{
+    GATEWAYSERVICE_LOG(DEBUG) << LOG_DESC("asyncGetPeerBlacklist: request");
+    current->setResponse(false);
+    m_gatewayInitializer->gateway()->asyncGetPeerBlacklist(
+            [current](bcos::Error::Ptr _error, const std::set<std::string>& _strList, const bool _enable)
+            {
+                std::vector<std::string> strList;
+                for(auto& str : _strList)
+                {
+                    strList.emplace_back(str);
+                }
+
+                async_response_asyncGetPeerBlacklist(
+                        current, toTarsError(_error), strList, _enable);
+            });
+    return bcostars::Error();
+}
+
+bcostars::Error GatewayServiceServer::asyncSetPeerBlacklist(const std::vector<std::string>& _strList, bool _enable,
+                                                            tars::TarsCurrentPtr current)
+{
+    GATEWAYSERVICE_LOG(DEBUG) << LOG_DESC("asyncSetPeerBlacklist: request");
+
+    std::set<std::string> strList;
+    for(auto& str : _strList)
+    {
+        strList.emplace(str);
+    }
+
+    current->setResponse(false);
+    m_gatewayInitializer->gateway()->asyncSetPeerBlacklist(strList, _enable,
+            [current](bcos::Error::Ptr _error)
+            {
+                async_response_asyncSetPeerBlacklist(
+                        current, toTarsError(_error));
+            });
+    return bcostars::Error();
+}
+
+bcostars::Error GatewayServiceServer::asyncGetPeerWhitelist(std::vector<std::string>&, bool&,
+                                      tars::TarsCurrentPtr current)
+{
+    GATEWAYSERVICE_LOG(DEBUG) << LOG_DESC("asyncGetPeerWhitelist: request");
+    current->setResponse(false);
+    m_gatewayInitializer->gateway()->asyncGetPeerWhitelist(
+            [current](bcos::Error::Ptr _error, const std::set<std::string>& _strList, const bool _enable)
+            {
+                std::vector<std::string> strList;
+                for(auto& str : _strList)
+                {
+                    strList.emplace_back(str);
+                }
+
+                async_response_asyncGetPeerBlacklist(
+                        current, toTarsError(_error), strList, _enable);
+            });
+    return bcostars::Error();
+}
+
+bcostars::Error GatewayServiceServer::asyncSetPeerWhitelist(const std::vector<std::string>& _strList, bool _enable,
+                                                            tars::TarsCurrentPtr current)
+{
+    GATEWAYSERVICE_LOG(DEBUG) << LOG_DESC("asyncSetPeerWhitelist: request");
+
+    std::set<std::string> strList;
+    for(auto& str : _strList)
+    {
+        strList.emplace(str);
+    }
+
+    current->setResponse(false);
+    m_gatewayInitializer->gateway()->asyncSetPeerWhitelist(strList, _enable,
+            [current](bcos::Error::Ptr _error)
+            {
+                async_response_asyncSetPeerWhitelist(
+                        current, toTarsError(_error));
+            });
+    return bcostars::Error();
+}

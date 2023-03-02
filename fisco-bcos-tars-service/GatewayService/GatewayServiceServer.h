@@ -144,6 +144,17 @@ public:
     bcostars::Error asyncRemoveTopic(const std::string& _clientID,
         const vector<std::string>& _topicList, tars::TarsCurrentPtr current) override;
 
+    bcostars::Error asyncGetPeerBlacklist(std::vector<std::string>&, bool&,
+        tars::TarsCurrentPtr current) override;
+    bcostars::Error asyncSetPeerBlacklist(const std::vector<std::string>&, bool,
+        tars::TarsCurrentPtr current) override;
+
+    bcostars::Error asyncGetPeerWhitelist(std::vector<std::string>&, bool&,
+                                          tars::TarsCurrentPtr current) override;
+    bcostars::Error asyncSetPeerWhitelist(const std::vector<std::string>&, bool,
+                                          tars::TarsCurrentPtr current) override;
+
+
 private:
     GatewayInitializer::Ptr m_gatewayInitializer;
 };
