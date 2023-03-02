@@ -43,12 +43,6 @@ struct Fixture
     FixedStringPool stringPool;
 };
 
-template <>
-struct boost::hash<StateKey>
-{
-    size_t operator()(const StateKey& stateKey) const { return std::hash<StateKey>{}(stateKey); }
-};
-
 Fixture fixture;
 std::variant<MemoryStorage<Key, storage::Entry, Attribute(ORDERED)>,
     MemoryStorage<Key, storage::Entry, Attribute(ORDERED | CONCURRENT), std::hash<Key>>,

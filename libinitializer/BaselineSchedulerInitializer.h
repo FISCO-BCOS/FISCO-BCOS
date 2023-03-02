@@ -45,7 +45,7 @@ private:
     bcos::ledger::LedgerImpl2<Hasher, decltype(m_rocksDBStorage), decltype(*m_blockFactory)>
         m_ledger;
 
-    MultiLayerStorage<MutableStorage, void, decltype(m_rocksDBStorage)> m_multiLayerStorage;
+    MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)> m_multiLayerStorage;
 
     std::conditional_t<enableParallel,
         SchedulerParallelImpl<decltype(m_multiLayerStorage),
@@ -67,7 +67,7 @@ public:
         m_rocksDBStorage(rocksDB, storage2::rocksdb::StateKeyResolver{m_tableNamePool},
             storage2::rocksdb::StateValueResolver{}),
         m_ledger(m_rocksDBStorage, *m_blockFactory, m_tableNamePool),
-        m_multiLayerStorage(m_rocksDBStorage),
+        m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
         m_scheduler(m_multiLayerStorage, *m_blockFactory->receiptFactory(), m_tableNamePool)
     {}
 

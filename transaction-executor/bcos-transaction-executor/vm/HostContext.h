@@ -32,6 +32,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>

@@ -33,7 +33,7 @@ constexpr static s256 singleTransfer(1);
 
 using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage =
-    MemoryStorage<StateKey, StateValue, Attribute(ORDERED | CONCURRENT), std::hash<StateKey>>;
+    MemoryStorage<StateKey, StateValue, Attribute(CONCURRENT), std::hash<StateKey>>;
 using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 

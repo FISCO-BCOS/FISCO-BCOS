@@ -246,9 +246,19 @@ public:
     std::unique_ptr<MultiLayerStorage> fork()
     {
         std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);
-        auto newMultiLayerStorage = std::make_unique<MultiLayerStorage>(m_backendStorage);
+        if constexpr (withCacheStorage)
+        {
+            auto newMultiLayerStorage =
+                std::make_unique<MultiLayerStorage>(m_backendStorage, m_cacheStorage);
 
-        return newMultiLayerStorage;
+            return newMultiLayerStorage;
+        }
+        else
+        {
+            auto newMultiLayerStorage = std::make_unique<MultiLayerStorage>(m_backendStorage);
+
+            return newMultiLayerStorage;
+        }
     }
 
     template <class... Args>
