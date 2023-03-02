@@ -18,6 +18,8 @@
 namespace bcos::transaction_executor
 {
 
+#define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
+
 // clang-format off
 struct InvalidArgumentsError: public bcos::Error {};
 // clang-format on
@@ -92,7 +94,13 @@ public:
             HostContext hostContext(rollbackableStorage, m_tableNamePool, blockHeader, evmcMessage,
                 evmcMessage.sender, contextID, 0);
             auto evmcResult = co_await hostContext.execute();
+            struct Defer
+            {
+                ~Defer() noexcept { releaseResult(m_evmcResult); }
+                decltype(evmcResult)& m_evmcResult;
+            } defer{.m_evmcResult = evmcResult};
 
+            bcos::bytesConstRef output;
             std::string newContractAddress;
             if (!RANGES::equal(evmcResult.create_address.bytes, EMPTY_ADDRESS.bytes))
             {
@@ -101,18 +109,28 @@ public:
                     evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
                     std::back_inserter(newContractAddress));
             }
+            else
+            {
+                output = {evmcResult.output_data, evmcResult.output_size};
+            }
+
+            if (evmcResult.status_code != 0)
+            {
+                TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
+            }
 
             auto const& logEntries = hostContext.logs();
-            auto receipt = m_receiptFactory.createReceipt(evmcResult.gas_left,
-                std::move(newContractAddress), logEntries, evmcResult.status_code,
-                bcos::bytesConstRef(evmcResult.output_data, evmcResult.output_size),
-                blockHeader.number());
+            auto receipt =
+                m_receiptFactory.createReceipt(evmcResult.gas_left, std::move(newContractAddress),
+                    logEntries, evmcResult.status_code, output, blockHeader.number());
 
-            releaseResult(evmcResult);
             co_return receipt;
         }
         catch (std::exception& e)
         {
+            TRANSACTION_EXECUTOR_LOG(DEBUG)
+                << "Execute exception: " << boost::diagnostic_information(e);
+
             auto receipt = m_receiptFactory.createReceipt(
                 0, {}, {}, EVMC_INTERNAL_ERROR, {}, blockHeader.number());
             receipt->setMessage(boost::diagnostic_information(e));

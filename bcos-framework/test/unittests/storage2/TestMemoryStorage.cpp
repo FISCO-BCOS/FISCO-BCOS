@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE(mru)
 
         // write 10 100byte value
         storage::Entry entry;
-        entry.set(std::string('a', 10));
+        entry.set(std::string(100, 'a'));
         co_await storage.write(RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view(entry));
 
         // ensure 10 are useable

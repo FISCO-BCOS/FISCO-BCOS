@@ -46,12 +46,19 @@ concept WriteableStorage = requires(StorageType&& impl)
         std::vector<typename StorageType::Key>(), std::vector<typename StorageType::Value>()))>;
 };
 
+struct STORAGE_BEGIN_TYPE
+{
+};
+inline constexpr STORAGE_BEGIN_TYPE STORAGE_BEGIN{};
+
 template <class StorageType>
 concept SeekableStorage = requires(StorageType&& impl)
 {
     typename StorageType::Key;
     requires ReadIterator<
         task::AwaitableReturnType<decltype(impl.seek(std::declval<typename StorageType::Key>()))>>;
+    requires ReadIterator<
+        task::AwaitableReturnType<decltype(impl.seek(std::declval<STORAGE_BEGIN_TYPE>()))>>;
 };
 
 template <class StorageType>

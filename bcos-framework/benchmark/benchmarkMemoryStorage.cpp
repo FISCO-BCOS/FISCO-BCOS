@@ -5,8 +5,6 @@
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
 #include <tbb/concurrent_hash_map.h>
-
-#define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_map.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <transaction-executor/TransactionExecutor.h>
@@ -43,12 +41,6 @@ struct Fixture
     std::vector<Key> allKeys;
     std::vector<storage::Entry> allValues;
     FixedStringPool stringPool;
-};
-
-template <>
-struct boost::hash<StateKey>
-{
-    size_t operator()(const StateKey& stateKey) const { return std::hash<StateKey>{}(stateKey); }
 };
 
 Fixture fixture;

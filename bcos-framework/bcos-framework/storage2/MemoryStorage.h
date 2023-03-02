@@ -15,7 +15,6 @@
 #include <forward_list>
 #include <functional>
 #include <mutex>
-#include <new>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <set>
 #include <shared_mutex>
@@ -61,8 +60,8 @@ private:
     constexpr static bool withMRU = (attribute & Attribute::MRU) != 0;
     constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
 
-    constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets for concurrent, enough?
-    constexpr unsigned getBucketSize() { return withConcurrent ? MAX_BUCKETS : 1; }
+    constexpr static unsigned BUCKETS_COUNT = 61;  // Magic number less than 64
+    constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
 
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
@@ -74,7 +73,8 @@ private:
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
 
-    struct Data
+    constexpr static int MOSTLY_CACHELINE_SIZE = 64;
+    struct alignas(MOSTLY_CACHELINE_SIZE) Data
     {
         KeyType key;
         [[no_unique_address]] DataValueType value;
@@ -87,8 +87,7 @@ private:
         boost::multi_index_container<Data,
             boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
-
-    struct Bucket
+    struct alignas(MOSTLY_CACHELINE_SIZE) Bucket
     {
         Container container;
         [[no_unique_address]] BucketMutex mutex;  // For concurrent
@@ -105,7 +104,6 @@ private:
         {
             return std::make_tuple(std::ref(m_buckets[0]), Lock(Empty{}));
         }
-
         auto index = getBucketIndex(key);
 
         auto& bucket = m_buckets[index];
@@ -163,13 +161,13 @@ public:
 
     MemoryStorage(unsigned buckets = 0) requires(!withConcurrent) {}
 
-    MemoryStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(withConcurrent)
+    MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
       : m_buckets(std::min(buckets, getBucketSize()))
     {}
     MemoryStorage(const MemoryStorage&) = delete;
     MemoryStorage(MemoryStorage&&) noexcept = default;
     MemoryStorage& operator=(const MemoryStorage&) = delete;
-    MemoryStorage& operator=(MemoryStorage&&) = default;
+    MemoryStorage& operator=(MemoryStorage&&) noexcept = default;
 
     void setMaxCapacity(int64_t capacity) requires withMRU { m_maxCapacity = capacity; }
 
@@ -290,7 +288,7 @@ public:
             output.m_iterators.reserve(RANGES::size(keys));
         }
 
-        std::conditional_t<withConcurrent, std::bitset<MAX_BUCKETS>, Empty> locks;
+        std::conditional_t<withConcurrent, std::bitset<BUCKETS_COUNT>, Empty> locks;
         for (auto&& key : keys)
         {
             auto bucketIndex = getBucketIndex(key);
@@ -329,7 +327,16 @@ public:
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
 
-        auto it = index.lower_bound(key);
+        decltype(index.begin()) it;
+        if constexpr (std::is_same_v<storage2::STORAGE_BEGIN_TYPE,
+                          std::remove_cvref_t<decltype(key)>>)
+        {
+            it = index.begin();
+        }
+        else
+        {
+            it = index.lower_bound(key);
+        }
 
         task::AwaitableValue<SeekIterator> output({});
         auto& seekIt = output.value();

@@ -32,6 +32,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -48,6 +49,8 @@
 
 namespace bcos::transaction_executor
 {
+
+#define HOST_CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("HOST_CONTEXT")
 
 // clang-format off
 struct NotFoundCodeError : public bcos::Error {};
@@ -147,7 +150,7 @@ public:
                 if (co_await codeIt.hasValue())
                 {
                     auto&& codeEntry = co_await codeIt.value();
-                    co_return std::forward<decltype(codeEntry)>(codeEntry);
+                    co_return std::make_optional<storage::Entry>(codeEntry);
                 }
             }
             co_return std::optional<storage::Entry>{};
@@ -344,14 +347,13 @@ public:
             co_await setCode(bytesConstRef(result.output_data, result.output_size));
             result.create_address = m_newContractAddress;
         }
-
         co_return result;
     }
 
     task::Task<evmc_result> call()
     {
         auto codeEntry = co_await code(m_message.code_address);
-        if (!codeEntry)
+        if (!codeEntry || codeEntry->size() == 0)
         {
             BOOST_THROW_EXCEPTION(
                 NotFoundCodeError{} << bcos::Error::ErrorMessage(
