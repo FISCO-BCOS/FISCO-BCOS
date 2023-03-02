@@ -74,14 +74,16 @@ void ShardingBlockExecutive::asyncExecute(
             }
 
             SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
-                                << LOG_DESC("ShardingExecute begin");
+                                << LOG_DESC("ShardingExecute begin")
+                                << LOG_KV("shardSize", m_dmcExecutors.size());
             shardingExecute(std::move(callback));
         });
     }
     else
     {
         SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
-                             << LOG_DESC("DMCExecute begin for call");
+                             << LOG_DESC("DMCExecute begin for call")
+                             << LOG_KV("shardSize", m_dmcExecutors.size());
         shardingExecute(std::move(callback));
     }
 }
@@ -89,6 +91,13 @@ void ShardingBlockExecutive::asyncExecute(
 void ShardingBlockExecutive::shardingExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
+    if (m_dmcExecutors.empty())
+    {
+        // if empty block, use DMC logic to handle
+        DMCExecute(std::move(callback));
+        return;
+    }
+
     auto batchStatus = std::make_shared<BatchStatus>();
     batchStatus->total = m_dmcExecutors.size();
     auto startT = utcTime();
