@@ -162,7 +162,7 @@ public:
     MemoryStorage(unsigned buckets = 0) requires(!withConcurrent) {}
 
     MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
-      : m_buckets(getBucketSize())
+      : m_buckets(std::min(buckets, getBucketSize()))
     {}
     MemoryStorage(const MemoryStorage&) = delete;
     MemoryStorage(MemoryStorage&&) noexcept = default;
