@@ -22,13 +22,14 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 const int SECP256K1_SIGNATURE_LEN = 65;
+const int SECP256K1_UNCOMPRESS_PUBLICKEY_LEN = 65;
+const int SECP256K1_PUBLICKEY_LEN = 64;
+const int SECP256K1_SIGNATURE_V = 64;
 std::shared_ptr<bytes> secp256k1Sign(const KeyPairInterface& _keyPair, const HashType& _hash);
-bool secp256k1Verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData);
+bool secp256k1Verify(const PublicPtr& _pubKey, const HashType& _hash, bytesConstRef _signatureData);
 KeyPairInterface::UniquePtr secp256k1GenerateKeyPair();
 
 PublicPtr secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData);
@@ -70,5 +71,4 @@ public:
 
     KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
 };
-}  // namespace crypto
 }  // namespace bcos
