@@ -60,8 +60,8 @@ private:
     constexpr static bool withMRU = (attribute & Attribute::MRU) != 0;
     constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
 
-    constexpr static unsigned MAX_BUCKETS = 64;  // Support up to 64 buckets for concurrent, enough?
-    constexpr unsigned getBucketSize() { return withConcurrent ? MAX_BUCKETS : 1; }
+    constexpr static unsigned BUCKETS_COUNT = 61;  // Magic number less than 64
+    constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
 
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
@@ -161,8 +161,8 @@ public:
 
     MemoryStorage(unsigned buckets = 0) requires(!withConcurrent) {}
 
-    MemoryStorage(unsigned buckets = std::thread::hardware_concurrency()) requires(withConcurrent)
-      : m_buckets(std::min(buckets, getBucketSize()))
+    MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
+      : m_buckets(getBucketSize())
     {}
     MemoryStorage(const MemoryStorage&) = delete;
     MemoryStorage(MemoryStorage&&) noexcept = default;
@@ -288,7 +288,7 @@ public:
             output.m_iterators.reserve(RANGES::size(keys));
         }
 
-        std::conditional_t<withConcurrent, std::bitset<MAX_BUCKETS>, Empty> locks;
+        std::conditional_t<withConcurrent, std::bitset<BUCKETS_COUNT>, Empty> locks;
         for (auto&& key : keys)
         {
             auto bucketIndex = getBucketIndex(key);

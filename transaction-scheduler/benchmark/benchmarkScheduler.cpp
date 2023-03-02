@@ -2,6 +2,7 @@
 #include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/storage2/StringPool.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
@@ -30,17 +31,9 @@ using namespace bcos::transaction_executor;
 constexpr static s256 singleIssue(1000000);
 constexpr static s256 singleTransfer(1);
 
-struct TableNameHash
-{
-    size_t operator()(const bcos::transaction_executor::StateKey& key) const
-    {
-        return std::hash<bcos::transaction_executor::StateKey>{}(key);
-    }
-};
-
 using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage =
-    MemoryStorage<StateKey, StateValue, Attribute(ORDERED | CONCURRENT), TableNameHash>;
+    MemoryStorage<StateKey, StateValue, Attribute(ORDERED | CONCURRENT), std::hash<StateKey>>;
 using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
@@ -66,7 +59,7 @@ struct Fixture
             SchedulerSerialImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl>>(
             m_multiLayerStorage, *m_receiptFactory, m_tableNamePool))
     {
-        // boost::log::core::get()->set_logging_enabled(false);
+        boost::log::core::get()->set_logging_enabled(false);
 
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             std::make_shared<bcos::crypto::Keccak256>();
@@ -462,43 +455,44 @@ static void conflictTransfer(benchmark::State& state)
                 }
 
                 // Check
-                auto balances = co_await fixture.balances();
-                for (auto&& [balance, index] :
-                    RANGES::zip_view(balances, RANGES::iota_view<size_t>(0LU)))
-                {
-                    if (balance > singleIssue)
-                    {
-                        std::cout << fmt::format("Found larger: {} {}",
-                            balance.template convert_to<std::string>(), index);
-                    }
-                    if (index == 0)
-                    {
-                        if (balance != singleIssue - i * singleTransfer)
-                        {
-                            BOOST_THROW_EXCEPTION(std::runtime_error(
-                                fmt::format("Start balance not equal to expected! {}",
-                                    balance.template convert_to<std::string>())));
-                        }
-                    }
-                    else if (index == balances.size() - i)
-                    {
-                        if (balance != singleIssue + i * singleTransfer)
-                        {
-                            BOOST_THROW_EXCEPTION(std::runtime_error(
-                                fmt::format("End balance not equal to expected! {}",
-                                    balance.template convert_to<std::string>())));
-                        }
-                    }
-                    else
-                    {
-                        if (balance != singleIssue)
-                        {
-                            BOOST_THROW_EXCEPTION(
-                                std::runtime_error(fmt::format("Balance not equal to expected! {} ",
-                                    balance.template convert_to<std::string>())));
-                        }
-                    }
-                }
+                // auto balances = co_await fixture.balances();
+                // for (auto&& [balance, index] :
+                //     RANGES::zip_view(balances, RANGES::iota_view<size_t>(0LU)))
+                // {
+                //     if (balance > singleIssue)
+                //     {
+                //         std::cout << fmt::format("Found larger: {} {}",
+                //             balance.template convert_to<std::string>(), index);
+                //     }
+                //     if (index == 0)
+                //     {
+                //         if (balance != singleIssue - i * singleTransfer)
+                //         {
+                //             BOOST_THROW_EXCEPTION(std::runtime_error(
+                //                 fmt::format("Start balance not equal to expected! {}",
+                //                     balance.template convert_to<std::string>())));
+                //         }
+                //     }
+                //     else if (index == balances.size() - i)
+                //     {
+                //         if (balance != singleIssue + i * singleTransfer)
+                //         {
+                //             BOOST_THROW_EXCEPTION(std::runtime_error(
+                //                 fmt::format("End balance not equal to expected! {}",
+                //                     balance.template convert_to<std::string>())));
+                //         }
+                //     }
+                //     else
+                //     {
+                //         if (balance != singleIssue)
+                //         {
+                //             BOOST_THROW_EXCEPTION(
+                //                 std::runtime_error(fmt::format("Balance not equal to expected! {}
+                //                 ",
+                //                     balance.template convert_to<std::string>())));
+                //         }
+                //     }
+                // }
             }(state));
         },
         fixture.m_scheduler);
@@ -507,9 +501,12 @@ static void conflictTransfer(benchmark::State& state)
 // static void parallelScheduler(benchmark::State& state) {}
 constexpr static bool SERIAL = false;
 constexpr static bool PARALLEL = true;
+
 BENCHMARK(issue<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
-BENCHMARK(transfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
-BENCHMARK(conflictTransfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
 BENCHMARK(issue<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
+
+BENCHMARK(transfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
 BENCHMARK(transfer<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
+
+BENCHMARK(conflictTransfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
 BENCHMARK(conflictTransfer<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);

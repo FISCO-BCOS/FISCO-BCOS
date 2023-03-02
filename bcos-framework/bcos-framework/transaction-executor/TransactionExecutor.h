@@ -21,7 +21,8 @@ class SmallKey : public boost::container::small_vector<char, 32>
 {
 public:
     using boost::container::small_vector<char, 32>::small_vector;
-    SmallKey(concepts::bytebuffer::ByteBuffer auto const& buffer)
+
+    explicit SmallKey(concepts::bytebuffer::ByteBuffer auto const& buffer)
       : boost::container::small_vector<char, 32>::small_vector::small_vector(
             RANGES::begin(buffer), RANGES::end(buffer))
     {}
@@ -44,14 +45,13 @@ using StateKey = std::tuple<TableNameID, SmallKey>;  // TODO: 计算最多支持
 using StateValue = storage::Entry;
 
 template <concepts::bytebuffer::ByteBuffer Buffer>
-bool operator<=>(const StateKey& stateKey, std::tuple<TableNameID, Buffer> const& rhs)
+std::weak_ordering operator<=>(const StateKey& stateKey, std::tuple<TableNameID, Buffer> const& rhs)
 {
     auto const& [lhsTable, lhsKey] = stateKey;
     auto lhsKeyView = lhsKey.toStringView();
 
     auto const& [rhsTable, rhsKey] = rhs;
     auto rhsKeyView = concepts::bytebuffer::toView(rhsKey);
-
     auto tableComp = lhsTable <=> rhsTable;
     if (tableComp != std::weak_ordering::equivalent)
     {
@@ -108,6 +108,20 @@ struct std::hash<bcos::transaction_executor::StateKey>
         size_t hash = 0;
         boost::hash_combine(hash, std::hash<bcos::transaction_executor::TableNameID>{}(table));
         boost::hash_combine(hash, std::hash<std::string_view>{}(key.toStringView()));
+        return hash;
+    }
+};
+
+template <>
+struct std::hash<std::tuple<bcos::transaction_executor::TableNameID, std::string_view>>
+{
+    size_t operator()(
+        const std::tuple<bcos::transaction_executor::TableNameID, std::string_view>& stateKey) const
+    {
+        auto const& [table, key] = stateKey;
+        size_t hash = 0;
+        boost::hash_combine(hash, std::hash<bcos::transaction_executor::TableNameID>{}(table));
+        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
         return hash;
     }
 };

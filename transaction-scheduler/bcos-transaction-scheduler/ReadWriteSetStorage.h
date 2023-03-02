@@ -15,9 +15,11 @@ private:
     using Empty = std::monostate;
 
     Storage& m_storage;
-    [[no_unique_address]] std::conditional_t<enableReadSet, std::set<typename Storage::Key>, Empty>
+    [[no_unique_address]] std::conditional_t<enableReadSet,
+        std::set<typename Storage::Key, std::less<>>, Empty>
         m_readSet;
-    [[no_unique_address]] std::conditional_t<enableWriteSet, std::set<typename Storage::Key>, Empty>
+    [[no_unique_address]] std::conditional_t<enableWriteSet,
+        std::set<typename Storage::Key, std::less<>>, Empty>
         m_writeSet;
 
     void putSet(decltype(m_readSet)& set, auto const& key)

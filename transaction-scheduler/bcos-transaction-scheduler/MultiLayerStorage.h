@@ -43,10 +43,10 @@ private:
     std::unique_ptr<MutableStorageType> m_mutableStorage;
     std::deque<std::unique_ptr<MutableStorageType>> m_immutableStorages;  // Ledger read data from
                                                                           // here
+    BackendStorage& m_backendStorage;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::add_lvalue_reference_t<CachedStorage>, std::monostate>
         m_cacheStorage;
-    BackendStorage& m_backendStorage;
 
     std::mutex m_immutablesMutex;
     std::mutex m_mergeMutex;
