@@ -12,12 +12,10 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
-#include <forward_list>
 #include <functional>
 #include <mutex>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <set>
-#include <shared_mutex>
 #include <thread>
 #include <type_traits>
 #include <utility>
