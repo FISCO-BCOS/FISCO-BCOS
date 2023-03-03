@@ -135,6 +135,23 @@ void WsService::reportConnectedNodes()
     auto ss = sessions();
     WEBSOCKET_SERVICE(INFO) << LOG_DESC("connected nodes") << LOG_KV("count", ss.size());
 
+    for (auto const& session : ss)
+    {
+        auto queueSize = session->writeQueueSize();
+        if (queueSize > 0)
+        {
+            WEBSOCKET_SERVICE(INFO)
+                << LOG_DESC("report session write queue status")
+                << LOG_KV("endpoint", session->endPoint()) << LOG_KV("writeQueueSize", queueSize);
+        }
+        else
+        {
+            WEBSOCKET_SERVICE(DEBUG)
+                << LOG_DESC("report session write queue status")
+                << LOG_KV("endpoint", session->endPoint()) << LOG_KV("writeQueueSize", queueSize);
+        }
+    }
+
     m_heartbeat = std::make_shared<boost::asio::deadline_timer>(
         *(m_timerIoc), boost::posix_time::milliseconds(m_config->heartbeatPeriod()));
     auto self = std::weak_ptr<WsService>(shared_from_this());
