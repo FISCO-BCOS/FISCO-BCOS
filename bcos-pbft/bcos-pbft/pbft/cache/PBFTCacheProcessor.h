@@ -50,16 +50,8 @@ public:
     virtual void tryToResendCheckPoint();
 
     virtual ~PBFTCacheProcessor() = default;
-    virtual void initState(
-        PBFTProposalList const& _committedProposals, bcos::crypto::NodeIDPtr _fromNode);
 
     virtual void addPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg);
-    virtual bool existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg);
-
-    virtual bool tryToFillProposal(PBFTMessageInterface::Ptr _prePrepareMsg);
-
-    virtual bool conflictWithProcessedReq(PBFTMessageInterface::Ptr _msg);
-    virtual bool conflictWithPrecommitReq(PBFTMessageInterface::Ptr _prePrepareMsg);
     virtual void addPrepareCache(PBFTMessageInterface::Ptr _prepareReq)
     {
         addCache(m_caches, std::move(_prepareReq),
@@ -67,7 +59,6 @@ public:
                 _pbftCache->addPrepareCache(std::move(_prepareReq));
             });
     }
-
     virtual void addCommitReq(PBFTMessageInterface::Ptr _commitReq)
     {
         addCache(m_caches, std::move(_commitReq),
@@ -75,6 +66,14 @@ public:
                 _pbftCache->addCommitCache(std::move(_commitReq));
             });
     }
+
+    virtual bool existPrePrepare(PBFTMessageInterface::Ptr const& _prePrepareMsg) const;
+    virtual bool conflictWithProcessedReq(PBFTMessageInterface::Ptr const& _msg) const;
+    virtual bool conflictWithPrecommitReq(PBFTMessageInterface::Ptr const& _prePrepareMsg) const;
+    virtual void initState(
+        PBFTProposalList const& _committedProposals, bcos::crypto::NodeIDPtr _fromNode);
+
+    virtual bool tryToFillProposal(PBFTMessageInterface::Ptr _prePrepareMsg);
 
     PBFTMessageList preCommitCachesWithData()
     {
@@ -169,6 +168,7 @@ public:
     virtual bool checkAndTryToRecover();
 
     std::map<bcos::crypto::HashType, bcos::protocol::BlockNumber> const& executingProposals()
+        const noexcept
     {
         return m_executingProposals;
     }
@@ -228,7 +228,6 @@ protected:
         std::function<void(PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _pbftMessage)>;
     void addCache(PBFTCachesType& _pbftCache, PBFTMessageInterface::Ptr _pbftReq,
         UpdateCacheHandler _handler);
-
     PBFTMessageList generatePrePrepareMsg(
         std::map<IndexType, ViewChangeMsgInterface::Ptr> _viewChangeCache);
     void reCalculateViewChangeWeight();

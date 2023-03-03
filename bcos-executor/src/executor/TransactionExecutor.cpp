@@ -2641,17 +2641,17 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
         callParameters->codeAddress = input.delegateCallAddress();
     }
 
-    if (!m_isWasm)
+    if (!m_isWasm && !callParameters->create)
     {
         if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->codeAddress.insert(
-                0, callParameters->codeAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->codeAddress.size(), '0');
         }
         if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->receiveAddress.insert(
-                0, callParameters->receiveAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
 
@@ -2684,18 +2684,18 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
 
-    if (!m_isWasm)
+    if (!m_isWasm && !callParameters->create)
     {
         constexpr static auto addressSize = Address::SIZE * 2;
         if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->codeAddress.insert(
-                0, callParameters->codeAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->codeAddress.size(), '0');
         }
         if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->receiveAddress.insert(
-                0, callParameters->receiveAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
     return callParameters;

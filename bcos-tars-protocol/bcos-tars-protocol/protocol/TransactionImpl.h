@@ -63,6 +63,8 @@ public:
     std::string_view groupId() const override { return m_inner()->data.groupID; }
     int64_t blockLimit() const override { return m_inner()->data.blockLimit; }
     const std::string& nonce() const override;
+    // only for test
+    void setNonce(std::string _n) override { m_inner()->data.nonce = std::move(_n); }
     std::string_view to() const override { return m_inner()->data.to; }
     std::string_view abi() const override { return m_inner()->data.abi; }
     bcos::bytesConstRef input() const override;

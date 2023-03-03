@@ -50,6 +50,7 @@ BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* 
     m_staticCall(staticCall)
 {
     m_hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
+    m_blockHeader = m_block->blockHeaderConst();
     start();
 }
 
@@ -91,8 +92,7 @@ void BlockExecutive::prepare()
 
     SCHEDULER_LOG(DEBUG) << METRIC << LOG_BADGE("BlockTrace") << BLOCK_NUMBER(number())
                          << "preExeBlock success"
-                         << LOG_KV(
-                                "blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
+                         << LOG_KV("blockHeader.timestamp", blockHeader()->timestamp())
                          << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
                          << LOG_KV("timeCost", (utcTime() - startT));
 }
@@ -134,7 +134,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
         }
         else
         {
-            if (!m_staticCall && isSysContractDeploy(m_block->blockHeaderConst()->number()) &&
+            if (!m_staticCall && isSysContractDeploy(number()) &&
                 tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
             {
                 // if enable auth check, and first deploy auth contract
@@ -268,7 +268,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
 {
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number())
                          << "BlockExecutive prepare: buildExecutivesFromNormalTransaction"
-                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                         << LOG_KV("block number", number())
                          << LOG_KV("txCount", m_block->transactionsSize());
 
     m_executiveResults.resize(m_block->transactionsSize());
@@ -675,8 +675,8 @@ void BlockExecutive::asyncNotify(
         return;
     }
     auto results = std::make_shared<bcos::protocol::TransactionSubmitResults>();
-    auto blockHeader = m_block->blockHeaderConst();
-    auto blockHash = blockHeader->hash();
+    auto blockHash = blockHeader()->hash();
+    auto number = blockHeader()->number();
     size_t index = 0;
     for (auto& it : m_executiveResults)
     {
@@ -695,21 +695,19 @@ void BlockExecutive::asyncNotify(
         results->emplace_back(submitResult);
     }
     auto txsSize = m_executiveResults.size();
-    notifier(blockHeader->number(), results, [_callback, blockHeader, txsSize](Error::Ptr _error) {
+    notifier(number, results, [_callback, number, blockHash, txsSize](Error::Ptr _error) {
         if (_callback)
         {
             _callback(_error);
         }
         if (_error == nullptr)
         {
-            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
-                                << LOG_DESC("notify block result success")
-                                << LOG_KV("hash", blockHeader->hash().abridged())
+            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number) << LOG_DESC("notify block result success")
+                                << LOG_KV("hash", blockHash.abridged())
                                 << LOG_KV("txsSize", txsSize);
             return;
         }
-        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
-                            << LOG_DESC("notify block result failed")
+        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number) << LOG_DESC("notify block result failed")
                             << LOG_KV("code", _error->errorCode())
                             << LOG_KV("msg", _error->errorMessage());
     });
@@ -1168,7 +1166,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
     // for (auto& it : *(m_scheduler->m_executorManager))
     forEachExecutor([this, status](std::string,
                         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
-        auto blockHeader = m_block->blockHeaderConst();
+        auto blockHeader = m_blockHeader;
         executor->nextBlockHeader(
             m_schedulerTermId, blockHeader, [this, status](bcos::Error::Ptr&& error) {
                 {
@@ -1603,7 +1601,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     m_gasUsed.fetch_add(txGasUsed);
     auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
         std::string(output->newEVMContractAddress()), output->takeLogEntries(), output->status(),
-        output->data(), m_block->blockHeaderConst()->number());
+        output->data(), number());
 
     // write receipt in results
     SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
@@ -1638,8 +1636,7 @@ void BlockExecutive::serialPrepareExecutor()
         for (const auto& address : currentExecutors)
         {
             DMC_LOG(TRACE) << " 0.Pre-DmcExecutor: \t----------------- addr:" << address
-                           << " | number:" << m_block->blockHeaderConst()->number()
-                           << " -----------------";
+                           << " | number:" << number() << " -----------------";
             hasScheduleOutMessage |=
                 m_dmcExecutors[address]->prepare();  // may generate new contract in m_dmcExecutors
         }
@@ -1661,8 +1658,7 @@ void BlockExecutive::serialPrepareExecutor()
             continue;  // must jump finished executor
         }
         DMC_LOG(TRACE) << " 3.UnlockPrepare: \t |---------------- addr:" << address
-                       << " | number:" << std::to_string(m_block->blockHeaderConst()->number())
-                       << " ----------------|";
+                       << " | number:" << std::to_string(number()) << " ----------------|";
 
         allFinished = false;
         bool need = dmcExecutor->unlockPrepare();
@@ -1677,8 +1673,8 @@ void BlockExecutive::serialPrepareExecutor()
         for (auto& it : m_dmcExecutors)
         {
             const auto& address = it.first;
-            DMC_LOG(TRACE) << " --detect--revert-- " << address << " | "
-                           << m_block->blockHeaderConst()->number() << " -----------------";
+            DMC_LOG(TRACE) << " --detect--revert-- " << address << " | " << number()
+                           << " -----------------";
             if (m_dmcExecutors[address]->detectLockAndRevert())
             {
                 needRevert = true;
@@ -1688,8 +1684,8 @@ void BlockExecutive::serialPrepareExecutor()
 
         if (!needRevert)
         {
-            std::string errorMsg = "Need detect deadlock but no deadlock detected! block: " +
-                                   toString(m_block->blockHeaderConst()->number());
+            std::string errorMsg =
+                "Need detect deadlock but no deadlock detected! block: " + std::to_string(number());
             DMC_LOG(ERROR) << errorMsg;
             BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, errorMsg));
         }
