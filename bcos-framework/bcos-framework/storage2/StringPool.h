@@ -3,6 +3,7 @@
 #include "MemoryStorage.h"
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/ThreeWay4StringView.h>
+#include <oneapi/tbb/concurrent_unordered_set.h>
 #include <boost/container/static_vector.hpp>
 #include <boost/container_hash/hash_fwd.hpp>
 #include <boost/functional/hash.hpp>
@@ -11,39 +12,6 @@
 #include <compare>
 #include <functional>
 #include <string_view>
-
-template <size_t n>
-struct boost::hash<boost::container::small_vector<char, n>>
-{
-    std::size_t operator()(const boost::container::small_vector<char, n>& str) const noexcept
-    {
-        return boost::hash<std::string_view>{}(std::string_view(str.data(), str.size()));
-    }
-    std::size_t operator()(std::string_view view) const noexcept
-    {
-        return boost::hash<std::string_view>{}(view);
-    }
-};
-
-template <size_t n>
-struct std::equal_to<boost::container::small_vector<char, n>>
-{
-    bool operator()(
-        const boost::container::small_vector<char, n>& str, std::string_view view) const noexcept
-    {
-        return std::string_view(str.data(), str.size()) == view;
-    }
-    bool operator()(
-        std::string_view view, const boost::container::small_vector<char, n>& str) const noexcept
-    {
-        return std::string_view(str.data(), str.size()) == view;
-    }
-    bool operator()(const boost::container::small_vector<char, n>& lhs,
-        const boost::container::small_vector<char, n>& rhs) const noexcept
-    {
-        return lhs == rhs;
-    }
-};
 
 namespace bcos::storage2::string_pool
 {
@@ -139,9 +107,38 @@ class FixedStringPool : public StringPool
 {
 private:
     using StringType = boost::container::small_vector<char, DEFAULT_STRING_LENGTH>;
-    mutable memory_storage::MemoryStorage<StringType, memory_storage::Empty,
-        memory_storage::CONCURRENT, boost::hash<StringType>>
-        m_storage;
+    struct EqualTo
+    {
+        using is_transparent = std::string_view;
+
+        bool operator()(const StringType& str, std::string_view view) const noexcept
+        {
+            return std::string_view(str.data(), str.size()) == view;
+        }
+        bool operator()(std::string_view view, const StringType& str) const noexcept
+        {
+            return std::string_view(str.data(), str.size()) == view;
+        }
+        bool operator()(const StringType& lhs, const StringType& rhs) const noexcept
+        {
+            return lhs == rhs;
+        }
+    };
+    struct Hash
+    {
+        using transparent_key_equal = EqualTo;
+
+        std::size_t operator()(const StringType& str) const noexcept
+        {
+            return std::hash<std::string_view>{}(std::string_view(str.data(), str.size()));
+        }
+        std::size_t operator()(std::string_view view) const noexcept
+        {
+            return std::hash<std::string_view>{}(view);
+        }
+    };
+
+    tbb::concurrent_unordered_set<StringType, Hash, EqualTo> m_storage;
 
 public:
     struct UnexceptStringID : public bcos::Error
@@ -157,25 +154,13 @@ public:
 
     ID add(std::string_view str) override
     {
-        // Replace to tbb
-        while (true)
+        auto it = m_storage.find(str);
+        if (it == m_storage.end())
         {
-            auto itAwaitable = m_storage.read(single(str));
-            auto& it = itAwaitable.value();
-            std::ignore = it.next();
-            auto existsAwaitable = it.hasValue();
-            auto exists = existsAwaitable.value();
-            if (exists)
-            {
-                auto keyAwaitable = it.key();
-                const auto& key = keyAwaitable.value();
-                return std::addressof(key);
-            }
-
-            it.release();
-            m_storage.write(
-                single(StringType(str.begin(), str.end())), single(memory_storage::Empty{}));
+            it = m_storage.emplace_hint(it, StringType(str.begin(), str.end()));
         }
+
+        return std::addressof(*it);
     }
 
     std::string_view query(ID id) const override

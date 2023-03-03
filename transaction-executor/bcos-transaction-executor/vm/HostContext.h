@@ -417,19 +417,35 @@ public:
                     std::string("Not found contract code: ").append(*m_myContractTable)));
         }
         auto code = codeEntry->get();
-        auto codeHash = co_await codeHashAt(m_message.code_address);
         auto mode = toRevision(vmSchedule());
 
-        auto vmInstance = m_vmFactory.create(VMKind::evmone, codeHash, code, mode);
-        auto savepoint = m_rollbackableStorage.current();
-        auto result = vmInstance.execute(
-            interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
-        if (result.status_code != 0)
+        if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            co_await m_rollbackableStorage.rollback(savepoint);
-        }
+            auto codeHash = co_await codeHashAt(m_message.code_address);
+            auto vmInstance = m_vmFactory.create(VMKind::evmone, codeHash, code, mode);
+            auto savepoint = m_rollbackableStorage.current();
+            auto result = vmInstance.execute(
+                interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
+            if (result.status_code != 0)
+            {
+                co_await m_rollbackableStorage.rollback(savepoint);
+            }
 
-        co_return result;
+            co_return result;
+        }
+        else
+        {
+            auto vmInstance = VMFactory::create();
+            auto savepoint = m_rollbackableStorage.current();
+            auto result = vmInstance.execute(
+                interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
+            if (result.status_code != 0)
+            {
+                co_await m_rollbackableStorage.rollback(savepoint);
+            }
+
+            co_return result;
+        }
     }
 
     task::Task<evmc_result> callBuiltInPrecompiled(
