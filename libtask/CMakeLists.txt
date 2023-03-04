@@ -5,6 +5,10 @@ target_include_directories(bcos-task INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-task>)
 target_link_libraries(bcos-task INTERFACE bcos-concepts)
+target_precompile_headers(bcos-task
+  INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/bcos-task/Coroutine.h ${CMAKE_CURRENT_SOURCE_DIR}/bcos-task/Task.h 
+  ${CMAKE_CURRENT_SOURCE_DIR}/bcos-task/Trait.h ${CMAKE_CURRENT_SOURCE_DIR}/bcos-task/Wait.h 
+)
 
 include(GNUInstallDirs)
 install(TARGETS bcos-task EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

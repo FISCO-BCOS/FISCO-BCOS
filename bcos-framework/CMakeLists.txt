@@ -29,6 +29,79 @@ target_include_directories(bcos-framework INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-framework>)
 target_link_libraries(bcos-framework INTERFACE bcos-crypto bcos-task Microsoft.GSL::GSL)
+message(STATUS "framework headers: ${HEADERS}")
+target_precompile_headers(bcos-framework
+  INTERFACE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/Common.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/consensus/ConsensusInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/consensus/ConsensusNode.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/consensus/ConsensusNodeInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/consensus/ConsensusTypeDef.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/dispatcher/SchedulerInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/dispatcher/SchedulerTypeDef.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/election/FailOverTypeDef.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/election/LeaderElectionInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/election/LeaderEntryPointInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/executor/ExecuteError.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/executor/ExecutionMessage.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/executor/ExecutorStatus.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/executor/NativeExecutionMessage.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/executor/ParallelTransactionExecutorInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/executor/PrecompiledTypeDef.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/front/FrontServiceInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/gateway/GatewayInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/gateway/GatewayTypeDef.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/gateway/GroupNodeInfo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/ledger/GenesisConfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/ledger/LedgerConfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/ledger/LedgerInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/ledger/LedgerTypeDef.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/multigroup/ChainNodeInfo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/multigroup/ChainNodeInfoFactory.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/multigroup/GroupInfo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/multigroup/GroupInfoCodec.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/multigroup/GroupInfoFactory.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/multigroup/GroupTypeDef.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/Block.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/BlockFactory.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/BlockHeader.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/BlockHeaderFactory.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/CommonError.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/Exceptions.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/GlobalConfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/LogEntry.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/MemberInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/Protocol.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/ProtocolInfo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/ProtocolInfoCodec.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/ProtocolTypeDef.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/ServiceDesc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/Transaction.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/TransactionFactory.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/TransactionMetaData.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/TransactionReceipt.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/TransactionReceiptFactory.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/TransactionSubmitResult.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/protocol/TransactionSubmitResultFactory.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/rpc/HandshakeRequest.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/rpc/RPCInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/sealer/SealerInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/security/DataEncryptInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/storage/Common.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/storage/Entry.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/storage/KVStorageHelper.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/storage/StorageInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/storage/Table.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/storage2/MemoryStorage.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/storage2/Storage.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/storage2/StringPool.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/sync/BlockSyncInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/sync/SyncConfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/transaction-executor/TransactionExecutor.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/transaction-scheduler/TransactionScheduler.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/txpool/TxPoolInterface.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework/txpool/TxPoolTypeDef.h
+)
 
 if (TESTS)
     enable_testing()
