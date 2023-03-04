@@ -12,12 +12,10 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
-#include <forward_list>
 #include <functional>
 #include <mutex>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <set>
-#include <shared_mutex>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -96,7 +94,7 @@ private:
     using Buckets = std::conditional_t<withConcurrent, std::vector<Bucket>, std::array<Bucket, 1>>;
 
     Buckets m_buckets;
-    [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> m_maxCapacity = {};
+    [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> m_maxCapacity;
 
     std::tuple<std::reference_wrapper<Bucket>, Lock> getBucket(auto const& key)
     {
@@ -159,11 +157,22 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MemoryStorage(unsigned buckets = 0) requires(!withConcurrent) {}
+    MemoryStorage(unsigned buckets = 0) requires(!withConcurrent)
+    {
+        if constexpr (withMRU)
+        {
+            m_maxCapacity = DEFAULT_CAPACITY;
+        }
+    }
 
     MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
       : m_buckets(std::min(buckets, getBucketSize()))
-    {}
+    {
+        if constexpr (withMRU)
+        {
+            m_maxCapacity = DEFAULT_CAPACITY;
+        }
+    }
     MemoryStorage(const MemoryStorage&) = delete;
     MemoryStorage(MemoryStorage&&) noexcept = default;
     MemoryStorage& operator=(const MemoryStorage&) = delete;

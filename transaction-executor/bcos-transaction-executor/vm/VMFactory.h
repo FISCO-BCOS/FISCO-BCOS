@@ -21,10 +21,12 @@
 
 #pragma once
 #include "VMInstance.h"
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include <evmone/evmone.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace bcos::transaction_executor
@@ -40,6 +42,14 @@ struct UnknownVMError : public bcos::Error {};
 
 class VMFactory
 {
+private:
+    storage2::memory_storage::MemoryStorage<crypto::HashType,
+        std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>,
+        storage2::memory_storage::Attribute(
+            storage2::memory_storage::CONCURRENT | storage2::memory_storage::MRU),
+        std::hash<crypto::HashType>>
+        m_evmoneCodeAnalysisCache;
+
 public:
     /// Creates a VM instance of the global kind.
     static VMInstance create() { return create(VMKind::evmone); }
@@ -51,6 +61,38 @@ public:
         {
         case VMKind::evmone:
             return VMInstance{evmc_create_evmone()};
+        default:
+            BOOST_THROW_EXCEPTION(UnknownVMError{});
+        }
+    }
+
+    VMInstance create(
+        VMKind kind, const bcos::h256& codeHash, std::string_view code, evmc_revision mode)
+    {
+        switch (kind)
+        {
+        case VMKind::evmone:
+        {
+            std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const> codeAnalysis;
+            auto it = m_evmoneCodeAnalysisCache.read(storage2::single(codeHash)).toValue();
+            it.next().toValue();
+            if (it.hasValue().toValue())
+            {
+                codeAnalysis = it.value().toValue();
+                it.release();
+            }
+            else
+            {
+                it.release();
+                codeAnalysis = std::make_shared<evmone::advanced::AdvancedCodeAnalysis>(
+                    evmone::advanced::analyze(
+                        mode, evmone::bytes_view((const uint8_t*)code.data(), code.size())));
+                m_evmoneCodeAnalysisCache.write(
+                    storage2::single(codeHash), storage2::single(std::as_const(codeAnalysis)));
+            }
+
+            return VMInstance{std::move(codeAnalysis)};
+        }
         default:
             BOOST_THROW_EXCEPTION(UnknownVMError{});
         }

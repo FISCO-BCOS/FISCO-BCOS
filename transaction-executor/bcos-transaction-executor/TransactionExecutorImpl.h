@@ -1,6 +1,8 @@
 #pragma once
 
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-transaction-executor/vm/VMFactory.h"
 #include "transaction-executor/bcos-transaction-executor/RollbackableStorage.h"
 #include "transaction-executor/bcos-transaction-executor/vm/VMInstance.h"
 #include "vm/HostContext.h"
@@ -51,6 +53,7 @@ private:
         return address;
     }
 
+    VMFactory vmFactory;
     Storage& m_storage;
     ReceiptFactory& m_receiptFactory;
     TableNamePool& m_tableNamePool;
@@ -91,8 +94,8 @@ public:
             std::uninitialized_copy(
                 transaction.sender().begin(), transaction.sender().end(), evmcMessage.sender.bytes);
 
-            HostContext hostContext(rollbackableStorage, m_tableNamePool, blockHeader, evmcMessage,
-                evmcMessage.sender, contextID, 0);
+            HostContext hostContext(vmFactory, rollbackableStorage, m_tableNamePool, blockHeader,
+                evmcMessage, evmcMessage.sender, contextID, 0);
             auto evmcResult = co_await hostContext.execute();
             struct Defer
             {

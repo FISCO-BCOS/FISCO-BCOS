@@ -82,7 +82,7 @@ public:
         }
         task::AwaitableValue<Key> key() const
         {
-            static_assert(!sizeof(*this), "Unsupported method!");
+            static_assert(sizeof(*this) == 0U, "Unsupported method!");
         }
         task::AwaitableValue<Value> value() const
         {

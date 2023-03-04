@@ -65,11 +65,68 @@ inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 template <StateStorage Storage, protocol::IsBlockHeader BlockHeader>
 class HostContext : public evmc_host_context
 {
+private:
+    VMFactory& m_vmFactory;
+    Rollbackable<Storage>& m_rollbackableStorage;
+    TableNamePool& m_tableNamePool;
+    BlockHeader const& m_blockHeader;
+    const evmc_message& m_message;
+    const evmc_address& m_origin;
+    int m_contextID;
+    int m_seq;
+
+    TableNameID m_myContractTable;
+    TableNameID m_codeTable;
+    TableNameID m_abiTable;
+    evmc_address m_newContractAddress;
+    std::vector<protocol::LogEntry> m_logs;
+
+    TableNameID getTableNameID(const evmc_address& address)
+    {
+        std::array<char, USER_APPS_PREFIX.size() + sizeof(address)> tableName;
+        std::uninitialized_copy_n(
+            USER_APPS_PREFIX.data(), USER_APPS_PREFIX.size(), tableName.data());
+        std::uninitialized_copy_n((const char*)address.bytes, sizeof(address),
+            tableName.data() + USER_APPS_PREFIX.size());
+
+        return storage2::string_pool::makeStringID(
+            m_tableNamePool, std::string_view(tableName.data(), tableName.size()));
+    }
+
+    TableNameID getMyContractTable(
+        const protocol::BlockHeader& blockHeader, const evmc_message& message)
+    {
+        switch (message.kind)
+        {
+        case EVMC_CREATE:
+        {
+            auto address = fmt::format("{}_{}_{}", blockHeader.number(), m_contextID, m_seq);
+            auto hash = GlobalHashImpl::g_hashImpl->hash(address);
+            std::uninitialized_copy_n(
+                hash.data(), sizeof(m_newContractAddress.bytes), m_newContractAddress.bytes);
+
+            return getTableNameID(m_newContractAddress);
+        }
+        case EVMC_CREATE2:
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error("Unimplement"));
+            break;
+        }
+        default:
+        {
+            // CALL OR DELEGATECALL
+            m_newContractAddress = {};
+            return getTableNameID(message.recipient);
+        }
+        }
+    }
+
 public:
-    HostContext(Rollbackable<Storage>& storage, TableNamePool& tableNamePool,
+    HostContext(VMFactory& vmFactory, Rollbackable<Storage>& storage, TableNamePool& tableNamePool,
         BlockHeader const& blockHeader, const evmc_message& message, const evmc_address& origin,
         int contextID, int seq)
       : evmc_host_context(),
+        m_vmFactory(vmFactory),
         m_rollbackableStorage(storage),
         m_tableNamePool(tableNamePool),
         m_blockHeader(blockHeader),
@@ -360,19 +417,35 @@ public:
                     std::string("Not found contract code: ").append(*m_myContractTable)));
         }
         auto code = codeEntry->get();
-
-        auto vmInstance = VMFactory::create();
         auto mode = toRevision(vmSchedule());
 
-        auto savepoint = m_rollbackableStorage.current();
-        auto result = vmInstance.execute(
-            interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
-        if (result.status_code != 0)
+        if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            co_await m_rollbackableStorage.rollback(savepoint);
-        }
+            auto codeHash = co_await codeHashAt(m_message.code_address);
+            auto vmInstance = m_vmFactory.create(VMKind::evmone, codeHash, code, mode);
+            auto savepoint = m_rollbackableStorage.current();
+            auto result = vmInstance.execute(
+                interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
+            if (result.status_code != 0)
+            {
+                co_await m_rollbackableStorage.rollback(savepoint);
+            }
 
-        co_return result;
+            co_return result;
+        }
+        else
+        {
+            auto vmInstance = VMFactory::create();
+            auto savepoint = m_rollbackableStorage.current();
+            auto result = vmInstance.execute(
+                interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
+            if (result.status_code != 0)
+            {
+                co_await m_rollbackableStorage.rollback(savepoint);
+            }
+
+            co_return result;
+        }
     }
 
     task::Task<evmc_result> callBuiltInPrecompiled(
@@ -384,80 +457,20 @@ public:
 
     task::Task<evmc_result> externalCall(const evmc_message& message)
     {
-        HostContext hostcontext(m_rollbackableStorage, m_tableNamePool, m_blockHeader, message,
-            m_origin, m_contextID, m_seq + 1);
-
-        // TODO: 跨协程调用
-        // if constexpr () ...
-        // ExternalCaller externalCaller;
-        // co_await externalCaller.execute();
+        HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_tableNamePool, m_blockHeader,
+            message, m_origin, m_contextID, m_seq + 1);
 
         auto result = co_await hostcontext.execute();
-        if (result.status_code == EVMC_SUCCESS)
+        if (result.status_code == EVMC_SUCCESS && !hostcontext.m_logs.empty())
         {
-            m_logs.insert(m_logs.end(), hostcontext.m_logs.begin(), hostcontext.m_logs.end());
+            auto const& logs = hostcontext.logs();
+            m_logs.insert(m_logs.end(), logs.begin(), logs.end());
         }
 
         co_return result;
     }
 
     const std::vector<protocol::LogEntry>& logs() & { return m_logs; }
-
-private:
-    TableNameID getTableNameID(const evmc_address& address)
-    {
-        std::array<char, USER_APPS_PREFIX.size() + sizeof(address)> tableName;
-        std::uninitialized_copy_n(
-            USER_APPS_PREFIX.data(), USER_APPS_PREFIX.size(), tableName.data());
-        std::uninitialized_copy_n((const char*)address.bytes, sizeof(address),
-            tableName.data() + USER_APPS_PREFIX.size());
-
-        return storage2::string_pool::makeStringID(
-            m_tableNamePool, std::string_view(tableName.data(), tableName.size()));
-    }
-
-    TableNameID getMyContractTable(
-        const protocol::BlockHeader& blockHeader, const evmc_message& message)
-    {
-        switch (message.kind)
-        {
-        case EVMC_CREATE:
-        {
-            auto address = fmt::format("{}_{}_{}", blockHeader.number(), m_contextID, m_seq);
-            auto hash = GlobalHashImpl::g_hashImpl->hash(address);
-            m_newContractAddress = evmc_address{};
-            RANGES::copy_n(
-                hash.data(), sizeof(m_newContractAddress.bytes), m_newContractAddress.bytes);
-
-            return getTableNameID(m_newContractAddress);
-        }
-        case EVMC_CREATE2:
-        {
-            BOOST_THROW_EXCEPTION(std::runtime_error("Unimplement"));
-            break;
-        }
-        default:
-        {
-            // CALL OR DELEGATECALL
-            m_newContractAddress = {};
-            return getTableNameID(message.recipient);
-        }
-        }
-    }
-
-    Rollbackable<Storage>& m_rollbackableStorage;
-    TableNamePool& m_tableNamePool;
-    BlockHeader const& m_blockHeader;
-    const evmc_message& m_message;
-    const evmc_address& m_origin;
-    int m_contextID;
-    int m_seq;
-
-    TableNameID m_myContractTable;
-    TableNameID m_codeTable;
-    TableNameID m_abiTable;
-    evmc_address m_newContractAddress;
-    std::vector<protocol::LogEntry> m_logs;
 };
 
 }  // namespace bcos::transaction_executor
