@@ -37,7 +37,7 @@ struct TestRocksDBStorage2Fixture
 
 BOOST_FIXTURE_TEST_SUITE(TestRocksDBStorage2, TestRocksDBStorage2Fixture)
 
-BOOST_AUTO_TEST_CASE(readWriteRemove)
+BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
 {
     task::syncWait([this]() -> task::Task<void> {
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
@@ -122,6 +122,33 @@ BOOST_AUTO_TEST_CASE(readWriteRemove)
 
             ++i;
         }
+
+        // Seek to ensure 50 values
+        auto seekIt = co_await rocksDB.seek(storage2::STORAGE_BEGIN);
+
+        i = 0;
+        while (co_await seekIt.next())
+        {
+            auto num = i;
+            if (i >= 50)
+            {
+                num += 20;  // 20 item has been deleted above
+            }
+
+            BOOST_CHECK(co_await seekIt.hasValue());
+
+            auto key = co_await seekIt.key();
+            auto& [tableName, keyName] = key;
+            BOOST_CHECK_EQUAL(*tableName, fmt::format("Table: {}", num % 10));
+            BOOST_CHECK_EQUAL(keyName.toStringView(), fmt::format("Key: {}", num));
+
+            auto value = co_await it2.value();
+            BOOST_CHECK_EQUAL(
+                value.get(), fmt::format("Entry value is: i am a value!!!!!!! {}", num));
+
+            ++i;
+        }
+        BOOST_CHECK_EQUAL(i, 80);
 
         co_return;
     }());

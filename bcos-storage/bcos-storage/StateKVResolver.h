@@ -64,7 +64,7 @@ struct StateKeyResolver
         }
 
         auto tableRange = RANGES::subrange<decltype(buffer)>(RANGES::begin(buffer), it);
-        RANGES::advance(it);
+        ++it;
         auto keyRange = RANGES::subrange<decltype(buffer)>(it, RANGES::end(buffer));
 
         if (RANGES::empty(tableRange) || RANGES::empty(keyRange))

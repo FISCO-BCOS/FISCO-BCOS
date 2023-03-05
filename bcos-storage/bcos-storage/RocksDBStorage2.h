@@ -4,6 +4,7 @@
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
+#include <rocksdb/iterator.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
@@ -92,7 +93,7 @@ public:
         }
     };
 
-    auto read(RANGES::input_range auto const& keys) -> task::AwaitableValue<ReadIterator>
+    auto read(RANGES::input_range auto const& keys) & -> task::AwaitableValue<ReadIterator>
     {
         task::AwaitableValue<ReadIterator> readIteratorAwaitable(ReadIterator{m_valueResolver});
         auto& readIterator = readIteratorAwaitable.value();
@@ -180,6 +181,68 @@ public:
         }
 
         return {};
+    }
+
+    class SeekIterator
+    {
+        friend class RocksDBStorage2;
+
+    private:
+        std::unique_ptr<::rocksdb::Iterator> m_rocksDBIterator;
+        RocksDBStorage2& m_self;
+        bool m_started = false;
+
+    public:
+        using Key = KeyType;
+        using Value = ValueType;
+
+        SeekIterator(std::unique_ptr<::rocksdb::Iterator> rocksDBIterator, RocksDBStorage2& self)
+          : m_rocksDBIterator(std::move(rocksDBIterator)), m_self(self)
+        {}
+
+        task::AwaitableValue<bool> next()
+        {
+            if (m_started)
+            {
+                m_rocksDBIterator->Next();
+            }
+            else
+            {
+                m_started = true;
+            }
+            return {m_rocksDBIterator->Valid()};
+        }
+        task::AwaitableValue<bool> hasValue() const { return {true}; }
+        task::AwaitableValue<Key> key() const
+        {
+            auto slice = m_rocksDBIterator->key();
+            return {m_self.m_keyResolver.decode(slice.ToStringView())};
+        }
+        task::AwaitableValue<Value> value() const
+        {
+            auto slice = m_rocksDBIterator->value();
+            return {m_self.m_valueResolver.decode(slice.ToStringView())};
+        }
+    };
+
+    task::AwaitableValue<SeekIterator> seek(auto const& key) &
+    {
+        task::AwaitableValue<SeekIterator> iteratorAwaitable(
+            {std::unique_ptr<::rocksdb::Iterator>(
+                 m_rocksDB.NewIterator(::rocksdb::ReadOptions(), m_rocksDB.DefaultColumnFamily())),
+                *this});
+        auto& iterator = iteratorAwaitable.value();
+        if constexpr (std::is_same_v<storage2::STORAGE_BEGIN_TYPE,
+                          std::remove_cvref_t<decltype(key)>>)
+        {
+            iterator.m_rocksDBIterator->SeekToFirst();
+        }
+        else
+        {
+            iterator.m_rocksDBIterator->Seek(
+                ::rocksdb::Slice(RANGES::data(key), RANGES::size(key)));
+        }
+        return iteratorAwaitable;
     }
 };
 

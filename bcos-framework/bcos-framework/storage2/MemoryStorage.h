@@ -58,7 +58,7 @@ private:
     constexpr static bool withMRU = (attribute & Attribute::MRU) != 0;
     constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
 
-    constexpr static unsigned BUCKETS_COUNT = 61;  // Magic number less than 64
+    constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
 
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
