@@ -67,6 +67,8 @@ private:
             else
             {
                std::swap(response.block, block);
+               LIGHTNODE_LOG(DEBUG) << LOG_DESC("lightNodeGetBlock")
+                                    << LOG_KV("BlockNumber", blockNumber);
                co_return;
             }
         }
