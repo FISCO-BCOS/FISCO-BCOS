@@ -13,12 +13,12 @@ void ShardingDmcExecutor::submit(protocol::ExecutionMessage::UniquePtr message, 
 
 void ShardingDmcExecutor::shardGo(std::function<void(bcos::Error::UniquePtr, Status)> callback)
 {
+    std::shared_ptr<std::vector<protocol::ExecutionMessage::UniquePtr>> messages;
     {
         // NOTICE: waiting for preExecute finish
         auto preExecuteGuard = bcos::WriteGuard(x_preExecute);
+        messages = std::move(m_preparedMessages);
     }
-
-    auto messages = std::move(m_preparedMessages);
 
     if (messages && messages->size() == 1 && (*messages)[0]->staticCall())
     {
@@ -164,6 +164,7 @@ void ShardingDmcExecutor::executorExecuteTransactions(std::string contractAddres
 
 void ShardingDmcExecutor::preExecute()
 {
+    auto preExecuteGuard = std::make_shared<bcos::WriteGuard>(x_preExecute);
     auto message = std::move(m_preparedMessages);
     if (!message)
     {
@@ -174,7 +175,6 @@ void ShardingDmcExecutor::preExecute()
                    << LOG_KV("blockNumber", m_block->blockHeader()->number())
                    << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
 
-    auto preExecuteGuard = std::make_shared<bcos::WriteGuard>(x_preExecute);
 
     auto self = shared_from_this();
     m_executor->preExecuteTransactions(m_schedulerTermId, m_block->blockHeaderConst(),
