@@ -279,11 +279,12 @@ private:
 
         bcos::bytes responseBuffer;
         bcos::concepts::serialize::encode(response, responseBuffer);
+        auto blockNumber = request.blockNumber;
         front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID,
-            bcos::ref(responseBuffer), [request](Error::Ptr _error) {
+            bcos::ref(responseBuffer), [blockNumber](Error::Ptr _error) {
                 if (_error)
                 {
-                    LIGHTNODE_LOG(ERROR) << "send getblockResponse failed, blockNumber is " << request.blockNumber;
+                    LIGHTNODE_LOG(ERROR) << "send getblockResponse failed " << LOG_KV("blockNumber", blockNumber);
                 }
             });
         LIGHTNODE_LOG(DEBUG) << "asyncSendResponse: sendResponseMessage to dstNode:"  << nodeID->hex()
