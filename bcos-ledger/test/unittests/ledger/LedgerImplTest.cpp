@@ -227,7 +227,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
         bcos::ledger::NotFoundBlockHeader);
     BOOST_CHECK_THROW(
         bcos::task::syncWait(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3)),
-        bcos::ledger::NotFoundBlockHeader);
+        bcos::ledger::GetBlockDataError);
 }
 
 BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
