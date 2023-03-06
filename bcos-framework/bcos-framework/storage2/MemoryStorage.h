@@ -60,10 +60,11 @@ private:
 
     constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
+    constexpr static int MOSTLY_CACHELINE_SIZE = 64;
 
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
-    constexpr static unsigned DEFAULT_CAPACITY = 256L * 1024 * 1024;  // For mru
+    constexpr static unsigned DEFAULT_CAPACITY = 4 * 1024 * 1024;  // For mru
     using Mutex = std::mutex;
     using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
@@ -71,7 +72,6 @@ private:
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
 
-    constexpr static int MOSTLY_CACHELINE_SIZE = 64;
     struct alignas(MOSTLY_CACHELINE_SIZE) Data
     {
         KeyType key;

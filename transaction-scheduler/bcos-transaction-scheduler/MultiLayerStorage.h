@@ -222,7 +222,7 @@ public:
 
     task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        if (!m_mutableStorage)
+        if (!m_mutableStorage) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
         }

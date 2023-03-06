@@ -8,6 +8,7 @@
 #include <tbb/parallel_pipeline.h>
 #include <iterator>
 #include <range/v3/range/concepts.hpp>
+#include <range/v3/view/move.hpp>
 
 namespace bcos::transaction_scheduler
 {
@@ -174,8 +175,7 @@ public:
 
                             PARALLEL_SCHEDULER_LOG(DEBUG)
                                 << "Inserting receipts... " << chunkReceipts.size();
-                            receipts.insert(
-                                receipts.end(), chunkReceipts.begin(), chunkReceipts.end());
+                            RANGES::move(chunkReceipts, std::back_inserter(receipts));
                             executedChunk.emplace_back(std::move(*chunkResult));
                             ++chunkIt;
                         }));
