@@ -871,8 +871,9 @@ void SchedulerImpl::preExecuteBlock(
             }
             catch (bcos::Error& e)
             {
-                SCHEDULER_LOG(WARNING) << "preExeBlock exception: " << LOG_KV("code", e.errorCode())
-                                       << LOG_KV("message", e.errorMessage());
+                SCHEDULER_LOG(WARNING)
+                    << "preExeBlock in worker exception: " << LOG_KV("code", e.errorCode())
+                    << LOG_KV("message", e.errorMessage());
                 callback(BCOS_ERROR_PTR(e.errorCode(), e.errorMessage()));
             }
         });
