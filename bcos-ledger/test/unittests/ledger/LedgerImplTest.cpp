@@ -321,8 +321,8 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
     std::array<std::byte, 32> lastBlockHash;
     bcos::concepts::hash::calculate<Hasher>(genesisBlock, lastBlockHash);
 
-    constexpr static size_t blockCount = 10;
-    for (auto number = 1U; number < blockCount; ++number)
+    constexpr static size_t blockCount = 50;
+    for (auto number = 1U; number <= blockCount; ++number)
     {
         // write some block
         bcostars::Block block;
