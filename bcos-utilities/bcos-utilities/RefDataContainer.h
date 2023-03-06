@@ -99,6 +99,12 @@ public:
             (char const*)m_dataPointer, ((char const*)m_dataPointer) + m_dataCount * sizeof(T));
     }
 
+    std::string_view toStringView() const
+    {
+        return std::string_view(
+            (char const*)m_dataPointer, ((char const*)m_dataPointer) + m_dataCount * sizeof(T));
+    }
+
     bool empty() const { return (m_dataCount == 0); }
     RefDataContainer<T> getCroppedData(size_t _startIndex, size_t _count) const
     {
