@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
     env:
-      VCPKG_ROOT: /home/ci/actions-runner/_work/FISCO-BCOS/FISCO-BCOS/vcpkg
+      VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
     steps:
       - uses: actions/checkout@v3
@@ -54,10 +54,8 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd ${{ env.VCPKG_ROOT }}
-          git checkout master
-          git pull
-          cd -
+          cd ${{ env.VCPKG_ROOT }} && git checkout master
+          git pull && cd -
 
       - name: Build for linux
         run: |
@@ -67,7 +65,7 @@ jobs:
           . /opt/rh/llvm-toolset-7.0/enable
           alias cmake='cmake3'
           mkdir -p build && cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j3
       - name: Test
         run:
