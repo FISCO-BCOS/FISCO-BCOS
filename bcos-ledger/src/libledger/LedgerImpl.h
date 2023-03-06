@@ -506,7 +506,6 @@ private:
         }
         catch (std::exception const& e){
             LEDGER_LOG(ERROR) << "getBlockData all failed";
-            BOOST_THROW_EXCEPTION(bcos::error::ErrorMessage{"getBlockData all failed!"});
         }
     }
 
