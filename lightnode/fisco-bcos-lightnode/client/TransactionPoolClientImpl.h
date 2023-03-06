@@ -36,18 +36,12 @@ private:
         co_await p2p().sendMessageByNodeID(
             bcos::protocol::LIGHTNODE_SEND_TRANSACTION, nodeID, request, response);
 
-        bcostars::RequestGetStatus requestGetStatus;
-        bcostars::ResponseGetStatus responseGetStatus;
-        co_await p2p().sendMessageByNodeID(
-            protocol::LIGHTNODE_GET_STATUS, nodeID, requestGetStatus, responseGetStatus);
-
         if (response.error.errorCode)
         {
             LIGHTNODE_LOG(WARNING) << "light node submitTransaction failed, errorCode: " << response.error.errorCode
                                    << " " << response.error.errorMessage;
             BOOST_THROW_EXCEPTION(SubmitTransactionFailed{}
-                                  << bcos::error::ErrorMessage{"lightNode are synchronizing, not reached latest block"
-                                                               + std::to_string(responseGetStatus.blockNumber) + ", submitTransaction failed!"});
+                                  << bcos::error::ErrorMessage{response.error.errorMessage});
         }
 
         std::swap(response.receipt, receipt);
