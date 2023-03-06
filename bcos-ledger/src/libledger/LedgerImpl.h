@@ -38,6 +38,7 @@ struct MismatchTransactionCount : public bcos::error::Exception {};
 struct MismatchParentHash: public bcos::error::Exception {};
 struct NotFoundBlockHeader: public bcos::error::Exception {};
 struct GetABIError : public bcos::error::Exception {};
+struct GetBlockDataError : public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
@@ -506,6 +507,8 @@ private:
         }
         catch (std::exception const& e){
             LEDGER_LOG(ERROR) << "getBlockData all failed";
+            BOOST_THROW_EXCEPTION(
+                GetABIError{} << bcos::error::ErrorMessage{"getBlockData all failed!"});
         }
     }
 
