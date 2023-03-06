@@ -85,22 +85,11 @@ bool bcos::crypto::secp256k1Verify(
     }
     return false;
 #endif
-    // secp256k1_pubkey spubkey;
-    // unsigned char data[65];
-    // data[0] = 0x04;
-    // memcpy(data + 1, _pubKey->constData(), _pubKey->size());
-    // if (!secp256k1_ec_pubkey_parse(g_SECP256K1_CTX.get(), &spubkey, data, 65))
-    // {
-    //     return false;
-    // }
+
     secp256k1_ecdsa_recoverable_signature sig;
     secp256k1_ecdsa_recoverable_signature_parse_compact(g_SECP256K1_CTX.get(), &sig,
         _signatureData.data(), (int)_signatureData[SECP256K1_SIGNATURE_V]);
-    // std::reverse(spubkey.data, spubkey.data + 32);
-    // std::reverse(spubkey.data + 32, spubkey.data + 64);
 
-    // secp256k1_ecdsa_signature* sig = (secp256k1_ecdsa_signature*)(_signatureData.data());
-    // return secp256k1_ecdsa_verify(g_SECP256K1_CTX.get(), &sig, _hash.data(), &spubkey) != 0;
     secp256k1_pubkey recoverPubKey;
     if (secp256k1_ecdsa_recover(g_SECP256K1_CTX.get(), &recoverPubKey, &sig, _hash.data()) == 0)
     {
