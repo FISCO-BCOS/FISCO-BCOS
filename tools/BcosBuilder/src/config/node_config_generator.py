@@ -294,8 +294,8 @@ class NodeConfigGenerator:
             config_content = configparser.ConfigParser(
                 comment_prefixes='/', allow_no_value=True)
             config_content.read(group_config.genesis_config_path)
-            # (ret, nodeid_list) = self._generate_all_node_pem(group_config, is_build_opr)
-            return (True, config_content)
+            (ret, nodeid_list) = self._generate_all_node_pem(group_config)
+            return (ret, config_content)
         if must_genesis_exists is True:
             utilities.log_error("Please set the genesis config path firstly!")
             sys.exit(-1)
