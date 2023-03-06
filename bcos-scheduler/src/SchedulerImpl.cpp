@@ -828,51 +828,61 @@ void SchedulerImpl::preExecuteBlock(
         _callback(error == nullptr ? nullptr : std::move(error));
     };
 
-    auto blockNumber = block->blockHeaderConst()->number();
-    int64_t timestamp = block->blockHeaderConst()->timestamp();
-    BlockExecutive::Ptr blockExecutive = getPreparedBlock(blockNumber, timestamp);
-
-    if (blockExecutive != nullptr)
+    try
     {
-        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << LOG_BADGE("prepareBlockExecutive")
-                             << "Duplicate block to prepare, dropped."
-                             << LOG_KV("blockHeader.timestamp", timestamp);
-        callback(nullptr);  // also success
-        return;
-    }
+        auto blockNumber = block->blockHeaderConst()->number();
+        int64_t timestamp = block->blockHeaderConst()->timestamp();
+        BlockExecutive::Ptr blockExecutive = getPreparedBlock(blockNumber, timestamp);
 
-    // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this,
-    // 0,
-    //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool,
-    //     m_gasLimit, verify);
-    fetchConfig();
-    // Note: must build blockExecutive before enqueue() for executeBlock use the same blockExecutive
-    blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
-        m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
-
-    blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
-
-    setPreparedBlock(blockNumber, timestamp, blockExecutive);
-
-    m_worker.enqueue([this, block, blockExecutive, callback = std::move(callback)]() {
-        try
+        if (blockExecutive != nullptr)
         {
-            if (!m_isRunning)
+            SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << LOG_BADGE("prepareBlockExecutive")
+                                 << "Duplicate block to prepare, dropped."
+                                 << LOG_KV("blockHeader.timestamp", timestamp);
+            callback(nullptr);  // also success
+            return;
+        }
+
+        // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this,
+        // 0,
+        //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool,
+        //     m_gasLimit, verify);
+        fetchConfig();
+        // Note: must build blockExecutive before enqueue() for executeBlock use the same
+        // blockExecutive
+        blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
+            m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
+
+        blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
+
+        setPreparedBlock(blockNumber, timestamp, blockExecutive);
+
+        m_worker.enqueue([this, block, blockExecutive, callback = std::move(callback)]() {
+            try
             {
-                return;
+                if (!m_isRunning)
+                {
+                    return;
+                }
+
+                blockExecutive->prepare();
+
+                callback(nullptr);
             }
-
-            blockExecutive->prepare();
-
-            callback(nullptr);
-        }
-        catch (bcos::Error& e)
-        {
-            SCHEDULER_LOG(WARNING) << "preExeBlock exception: " << LOG_KV("code", e.errorCode())
-                                   << LOG_KV("message", e.errorMessage());
-            callback(BCOS_ERROR_PTR(e.errorCode(), e.errorMessage()));
-        }
-    });
+            catch (bcos::Error& e)
+            {
+                SCHEDULER_LOG(WARNING) << "preExeBlock exception: " << LOG_KV("code", e.errorCode())
+                                       << LOG_KV("message", e.errorMessage());
+                callback(BCOS_ERROR_PTR(e.errorCode(), e.errorMessage()));
+            }
+        });
+    }
+    catch (bcos::Error& e)
+    {
+        SCHEDULER_LOG(WARNING) << "preExeBlock exception: " << LOG_KV("code", e.errorCode())
+                               << LOG_KV("message", e.errorMessage());
+        callback(BCOS_ERROR_PTR(e.errorCode(), e.errorMessage()));
+    }
 }
 
 void SchedulerImpl::asyncGetLedgerConfig(
