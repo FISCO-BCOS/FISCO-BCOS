@@ -37,7 +37,7 @@ public:
     {
         // State root
         auto& mutableStorage = m_multiLayerStorage.mutableStorage();
-        auto it = co_await mutableStorage.seek(transaction_executor::EMPTY_STATE_KEY);
+        auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
         bcos::h256 hash;
         while (co_await it.next())
         {
@@ -81,7 +81,7 @@ public:
         co_return co_await executor.execute(blockHeader, transaction, 0);
     }
 
-    decltype(m_multiLayerStorage)& multiLayerStorage() & { return m_multiLayerStorage; }
+    MultiLayerStorage& multiLayerStorage() & { return m_multiLayerStorage; }
     decltype(m_receiptFactory)& receiptFactory() & { return m_receiptFactory; }
     transaction_executor::TableNamePool& tableNamePool() & { return m_tableNamePool; }
 };

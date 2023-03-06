@@ -24,9 +24,7 @@
 #include <utility>
 
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class BlockHeaderFactoryImpl : public bcos::protocol::BlockHeaderFactory
 {
@@ -34,7 +32,7 @@ public:
     BlockHeaderFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
       : m_cryptoSuite(std::move(cryptoSuite))
     {}
-    ~BlockHeaderFactoryImpl() override {}
+    ~BlockHeaderFactoryImpl() override = default;
     bcos::protocol::BlockHeader::Ptr createBlockHeader() override
     {
         return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
@@ -62,5 +60,4 @@ public:
 private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

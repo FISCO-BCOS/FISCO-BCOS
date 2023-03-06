@@ -37,6 +37,7 @@ BOOST_AUTO_TEST_CASE(execute)
             storage, receiptFactory, tableNamePool);
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
         bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
 

@@ -155,7 +155,7 @@ BOOST_AUTO_TEST_CASE(conflict)
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
 
-        auto count = 8;
+        auto count = 64;
         auto transactions =
             RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int index) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(

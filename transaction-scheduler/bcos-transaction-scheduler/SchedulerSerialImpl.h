@@ -4,6 +4,9 @@
 
 namespace bcos::transaction_scheduler
 {
+
+#define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
+
 template <transaction_executor::StateStorage MultiLayerStorage,
     protocol::IsTransactionReceiptFactory ReceiptFactory,
     template <typename, typename> class Executor>
