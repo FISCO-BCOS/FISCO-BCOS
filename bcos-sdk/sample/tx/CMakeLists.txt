@@ -4,7 +4,18 @@ file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_executable(deploy_hello deploy_hello.cpp)
-target_link_libraries(deploy_hello PUBLIC ${BCOS_CPP_SDK_TARGET} ${TARS_PROTOCOL_TARGET} bcos-crypto bcos-boostssl bcos-utilities jsoncpp_static OpenSSL::SSL OpenSSL::Crypto)
+if (NOT WIN32)
+   target_compile_options(deploy_hello PRIVATE -Wno-error -Wno-unused-variable)
+endif()
+target_link_libraries(deploy_hello PUBLIC ${BCOS_CPP_SDK_TARGET} bcos-crypto bcos-boostssl bcos-utilities jsoncpp_static OpenSSL::SSL OpenSSL::Crypto)
+
+add_executable(hello_perf hello_perf.cpp)
+
+if(NOT WIN32)
+   target_compile_options(hello_perf PRIVATE -Wno-error -Wno-unused-variable)
+endif()
+
+target_link_libraries(hello_perf PUBLIC ${BCOS_CPP_SDK_TARGET} ${TARS_PROTOCOL_TARGET})
 
 add_executable(tx_sign_perf tx_sign_perf.cpp)
 target_link_libraries(tx_sign_perf PUBLIC ${BCOS_CPP_SDK_TARGET} ${TARS_PROTOCOL_TARGET})

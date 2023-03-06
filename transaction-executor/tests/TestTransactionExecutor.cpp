@@ -1,6 +1,6 @@
 #include "../bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "TestBytecode.h"
-#include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
+#include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>

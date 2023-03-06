@@ -81,23 +81,28 @@ void Config::loadCommon(
     [common]
         ; if disable ssl connection, default: false
         ; disable_ssl = true
-        ; thread pool size for network msg sending recving handing
+        ; thread pool size for network msg sending receiving handing
         thread_pool_size = 8
         ; send message timeout(ms)
         message_timeout_ms = 10000
+        ; send rpc request to the highest block number node, default: true
+        send_rpc_request_to_highest_block_node = true;
     */
     bool disableSsl = _pt.get<bool>("common.disable_ssl", false);
     int threadPoolSize = _pt.get<int>("common.thread_pool_size", 8);
     int messageTimeOut = _pt.get<int>("common.message_timeout_ms", 10000);
+    bool sendRpcRequestToHighestBlockNode =
+        _pt.get<bool>("common.send_rpc_request_to_highest_block_node", true);
 
     _config.setDisableSsl(disableSsl);
     _config.setSendMsgTimeout(messageTimeOut);
     _config.setThreadPoolSize(threadPoolSize);
-
+    this->setSendRpcRequestToHighestBlockNode(sendRpcRequestToHighestBlockNode);
 
     BCOS_LOG(INFO) << LOG_BADGE("loadCommon") << LOG_DESC("load common section config items ok")
                    << LOG_KV("disableSsl", disableSsl) << LOG_KV("threadPoolSize", threadPoolSize)
-                   << LOG_KV("messageTimeOut", messageTimeOut);
+                   << LOG_KV("messageTimeOut", messageTimeOut)
+                   << LOG_KV("sendRpcRequestToHighestBlockNode", sendRpcRequestToHighestBlockNode);
 }
 
 void Config::loadPeers(
@@ -121,16 +126,7 @@ void Config::loadPeers(
         }
 
         NodeIPEndpoint ep;
-        if (!WsTools::stringToEndPoint(it.second.data(), ep))
-        {
-            BCOS_LOG(WARNING)
-                << LOG_BADGE("loadPeers")
-                << LOG_DESC(
-                       "invalid endpoint, endpoint must be in IP:Port format, eg: 127.0.0.1:20200")
-                << LOG_KV("endpoint", it.second.data());
-            continue;
-        }
-
+        WsTools::stringToEndPoint(it.second.data(), ep);
         BCOS_LOG(INFO) << LOG_BADGE("loadPeers") << LOG_DESC("add one connected peer")
                        << LOG_KV("endpoint", it.second.data());
 
