@@ -57,7 +57,7 @@ public:
         m_isWasm(isWasm),
         m_isSerialExecute(isSerialExecute),
         m_schedulerTermId(schedulerTermId),
-        m_worker("scheduler", 1)
+        m_worker("scheduler", 8)
     {
         start();
     }
@@ -163,6 +163,10 @@ private:
         std::function<void()> beforeBack, std::function<void()> whenQueueBack,
         std::function<void(bcos::protocol::BlockNumber)> whenNewer,  // whenNewer(backNumber)
         std::function<void(std::exception const&)> whenException);
+
+    void executeBlockInternal(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+            callback);
 
     bcos::protocol::BlockNumber getCurrentBlockNumber();
 
