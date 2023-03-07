@@ -225,4 +225,59 @@ BOOST_AUTO_TEST_CASE(logicalDeletion)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(range)
+{
+    task::syncWait([]() -> task::Task<void> {
+        constexpr static int count = 100;
+
+        MemoryStorage<std::tuple<std::string, std::string>, storage::Entry, ORDERED> storage;
+        co_await storage.write(
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(num));
+            }),
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
+                storage::Entry entry;
+                entry.set("Hello world!" + boost::lexical_cast<std::string>(num));
+                return entry;
+            }));
+
+        auto readIt = co_await storage.read(
+            RANGES::iota_view<int, int>(0, 10) | RANGES::views::transform([](int i) {
+                return std::tuple<std::string, std::string>(
+                    "table", "key:" + boost::lexical_cast<std::string>(i));
+            }));
+        auto readRange = readIt.range();
+        for (auto&& [kv, num] : RANGES::zip_view(readRange, RANGES::iota_view<size_t>(0)))
+        {
+            auto& [key, value] = kv;
+            BOOST_CHECK(key);
+            BOOST_CHECK(value);
+
+            auto& [tableName, keyName] = *key;
+            BOOST_CHECK_EQUAL(tableName, "table");
+            BOOST_CHECK_EQUAL(keyName, "key:" + boost::lexical_cast<std::string>(num));
+            BOOST_CHECK_EQUAL(value->get(), "Hello world!" + boost::lexical_cast<std::string>(num));
+            BOOST_CHECK_LT(num, 10);
+        }
+
+        auto seekIt = co_await storage.seek(storage2::STORAGE_BEGIN);
+        auto seekRange = seekIt.range();
+
+        for (auto&& [kv, num] : RANGES::zip_view(seekRange, RANGES::iota_view<size_t>(0)))
+        {
+            auto& [key, value] = kv;
+            BOOST_CHECK(key);
+            BOOST_CHECK(value);
+
+            auto& [tableName, keyName] = *key;
+            // BOOST_CHECK_EQUAL(tableName, "table");
+            // BOOST_CHECK_EQUAL(keyName, "key:" + boost::lexical_cast<std::string>(num));
+            // BOOST_CHECK_EQUAL(value->get(), "Hello world!" +
+            // boost::lexical_cast<std::string>(num));
+            BOOST_CHECK_LT(num, 100);
+        }
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

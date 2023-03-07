@@ -225,6 +225,7 @@ public:
             try
             {
                 BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << blockHeader->number();
+
                 std::unique_lock commitLock(self->m_commitMutex, std::try_to_lock);
                 if (!commitLock.owns_lock())
                 {
@@ -254,12 +255,19 @@ public:
 
                 auto& result = self->m_results.back();
 
-                // Write block and receipt
-                co_await self->m_ledger.template setBlock<concepts::ledger::HEADER,
-                    concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
-                    concepts::ledger::NONCES>(*(result.m_block));
+                if (blockHeader->number() != 0)
+                {
+                    // Write block and receipt
+                    co_await self->m_ledger.template setBlock<concepts::ledger::HEADER,
+                        concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
+                        concepts::ledger::NONCES>(*(result.m_block));
+                }
+                else
+                {
+                    BASELINE_SCHEDULER_LOG(INFO) << "Ignore commit block header: 0";
+                }
 
-                // Write status
+                // Write states
                 co_await self->m_schedulerImpl.commit();
                 commitLock.unlock();
 

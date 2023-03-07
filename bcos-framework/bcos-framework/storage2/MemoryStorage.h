@@ -15,6 +15,7 @@
 #include <functional>
 #include <mutex>
 #include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/view/transform.hpp>
 #include <set>
 #include <thread>
 #include <type_traits>
@@ -72,7 +73,7 @@ private:
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
 
-    struct alignas(MOSTLY_CACHELINE_SIZE) Data
+    struct Data
     {
         KeyType key;
         [[no_unique_address]] DataValueType value;
@@ -201,12 +202,12 @@ public:
         ReadIterator& operator=(ReadIterator&&) noexcept = default;
         ~ReadIterator() noexcept = default;
 
-        task::AwaitableValue<bool> next()
+        task::AwaitableValue<bool> next() &
         {
             return {static_cast<size_t>(++m_index) != m_iterators.size()};
         }
-        task::AwaitableValue<Key> key() const { return {m_iterators[m_index]->key}; }
-        task::AwaitableValue<Value> value() const
+        task::AwaitableValue<Key> key() const& { return {m_iterators[m_index]->key}; }
+        task::AwaitableValue<Value> value() const&
         {
             if constexpr (withLogicalDeletion)
             {
@@ -237,10 +238,29 @@ public:
                 m_bucketLocks.clear();
             }
         }
+
+        auto range() const&
+        {
+            return m_iterators |
+                   RANGES::views::transform(
+                       [](auto const* data) -> std::tuple<const KeyType*, const ValueType*> {
+                           if (!data)
+                           {
+                               return {nullptr, nullptr};
+                           }
+                           return {std::addressof(data->key), std::addressof(data->value)};
+                       });
+        }
     };
 
     class SeekIterator
     {
+    private:
+        typename Container::iterator m_it;
+        typename Container::iterator m_end;
+        [[no_unique_address]] Lock m_bucketLock;
+        bool m_started = false;
+
     public:
         friend class MemoryStorage;
         using Key = const KeyType&;
@@ -281,11 +301,26 @@ public:
 
         void release() { m_bucketLock.unlock(); }
 
-    private:
-        typename Container::iterator m_it;
-        typename Container::iterator m_end;
-        [[no_unique_address]] Lock m_bucketLock;
-        bool m_started = false;
+        auto range() const&
+        {
+            return RANGES::subrange<decltype(m_it), decltype(m_end)>(m_it, m_end) |
+                   RANGES::views::transform(
+                       [](auto const& it) -> std::tuple<const KeyType*, const ValueType*> {
+                           if constexpr (withLogicalDeletion)
+                           {
+                               if (std::holds_alternative<Deleted>(it.value))
+                               {
+                                   return {std::addressof(it.key), nullptr};
+                               }
+                               return {std::addressof(it.key),
+                                   std::addressof(std::get<ValueType>(it.value))};
+                           }
+                           else
+                           {
+                               return {std::addressof(it.key), std::addressof(it.value)};
+                           }
+                       });
+        }
     };
 
     task::AwaitableValue<ReadIterator> read(RANGES::input_range auto const& keys)

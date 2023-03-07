@@ -308,7 +308,6 @@ public:
         m_immutableStorages.pop_back();
         immutablesLock.unlock();
 
-        // TODO: Transactional
         auto it = co_await immutableStorage->seek(storage2::STORAGE_BEGIN);
         while (co_await it.next())
         {
