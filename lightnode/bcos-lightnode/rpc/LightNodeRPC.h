@@ -280,6 +280,8 @@ public:
                     blockNumber, block);
                 if (RANGES::empty(block.transactionsMetaData) && blockNumber != 0)
                 {
+                    LIGHTNODE_LOG(ERROR) << LOG_DESC("getBlockByNumber")
+                                         << LOG_KV("block has no transaction, blockNumber", blockNumber);
                     auto error = bcos::Error();
                     self->toErrorResp(error, respFunc);
                     co_return;
@@ -304,6 +306,9 @@ public:
                     if (!bcos::concepts::bytebuffer::equalTo(
                             block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
                     {
+                        LIGHTNODE_LOG(ERROR) << LOG_KV("blockNumber", blockNumber)
+                                             << LOG_KV("blockTxsRoot",block.blockHeader.data.txsRoot)
+                                             << LOG_KV("merkles", merkles);
                         BOOST_THROW_EXCEPTION(std::runtime_error{"No match transaction root!"});
                     }
                 }
