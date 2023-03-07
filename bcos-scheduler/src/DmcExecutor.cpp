@@ -71,16 +71,16 @@ bool DmcExecutor::unlockPrepare()
 
             // Try to acquire key lock
             if (!m_keyLocks->acquireKeyLock(
-                    f_getAddr(message->from()), message->keyLockAcquired(), contextID, seq))
+                    message->from(), message->keyLockAcquired(), contextID, seq))
             {
                 DMC_LOG(TRACE) << " Waiting key, contract: " << contextID << " | " << seq << " | "
-                               << f_getAddr(message->from())
+                               << message->from()
                                << " keyLockAcquired: " << toHex(message->keyLockAcquired());
             }
             else
             {
                 DMC_LOG(TRACE) << " Wait key lock success, " << contextID << " | " << seq << " | "
-                               << f_getAddr(message->from())
+                               << message->from()
                                << " keyLockAcquired: " << toHex(message->keyLockAcquired());
 
                 m_executivePool.markAs(contextID, MessageHint::NEED_SEND);
@@ -179,7 +179,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
     if (!m_executivePool.empty(MessageHint::NEED_PREPARE))
     {
         callback(nullptr, NEED_PREPARE);
-        return;
+        return;GG
     }
     */
 
@@ -207,8 +207,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
                 return true;
             }
 
-            auto keyLocks =
-                m_keyLocks->getKeyLocksNotHoldingByContext(f_getAddr(message->to()), contextID);
+            auto keyLocks = m_keyLocks->getKeyLocksNotHoldingByContext(message->to(), contextID);
             message->setKeyLocks(std::move(keyLocks));
             DMC_LOG(TRACE) << " 4.SendToExecutor:\t >>>> " << executiveState->toString()
                            << " >>>> [" << m_name << "]:" << m_contractAddress
@@ -390,7 +389,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
 
         // update my key locks in m_keyLocks
         m_keyLocks->batchAcquireKeyLock(
-            f_getAddr(message->from()), message->keyLocks(), message->contextID(), message->seq());
+            message->from(), message->keyLocks(), message->contextID(), message->seq());
 
         auto newSeq = executiveState->currentSeq++;
         executiveState->callStack.push(newSeq);
@@ -435,7 +434,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     case protocol::ExecutionMessage::KEY_LOCK:
     {
         m_keyLocks->batchAcquireKeyLock(
-            f_getAddr(message->from()), message->keyLocks(), message->contextID(), message->seq());
+            message->from(), message->keyLocks(), message->contextID(), message->seq());
 
         executiveState->message = std::move(message);
 
