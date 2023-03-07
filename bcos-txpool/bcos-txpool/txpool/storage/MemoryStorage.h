@@ -22,7 +22,9 @@
 
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
+#include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/RateReporter.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_hash_map.h>
@@ -79,7 +81,8 @@ public:
 
     bool exist(bcos::crypto::HashType const& _txHash) override
     {
-        return m_txsTable.count(_txHash) > 0U;
+        TxsMap::ReadAccessor::Ptr accessor;
+        return m_txsTable.find<TxsMap::ReadAccessor>(accessor, _txHash);
     }
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
@@ -144,13 +147,10 @@ protected:
 
     TxPoolConfig::Ptr m_config;
 
-    using TxsTableAccessor = tbb::concurrent_hash_map<bcos::crypto::HashType,
-        bcos::protocol::Transaction::Ptr, HashCompare>::accessor;
-    tbb::concurrent_hash_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr, HashCompare>
-        m_txsTable;
-    mutable SharedMutex x_txpoolMutex;
+    using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
+        std::hash<bcos::crypto::HashType>>;
 
-    tbb::concurrent_bounded_queue<bcos::protocol::Transaction::Ptr> m_tx2Seal;
+    TxsMap m_txsTable;
 
     tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
         m_invalidTxs;
@@ -172,5 +172,11 @@ protected:
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
+
+    RateReporter m_inRateReporter;
+    RateReporter m_sealRateReporter;
+    RateReporter m_removeRateReporter;
+
+    bcos::crypto::HashType m_knownLatestSealedTxHash;
 };
 }  // namespace bcos::txpool

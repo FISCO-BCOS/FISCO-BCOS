@@ -182,7 +182,7 @@ check_sync()
     bash group0_node_40402/start.sh
     # wait for sync
     sleep 10
-    block_number=$(cat group0_node_40402/log/*log |grep Report | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
+    block_number=$(cat group0_node_40402/log/*log |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
     if [ "${block_number}" == "${expected_block_number}" ]; then
         LOG_INFO "check_sync success, current blockNumber: ${block_number}"
     else
