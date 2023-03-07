@@ -41,7 +41,7 @@ private:
             LIGHTNODE_LOG(WARNING) << "light node submitTransaction failed, errorCode: " << response.error.errorCode
                                    << " " << response.error.errorMessage;
             BOOST_THROW_EXCEPTION(SubmitTransactionFailed{}
-                                  << bcos::error::ErrorMessage{"lightNode submitTransaction failed!"});
+                                  << bcos::error::ErrorMessage{response.error.errorMessage});
         }
 
         std::swap(response.receipt, receipt);

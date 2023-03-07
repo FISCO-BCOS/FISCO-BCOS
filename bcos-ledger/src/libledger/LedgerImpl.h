@@ -38,6 +38,7 @@ struct MismatchTransactionCount : public bcos::error::Exception {};
 struct MismatchParentHash: public bcos::error::Exception {};
 struct NotFoundBlockHeader: public bcos::error::Exception {};
 struct GetABIError : public bcos::error::Exception {};
+struct GetBlockDataError : public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
@@ -496,11 +497,19 @@ private:
     {
         LEDGER_LOG(DEBUG) << "getBlockData all: " << blockNumberKey;
 
-        co_await getBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+        try
+        {
+            co_await getBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+        }
+        catch (std::exception const& e){
+            LEDGER_LOG(ERROR) << "getBlockData all failed";
+            BOOST_THROW_EXCEPTION(
+                GetBlockDataError{} << bcos::error::ErrorMessage{"getBlockData all failed!"});
+        }
     }
 
     template <std::same_as<bcos::concepts::ledger::HEADER>>

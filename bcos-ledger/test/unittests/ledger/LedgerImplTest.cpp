@@ -227,7 +227,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
         bcos::ledger::NotFoundBlockHeader);
     BOOST_CHECK_THROW(
         bcos::task::syncWait(ledger.getBlock<bcos::concepts::ledger::ALL>(10087, block3)),
-        bcos::ledger::NotFoundBlockHeader);
+        bcos::ledger::GetBlockDataError);
 }
 
 BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
@@ -321,8 +321,8 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
     std::array<std::byte, 32> lastBlockHash;
     bcos::concepts::hash::calculate<Hasher>(genesisBlock, lastBlockHash);
 
-    constexpr static size_t blockCount = 10;
-    for (auto number = 1U; number < blockCount; ++number)
+    constexpr static size_t blockCount = 50;
+    for (auto number = 1U; number <= blockCount; ++number)
     {
         // write some block
         bcostars::Block block;
