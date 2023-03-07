@@ -54,31 +54,44 @@ void ExecutiveDagFlow::submit(CallParameters::UniquePtr txInput)
     }
 }
 
+inline bool isResumeInputs(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs)
+{
+    if (!txInputs)
+    {
+        return false;
+    }
+
+    return (*txInputs)[0]->seq > 0 ||
+           (*txInputs)[0]->type != CallParameters::MESSAGE;  // FINISH/REVERT is also resume message
+}
 
 void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs)
 {
     bcos::RecursiveGuard lock(x_lock);
-    if (m_dagFlow)
-    {
-        // m_dagFlow has been set before this function call, just use it
-    }
-    else
-    {
-        // generate m_dagFlow
-        m_dagFlow = prepareDagFlow(*m_executiveFactory->getBlockContext().lock(),
-            m_executiveFactory, *txInputs, m_abiCache);
-    }
 
-    if (!m_inputs)
+    if (!isResumeInputs(txInputs))
     {
-        // is first in
+        if (m_dagFlow)
+        {
+            // m_dagFlow has been set before this function call, just use it
+        }
+        else
+        {
+            // generate m_dagFlow
+            m_dagFlow = prepareDagFlow(*m_executiveFactory->getBlockContext().lock(),
+                m_executiveFactory, *txInputs, m_abiCache);
+        }
+
+        assert(!m_inputs);
         m_inputs = txInputs;
     }
     else
     {
         // is dmc resume input
-        // m_inputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
-        // m_inputs->resize(txInputs->size());
+        if (!m_inputs)
+        {
+            m_inputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
+        }
         for (auto& txInput : *txInputs)
         {
             submit(std::move(txInput));
@@ -90,6 +103,14 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
 {
     auto startT = utcTime();
     auto txsSize = m_inputs->size();
+    if (!m_inputs || txsSize == 0)
+    {
+        // clear input data
+        m_inputs = nullptr;
+        m_dagFlow = nullptr;
+        return;
+    }
+
     m_dagFlow->setExecuteTxFunc([this](ID id) {
         try
         {

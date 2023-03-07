@@ -97,6 +97,16 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
         output->evmStatus = EVMC_REVERT;
     }
 
+    if (versionCompareTo(
+            blockContext().lock()->blockVersion(), protocol::BlockVersion::V3_3_VERSION) >= 0)
+    {
+        if (output->type == CallParameters::REVERT)
+        {
+            // fix the bug here
+            output->evmStatus = EVMC_REVERT;
+        }
+    }
+
     // After coroutine switch, set the recoder
     m_syncStorageWrapper->setRecoder(m_recoder);
 

@@ -45,7 +45,6 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
                 break;
             }
 
-            // get dagFlow from cache
             auto number = m_blockContext->number();
             auto timestamp = m_blockContext->timestamp();
 
@@ -60,6 +59,7 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
                 break;
             }
 
+            // get dagFlow from cache
             PreExeCache::Ptr cache;
             {
                 // get dagFlow if it has been prepared beforehand

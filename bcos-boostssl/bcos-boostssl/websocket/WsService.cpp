@@ -141,14 +141,14 @@ void WsService::reportConnectedNodes()
         if (queueSize > 0)
         {
             WEBSOCKET_SERVICE(INFO)
-                << LOG_DESC("report session write queue status")
-                << LOG_KV("endpoint", session->endPoint()) << LOG_KV("writeQueueSize", queueSize);
+                << LOG_DESC("session write queue status") << LOG_KV("endpoint", session->endPoint())
+                << LOG_KV("writeQueueSize", queueSize);
         }
         else
         {
             WEBSOCKET_SERVICE(DEBUG)
-                << LOG_DESC("report session write queue status")
-                << LOG_KV("endpoint", session->endPoint()) << LOG_KV("writeQueueSize", queueSize);
+                << LOG_DESC("session write queue status") << LOG_KV("endpoint", session->endPoint())
+                << LOG_KV("writeQueueSize", queueSize);
         }
     }
 
