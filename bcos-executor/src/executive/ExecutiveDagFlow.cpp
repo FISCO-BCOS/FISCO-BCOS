@@ -61,8 +61,17 @@ inline bool isResumeInputs(std::shared_ptr<std::vector<CallParameters::UniquePtr
         return false;
     }
 
-    return (*txInputs)[0]->seq > 0 ||
-           (*txInputs)[0]->type != CallParameters::MESSAGE;  // FINISH/REVERT is also resume message
+    for (auto& input : *txInputs)
+    {
+        if ((*txInputs)[0]->seq > 0 ||
+            (*txInputs)[0]->type != CallParameters::MESSAGE)  // FINISH/REVERT is also resume
+                                                              // message
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs)
