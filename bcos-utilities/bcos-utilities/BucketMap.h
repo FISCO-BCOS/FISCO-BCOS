@@ -156,7 +156,6 @@ public:
         }
     }
 
-
     // return true if found
     template <class AccessorType>
     bool find(typename AccessorType::Ptr& accessor, const KeyType& key)
@@ -229,16 +228,6 @@ public:
                 break;
             }
         }
-    }
-
-    void forEachRead(std::function<bool(typename ReadAccessor::Ptr)> handler)
-    {
-        forEach<ReadAccessor>(std::move(handler));
-    }
-
-    void forEachWrite(std::function<bool(typename WriteAccessor::Ptr)> handler)
-    {
-        forEach<WriteAccessor>(std::move(handler));
     }
 
 private:

@@ -44,6 +44,7 @@ BOOST_AUTO_TEST_CASE(serialTest)
 
     BKMap bucketMap(10);
     std::cout << bucketMap.size() << std::endl;
+    BOOST_CHECK(bucketMap.empty());
 
     // insert
     for (int i = 0; i < 100; i++)
@@ -51,39 +52,91 @@ BOOST_AUTO_TEST_CASE(serialTest)
         WriteAccessor::Ptr accessor;
         bucketMap.insert(accessor, {i, i});
     }
+    BOOST_CHECK_EQUAL(100, bucketMap.size());
 
     std::cout << std::endl;
     // for each read
-    bucketMap.forEachRead([](ReadAccessor::Ptr accessor) {
+    bucketMap.forEach<ReadAccessor>([](ReadAccessor::Ptr accessor) {
         std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+        BOOST_CHECK_EQUAL(accessor->key(), accessor->value());
         return true;
     });
 
     // for each write
-    bucketMap.forEachWrite([](WriteAccessor::Ptr accessor) {
+    bucketMap.forEach<WriteAccessor>([](WriteAccessor::Ptr accessor) {
         accessor->value()++;
         return true;
     });
 
     std::cout << std::endl;
     // for each read
-    bucketMap.forEachRead([](ReadAccessor::Ptr accessor) {
+    bucketMap.forEach<ReadAccessor>([](ReadAccessor::Ptr accessor) {
         std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+        BOOST_CHECK_EQUAL(accessor->key() + 1, accessor->value());
         return true;
     });
+    BOOST_CHECK_EQUAL(100, bucketMap.size());
 
-    // remove
+    // remove & find
     for (size_t i = 0; i < 10; i++)
     {
+        {  // find
+            ReadAccessor::Ptr accessor;
+            bool has = bucketMap.find<ReadAccessor>(accessor, i);
+            BOOST_CHECK_EQUAL(accessor->key(), i);
+            BOOST_CHECK_EQUAL(accessor->value(), i + 1);
+            BOOST_CHECK(has);
+        }
+
+
+        {  // constains
+            bool has = bucketMap.contains(i);
+            BOOST_CHECK(has);
+        }
+
+        // remove
         bucketMap.remove(i);
+
+        {  // find again
+            ReadAccessor::Ptr accessor;
+            bool has = bucketMap.find<ReadAccessor>(accessor, i);
+            BOOST_CHECK(!has);
+        }
+
+        {  // constains ?
+            bool has = bucketMap.contains(i);
+            BOOST_CHECK(!has);
+        }
     }
+    BOOST_CHECK_EQUAL(90, bucketMap.size());
 
     std::cout << std::endl;
-    // for each read
-    bucketMap.forEachRead([](ReadAccessor::Ptr accessor) {
-        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
-        return true;
-    });
+    // for each size check
+    {
+        size_t cnt = 0;
+        bucketMap.forEach<ReadAccessor>([&cnt](ReadAccessor::Ptr accessor) {
+            std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+            cnt++;
+            return true;
+        });
+        BOOST_CHECK_EQUAL(90, bucketMap.size());
+    }
+
+    // for each begin with certain startId
+    {
+        size_t cnt = 0;
+        bucketMap.forEach<ReadAccessor>(666, [&cnt](ReadAccessor::Ptr accessor) {
+            std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+            cnt++;
+            return true;
+        });
+        BOOST_CHECK_EQUAL(90, bucketMap.size());
+    }
+
+    // clear
+    bucketMap.clear();
+    BOOST_CHECK(!bucketMap.contains(6));
+    BOOST_CHECK(bucketMap.empty());
 }
 
 BOOST_AUTO_TEST_CASE(parallelTest)
@@ -97,23 +150,37 @@ BOOST_AUTO_TEST_CASE(parallelTest)
 
     // insert
     tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, 100), [&bucketMap](const tbb::blocked_range<size_t>& range) {
+        tbb::blocked_range<int>(0, 5000), [&bucketMap](const tbb::blocked_range<int>& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {
-                size_t op = i % 5;
+                size_t magic = std::rand() % 500;
+                size_t op = magic % 7;
                 switch (op)
                 {
+                case 0:
+                {
+                    bucketMap.forEach<ReadAccessor>([](ReadAccessor::Ptr accessor) {
+                        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+                        return true;
+                    });
+                    break;
+                }
                 case 1:
                 {
-                    bucketMap.forEachRead([](ReadAccessor::Ptr accessor) {
-                        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+                    bucketMap.forEach<WriteAccessor>([](WriteAccessor::Ptr accessor) {
+                        accessor->value()++;
                         return true;
                     });
                     break;
                 }
                 case 2:
                 {
-                    bucketMap.forEachWrite([](WriteAccessor::Ptr accessor) {
+                    // concurrent read and write
+                    bucketMap.forEach<ReadAccessor>([](ReadAccessor::Ptr accessor) {
+                        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+                        return true;
+                    });
+                    bucketMap.forEach<WriteAccessor>([](WriteAccessor::Ptr accessor) {
                         accessor->value()++;
                         return true;
                     });
@@ -121,20 +188,35 @@ BOOST_AUTO_TEST_CASE(parallelTest)
                 }
                 case 3:
                 {
-                    bucketMap.remove(i - 1);
+                    WriteAccessor::Ptr accessor;
+                    bucketMap.insert(accessor, {magic, magic});
+                    break;
+                }
+                case 4:
+                {
+                    bucketMap.contains(magic);
+                    break;
+                }
+                case 5:
+                {
+                    bucketMap.remove(magic);
+                    break;
+                }
+                case 6:
+                {
+                    WriteAccessor::Ptr accessor;
+                    bucketMap.find<WriteAccessor>(accessor, magic);
                     break;
                 }
                 default:
                 {
-                    WriteAccessor::Ptr accessor;
-                    bucketMap.insert(accessor, {i, i});
+                    bucketMap.size();
                     break;
                 }
                 }
             }
         });
 }
-
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
