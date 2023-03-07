@@ -96,8 +96,8 @@ BOOST_AUTO_TEST_CASE(parallelTest)
     std::cout << bucketMap.size() << std::endl;
 
     // insert
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, 10000),
-        [&bucketMap](const tbb::blocked_range<size_t>& range) {
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, 100), [&bucketMap](const tbb::blocked_range<size_t>& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {
                 size_t op = i % 5;
@@ -109,6 +109,7 @@ BOOST_AUTO_TEST_CASE(parallelTest)
                         std::cout << accessor->key() << ":" << accessor->value() << std::endl;
                         return true;
                     });
+                    break;
                 }
                 case 2:
                 {
@@ -116,13 +117,18 @@ BOOST_AUTO_TEST_CASE(parallelTest)
                         accessor->value()++;
                         return true;
                     });
+                    break;
+                }
+                case 3:
+                {
+                    bucketMap.remove(i - 1);
+                    break;
                 }
                 default:
                 {
                     WriteAccessor::Ptr accessor;
                     bucketMap.insert(accessor, {i, i});
                     break;
-                    bucketMap.remove(i);
                 }
                 }
             }
