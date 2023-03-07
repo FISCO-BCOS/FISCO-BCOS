@@ -144,7 +144,8 @@ protected:
 
 protected:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
-    void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
+    virtual void handleExecutiveOutputs(
+        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
     void scheduleOut(ExecutiveState::Ptr executiveState);
 
     void handleCreateMessage(ExecutiveState::Ptr executive);

@@ -60,6 +60,8 @@ public:
 
 private:
     void handleShardGoOutput(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
+    void handleExecutiveOutputs(
+        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) override;
 
     std::shared_ptr<std::vector<protocol::ExecutionMessage::UniquePtr>> m_preparedMessages =
         std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();

@@ -126,20 +126,30 @@ void ShardingDmcExecutor::handleShardGoOutput(
     }
     DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DAGExecute: dump output finish";
 
+    // going to dmc logic
+    handleExecutiveOutputs(std::move(dmcMessages));
+}
+
+void ShardingDmcExecutor::handleExecutiveOutputs(
+    std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs)
+{
     // create executiveState
-    for (auto& dmcOutput : dmcMessages)
+    for (auto& dmcOutput : outputs)
     {
         auto contextID = dmcOutput->contextID();
-        auto executiveState = std::make_shared<ExecutiveState>(contextID, nullptr, false);
+        auto executiveState = m_executivePool.get(contextID);
+        if (!executiveState)
+        {
+            executiveState = std::make_shared<ExecutiveState>(contextID, nullptr, false);
+            auto newSeq = executiveState->currentSeq++;
+            executiveState->callStack.push(newSeq);
 
-        auto newSeq = executiveState->currentSeq++;
-        executiveState->callStack.push(newSeq);
-
-        m_executivePool.add(contextID, executiveState);
+            m_executivePool.add(contextID, executiveState);
+        }
     }
 
     // going to dmc logic
-    DmcExecutor::handleExecutiveOutputs(std::move(dmcMessages));
+    DmcExecutor::handleExecutiveOutputs(std::move(outputs));
 }
 
 void ShardingDmcExecutor::executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,

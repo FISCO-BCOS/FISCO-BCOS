@@ -182,6 +182,18 @@ void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
 void TransactionExecutor::resetEnvironment()
 {
     RecursiveGuard l(x_resetEnvironmentLock);
+
+    if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    {
+        m_keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+    }
+    else
+    {
+        m_keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            storage::IGNORED_ARRAY.begin(), storage::IGNORED_ARRAY.end());
+    }
+
     if (m_isWasm)
     {
         initWasmEnvironment();
