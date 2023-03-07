@@ -42,6 +42,7 @@
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -339,6 +340,7 @@ public:
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     task::Task<h256> blockHash(int64_t number) const
     {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unsupported method!"));
         // TODO: return the block hash in multilayer storage
         co_return h256{};
     }
@@ -452,6 +454,7 @@ public:
         const evmc_message* message, bool _isEvmPrecompiled)
     {
         // TODO: to be done
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unsupported method!"));
         co_return evmc_result{};
     }
 
@@ -463,14 +466,16 @@ public:
         auto result = co_await hostcontext.execute();
         if (result.status_code == EVMC_SUCCESS && !hostcontext.m_logs.empty())
         {
-            auto const& logs = hostcontext.logs();
-            m_logs.insert(m_logs.end(), logs.begin(), logs.end());
+            auto& logs = hostcontext.logs();
+            m_logs.reserve(m_logs.size() + RANGES::size(logs));
+            RANGES::move(logs, std::back_inserter(m_logs));
         }
 
         co_return result;
     }
 
-    const std::vector<protocol::LogEntry>& logs() & { return m_logs; }
+    const std::vector<protocol::LogEntry>& logs() const& { return m_logs; }
+    std::vector<protocol::LogEntry>& logs() & { return m_logs; }
 };
 
 }  // namespace bcos::transaction_executor
