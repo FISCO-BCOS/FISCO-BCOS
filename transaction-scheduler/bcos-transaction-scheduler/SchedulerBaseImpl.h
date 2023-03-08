@@ -49,8 +49,9 @@ public:
 
         auto currentRangeIt = RANGES::begin(range);
         tbb::parallel_pipeline(std::thread::hardware_concurrency() * 4,
-            tbb::make_filter<void, std::optional<decltype(RANGES::subrange(RANGES::begin(range),
-                                       RANGES::end(range)))>>(tbb::filter_mode::serial_in_order,
+            tbb::make_filter<void,
+                std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
+                    RANGES::begin(range), RANGES::end(range)))>>(tbb::filter_mode::serial_in_order,
                 [&](tbb::flow_control& control) -> std::optional<decltype(RANGES::subrange(
                                                     RANGES::begin(range), RANGES::end(range)))> {
                     if (currentRangeIt == RANGES::end(range))
