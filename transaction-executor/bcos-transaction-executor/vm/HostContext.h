@@ -239,8 +239,6 @@ public:
             if (!co_await storage2::existsOne(
                     m_rollbackableStorage, std::tuple{m_codeTable, codeHashEntry.get()}))
             {
-                HOST_CONTEXT_LOG(DEBUG)
-                    << "Set code to: " << toHexStringWithPrefix(codeHashEntry.get());
                 storage::Entry codeEntry;
                 codeEntry.set(code.toBytes());
                 co_await m_rollbackableStorage.write(
@@ -408,8 +406,6 @@ public:
         {
             co_await setCode(bytesConstRef(result.output_data, result.output_size));
             result.create_address = m_newContractAddress;
-            HOST_CONTEXT_LOG(DEBUG)
-                << "Deploying: " << toHexStringWithPrefix(*getTableNameID(result.create_address));
         }
 
         co_return result;
@@ -417,8 +413,6 @@ public:
 
     task::Task<evmc_result> call()
     {
-        HOST_CONTEXT_LOG(DEBUG) << "Calling: "
-                                << toHexStringWithPrefix(*getTableNameID(m_message.code_address));
         auto codeEntry = co_await code(m_message.code_address);
         if (!codeEntry || codeEntry->size() == 0)
         {

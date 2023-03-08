@@ -93,12 +93,11 @@ evmc_bytes32 getCodeHash(evmc_host_context* context, const evmc_address* addr) n
 
 template <class HostContextType>
 size_t copyCode(evmc_host_context* context, const evmc_address*, size_t, uint8_t* bufferData,
-    size_t _bufferSize) noexcept
+    size_t bufferSize) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
-
-    task::syncWait(hostContext.setCode(bytesConstRef((bcos::byte*)bufferData, _bufferSize)));
-    return _bufferSize;
+    task::syncWait(hostContext.setCode(bytesConstRef((bcos::byte*)bufferData, bufferSize)));
+    return bufferSize;
 }
 
 template <class HostContextType>
@@ -161,17 +160,13 @@ evmc_bytes32 getBlockHash(evmc_host_context* context, int64_t number) noexcept
 template <class HostContextType>
 evmc_result call(evmc_host_context* context, const evmc_message* message) noexcept
 {
-    // gas maybe smaller than 0 since outside gas is u256 and evmc_message is
-    // int64_t so gas maybe smaller than 0 in some extreme cases
-    // * origin code: assert(_msg->gas >= 0)
     if (message->gas < 0)
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", message->gas);
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("message gas:", message->gas);
         BOOST_THROW_EXCEPTION(protocol::GasOverflow());
     }
 
     auto& hostContext = static_cast<HostContextType&>(*context);
-
     return task::syncWait(hostContext.externalCall(*message));
 }
 
