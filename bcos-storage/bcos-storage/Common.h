@@ -22,10 +22,16 @@
 #pragma once
 
 #include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-utilities/ITTAPI.h>
 
 namespace bcos::storage
 {
 const char* const TABLE_KEY_SPLIT = ":";
+
+extern const __itt_string_handle* const ITT_STRING_STORAGE_PREPARE;
+extern const __itt_string_handle* const ITT_STRING_STORAGE_COMMIT;
+extern const __itt_string_handle* const ITT_STRING_STORAGE_ROLLBACK;
+extern const __itt_string_handle* const ITT_STRING_STORAGE_SET_ROWS;
 
 inline std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
 {

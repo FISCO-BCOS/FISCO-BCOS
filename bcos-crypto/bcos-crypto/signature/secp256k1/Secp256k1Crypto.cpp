@@ -139,7 +139,7 @@ PublicPtr bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _s
         BOOST_THROW_EXCEPTION(
             InvalidSignature() << errinfo_comment(
                 "secp256k1Sign illegal argument: recid >= 0 && recid <= 3, recid: " +
-                std::to_string((int)_signatureData[64])));
+                std::to_string((int)_signatureData[SECP256K1_SIGNATURE_V])));
     }
     auto pubKey = std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN);
     // secp256k1_ecdsa_recoverable_signature* rawSig =
