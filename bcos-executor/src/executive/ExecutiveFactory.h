@@ -39,7 +39,7 @@ class ExecutiveFactory
 public:
     using Ptr = std::shared_ptr<ExecutiveFactory>;
 
-    ExecutiveFactory(std::weak_ptr<BlockContext> blockContext,
+    ExecutiveFactory(const BlockContext& blockContext,
         std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
             precompiledContract,
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
@@ -56,7 +56,7 @@ public:
     virtual ~ExecutiveFactory() = default;
     virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, bool useCoroutine = true);
-    std::weak_ptr<BlockContext> getBlockContext() { return m_blockContext; };
+    const BlockContext& getBlockContext() { return m_blockContext; };
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& address) const
     {
@@ -79,7 +79,7 @@ protected:
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         m_constantPrecompiled;
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
-    std::weak_ptr<BlockContext> m_blockContext;
+    const BlockContext& m_blockContext;
     const wasm::GasInjector& m_gasInjector;
 };
 
@@ -88,7 +88,7 @@ class ShardingExecutiveFactory : public ExecutiveFactory
 public:
     using Ptr = std::shared_ptr<ShardingExecutiveFactory>;
 
-    ShardingExecutiveFactory(std::weak_ptr<BlockContext> blockContext,
+    ShardingExecutiveFactory(const BlockContext& blockContext,
         std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
             precompiledContract,
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>

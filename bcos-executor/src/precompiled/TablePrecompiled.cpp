@@ -242,7 +242,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     // [tableName,keyField,valueFields][actualParams]
     std::vector<std::string> dynamicParams;
@@ -289,7 +289,7 @@ void TablePrecompiled::desc(precompiled::TableInfo& _tableInfo, const std::strin
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, bool withKeyOrder) const
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto tableName = _tableName.starts_with("u_") ? _tableName.substr(2) : _tableName;
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("TablePrecompiled desc") << LOG_KV("tableName", tableName);
@@ -435,7 +435,7 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
 {
     /// select(string)
     std::string key;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
@@ -477,7 +477,7 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     /// select((uint8,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limit;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions, limit);
 
@@ -518,7 +518,7 @@ void TablePrecompiled::selectByConditionV32(const std::string& tableName,
     /// select((uint8,string,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTupleV320> conditions;
     precompiled::LimitTuple limit;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     bool _isNumericalOrder = false;
 
@@ -593,7 +593,7 @@ void TablePrecompiled::count(const std::string& tableName,
 {
     /// count((uint8,string)[])
     std::vector<precompiled::ConditionTuple> conditions;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
@@ -640,7 +640,7 @@ void TablePrecompiled::countV32(const std::string& tableName,
 {
     /// count((uint8,string,string)[])
     std::vector<precompiled::ConditionTupleV320> conditions;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     codec.decode(data, conditions);
@@ -695,7 +695,7 @@ void TablePrecompiled::insert(const std::string& tableName,
 {
     /// insert((string,string[]))
     precompiled::EntryTuple insertEntry;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, insertEntry);
 
@@ -763,7 +763,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
     /// update(string,(string,string)[])
     std::string key;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key, updateFields);
 
@@ -842,7 +842,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limitTuple;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions, limitTuple, updateFields);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
@@ -926,7 +926,7 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
     std::vector<precompiled::ConditionTupleV320> conditions;
     precompiled::LimitTuple limitTuple;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     codec.decode(data, conditions, limitTuple, updateFields);
@@ -1045,7 +1045,7 @@ void TablePrecompiled::removeByKey(const std::string& tableName,
 {
     /// remove(string)
     std::string key;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table remove") << LOG_KV("tableName", tableName)
@@ -1080,7 +1080,7 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
     /// remove((uint8,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limitTuple;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions, limitTuple);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
@@ -1122,7 +1122,7 @@ void TablePrecompiled::removeByConditionV32(const std::string& tableName,
     /// remove((uint8,string,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTupleV320> conditions;
     precompiled::LimitTuple limitTuple;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
 
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions, limitTuple);

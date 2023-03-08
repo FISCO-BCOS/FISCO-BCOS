@@ -56,7 +56,7 @@ public:
     };
 
 
-    CoroutineTransactionExecutive(std::weak_ptr<BlockContext> blockContext,
+    CoroutineTransactionExecutive(const BlockContext& blockContext,
         std::string contractAddress, int64_t contextID, int64_t seq,
         const wasm::GasInjector& gasInjector)
       : TransactionExecutive(

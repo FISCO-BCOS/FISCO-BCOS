@@ -50,7 +50,7 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     // [tableName][actualParams]
     std::vector<std::string> dynamicParams;
@@ -100,7 +100,7 @@ void KVTablePrecompiled::get(const std::string& tableName,
 {
     /// get(string) => (bool, string)
     std::string key;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
@@ -125,7 +125,7 @@ void KVTablePrecompiled::set(const std::string& tableName,
 {
     /// set(string,string)
     std::string key, value;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key, value);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)

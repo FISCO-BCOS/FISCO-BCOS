@@ -9,7 +9,7 @@ using namespace bcos::executor;
 using namespace bcos::storage;
 
 
-ShardingTransactionExecutive::ShardingTransactionExecutive(std::weak_ptr<BlockContext> blockContext,
+ShardingTransactionExecutive::ShardingTransactionExecutive(const BlockContext& blockContext,
     std::string contractAddress, int64_t contextID, int64_t seq,
     const wasm::GasInjector& gasInjector)
   : CoroutineTransactionExecutive(
@@ -67,6 +67,6 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
 
 std::string ShardingTransactionExecutive::getContractShard(const std::string_view& contractAddress)
 {
-    auto tableName = getContractTableName(contractAddress, m_blockContext.lock()->isWasm());
+    auto tableName = getContractTableName(contractAddress, m_blockContext.isWasm());
     return ContractShardUtils::getContractShard(storage(), tableName);
 }

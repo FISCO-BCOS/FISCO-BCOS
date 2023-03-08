@@ -86,7 +86,7 @@ struct ExecutiveStackFlowFixture
             nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
 
         executiveFactory = std::make_shared<MockExecutiveFactory>(
-            blockContext, nullptr, nullptr, nullptr, nullptr);
+            *blockContext, nullptr, nullptr, nullptr, nullptr);
     }
     std::shared_ptr<ExecutiveStackFlow> executiveStackFlow;
     std::shared_ptr<MockExecutiveFactory> executiveFactory;

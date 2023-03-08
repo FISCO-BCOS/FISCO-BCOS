@@ -87,7 +87,7 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
         else
         {
             // generate m_dagFlow
-            m_dagFlow = prepareDagFlow(*m_executiveFactory->getBlockContext().lock(),
+            m_dagFlow = prepareDagFlow(m_executiveFactory->getBlockContext(),
                 m_executiveFactory, *txInputs, m_abiCache);
         }
 

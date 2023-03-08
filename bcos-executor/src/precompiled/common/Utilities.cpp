@@ -400,8 +400,8 @@ s256 precompiled::externalTouchNewFile(
     std::string_view _sender, std::string_view _to, std::string_view _filePath,
     std::string_view _fileType, int64_t gasLeft)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto codecResult =
         codec.encodeWithSig("touch(string,string)", std::string(_filePath), std::string(_fileType));
     auto response =
@@ -423,8 +423,8 @@ std::vector<Address> precompiled::getGovernorList(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec)
 {
-    auto blockContext = _executive->blockContext().lock();
-    const auto* sender = blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
+    const auto& blockContext = _executive->blockContext();
+    const auto* sender = blockContext.isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
     auto getCommittee = codec.encodeWithSig("_committee()");
     auto getCommitteeResponse = externalRequest(_executive, ref(getCommittee),
         _callParameters->m_origin, sender, AUTH_COMMITTEE_ADDRESS, _callParameters->m_staticCall,

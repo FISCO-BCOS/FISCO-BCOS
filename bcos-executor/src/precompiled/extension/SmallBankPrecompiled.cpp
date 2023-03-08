@@ -105,7 +105,7 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("call")
                                << LOG_DESC("open table failed.")
                                << LOG_KV("tableName", m_tableName);
-        const auto& blockContext = _executive->blockContextReference();
+        const auto& blockContext = _executive->blockContext();
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_OPEN_ERROR,
             CodecWrapper(blockContext.hashHandler(), blockContext.isWasm()));
         return _callParameters;
@@ -141,7 +141,7 @@ void SmallBankPrecompiled::updateBalanceCall(
     // userAdd(string,uint256)
     std::string user;
     u256 amount;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_data, user, amount);
 
@@ -192,7 +192,7 @@ void SmallBankPrecompiled::sendPaymentCall(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _data,
     std::string const&, bytes& _out)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     std::string fromUser, toUser;
     u256 amount;

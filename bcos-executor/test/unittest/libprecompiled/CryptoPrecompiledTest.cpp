@@ -299,7 +299,7 @@ public:
                 h256(), utcTime(), (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION),
                 FiscoBcosSchedule, false, false);
         m_executive =
-            std::make_shared<TransactionExecutive>(m_blockContext, "", 100, 0, m_gasInjector);
+            std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
         m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(m_cryptoSuite->hashImpl());
     }
 

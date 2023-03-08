@@ -42,7 +42,7 @@ struct GroupSigPrecompiledFixture
         m_blockContext = std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_hashImpl, 0,
             h256(), utcTime(), 0, FiscoBcosSchedule, false, false);
         m_executive =
-            std::make_shared<TransactionExecutive>(m_blockContext, "", 100, 0, m_gasInjector);
+            std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
     }
 
     ~GroupSigPrecompiledFixture() {}

@@ -117,7 +117,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         request->createSalt = fromEvmC(_msg->create2_salt);
         break;
     case EVMC_CALL:
-        if (m_executive->blockContext().lock()->isWasm())
+        if (m_executive->blockContext().isWasm())
         {
             request->receiveAddress.assign((char*)_msg->destination_ptr, _msg->destination_len);
         }
@@ -132,7 +132,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     case EVMC_DELEGATECALL:
     case EVMC_CALLCODE:
     {
-        if (!m_executive->blockContext().lock()->isWasm())
+        if (!m_executive->blockContext().isWasm())
         {
             if (blockContext->blockVersion() >=
                 (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
@@ -481,7 +481,7 @@ void HostContext::log(h256s&& _topics, bytesConstRef _data)
 
 h256 HostContext::blockHash(int64_t _number) const
 {
-    if (m_executive->blockContext().lock()->blockVersion() >=
+    if (m_executive->blockContext().blockVersion() >=
         (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         if (_number >= blockNumber() || _number < 0)
@@ -490,28 +490,28 @@ h256 HostContext::blockHash(int64_t _number) const
         }
         else
         {
-            return m_executive->blockContext().lock()->blockHash(_number);
+            return m_executive->blockContext().blockHash(_number);
         }
     }
     else
     {
-        return m_executive->blockContext().lock()->hash();
+        return m_executive->blockContext().hash();
     }
 }
 
 int64_t HostContext::blockNumber() const
 {
-    return m_executive->blockContext().lock()->number();
+    return m_executive->blockContext().number();
 }
 
 uint32_t HostContext::blockVersion() const
 {
-    return m_executive->blockContext().lock()->blockVersion();
+    return m_executive->blockContext().blockVersion();
 }
 
 uint64_t HostContext::timestamp() const
 {
-    return m_executive->blockContext().lock()->timestamp();
+    return m_executive->blockContext().timestamp();
 }
 
 std::string_view HostContext::myAddress() const

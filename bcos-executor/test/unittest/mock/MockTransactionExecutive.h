@@ -16,16 +16,14 @@ class MockTransactionExecutive : public bcos::executor::CoroutineTransactionExec
 {
 public:
     using Ptr = std::shared_ptr<MockTransactionExecutive>;
-    MockTransactionExecutive(std::weak_ptr<bcos::executor::BlockContext> blockContext,
-        std::string contractAddress, int64_t contextID, int64_t seq,
-        std::shared_ptr<wasm::GasInjector>& gasInjector)
-      : CoroutineTransactionExecutive(
-            std::move(blockContext), contractAddress, contextID, seq, *gasInjector)
+    MockTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
+        int64_t contextID, int64_t seq, std::shared_ptr<wasm::GasInjector>& gasInjector)
+      : CoroutineTransactionExecutive(blockContext, contractAddress, contextID, seq, *gasInjector)
     {}
 
     virtual ~MockTransactionExecutive() {}
 
-    CallParameters::UniquePtr start(CallParameters::UniquePtr input)  { return input; }
+    CallParameters::UniquePtr start(CallParameters::UniquePtr input) { return input; }
     CallParameters::UniquePtr resume()
     {
         auto callParameters = std::make_unique<CallParameters>(CallParameters::Type::MESSAGE);

@@ -88,7 +88,7 @@ std::shared_ptr<PrecompiledExecResult> CpuHeavyPrecompiled::call(
 
     // parse function name
     // uint32_t func = getParamFunc(_param);
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     u256 size, signature;

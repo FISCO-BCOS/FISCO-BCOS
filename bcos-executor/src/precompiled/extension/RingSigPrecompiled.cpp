@@ -50,7 +50,7 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext.hashHandler(), blockContext.isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();

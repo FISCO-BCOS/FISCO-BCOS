@@ -117,7 +117,7 @@ void AccountManagerPrecompiled::setAccountStatus(
     // setAccountStatus(address,uint8)
     Address account;
     uint8_t status = 0;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), account, status);
     std::string accountStr = account.hex();
@@ -187,7 +187,7 @@ void AccountManagerPrecompiled::getAccountStatus(
 {
     // getAccountStatus(address)
     Address account;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), account);
     std::string accountStr = account.hex();

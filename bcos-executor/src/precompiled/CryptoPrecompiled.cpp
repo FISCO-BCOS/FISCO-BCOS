@@ -64,7 +64,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
 {
     auto funcSelector = getParamFunc(_callParameters->input());
     auto paramData = _callParameters->params();
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(paramData.size());
@@ -118,7 +118,7 @@ void CryptoPrecompiled::curve25519VRFVerify(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef _paramData,
     PrecompiledExecResult::Ptr _callResult)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     bool verifySuccess = false;
     u256 randomValue = 0;
@@ -155,7 +155,7 @@ void CryptoPrecompiled::curve25519VRFVerify(
 void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     try
     {
