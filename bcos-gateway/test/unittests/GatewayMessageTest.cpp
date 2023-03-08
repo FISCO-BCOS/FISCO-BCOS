@@ -106,8 +106,8 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
 
     if (_version > 0)
     {
-        BOOST_CHECK_THROW(decodeMsg1->decode(bytesConstRef(buffer->data(), buffer->size() - 1)),
-            std::out_of_range);
+        auto ret = decodeMsg1->decode(bytesConstRef(buffer->data(), buffer->size() - 1));
+        BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_INCOMPLETE);
     }
     else
     {
@@ -136,7 +136,8 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
     p2pMsg->setVersion(_version);
     if (_version > 0)
     {
-        BOOST_CHECK_THROW(p2pMsg->decode(ref(invalidMsgBytes)), std::out_of_range);
+        auto ret1 = p2pMsg->decode(ref(invalidMsgBytes));
+        BOOST_CHECK_EQUAL(ret1, MessageDecodeStatus::MESSAGE_INCOMPLETE);
     }
     else
     {
@@ -203,7 +204,8 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     p2pMsg->setVersion(_version);
     if (_version > 0)
     {
-        BOOST_CHECK_THROW(p2pMsg->decode(ref(invalidMsgBytes)), std::out_of_range);
+        auto ret = p2pMsg->decode(ref(invalidMsgBytes));
+        BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_INCOMPLETE);
     }
     else
     {

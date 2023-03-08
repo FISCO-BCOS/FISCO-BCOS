@@ -294,6 +294,10 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
     }
 
     int32_t offset = decodeHeader(_buffer);
+    if (offset <= 0)
+    {  // The packet was not fully received by the network.
+        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+    }
 
     // check if packet header fully received
     if (_buffer.size() < m_length)
