@@ -76,6 +76,8 @@ public:
                 m_storage);
 
             auto toAddress = unhexAddress(transaction.to());
+            TRANSACTION_EXECUTOR_LOG(DEBUG) << "Execute transaction: " << transaction.to();
+
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
@@ -111,6 +113,8 @@ public:
                 boost::algorithm::hex_lower(evmcResult.create_address.bytes,
                     evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
                     std::back_inserter(newContractAddress));
+
+                TRANSACTION_EXECUTOR_LOG(DEBUG) << "Create new contract: " << newContractAddress;
             }
             else
             {

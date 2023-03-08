@@ -27,6 +27,7 @@
 #include "VMFactory.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/storage2/StringPool.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -236,8 +237,10 @@ public:
         {
             // Query the code table first
             if (!co_await storage2::existsOne(
-                    m_rollbackableStorage, StateKey{m_codeTable, codeHashEntry.get()}))
+                    m_rollbackableStorage, std::tuple{m_codeTable, codeHashEntry.get()}))
             {
+                HOST_CONTEXT_LOG(DEBUG)
+                    << "Set code to: " << toHexStringWithPrefix(codeHashEntry.get());
                 storage::Entry codeEntry;
                 codeEntry.set(code.toBytes());
                 co_await m_rollbackableStorage.write(
@@ -405,18 +408,23 @@ public:
         {
             co_await setCode(bytesConstRef(result.output_data, result.output_size));
             result.create_address = m_newContractAddress;
+            HOST_CONTEXT_LOG(DEBUG)
+                << "Deploying: " << toHexStringWithPrefix(*getTableNameID(result.create_address));
         }
+
         co_return result;
     }
 
     task::Task<evmc_result> call()
     {
+        HOST_CONTEXT_LOG(DEBUG) << "Calling: "
+                                << toHexStringWithPrefix(*getTableNameID(m_message.code_address));
         auto codeEntry = co_await code(m_message.code_address);
         if (!codeEntry || codeEntry->size() == 0)
         {
-            BOOST_THROW_EXCEPTION(
-                NotFoundCodeError{} << bcos::Error::ErrorMessage(
-                    std::string("Not found contract code: ").append(*m_myContractTable)));
+            BOOST_THROW_EXCEPTION(NotFoundCodeError{} << bcos::Error::ErrorMessage(
+                                      std::string("Not found contract code: ")
+                                          .append(toHexStringWithPrefix(*m_myContractTable))));
         }
         auto code = codeEntry->get();
         auto mode = toRevision(vmSchedule());

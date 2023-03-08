@@ -61,7 +61,7 @@ private:
         boost::container::small_vector<std::tuple<const RANGES::range_value_t<decltype(keys)>*,
                                            RANGES::range_value_t<decltype(values)>*>,
             1>
-            missingPointers;
+            missings;
 
         auto keyIt = RANGES::begin(keys);
         auto valueIt = RANGES::begin(values);
@@ -74,13 +74,13 @@ private:
             }
             else
             {
-                missingPointers.emplace_back(
+                missings.emplace_back(
                     std::make_tuple(std::addressof(*keyIt), std::addressof(*valueIt)));
             }
             RANGES::advance(keyIt, 1);
             RANGES::advance(valueIt, 1);
         }
-        co_return missingPointers;
+        co_return missings;
     }
 
 public:

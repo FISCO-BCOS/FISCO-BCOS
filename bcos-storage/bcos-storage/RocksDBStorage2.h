@@ -73,23 +73,16 @@ public:
 
         task::AwaitableValue<bool> next()
         {
-            return !(static_cast<size_t>(++m_index) == m_results.size());
+            return {!(static_cast<size_t>(++m_index) == m_results.size())};
         }
-        task::AwaitableValue<bool> hasValue() const
-        {
-            auto exists = m_status[m_index].ok();
-            task::AwaitableValue<bool> hasValueAwaitable(!!exists);
-            return hasValueAwaitable;
-        }
+        task::AwaitableValue<bool> hasValue() const { return {m_status[m_index].ok()}; }
         task::AwaitableValue<Key> key() const
         {
             static_assert(sizeof(*this) == 0U, "Unsupported method!");
         }
         task::AwaitableValue<Value> value() const
         {
-            task::AwaitableValue<Value> valueAwaitable(
-                m_valueResolver.decode(m_results[m_index].ToStringView()));
-            return valueAwaitable;
+            return {m_valueResolver.decode(m_results[m_index].ToStringView())};
         }
     };
 
@@ -105,10 +98,10 @@ public:
                 readIterator.m_status.resize(1);
 
                 auto key = m_keyResolver.encode(keys[0]);
-                auto status =
-                    m_rocksDB.Get(::rocksdb::ReadOptions(), m_rocksDB.DefaultColumnFamily(),
-                        ::rocksdb::Slice(RANGES::data(key), RANGES::size(key)),
-                        &readIterator.m_results[0]);
+                auto& status = readIterator.m_status[0];
+                status = m_rocksDB.Get(::rocksdb::ReadOptions(), m_rocksDB.DefaultColumnFamily(),
+                    ::rocksdb::Slice(RANGES::data(key), RANGES::size(key)),
+                    &readIterator.m_results[0]);
                 if (!status.ok() && !status.IsNotFound())
                 {
                     BOOST_THROW_EXCEPTION(

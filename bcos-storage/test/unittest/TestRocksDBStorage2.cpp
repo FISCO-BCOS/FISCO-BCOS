@@ -1,3 +1,4 @@
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/StringPool.h>
@@ -56,6 +57,11 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
             bcos::storage2::rocksdb::StateValueResolver>
             rocksDB(*originRocksDB, StateKeyResolver(stringPool), StateValueResolver{});
+
+        auto notExistsValue = co_await storage2::readOne(
+            rocksDB, StateKey{storage2::string_pool::makeStringID(stringPool, "Non exists table"),
+                         "Non exists key"});
+        BOOST_REQUIRE(!notExistsValue);
 
         auto keys = RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([this](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
