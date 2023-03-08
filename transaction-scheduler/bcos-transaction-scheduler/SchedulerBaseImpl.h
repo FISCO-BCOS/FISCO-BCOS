@@ -68,10 +68,11 @@ public:
                     {
                         ++currentRangeIt;
                     }
-                    return std::make_optional(RANGES::subrange(start, currentRangeIt));
+                    return std::make_optional(
+                        RANGES::subrange<decltype(start)>(start, currentRangeIt));
                 }) &
-                tbb::make_filter<std::optional<decltype(RANGES::subrange(
-                                     RANGES::begin(range), RANGES::end(range)))>,
+                tbb::make_filter<std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(
+                                         range))>(RANGES::begin(range), RANGES::end(range)))>,
                     void>(tbb::filter_mode::parallel, [&combinableHash, &hashImpl, &blockHeader](
                                                           auto const& entryRange) {
                     if (!entryRange)

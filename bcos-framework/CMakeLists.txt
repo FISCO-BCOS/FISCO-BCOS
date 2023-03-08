@@ -17,7 +17,6 @@
 # ------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.12)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "Minimum OS X deployment version")
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
