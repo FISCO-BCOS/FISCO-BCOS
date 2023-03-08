@@ -143,7 +143,7 @@ void ShardingDmcExecutor::handleExecutiveOutputs(
             executiveState = std::make_shared<ExecutiveState>(contextID, nullptr, false);
             auto newSeq = executiveState->currentSeq++;
             executiveState->callStack.push(newSeq);
-
+            dmcOutput->setSeq(newSeq);
             m_executivePool.add(contextID, executiveState);
         }
     }

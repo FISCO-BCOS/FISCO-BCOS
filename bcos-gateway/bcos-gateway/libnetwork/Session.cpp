@@ -34,7 +34,6 @@ Session::Session(size_t _recvBufferSize)
     SESSION_LOG(INFO) << "[Session::Session] this=" << this
                       << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
     m_idleCheckTimer = std::make_shared<bcos::Timer>(m_idleTimeInterval, "idleChecker");
-    m_idleCheckTimer->registerTimeoutHandler([this]() { checkNetworkStatus(); });
 }
 
 Session::~Session()
@@ -494,10 +493,18 @@ void Session::start()
                 boost::bind(&Session::doRead, shared_from_this()));  // doRead();
         }
     }
-    if (m_idleCheckTimer)
-    {
-        m_idleCheckTimer->start();
-    }
+
+    auto self = weak_from_this();
+    m_idleCheckTimer->registerTimeoutHandler([self]() {
+        auto session = self.lock();
+        if (session)
+        {
+            session->checkNetworkStatus();
+        }
+    });
+    m_idleCheckTimer->start();
+
+    SESSION_LOG(INFO) << "[start] start session " << LOG_KV("this", this);
 }
 
 void Session::doRead()
