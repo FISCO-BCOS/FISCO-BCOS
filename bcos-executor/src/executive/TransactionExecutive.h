@@ -57,16 +57,16 @@ class TransactionExecutive : public std::enable_shared_from_this<TransactionExec
 {
 public:
     using Ptr = std::shared_ptr<TransactionExecutive>;
-    TransactionExecutive(std::weak_ptr<BlockContext> blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, std::shared_ptr<wasm::GasInjector>& gasInjector)
-      : m_blockContext(std::move(blockContext)),
+    TransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
+        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
+      : m_blockContext(blockContext),
         m_contractAddress(std::move(contractAddress)),
         m_contextID(contextID),
         m_seq(seq),
         m_gasInjector(gasInjector)
     {
         m_recoder = std::make_shared<storage::Recoder>();
-        m_hashImpl = m_blockContext.lock()->hashHandler();
+        m_hashImpl = m_blockContext.hashHandler();
     }
 
     TransactionExecutive(TransactionExecutive const&) = delete;
@@ -87,7 +87,7 @@ public:
         return *m_storageWrapper;
     }
 
-    std::weak_ptr<BlockContext> blockContext() { return m_blockContext; }
+    const BlockContext& blockContext() { return m_blockContext; }
 
     int64_t contextID() const { return m_contextID; }
     int64_t seq() const { return m_seq; }
@@ -138,9 +138,9 @@ public:
         precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
 
-    VMSchedule const& vmSchedule() const { return m_blockContext.lock()->vmSchedule(); }
+    VMSchedule const& vmSchedule() const { return m_blockContext.vmSchedule(); }
 
-    bool isWasm() { return m_blockContext.lock()->isWasm(); }
+    bool isWasm() { return m_blockContext.isWasm(); }
 
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
@@ -179,10 +179,9 @@ protected:
     inline std::string getContractTableName(
         const std::string_view& _address, bool isWasm = false, bool isCreate = false)
     {
-        auto blockContext = m_blockContext.lock();
-        auto version = blockContext->blockVersion();
+        auto version = m_blockContext.blockVersion();
 
-        if (blockContext->isAuthCheck() ||
+        if (m_blockContext.isAuthCheck() ||
             protocol::versionCompareTo(version, protocol::BlockVersion::V3_3_VERSION) >= 0)
         {
             if (_address.starts_with(precompiled::SYS_ADDRESS_PREFIX))
@@ -223,7 +222,7 @@ protected:
     bool buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
         std::string_view _sender, std::string_view _type, int64_t gasLeft);
 
-    std::weak_ptr<BlockContext> m_blockContext;  ///< Information on the runtime environment.
+    const BlockContext& m_blockContext;  ///< Information on the runtime environment.
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         m_constantPrecompiled;
     std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
@@ -235,7 +234,7 @@ protected:
     int64_t m_seq;
     crypto::Hash::Ptr m_hashImpl;
 
-    std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
+    const wasm::GasInjector& m_gasInjector;
 
     bcos::storage::Recoder::Ptr m_recoder;
     std::shared_ptr<storage::StorageWrapper> m_storageWrapper;

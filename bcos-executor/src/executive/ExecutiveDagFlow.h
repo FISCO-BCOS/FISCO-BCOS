@@ -73,7 +73,7 @@ public:
         }
     }
 
-    static TxDAGFlow::Ptr prepareDagFlow(BlockContext& blockContext,
+    static TxDAGFlow::Ptr prepareDagFlow(const BlockContext& blockContext,
         ExecutiveFactory::Ptr executiveFactory,
         std::vector<std::unique_ptr<CallParameters>>& inputs,
         std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
@@ -86,7 +86,7 @@ public:
 protected:
     void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn) override;
 
-    static critical::CriticalFieldsInterface::Ptr generateDagCriticals(BlockContext& blockContext,
+    static critical::CriticalFieldsInterface::Ptr generateDagCriticals(const BlockContext& blockContext,
         ExecutiveFactory::Ptr executiveFactory,
         std::vector<std::unique_ptr<CallParameters>>& inputs,
         std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache);

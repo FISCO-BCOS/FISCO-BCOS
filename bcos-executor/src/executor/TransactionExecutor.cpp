@@ -1551,8 +1551,8 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     abiKey.insert(abiKey.end(), selector.begin(), selector.end());
                     // if precompiled
                     auto executiveFactory =
-                        std::make_shared<ExecutiveFactory>(m_blockContext, m_precompiledContract,
-                            m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+                        std::make_shared<ExecutiveFactory>(*m_blockContext, m_precompiledContract,
+                            m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
                     auto executive = executiveFactory->build(
                         params->codeAddress, params->contextID, params->seq, false);
                     auto p = executive->getPrecompiled(params->receiveAddress);
@@ -2225,8 +2225,8 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     ExecutiveFlowInterface::Ptr executiveFlow = blockContext->getExecutiveFlow(codeAddress);
     if (executiveFlow == nullptr)
     {
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(*blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
         if (!useCoroutine)
         {
             executiveFlow = std::make_shared<ExecutiveSerialFlow>(executiveFactory);
@@ -2727,8 +2727,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         }
 
         auto& input = inputs[id];
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(*m_blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
         auto executive =
             executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
 

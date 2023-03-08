@@ -87,7 +87,7 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
         else
         {
             // generate m_dagFlow
-            m_dagFlow = prepareDagFlow(*m_executiveFactory->getBlockContext().lock(),
+            m_dagFlow = prepareDagFlow(m_executiveFactory->getBlockContext(),
                 m_executiveFactory, *txInputs, m_abiCache);
         }
 
@@ -199,7 +199,7 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
 }
 
 critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
-    BlockContext& blockContext, ExecutiveFactory::Ptr executiveFactory,
+    const BlockContext& blockContext, ExecutiveFactory::Ptr executiveFactory,
     std::vector<CallParameters::UniquePtr>& inputs,
     std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
 {

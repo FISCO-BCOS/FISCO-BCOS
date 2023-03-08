@@ -174,8 +174,8 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
     if (blockHeader->version() >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         auto blockContext = createTmpBlockContext(blockHeader);
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(*blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
 
         auto txNum = inputs.size();
         auto blockNumber = blockHeader->number();
@@ -409,8 +409,8 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
             if (!isStaticCall)
             {
                 auto executiveFactory =
-                    std::make_shared<ShardingExecutiveFactory>(blockContext, m_precompiledContract,
-                        m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+                    std::make_shared<ShardingExecutiveFactory>(*blockContext, m_precompiledContract,
+                        m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
 
                 executiveFlow = std::make_shared<ExecutiveDagFlow>(executiveFactory, m_abiCache);
                 executiveFlow->setThreadPool(m_threadPool);

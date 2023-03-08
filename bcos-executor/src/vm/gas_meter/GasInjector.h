@@ -69,7 +69,7 @@ public:
     };
     GasInjector(InstructionTable costTable) : m_costTable(std::move(costTable)) {}
 
-    Result InjectMeter(const std::vector<uint8_t>& byteCode);
+    Result InjectMeter(const std::vector<uint8_t>& byteCode) const;
 
 private:
     struct ImportsInfo
@@ -80,7 +80,7 @@ private:
         uint32_t tempVarForMemoryGasIndex{};
         uint32_t originSize{};
     };
-    void InjectMeterExprList(wabt::ExprList* exprs, const ImportsInfo& info);
+    void InjectMeterExprList(wabt::ExprList* exprs, const ImportsInfo& info) const;
     const InstructionTable m_costTable;
 };
 }  // namespace bcos::wasm
