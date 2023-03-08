@@ -35,8 +35,8 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
     }
 
     // TODO: remove this log
-    EXECUTIVE_LOG(INFO) << LOG_BADGE("Sharding")
-                        << "ShardingTransactionExecutive externalCall: " << input->toFullString();
+    EXECUTIVE_LOG(TRACE) << LOG_BADGE("Sharding")
+                         << "ShardingTransactionExecutive externalCall: " << input->toFullString();
 
     // set DMC contextID and seq
     input->contextID = contextID();
@@ -52,16 +52,16 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
         auto toShardName = getContractShard(input->receiveAddress);
         if (toShardName != m_shardName.value())
         {
-            EXECUTIVE_LOG(INFO) << LOG_BADGE("Sharding")
-                                << "ShardingTransactionExecutive call other shard: "
-                                << LOG_KV("toShard", toShardName)
-                                << LOG_KV("input", input->toFullString());
+            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Sharding")
+                                 << "ShardingTransactionExecutive call other shard: "
+                                 << LOG_KV("toShard", toShardName)
+                                 << LOG_KV("input", input->toFullString());
             return CoroutineTransactionExecutive::externalCall(std::move(input));
         }
     }
 
-    EXECUTIVE_LOG(INFO) << LOG_BADGE("Sharding") << "ShardingTransactionExecutive call local"
-                        << input->toFullString();
+    EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Sharding") << "ShardingTransactionExecutive call local"
+                         << input->toFullString();
     return TransactionExecutive::externalCall(std::move(input));
 }
 

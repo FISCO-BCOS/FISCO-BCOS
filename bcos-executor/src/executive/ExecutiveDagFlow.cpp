@@ -352,7 +352,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                                     abiStr, selector.toBytes(), isSmCrypto);
                                 if (!functionAbi)
                                 {
-                                    DAGFLOW_LOG(DEBUG)
+                                    DAGFLOW_LOG(TRACE)
                                         << "generateDags: " << LOG_DESC("ABI deserialize failed")
                                         << LOG_KV("address", to) << LOG_KV("ABI", abiStr);
 
@@ -381,7 +381,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                         }
                         else
                         {
-                            DAGFLOW_LOG(DEBUG) << "generateDags: " << LOG_DESC("Found ABI in cache")
+                            DAGFLOW_LOG(TRACE) << "generateDags: " << LOG_DESC("Found ABI in cache")
                                                << LOG_KV("address", to)
                                                << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                             auto& functionAbi = cacheHandle.value();
@@ -391,7 +391,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                     }
                     if (conflictFields == nullptr)
                     {
-                        DAGFLOW_LOG(DEBUG)
+                        DAGFLOW_LOG(TRACE)
                             << "generateDags: "
                             << LOG_DESC("The transaction can't be executed concurrently")
                             << LOG_KV("address", to)
