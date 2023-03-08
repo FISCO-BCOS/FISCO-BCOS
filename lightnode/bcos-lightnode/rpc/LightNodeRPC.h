@@ -304,20 +304,23 @@ public:
                         BOOST_THROW_EXCEPTION(
                             std::runtime_error{"Unable to generate transaction merkle root!"});
                     }
-                    auto merkleRoot = *RANGES::rbegin(merkles);
-                    std::ostringstream strHex;
-                    strHex << "0x" << std::hex << std::setfill('0');
-                    for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
-                        strHex << std::setw(2) << static_cast<unsigned int>(merkleRoot[i]);
-                    }
                     LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
                                          << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
-                                         << LOG_KV("transaction number", block.transactions.size())
-                                         << LOG_KV("merkleRoot", strHex.str());
+                                         << LOG_KV("transaction number", block.transactions.size());
 
                     if (!bcos::concepts::bytebuffer::equalTo(
                             block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
                     {
+                        auto merkleRoot = *RANGES::rbegin(merkles);
+                        std::ostringstream strHex;
+                        strHex << "0x" << std::hex << std::setfill('0');
+                        for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
+                            strHex << std::setw(2) << static_cast<unsigned int>(merkleRoot[i]);
+                        }
+                        LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
+                                             << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
+                                             << LOG_KV("transaction number", block.transactions.size())
+                                             << LOG_KV("merkleRoot", strHex.str());
                         BOOST_THROW_EXCEPTION(
                             CheckMerkleRootFailed{} << bcos::error::ErrorMessage{"Check block transactionMerkle failed!"});
                     }
