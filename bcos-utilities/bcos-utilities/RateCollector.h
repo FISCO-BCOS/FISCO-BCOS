@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file RateReporter.h
+ * @file RateCollector.h
  * @author: octopus
  * @date 2023-02-17
  */

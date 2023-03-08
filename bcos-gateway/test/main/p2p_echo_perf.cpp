@@ -71,7 +71,7 @@ int main(int argc, const char** argv)
         logInitializer->initLog(configPath);
 
         constexpr static int RATE_REPORT_INTERVAL = 10000;  // 10s
-        auto reporter = std::make_shared<RateReporter>(workModel, RATE_REPORT_INTERVAL);
+        auto reporter = std::make_shared<RateCollector>(workModel, RATE_REPORT_INTERVAL);
         reporter->start();
 
         // load the config items

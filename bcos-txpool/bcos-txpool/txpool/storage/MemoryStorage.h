@@ -173,9 +173,9 @@ protected:
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
 
-    RateCollector m_inRateReporter;
-    RateCollector m_sealRateReporter;
-    RateCollector m_removeRateReporter;
+    RateCollector m_inRateCollector;
+    RateCollector m_sealRateCollector;
+    RateCollector m_removeRateCollector;
 
     bcos::crypto::HashType m_knownLatestSealedTxHash;
 };
