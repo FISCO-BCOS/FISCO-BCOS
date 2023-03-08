@@ -1,5 +1,5 @@
 #!/bin/bash
-execT=$(cat $1 |grep "asyncExecuteBlock success,sysBlock" |awk -F '=' '{print $9}' |awk -F ',' '{print $1}' |awk '{sum+=$1} END {print sum/NR}')
+execT=$(cat $1 |grep -iaE "asyncExecuteBlock success,sysBlock|BlockSync: applyBlock success" |awk -F '=' '{print $9}' |awk -F ',' '{print $1}' |awk '{sum+=$1} END {print sum/NR}')
 waitT=$(cat $1 |grep -ia "waitT" |awk -F '=' '{print $8}' |awk '{sum+=$1} END {print sum/NR}')
 commitT=$(cat $1 |grep -iaE "CommitBlock success" |awk -F '=' '{print $3}' |awk '{sum+=$1} END {print sum/NR}')
 echo -e "exec\t\t" ${execT}
