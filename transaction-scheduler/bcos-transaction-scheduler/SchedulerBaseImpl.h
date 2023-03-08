@@ -52,8 +52,9 @@ public:
             tbb::make_filter<void,
                 std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
                     RANGES::begin(range), RANGES::end(range)))>>(tbb::filter_mode::serial_in_order,
-                [&](tbb::flow_control& control) -> std::optional<decltype(RANGES::subrange(
-                                                    RANGES::begin(range), RANGES::end(range)))> {
+                [&](tbb::flow_control& control)
+                    -> std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
+                        RANGES::begin(range), RANGES::end(range)))> {
                     if (currentRangeIt == RANGES::end(range))
                     {
                         control.stop();

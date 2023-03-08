@@ -341,7 +341,7 @@ static void transfer(benchmark::State& state)
                         RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                                                      -> auto& { return *transaction; }));
-                co_await scheduler.finish<decltype(blockHeader)>(
+                co_await scheduler.template finish<decltype(blockHeader)>(
                     blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
                 co_await scheduler.commit();
 
