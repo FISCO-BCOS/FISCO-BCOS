@@ -184,7 +184,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
         EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("preExeBlock") << LOG_BADGE("DAGFlow")
                                  << "preExecuteTransactions start"
                                  << LOG_KV("blockNumber", blockNumber)
-                                 << LOG_KV("timestamp", timestamp);
+                                 << LOG_KV("timestamp", timestamp) << LOG_KV("txNum", txNum);
 
         PreExeCache::Ptr cache = std::make_shared<PreExeCache>();
         std::shared_ptr<bcos::WriteGuard> cacheGuard = nullptr;
