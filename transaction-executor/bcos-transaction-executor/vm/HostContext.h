@@ -357,7 +357,7 @@ public:
         //     // FISCO BCOS only has tx Gas limit. We use it as block gas limit
         //     return m_executive->blockContext().lock()->txGasLimit();
         // }
-        return 3000 * 10000;  // TODO: add config
+        return 30000 * 10000;  // TODO: add config
     }
 
     /// Revert any changes made (by any of the other calls).
@@ -392,8 +392,10 @@ public:
 
     task::Task<evmc_result> create()
     {
-        auto vmInstance = VMFactory::create();
+        std::string_view createCode((const char*)m_message.input_data, m_message.input_size);
+        auto createCodeHash = GlobalHashImpl::g_hashImpl->hash(createCode);
         auto mode = toRevision(vmSchedule());
+        auto vmInstance = m_vmFactory.create(VMKind::evmone, createCodeHash, createCode, mode);
 
         auto savepoint = m_rollbackableStorage.current();
         auto result = vmInstance.execute(

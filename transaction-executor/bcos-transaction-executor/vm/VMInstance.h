@@ -56,7 +56,7 @@ public:
             if (instance->set_option != nullptr)
             {
                 instance->set_option(instance, "advanced", "");
-                // m_instance->set_option(m_instance, "trace", "");
+                instance->set_option(instance, "trace", "");
                 // m_instance->set_option(m_instance, "baseline", "");
             }
         }

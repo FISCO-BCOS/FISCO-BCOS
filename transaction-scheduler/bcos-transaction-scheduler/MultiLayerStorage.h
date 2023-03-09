@@ -41,8 +41,8 @@ private:
     static_assert(std::same_as<typename MutableStorageType::Value, typename BackendStorage::Value>);
 
     std::unique_ptr<MutableStorageType> m_mutableStorage;
-    std::deque<std::unique_ptr<MutableStorageType>> m_immutableStorages;  // Ledger read data from
-                                                                          // here
+    std::list<std::unique_ptr<MutableStorageType>> m_immutableStorages;  // Ledger read data from
+                                                                         // here
     BackendStorage& m_backendStorage;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::add_lvalue_reference_t<CachedStorage>, std::monostate>
@@ -304,8 +304,7 @@ public:
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
-        auto immutableStorage = std::move(m_immutableStorages.back());
-        m_immutableStorages.pop_back();
+        auto& immutableStorage = m_immutableStorages.back();
         immutablesLock.unlock();
 
         auto it = co_await immutableStorage->seek(storage2::STORAGE_BEGIN);
@@ -321,6 +320,9 @@ public:
                 co_await storage2::removeOne(m_backendStorage, co_await it.key());
             }
         }
+
+        immutablesLock.lock();
+        m_immutableStorages.pop_back();
     }
 
     MutableStorageType& mutableStorage()
