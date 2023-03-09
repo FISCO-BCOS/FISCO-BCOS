@@ -24,4 +24,5 @@
     level=info
     ; MB
     max_log_file_size=200
+    enable_rate_collector=false
 

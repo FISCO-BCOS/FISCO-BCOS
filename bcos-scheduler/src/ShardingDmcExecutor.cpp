@@ -176,7 +176,7 @@ void ShardingDmcExecutor::preExecute()
 {
     auto preExecuteGuard = std::make_shared<bcos::WriteGuard>(x_preExecute);
     auto message = std::move(m_preparedMessages);
-    if (!message)
+    if (!message || message->size() == 0)
     {
         return;
     }

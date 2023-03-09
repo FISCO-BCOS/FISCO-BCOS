@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file RateReporter.h
+ * @file RateCollector.h
  * @author: octopus
  * @date 2023-02-17
  */
@@ -32,7 +32,7 @@
 namespace bcos
 {
 
-struct RateReporterStat
+struct RateCollectorStat
 {
     std::atomic<int64_t> totalDataSize{0};
     std::atomic<int64_t> totalFailedDataSize{0};
@@ -44,13 +44,13 @@ struct RateReporterStat
     std::atomic<int64_t> lastFailedCount{0};
 };
 
-class RateReporter : bcos::ObjectCounter<RateReporter>
+class RateCollector : bcos::ObjectCounter<RateCollector>
 {
 public:
-    using Ptr = std::shared_ptr<RateReporter>;
-    using ConstPtr = std::shared_ptr<const RateReporter>;
+    using Ptr = std::shared_ptr<RateCollector>;
+    using ConstPtr = std::shared_ptr<const RateCollector>;
 
-    RateReporter(std::string _moduleName, uint64_t _intervalMS)
+    RateCollector(std::string _moduleName, uint64_t _intervalMS)
       : m_moduleName(std::move(_moduleName)), m_intervalMS(_intervalMS)
     {
         m_reportTimer = std::make_shared<Timer>(_intervalMS, _moduleName);
@@ -61,12 +61,12 @@ public:
         });
     }
 
-    ~RateReporter() { stop(); }
+    ~RateCollector() { stop(); }
 
-    RateReporter(const RateReporter&) = delete;
-    RateReporter(RateReporter&&) = delete;
-    RateReporter& operator=(const RateReporter&) = delete;
-    RateReporter& operator=(RateReporter&&) = delete;
+    RateCollector(const RateCollector&) = delete;
+    RateCollector(RateCollector&&) = delete;
+    RateCollector& operator=(const RateCollector&) = delete;
+    RateCollector& operator=(RateCollector&&) = delete;
 
     void start()
     {
@@ -84,10 +84,19 @@ public:
         }
     }
 
+    static void enable();
+    static void disable();
+    bool isEnable();
+
     void report()
     {
-        auto& stat = m_rateReporterStat;
-        BCOS_LOG(INFO) << LOG_BADGE("RateReporter")
+        if (!isEnable())
+        {
+            return;
+        }
+
+        auto& stat = m_rateCollectorStat;
+        BCOS_LOG(INFO) << LOG_BADGE("RateCollector")
                        << LOG_BADGE(m_moduleName)
                        //    << LOG_KV("totalCount", stat.totalCount)
                        //    << LOG_KV("totalFailedCount", stat.totalFailedCount)
@@ -104,43 +113,43 @@ public:
 
     void flush()
     {
-        m_rateReporterStat.lastCount = 0;
-        m_rateReporterStat.lastFailedCount = 0;
-        m_rateReporterStat.lastTotalDataSize = 0;
-        m_rateReporterStat.lastTotalFailedDataSize = 0;
+        m_rateCollectorStat.lastCount = 0;
+        m_rateCollectorStat.lastFailedCount = 0;
+        m_rateCollectorStat.lastTotalDataSize = 0;
+        m_rateCollectorStat.lastTotalFailedDataSize = 0;
     }
 
     void update(std::size_t _dataSize, bool _success)
     {
         if (_success)
         {
-            m_rateReporterStat.totalCount++;
-            m_rateReporterStat.lastCount++;
-            m_rateReporterStat.totalDataSize += _dataSize;
-            m_rateReporterStat.lastTotalDataSize += _dataSize;
+            m_rateCollectorStat.totalCount++;
+            m_rateCollectorStat.lastCount++;
+            m_rateCollectorStat.totalDataSize += _dataSize;
+            m_rateCollectorStat.lastTotalDataSize += _dataSize;
         }
         else
         {
-            m_rateReporterStat.totalFailedCount++;
-            m_rateReporterStat.lastFailedCount++;
-            m_rateReporterStat.totalFailedDataSize += _dataSize;
-            m_rateReporterStat.lastTotalFailedDataSize += _dataSize;
+            m_rateCollectorStat.totalFailedCount++;
+            m_rateCollectorStat.lastFailedCount++;
+            m_rateCollectorStat.totalFailedDataSize += _dataSize;
+            m_rateCollectorStat.lastTotalFailedDataSize += _dataSize;
         }
     }
 
 private:
     std::string m_moduleName;
     uint32_t m_intervalMS;
-    RateReporterStat m_rateReporterStat;
+    RateCollectorStat m_rateCollectorStat;
     std::shared_ptr<Timer> m_reportTimer;
 };
 
-class RateReporterFactory
+class RateCollectorFactory
 {
 public:
-    static RateReporter::Ptr build(std::string _moduleName, uint64_t _intervalMS)
+    static RateCollector::Ptr build(std::string _moduleName, uint64_t _intervalMS)
     {
-        return std::make_shared<RateReporter>(_moduleName, _intervalMS);
+        return std::make_shared<RateCollector>(_moduleName, _intervalMS);
     }
 };
 

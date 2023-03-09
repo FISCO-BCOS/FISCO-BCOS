@@ -24,7 +24,7 @@
 #include "bcos-txpool/txpool/utilities/Common.h"
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <bcos-utilities/RateReporter.h>
+#include <bcos-utilities/RateCollector.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_hash_map.h>
@@ -173,9 +173,9 @@ protected:
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
 
-    RateReporter m_inRateReporter;
-    RateReporter m_sealRateReporter;
-    RateReporter m_removeRateReporter;
+    RateCollector m_inRateCollector;
+    RateCollector m_sealRateCollector;
+    RateCollector m_removeRateCollector;
 
     bcos::crypto::HashType m_knownLatestSealedTxHash;
 };

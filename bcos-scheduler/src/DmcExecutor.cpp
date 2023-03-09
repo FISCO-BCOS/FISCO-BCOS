@@ -179,7 +179,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
     if (!m_executivePool.empty(MessageHint::NEED_PREPARE))
     {
         callback(nullptr, NEED_PREPARE);
-        return;GG
+        return;
     }
     */
 

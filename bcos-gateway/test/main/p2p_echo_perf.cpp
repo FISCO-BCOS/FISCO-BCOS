@@ -26,7 +26,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/CompositeBuffer.h"
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-utilities/RateReporter.h>
+#include <bcos-utilities/RateCollector.h>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -71,7 +71,7 @@ int main(int argc, const char** argv)
         logInitializer->initLog(configPath);
 
         constexpr static int RATE_REPORT_INTERVAL = 10000;  // 10s
-        auto reporter = std::make_shared<RateReporter>(workModel, RATE_REPORT_INTERVAL);
+        auto reporter = std::make_shared<RateCollector>(workModel, RATE_REPORT_INTERVAL);
         reporter->start();
 
         // load the config items
