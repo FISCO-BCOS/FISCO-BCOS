@@ -76,9 +76,8 @@ public:
         auto hashResult = hash();
         // check the signatures
         auto signature = signatureData();
-        auto publicKey = signatureImpl.recover(hashResult, signature);
-        // recover the sender
-        forceSender(bcos::right160(hashImpl.hash(publicKey)).asBytes());
+        auto ret = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
+        forceSender(ret.second);
     }
 
     virtual int32_t version() const = 0;
@@ -107,7 +106,7 @@ public:
         }
         return TransactionType::ContractCreation;
     }
-    virtual void forceSender(bytes _sender) const = 0;
+    virtual void forceSender(const bcos::bytes& _sender) const = 0;
     virtual bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;

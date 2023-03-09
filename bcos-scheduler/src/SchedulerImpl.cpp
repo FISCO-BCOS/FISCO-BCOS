@@ -35,7 +35,7 @@ const __itt_string_handle* const ITT_STRING_SCHEDULER_COMMIT =
     __itt_string_handle_create("scheduler.commit");
 // __itt_id ITT_SCHEDULER_EXECUTE_ID = 1;
 
-};  // namespace bcos::scheduler
+}  // namespace bcos::scheduler
 
 void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
     std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)

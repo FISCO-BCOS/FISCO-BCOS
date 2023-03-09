@@ -412,8 +412,17 @@ public:
                         auto& entry = it.entry;
                         if (entry.dirty())
                         {
-                            auto entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
-                                             entry.hash(it.table, it.key, hashImpl, m_blockVersion);
+                            bcos::crypto::HashType entryHash;
+                            if (m_blockVersion >=
+                                (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+                            {
+                                entryHash = entry.hash(it.table, it.key, hashImpl, m_blockVersion);
+                            }
+                            else
+                            {  // v3.0.0
+                                entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
+                                            entry.hash(it.table, it.key, hashImpl, m_blockVersion);
+                            }
                             bucketHash ^= entryHash;
                         }
                     }
@@ -584,7 +593,8 @@ private:
     uint32_t m_blockVersion = 0;
     std::vector<Bucket> m_buckets;
 
-    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(const std::string_view& table, const std::string_view& key)
+    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(
+        const std::string_view& table, const std::string_view& key)
     {
         auto hash = std::hash<std::string_view>{}(table);
         boost::hash_combine(hash, std::hash<std::string_view>{}(key));
