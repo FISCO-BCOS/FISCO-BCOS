@@ -8,6 +8,7 @@
 #include <tbb/parallel_pipeline.h>
 #include <iterator>
 #include <range/v3/range/concepts.hpp>
+#include <range/v3/view/move.hpp>
 
 namespace bcos::transaction_scheduler
 {
@@ -20,10 +21,10 @@ template <transaction_executor::StateStorage MultiLayerStorage,
 class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
 private:
-    constexpr static size_t DEFAULT_CHUNK_SIZE = 100;
+    constexpr static size_t DEFAULT_CHUNK_SIZE = 50;
 
-    size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                    // Maybe auto adjust
-    size_t m_maxThreads = std::thread::hardware_concurrency();  // Maybe auto adjust
+    size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                        // Maybe auto adjust
+    size_t m_maxThreads = std::thread::hardware_concurrency() * 4;  // Maybe auto adjust
     using ChunkLocalStorage =
         transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
             MultiLayerStorage>;
@@ -174,8 +175,7 @@ public:
 
                             PARALLEL_SCHEDULER_LOG(DEBUG)
                                 << "Inserting receipts... " << chunkReceipts.size();
-                            receipts.insert(
-                                receipts.end(), chunkReceipts.begin(), chunkReceipts.end());
+                            RANGES::move(chunkReceipts, std::back_inserter(receipts));
                             executedChunk.emplace_back(std::move(*chunkResult));
                             ++chunkIt;
                         }));

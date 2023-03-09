@@ -37,7 +37,7 @@ namespace precompiled
 constexpr const char* const SYS_CONFIG_NAME = "/sys/status";
 constexpr const char* const TABLE_NAME = "/sys/table_storage";
 constexpr const char* const TABLE_MANAGER_NAME = "/sys/table_manager";
-constexpr const char* const CONSENSUS_NAME = "/sys/consensus";
+constexpr const char* const CONSENSUS_TABLE_NAME = "/sys/consensus";
 constexpr const char* const AUTH_MANAGER_NAME = "/sys/auth";
 constexpr const char* const KV_TABLE_NAME = "/sys/kv_storage";
 constexpr const char* const CRYPTO_NAME = "/sys/crypto_tools";
@@ -51,7 +51,7 @@ constexpr const char* const CAST_NAME = "/sys/cast_tools";
 constexpr const char* const SHARDING_PRECOMPILED_NAME = "/sys/sharding";
 constexpr static const uint8_t BFS_SYS_SUBS_COUNT = 15;
 constexpr static const std::array<std::string_view, BFS_SYS_SUBS_COUNT> BFS_SYS_SUBS = {
-    SYS_CONFIG_NAME, TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_NAME, AUTH_MANAGER_NAME,
+    SYS_CONFIG_NAME, TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_TABLE_NAME, AUTH_MANAGER_NAME,
     KV_TABLE_NAME, CRYPTO_NAME, DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME,
     DISCRETE_ZKP_NAME, ACCOUNT_MANAGER_NAME, CAST_NAME, SHARDING_PRECOMPILED_NAME};
 
@@ -94,7 +94,7 @@ constexpr static const std::array<std::pair<std::string_view,std::string_view>, 
     std::pair{SYS_CONFIG_NAME, SYS_CONFIG_ADDRESS},
     {TABLE_NAME, TABLE_ADDRESS},
     {TABLE_MANAGER_NAME, TABLE_MANAGER_ADDRESS},
-    {CONSENSUS_NAME, CONSENSUS_ADDRESS},
+    {CONSENSUS_TABLE_NAME, CONSENSUS_ADDRESS},
     {AUTH_MANAGER_NAME, AUTH_MANAGER_ADDRESS},
     {KV_TABLE_NAME, KV_TABLE_ADDRESS},
     {CRYPTO_NAME, CRYPTO_ADDRESS},
@@ -112,7 +112,7 @@ constexpr static const std::array<std::pair<std::string_view,std::string_view>, 
 const std::set<std::string, std::less<>> c_systemTxsAddress = {
     bcos::precompiled::SYS_CONFIG_ADDRESS, bcos::precompiled::CONSENSUS_ADDRESS,
     bcos::precompiled::WORKING_SEALER_MGR_ADDRESS, bcos::precompiled::SYS_CONFIG_NAME,
-    bcos::precompiled::CONSENSUS_NAME, bcos::precompiled::AUTH_COMMITTEE_ADDRESS,
+    bcos::precompiled::CONSENSUS_TABLE_NAME, bcos::precompiled::AUTH_COMMITTEE_ADDRESS,
     bcos::precompiled::AUTH_MANAGER_ADDRESS, bcos::precompiled::ACCOUNT_ADDRESS,
     bcos::precompiled::ACCOUNT_MGR_ADDRESS, bcos::precompiled::ACCOUNT_MANAGER_NAME,
     bcos::precompiled::SHARDING_PRECOMPILED_ADDRESS};

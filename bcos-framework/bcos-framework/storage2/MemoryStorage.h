@@ -15,6 +15,7 @@
 #include <functional>
 #include <mutex>
 #include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/view/transform.hpp>
 #include <set>
 #include <thread>
 #include <type_traits>
@@ -58,12 +59,13 @@ private:
     constexpr static bool withMRU = (attribute & Attribute::MRU) != 0;
     constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
 
-    constexpr static unsigned BUCKETS_COUNT = 61;  // Magic number less than 64
+    constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
+    constexpr static int MOSTLY_CACHELINE_SIZE = 64;
 
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
-    constexpr static unsigned DEFAULT_CAPACITY = 256L * 1024 * 1024;  // For mru
+    constexpr static unsigned DEFAULT_CAPACITY = 4 * 1024 * 1024;  // For mru
     using Mutex = std::mutex;
     using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
@@ -71,8 +73,7 @@ private:
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
 
-    constexpr static int MOSTLY_CACHELINE_SIZE = 64;
-    struct alignas(MOSTLY_CACHELINE_SIZE) Data
+    struct Data
     {
         KeyType key;
         [[no_unique_address]] DataValueType value;
@@ -201,12 +202,12 @@ public:
         ReadIterator& operator=(ReadIterator&&) noexcept = default;
         ~ReadIterator() noexcept = default;
 
-        task::AwaitableValue<bool> next()
+        task::AwaitableValue<bool> next() &
         {
             return {static_cast<size_t>(++m_index) != m_iterators.size()};
         }
-        task::AwaitableValue<Key> key() const { return {m_iterators[m_index]->key}; }
-        task::AwaitableValue<Value> value() const
+        task::AwaitableValue<Key> key() const& { return {m_iterators[m_index]->key}; }
+        task::AwaitableValue<Value> value() const&
         {
             if constexpr (withLogicalDeletion)
             {
@@ -237,10 +238,29 @@ public:
                 m_bucketLocks.clear();
             }
         }
+
+        auto range() const&
+        {
+            return m_iterators |
+                   RANGES::views::transform(
+                       [](auto const* data) -> std::tuple<const KeyType*, const ValueType*> {
+                           if (!data)
+                           {
+                               return {nullptr, nullptr};
+                           }
+                           return {std::addressof(data->key), std::addressof(data->value)};
+                       });
+        }
     };
 
     class SeekIterator
     {
+    private:
+        typename Container::iterator m_it;
+        typename Container::iterator m_end;
+        [[no_unique_address]] Lock m_bucketLock;
+        bool m_started = false;
+
     public:
         friend class MemoryStorage;
         using Key = const KeyType&;
@@ -281,11 +301,26 @@ public:
 
         void release() { m_bucketLock.unlock(); }
 
-    private:
-        typename Container::iterator m_it;
-        typename Container::iterator m_end;
-        [[no_unique_address]] Lock m_bucketLock;
-        bool m_started = false;
+        auto range() const&
+        {
+            return RANGES::subrange<decltype(m_it), decltype(m_end)>(m_it, m_end) |
+                   RANGES::views::transform(
+                       [](auto const& it) -> std::tuple<const KeyType*, const ValueType*> {
+                           if constexpr (withLogicalDeletion)
+                           {
+                               if (std::holds_alternative<Deleted>(it.value))
+                               {
+                                   return {std::addressof(it.key), nullptr};
+                               }
+                               return {std::addressof(it.key),
+                                   std::addressof(std::get<ValueType>(it.value))};
+                           }
+                           else
+                           {
+                               return {std::addressof(it.key), std::addressof(it.value)};
+                           }
+                       });
+        }
     };
 
     task::AwaitableValue<ReadIterator> read(RANGES::input_range auto const& keys)

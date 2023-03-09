@@ -356,7 +356,10 @@ public:
             uint64_t value = 0;
             try
             {
-                value = boost::lexical_cast<uint64_t>(strValue);
+                if (index != 3)
+                {
+                    value = boost::lexical_cast<uint64_t>(strValue);
+                }
             }
             catch (std::exception& e)
             {
@@ -375,7 +378,7 @@ public:
                 ledgerConfig.setGasLimit({value, number});
                 break;
             case 3:
-                ledgerConfig.setCompatibilityVersion(value);
+                ledgerConfig.setCompatibilityVersion(bcos::tool::toVersionNumber(strValue));
                 break;
             default:
                 BOOST_THROW_EXCEPTION(UnexpectedRowIndex{});

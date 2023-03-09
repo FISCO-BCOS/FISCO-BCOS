@@ -10,6 +10,7 @@
 #include <transaction-executor/TransactionExecutor.h>
 #include <boost/container_hash/hash_fwd.hpp>
 #include <any>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -43,6 +44,19 @@ struct Fixture
     FixedStringPool stringPool;
 };
 
+void setCapacityForMRU(auto& storage)
+{
+    if constexpr (std::is_same_v<std::remove_cvref_t<decltype(storage)>,
+                      MemoryStorage<Key, storage::Entry, Attribute(ORDERED | CONCURRENT | MRU),
+                          std::hash<Key>>> ||
+                  std::is_same_v<std::remove_cvref_t<decltype(storage)>,
+                      MemoryStorage<Key, storage::Entry, Attribute(CONCURRENT | MRU),
+                          std::hash<Key>>>)
+    {
+        storage.setMaxCapacity(1000 * 1000 * 1000);
+    }
+}
+
 Fixture fixture;
 std::variant<MemoryStorage<Key, storage::Entry, Attribute(ORDERED)>,
     MemoryStorage<Key, storage::Entry, Attribute(ORDERED | CONCURRENT), std::hash<Key>>,
@@ -59,9 +73,11 @@ static void read(benchmark::State& state)
         fixture.prepareData(state.range(0));
         anyStorage.emplace<Storage>();
 
+
         task::syncWait([&]() -> task::Task<void> {
             co_await std::visit(
                 [&](auto& storage) -> task::Task<void> {
+                    setCapacityForMRU(storage);
                     co_await storage.write(fixture.allKeys, fixture.allValues);
                 },
                 anyStorage);
@@ -103,6 +119,8 @@ static void write(benchmark::State& state)
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         co_await std::visit(
             [&](auto& storage) -> task::Task<void> {
+                setCapacityForMRU(storage);
+
                 auto i = 100 * 10000 * state.thread_index();
                 for (auto const& it : state)
                 {
@@ -202,14 +220,12 @@ BENCHMARK(read<MemoryStorage<Key, storage::Entry, Attribute(ORDERED | CONCURRENT
     ->Arg(1000000)
     ->Threads(1)
     ->Threads(8);
-// BENCHMARK(
-//     read<MemoryStorage<int, storage::Entry, Attribute(ORDERED | CONCURRENT | MRU),
-//     std::hash<int>>>)
-//     ->Arg(100000)
-//     ->Arg(1000000)
-//     ->Threads(1)
-//     ->Threads(8)
-//     ->Threads(16);
+BENCHMARK(
+    read<MemoryStorage<Key, storage::Entry, Attribute(ORDERED | CONCURRENT | MRU), std::hash<Key>>>)
+    ->Arg(100000)
+    ->Arg(1000000)
+    ->Threads(1)
+    ->Threads(8);
 BENCHMARK(read<MemoryStorage<Key, storage::Entry>>)->Arg(100000)->Arg(1000000);
 BENCHMARK(read<MemoryStorage<Key, storage::Entry, Attribute(CONCURRENT), std::hash<Key>>>)
     ->Arg(100000)
@@ -226,12 +242,10 @@ BENCHMARK(write<MemoryStorage<Key, storage::Entry>>);
 BENCHMARK(write<MemoryStorage<Key, storage::Entry, Attribute(CONCURRENT), std::hash<Key>>>)
     ->Threads(1)
     ->Threads(8);
-
-// BENCHMARK(read<MemoryStorage<int, storage::Entry, Attribute(CONCURRENT | MRU), std::hash<int>>>)
-//     ->Arg(100000)
-//     ->Arg(1000000)
-//     ->Threads(1)
-//     ->Threads(8)
-//     ->Threads(16);
+BENCHMARK(read<MemoryStorage<Key, storage::Entry, Attribute(CONCURRENT | MRU), std::hash<Key>>>)
+    ->Arg(100000)
+    ->Arg(1000000)
+    ->Threads(1)
+    ->Threads(8);
 
 BENCHMARK_MAIN();

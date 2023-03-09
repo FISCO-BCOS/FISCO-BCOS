@@ -33,6 +33,7 @@ struct Fixture
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             std::make_shared<bcos::crypto::Keccak256>();
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(m_helloworldBytecodeBinary));
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     }
 
     std::string deployContract()

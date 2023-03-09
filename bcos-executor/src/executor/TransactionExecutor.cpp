@@ -309,7 +309,7 @@ void TransactionExecutor::initWasmEnvironment()
 
     // in WASM
     m_constantPrecompiled->insert({SYS_CONFIG_NAME, sysConfig});
-    m_constantPrecompiled->insert({CONSENSUS_NAME, consensusPrecompiled});
+    m_constantPrecompiled->insert({CONSENSUS_TABLE_NAME, consensusPrecompiled});
     m_constantPrecompiled->insert({TABLE_MANAGER_NAME, tableManagerPrecompiled});
     m_constantPrecompiled->insert({KV_TABLE_NAME, kvTablePrecompiled});
     m_constantPrecompiled->insert({TABLE_NAME, tablePrecompiled});

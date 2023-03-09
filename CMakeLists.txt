@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.14)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
 
 if(NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")

@@ -87,6 +87,15 @@ struct SeekIteratorTrait
 template <storage2::SeekableStorage Storage>
 using SeekIteratorType = typename SeekIteratorTrait<Storage>::type;
 
+template <class Iterator>
+concept RangeableIterator = requires(Iterator&& iterator)
+{
+    // clang-format off
+    requires storage2::ReadIterator<Iterator>;
+    { iterator.range() } -> RANGES::range;
+    // clang-format on
+};
+
 auto single(auto&& value)
 {
     return RANGES::single_view(std::ref(value)) |

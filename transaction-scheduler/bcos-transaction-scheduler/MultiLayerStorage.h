@@ -61,7 +61,7 @@ private:
         boost::container::small_vector<std::tuple<const RANGES::range_value_t<decltype(keys)>*,
                                            RANGES::range_value_t<decltype(values)>*>,
             1>
-            missingPointers;
+            missings;
 
         auto keyIt = RANGES::begin(keys);
         auto valueIt = RANGES::begin(values);
@@ -74,13 +74,13 @@ private:
             }
             else
             {
-                missingPointers.emplace_back(
+                missings.emplace_back(
                     std::make_tuple(std::addressof(*keyIt), std::addressof(*valueIt)));
             }
             RANGES::advance(keyIt, 1);
             RANGES::advance(valueIt, 1);
         }
-        co_return missingPointers;
+        co_return missings;
     }
 
 public:
@@ -222,7 +222,7 @@ public:
 
     task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        if (!m_mutableStorage)
+        if (!m_mutableStorage) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
         }
@@ -308,7 +308,6 @@ public:
         m_immutableStorages.pop_back();
         immutablesLock.unlock();
 
-        // TODO: Transactional
         auto it = co_await immutableStorage->seek(storage2::STORAGE_BEGIN);
         while (co_await it.next())
         {
