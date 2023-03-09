@@ -280,4 +280,36 @@ BOOST_AUTO_TEST_CASE(range)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(merge)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MemoryStorage<int, int, ORDERED> storage1;
+        MemoryStorage<int, int, ORDERED> storage2;
+
+        storage1.write(RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
+        storage2.write(RANGES::iota_view<int, int>(9, 19), RANGES::repeat_view<int>(200));
+
+        storage1.merge(storage2);
+        auto it = co_await storage1.seek(bcos::storage2::STORAGE_BEGIN);
+        int i = 0;
+        while (co_await it.next())
+        {
+            auto keyNum = co_await it.key();
+            auto valueNum = co_await it.value();
+
+            BOOST_CHECK_EQUAL(keyNum, i);
+            if (keyNum > 8)
+            {
+                BOOST_CHECK_EQUAL(valueNum, 200);
+            }
+            else
+            {
+                BOOST_CHECK_EQUAL(valueNum, 100);
+            }
+            ++i;
+        }
+        BOOST_CHECK_EQUAL(i, 19);
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
