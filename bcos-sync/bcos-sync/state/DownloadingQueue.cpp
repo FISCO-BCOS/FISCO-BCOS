@@ -113,7 +113,6 @@ void DownloadingQueue::flushBufferToQueue()
 bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
 {
     // pop buffer into queue
-    WriteGuard lock(x_blocks);
     if (m_blocks.size() >= m_config->maxDownloadingBlockQueueSize())
     {
         BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
@@ -126,22 +125,16 @@ bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
                        << LOG_DESC("Decoding block buffer")
                        << LOG_KV("blocksShardSize", _blocksData->blocksSize());
     size_t blocksSize = _blocksData->blocksSize();
+    std::vector<protocol::Block::Ptr> blocks;
+    blocks.reserve(blocksSize);
+    // prepare block
     for (size_t i = 0; i < blocksSize; i++)
     {
         try
         {
             auto block =
                 m_config->blockFactory()->createBlock(_blocksData->blockData(i), true, true);
-            auto blockHeader = block->blockHeader();
-            if (isNewerBlock(block))
-            {
-                m_blocks.push(block);
-                BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                                   << LOG_DESC("Flush block to the queue")
-                                   << LOG_KV("number", blockHeader->number())
-                                   << LOG_KV("configNum", m_config->blockNumber())
-                                   << LOG_KV("nodeId", m_config->nodeID()->shortHex());
-            }
+            blocks.push_back(std::move(block));
         }
         catch (std::exception const& e)
         {
@@ -150,6 +143,21 @@ bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
                                  << LOG_KV("reason", boost::diagnostic_information(e))
                                  << LOG_KV("blockDataSize", _blocksData->blockData(i).size());
             continue;
+        }
+    }
+    WriteGuard lock(x_blocks);
+    for (const auto& block : blocks)
+    {
+        auto blockHeader = block->blockHeader();
+        // is NewerBlock
+        if (blockHeader->number() > m_config->blockNumber())
+        {
+            m_blocks.push(block);
+            BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                               << LOG_DESC("Flush block to the queue")
+                               << LOG_KV("number", blockHeader->number())
+                               << LOG_KV("configNum", m_config->blockNumber())
+                               << LOG_KV("nodeId", m_config->nodeID()->shortHex());
         }
     }
     if (m_blocks.empty())
@@ -164,19 +172,13 @@ bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
     return true;
 }
 
-bool DownloadingQueue::isNewerBlock(Block::Ptr _block)
-{
-    // Note: must holder blockHeader here to ensure the life cycle of blockHeader
-    auto blockHeader = _block->blockHeader();
-    return blockHeader->number() > m_config->blockNumber();
-}
-
 void DownloadingQueue::clearFullQueueIfNotHas(BlockNumber _blockNumber)
 {
     bool needClear = false;
     {
         ReadGuard lock(x_blocks);
-        if (m_blocks.size() == m_config->maxDownloadingBlockQueueSize() &&
+        // Note: size maybe greater than max when many blocks execute failed
+        if (m_blocks.size() >= m_config->maxDownloadingBlockQueueSize() &&
             m_blocks.top()->blockHeader()->number() > _blockNumber)
         {
             needClear = true;
@@ -188,8 +190,8 @@ void DownloadingQueue::clearFullQueueIfNotHas(BlockNumber _blockNumber)
     }
 }
 
-bool DownloadingQueue::verifyExecutedBlock(
-    bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _blockHeader)
+bool DownloadingQueue::verifyExecutedBlock(bcos::protocol::Block::Ptr const& _block,
+    bcos::protocol::BlockHeader::Ptr const& _blockHeader) const noexcept
 {
     // check blockHash(Note: since the ledger check the parentHash before commit, here no need to
     // check the parentHash)
@@ -205,7 +207,7 @@ bool DownloadingQueue::verifyExecutedBlock(
     return true;
 }
 
-std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr _header)
+std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr const& _header) const noexcept
 {
     std::stringstream oss;
     std::stringstream sealerListStr;
@@ -258,7 +260,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
 {
     auto blockHeader = _block->blockHeader();
     // check the block number
-    if (blockHeader->number() <= m_config->blockNumber())
+    if (blockHeader->number() <= m_config->blockNumber()) [[unlikely]]
     {
         BLKSYNC_LOG(WARNING) << LOG_BADGE("Download")
                              << LOG_BADGE("BlockSync: checkBlock before apply")
@@ -273,6 +275,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
     {
         return;
     }
+    m_config->setApplyingBlock(blockHeader->number());
     auto startT = utcTime();
     auto self = weak_from_this();
     m_config->scheduler()->executeBlock(_block, true,
@@ -352,6 +355,11 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 if (!_sysBlock)
                 {
                     config->setExecutedBlock(orgBlockHeader->number());
+                    if (downloadQueue->m_applyFinishedHandler)
+                    {
+                        // if still have block not execute
+                        downloadQueue->m_applyFinishedHandler(!downloadQueue->empty());
+                    }
                 }
                 auto signature = orgBlockHeader->signatureList();
                 BLKSYNC_LOG(INFO) << METRIC << LOG_BADGE("Download")

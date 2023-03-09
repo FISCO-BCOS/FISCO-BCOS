@@ -23,9 +23,7 @@
 #include "bcos-sync/protocol/proto/BlockSync.pb.h"
 #include "bcos-sync/utilities/Common.h"
 #include <bcos-protocol/Common.h>
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockSyncMsgImpl : virtual public BlockSyncMsgInterface
 {
@@ -34,7 +32,7 @@ public:
     BlockSyncMsgImpl() : m_syncMessage(std::make_shared<BlockSyncMessage>()) {}
     explicit BlockSyncMsgImpl(bytesConstRef _data) : BlockSyncMsgImpl() { decode(_data); }
 
-    ~BlockSyncMsgImpl() override {}
+    ~BlockSyncMsgImpl() override = default;
 
     bytesPointer encode() const override { return bcos::protocol::encodePBObject(m_syncMessage); }
     void decode(bytesConstRef _data) override
@@ -61,6 +59,9 @@ public:
         m_syncMessage->set_archived_number(_number);
     }
 
+    size_t blockInterval() const override { return m_syncMessage->block_interval(); }
+    void setBlockInterval(size_t interval) override { m_syncMessage->set_block_interval(interval); }
+
     void setPacketType(int32_t packetType) override { m_syncMessage->set_packettype(packetType); }
 
     std::shared_ptr<BlockSyncMessage> syncMessage() { return m_syncMessage; }
@@ -68,5 +69,4 @@ public:
 protected:
     std::shared_ptr<BlockSyncMessage> m_syncMessage;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync
