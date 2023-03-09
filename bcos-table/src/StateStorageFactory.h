@@ -84,7 +84,7 @@ public:
             return std::make_shared<bcos::storage::KeyPageStorage>(
                 storage, m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
         }
-        return std::make_shared<bcos::storage::StateStorage>(storage);
+        return std::make_shared<bcos::storage::StateStorage>(storage, compatibilityVersion);
     }
 
 private:

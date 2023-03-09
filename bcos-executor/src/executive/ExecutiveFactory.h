@@ -45,13 +45,12 @@ public:
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             constantPrecompiled,
         std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
-        std::shared_ptr<wasm::GasInjector> gasInjector)
+        const wasm::GasInjector& gasInjector)
       : m_precompiledContract(precompiledContract),
         m_constantPrecompiled(constantPrecompiled),
         m_builtInPrecompiled(builtInPrecompiled),
         m_blockContext(blockContext),
         m_gasInjector(gasInjector)
-
     {}
 
     virtual ~ExecutiveFactory() = default;
@@ -81,7 +80,7 @@ protected:
         m_constantPrecompiled;
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     std::weak_ptr<BlockContext> m_blockContext;
-    std::shared_ptr<wasm::GasInjector> m_gasInjector;
+    const wasm::GasInjector& m_gasInjector;
 };
 
 class ShardingExecutiveFactory : public ExecutiveFactory
@@ -95,7 +94,7 @@ public:
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             constantPrecompiled,
         std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
-        std::shared_ptr<wasm::GasInjector> gasInjector)
+        const wasm::GasInjector& gasInjector)
       : ExecutiveFactory(
             blockContext, precompiledContract, constantPrecompiled, builtInPrecompiled, gasInjector)
     {}

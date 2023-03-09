@@ -22,6 +22,7 @@
 #include "bcos-crypto/signature/codec/SignatureDataWithPub.h"
 #include "bcos-executor/src/executive/LedgerCache.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include "vm/gas_meter/GasInjector.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/sm2.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
@@ -294,9 +295,8 @@ public:
             std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
                 h256(), utcTime(), (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION),
                 FiscoBcosSchedule, false, false);
-        std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
         m_executive = std::make_shared<TransactionExecutive>(
-            std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, gasInjector);
+            std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, m_gasInjector);
         m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(m_cryptoSuite->hashImpl());
     }
 
@@ -307,6 +307,7 @@ public:
     CryptoPrecompiled::Ptr m_cryptoPrecompiled;
     std::string m_sm2VerifyFunction = "sm2Verify(bytes32,bytes,bytes32,bytes32)";
     std::shared_ptr<bcos::codec::abi::ContractABICodec> m_abi;
+    wasm::GasInjector m_gasInjector;
     LedgerCache::Ptr m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
 };
 

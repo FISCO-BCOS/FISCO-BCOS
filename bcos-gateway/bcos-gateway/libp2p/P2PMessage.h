@@ -75,7 +75,7 @@ public:
     const static size_t MAX_DST_NODEID_COUNT = 255;
 
     bool encode(bytes& _buffer);
-    int32_t decode(bytesConstRef _buffer);
+    int32_t decode(const bytesConstRef& _buffer);
 
 public:
     uint16_t moduleID() const { return m_moduleID; }
@@ -131,6 +131,8 @@ public:
     {
         m_payload = std::make_shared<bytes>();
         m_options = std::make_shared<P2PMessageOptions>();
+        m_srcP2PNodeID.reserve(512);
+        m_dstP2PNodeID.reserve(512);
     }
 
     // ~P2PMessage() override = default;
@@ -178,7 +180,7 @@ public:
     void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
     bool encode(bytes& _buffer) override;
     bool encode(EncodedMessage& _buffer) override;
-    int32_t decode(bytesConstRef _buffer) override;
+    int32_t decode(const bytesConstRef& _buffer) override;
     bool isRespPacket() const override
     {
         return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
@@ -212,7 +214,7 @@ public:
     MessageExtAttributes::Ptr extAttributes() override { return m_extAttr; }
 
 protected:
-    virtual int32_t decodeHeader(bytesConstRef _buffer);
+    virtual int32_t decodeHeader(const bytesConstRef& _buffer);
     virtual bool encodeHeader(bytes& _buffer);
 
 protected:

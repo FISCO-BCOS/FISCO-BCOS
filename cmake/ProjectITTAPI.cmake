@@ -19,13 +19,17 @@ ExternalProject_Add(ittapi_project
 )
 
 ExternalProject_Get_Property(ittapi_project SOURCE_DIR)
-add_library(ittapi STATIC IMPORTED GLOBAL)
 
 set(ITTAPI_INCLUDE_DIR ${SOURCE_DIR}/include)
 set(ITTAPI_LIBRARY ${SOURCE_DIR}/bin/libittnotify.a)
 file(MAKE_DIRECTORY ${ITTAPI_INCLUDE_DIR})  # Must exist.
 
-set_property(TARGET ittapi PROPERTY IMPORTED_LOCATION ${ITTAPI_LIBRARY})
+if(WITH_VTUNE_ITT)
+    add_library(ittapi STATIC IMPORTED GLOBAL)
+    set_property(TARGET ittapi PROPERTY IMPORTED_LOCATION ${ITTAPI_LIBRARY})
+else()
+    add_library(ittapi INTERFACE IMPORTED GLOBAL)
+endif()
 set_property(TARGET ittapi PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ITTAPI_INCLUDE_DIR})
 
 add_dependencies(ittapi ittapi_project)

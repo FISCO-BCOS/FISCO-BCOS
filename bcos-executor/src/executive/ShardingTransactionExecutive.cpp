@@ -11,7 +11,7 @@ using namespace bcos::storage;
 
 ShardingTransactionExecutive::ShardingTransactionExecutive(std::weak_ptr<BlockContext> blockContext,
     std::string contractAddress, int64_t contextID, int64_t seq,
-    std::shared_ptr<wasm::GasInjector>& gasInjector)
+    const wasm::GasInjector& gasInjector)
   : CoroutineTransactionExecutive(
         std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector)
 {}

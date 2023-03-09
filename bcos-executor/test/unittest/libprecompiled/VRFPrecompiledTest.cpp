@@ -20,6 +20,7 @@
 #include "bcos-executor/src/precompiled/CryptoPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "vm/gas_meter/GasInjector.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -59,9 +60,8 @@ public:
         m_blockContext =
             std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
                 h256(), utcTime(), _blockVersion, FiscoBcosSchedule, false, false);
-        std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
         m_executive = std::make_shared<TransactionExecutive>(
-            std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, gasInjector);
+            std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, m_gasInjector);
         m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(m_cryptoSuite->hashImpl());
     }
 
@@ -72,6 +72,7 @@ public:
     BlockContext::Ptr m_blockContext;
     TransactionExecutive::Ptr m_executive;
     CryptoPrecompiled::Ptr m_cryptoPrecompiled;
+    wasm::GasInjector m_gasInjector;
     std::string m_vrfVerifyFunction = "curve25519VRFVerify(bytes,bytes,bytes)";
     std::shared_ptr<bcos::codec::abi::ContractABICodec> m_abi;
 };

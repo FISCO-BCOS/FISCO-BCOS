@@ -480,7 +480,7 @@ void BlockExecutive::asyncExecute(
 
 void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 {
-    auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
+    auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage, m_block->version());
 
     m_currentTimePoint = std::chrono::system_clock::now();
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");

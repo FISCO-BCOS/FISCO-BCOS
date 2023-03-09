@@ -73,7 +73,7 @@ public:
         }
     }
 
-    static TxDAGFlow::Ptr prepareDagFlow(BlockContext& blockContext,
+    static TxDAGFlow::Ptr prepareDagFlow(const BlockContext& blockContext,
         ExecutiveFactory::Ptr executiveFactory,
         std::vector<std::unique_ptr<CallParameters>>& inputs,
         std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
@@ -86,16 +86,13 @@ public:
 protected:
     void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn) override;
 
-    static critical::CriticalFieldsInterface::Ptr generateDagCriticals(BlockContext& blockContext,
-        ExecutiveFactory::Ptr executiveFactory,
+    static critical::CriticalFieldsInterface::Ptr generateDagCriticals(
+        const BlockContext& blockContext, ExecutiveFactory::Ptr executiveFactory,
         std::vector<std::unique_ptr<CallParameters>>& inputs,
         std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache);
 
     static TxDAGFlow::Ptr generateDagFlow(
         const BlockContext& blockContext, critical::CriticalFieldsInterface::Ptr criticals);
-
-    static bytes getComponentBytes(
-        size_t index, const std::string& typeName, const bytesConstRef& data);
 
     static std::shared_ptr<std::vector<bytes>> extractConflictFields(const FunctionAbi& functionAbi,
         const CallParameters& params, const BlockContext& blockContext);
@@ -116,6 +113,5 @@ protected:
 
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
 };
-
 
 }  // namespace bcos::executor

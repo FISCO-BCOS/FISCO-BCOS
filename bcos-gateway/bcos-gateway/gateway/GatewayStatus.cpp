@@ -79,22 +79,28 @@ bool GatewayStatus::randomChooseP2PNode(
 bool GatewayStatus::randomChooseNode(
     std::string& _choosedNode, GroupType _type, std::string const& _groupID) const
 {
-    std::set<std::string> p2pNodeList;
+    const std::set<std::string>* p2pNodeList;
     {
         ReadGuard l(x_groupP2PNodeList);
-        if (!m_groupP2PNodeList.count(_groupID) || !m_groupP2PNodeList.at(_groupID).count(_type))
+        auto it = m_groupP2PNodeList.find(_groupID);
+        if (it == m_groupP2PNodeList.end())
         {
             return false;
         }
-        p2pNodeList = m_groupP2PNodeList.at(_groupID).at(_type);
+        auto it2 = it->second.find(_type);
+        if (it2 == it->second.end())
+        {
+            return false;
+        }
+        p2pNodeList = &it2->second;
     }
-    if (p2pNodeList.empty())
+    if (p2pNodeList->empty())
     {
         return false;
     }
-    srand(utcTime());
-    auto selectedP2PNode = rand() % p2pNodeList.size();
-    auto it = p2pNodeList.begin();
+    // srand(utcTime());
+    auto selectedP2PNode = rand() % p2pNodeList->size();
+    auto it = p2pNodeList->begin();
     if (selectedP2PNode > 0)
     {
         std::advance(it, selectedP2PNode);

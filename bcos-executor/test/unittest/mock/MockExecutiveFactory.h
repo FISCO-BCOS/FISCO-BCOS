@@ -24,7 +24,7 @@ public:
         std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
         std::shared_ptr<wasm::GasInjector> gasInjector)
       : ExecutiveFactory(std::move(blockContext), precompiledContract, constantPrecompiled,
-            builtInPrecompiled, gasInjector)
+            builtInPrecompiled, *gasInjector)
     {}
     virtual ~MockExecutiveFactory() {}
 
