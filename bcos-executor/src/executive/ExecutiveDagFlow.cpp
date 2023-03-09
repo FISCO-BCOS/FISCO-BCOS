@@ -87,8 +87,8 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
         else
         {
             // generate m_dagFlow
-            m_dagFlow = prepareDagFlow(m_executiveFactory->getBlockContext(),
-                m_executiveFactory, *txInputs, m_abiCache);
+            m_dagFlow = prepareDagFlow(
+                m_executiveFactory->getBlockContext(), m_executiveFactory, *txInputs, m_abiCache);
         }
 
         assert(!m_inputs);
@@ -424,22 +424,22 @@ TxDAGFlow::Ptr ExecutiveDagFlow::generateDagFlow(
     return dagFlow;
 }
 
-
-bytes ExecutiveDagFlow::getComponentBytes(
-    size_t index, const std::string& typeName, const bytesConstRef& data)
+bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
 {
+    // the string length will never exceed uint64_t
     size_t indexOffset = index * 32;
-    auto header = bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
     if (typeName == "string" || typeName == "bytes")
     {
-        u256 u = fromBigEndian<u256>(header);
-        auto offset = static_cast<std::size_t>(u);
-        auto rawData = data.getCroppedData(offset);
-        auto len = static_cast<std::size_t>(
-            fromBigEndian<u256>(bytes(rawData.begin(), rawData.begin() + 32)));
-        return bytes(rawData.begin() + 32, rawData.begin() + 32 + static_cast<std::size_t>(len));
+        uint64_t offset = 0;
+        std::reverse_copy(
+            data.begin() + indexOffset + 24, data.begin() + indexOffset + 32, (char*)&offset);
+        const unsigned char* rawData = data.data() + offset + 32;
+        uint64_t dataLength = 0;
+        std::reverse_copy(
+            data.begin() + offset + 24, data.begin() + offset + 32, (char*)&dataLength);
+        return bytes(rawData, rawData + dataLength);
     }
-    return header;
+    return bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
 }
 
 std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
@@ -460,9 +460,10 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
 
     auto conflictFields = make_shared<vector<bytes>>();
 
-    for (auto& conflictField : functionAbi.conflictFields)
+    for (const auto& conflictField : functionAbi.conflictFields)
     {
         auto criticalKey = bytes();
+        criticalKey.reserve(72);
 
         size_t slot = toHash;
         if (conflictField.slot.has_value())
@@ -554,12 +555,12 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
         {
             assert(!conflictField.value.empty());
             const ParameterAbi* paramAbi = nullptr;
-            auto components = &functionAbi.inputs;
+            const auto* components = &functionAbi.inputs;
             auto inputData = ref(params.data).getCroppedData(4).toBytes();
             if (_blockContext.isWasm())
             {
                 auto startPos = 0u;
-                for (auto segment : conflictField.value)
+                for (const auto& segment : conflictField.value)
                 {
                     if (segment >= components->size())
                     {
@@ -591,7 +592,7 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
             else
             {  // evm
                 auto index = conflictField.value[0];
-                auto typeName = functionAbi.flatInputs[index];
+                const auto& typeName = functionAbi.flatInputs[index];
                 if (typeName.empty())
                 {
                     return nullptr;

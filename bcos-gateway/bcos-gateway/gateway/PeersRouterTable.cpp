@@ -48,11 +48,17 @@ std::set<P2pID> PeersRouterTable::queryP2pIDs(
     const std::string& _groupID, const std::string& _nodeID) const
 {
     ReadGuard l(x_groupNodeList);
-    if (!m_groupNodeList.count(_groupID) || !m_groupNodeList.at(_groupID).count(_nodeID))
+    auto it = m_groupNodeList.find(_groupID);
+    if (it == m_groupNodeList.end())
     {
         return std::set<P2pID>();
     }
-    return m_groupNodeList.at(_groupID).at(_nodeID);
+    auto it2 = it->second.find(_nodeID);
+    if(it2 == it->second.end())
+    {
+        return std::set<P2pID>();
+    }
+    return it2->second;
 }
 
 std::set<P2pID> PeersRouterTable::queryP2pIDsByGroupID(const std::string& _groupID) const

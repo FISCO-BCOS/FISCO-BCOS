@@ -50,6 +50,8 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+#include <array>
+#include <cstring>
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -1298,18 +1300,20 @@ void TransactionExecutor::dagExecuteTransactions(
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
 {
-    size_t indexOffset = index * 32;
-    auto header = bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
+    // the string length will never exceed uint64_t
+     size_t indexOffset = index * 32;
     if (typeName == "string" || typeName == "bytes")
     {
-        u256 u = fromBigEndian<u256>(header);
-        auto offset = static_cast<std::size_t>(u);
-        auto rawData = data.getCroppedData(offset);
-        auto len = static_cast<std::size_t>(
-            fromBigEndian<u256>(bytes(rawData.begin(), rawData.begin() + 32)));
-        return bytes(rawData.begin() + 32, rawData.begin() + 32 + static_cast<std::size_t>(len));
+        uint64_t offset = 0;
+        std::reverse_copy(
+            data.begin() + indexOffset + 24, data.begin() + indexOffset + 32, (char*)&offset);
+        const unsigned char* rawData = data.data() + offset + 32;
+        uint64_t dataLength = 0;
+        std::reverse_copy(
+            data.begin() + offset + 24, data.begin() + offset + 32, (char*)&dataLength);
+        return bytes(rawData, rawData + dataLength);
     }
-    return header;
+    return bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
 }
 
 std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(

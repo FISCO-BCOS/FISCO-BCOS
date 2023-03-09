@@ -31,11 +31,17 @@ FrontServiceInfo::Ptr LocalRouterTable::getFrontService(
     const std::string& _groupID, NodeIDPtr _nodeID) const
 {
     ReadGuard l(x_nodeList);
-    if (!m_nodeList.count(_groupID) || !m_nodeList.at(_groupID).count(_nodeID->hex()))
+    auto it = m_nodeList.find(_groupID);
+    if (it == m_nodeList.end())
     {
         return nullptr;
     }
-    return m_nodeList.at(_groupID).at(_nodeID->hex());
+    auto it2 = it->second.find(_nodeID->hex());
+    if (it2 == it->second.end())
+    {
+        return nullptr;
+    }
+    return it2->second;
 }
 
 std::vector<FrontServiceInfo::Ptr> LocalRouterTable::getGroupFrontServiceList(
