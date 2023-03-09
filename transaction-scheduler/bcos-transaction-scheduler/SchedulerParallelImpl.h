@@ -24,8 +24,8 @@ class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Receip
 private:
     constexpr static size_t DEFAULT_CHUNK_SIZE = 50;
 
-    size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                    // Maybe auto adjust
-    size_t m_maxThreads = std::thread::hardware_concurrency();  // Maybe auto adjust
+    size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                        // Maybe auto adjust
+    size_t m_maxThreads = std::thread::hardware_concurrency() * 4;  // Maybe auto adjust
     using ChunkLocalStorage =
         transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
             MultiLayerStorage>;
