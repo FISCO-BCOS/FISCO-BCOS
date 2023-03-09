@@ -23,6 +23,7 @@
 #include <random>
 
 #include "Exceptions.h"
+#include "libdevcore/Log.h"
 
 using namespace std;
 using namespace dev;
@@ -95,9 +96,14 @@ bytes dev::fromHex(std::string const& _s, WhenError _throw)
         if (h != -1)
             ret.push_back(h);
         else if (_throw == WhenError::Throw)
+        {
+            LOG(DEBUG) << LOG_BADGE("fromHex") << LOG_DESC("invalid hex char") << LOG_KV("str", _s);
             BOOST_THROW_EXCEPTION(BadHexCharacter());
+        }
         else
+        {
             return bytes();
+        }
     }
     for (unsigned i = s; i < _s.size(); i += 2)
     {
@@ -106,9 +112,14 @@ bytes dev::fromHex(std::string const& _s, WhenError _throw)
         if (h != -1 && l != -1)
             ret.push_back((byte)(h * 16 + l));
         else if (_throw == WhenError::Throw)
+        {
+            LOG(DEBUG) << LOG_BADGE("fromHex") << LOG_DESC("invalid hex char") << LOG_KV("str", _s);
             BOOST_THROW_EXCEPTION(BadHexCharacter());
+        }
         else
+        {
             return bytes();
+        }
     }
     return ret;
 }
