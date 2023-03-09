@@ -22,9 +22,7 @@
 #include "bcos-sync/interfaces/BlocksMsgInterface.h"
 #include "bcos-sync/protocol/PB/BlockSyncMsgImpl.h"
 #include "bcos-sync/utilities/Common.h"
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlocksMsgImpl : public BlocksMsgInterface, public BlockSyncMsgImpl
 {
@@ -39,13 +37,13 @@ public:
     {}
 
     explicit BlocksMsgImpl(bytesConstRef _data) : BlocksMsgImpl() { decode(_data); }
-    ~BlocksMsgImpl() override {}
+    ~BlocksMsgImpl() override = default;
 
     size_t blocksSize() const override { return m_syncMessage->blocksdata_size(); }
     bytesConstRef blockData(size_t _index) const override
     {
         auto const& blockData = m_syncMessage->blocksdata(_index);
-        return bytesConstRef((byte const*)blockData.data(), blockData.size());
+        return {(byte const*)blockData.data(), blockData.size()};
     }
 
     void appendBlockData(bytes&& _blockData) override
@@ -68,8 +66,7 @@ protected:
     explicit BlocksMsgImpl(std::shared_ptr<BlockSyncMessage> _syncMessage)
     {
         setPacketType(BlockSyncPacketType::BlockResponsePacket);
-        m_syncMessage = _syncMessage;
+        m_syncMessage = std::move(_syncMessage);
     }
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

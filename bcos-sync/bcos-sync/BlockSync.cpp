@@ -42,6 +42,12 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
     m_downloadingTimer->registerTimeoutHandler([this] { onDownloadTimeout(); });
     m_downloadingQueue->registerNewBlockHandler(
         [this](auto&& config) { onNewBlock(std::forward<decltype(config)>(config)); });
+    m_downloadingQueue->registerApplyFinishedHandler([this](bool _isNotify) {
+        if (_isNotify)
+        {
+            m_signalled.notify_all();
+        }
+    });
     initSendResponseHandler();
 }
 
@@ -236,8 +242,8 @@ void BlockSync::workerProcessLoop()
             executeWorker();
             if (idleWaitMs() != 0U)
             {
-                boost::unique_lock<boost::mutex> l(x_signalled);
-                m_signalled.wait_for(l, boost::chrono::milliseconds(idleWaitMs()));
+                boost::unique_lock<boost::mutex> lock(x_signalled);
+                m_signalled.wait_for(lock, boost::chrono::milliseconds(idleWaitMs()));
             }
         }
         catch (std::exception const& e)
@@ -433,7 +439,8 @@ void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Pt
     BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("onPeerBlocksRequest")
                       << LOG_DESC("Receive block request") << LOG_KV("peer", _nodeID->shortHex())
                       << LOG_KV("from", blockRequest->number())
-                      << LOG_KV("size", blockRequest->size());
+                      << LOG_KV("size", blockRequest->size())
+                      << LOG_KV("interval", blockRequest->blockInterval());
     auto peerStatus = m_syncStatus->peerStatus(_nodeID);
     if (!peerStatus && m_config->existsInGroup(_nodeID))
     {
@@ -450,7 +457,8 @@ void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Pt
     }
     if (peerStatus)
     {
-        peerStatus->downloadRequests()->push(blockRequest->number(), blockRequest->size());
+        peerStatus->downloadRequests()->push(
+            blockRequest->number(), blockRequest->size(), blockRequest->blockInterval());
         m_signalled.notify_all();
         return;
     }
@@ -493,20 +501,21 @@ void BlockSync::tryToRequestBlocks()
     }
     auto requestToNumber = m_config->knownHighestNumber();
     m_config->consensus()->notifyHighestSyncingNumber(requestToNumber);
-    auto topBlock = m_downloadingQueue->top();
+    auto topBlock = m_downloadingQueue->top(true);
     // The block in BlockQueue is not nextBlock(the BlockQueue missing some block)
     if (topBlock)
     {
         auto topBlockHeader = topBlock->blockHeader();
-        if (topBlockHeader && topBlockHeader->number() > m_config->nextBlock())
+        if (topBlockHeader && topBlockHeader->number() >= m_config->nextBlock())
         {
             requestToNumber =
                 std::min(m_config->knownHighestNumber(), (topBlockHeader->number() - 1));
         }
     }
-    auto currentNumber = m_config->blockNumber();
+    auto currentNumber = std::max(m_config->blockNumber(), m_config->applyingBlock());
     // no need to request blocks
-    if (currentNumber >= requestToNumber)
+    if (currentNumber >= requestToNumber || requestToNumber <= m_config->executedBlock() ||
+        requestToNumber <= m_config->applyingBlock())
     {
         return;
     }
@@ -523,6 +532,8 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
     auto blockSizePerShard = m_config->maxRequestBlocks();
     auto shardNumber = (_to - _from + blockSizePerShard - 1) / blockSizePerShard;
     size_t shard = 0;
+    auto interval = m_syncStatus->peers()->size() - 1;
+    interval = (interval == 0) ? 1 : interval;
     // at most request `maxShardPerPeer` shards every time
     for (size_t loop = 0; loop < m_config->maxShardPerPeer() && shard < shardNumber; loop++)
     {
@@ -534,8 +545,18 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
                 // Only send request to nodes which are not syncing(has max number)
                 return true;
             }
-            BlockNumber from = _from + 1 + shard * blockSizePerShard;
-            BlockNumber to = std::min((BlockNumber)(from + blockSizePerShard - 1), _to);
+            // BlockNumber from = _from + 1 + shard * blockSizePerShard;
+            // BlockNumber to = std::min((BlockNumber)(from + blockSizePerShard - 1), _to);
+
+            /// example: _from=0, interval=3, blockSizePerShard=4, _to=unlimited, then loop twice
+            /// peer0: [1, 4, 7, 10], [13, 16, 19, 22]
+            /// peer1: [2, 5, 8, 11], [14, 17, 20, 23]
+            /// peer2: [3, 6, 9, 12], [15, 18, 21, 24]
+            BlockNumber from = _from + 1 + (shard % interval) +
+                               (shard / interval) * (blockSizePerShard * interval);
+            BlockNumber to =
+                std::min((BlockNumber)(from + (blockSizePerShard - 1) * interval), _to);
+            BlockNumber size = (to - from) / interval + 1;
             if (_p->number() < to || _p->archivedBlockNumber() >= from)
             {
                 return true;  // to next peer
@@ -543,8 +564,17 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
             // found a peer
             findPeer = true;
             auto blockRequest = m_config->msgFactory()->createBlockRequest();
-            blockRequest->setNumber(from);
-            blockRequest->setSize(to - from + 1);
+            if (size <= 1) [[unlikely]]
+            {
+                blockRequest->setNumber(from);
+                blockRequest->setSize(to - from + 1);
+            }
+            else [[likely]]
+            {
+                blockRequest->setNumber(from);
+                blockRequest->setSize(size);
+                blockRequest->setBlockInterval(interval);
+            }
             auto encodedData = blockRequest->encode();
             m_config->frontService()->asyncSendMessageByNodeID(
                 ModuleID::BlockSync, _p->nodeId(), ref(*encodedData), 0, nullptr);
@@ -553,7 +583,9 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
 
             BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("Request")
                               << LOG_DESC("Request blocks") << LOG_KV("from", from)
-                              << LOG_KV("to", to) << LOG_KV("curNum", m_config->blockNumber())
+                              << LOG_KV("to", to)
+                              << LOG_KV("interval", blockRequest->blockInterval())
+                              << LOG_KV("curNum", m_config->blockNumber())
                               << LOG_KV("peerArchived", _p->archivedBlockNumber())
                               << LOG_KV("peer", _p->nodeId()->shortHex())
                               << LOG_KV("maxRequestNumber", m_maxRequestNumber)
@@ -607,8 +639,10 @@ void BlockSync::maintainDownloadingQueue()
         return;
     }
 
+    // hold header to decrease make_shared overhead
+    auto topHeader = topBlock->blockHeaderConst();
     auto expectedBlock = executedBlock + 1;
-    auto topNumber = topBlock->blockHeader()->number();
+    auto topNumber = topHeader->number();
     if (topNumber > (expectedBlock))
     {
         BLKSYNC_LOG(WARNING) << LOG_DESC("Discontinuous block") << LOG_KV("topNumber", topNumber)
@@ -621,7 +655,7 @@ void BlockSync::maintainDownloadingQueue()
         return;
     }
     // execute the expected block
-    if (topBlock->blockHeader()->number() == (executedBlock + 1))
+    if (topHeader->number() == (executedBlock + 1))
     {
         auto block = m_downloadingQueue->top();
         // Note: the block maybe cleared here
@@ -654,35 +688,57 @@ void BlockSync::maintainBlockRequest()
         }
         while (!reqQueue->empty())
         {
+            // TODO: use mergeAndPop
             auto blocksReq = reqQueue->topAndPop();
-            BlockNumber numberLimit = blocksReq->fromNumber() + blocksReq->size();
-            // read archived block number to check the request range
-            // the number less than archived block number is not exist
             auto archivedBlockNumber = m_config->archiveBlockNumber();
-            BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download Request: response blocks")
-                               << LOG_KV("from", blocksReq->fromNumber())
-                               << LOG_KV("size", blocksReq->size()) << LOG_KV("to", numberLimit - 1)
-                               << LOG_KV("archivedNumber", archivedBlockNumber)
-                               << LOG_KV("peer", _p->nodeId()->shortHex());
             BlockNumber startNumber = std::max(blocksReq->fromNumber(), archivedBlockNumber);
-            for (BlockNumber number = startNumber; number < numberLimit; number++)
+            if (blocksReq->interval() > 0)
             {
-                fetchAndSendBlock(reqQueue, _p->nodeId(), number);
+                auto fromNumber = blocksReq->fromNumber();
+                auto blockCount = blocksReq->size();
+                auto interval = blocksReq->interval();
+                BLKSYNC_LOG(DEBUG)
+                    << LOG_BADGE("Download Request: response blocks") << LOG_KV("from", fromNumber)
+                    << LOG_KV("size", blockCount) << LOG_KV("interval", interval);
+                for (size_t i = 0; i < blockCount; i++)
+                {
+                    auto fetchNumber = fromNumber + i * interval;
+                    if (std::cmp_less(fetchNumber, startNumber))
+                    {
+                        continue;
+                    }
+                    fetchAndSendBlock(_p->nodeId(), fetchNumber);
+                }
+            }
+            else
+            {
+                BlockNumber numberLimit = blocksReq->fromNumber() + blocksReq->size();
+                // read archived block number to check the request range
+                // the number less than archived block number is not exist
+                BLKSYNC_LOG(DEBUG)
+                    << LOG_BADGE("Download Request: response blocks")
+                    << LOG_KV("from", blocksReq->fromNumber()) << LOG_KV("size", blocksReq->size())
+                    << LOG_KV("to", numberLimit - 1)
+                    << LOG_KV("archivedNumber", archivedBlockNumber)
+                    << LOG_KV("peer", _p->nodeId()->shortHex());
+                for (BlockNumber number = startNumber; number < numberLimit; number++)
+                {
+                    fetchAndSendBlock(_p->nodeId(), number);
+                }
             }
         }
+        m_signalled.notify_all();
         return true;
     });
 }
 
-void BlockSync::fetchAndSendBlock(
-    DownloadRequestQueue::Ptr _reqQueue, PublicPtr _peer, BlockNumber _number)
+void BlockSync::fetchAndSendBlock(PublicPtr const& _peer, BlockNumber _number)
 {
     // only fetch blockHeader and transactions
     auto blockFlag = HEADER | TRANSACTIONS;
     auto self = weak_from_this();
     m_config->ledger()->asyncGetBlockDataByNumber(_number, blockFlag,
-        [self, _reqQueue = std::move(_reqQueue), _peer = std::move(_peer), _number](
-            Error::Ptr _error, Block::Ptr _block) {
+        [self, _peer = std::move(_peer), _number](auto&& _error, Block::Ptr _block) {
             if (_error != nullptr)
             {
                 BLKSYNC_LOG(WARNING)

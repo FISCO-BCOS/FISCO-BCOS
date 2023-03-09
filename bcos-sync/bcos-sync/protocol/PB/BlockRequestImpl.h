@@ -22,9 +22,7 @@
 #include "bcos-sync/interfaces/BlockRequestInterface.h"
 #include "bcos-sync/protocol/PB/BlockSyncMsgImpl.h"
 #include "bcos-sync/utilities/Common.h"
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockRequestImpl : public BlockRequestInterface, public BlockSyncMsgImpl
 {
@@ -50,5 +48,4 @@ protected:
         m_syncMessage = _syncMessage;
     }
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync
