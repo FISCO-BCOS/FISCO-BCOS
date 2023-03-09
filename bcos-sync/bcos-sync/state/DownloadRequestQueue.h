@@ -39,7 +39,7 @@ public:
     size_t interval() const noexcept { return m_interval; }
     bcos::protocol::BlockNumber toNumber() const noexcept
     {
-        return (m_interval == 0) ? (protocol::BlockNumber)m_fromNumber + m_size :
+        return (m_interval == 0) ? (protocol::BlockNumber)m_fromNumber + m_size - 1 :
                                    (protocol::BlockNumber)m_fromNumber + (m_size - 1) * m_interval;
     }
 

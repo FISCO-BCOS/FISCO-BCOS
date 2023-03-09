@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(testNonSMRequestAndDownloadBlock)
     testComplicatedCase(cryptoSuite);
 }
 
-BOOST_AUTO_TEST_CASE(testDownloadQueueMerge)
+BOOST_AUTO_TEST_CASE(testDownloadQueueTopMerge)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -287,6 +287,46 @@ BOOST_AUTO_TEST_CASE(testDownloadQueueMerge)
     BOOST_CHECK(request->size() == 2);
     BOOST_CHECK(request->fromNumber() == 10);
     BOOST_CHECK(request->interval() == 0);
+}
+
+BOOST_AUTO_TEST_CASE(testDownloadQueueMerge)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto gateWay = std::make_shared<FakeGateWay>();
+    BlockNumber maxBlock = 10;
+    auto newerPeer = std::make_shared<SyncFixture>(cryptoSuite, gateWay, (maxBlock + 1));
+
+    DownloadRequestQueue::Ptr queue = std::make_shared<DownloadRequestQueue>(
+        newerPeer->syncConfig(), newerPeer->syncConfig()->nodeID());
+    // clang-format off
+    // "Tops" means that the merge result of all tops can merge at one turn
+    // Example:
+    // top[x] (f, s, it)   range            merged range
+    // top[0] (1, 3, 3)    [1, 4, 7]        [1, 4, 7]
+    // top[1] (1, 4, 3)    [1, 4, 7, 10]    [1, 4, 7, 10]
+    // top[2] (2, 2)       [2,3]            [1,2,3,4,7,10]
+    // top[2] (4, 2, 3)    [4, 7]           [1,2,3,4,7,10]
+    // top[3] (7, 4, 3)    [7, 10, 13, 16]  [1,2,3,4,7,10,13,16]
+    // top[4] (16, 1, 3)   [16]             [1,2,3,4,7,10,13,16]
+    // top[5] (19, 1, 3)   [19]             [1,2,3,4,7,10,13,16,19]
+    // top[6] (20, 1, 3)   [20]             [1,2,3,4,7,10,13,16,19,20]
+    // top[7] (20, 1)      [20]             same
+    // top[8] (21, 2)      [21,22]          [1,2,3,4,7,10,13,16,19,20,21,22]
+    // clang-format on
+    queue->push(1, 3, 3);
+    queue->push(2, 2);
+    queue->push(4, 2, 3);
+    queue->push(1, 4, 3);
+    queue->push(16, 1, 3);
+    queue->push(7, 4, 3);
+    queue->push(20, 1, 3);
+    queue->push(19, 1, 3);
+    queue->push(20, 1);
+    queue->push(21, 2);
+    auto request = queue->mergeAndPop();
+    BOOST_CHECK(request.size() == 12);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -688,9 +688,23 @@ void BlockSync::maintainBlockRequest()
         }
         while (!reqQueue->empty())
         {
-            // TODO: use mergeAndPop
-            auto blocksReq = reqQueue->topAndPop();
             auto archivedBlockNumber = m_config->archiveBlockNumber();
+
+            auto fetchSet = reqQueue->mergeAndPop();
+            for (const auto& number : fetchSet)
+            {
+                if (std::cmp_less(number, archivedBlockNumber))
+                {
+                    continue;
+                }
+                fetchAndSendBlock(_p->nodeId(), number);
+            }
+            BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download Request: response blocks")
+                               << LOG_KV("size", fetchSet.size())
+                               << LOG_KV("archivedNumber", archivedBlockNumber)
+                               << LOG_KV("peer", _p->nodeId()->shortHex());
+#if 0
+            auto blocksReq = reqQueue->topAndPop();
             BlockNumber startNumber = std::max(blocksReq->fromNumber(), archivedBlockNumber);
             if (blocksReq->interval() > 0)
             {
@@ -726,6 +740,7 @@ void BlockSync::maintainBlockRequest()
                     fetchAndSendBlock(_p->nodeId(), number);
                 }
             }
+#endif
         }
         m_signalled.notify_all();
         return true;

@@ -133,11 +133,11 @@ std::set<protocol::BlockNumber, std::less<>> DownloadRequestQueue::mergeAndPop()
     UpgradeGuard ulock(lock);
     std::set<BlockNumber, std::less<>> fetchSet{};
 
-    while (!m_reqQueue.empty() && fetchSet.size() <= 16)
+    while (!m_reqQueue.empty())
     {
         auto topReq = m_reqQueue.top();
-        for (BlockNumber i = topReq->fromNumber(); i <= topReq->toNumber();
-             i += (topReq->interval() == 0 ? 1 : topReq->interval()))
+        auto interval = (topReq->interval() == 0 ? 1 : topReq->interval());
+        for (BlockNumber i = topReq->fromNumber(); i <= topReq->toNumber(); i += interval)
         {
             fetchSet.insert(i);
         }
