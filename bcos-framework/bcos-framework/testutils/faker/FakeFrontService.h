@@ -153,7 +153,7 @@ public:
         const std::string&, bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc) override
     {}
     // for gateway: useless here
-    void onReceiveMessage(const std::string&, NodeIDPtr, bytesConstRef, ReceiveMsgFunc) override {}
+    void onReceiveMessage(const std::string&, const NodeIDPtr&, bytesConstRef, ReceiveMsgFunc) override {}
     void asyncSendMessageByNodeIDs(
         int _moduleId, const std::vector<NodeIDPtr>& _nodeIdList, bytesConstRef _data) override
     {

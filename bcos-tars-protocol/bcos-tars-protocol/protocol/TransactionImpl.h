@@ -79,7 +79,7 @@ public:
     {
         return {m_inner()->sender.data(), m_inner()->sender.size()};
     }
-    void forceSender(bcos::bytes _sender) const override
+    void forceSender(const bcos::bytes& _sender) const override
     {
         m_inner()->sender.assign(_sender.begin(), _sender.end());
     }
