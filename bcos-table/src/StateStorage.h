@@ -160,7 +160,7 @@ public:
     void asyncGetRow(std::string_view tableView, std::string_view keyView,
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override
     {
-        auto [bucket, lock] = getBucket(tableView);
+        auto [bucket, lock] = getBucket(tableView, keyView);
         boost::ignore_unused(lock);
 
         auto it = bucket->container.template get<0>().find(std::make_tuple(tableView, keyView));
@@ -237,7 +237,7 @@ public:
 
         for (auto i = 0U; i < keys.size(); ++i)
         {
-            auto [bucket, lock] = getBucket(tableView);
+            auto [bucket, lock] = getBucket(tableView, keys[i]);
             boost::ignore_unused(lock);
 
             auto it = bucket->container.find(std::make_tuple(tableView, std::string_view(keys[i])));
@@ -316,7 +316,7 @@ public:
         ssize_t updatedCapacity = entry.size();
         std::optional<Entry> entryOld;
 
-        auto [bucket, lock] = getBucket(tableView);
+        auto [bucket, lock] = getBucket(tableView, keyView);
         boost::ignore_unused(lock);
 
         auto it = bucket->container.find(std::make_tuple(tableView, keyView));
@@ -442,7 +442,7 @@ public:
         for (const auto& change : recoder)
         {
             ssize_t updateCapacity = 0;
-            auto [bucket, lock] = getBucket(change.table);
+            auto [bucket, lock] = getBucket(change.table, std::string_view(change.key));
             boost::ignore_unused(lock);
 
             auto it = bucket->container.find(
@@ -519,7 +519,7 @@ private:
             entry.setStatus(Entry::NORMAL);
             auto updateCapacity = entry.size();
 
-            auto [bucket, lock] = getBucket(table);
+            auto [bucket, lock] = getBucket(table, key);
             auto it = bucket->container.find(std::make_tuple(table, key));
 
             if (it == bucket->container.end())
@@ -584,9 +584,10 @@ private:
     uint32_t m_blockVersion = 0;
     std::vector<Bucket> m_buckets;
 
-    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(std::string_view table)
+    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(const std::string_view& table, const std::string_view& key)
     {
         auto hash = std::hash<std::string_view>{}(table);
+        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
         auto index = hash % m_buckets.size();
 
         auto& bucket = m_buckets[index];
