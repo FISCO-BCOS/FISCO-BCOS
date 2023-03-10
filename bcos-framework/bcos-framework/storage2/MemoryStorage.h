@@ -178,6 +178,7 @@ public:
     MemoryStorage(MemoryStorage&&) noexcept = default;
     MemoryStorage& operator=(const MemoryStorage&) = delete;
     MemoryStorage& operator=(MemoryStorage&&) noexcept = default;
+    ~MemoryStorage() noexcept = default;
 
     void setMaxCapacity(int64_t capacity) requires withMRU { m_maxCapacity = capacity; }
 
@@ -494,6 +495,29 @@ public:
         }
 
         return {};
+    }
+
+    void merge(MemoryStorage& from)
+    {
+        for (auto tuple : RANGES::zip_view(m_buckets, from.m_buckets))
+        {
+            auto& [bucket, fromBucket] = tuple;
+            Lock toLock(bucket.mutex);
+            Lock fromLock(fromBucket.mutex);
+
+            auto& index = bucket.container.template get<0>();
+            auto& fromIndex = fromBucket.container.template get<0>();
+            while (!fromIndex.empty())
+            {
+                auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
+                if (!merged)
+                {
+                    auto erasedIt = index.erase(it);
+                    auto fromNode = fromIndex.extract(fromIndex.begin());
+                    index.insert(erasedIt, std::move(fromNode));
+                }
+            }
+        }
     }
 };
 

@@ -113,8 +113,8 @@ task::Task<void> storage2MultiThreadWrite(auto& storage, RANGES::range auto cons
             for (auto i = range.begin(); i != range.end(); ++i)
             {
                 auto const& item = dataSet[i];
-                storage.write(storage2::single(std::get<0>(item)),
-                    storage2::single(std::get<1>(item)));  // Here is valid because storage returns
+                storage.write(storage2::singleView(std::get<0>(item)),
+                    storage2::singleView(std::get<1>(item)));  // Here is valid because storage returns
                                                            // AwaitableValue
             }
         });

@@ -5,6 +5,7 @@
 #include "SchedulerBaseImpl.h"
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Wait.h>
+#include <oneapi/tbb/task_group.h>
 #include <tbb/parallel_pipeline.h>
 #include <iterator>
 #include <range/v3/range/concepts.hpp>
@@ -68,22 +69,8 @@ private:
 
     task::Task<void> mergeStorage(auto& fromStorage, auto& toStorage)
     {
-        auto it = co_await fromStorage.seek(storage2::STORAGE_BEGIN);
-        size_t count = 0;
-        while (co_await it.next())
-        {
-            if (co_await it.hasValue())
-            {
-                co_await storage2::writeOne(toStorage, co_await it.key(), co_await it.value());
-            }
-            else
-            {
-                co_await storage2::removeOne(toStorage, co_await it.key());
-            }
-            ++count;
-        }
-
-        PARALLEL_SCHEDULER_LOG(DEBUG) << "Merged " << count << " entries";
+        toStorage.merge(fromStorage);
+        co_return;
     }
 
 public:
@@ -116,6 +103,7 @@ public:
             auto currentChunk = chunkIt;
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
+
             tbb::parallel_pipeline(m_maxThreads,
                 tbb::make_filter<void,
                     std::optional<std::tuple<RANGES::range_value_t<decltype(chunks)>, int64_t>>>(

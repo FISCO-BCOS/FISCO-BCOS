@@ -275,35 +275,37 @@ public:
                 callback(nullptr,
                     std::make_shared<ledger::LedgerConfig>(co_await self->m_ledger.getConfig()));
 
+                auto blockHeader = result.m_block->blockHeaderConst();
                 // Notify the result
                 auto submitResults =
                     RANGES::iota_view<uint64_t, uint64_t>(0L, result.m_block->receiptsSize()) |
-                    RANGES::views::transform([&result, self = self](uint64_t index)
-                                                 -> protocol::TransactionSubmitResult::Ptr {
-                        auto transaction = result.m_transactions[index];
-                        auto receipt = result.m_block->receipt(index);
+                    RANGES::views::transform(
+                        [&](uint64_t index) -> protocol::TransactionSubmitResult::Ptr {
+                            auto& transaction = result.m_transactions[index];
+                            auto receipt = result.m_block->receipt(index);
 
-                        auto submitResult =
-                            self->m_transactionSubmitResultFactory.createTxSubmitResult();
-                        submitResult->setStatus(receipt->status());
-                        submitResult->setTxHash(result.m_block->transactionHash(index));
-                        submitResult->setBlockHash(result.m_block->blockHeaderConst()->hash());
-                        submitResult->setTransactionIndex(index);
-                        submitResult->setNonce(transaction->nonce());
-                        submitResult->setTransactionReceipt(
-                            std::const_pointer_cast<bcos::protocol::TransactionReceipt>(receipt));
-                        submitResult->setSender(std::string(transaction->sender()));
-                        submitResult->setTo(std::string(transaction->to()));
+                            auto submitResult =
+                                self->m_transactionSubmitResultFactory.createTxSubmitResult();
+                            submitResult->setStatus(receipt->status());
+                            submitResult->setTxHash(result.m_block->transactionHash(index));
+                            submitResult->setBlockHash(blockHeader->hash());
+                            submitResult->setTransactionIndex(index);
+                            submitResult->setNonce(transaction->nonce());
+                            submitResult->setTransactionReceipt(
+                                std::const_pointer_cast<bcos::protocol::TransactionReceipt>(
+                                    receipt));
+                            submitResult->setSender(std::string(transaction->sender()));
+                            submitResult->setTo(std::string(transaction->to()));
 
-                        return submitResult;
-                    }) |
+                            return submitResult;
+                        }) |
                     RANGES::to<std::vector<protocol::TransactionSubmitResult::Ptr>>();
 
                 auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
                     std::move(submitResults));
                 self->m_blockNumberNotifier(blockHeader->number());
                 self->m_transactionNotifier(blockHeader->number(), std::move(submitResultsPtr),
-                    []([[maybe_unused]] const Error::Ptr& error) {
+                    [](const Error::Ptr& error) {
                         if (error)
                         {
                             BASELINE_SCHEDULER_LOG(WARNING)

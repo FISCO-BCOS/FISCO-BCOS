@@ -157,16 +157,18 @@ BOOST_AUTO_TEST_CASE(insert)
         newEntry.set("Hello world!");
 
         MockStorage mock;
-        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
-            storage2::single(std::move(newEntry)));
+        co_await mock.write(
+            RANGES::single_view(std::tuple<std::string, std::string>("table", "key")),
+            RANGES::single_view(std::move(newEntry)));
 
         storage::Entry newEntry2;
         newEntry2.set("fine!");
-        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key2")),
-            storage2::single(std::move(newEntry2)));
+        co_await mock.write(
+            RANGES::single_view(std::tuple<std::string, std::string>("table", "key2")),
+            RANGES::single_view(std::move(newEntry2)));
 
         auto result = co_await mock.read(
-            storage2::single(std::tuple<std::string_view, std::string_view>("table", "key2")));
+            RANGES::single_view(std::tuple<std::string_view, std::string_view>("table", "key2")));
 
         co_await result.next();
         BOOST_REQUIRE(co_await result.hasValue());
@@ -186,16 +188,18 @@ BOOST_AUTO_TEST_CASE(update)
         newEntry.set("Hello world!");
 
         MockStorage mock;
-        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
-            storage2::single(std::move(newEntry)));
+        co_await mock.write(
+            RANGES::single_view(std::tuple<std::string, std::string>("table", "key")),
+            RANGES::single_view(std::move(newEntry)));
 
         storage::Entry newEntry2;
         newEntry2.set("fine!");
-        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
-            storage2::single(std::move(newEntry2)));
+        co_await mock.write(
+            RANGES::single_view(std::tuple<std::string, std::string>("table", "key")),
+            RANGES::single_view(std::move(newEntry2)));
 
         auto result = co_await mock.read(
-            storage2::single(std::tuple<std::string_view, std::string_view>("table", "key")));
+            RANGES::single_view(std::tuple<std::string_view, std::string_view>("table", "key")));
 
         co_await result.next();
         BOOST_REQUIRE(co_await result.hasValue());
@@ -210,14 +214,15 @@ BOOST_AUTO_TEST_CASE(remove)
         newEntry.set("Hello world!");
 
         MockStorage mock;
-        co_await mock.write(storage2::single(std::tuple<std::string, std::string>("table", "key")),
-            storage2::single((std::move(newEntry))));
+        co_await mock.write(
+            RANGES::single_view(std::tuple<std::string, std::string>("table", "key")),
+            RANGES::single_view((std::move(newEntry))));
 
         co_await mock.remove(
-            storage2::single((std::tuple<std::string_view, std::string_view>("table", "key"))));
+            RANGES::single_view((std::tuple<std::string_view, std::string_view>("table", "key"))));
 
         auto result = co_await mock.read(
-            storage2::single((std::tuple<std::string_view, std::string_view>("table", "key"))));
+            RANGES::single_view((std::tuple<std::string_view, std::string_view>("table", "key"))));
 
         co_await result.next();
         BOOST_REQUIRE(!co_await result.hasValue());

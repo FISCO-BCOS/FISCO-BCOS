@@ -57,23 +57,14 @@ public:
         return m_pool->query(m_stringPoolID);
     }
 
-    std::weak_ordering operator<=>(const StringID& rhs) const
+    auto operator<=>(const StringID& rhs) const
     {
-        if (m_pool == nullptr)
+        if (m_pool == nullptr || rhs.m_pool == nullptr)
         {
-            if (rhs.m_pool == nullptr)
-            {
-                return std::weak_ordering::equivalent;
-            }
-            return std::weak_ordering::less;
+            return m_pool <=> rhs.m_pool;
         }
 
-        if (rhs.m_pool == nullptr)
-        {
-            return std::weak_ordering::greater;
-        }
-
-        if (std::addressof(m_pool) == std::addressof(rhs.m_pool))
+        if (m_pool == rhs.m_pool)
         {
             return m_stringPoolID <=> rhs.m_stringPoolID;
         }
@@ -83,12 +74,12 @@ public:
 
     bool operator==(const StringID& rhs) const
     {
-        if (m_pool == nullptr)
+        if (m_pool == nullptr || rhs.m_pool == nullptr)
         {
-            return rhs.m_pool == nullptr;
+            return true;
         }
 
-        if (std::addressof(m_pool) == std::addressof(rhs.m_pool))
+        if (m_pool == rhs.m_pool)
         {
             return m_stringPoolID == rhs.m_stringPoolID;
         }

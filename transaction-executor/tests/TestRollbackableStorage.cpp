@@ -4,6 +4,7 @@
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -28,11 +29,13 @@ BOOST_AUTO_TEST_CASE(addRollback)
         auto point = rollbackableStorage.current();
         storage::Entry entry;
         entry.set("OK!");
-        co_await rollbackableStorage.write(single(StateKey{tableID, "Key1"}), single(entry));
+        co_await rollbackableStorage.write(
+            singleView(StateKey{tableID, "Key1"}), singleView(entry));
 
         storage::Entry entry2;
         entry2.set("OK2!");
-        co_await rollbackableStorage.write(single(StateKey{tableID, "Key2"}), single(entry2));
+        co_await rollbackableStorage.write(
+            singleView(StateKey{tableID, "Key2"}), singleView(entry2));
 
         // Check the entry exists
         std::vector<StateKey> keys{
@@ -76,11 +79,13 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         auto point = rollbackableStorage.current();
         storage::Entry entry;
         entry.set("OK!");
-        co_await rollbackableStorage.write(single(StateKey{tableID, "Key1"}), single(entry));
+        co_await rollbackableStorage.write(
+            singleView(StateKey{tableID, "Key1"}), singleView(entry));
 
         storage::Entry entry2;
         entry2.set("OK2!");
-        co_await rollbackableStorage.write(single(StateKey{tableID, "Key2"}), single(entry2));
+        co_await rollbackableStorage.write(
+            singleView(StateKey{tableID, "Key2"}), singleView(entry2));
 
         // Check the entry exists
         std::vector<StateKey> keys{
@@ -110,6 +115,43 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         BOOST_CHECK_EQUAL(count2, 0);
 
         co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(equal)
+{
+    task::syncWait([]() -> task::Task<void> {
+        storage2::string_pool::FixedStringPool pool;
+        storage2::memory_storage::MemoryStorage<transaction_executor::StateKey, int,
+            storage2::memory_storage::ORDERED>
+            storage;
+
+        co_await storage.write(RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place,
+                                   makeStringID(pool, "table"), std::string_view("0")),
+            RANGES::single_view(0));
+        co_await storage.write(RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place,
+                                   makeStringID(pool, "table"), std::string_view("1")),
+            RANGES::single_view(1));
+        co_await storage.write(RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place,
+                                   makeStringID(pool, "table"), std::string_view("2")),
+            RANGES::single_view(2));
+
+        auto it = co_await storage.read(
+            RANGES::iota_view<int, int>(0, 3) | RANGES::views::transform([&pool](int num) {
+                return StateKey(makeStringID(pool, "table"), boost::lexical_cast<std::string>(num));
+            }));
+        int i = 0;
+        while (co_await it.next())
+        {
+            auto& key = co_await it.key();
+            auto& value = co_await it.value();
+            auto view = std::get<1>(key).toStringView();
+            auto str = boost::lexical_cast<std::string>(i);
+            BOOST_CHECK_EQUAL(view, str);
+            BOOST_CHECK_EQUAL(value, i);
+            ++i;
+        }
+        BOOST_CHECK_EQUAL(i, 3);
     }());
 }
 

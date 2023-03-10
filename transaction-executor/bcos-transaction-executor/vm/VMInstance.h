@@ -56,7 +56,7 @@ public:
             if (instance->set_option != nullptr)
             {
                 instance->set_option(instance, "advanced", "");
-                // m_instance->set_option(m_instance, "trace", "");
+                instance->set_option(instance, "trace", "");
                 // m_instance->set_option(m_instance, "baseline", "");
             }
         }
@@ -103,6 +103,9 @@ inline void releaseResult(evmc_result& result)
     if (result.release)
     {
         result.release(std::addressof(result));
+        result.release = nullptr;
+        result.output_data = nullptr;
+        result.output_size = 0;
     }
 }
 

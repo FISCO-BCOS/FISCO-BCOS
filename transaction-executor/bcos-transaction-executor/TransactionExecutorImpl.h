@@ -79,7 +79,7 @@ public:
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
-                .gas = 3000 * 10000,  // TODO: use arg
+                .gas = 30000 * 10000,  // TODO: use arg
                 .recipient = toAddress,
                 .destination_ptr = nullptr,
                 .destination_len = 0,
@@ -94,8 +94,9 @@ public:
             std::uninitialized_copy(
                 transaction.sender().begin(), transaction.sender().end(), evmcMessage.sender.bytes);
 
+            int64_t seq = 0;
             HostContext hostContext(vmFactory, rollbackableStorage, m_tableNamePool, blockHeader,
-                evmcMessage, evmcMessage.sender, contextID, 0);
+                evmcMessage, evmcMessage.sender, contextID, seq);
             auto evmcResult = co_await hostContext.execute();
             struct Defer
             {

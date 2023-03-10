@@ -27,6 +27,7 @@ public:
 
     Rollbackable(Storage& storage) : m_storage(storage) {}
 
+    Storage& storage() { return m_storage; }
     Savepoint current() const { return static_cast<int64_t>(m_records.size()); }
     task::Task<void> rollback(Savepoint savepoint)
     {
@@ -36,12 +37,12 @@ public:
             auto& record = m_records[index - 1];
             if (record.oldValue)
             {
-                co_await m_storage.write(
-                    storage2::single(record.key), storage2::single(*record.oldValue));
+                co_await m_storage.write(RANGES::single_view(record.key),
+                    RANGES::single_view(std::move(*record.oldValue)));
             }
             else
             {
-                co_await m_storage.remove(storage2::single(record.key));
+                co_await m_storage.remove(RANGES::single_view(record.key));
             }
             m_records.pop_back();
         }
@@ -53,12 +54,6 @@ public:
     {
         co_return co_await m_storage.read(keys);
     }
-
-    // auto seek(auto const& key)
-    //     -> task::Task<task::AwaitableReturnType<decltype(m_storage.seek(key))>>
-    // {
-    //     co_return co_await m_storage.seek(key);
-    // }
 
     auto write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.write(

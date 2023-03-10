@@ -97,7 +97,7 @@ struct MockConflictExecutor
 
         StateKey key1{makeStringID(m_tableNamePool, "t_test"), std::string_view("key1")};
         // Read first and +1
-        auto it = co_await m_storage.read(storage2::single(key1));
+        auto it = co_await m_storage.read(storage2::singleView(key1));
         co_await it.next();
 
         if (co_await it.hasValue())
@@ -110,10 +110,10 @@ struct MockConflictExecutor
         }
         storage::Entry entry;
         entry.set(boost::lexical_cast<std::string>(inputNum));
-        co_await m_storage.write(storage2::single(key1), storage2::single(entry));
+        co_await m_storage.write(storage2::singleView(key1), storage2::singleView(entry));
 
         StateKey key2{makeStringID(m_tableNamePool, "t_test"), std::string_view("key2")};
-        auto it2 = co_await m_storage.read(storage2::single(key2));
+        auto it2 = co_await m_storage.read(storage2::singleView(key2));
         co_await it2.next();
         if (co_await it2.hasValue())
         {
@@ -125,7 +125,7 @@ struct MockConflictExecutor
             storage::Entry entry2;
             entry2.set(boost::lexical_cast<std::string>(newNum));
 
-            co_await m_storage.write(storage2::single(key2), storage2::single(entry2));
+            co_await m_storage.write(storage2::singleView(key2), storage2::singleView(entry2));
         }
         else
         {
@@ -133,7 +133,7 @@ struct MockConflictExecutor
             storage::Entry entry2;
             entry2.set(boost::lexical_cast<std::string>(0));
 
-            co_await m_storage.write(storage2::single(key2), storage2::single(entry2));
+            co_await m_storage.write(storage2::singleView(key2), storage2::singleView(entry2));
         }
 
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
@@ -174,14 +174,14 @@ BOOST_AUTO_TEST_CASE(conflict)
         StateKey key1{makeStringID(tableNamePool, "t_test"), std::string_view("key1")};
         StateKey key2{makeStringID(tableNamePool, "t_test"), std::string_view("key2")};
 
-        auto it = co_await mutableStorage.read(storage2::single(key1));
+        auto it = co_await mutableStorage.read(storage2::singleView(key1));
         co_await it.next();
         BOOST_CHECK(co_await it.hasValue());
         auto& entry1 = co_await it.value();
         auto result1 = boost::lexical_cast<int>(entry1.get());
         BOOST_CHECK_EQUAL(result1, count - 1);
 
-        auto it2 = co_await mutableStorage.read(storage2::single(key2));
+        auto it2 = co_await mutableStorage.read(storage2::singleView(key2));
         co_await it2.next();
         BOOST_REQUIRE(co_await it2.hasValue());
         auto& entry2 = co_await it2.value();

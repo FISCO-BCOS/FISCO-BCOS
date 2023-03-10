@@ -48,7 +48,7 @@ public:
         tbb::combinable<bcos::h256> combinableHash;
 
         auto currentRangeIt = RANGES::begin(range);
-        tbb::parallel_pipeline(std::thread::hardware_concurrency() * 4,
+        tbb::parallel_pipeline(std::thread::hardware_concurrency(),
             tbb::make_filter<void,
                 std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
                     RANGES::begin(range), RANGES::end(range)))>>(tbb::filter_mode::serial_in_order,
@@ -73,36 +73,34 @@ public:
                 }) &
                 tbb::make_filter<std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(
                                          range))>(RANGES::begin(range), RANGES::end(range)))>,
-                    void>(tbb::filter_mode::parallel, [&combinableHash, &hashImpl, &blockHeader](
-                                                          auto const& entryRange) {
-                    if (!entryRange)
-                    {
-                        return;
-                    }
+                    void>(tbb::filter_mode::parallel,
+                    [&combinableHash, &hashImpl, &blockHeader](auto const& entryRange) {
+                        if (!entryRange)
+                        {
+                            return;
+                        }
 
-                    auto& entryHash = combinableHash.local();
-                    for (auto const& keyValuePair : *entryRange)
-                    {
-                        auto& [key, entry] = keyValuePair;
-                        auto& [tableName, keyName] = *key;
-                        auto tableNameView = *tableName;
-                        auto keyView = keyName.toStringView();
-                        if (entry)
+                        auto& entryHash = combinableHash.local();
+                        for (auto const& keyValuePair : *entryRange)
                         {
-                            entryHash ^= (hashImpl.hash(tableNameView) ^ hashImpl.hash(keyView) ^
-                                          entry->hash(tableNameView, keyView, hashImpl,
-                                              blockHeader.version()));
+                            auto& [key, entry] = keyValuePair;
+                            auto& [tableName, keyName] = *key;
+                            auto tableNameView = *tableName;
+                            auto keyView = keyName.toStringView();
+                            if (entry)
+                            {
+                                entryHash ^= entry->hash(
+                                    tableNameView, keyView, hashImpl, blockHeader.version());
+                            }
+                            else
+                            {
+                                storage::Entry deleteEntry;
+                                deleteEntry.setStatus(storage::Entry::DELETED);
+                                entryHash ^= deleteEntry.hash(
+                                    tableNameView, keyView, hashImpl, blockHeader.version());
+                            }
                         }
-                        else
-                        {
-                            storage::Entry deleteEntry;
-                            deleteEntry.setStatus(storage::Entry::DELETED);
-                            entryHash ^= (hashImpl.hash(tableNameView) ^ hashImpl.hash(keyView) ^
-                                          deleteEntry.hash(tableNameView, keyView, hashImpl,
-                                              blockHeader.version()));
-                        }
-                    }
-                }));
+                    }));
         m_multiLayerStorage.pushMutableToImmutableFront();
 
         co_return combinableHash.combine(
