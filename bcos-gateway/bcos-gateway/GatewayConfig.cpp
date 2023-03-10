@@ -14,8 +14,10 @@
 #include <json/json.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <fstream>
 #include <limits>
 #include <string>
+#include <vector>
 
 using namespace bcos;
 using namespace security;
@@ -823,8 +825,9 @@ void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _
         certBlacklistSection = "certificate_blacklist";
     }
 
-    bool enableBlacklist{false};
     // CRL means certificate rejected list, CRL optional in config.ini
+    bool enableBlacklist{false};
+    std::set<std::string> certBlacklist;
     if (_pt.get_child_optional(certBlacklistSection))
     {
         for (auto it : _pt.get_child(certBlacklistSection))
@@ -841,8 +844,8 @@ void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _
                         (false == m_smSSL ? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
                     if (true == isNodeIDValid)
                     {
-                        m_enableBlacklist = true;
-                        m_certBlacklist.emplace(std::move(nodeID));
+                        enableBlacklist = true;
+                        certBlacklist.emplace(std::move(nodeID));
                     }
                     else
                     {
@@ -861,6 +864,11 @@ void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _
             }
         }
     }
+
+    bcos::Guard l(x_certBlacklist);
+
+    m_enableBlacklist = enableBlacklist;
+    m_certBlacklist.swap(certBlacklist);
 }
 
 void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _pt)
@@ -871,7 +879,8 @@ void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _
         certWhitelistSection = "certificate_whitelist";
     }
 
-    bool enableWhiteList{false};
+    bool enableWhitelist{false};
+    std::set<std::string> certWhitelist;
     // CAL means certificate accepted list, CAL optional in config.ini
     if (_pt.get_child_optional(certWhitelistSection))
     {
@@ -889,8 +898,8 @@ void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _
                         (false == m_smSSL ? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
                     if (true == isNodeIDValid)
                     {
-                        m_enableWhitelist = true;
-                        m_certWhitelist.emplace(std::move(nodeID));
+                        enableWhitelist = true;
+                        certWhitelist.emplace(std::move(nodeID));
                     }
                     else
                     {
@@ -909,6 +918,11 @@ void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _
             }
         }
     }
+
+    bcos::Guard l(x_certWhitelist);
+
+    m_enableWhitelist = enableWhitelist;
+    m_certWhitelist.swap(certWhitelist);
 }
 
 void GatewayConfig::checkFileExist(const std::string& _path)
@@ -921,4 +935,200 @@ void GatewayConfig::checkFileExist(const std::string& _path)
                                                   " maybe file not exist, path: " +
                                                   _path));
     }
+}
+
+void GatewayConfig::loadPeerBlacklist()
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::ini_parser::read_ini(m_configFile, pt);
+
+    initPeerBlacklistConfig(pt);
+}
+
+void GatewayConfig::loadPeerWhitelist()
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::ini_parser::read_ini(m_configFile, pt);
+
+    initPeerWhitelistConfig(pt);
+}
+
+void GatewayConfig::updatePeerBlacklistAndConfigFile(
+    const std::set<std::string>& _strList, const bool _enable)
+{
+    // check whether the format of node id is right
+    auto nodeIdLength = (false == m_smSSL ? h2048::SIZE * 2 : h512::SIZE * 2);
+    for (auto& str : _strList)
+    {
+        GATEWAY_CONFIG_LOG(INFO) << LOG_KV("black peer", str);
+
+        bool result = (false == m_smSSL ? isNodeIDOk<h2048>(str) : isNodeIDOk<h512>(str));
+        if (false == result)
+        {
+            GATEWAY_CONFIG_LOG(ERROR)
+                << LOG_DESC("Node id format error, current length: " + std::to_string(str.size()) +
+                            ", excepted length: " + std::to_string(nodeIdLength));
+            BOOST_THROW_EXCEPTION(
+                NodeIdFormatError() << errinfo_comment(
+                    "Node id format error, current length: " + std::to_string(str.size()) +
+                    ", excepted length: " + std::to_string(nodeIdLength)));
+        }
+    }
+
+    // read all lines
+    std::shared_ptr<std::vector<std::string>> contents = bcos::readAllLinesFromFile(m_configFile);
+    if (nullptr == contents || true == contents->empty())
+    {
+        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("maybe file not exist, path: " + m_configFile);
+        BOOST_THROW_EXCEPTION(
+            FileReadError() << errinfo_comment("maybe file not exist, path: " + m_configFile));
+    }
+
+    auto crlTitlePosIter = std::find(contents->begin(), contents->end(), "[certificate_blacklist]");
+    if (contents->end() != crlTitlePosIter)
+    {
+        std::vector<std::string>::iterator nextTitlePosIter{crlTitlePosIter + 1};
+        while (nextTitlePosIter != contents->end() &&
+               (std::string::npos == nextTitlePosIter->find("[") ||
+                   std::string::npos == nextTitlePosIter->find("]")))
+        {
+            ++nextTitlePosIter;
+        }
+        contents->erase(crlTitlePosIter + 1, nextTitlePosIter);
+    }
+
+    if (contents->end() == crlTitlePosIter)
+    {
+        contents->emplace(contents->end(), "[certificate_blacklist]");
+    }
+    else
+    {
+        crlTitlePosIter = std::find(contents->begin(), contents->end(), "[certificate_blacklist]");
+    }
+    auto insIter = contents->emplace(crlTitlePosIter + 1,
+        "    ; crl.0 should be nodeid, nodeid's length is " + std::to_string(nodeIdLength));
+    if (true == _strList.empty())
+    {
+        insIter = contents->emplace(insIter + 1, "    ;crl.0=");
+    }
+    else
+    {
+        auto offset{0};
+        for (auto& str : _strList)
+        {
+            insIter =
+                contents->emplace(insIter + 1, "    crl." + std::to_string(offset++) + "=" + str);
+        }
+    }
+    contents->emplace(insIter + 1, "");
+
+    for (auto iter = contents->end() - 1; iter >= contents->begin(); --iter)
+    {
+        if (false == iter->empty())
+        {
+            contents->erase(iter + 1, contents->end());
+            break;
+        }
+    }
+
+    if (false == bcos::writeAllLinesToFile("./config.ini", contents))
+    {
+        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("can not create file, path: ./config.ini");
+        BOOST_THROW_EXCEPTION(
+            FileWriteError() << errinfo_comment("can not create file, path: ./config.ini"));
+    }
+
+    std::rename("./config.ini", m_configFile.c_str());
+
+    loadPeerBlacklist();
+}
+
+void GatewayConfig::updatePeerWhitelistAndConfigFile(
+    const std::set<std::string>& _strList, const bool _enable)
+{
+    // check whether the format of node id is right
+    auto nodeIdLength = (false == m_smSSL ? h2048::SIZE * 2 : h512::SIZE * 2);
+    for (auto& str : _strList)
+    {
+        GATEWAY_CONFIG_LOG(INFO) << LOG_KV("white peer", str);
+
+        bool result = (false == m_smSSL ? isNodeIDOk<h2048>(str) : isNodeIDOk<h512>(str));
+        if (false == result)
+        {
+            GATEWAY_CONFIG_LOG(ERROR)
+                << LOG_DESC("Node id format error, current length: " + std::to_string(str.size()) +
+                            ", excepted length: " + std::to_string(nodeIdLength));
+            BOOST_THROW_EXCEPTION(
+                NodeIdFormatError() << errinfo_comment(
+                    "Node id format error, current length: " + std::to_string(str.size()) +
+                    ", excepted length: " + std::to_string(nodeIdLength)));
+        }
+    }
+
+    // read all lines
+    std::shared_ptr<std::vector<std::string>> contents = bcos::readAllLinesFromFile(m_configFile);
+    if (nullptr == contents || true == contents->empty())
+    {
+        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("maybe file not exist, path: " + m_configFile);
+        BOOST_THROW_EXCEPTION(
+            FileReadError() << errinfo_comment("maybe file not exist, path: " + m_configFile));
+    }
+
+    auto calTitlePosIter = std::find(contents->begin(), contents->end(), "[certificate_whitelist]");
+    if (contents->end() != calTitlePosIter)
+    {
+        std::vector<std::string>::iterator nextTitlePosIter{calTitlePosIter + 1};
+        while (nextTitlePosIter != contents->end() &&
+               (std::string::npos == nextTitlePosIter->find("[") ||
+                   std::string::npos == nextTitlePosIter->find("]")))
+        {
+            ++nextTitlePosIter;
+        }
+        contents->erase(calTitlePosIter + 1, nextTitlePosIter);
+    }
+
+    if (contents->end() == calTitlePosIter)
+    {
+        contents->emplace(contents->end(), "[certificate_whitelist]");
+    }
+    else
+    {
+        calTitlePosIter = std::find(contents->begin(), contents->end(), "[certificate_whitelist]");
+    }
+    auto insIter = contents->emplace(calTitlePosIter + 1,
+        "    ; cal.0 should be nodeid, nodeid's length is " + std::to_string(nodeIdLength));
+    if (true == _strList.empty())
+    {
+        insIter = contents->emplace(insIter + 1, "    ;cal.0=");
+    }
+    else
+    {
+        auto offset{0};
+        for (auto& str : _strList)
+        {
+            insIter =
+                contents->emplace(insIter + 1, "    cal." + std::to_string(offset++) + "=" + str);
+        }
+    }
+    contents->emplace(insIter + 1, "");
+
+    for (auto iter = contents->end() - 1; iter >= contents->begin(); --iter)
+    {
+        if (false == iter->empty())
+        {
+            contents->erase(iter + 1, contents->end());
+            break;
+        }
+    }
+
+    if (false == bcos::writeAllLinesToFile("./config.ini", contents))
+    {
+        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("can not create file, path: ./config.ini");
+        BOOST_THROW_EXCEPTION(
+            FileWriteError() << errinfo_comment("can not create file, path: ./config.ini"));
+    }
+
+    std::rename("./config.ini", m_configFile.c_str());
+
+    loadPeerWhitelist();
 }
