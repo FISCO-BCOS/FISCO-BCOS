@@ -16,7 +16,7 @@ class MockExecutiveFactory : public bcos::executor::ExecutiveFactory
 {
 public:
     using Ptr = std::shared_ptr<MockExecutiveFactory>;
-    MockExecutiveFactory(std::shared_ptr<BlockContext> blockContext,
+   MockExecutiveFactory(std::shared_ptr<BlockContext> blockContext,
         std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
             precompiledContract,
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
@@ -32,13 +32,13 @@ public:
     std::shared_ptr<TransactionExecutive> build(const std::string&, int64_t, int64_t, bool) override
     {
         auto ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
-        std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
+        blockContext = std::make_shared<BlockContext>(
             nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
         auto executive =
             std::make_shared<MockTransactionExecutive>(blockContext, "0x00", 0, 0, instruction);
         return executive;
     }
-
+    std::shared_ptr<BlockContext> blockContext;
 #ifdef WITH_WASM
     std::shared_ptr<wasm::GasInjector> instruction =
         std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());

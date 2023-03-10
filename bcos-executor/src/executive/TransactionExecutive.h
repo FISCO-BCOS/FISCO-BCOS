@@ -88,6 +88,7 @@ public:
     }
 
     std::weak_ptr<BlockContext> blockContext() { return m_blockContext; }
+    const BlockContext& blockContextReference() const { return *m_blockContext.lock(); }
 
     int64_t contextID() const { return m_contextID; }
     int64_t seq() const { return m_seq; }

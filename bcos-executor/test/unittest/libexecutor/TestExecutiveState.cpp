@@ -27,7 +27,7 @@ struct ExecutiveStateFixture
         input->codeAddress = "aabbccddee";
         input->contextID = 1;
         input->seq = 1;
-        std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
+        blockContext = std::make_shared<BlockContext>(
             nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
 
         executiveFactory = std::make_shared<MockExecutiveFactory>(
@@ -35,6 +35,7 @@ struct ExecutiveStateFixture
     }
     LedgerCache::Ptr ledgerCache;
     std::shared_ptr<MockTransactionExecutive> executive;
+    std::shared_ptr<BlockContext> blockContext;
     std::shared_ptr<MockExecutiveFactory> executiveFactory;
     std::shared_ptr<ExecutiveState> executiveState;
     CallParameters::UniquePtr input;

@@ -117,12 +117,12 @@ void AccountManagerPrecompiled::setAccountStatus(
     // setAccountStatus(address,uint8)
     Address account;
     uint8_t status = 0;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), account, status);
     std::string accountStr = account.hex();
 
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_BADGE("AccountManagerPrecompiled") << LOG_DESC("setAccountStatus")
                           << LOG_KV("account", accountStr)
                           << LOG_KV("status", std::to_string(status));
@@ -140,7 +140,7 @@ void AccountManagerPrecompiled::setAccountStatus(
     if (RANGES::find(governors, account) != governors.end())
     {
         // set governor's status
-        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("AccountManagerPrecompiled")
                               << LOG_DESC("set governor's status") << LOG_KV("account", accountStr)
                               << LOG_KV("status", std::to_string(status));
@@ -157,13 +157,13 @@ void AccountManagerPrecompiled::setAccountStatus(
         if (appsTable)
         {
             PRECOMPILED_LOG(INFO)
-                << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("AccountManagerPrecompiled")
+                << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("AccountManagerPrecompiled")
                 << LOG_DESC("account table already exist in /apps, maybe this is a contract.")
                 << LOG_KV("account", accountStr) << LOG_KV("status", std::to_string(status));
             _callParameters->setExecResult(codec.encode(int32_t(CODE_ACCOUNT_ALREADY_EXIST)));
             return;
         }
-        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("AccountManagerPrecompiled")
                               << LOG_DESC("setAccountStatus table not exist, create first")
                               << LOG_KV("account", accountStr)
@@ -187,12 +187,12 @@ void AccountManagerPrecompiled::getAccountStatus(
 {
     // getAccountStatus(address)
     Address account;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), account);
     std::string accountStr = account.hex();
 
-    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("getAccountStatus")
+    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("getAccountStatus")
                            << LOG_KV("account", accountStr);
     auto newParams = codec.encodeWithSig("getAccountStatus()");
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,

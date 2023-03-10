@@ -42,8 +42,8 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     // [tableName][actualParams]
     std::vector<std::string> dynamicParams;
     bytes param;
@@ -83,10 +83,10 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const PrecompiledExecResult::Ptr& _callParameters) const
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     const auto* accountMgrSender =
-        blockContext->isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
+        blockContext.isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
     if (_callParameters->m_sender != accountMgrSender)
     {
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
@@ -96,7 +96,7 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
     uint8_t status = 0;
     codec.decode(data, status);
 
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number()) << LOG_BADGE("AccountPrecompiled")
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("AccountPrecompiled")
                           << LOG_DESC("setAccountStatus") << LOG_KV("account", accountTableName)
                           << LOG_KV("status", std::to_string(status));
     auto existEntry = _executive->storage().getRow(accountTableName, ACCOUNT_STATUS);
@@ -108,7 +108,7 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
         // account already abolish, should not set any status to it
         if (existStatus == AccountStatus::abolish && status != AccountStatus::abolish)
         {
-            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                                   << LOG_BADGE("AccountPrecompiled")
                                   << LOG_DESC("account already abolish, should not set any status")
                                   << LOG_KV("account", accountTableName)
@@ -132,7 +132,7 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
     statusEntry.importFields({boost::lexical_cast<std::string>(status)});
     _executive->storage().setRow(accountTableName, ACCOUNT_STATUS, std::move(statusEntry));
     Entry lastUpdateEntry;
-    lastUpdateEntry.importFields({boost::lexical_cast<std::string>(blockContext->number())});
+    lastUpdateEntry.importFields({boost::lexical_cast<std::string>(blockContext.number())});
     _executive->storage().setRow(accountTableName, ACCOUNT_LAST_UPDATE, std::move(lastUpdateEntry));
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
@@ -141,8 +141,8 @@ void AccountPrecompiled::getAccountStatus(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters) const
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     uint8_t status = getAccountStatus(tableName, _executive);
     _callParameters->setExecResult(codec.encode(status));
 }
@@ -160,9 +160,9 @@ uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
         return 0;
     }
     auto lastUpdateNumber = boost::lexical_cast<BlockNumber>(std::string(lastUpdateEntry->get()));
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContextReference();
     std::string statusStr;
-    if (blockContext->number() > lastUpdateNumber) [[likely]]
+    if (blockContext.number() > lastUpdateNumber) [[likely]]
     {
         statusStr = std::string(entry->get());
     }
@@ -173,7 +173,7 @@ uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
     }
 
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled")
-                           << BLOCK_NUMBER(blockContext->number()) << LOG_DESC("getAccountStatus")
+                           << BLOCK_NUMBER(blockContext.number()) << LOG_DESC("getAccountStatus")
                            << LOG_KV("lastUpdateNumber", lastUpdateNumber)
                            << LOG_KV("status", statusStr);
     auto status = boost::lexical_cast<uint8_t>(statusStr);

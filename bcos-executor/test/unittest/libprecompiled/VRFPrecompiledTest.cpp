@@ -60,8 +60,8 @@ public:
         m_blockContext =
             std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
                 h256(), utcTime(), _blockVersion, FiscoBcosSchedule, false, false);
-        m_executive = std::make_shared<TransactionExecutive>(
-            std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, m_gasInjector);
+        m_executive =
+            std::make_shared<TransactionExecutive>(m_blockContext, "", 100, 0, m_gasInjector);
         m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(m_cryptoSuite->hashImpl());
     }
 

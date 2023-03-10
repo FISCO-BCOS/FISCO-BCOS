@@ -130,10 +130,10 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
 
-    auto blockContext = _executive->blockContext().lock();
-    const auto* authAddress = blockContext->isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext->number())
+    const auto& blockContext = _executive->blockContextReference();
+    const auto* authAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number())
                            << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("call")
                            << LOG_KV("func", func);
 
@@ -149,7 +149,7 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
     if (selector != selector2Func.end())
     {
         auto& [minVersion, execFunc] = selector->second;
-        if (versionCompareTo(blockContext->blockVersion(), minVersion) >= 0)
+        if (versionCompareTo(blockContext.blockVersion(), minVersion) >= 0)
         {
             execFunc(_executive, _callParameters);
 
@@ -177,9 +177,9 @@ void ContractAuthMgrPrecompiled::getAdmin(
     /// wasm: getAdmin(string)  => string admin
 
     std::string path;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (blockContext->isWasm())
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    if (blockContext.isWasm())
     {
         codec.decode(_callParameters->params(), path);
     }
@@ -198,7 +198,7 @@ void ContractAuthMgrPrecompiled::getAdmin(
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("contract ACL table not found") << LOG_KV("table", path);
-        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
+        if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
         {
             // return empty admin by default
             _callParameters->setExecResult(codec.encode(std::string(EMPTY_ADDRESS)));
@@ -229,9 +229,9 @@ void ContractAuthMgrPrecompiled::resetAdmin(
 
     std::string address;
     std::string admin;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (!blockContext->isWasm())
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    if (!blockContext.isWasm())
     {
         Address contractAddress;
         Address adminAddress;
@@ -243,7 +243,7 @@ void ContractAuthMgrPrecompiled::resetAdmin(
     {
         codec.decode(_callParameters->params(), address, admin);
     }
-    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
                            << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("resetAdmin")
                            << LOG_KV("address", address) << LOG_KV("admin", admin);
     auto path = getAuthTableName(address);
@@ -252,7 +252,7 @@ void ContractAuthMgrPrecompiled::resetAdmin(
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("contract ACL table not found") << LOG_KV("path", path);
-        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
+        if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
         {
             if (!_executive->storage().openTable(getContractTableName(USER_APPS_PREFIX, address)))
                 [[unlikely]]
@@ -288,9 +288,9 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     std::string path;
     string32 _func;
     string32 _type;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (!blockContext->isWasm())
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    if (!blockContext.isWasm())
     {
         Address contractAddress;
         codec.decode(_callParameters->params(), contractAddress, _func, _type);
@@ -302,7 +302,7 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
     uint8_t type = _type[_type.size() - 1];
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_BADGE("ContractAuthMgrPrecompiled")
                           << LOG_DESC("setMethodAuthType") << LOG_KV("path", path)
                           << LOG_KV("func", toHexStringWithPrefix(func))
@@ -352,9 +352,9 @@ void ContractAuthMgrPrecompiled::checkMethodAuth(
     std::string path;
     string32 _func;
     std::string account;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (!blockContext->isWasm())
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    if (!blockContext.isWasm())
     {
         Address contractAddress;
         Address accountAddress;
@@ -441,9 +441,9 @@ void ContractAuthMgrPrecompiled::getMethodAuth(
     std::string path;
     string32 _func;
     bytes funcBytes;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (!blockContext->isWasm())
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    if (!blockContext.isWasm())
     {
         Address contractAddress;
         codec.decode(_callParameters->params(), contractAddress, _func);
@@ -507,10 +507,10 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
     std::string path;
     std::string account;
     string32 _func;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), path, _func, account);
-    if (!blockContext->isWasm())
+    if (!blockContext.isWasm())
     {
         Address contractAddress;
         Address accountAddress;
@@ -523,7 +523,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         codec.decode(_callParameters->params(), path, _func, account);
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("setAuth")
                           << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
                           << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
@@ -674,9 +674,9 @@ void ContractAuthMgrPrecompiled::setContractStatus(
 
     std::string address;
     bool isFreeze = false;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (blockContext->isWasm())
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    if (blockContext.isWasm())
     {
         codec.decode(_callParameters->params(), address, isFreeze);
     }
@@ -686,7 +686,7 @@ void ContractAuthMgrPrecompiled::setContractStatus(
         codec.decode(_callParameters->params(), contractAddress, isFreeze);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_BADGE("ContractAuthMgrPrecompiled")
                           << LOG_DESC("setContractStatus") << LOG_KV("address", address)
                           << LOG_KV("isFreeze", isFreeze);
@@ -700,14 +700,14 @@ void ContractAuthMgrPrecompiled::setContractStatus(
         return;
     }
     auto existEntry = table->getRow(STATUS_FIELD);
-    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
+    if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
         existEntry.has_value())
     {
         auto existStatus = existEntry->get();
         // account already abolish, should not set any status to it
         if (existStatus == CONTRACT_ABOLISH)
         {
-            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                                   << LOG_BADGE("ContractAuthMgrPrecompiled")
                                   << LOG_DESC("contract already abolish, should not set any status")
                                   << LOG_KV("contract", path);
@@ -729,9 +729,9 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
     /// setContractStatus(address _addr, uint8) => int256
     std::string address;
     uint8_t status = 0;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (blockContext->isWasm())
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    if (blockContext.isWasm())
     {
         codec.decode(_callParameters->params(), address, status);
     }
@@ -741,7 +741,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
         codec.decode(_callParameters->params(), contractAddress, status);
         address = contractAddress.hex();
     }
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_BADGE("ContractAuthMgrPrecompiled")
                           << LOG_DESC("setContractStatus") << LOG_KV("address", address)
                           << LOG_KV("status", std::to_string(status));
@@ -767,7 +767,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
         // account already abolish, should not set any status to it
         if (existStatus == CONTRACT_ABOLISH && statusStr != CONTRACT_ABOLISH)
         {
-            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                                   << LOG_BADGE("ContractAuthMgrPrecompiled")
                                   << LOG_DESC("contract already abolish, should not set any status")
                                   << LOG_KV("contract", path) << LOG_KV("status", statusStr);
@@ -790,9 +790,9 @@ void ContractAuthMgrPrecompiled::contractAvailable(
     /// contractAvailable(address _addr) => bool
 
     std::string address;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    if (blockContext->isWasm())
+    const auto& blockContext = _executive->blockContextReference();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    if (blockContext.isWasm())
     {
         codec.decode(_callParameters->params(), address);
     }
