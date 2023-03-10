@@ -94,8 +94,9 @@ public:
             std::uninitialized_copy(
                 transaction.sender().begin(), transaction.sender().end(), evmcMessage.sender.bytes);
 
+            int64_t seq = 0;
             HostContext hostContext(vmFactory, rollbackableStorage, m_tableNamePool, blockHeader,
-                evmcMessage, evmcMessage.sender, contextID, 0);
+                evmcMessage, evmcMessage.sender, contextID, seq);
             auto evmcResult = co_await hostContext.execute();
             struct Defer
             {

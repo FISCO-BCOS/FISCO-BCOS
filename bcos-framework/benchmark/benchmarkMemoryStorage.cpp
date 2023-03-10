@@ -90,7 +90,7 @@ static void read(benchmark::State& state)
                 int i = (state.range(0) / state.threads()) * state.thread_index();
                 for (auto const& it : state)
                 {
-                    auto itAwaitable = co_await storage.read(storage2::single(
+                    auto itAwaitable = co_await storage.read(storage2::singleView(
                         fixture.allKeys[(i + fixture.allKeys.size()) % fixture.allKeys.size()]));
                     co_await itAwaitable.next();
                     [[maybe_unused]] auto& value = co_await itAwaitable.value();
@@ -125,8 +125,8 @@ static void write(benchmark::State& state)
                 for (auto const& it : state)
                 {
                     auto index = (i + fixture.allKeys.size()) % fixture.allKeys.size();
-                    co_await storage.write(storage2::single(fixture.allKeys[index]),
-                        storage2::single(fixture.allValues[index]));
+                    co_await storage.write(storage2::singleView(fixture.allKeys[index]),
+                        storage2::singleView(fixture.allValues[index]));
                     ++i;
                 }
                 co_return;

@@ -96,15 +96,29 @@ concept RangeableIterator = requires(Iterator&& iterator)
     // clang-format on
 };
 
-auto single(auto&& value)
+static auto singleView(auto&& value)
 {
-    return RANGES::single_view(std::ref(value)) |
-           RANGES::views::transform([](auto&& input) -> auto& { return input.get(); });
+    using ValueType = decltype(value);
+
+    if constexpr (std::is_rvalue_reference_v<ValueType>)
+    {
+        return RANGES::single_view(std::forward<decltype(value)>(value));
+    }
+    else if constexpr (std::is_const_v<ValueType>)
+    {
+        return RANGES::single_view(std::cref(value)) |
+               RANGES::views::transform([](auto&& input) -> auto const& { return input.get(); });
+    }
+    else
+    {
+        return RANGES::single_view(std::ref(value)) |
+               RANGES::views::transform([](auto&& input) -> auto& { return input.get(); });
+    }
 }
 
 task::Task<bool> existsOne(ReadableStorage auto& storage, auto const& key)
 {
-    auto it = co_await storage.read(storage2::single(key));
+    auto it = co_await storage.read(storage2::singleView(key));
     co_await it.next();
     co_return co_await it.hasValue();
 }
@@ -114,13 +128,14 @@ using ValueOrReferenceWrapper = std::conditional_t<std::is_reference_v<Reference
     std::reference_wrapper<std::remove_reference_t<Reference>>, Reference>;
 
 auto readOne(ReadableStorage auto& storage, auto const& key)
-    -> task::Task<std::optional<ValueOrReferenceWrapper<
-        typename task::AwaitableReturnType<decltype(storage.read(storage2::single(key)))>::Value>>>
+    -> task::Task<std::optional<ValueOrReferenceWrapper<typename task::AwaitableReturnType<
+        decltype(storage.read(storage2::singleView(key)))>::Value>>>
 {
-    using ValueType = ValueOrReferenceWrapper<
-        typename task::AwaitableReturnType<decltype(storage.read(storage2::single(key)))>::Value>;
+    using ValueType =
+        ValueOrReferenceWrapper<typename task::AwaitableReturnType<decltype(storage.read(
+            storage2::singleView(key)))>::Value>;
 
-    auto it = co_await storage.read(storage2::single(key));
+    auto it = co_await storage.read(storage2::singleView(key));
     co_await it.next();
     std::optional<ValueType> result;
     if (co_await it.hasValue())
@@ -134,13 +149,13 @@ auto readOne(ReadableStorage auto& storage, auto const& key)
 task::Task<void> writeOne(WriteableStorage auto& storage, auto const& key, auto&& value)
 {
     co_await storage.write(
-        storage2::single(key), storage2::single(std::forward<decltype(value)>(value)));
+        storage2::singleView(key), storage2::singleView(std::forward<decltype(value)>(value)));
     co_return;
 }
 
 task::Task<void> removeOne(ErasableStorage auto& storage, auto const& key)
 {
-    co_await storage.remove(storage2::single(key));
+    co_await storage.remove(storage2::singleView(key));
     co_return;
 }
 

@@ -3,6 +3,7 @@
 #include "TestBytecode.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/storage2/StringPool.h"
+#include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
 #include "transaction-executor/bcos-transaction-executor/vm/VMInstance.h"
 #include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
@@ -53,8 +54,8 @@ public:
                 .code_address = {}};
             evmc_address origin = {};
 
-            HostContext hostContext(
-                vmFactory, rollbackableStorage, tableNamePool, blockHeader, message, origin, 0, 0);
+            HostContext hostContext(vmFactory, rollbackableStorage, tableNamePool, blockHeader,
+                message, origin, 0, seq);
             auto result = co_await hostContext.execute();
 
             BOOST_REQUIRE_EQUAL(result.status_code, 0);
@@ -94,7 +95,7 @@ public:
         evmc_address origin = {};
 
         HostContext hostContext(
-            vmFactory, rollbackableStorage, tableNamePool, blockHeader, message, origin, 0, 0);
+            vmFactory, rollbackableStorage, tableNamePool, blockHeader, message, origin, 0, seq);
         auto result = co_await hostContext.execute();
 
         co_return result;
@@ -105,6 +106,7 @@ public:
     Rollbackable<decltype(storage)> rollbackableStorage;
     evmc_address helloworldAddress;
     VMFactory vmFactory;
+    int64_t seq = 0;
 };
 
 bcos::crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
@@ -172,6 +174,17 @@ BOOST_AUTO_TEST_CASE(contractDeploy)
         abiCodec.abiOut(bcos::bytesConstRef(result.output_data, result.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 999);
 
+        releaseResult(result);
+
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(createTwice)
+{
+    syncWait([this]() -> Task<void> {
+        auto result = co_await call("createTwice()");
+        BOOST_CHECK_EQUAL(result.status_code, 0);
         releaseResult(result);
 
         co_return;

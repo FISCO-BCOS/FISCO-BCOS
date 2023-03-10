@@ -74,7 +74,7 @@ public:
         case VMKind::evmone:
         {
             std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const> codeAnalysis;
-            auto it = m_evmoneCodeAnalysisCache.read(storage2::single(codeHash)).toValue();
+            auto it = m_evmoneCodeAnalysisCache.read(storage2::singleView(codeHash)).toValue();
             it.next().toValue();
             if (it.hasValue().toValue())
             {
@@ -88,7 +88,7 @@ public:
                     evmone::advanced::analyze(
                         mode, evmone::bytes_view((const uint8_t*)code.data(), code.size())));
                 m_evmoneCodeAnalysisCache.write(
-                    storage2::single(codeHash), storage2::single(std::as_const(codeAnalysis)));
+                    storage2::singleView(codeHash), storage2::singleView(std::as_const(codeAnalysis)));
             }
 
             return VMInstance{std::move(codeAnalysis)};
