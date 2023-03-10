@@ -977,7 +977,7 @@ void GatewayConfig::updatePeerBlacklistAndConfigFile(
 
     // read all lines
     std::shared_ptr<std::vector<std::string>> contents = bcos::readAllLinesFromFile(m_configFile);
-    if (nullptr == contents || true == contents->empty())
+    if (true == contents->empty())
     {
         GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("maybe file not exist, path: " + m_configFile);
         BOOST_THROW_EXCEPTION(
@@ -1067,7 +1067,7 @@ void GatewayConfig::updatePeerWhitelistAndConfigFile(
 
     // read all lines
     std::shared_ptr<std::vector<std::string>> contents = bcos::readAllLinesFromFile(m_configFile);
-    if (nullptr == contents || true == contents->empty())
+    if (true == contents->empty())
     {
         GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("maybe file not exist, path: " + m_configFile);
         BOOST_THROW_EXCEPTION(
