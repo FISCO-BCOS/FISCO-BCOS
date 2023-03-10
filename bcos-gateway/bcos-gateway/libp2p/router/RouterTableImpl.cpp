@@ -221,16 +221,16 @@ std::string RouterTable::getNextHop(std::string const& _nodeID)
 {
     std::string emptyNextHop;
     ReadGuard l(x_routerEntries);
-    if (!m_routerEntries.count(_nodeID))
+    auto it = m_routerEntries.find(_nodeID);
+    if (it == m_routerEntries.end())
     {
         return emptyNextHop;
     }
-    auto entry = m_routerEntries.at(_nodeID);
-    if (entry->distance() >= m_unreachableDistance)
+    if (it->second->distance() >= m_unreachableDistance)
     {
         return emptyNextHop;
     }
-    return entry->nextHop();
+    return it->second->nextHop();
 }
 
 std::set<std::string> RouterTable::getAllReachableNode()

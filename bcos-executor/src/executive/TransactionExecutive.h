@@ -58,8 +58,8 @@ class TransactionExecutive : public std::enable_shared_from_this<TransactionExec
 public:
     using Ptr = std::shared_ptr<TransactionExecutive>;
     TransactionExecutive(std::weak_ptr<BlockContext> blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, std::shared_ptr<wasm::GasInjector>& gasInjector)
-      : m_blockContext(std::move(blockContext)),
+        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
+      : m_blockContext(blockContext),
         m_contractAddress(std::move(contractAddress)),
         m_contextID(contextID),
         m_seq(seq),
@@ -138,9 +138,9 @@ public:
         precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
 
-    VMSchedule const& vmSchedule() const { return m_blockContext.lock()->vmSchedule(); }
+     VMSchedule const& vmSchedule() const { return m_blockContext.lock()->vmSchedule(); }
 
-    bool isWasm() { return m_blockContext.lock()->isWasm(); }
+    bool isWasm() const { return m_blockContext.lock()->isWasm(); }
 
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
@@ -235,7 +235,7 @@ protected:
     int64_t m_seq;
     crypto::Hash::Ptr m_hashImpl;
 
-    std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
+    const wasm::GasInjector& m_gasInjector;
 
     bcos::storage::Recoder::Ptr m_recoder;
     std::shared_ptr<storage::StorageWrapper> m_storageWrapper;

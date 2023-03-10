@@ -473,7 +473,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             return {nullptr, std::move(callResults)};
         }
 
-        auto result = m_gasInjector->InjectMeter(code);
+        auto result = m_gasInjector.InjectMeter(code);
         if (result.status == wasm::GasInjector::Status::Success)
         {
             result.byteCode->swap(code);

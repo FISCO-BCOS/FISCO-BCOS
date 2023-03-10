@@ -50,6 +50,8 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+#include <array>
+#include <cstring>
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -1296,22 +1298,6 @@ void TransactionExecutor::dagExecuteTransactions(
                             << LOG_KV("inputSize", inputs.size());
 }
 
-bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
-{
-    size_t indexOffset = index * 32;
-    auto header = bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
-    if (typeName == "string" || typeName == "bytes")
-    {
-        u256 u = fromBigEndian<u256>(header);
-        auto offset = static_cast<std::size_t>(u);
-        auto rawData = data.getCroppedData(offset);
-        auto len = static_cast<std::size_t>(
-            fromBigEndian<u256>(bytes(rawData.begin(), rawData.begin() + 32)));
-        return bytes(rawData.begin() + 32, rawData.begin() + 32 + static_cast<std::size_t>(len));
-    }
-    return header;
-}
-
 std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
     const FunctionAbi& functionAbi, const CallParameters& params,
     std::shared_ptr<BlockContext> _blockContext)
@@ -1331,9 +1317,10 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
 
     auto conflictFields = make_shared<vector<bytes>>();
 
-    for (auto& conflictField : functionAbi.conflictFields)
+    for (const auto& conflictField : functionAbi.conflictFields)
     {
         auto criticalKey = bytes();
+        criticalKey.reserve(72);
 
         size_t slot = toHash;
         if (conflictField.slot.has_value())
@@ -1398,7 +1385,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 auto bytes = static_cast<bcos::byte*>(static_cast<void*>(&blockNumber));
                 criticalKey.insert(criticalKey.end(), bytes, bytes + sizeof(blockNumber));
 
-                EXECUTOR_NAME_LOG(DEBUG)
+                EXECUTOR_NAME_LOG(TRACE)
                     << LOG_BADGE("extractConflictFields") << LOG_DESC("use `BlockNumber`")
                     << LOG_KV("functionName", functionAbi.name)
                     << LOG_KV("blockNumber", blockNumber);
@@ -1408,7 +1395,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
             {
                 criticalKey.insert(criticalKey.end(), to.begin(), to.end());
 
-                EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields")
+                EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields")
                                          << LOG_DESC("use `Addr`") << LOG_KV("addr", to);
                 break;
             }
@@ -1425,12 +1412,12 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         {
             assert(!conflictField.value.empty());
             const ParameterAbi* paramAbi = nullptr;
-            auto components = &functionAbi.inputs;
+            const auto* components = &functionAbi.inputs;
             auto inputData = ref(params.data).getCroppedData(4).toBytes();
             if (_blockContext->isWasm())
             {
                 auto startPos = 0u;
-                for (auto segment : conflictField.value)
+                for (const auto& segment : conflictField.value)
                 {
                     if (segment >= components->size())
                     {
@@ -1462,7 +1449,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
             else
             {  // evm
                 auto index = conflictField.value[0];
-                auto typeName = functionAbi.flatInputs[index];
+                const auto& typeName = functionAbi.flatInputs[index];
                 if (typeName.empty())
                 {
                     return nullptr;
@@ -1471,7 +1458,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 criticalKey.insert(criticalKey.end(), out.begin(), out.end());
             }
 
-            EXECUTOR_NAME_LOG(DEBUG)
+            EXECUTOR_NAME_LOG(TRACE)
                 << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Params`")
                 << LOG_KV("functionName", functionAbi.name)
                 << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
@@ -1481,7 +1468,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         {
             criticalKey.insert(
                 criticalKey.end(), conflictField.value.begin(), conflictField.value.end());
-            EXECUTOR_NAME_LOG(DEBUG)
+            EXECUTOR_NAME_LOG(TRACE)
                 << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Const`")
                 << LOG_KV("functionName", functionAbi.name)
                 << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
@@ -1489,7 +1476,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         }
         case None:
         {
-            EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `None`")
+            EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `None`")
                                      << LOG_KV("functionName", functionAbi.name)
                                      << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
             break;
@@ -1552,7 +1539,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     // if precompiled
                     auto executiveFactory =
                         std::make_shared<ExecutiveFactory>(m_blockContext, m_precompiledContract,
-                            m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+                            m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
                     auto executive = executiveFactory->build(
                         params->codeAddress, params->contextID, params->seq, false);
                     auto p = executive->getPrecompiled(params->receiveAddress);
@@ -2226,7 +2213,7 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     if (executiveFlow == nullptr)
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
         if (!useCoroutine)
         {
             executiveFlow = std::make_shared<ExecutiveSerialFlow>(executiveFactory);
@@ -2728,7 +2715,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 
         auto& input = inputs[id];
         auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
         auto executive =
             executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
 
