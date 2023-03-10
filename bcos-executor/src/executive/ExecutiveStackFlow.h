@@ -77,13 +77,13 @@ public:
         ExecutiveFlowInterface::stop();
     };
 
-private:
+protected:
     void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
         std::function<void(bcos::Error::UniquePtr)> onFinished);
 
     void runWaitingFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
 
-    void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
+    virtual void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
 
     void runOne(ExecutiveState::Ptr executiveState,
         std::function<void(CallParameters::UniquePtr)> onTxReturn);

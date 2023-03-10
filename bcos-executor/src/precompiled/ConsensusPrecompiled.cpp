@@ -60,10 +60,10 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
 
     showConsensusTable(_executive);
 
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
-    if (blockContext->isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
+    if (blockContext.isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("sender is not from sys")
@@ -112,12 +112,12 @@ int ConsensusPrecompiled::addSealer(
     // addSealer(string, uint256)
     std::string nodeID;
     u256 weight;
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
     codec.decode(_data, nodeID, weight);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
 
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer")
                           << LOG_KV("nodeID", nodeID);
     if (nodeID.size() != NODE_LENGTH ||
@@ -156,18 +156,18 @@ int ConsensusPrecompiled::addSealer(
         // exist
         node->weight = weight;
         node->type = ledger::CONSENSUS_SEALER;
-        node->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
+        node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
     }
     else
     {
         // no exist
-        if (blockContext->blockVersion() >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+        if (blockContext.blockVersion() >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
         {
             // version >= 3.1.0, only allow adding sealer in observer list
             return CODE_ADD_SEALER_SHOULD_IN_OBSERVER;
         }
         consensusList.emplace_back(nodeID, weight, std::string{ledger::CONSENSUS_SEALER},
-            boost::lexical_cast<std::string>(blockContext->number() + 1));
+            boost::lexical_cast<std::string>(blockContext.number() + 1));
     }
 
     entry->setObject(consensusList);
@@ -186,11 +186,11 @@ int ConsensusPrecompiled::addObserver(
 {
     // addObserver(string)
     std::string nodeID;
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
     codec.decode(_data, nodeID);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver")
                           << LOG_KV("nodeID", nodeID);
 
@@ -231,12 +231,12 @@ int ConsensusPrecompiled::addObserver(
         }
         node->weight = 0;
         node->type = ledger::CONSENSUS_OBSERVER;
-        node->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
+        node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
     }
     else
     {
         consensusList.emplace_back(nodeID, 0, std::string{ledger::CONSENSUS_OBSERVER},
-            boost::lexical_cast<std::string>(blockContext->number() + 1));
+            boost::lexical_cast<std::string>(blockContext.number() + 1));
     }
 
     entry->setObject(consensusList);
@@ -252,7 +252,7 @@ int ConsensusPrecompiled::removeNode(
 {
     // remove(string)
     std::string nodeID;
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
     codec.decode(_data, nodeID);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
@@ -311,7 +311,7 @@ int ConsensusPrecompiled::setWeight(
     // setWeight(string,uint256)
     std::string nodeID;
     u256 weight;
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
     codec.decode(_data, nodeID, weight);
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
@@ -351,7 +351,7 @@ int ConsensusPrecompiled::setWeight(
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
         }
         node->weight = weight;
-        node->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
+        node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
     }
     else
     {

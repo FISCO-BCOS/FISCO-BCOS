@@ -105,7 +105,7 @@ public:
             "6bd9750029";
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -160,7 +160,7 @@ public:
         nextBlock(_number, m_blockVersion);
         bytes in =
             codec->encodeWithSig("createKVTable(string,string,string)", tableName, key, value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -253,7 +253,7 @@ public:
         int _errorCode = 0, bool errorInPrecompiled = false)
     {
         bytes in = codec->encodeWithSig("mkdir(string)", path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -332,7 +332,7 @@ public:
             in = codec->encodeWithSig(
                 "link(string,string,string,string)", name, version, address, abi);
         }
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -404,7 +404,7 @@ public:
         protocol::BlockNumber _number, std::string const& _path, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("readlink(string)", _path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -442,7 +442,7 @@ public:
         protocol::BlockNumber _number, uint32_t from, uint32_t to, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("rebuildBfs(uint256,uint256)", from, to);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         Address newSender = Address(isWasm ? std::string(precompiled::SYS_CONFIG_NAME) :
                                              std::string(precompiled::SYS_CONFIG_ADDRESS));
         tx->forceSender(newSender.asBytes());
@@ -484,7 +484,7 @@ public:
     {
         bytes in = codec->encodeWithSig("setValueByKey(string,string)",
             std::string(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), version);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         Address newSender = Address(std::string(precompiled::AUTH_COMMITTEE_ADDRESS));
         tx->forceSender(newSender.asBytes());
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -548,7 +548,7 @@ public:
     {
         bytes in =
             codec->encodeWithSig("list(string,uint256,uint256)", path, u256(offset), u256(count));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -669,7 +669,18 @@ BOOST_AUTO_TEST_CASE(lsTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
         std::set<std::string> lsSet;
         for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
@@ -678,7 +689,19 @@ BOOST_AUTO_TEST_CASE(lsTest)
             lsSet.insert(item);
         }
 
-        for (auto const& sysSub : precompiled::BFS_SYS_SUBS | RANGES::views::drop(1))
+        auto take = precompiled::BFS_SYS_SUBS_COUNT;
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            // remove cast
+            take--;
+        }
+        if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            // remove shard
+            take--;
+        }
+        for (auto const& sysSub :
+            precompiled::BFS_SYS_SUBS | RANGES::views::take(take) | RANGES::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
         }
@@ -770,7 +793,18 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
         std::set<std::string> lsSet;
         for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
@@ -779,7 +813,19 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
             lsSet.insert(item);
         }
 
-        for (auto const& sysSub : precompiled::BFS_SYS_SUBS | RANGES::views::drop(1))
+        auto take = precompiled::BFS_SYS_SUBS_COUNT;
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            // remove cast
+            take--;
+        }
+        if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            // remove shard
+            take--;
+        }
+        for (auto const& sysSub :
+            precompiled::BFS_SYS_SUBS | RANGES::views::take(take) | RANGES::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
         }
@@ -871,7 +917,18 @@ BOOST_AUTO_TEST_CASE(lsPagWasmTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
         std::set<std::string> lsSet;
         for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
@@ -880,7 +937,19 @@ BOOST_AUTO_TEST_CASE(lsPagWasmTest)
             lsSet.insert(item);
         }
 
-        for (auto const& sysSub : precompiled::BFS_SYS_SUBS | RANGES::views::drop(1))
+        auto take = precompiled::BFS_SYS_SUBS_COUNT;
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            // remove cast
+            take--;
+        }
+        if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            // remove shard
+            take--;
+        }
+        for (auto const& sysSub :
+            precompiled::BFS_SYS_SUBS | RANGES::views::take(take) | RANGES::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
         }
@@ -1628,7 +1697,18 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
     }
 
     // ls /apps/temp/temp2/temp3/temp4
@@ -1786,7 +1866,18 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
+        }
+        else
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
+        }
     }
 
     // ls /apps/temp/temp2/temp3/temp4

@@ -432,7 +432,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     auto txpool = faker->txpool();
     auto txpoolStorage = txpool->txpoolStorage();
     // case1: the node is not in the consensus/observerList
-    auto tx = fakeTransaction(_cryptoSuite, utcTime());
+    auto tx = fakeTransaction(_cryptoSuite, std::to_string(utcTime()));
 
     checkTxSubmit(txpool, txpoolStorage, tx, HashType(),
         (uint32_t)TransactionStatus::RequestNotBelongToTheGroup, 0);
@@ -440,7 +440,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     // case2: transaction with invalid blockLimit
     faker->appendSealer(faker->nodeID());
     auto ledger = faker->ledger();
-    tx = fakeTransaction(_cryptoSuite, utcTime() + 11000, ledger->blockNumber() + blockLimit + 1,
+    tx = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 11000), ledger->blockNumber() + blockLimit + 1,
         faker->chainId(), faker->groupId());
     checkTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::BlockLimitCheckFail, 0);
@@ -455,19 +455,19 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::NonceCheckFail, 0);
 
     // case4: invalid groupId
-    tx = fakeTransaction(_cryptoSuite, utcTime(), ledger->blockNumber() + blockLimit - 4,
+    tx = fakeTransaction(_cryptoSuite, std::to_string(utcTime()), ledger->blockNumber() + blockLimit - 4,
         faker->chainId(), "invalidGroup");
     checkTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::InvalidGroupId, 0);
 
     // case5: invalid chainId
-    tx = fakeTransaction(_cryptoSuite, utcTime(), ledger->blockNumber() + blockLimit - 4,
+    tx = fakeTransaction(_cryptoSuite, std::to_string(utcTime()), ledger->blockNumber() + blockLimit - 4,
         "invalidChainId", faker->groupId());
     checkTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::InvalidChainId, 0);
 
     // case6: invalid signature
-    tx = fakeTransaction(_cryptoSuite, utcTime() + 100000, ledger->blockNumber() + blockLimit - 4,
+    tx = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 100000), ledger->blockNumber() + blockLimit - 4,
         faker->chainId(), faker->groupId());
     auto pbTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
     bcos::crypto::KeyPairInterface::Ptr invalidKeyPair = signatureImpl->generateKeyPair();
@@ -490,7 +490,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
 
     // case7: submit success
     importedTxNum++;
-    tx = fakeTransaction(_cryptoSuite, utcTime() + 2000000, ledger->blockNumber() + blockLimit - 4,
+    tx = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 2000000), ledger->blockNumber() + blockLimit - 4,
         faker->chainId(), faker->groupId());
     checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None,
         importedTxNum, false, true, true);
@@ -504,7 +504,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     Transactions transactions;
     for (auto i = 0; i < 40; i++)
     {
-        auto tmpTx = fakeTransaction(_cryptoSuite, utcTime() + 1000 + i,
+        auto tmpTx = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 1000 + i),
             ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
         transactions.push_back(tmpTx);
     }
@@ -629,7 +629,7 @@ BOOST_AUTO_TEST_CASE(fillWithSubmit)
 
     // // case7: submit success
     // auto tx =
-    //     fakeTransaction(cryptoSuite, utcTime() + 2000000, 100, chainId, groupId);
+    //     fakeTransaction(cryptoSuite, utcTime() + 2000000, std::to_string(100), chainId, groupId);
 
     // tx->encode();
     // auto encodedPtr = std::make_shared<bytes>(tx->takeEncoded());

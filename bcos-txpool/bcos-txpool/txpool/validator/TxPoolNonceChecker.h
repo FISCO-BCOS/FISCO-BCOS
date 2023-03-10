@@ -35,7 +35,7 @@ public:
         bcos::protocol::NonceListPtr const& _nonceList) override;
     void batchRemove(bcos::protocol::NonceList const& _nonceList) override;
     void batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
-        std::hash<bcos::crypto::HashType>> const& _nonceList) override;
+        std::hash<bcos::protocol::NonceType>> const& _nonceList) override;
     bool exists(bcos::protocol::NonceType const& _nonce) override;
 
     void insert(bcos::protocol::NonceType const& _nonce) override;

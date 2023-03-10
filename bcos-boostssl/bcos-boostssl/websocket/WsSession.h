@@ -140,9 +140,9 @@ public:
     int32_t maxWriteMsgSize() const { return m_maxWriteMsgSize; }
     void setMaxWriteMsgSize(int32_t _maxWriteMsgSize) { m_maxWriteMsgSize = _maxWriteMsgSize; }
 
-    std::size_t msgQueueSize()
+    std::size_t writeQueueSize()
     {
-        bcos::ReadGuard l(x_writeQueue);
+        bcos::ReadGuard lockGuard(x_writeQueue);
         return m_writeQueue.size();
     }
 

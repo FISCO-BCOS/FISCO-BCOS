@@ -22,9 +22,7 @@
 #include "bcos-sync/interfaces/BlockRequestInterface.h"
 #include "bcos-sync/protocol/PB/BlockSyncMsgImpl.h"
 #include "bcos-sync/utilities/Common.h"
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockRequestImpl : public BlockRequestInterface, public BlockSyncMsgImpl
 {
@@ -38,7 +36,7 @@ public:
     {}
 
     explicit BlockRequestImpl(bytesConstRef _data) : BlockRequestImpl() { decode(_data); }
-    ~BlockRequestImpl() override {}
+    ~BlockRequestImpl() override = default;
 
     size_t size() const override { return m_syncMessage->size(); }
     void setSize(size_t _size) override { m_syncMessage->set_size(_size); }
@@ -47,8 +45,7 @@ protected:
     explicit BlockRequestImpl(std::shared_ptr<BlockSyncMessage> _syncMessage)
     {
         setPacketType(BlockSyncPacketType::BlockRequestPacket);
-        m_syncMessage = _syncMessage;
+        m_syncMessage = std::move(_syncMessage);
     }
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

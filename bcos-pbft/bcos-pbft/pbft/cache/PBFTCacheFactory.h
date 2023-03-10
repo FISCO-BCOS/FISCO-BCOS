@@ -27,7 +27,7 @@ class PBFTCacheFactory
 public:
     using Ptr = std::shared_ptr<PBFTCacheFactory>;
     PBFTCacheFactory() = default;
-    virtual ~PBFTCacheFactory() {}
+    virtual ~PBFTCacheFactory() = default;
 
     virtual PBFTCache::Ptr createPBFTCache(PBFTConfig::Ptr _config,
         bcos::protocol::BlockNumber _index,

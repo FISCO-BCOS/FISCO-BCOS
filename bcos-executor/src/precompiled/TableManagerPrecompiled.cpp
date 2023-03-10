@@ -85,7 +85,7 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
     uint32_t func = getParamFunc(_callParameters->input());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());
@@ -93,10 +93,10 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
     auto selector = selector2Func.find(func);
     if (selector != selector2Func.end())
     {
-        if (blockContext->isWasm() && func == name2Selector[TABLE_METHOD_OPEN])
+        if (blockContext.isWasm() && func == name2Selector[TABLE_METHOD_OPEN])
         {}
         auto& [minVersion, execFunc] = selector->second;
-        if (versionCompareTo(blockContext->blockVersion(), minVersion) >= 0)
+        if (versionCompareTo(blockContext.blockVersion(), minVersion) >= 0)
         {
             execFunc(_executive, gasPricer, _callParameters);
 
@@ -121,15 +121,15 @@ void TableManagerPrecompiled::createTable(
 {
     // createTable(string,(string,string[]))
     std::string tableName;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     TableInfoTuple tableInfo;
     codec.decode(_callParameters->params(), tableName, tableInfo);
     std::string keyField = std::get<0>(tableInfo);
     auto& valueFields = std::get<1>(tableInfo);
     std::string valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields);
-    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
                            << LOG_BADGE("TableManagerPrecompiled")
                            << LOG_KV("createTable", tableName) << LOG_KV("keyField", keyField)
                            << LOG_KV("valueField", valueField);
@@ -147,8 +147,8 @@ void TableManagerPrecompiled::createTableV32(
     std::string tableName;
     std::string keyField;
     std::string valueField;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     TableInfoTupleV320 tableInfo;
     codec.decode(_callParameters->params(), tableName, tableInfo);
@@ -156,7 +156,7 @@ void TableManagerPrecompiled::createTableV32(
     keyField = std::get<1>(tableInfo);
     auto& valueFields = std::get<2>(tableInfo);
     valueField = precompiled::checkCreateTableParam(tableName, keyField, valueFields, keyOrder);
-    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
                            << LOG_BADGE("TableManagerPrecompiled")
                            << LOG_KV("createTable", tableName) << LOG_KV("keyOrder", int(*keyOrder))
                            << LOG_KV("keyField", keyField) << LOG_KV("valueField", valueField);
@@ -173,11 +173,11 @@ void TableManagerPrecompiled::createKVTable(
 {
     /// createKVTable(string,string,string)
     std::string tableName, key, value;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), tableName, key, value);
     precompiled::checkCreateTableParam(tableName, key, value);
-    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
                            << LOG_BADGE("TableManagerPrecompiled")
                            << LOG_KV("createKVTable", tableName) << LOG_KV("keyField", key)
                            << LOG_KV("valueField", value);
@@ -192,17 +192,17 @@ void TableManagerPrecompiled::createKVTable(
         return;
     }
     std::string tableManagerAddress =
-        blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
-    std::string kvTableAddress = blockContext->isWasm() ? KV_TABLE_NAME : KV_TABLE_ADDRESS;
+        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
+    std::string kvTableAddress = blockContext.isWasm() ? KV_TABLE_NAME : KV_TABLE_ADDRESS;
     std::string codeString = getDynamicPrecompiledCodeString(kvTableAddress, newTableName);
 
     auto input = codec.encode(newTableName, codeString);
     std::string abi =
-        blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
+        blockContext.blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
             std::string(KV_TABLE_ABI) :
             "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
-        tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
+        tableManagerAddress, blockContext.isWasm() ? newTableName : "", false, true,
         _callParameters->m_gasLeft - gasPricer->calTotalGas(), true, std::move(abi));
 
     if (response->status != (int32_t)TransactionStatus::None)
@@ -226,12 +226,12 @@ void TableManagerPrecompiled::appendColumns(
     // appendColumns(string,string[])
     std::string tableName;
     std::vector<std::string> newColumns;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), tableName, newColumns);
     tableName = getActualTableName(getTableName(tableName));
 
-    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext->number())
+    PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
                            << LOG_BADGE("TableManagerPrecompiled") << LOG_DESC("appendColumns")
                            << LOG_KV("tableName", tableName)
                            << LOG_KV("newColumns", boost::join(newColumns, ","));
@@ -286,13 +286,13 @@ void TableManagerPrecompiled::openTable(
 {
     /// only solidity: openTable(string) => address
     std::string tableName;
-    auto blockContext = _executive->blockContext().lock();
-    if (blockContext->isWasm())
+    const auto& blockContext = _executive->blockContext();
+    if (blockContext.isWasm())
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManager") << LOG_DESC("call undefined function!");
         BOOST_THROW_EXCEPTION(PrecompiledError("TableManager call undefined function!"));
     }
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
                            << LOG_KV("openTable", tableName);
@@ -327,8 +327,8 @@ void TableManagerPrecompiled::desc(
 {
     /// desc(string)
     std::string tableName;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), tableName);
 
     tableName = getActualTableName(getTableName(tableName));
@@ -364,8 +364,8 @@ void TableManagerPrecompiled::descWithKeyOrder(
 {
     /// descWithKeyOrder(string)
     std::string tableName;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), tableName);
 
     tableName = getActualTableName(getTableName(tableName));
@@ -404,7 +404,7 @@ void TableManagerPrecompiled::externalCreateTable(
     const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters,
     const std::string& tableName, const CodecWrapper& codec, const std::string& valueField) const
 {
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     // /tables + tableName
     auto newTableName = getTableName(tableName);
@@ -416,17 +416,17 @@ void TableManagerPrecompiled::externalCreateTable(
         return;
     }
     std::string tableManagerAddress =
-        blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
-    std::string tableAddress = blockContext->isWasm() ? TABLE_NAME : TABLE_ADDRESS;
+        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
+    std::string tableAddress = blockContext.isWasm() ? TABLE_NAME : TABLE_ADDRESS;
 
     std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
     auto input = codec.encode(newTableName, codeString);
     std::string abi =
-        blockContext->blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
+        blockContext.blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) ?
             std::string(TABLE_ABI) :
             "";
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
-        tableManagerAddress, blockContext->isWasm() ? newTableName : "", false, true,
+        tableManagerAddress, blockContext.isWasm() ? newTableName : "", false, true,
         _callParameters->m_gasLeft - gasPricer->calTotalGas(), true, std::move(abi));
 
     if (response->status != (int32_t)TransactionStatus::None)

@@ -217,7 +217,7 @@ void bcos::rpc::toJsonResp(
     // transaction hash
     jResp["hash"] = toHexStringWithPrefix(_transactionPtr->hash());
     // transaction nonce
-    jResp["nonce"] = _transactionPtr->nonce().str(16);
+    jResp["nonce"] = toHex(_transactionPtr->nonce());
     // blockLimit
     jResp["blockLimit"] = _transactionPtr->blockLimit();
     // the receiver address
@@ -390,7 +390,7 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
     auto nodeService = getNodeService(_groupID, _nodeName, "call");
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
     auto transaction = transactionFactory->createTransaction(
-        0, std::string(_to), decodeData(_data), u256(0), 0, std::string(), std::string(), 0);
+        0, std::string(_to), decodeData(_data), "", 0, std::string(), std::string(), 0);
     nodeService->scheduler()->call(std::move(transaction),
         [m_to = std::string(_to), m_respFunc = std::move(_respFunc)](
             Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {

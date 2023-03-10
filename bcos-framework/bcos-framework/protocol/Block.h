@@ -33,9 +33,6 @@ using HashList = std::vector<bcos::crypto::HashType>;
 using HashListPtr = std::shared_ptr<HashList>;
 using HashListConstPtr = std::shared_ptr<const HashList>;
 
-using NonceList = std::vector<u256>;
-using NonceListPtr = std::shared_ptr<NonceList>;
-
 enum BlockType : int32_t
 {
     CompleteBlock = 1,
@@ -106,8 +103,8 @@ public:
     virtual uint64_t receiptsSize() const = 0;
 
     // for nonceList
-    virtual void setNonceList(RANGES::any_view<u256> nonces) = 0;
-    virtual RANGES::any_view<u256> nonceList() const = 0;
+    virtual void setNonceList(RANGES::any_view<std::string> nonces) = 0;
+    virtual RANGES::any_view<std::string> nonceList() const = 0;
 
     virtual NonceListPtr nonces() const
     {

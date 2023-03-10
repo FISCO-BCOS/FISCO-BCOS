@@ -47,7 +47,7 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(_bin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
                              BlockVersion version = protocol::BlockVersion::MAX_VERSION) {
         nextBlock(_number, version);
         bytes in = codec->encodeWithSig("setValueByKeyTest(string,string)", _key, _v);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -280,7 +280,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         nextBlock(number++);
         bytes in = codec->encodeWithSig(
             "getValueByKeyTest(string)", std::string(ledger::SYSTEM_KEY_TX_GAS_LIMIT));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -340,7 +340,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     {
         nextBlock(number++);
         bytes in = codec->encodeWithSig("getValueByKeyTest(string)", std::string("error"));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -420,7 +420,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         nextBlock(_number);
         bytes in = _w < 0 ? codec->encodeWithSig(method, _nodeId) :
                             codec->encodeWithSig(method, _nodeId, u256(_w));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);

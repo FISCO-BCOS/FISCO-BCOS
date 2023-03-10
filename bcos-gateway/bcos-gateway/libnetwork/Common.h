@@ -84,7 +84,7 @@ struct Options
 class NetworkException : public std::exception
 {
 public:
-    NetworkException(){};
+    NetworkException() = default;
     NetworkException(int _errorCode, const std::string& _msg)
       : m_errorCode(_errorCode), m_msg(_msg){};
 
@@ -100,9 +100,9 @@ private:
 };
 
 /// @returns the string form of the given disconnection reason.
-inline std::string reasonOf(DisconnectReason _r)
+inline std::string reasonOf(DisconnectReason _reason)
 {
-    switch (_r)
+    switch (_reason)
     {
     case DisconnectRequested:
         return "Disconnect was requested.";
@@ -131,7 +131,7 @@ inline std::string reasonOf(DisconnectReason _r)
     case NoDisconnect:
         return "(No disconnect has happened.)";
     case IdleWaitTimeout:
-        return "(Idle connection for no network io happens during 5s time "
+        return "(Idle connection for no network io happens during 60s time "
                "intervals.)";
     default:
         return "Unknown reason.";

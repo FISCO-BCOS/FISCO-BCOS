@@ -36,7 +36,7 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
     TransactionSubmitResultFactory::Ptr _txResultFactory, BlockFactory::Ptr _blockFactory,
     bcos::front::FrontServiceInterface::Ptr _frontService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::string const& _groupId,
-    std::string const& _chainId, int64_t _blockLimit)
+    std::string const& _chainId, int64_t _blockLimit, size_t _txpoolLimit)
   : m_nodeId(std::move(_nodeId)),
     m_cryptoSuite(std::move(_cryptoSuite)),
     m_txResultFactory(std::move(_txResultFactory)),
@@ -45,7 +45,8 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
     m_ledger(std::move(_ledger)),
     m_groupId(_groupId),
     m_chainId(_chainId),
-    m_blockLimit(_blockLimit)
+    m_blockLimit(_blockLimit),
+    m_txpoolLimit(_txpoolLimit)
 {}
 
 
@@ -58,8 +59,8 @@ TxPool::Ptr TxPoolFactory::createTxPool(
         std::make_shared<TxValidator>(txpoolNonceChecker, m_cryptoSuite, m_groupId, m_chainId);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction config");
-    auto txpoolConfig = std::make_shared<TxPoolConfig>(
-        validator, m_txResultFactory, m_blockFactory, m_ledger, txpoolNonceChecker, m_blockLimit);
+    auto txpoolConfig = std::make_shared<TxPoolConfig>(validator, m_txResultFactory, m_blockFactory,
+        m_ledger, txpoolNonceChecker, m_blockLimit, m_txpoolLimit);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction storage");
     auto txpoolStorage =

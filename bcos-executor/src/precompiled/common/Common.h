@@ -63,6 +63,7 @@ static const std::string V320_TABLE_INFO_PREFIX = "__v320_table_info__";
 
 /// FileSystem path limit
 static const size_t FS_PATH_MAX_LENGTH = 56;
+static const size_t FS_PATH_MAX_LENGTH_330 = 128;
 static const size_t FS_PATH_MAX_LEVEL = 6;
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;

@@ -75,7 +75,7 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     wasm_interface = getWasmHostInterface();
 
     hash_fn = evm_hash_fn;
-    version = m_executive->blockContext().lock()->blockVersion();
+    version = m_executive->blockContext().blockVersion();
     isSMCrypto = false;
 
     if (hashImpl() && hashImpl()->getHashImplType() == crypto::HashImplType::Sm3Hash)
@@ -129,16 +129,14 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     request->senderAddress = myAddress();
     request->origin = origin();
     request->status = 0;
-
-    auto blockContext = m_executive->blockContext().lock();
-
+    const auto& blockContext = m_executive->blockContext();
     switch (_msg->kind)
     {
     case EVMC_CREATE2:
         request->createSalt = fromEvmC(_msg->create2_salt);
         break;
     case EVMC_CALL:
-        if (m_executive->blockContext().lock()->isWasm())
+        if (blockContext.isWasm())
         {
             request->receiveAddress.assign((char*)_msg->destination_ptr, _msg->destination_len);
         }
@@ -153,10 +151,9 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     case EVMC_DELEGATECALL:
     case EVMC_CALLCODE:
     {
-        if (!m_executive->blockContext().lock()->isWasm())
+        if (!blockContext.isWasm())
         {
-            if (blockContext->blockVersion() >=
-                (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+            if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
             {
                 request->delegateCall = true;
                 request->codeAddress = evmAddress2String(_msg->code_address);
@@ -180,7 +177,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         request->create = true;
         break;
     }
-    if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+    if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
     {
         request->logEntries = std::move(m_callParameters->logEntries);
     }
@@ -191,7 +188,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
         return callBuiltInPrecompiled(request, false);
     }
-    if (!blockContext->isWasm() && m_executive->isEthereumPrecompiled(request->receiveAddress))
+    if (!blockContext.isWasm() && m_executive->isEthereumPrecompiled(request->receiveAddress))
     {
         return callBuiltInPrecompiled(request, true);
     }
@@ -201,7 +198,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     auto response = m_executive->externalCall(std::move(request));
 
     // Convert CallParameters to evmc_resultx
-    evmc_result result{.status_code = toEVMStatus(response, *blockContext),
+    evmc_result result{.status_code = toEVMStatus(response, blockContext),
         .gas_left = response->gas,
         .gas_refund = 0,
         .output_data = response->data.data(),
@@ -407,8 +404,8 @@ bcos::bytes HostContext::externalCodeRequest(const std::string_view& address)
 
 size_t HostContext::codeSizeAt(const std::string_view& address)
 {
-    auto blockContext = m_executive->blockContext().lock();
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    if (m_executive->blockContext().blockVersion() >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         /*
          Note:
@@ -433,8 +430,8 @@ size_t HostContext::codeSizeAt(const std::string_view& address)
 
 h256 HostContext::codeHashAt(const std::string_view& address)
 {
-    auto blockContext = m_executive->blockContext().lock();
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    if (m_executive->blockContext().blockVersion() >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         // precompiled return 0 hash;
         if (m_executive->isPrecompiled(addressBytesStr2String(address)))
@@ -506,7 +503,7 @@ void HostContext::log(h256s&& _topics, bytesConstRef _data)
 
 h256 HostContext::blockHash(int64_t _number) const
 {
-    if (m_executive->blockContext().lock()->blockVersion() >=
+    if (m_executive->blockContext().blockVersion() >=
         (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         if (_number >= blockNumber() || _number < 0)
@@ -515,28 +512,28 @@ h256 HostContext::blockHash(int64_t _number) const
         }
         else
         {
-            return m_executive->blockContext().lock()->blockHash(_number);
+            return m_executive->blockContext().blockHash(_number);
         }
     }
     else
     {
-        return m_executive->blockContext().lock()->hash();
+        return m_executive->blockContext().hash();
     }
 }
 
 int64_t HostContext::blockNumber() const
 {
-    return m_executive->blockContext().lock()->number();
+    return m_executive->blockContext().number();
 }
 
 uint32_t HostContext::blockVersion() const
 {
-    return m_executive->blockContext().lock()->blockVersion();
+    return m_executive->blockContext().blockVersion();
 }
 
 uint64_t HostContext::timestamp() const
 {
-    return m_executive->blockContext().lock()->timestamp();
+    return m_executive->blockContext().timestamp();
 }
 
 std::string_view HostContext::myAddress() const

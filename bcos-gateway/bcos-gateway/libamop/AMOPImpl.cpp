@@ -118,7 +118,7 @@ std::shared_ptr<bytes> AMOPImpl::buildAndEncodeMessage(uint32_t _type, bcos::byt
     message->setType(_type);
     message->setData(_data);
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
     return buffer;
 }
 
@@ -288,7 +288,7 @@ bool AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic,
 {
     std::vector<std::string> clients;
     m_topicManager->queryClientsByTopic(_topic, clients);
-    if (clients.size() == 0)
+    if (clients.empty())
     {
         AMOP_LOG(INFO) << LOG_DESC("trySendTopicMessageToLocalClient failed for empty client")
                        << LOG_KV("topic", _topic);

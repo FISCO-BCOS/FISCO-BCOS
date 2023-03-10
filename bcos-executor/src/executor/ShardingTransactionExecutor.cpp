@@ -45,9 +45,21 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
                 break;
             }
 
-            // get dagFlow from cache
             auto number = m_blockContext->number();
             auto timestamp = m_blockContext->timestamp();
+
+            if (!inputs.empty())
+            {
+                EXECUTOR_NAME_LOG(DEBUG)
+                    << LOG_BADGE("preExeBlock") << "Input is not empty, execute directly"
+                    << LOG_KV("number", number) << LOG_KV("timestamp", timestamp)
+                    << LOG_KV("shard", contractAddress);
+                TransactionExecutor::executeTransactions(
+                    contractAddress, std::move(inputs), std::move(callback));
+                break;
+            }
+
+            // get dagFlow from cache
             PreExeCache::Ptr cache;
             {
                 // get dagFlow if it has been prepared beforehand
@@ -136,11 +148,11 @@ BlockContext::Ptr ShardingTransactionExecutor::createTmpBlockContext(
 
     if (m_cachedStorage)
     {
-        stateStorage = createStateStorage(m_cachedStorage);
+        stateStorage = createStateStorage(m_cachedStorage, true);
     }
     else
     {
-        stateStorage = createStateStorage(m_backendStorage);
+        stateStorage = createStateStorage(m_backendStorage, true);
     }
 
     return createBlockContext(currentHeader, stateStorage);
@@ -162,8 +174,8 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
     if (blockHeader->version() >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         auto blockContext = createTmpBlockContext(blockHeader);
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(*blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
 
         auto txNum = inputs.size();
         auto blockNumber = blockHeader->number();
@@ -172,7 +184,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
         EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("preExeBlock") << LOG_BADGE("DAGFlow")
                                  << "preExecuteTransactions start"
                                  << LOG_KV("blockNumber", blockNumber)
-                                 << LOG_KV("timestamp", timestamp);
+                                 << LOG_KV("timestamp", timestamp) << LOG_KV("txNum", txNum);
 
         PreExeCache::Ptr cache = std::make_shared<PreExeCache>();
         std::shared_ptr<bcos::WriteGuard> cacheGuard = nullptr;
@@ -397,12 +409,11 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
             if (!isStaticCall)
             {
                 auto executiveFactory =
-                    std::make_shared<ShardingExecutiveFactory>(blockContext, m_precompiledContract,
-                        m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
-
+                    std::make_shared<ShardingExecutiveFactory>(*blockContext, m_precompiledContract,
+                        m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
                 executiveFlow = std::make_shared<ExecutiveDagFlow>(executiveFactory, m_abiCache);
-                executiveFlow->setThreadPool(m_threadPool);
                 blockContext->setExecutiveFlow(codeAddress, executiveFlow);
+                executiveFlow->setThreadPool(m_threadPool);
             }
             else
             {
