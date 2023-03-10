@@ -146,16 +146,16 @@ std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     std::vector<protocol::Transaction::ConstPtr> transactions;
     transactions.reserve(RANGES::size(hashes));
 
-    ReadGuard lock(x_txpoolMutex);
     for (auto const& hash : hashes)
     {
-        auto it = m_txsTable.find(hash);
-        if (it == m_txsTable.end())
+        TxsMap::ReadAccessor::Ptr accessor;
+        auto exists = m_txsTable.find<TxsMap::ReadAccessor>(accessor, hash);
+        if (!exists)
         {
             transactions.emplace_back(nullptr);
             continue;
         }
-        transactions.emplace_back(it->second);
+        transactions.emplace_back(accessor->value());
     }
 
     return transactions;

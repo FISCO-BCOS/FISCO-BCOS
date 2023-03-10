@@ -57,7 +57,7 @@ constexpr static const std::array<std::string_view, BFS_SYS_SUBS_COUNT> BFS_SYS_
 
 /// only for init v3.0.0 /sys/ in ledger, should never change it
 constexpr static const std::array<std::string_view, 13> BFS_SYS_SUBS_V30 = {SYS_CONFIG_NAME,
-    TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_NAME, AUTH_MANAGER_NAME, KV_TABLE_NAME, CRYPTO_NAME,
+    TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_TABLE_NAME, AUTH_MANAGER_NAME, KV_TABLE_NAME, CRYPTO_NAME,
     DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME, DISCRETE_ZKP_NAME,
     ACCOUNT_MANAGER_NAME};
 
