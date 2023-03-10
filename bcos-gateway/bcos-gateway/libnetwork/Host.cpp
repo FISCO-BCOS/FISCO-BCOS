@@ -428,7 +428,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
         Guard l(x_pendingConns);
-        if (m_pendingConns.count(_nodeIPEndpoint))
+        auto it = m_pendingConns.find(_nodeIPEndpoint);
+        if (it != m_pendingConns.end())
         {
             BCOS_LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list")
                             << LOG_KV("endpoint", _nodeIPEndpoint);

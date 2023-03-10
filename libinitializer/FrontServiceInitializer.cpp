@@ -43,7 +43,7 @@ FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _no
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(m_gateWay);
 
-    // make the threadpool configurable
+    // tx verify is use the frontService thread so config the size to cpu core number
     auto threadPool =
         std::make_shared<ThreadPool>("frontService", std::thread::hardware_concurrency());
     frontServiceFactory->setThreadPool(threadPool);
