@@ -130,7 +130,7 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
 
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     const auto* authAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number())
@@ -177,7 +177,7 @@ void ContractAuthMgrPrecompiled::getAdmin(
     /// wasm: getAdmin(string)  => string admin
 
     std::string path;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (blockContext.isWasm())
     {
@@ -229,7 +229,7 @@ void ContractAuthMgrPrecompiled::resetAdmin(
 
     std::string address;
     std::string admin;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (!blockContext.isWasm())
     {
@@ -288,7 +288,7 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     std::string path;
     string32 _func;
     string32 _type;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (!blockContext.isWasm())
     {
@@ -352,7 +352,7 @@ void ContractAuthMgrPrecompiled::checkMethodAuth(
     std::string path;
     string32 _func;
     std::string account;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (!blockContext.isWasm())
     {
@@ -441,7 +441,7 @@ void ContractAuthMgrPrecompiled::getMethodAuth(
     std::string path;
     string32 _func;
     bytes funcBytes;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (!blockContext.isWasm())
     {
@@ -507,7 +507,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
     std::string path;
     std::string account;
     string32 _func;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), path, _func, account);
     if (!blockContext.isWasm())
@@ -674,7 +674,7 @@ void ContractAuthMgrPrecompiled::setContractStatus(
 
     std::string address;
     bool isFreeze = false;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (blockContext.isWasm())
     {
@@ -729,7 +729,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
     /// setContractStatus(address _addr, uint8) => int256
     std::string address;
     uint8_t status = 0;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (blockContext.isWasm())
     {
@@ -790,7 +790,7 @@ void ContractAuthMgrPrecompiled::contractAvailable(
     /// contractAvailable(address _addr) => bool
 
     std::string address;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (blockContext.isWasm())
     {

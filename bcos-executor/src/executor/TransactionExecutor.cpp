@@ -1538,7 +1538,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     abiKey.insert(abiKey.end(), selector.begin(), selector.end());
                     // if precompiled
                     auto executiveFactory =
-                        std::make_shared<ExecutiveFactory>(m_blockContext, m_precompiledContract,
+                        std::make_shared<ExecutiveFactory>(*m_blockContext, m_precompiledContract,
                             m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
                     auto executive = executiveFactory->build(
                         params->codeAddress, params->contextID, params->seq, false);
@@ -2212,7 +2212,7 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     ExecutiveFlowInterface::Ptr executiveFlow = blockContext->getExecutiveFlow(codeAddress);
     if (executiveFlow == nullptr)
     {
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(*blockContext,
             m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
         if (!useCoroutine)
         {
@@ -2714,7 +2714,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         }
 
         auto& input = inputs[id];
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext,
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(*m_blockContext,
             m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
         auto executive =
             executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);

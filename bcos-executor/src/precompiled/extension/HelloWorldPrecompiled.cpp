@@ -64,7 +64,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());

@@ -88,7 +88,7 @@ inline bool isFromThisOrGovernors(std::shared_ptr<executor::TransactionExecutive
         return true;
     }
 
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     auto governors = getGovernorList(_executive, _callParameters, codec);
@@ -101,7 +101,7 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     if (!isFromThisOrSDK(_callParameters, getThisAddress(blockContext.isWasm())))
     {
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled")
@@ -176,7 +176,7 @@ void ShardingPrecompiled::makeShard(
 {
     // makeShard(string)
     std::string shardName;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), shardName);
 
@@ -224,7 +224,7 @@ void ShardingPrecompiled::linkShard(
 {
     // linkShard(string,string,string)
     std::string shardName, contractAddress;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), shardName, contractAddress);
 
@@ -298,7 +298,7 @@ void ShardingPrecompiled::getContractShard(
 {
     // (errorCode, shardName) = getContractShard(string)
     std::string contractAddress;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), contractAddress);
 
@@ -340,7 +340,7 @@ void ShardingPrecompiled::handleGetContractShard(
 {
     // getContractShard(string)
     std::string contractAddress;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), contractAddress);
 
@@ -365,7 +365,7 @@ void ShardingPrecompiled::setContractShard(
     const std::string_view& contractAddress, const std::string_view& shardName,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("ShardPrecompiled")
                           << "setContractShard internalCall request"
                           << LOG_KV("contractAddress", contractAddress)
@@ -390,7 +390,7 @@ void ShardingPrecompiled::handleSetContractShard(
 {
     // setContractShard(string,string)
     std::string contractAddress, shardName;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), contractAddress, shardName);
 

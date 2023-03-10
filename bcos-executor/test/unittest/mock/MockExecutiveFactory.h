@@ -16,15 +16,15 @@ class MockExecutiveFactory : public bcos::executor::ExecutiveFactory
 {
 public:
     using Ptr = std::shared_ptr<MockExecutiveFactory>;
-   MockExecutiveFactory(std::shared_ptr<BlockContext> blockContext,
+    MockExecutiveFactory(const BlockContext& blockContext,
         std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
             precompiledContract,
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             constantPrecompiled,
         std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
         std::shared_ptr<wasm::GasInjector> gasInjector)
-      : ExecutiveFactory(std::move(blockContext), precompiledContract, constantPrecompiled,
-            builtInPrecompiled, *gasInjector)
+      : ExecutiveFactory(blockContext, precompiledContract, constantPrecompiled, builtInPrecompiled,
+            *gasInjector)
     {}
     virtual ~MockExecutiveFactory() {}
 
@@ -35,7 +35,7 @@ public:
         blockContext = std::make_shared<BlockContext>(
             nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
         auto executive =
-            std::make_shared<MockTransactionExecutive>(blockContext, "0x00", 0, 0, instruction);
+            std::make_shared<MockTransactionExecutive>(*blockContext, "0x00", 0, 0, instruction);
         return executive;
     }
     std::shared_ptr<BlockContext> blockContext;

@@ -65,7 +65,7 @@ std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
 {
     auto funcSelector = getParamFunc(_callParameters->input());
     auto paramData = _callParameters->params();
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(paramData.size());

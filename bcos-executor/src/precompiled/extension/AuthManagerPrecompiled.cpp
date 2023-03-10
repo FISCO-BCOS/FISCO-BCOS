@@ -173,7 +173,7 @@ std::shared_ptr<PrecompiledExecResult> AuthManagerPrecompiled::call(
 {
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
 
     /// directly passthrough data to call
     auto selector = selector2Func.find(func);
@@ -206,7 +206,7 @@ void AuthManagerPrecompiled::getAdmin(
 {
     bytesConstRef data = getParamData(_callParameters->input());
     std::string path;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (blockContext.isWasm())
     {
@@ -234,7 +234,7 @@ void AuthManagerPrecompiled::resetAdmin(
     std::string path;
     std::string admin;
     bytesConstRef data = getParamData(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (!blockContext.isWasm())
     {
@@ -277,7 +277,7 @@ void AuthManagerPrecompiled::setMethodAuthType(
     string32 _func;
     string32 _type;
     bytesConstRef data = getParamData(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto beginT = utcTime();
     if (!blockContext.isWasm())
@@ -320,7 +320,7 @@ void AuthManagerPrecompiled::checkMethodAuth(
     string32 _func;
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (!blockContext.isWasm())
     {
@@ -353,7 +353,7 @@ void AuthManagerPrecompiled::getMethodAuth(
     std::string path;
     string32 _func;
     bytesConstRef data = getParamData(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (!blockContext.isWasm())
     {
@@ -384,7 +384,7 @@ void AuthManagerPrecompiled::setMethodAuth(
     std::string path;
     std::string account;
     string32 _func;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     bytesConstRef data = getParamData(_callParameters->input());
     auto recordT = utcTime();
@@ -430,7 +430,7 @@ void AuthManagerPrecompiled::setContractStatus(
     uint8_t status = 0;
     bytesConstRef data = getParamData(_callParameters->input());
     auto func = getParamFunc(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (func == getFuncSelector(AUTH_METHOD_SET_CONTRACT))
     {
@@ -477,7 +477,7 @@ void AuthManagerPrecompiled::contractAvailable(
 {
     std::string address;
     bytesConstRef data = getParamData(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (blockContext.isWasm())
     {
@@ -507,7 +507,7 @@ std::string AuthManagerPrecompiled::getContractAdmin(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _to,
     PrecompiledExecResult::Ptr const& _callParameters)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
@@ -538,7 +538,7 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
     const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
     std::string typeStr = "";
-    if (_executive->blockContextReference().blockVersion() >=
+    if (_executive->blockContext().blockVersion() >=
         static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
@@ -576,7 +576,7 @@ void AuthManagerPrecompiled::getDeployType(
 
 
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     u256 type = getDeployAuthType(_executive);
@@ -590,7 +590,7 @@ void AuthManagerPrecompiled::setDeployType(
 {
     string32 _type;
     bytesConstRef data = getParamData(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, _type);
     if (!checkSenderFromAuth(_callParameters->m_sender))
@@ -639,7 +639,7 @@ void AuthManagerPrecompiled::setDeployAuth(
 {
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (blockContext.isWasm())
     {
@@ -717,7 +717,7 @@ void AuthManagerPrecompiled::hasDeployAuth(
 {
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (blockContext.isWasm())
     {
@@ -743,7 +743,7 @@ bool AuthManagerPrecompiled::checkDeployAuth(
     std::map<std::string, bool> aclMap;
     std::string aclMapStr;
 
-    if (_executive->blockContextReference().blockVersion() >=
+    if (_executive->blockContext().blockVersion() >=
         static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION))
     {
         auto entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
@@ -797,7 +797,7 @@ void AuthManagerPrecompiled::initAuth(
 {
     std::string account;
     bytesConstRef data = getParamData(_callParameters->input());
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, account);
 

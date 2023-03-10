@@ -179,7 +179,7 @@ void DagTransferPrecompiled::userAddCall(std::shared_ptr<executor::TransactionEx
     // userAdd(string,uint256)
     std::string user;
     u256 amount;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_data, user, amount);
 
@@ -229,7 +229,7 @@ void DagTransferPrecompiled::userSaveCall(
     // userSave(string,uint256)
     std::string user;
     u256 amount;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_data, user, amount);
 
@@ -304,7 +304,7 @@ void DagTransferPrecompiled::userDrawCall(
 {
     std::string user;
     u256 amount;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_data, user, amount);
 
@@ -368,7 +368,7 @@ void DagTransferPrecompiled::userBalanceCall(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _data, bytes& _out)
 {
     std::string user;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_data, user);
 
@@ -417,7 +417,7 @@ void DagTransferPrecompiled::userTransferCall(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _data,
     std::string const&, bytes& _out)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     std::string fromUser, toUser;
     u256 amount;

@@ -42,7 +42,7 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     // [tableName][actualParams]
     std::vector<std::string> dynamicParams;
@@ -83,7 +83,7 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const PrecompiledExecResult::Ptr& _callParameters) const
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     const auto* accountMgrSender =
         blockContext.isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
@@ -141,7 +141,7 @@ void AccountPrecompiled::getAccountStatus(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters) const
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     uint8_t status = getAccountStatus(tableName, _executive);
     _callParameters->setExecResult(codec.encode(status));
@@ -160,7 +160,7 @@ uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
         return 0;
     }
     auto lastUpdateNumber = boost::lexical_cast<BlockNumber>(std::string(lastUpdateEntry->get()));
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     std::string statusStr;
     if (blockContext.number() > lastUpdateNumber) [[likely]]
     {
