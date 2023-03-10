@@ -56,7 +56,8 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(cryptoBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -200,7 +201,8 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         bytesConstRef dataRef(stringData);
         bytes encodedData = codec->encodeWithSig("sm3(bytes)", dataRef.toBytes());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, std::to_string(101), 100001, "1", "1");
+        auto tx = fakeTransaction(
+            cryptoSuite, keyPair, "", encodedData, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto txHash = tx->hash();
         txpool->hash2Transaction.emplace(txHash, tx);
@@ -244,7 +246,8 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         bytesConstRef dataRef(stringData);
         bytes encodedData = codec->encodeWithSig("keccak256Hash(bytes)", dataRef.toBytes());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, std::to_string(101), 100001, "1", "1");
+        auto tx = fakeTransaction(
+            cryptoSuite, keyPair, "", encodedData, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto txHash = tx->hash();
         txpool->hash2Transaction.emplace(txHash, tx);
@@ -295,8 +298,8 @@ public:
             std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
                 h256(), utcTime(), (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION),
                 FiscoBcosSchedule, false, false);
-        m_executive = std::make_shared<TransactionExecutive>(
-            std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, m_gasInjector);
+        m_executive =
+            std::make_shared<TransactionExecutive>(m_blockContext, "", 100, 0, m_gasInjector);
         m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(m_cryptoSuite->hashImpl());
     }
 
@@ -364,7 +367,8 @@ BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
         bytesConstRef dataRef(stringData);
         bytes encodedData = codec->encodeWithSig("getSha256(bytes)", dataRef.toBytes());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", encodedData, std::to_string(101), 100001, "1", "1");
+        auto tx = fakeTransaction(
+            cryptoSuite, keyPair, "", encodedData, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto txHash = tx->hash();
         txpool->hash2Transaction.emplace(txHash, tx);
