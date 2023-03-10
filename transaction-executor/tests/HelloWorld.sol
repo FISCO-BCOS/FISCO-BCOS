@@ -87,4 +87,11 @@ contract HelloWorld {
     function logOut() public {
         emit EventExample(m_intValue, m_stringValue);
     }
+
+    function createTwice() public {
+        ToBeDeploy contract1 = new ToBeDeploy();
+        ToBeDeploy contract2 = new ToBeDeploy();
+
+        require(contract1 != contract2);
+    }
 }
