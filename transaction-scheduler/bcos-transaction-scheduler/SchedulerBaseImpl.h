@@ -8,13 +8,8 @@
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-task/Task.h>
-#include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/combinable.h>
-#include <oneapi/tbb/concurrent_unordered_map.h>
-#include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_pipeline.h>
-#include <oneapi/tbb/parallel_reduce.h>
-#include <range/v3/view/transform.hpp>
 
 namespace bcos::transaction_scheduler
 {

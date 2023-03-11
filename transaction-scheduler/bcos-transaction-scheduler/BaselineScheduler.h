@@ -13,8 +13,6 @@
 #include <fmt/format.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <queue>
-#include <range/v3/view/map.hpp>
-#include <range/v3/view/transform.hpp>
 
 namespace bcos::transaction_scheduler
 {

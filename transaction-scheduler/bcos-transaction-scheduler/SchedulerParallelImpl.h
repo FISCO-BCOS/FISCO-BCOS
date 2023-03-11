@@ -8,8 +8,6 @@
 #include <oneapi/tbb/task_group.h>
 #include <tbb/parallel_pipeline.h>
 #include <iterator>
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/view/move.hpp>
 
 namespace bcos::transaction_scheduler
 {

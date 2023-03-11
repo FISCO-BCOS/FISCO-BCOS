@@ -6,13 +6,6 @@
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
-#include <range/v3/algorithm/all_of.hpp>
-#include <range/v3/range/access.hpp>
-#include <range/v3/range/traits.hpp>
-#include <range/v3/range_fwd.hpp>
-#include <range/v3/view/any_view.hpp>
-#include <range/v3/view/concat.hpp>
-#include <range/v3/view/transform.hpp>
 #include <stdexcept>
 #include <type_traits>
 #include <variant>
