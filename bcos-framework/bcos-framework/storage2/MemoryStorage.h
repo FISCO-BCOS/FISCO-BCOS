@@ -14,8 +14,6 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <mutex>
-#include <range/v3/iterator/basic_iterator.hpp>
-#include <range/v3/view/transform.hpp>
 #include <set>
 #include <thread>
 #include <type_traits>
