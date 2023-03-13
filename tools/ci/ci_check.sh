@@ -180,7 +180,7 @@ check_ipv6_pbft()
     check_consensus_and_sync 12 
 }
 
-fisco_version=$(../bin/fisco-bcos -v | grep -o "2\.[0-9]\.[0-9]" | head -n 1)
+fisco_version=$(../bin/fisco-bcos -v | egrep "FISCO-BCOS Version" | egrep -o "2\.[0-9]{1,}\.[0-9]{1,}")
 if [ -z "${fisco_version}" ];then LOG_ERROR "get fisco_version failed" && ../bin/fisco-bcos -v ;fi
 init
 check_sync_consensus
