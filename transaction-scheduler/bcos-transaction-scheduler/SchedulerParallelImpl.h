@@ -5,6 +5,8 @@
 #include "SchedulerBaseImpl.h"
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Wait.h>
+#include <oneapi/tbb/task.h>
+#include <oneapi/tbb/task_group.h>
 #include <tbb/parallel_pipeline.h>
 #include <iterator>
 
@@ -100,7 +102,6 @@ public:
             auto currentChunk = chunkIt;
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
-
             tbb::parallel_pipeline(m_maxThreads,
                 tbb::make_filter<void,
                     std::optional<std::tuple<RANGES::range_value_t<decltype(chunks)>, int64_t>>>(
@@ -110,13 +111,13 @@ public:
                         {
                             control.stop();
                             return std::optional<
-                                std::tuple<RANGES::range_value_t<decltype(chunks)>, int>>{};
+                                std::tuple<RANGES::range_value_t<decltype(chunks)>, int64_t>>{};
                         }
                         auto chunk = currentChunk;
                         ++currentChunk;
                         return std::make_optional(
-                            std::tuple<RANGES::range_value_t<decltype(chunks)>, int>{
-                                *chunk, m_chunkSize * RANGES::distance(chunkBegin, chunk)});
+                            std::tuple<RANGES::range_value_t<decltype(chunks)>, int64_t>{
+                                *chunk, RANGES::distance(chunkBegin, chunk)});
                     }) &
                     tbb::make_filter<
                         std::optional<std::tuple<RANGES::range_value_t<decltype(chunks)>, int64_t>>,
@@ -124,13 +125,14 @@ public:
                         [&](auto input) {
                             if (input && !abortToken)
                             {
-                                auto& [transactions, startContextID] = *input;
+                                auto& [transactions, index] = *input;
+                                auto startContextID = index * m_chunkSize;
                                 PARALLEL_SCHEDULER_LOG(DEBUG)
-                                    << "Chunk " << startContextID << " executing...";
+                                    << "Chunk " << index << " executing...";
                                 auto result = std::make_optional(task::syncWait(chunkExecute(
                                     blockHeader, transactions, startContextID, abortToken)));
                                 PARALLEL_SCHEDULER_LOG(DEBUG)
-                                    << "Chunk " << startContextID << " execute finished";
+                                    << "Chunk " << index << " execute finished";
                                 return result;
                             }
                             return std::optional<ChunkExecuteReturn>{};
