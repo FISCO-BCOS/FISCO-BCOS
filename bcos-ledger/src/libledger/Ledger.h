@@ -30,6 +30,7 @@
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <utility>
+#include <boost/compute/detail/lru_cache.hpp>
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
@@ -38,11 +39,17 @@ namespace bcos::ledger
 class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledger>
 {
 public:
+    using CacheType = boost::compute::detail::lru_cache<int64_t, std::shared_ptr<std::vector<h256>>>;
+
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::storage::StorageInterface::Ptr _storage)
+        bcos::storage::StorageInterface::Ptr _storage,
+        int merkleTreeCacheSize = 100)
       : m_blockFactory(std::move(_blockFactory)),
         m_storage(std::move(_storage)),
-        m_threadPool(std::make_shared<ThreadPool>("WriteReceipts", 1))
+        m_threadPool(std::make_shared<ThreadPool>("WriteReceipts", 1)),
+        m_merkleTreeCacheSize(merkleTreeCacheSize),
+        m_txProofMerkleCache(m_merkleTreeCacheSize),
+        m_receiptProofMerkleCache(m_merkleTreeCacheSize)
     {}
 
     ~Ledger() override = default;
@@ -154,5 +161,12 @@ private:
 
     mutable RecursiveMutex m_mutex;
     std::shared_ptr<bcos::ThreadPool> m_threadPool;
+
+    //Maintain merkle trees of 100 blocks
+    int m_merkleTreeCacheSize;
+    Mutex m_txMerkleMtx;
+    Mutex m_receiptMerkleMtx;
+    CacheType m_txProofMerkleCache;
+    CacheType m_receiptProofMerkleCache;
 };
 }  // namespace bcos::ledger
