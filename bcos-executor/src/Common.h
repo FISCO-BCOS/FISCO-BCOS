@@ -281,4 +281,5 @@ inline std::string getContractTableName(
     return out;
 }
 
+bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data);
 }  // namespace bcos

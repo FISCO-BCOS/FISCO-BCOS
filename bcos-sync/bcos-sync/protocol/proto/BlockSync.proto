@@ -19,4 +19,7 @@ message BlockSyncMessage
     //for time sync
     int64 time = 8;
     int64 archived_number = 9;
+
+    //for block sync optimize
+    int64 block_interval = 10;
 }

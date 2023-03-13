@@ -204,7 +204,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // number 2 nonce
     auto nonceBlock = m_blockFactory->createBlock();
-    std::vector<bcos::u256> nonceList;
+    protocol::NonceList nonceList;
     // get nonce from _blockTxs
     if (_blockTxs)
     {
@@ -1909,7 +1909,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
     Entry sysSubEntry;
     std::map<std::string, std::string> sysSubMap;
     for (const auto& contract :
-        precompiled::BFS_SYS_SUBS |
+        precompiled::BFS_SYS_SUBS_V30 |
             RANGES::views::transform([](std::string_view const& sub) -> std::string_view {
                 return sub.substr(tool::FS_SYS_BIN.length() + 1);
             }))

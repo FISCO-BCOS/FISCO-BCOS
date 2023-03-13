@@ -51,7 +51,7 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -148,7 +148,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("get()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -192,7 +192,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("set(string)", _value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -238,7 +238,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("setAccountStatus(address,uint8)", account, status);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address(_sender);
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -455,7 +455,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("getAccountStatus(address)", account);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -531,7 +531,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("getAccountStatus()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto hash = tx->hash();
         txpool->hash2Transaction[hash] = tx;
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));

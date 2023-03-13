@@ -144,7 +144,7 @@ public:
         wasm_interface = nullptr;
 
         hash_fn = evm_hash_fn;
-        // version = m_executive->blockContext().lock()->blockVersion();
+        // version = m_executive->blockContext().blockVersion();
         isSMCrypto = false;
         if (GlobalHashImpl::g_hashImpl &&
             GlobalHashImpl::g_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash)
@@ -359,7 +359,7 @@ public:
         // if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         // {
         //     // FISCO BCOS only has tx Gas limit. We use it as block gas limit
-        //     return m_executive->blockContext().lock()->txGasLimit();
+        //     return m_executive->blockContext().txGasLimit();
         // }
         return 30000 * 10000;  // TODO: add config
     }

@@ -47,7 +47,7 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
 
 bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
 {
-    bcos::ReadGuard l(x_blockHeader);
+    // bcos::ReadGuard l(x_blockHeader);
     return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
         [inner = this->m_inner]() { return &inner->blockHeader; });
 }
@@ -91,7 +91,7 @@ void BlockImpl::appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt)
         std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(_receipt)->inner());
 }
 
-void BlockImpl::setNonceList(RANGES::any_view<bcos::u256> nonces)
+void BlockImpl::setNonceList(RANGES::any_view<std::string> nonces)
 {
     m_inner->nonceList.clear();
     for (auto it : nonces)
@@ -100,11 +100,9 @@ void BlockImpl::setNonceList(RANGES::any_view<bcos::u256> nonces)
     }
 }
 
-RANGES::any_view<bcos::u256> BlockImpl::nonceList() const
+RANGES::any_view<std::string> BlockImpl::nonceList() const
 {
-    return m_inner->nonceList | RANGES::views::transform([](const std::string& nonceStr) {
-        return boost::lexical_cast<bcos::u256>(nonceStr);
-    });
+    return m_inner->nonceList;
 }
 
 bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const

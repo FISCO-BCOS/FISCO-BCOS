@@ -8,9 +8,7 @@
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-task/Task.h>
-#include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/combinable.h>
-#include <oneapi/tbb/concurrent_unordered_map.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 
 namespace bcos::transaction_scheduler

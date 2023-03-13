@@ -80,6 +80,11 @@ std::string ContractShardUtils::getContractShard(
     CONTRACT_SHARD_LOG(TRACE) << LOG_BADGE("ContractShard") << "getContractShard "
                               << LOG_KV("contractTableName", contractTableName);
 
+    if (contractTableName.empty())
+    {
+        return "";
+    }
+
     std::string_view tableName = contractTableName;
     std::optional<bcos::storage::Entry> entry;
     do

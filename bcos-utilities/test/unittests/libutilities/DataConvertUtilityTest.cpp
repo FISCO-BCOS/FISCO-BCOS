@@ -96,6 +96,29 @@ BOOST_AUTO_TEST_CASE(testBigEndian)
     BOOST_CHECK(fromBigEndian<u256>(big_endian_bytes) == number);
     BOOST_CHECK(fromBigEndian<u160>(toBigEndian(number_u160)) == number_u160);
 }
+
+/// test toBigEndian && fromBigEndian
+BOOST_AUTO_TEST_CASE(testBigEndianToU64)
+{
+    uint64_t number = 0xfffffffffffffffa;
+    u256 u256Number(number);
+    auto bigEndU64 = toBigEndian(u256Number);
+    std::cout << "uint64_t:" << number << std::endl;
+    std::cout << "u256:" << u256Number.str(16) << std::endl;
+    std::cout << "bigEndU64:" << toHex(bigEndU64) << std::endl;
+    // check u256
+    uint64_t fromBig0 = 0;
+    std::reverse_copy(bigEndU64.data() + 24, bigEndU64.data() + 32, (char*)&fromBig0);
+    std::cout << "fromBig:" << fromBig0 << std::endl;
+    BOOST_CHECK(fromBig0 == number);
+
+    uint64_t fromBig = 0;
+    std::reverse(bigEndU64.data() + 24, bigEndU64.data() + 32);
+    fromBig = *(uint64_t*)(bigEndU64.data() + 24);
+    std::cout << "fromBig:" << fromBig << std::endl;
+    BOOST_CHECK(fromBig == number);
+}
+
 /// test operator+
 BOOST_AUTO_TEST_CASE(testOperators)
 {

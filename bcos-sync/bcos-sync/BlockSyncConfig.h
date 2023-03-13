@@ -75,6 +75,8 @@ public:
     bcos::crypto::HashType const& hash() const;
 
     bcos::protocol::BlockNumber nextBlock() const { return m_nextBlock; }
+    bcos::protocol::BlockNumber applyingBlock() const { return m_applyingBlock; }
+    void setApplyingBlock(bcos::protocol::BlockNumber _number);
     void resetBlockInfo(
         bcos::protocol::BlockNumber _blockNumber, bcos::crypto::HashType const& _hash);
 
@@ -159,6 +161,7 @@ private:
 
     bcos::crypto::HashType m_genesisHash;
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
+    std::atomic<bcos::protocol::BlockNumber> m_applyingBlock = {0};
     std::atomic<bcos::protocol::BlockNumber> m_nextBlock = {0};
     std::atomic<bcos::protocol::BlockNumber> m_executedBlock = {0};
     bcos::crypto::HashType m_hash;

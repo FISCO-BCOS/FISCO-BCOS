@@ -239,7 +239,7 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
     auto dstNodeID = _message->dstP2PNodeID();
     // without nextHop: maybe network unreachable or with distance equal to 1
     auto nextHop = m_routerTable->getNextHop(dstNodeID);
-    if (nextHop.size() == 0)
+    if (nextHop.empty())
     {
         SERVICE_LOG(TRACE) << LOG_DESC("asyncSendMessageByNodeID: sendMessage to dstNode")
                            << LOG_KV("from", _message->srcP2PNodeID())

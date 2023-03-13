@@ -79,9 +79,10 @@ public:
     virtual void saveMessage(
         std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG);
 
-    inline bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
+    inline bcos::protocol::BlockNumber number() { return m_blockHeader->number(); }
 
     inline bcos::protocol::Block::Ptr block() { return m_block; }
+    inline auto blockHeader() const noexcept { return m_blockHeader; }
     inline bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
     bool isCall() { return m_staticCall; }
@@ -187,6 +188,7 @@ protected:
     std::chrono::milliseconds m_commitElapsed;
 
     bcos::protocol::Block::Ptr m_block;
+    bcos::protocol::BlockHeader::ConstPtr m_blockHeader;
     bcos::protocol::TransactionsPtr m_blockTxs;
 
     bcos::protocol::BlockHeader::Ptr m_result;

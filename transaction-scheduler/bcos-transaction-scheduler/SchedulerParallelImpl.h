@@ -5,8 +5,6 @@
 #include "SchedulerBaseImpl.h"
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Wait.h>
-#include <oneapi/tbb/task.h>
-#include <oneapi/tbb/task_group.h>
 #include <tbb/parallel_pipeline.h>
 #include <iterator>
 

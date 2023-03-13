@@ -86,6 +86,24 @@ TransactionStatus toTransactionStatus(Exception const& _e)
         return TransactionStatus::AccountFrozen;
     return TransactionStatus::Unknown;
 }
+
 }  // namespace executor
 
+bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
+{
+    // the string length will never exceed uint64_t
+    size_t indexOffset = index * 32;
+    if (typeName == "string" || typeName == "bytes")
+    {
+        uint64_t offset = 0;
+        std::reverse_copy(
+            data.begin() + indexOffset + 24, data.begin() + indexOffset + 32, (char*)&offset);
+        const unsigned char* rawData = data.data() + offset + 32;
+        uint64_t dataLength = 0;
+        std::reverse_copy(
+            data.begin() + offset + 24, data.begin() + offset + 32, (char*)&dataLength);
+        return bytes(rawData, rawData + dataLength);
+    }
+    return bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
+}
 }  // namespace bcos

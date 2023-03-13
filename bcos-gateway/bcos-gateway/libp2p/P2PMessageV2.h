@@ -35,7 +35,7 @@ public:
     virtual void setTTL(int16_t _ttl) { m_ttl = _ttl; }
 
 protected:
-    int32_t decodeHeader(bytesConstRef _buffer) override;
+    int32_t decodeHeader(const bytesConstRef& _buffer) override;
     bool encodeHeader(bytes& _buffer) override;
 
     int16_t m_ttl = 10;

@@ -55,6 +55,12 @@ constexpr static const std::array<std::string_view, BFS_SYS_SUBS_COUNT> BFS_SYS_
     KV_TABLE_NAME, CRYPTO_NAME, DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME,
     DISCRETE_ZKP_NAME, ACCOUNT_MANAGER_NAME, CAST_NAME, SHARDING_PRECOMPILED_NAME};
 
+/// only for init v3.0.0 /sys/ in ledger, should never change it
+constexpr static const std::array<std::string_view, 13> BFS_SYS_SUBS_V30 = {SYS_CONFIG_NAME,
+    TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_TABLE_NAME, AUTH_MANAGER_NAME, KV_TABLE_NAME, CRYPTO_NAME,
+    DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME, DISCRETE_ZKP_NAME,
+    ACCOUNT_MANAGER_NAME};
+
 /// precompiled contract for solidity
 /// precompiled address should range in [0x1000, 0x20000)
 constexpr const char* const SYS_CONFIG_ADDRESS = "0000000000000000000000000000000000001000";
@@ -70,7 +76,8 @@ constexpr const char* const BFS_ADDRESS = "0000000000000000000000000000000000001
 constexpr const char* const CAST_ADDRESS = "000000000000000000000000000000000000100f";
 constexpr const char* const SHARDING_PRECOMPILED_ADDRESS =
     "0000000000000000000000000000000000001010";
-constexpr const char* const SYS_ADDRESS_PREFIX = "00000000000000000000000000000000000";
+constexpr std::string_view SYS_ADDRESS_PREFIX = "00000000000000000000000000000000000";
+constexpr std::string_view EVM_PRECOMPILED_PREFIX = "000000000000000000000000000000000000000";
 constexpr std::string_view EMPTY_ADDRESS = "0000000000000000000000000000000000000000";
 
 // Contract address related to privacy computing
@@ -109,7 +116,7 @@ constexpr static const std::array<std::pair<std::string_view,std::string_view>, 
 };
 // clang-format on
 
-const std::set<std::string, std::less<>> c_systemTxsAddress = {
+const std::set<std::string_view, std::less<>> c_systemTxsAddress = {
     bcos::precompiled::SYS_CONFIG_ADDRESS, bcos::precompiled::CONSENSUS_ADDRESS,
     bcos::precompiled::WORKING_SEALER_MGR_ADDRESS, bcos::precompiled::SYS_CONFIG_NAME,
     bcos::precompiled::CONSENSUS_TABLE_NAME, bcos::precompiled::AUTH_COMMITTEE_ADDRESS,

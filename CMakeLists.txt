@@ -44,6 +44,7 @@ if(FULLNODE)
     endif()
     include(ProjectGroupSig)
     include(ProjectSDF)
+    include(ProjectITTAPI)
 
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)

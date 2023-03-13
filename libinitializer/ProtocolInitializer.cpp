@@ -32,6 +32,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
+#include <bcos-security/bcos-security/HsmDataEncryption.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -50,11 +51,11 @@ ProtocolInitializer::ProtocolInitializer()
 {}
 void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
 {
-    m_hsmEnable = _nodeConfig->hsmEnable();
+    m_enableHsm = _nodeConfig->enableHsm();
     // TODO: ed25519
     if (_nodeConfig->smCryptoType())
     {
-        if (m_hsmEnable)
+        if (m_enableHsm)
         {
             m_hsmLibPath = _nodeConfig->hsmLibPath();
             m_keyIndex = _nodeConfig->keyIndex();
@@ -76,8 +77,17 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
 
     if (true == _nodeConfig->storageSecurityEnable())
     {
-        m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
-        m_dataEncryption->init();
+        // storage security with HSM
+        if (_nodeConfig->enableHsm())
+        {
+            INITIALIZER_LOG(DEBUG)
+                << LOG_DESC("storage_security.enable = true, storage security with HSM");
+            m_dataEncryption = std::make_shared<HsmDataEncryption>(_nodeConfig);
+        }
+        else
+        {
+            m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
+        }
 
         INITIALIZER_LOG(INFO) << LOG_DESC(
             "storage_security.enable = true, init data encryption success");
@@ -125,7 +135,7 @@ void ProtocolInitializer::createHsmSMCryptoSuite()
 
 void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 {
-    if (m_hsmEnable)
+    if (m_enableHsm)
     {
         // Create key pair according to the key index which inside HSM(Hardware Secure Machine)
         m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())

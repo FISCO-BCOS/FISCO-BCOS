@@ -61,13 +61,19 @@ bool P2PMessageV2::encodeHeader(bytes& _buffer)
     return true;
 }
 
-int32_t P2PMessageV2::decodeHeader(bytesConstRef _buffer)
+int32_t P2PMessageV2::decodeHeader(const bytesConstRef& _buffer)
 {
     int32_t offset = P2PMessage::decodeHeader(_buffer);
     if (m_version <= bcos::protocol::ProtocolVersion::V0)
     {
         return offset;
     }
+
+    if (_buffer.size() < m_length)
+    {
+        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+    }
+
     auto length = static_cast<int32_t>(_buffer.size());
     // decode ttl
     CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 2, length);

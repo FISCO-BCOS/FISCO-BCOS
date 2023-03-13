@@ -50,6 +50,8 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+#include <array>
+#include <cstring>
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -182,6 +184,18 @@ void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
 void TransactionExecutor::resetEnvironment()
 {
     RecursiveGuard l(x_resetEnvironmentLock);
+
+    if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    {
+        m_keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+    }
+    else
+    {
+        m_keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            storage::IGNORED_ARRAY.begin(), storage::IGNORED_ARRAY.end());
+    }
+
     if (m_isWasm)
     {
         initWasmEnvironment();
@@ -289,9 +303,16 @@ void TransactionExecutor::initEvmEnvironment()
         {DISCRETE_ZKP_ADDRESS, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
 
 
-    // test precompiled
-    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    {
+        // Only 3.1 goes here, here is a bug, ignore init test precompiled
+    }
+    else
+    {
+        // test precompiled
+        CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+        SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    }
 }
 
 void TransactionExecutor::initWasmEnvironment()
@@ -352,16 +373,29 @@ void TransactionExecutor::initWasmEnvironment()
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_NAME, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
-
-    // test precompiled
-    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
-    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    {
+        // Only 3.1 goes here, here is a bug, ignore init test precompiled
+    }
+    else
+    {
+        // test precompiled
+        CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+        SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    }
 }
 
 void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)
 {
-    SmallBankPrecompiled::createTable(storage);
-    DagTransferPrecompiled::createDagTable(storage);
+    if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+    {
+        // Only 3.1 goes here, here is a bug, ignore init test precompiled
+    }
+    else
+    {
+        SmallBankPrecompiled::createTable(storage);
+        DagTransferPrecompiled::createDagTable(storage);
+    }
 }
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
@@ -1264,22 +1298,6 @@ void TransactionExecutor::dagExecuteTransactions(
                             << LOG_KV("inputSize", inputs.size());
 }
 
-bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
-{
-    size_t indexOffset = index * 32;
-    auto header = bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
-    if (typeName == "string" || typeName == "bytes")
-    {
-        u256 u = fromBigEndian<u256>(header);
-        auto offset = static_cast<std::size_t>(u);
-        auto rawData = data.getCroppedData(offset);
-        auto len = static_cast<std::size_t>(
-            fromBigEndian<u256>(bytes(rawData.begin(), rawData.begin() + 32)));
-        return bytes(rawData.begin() + 32, rawData.begin() + 32 + static_cast<std::size_t>(len));
-    }
-    return header;
-}
-
 std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
     const FunctionAbi& functionAbi, const CallParameters& params,
     std::shared_ptr<BlockContext> _blockContext)
@@ -1299,9 +1317,10 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
 
     auto conflictFields = make_shared<vector<bytes>>();
 
-    for (auto& conflictField : functionAbi.conflictFields)
+    for (const auto& conflictField : functionAbi.conflictFields)
     {
         auto criticalKey = bytes();
+        criticalKey.reserve(72);
 
         size_t slot = toHash;
         if (conflictField.slot.has_value())
@@ -1366,7 +1385,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 auto bytes = static_cast<bcos::byte*>(static_cast<void*>(&blockNumber));
                 criticalKey.insert(criticalKey.end(), bytes, bytes + sizeof(blockNumber));
 
-                EXECUTOR_NAME_LOG(DEBUG)
+                EXECUTOR_NAME_LOG(TRACE)
                     << LOG_BADGE("extractConflictFields") << LOG_DESC("use `BlockNumber`")
                     << LOG_KV("functionName", functionAbi.name)
                     << LOG_KV("blockNumber", blockNumber);
@@ -1376,7 +1395,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
             {
                 criticalKey.insert(criticalKey.end(), to.begin(), to.end());
 
-                EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields")
+                EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields")
                                          << LOG_DESC("use `Addr`") << LOG_KV("addr", to);
                 break;
             }
@@ -1393,12 +1412,12 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         {
             assert(!conflictField.value.empty());
             const ParameterAbi* paramAbi = nullptr;
-            auto components = &functionAbi.inputs;
+            const auto* components = &functionAbi.inputs;
             auto inputData = ref(params.data).getCroppedData(4).toBytes();
             if (_blockContext->isWasm())
             {
                 auto startPos = 0u;
-                for (auto segment : conflictField.value)
+                for (const auto& segment : conflictField.value)
                 {
                     if (segment >= components->size())
                     {
@@ -1430,7 +1449,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
             else
             {  // evm
                 auto index = conflictField.value[0];
-                auto typeName = functionAbi.flatInputs[index];
+                const auto& typeName = functionAbi.flatInputs[index];
                 if (typeName.empty())
                 {
                     return nullptr;
@@ -1439,7 +1458,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 criticalKey.insert(criticalKey.end(), out.begin(), out.end());
             }
 
-            EXECUTOR_NAME_LOG(DEBUG)
+            EXECUTOR_NAME_LOG(TRACE)
                 << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Params`")
                 << LOG_KV("functionName", functionAbi.name)
                 << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
@@ -1449,7 +1468,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         {
             criticalKey.insert(
                 criticalKey.end(), conflictField.value.begin(), conflictField.value.end());
-            EXECUTOR_NAME_LOG(DEBUG)
+            EXECUTOR_NAME_LOG(TRACE)
                 << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Const`")
                 << LOG_KV("functionName", functionAbi.name)
                 << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
@@ -1457,7 +1476,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         }
         case None:
         {
-            EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `None`")
+            EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `None`")
                                      << LOG_KV("functionName", functionAbi.name)
                                      << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
             break;
@@ -1519,8 +1538,8 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     abiKey.insert(abiKey.end(), selector.begin(), selector.end());
                     // if precompiled
                     auto executiveFactory =
-                        std::make_shared<ExecutiveFactory>(m_blockContext, m_precompiledContract,
-                            m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+                        std::make_shared<ExecutiveFactory>(*m_blockContext, m_precompiledContract,
+                            m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
                     auto executive = executiveFactory->build(
                         params->codeAddress, params->contextID, params->seq, false);
                     auto p = executive->getPrecompiled(params->receiveAddress);
@@ -1865,13 +1884,12 @@ void TransactionExecutor::commit(
 
         m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
         m_ledgerCache->fetchCompatibilityVersion();
-
-        setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
-        if (versionCompareTo(m_ledgerCache->ledgerConfig()->compatibilityVersion(),
-                BlockVersion::V3_3_VERSION) >= 0)
+        auto version = m_ledgerCache->ledgerConfig()->compatibilityVersion();
+        setBlockVersion(version);
+        if (version >= BlockVersion::V3_3_VERSION)
         {
             m_ledgerCache->fetchAuthCheckStatus();
-            m_isAuthCheck = m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+            m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
         }
         removeCommittedState();
 
@@ -2194,8 +2212,8 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     ExecutiveFlowInterface::Ptr executiveFlow = blockContext->getExecutiveFlow(codeAddress);
     if (executiveFlow == nullptr)
     {
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(*blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
         if (!useCoroutine)
         {
             executiveFlow = std::make_shared<ExecutiveSerialFlow>(executiveFactory);
@@ -2622,17 +2640,17 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
         callParameters->codeAddress = input.delegateCallAddress();
     }
 
-    if (!m_isWasm)
+    if (!m_isWasm && !callParameters->create)
     {
         if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->codeAddress.insert(
-                0, callParameters->codeAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->codeAddress.size(), '0');
         }
         if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->receiveAddress.insert(
-                0, callParameters->receiveAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
 
@@ -2665,18 +2683,18 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
 
-    if (!m_isWasm)
+    if (!m_isWasm && !callParameters->create)
     {
         constexpr static auto addressSize = Address::SIZE * 2;
         if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->codeAddress.insert(
-                0, callParameters->codeAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->codeAddress.size(), '0');
         }
         if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->receiveAddress.insert(
-                0, callParameters->receiveAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
     return callParameters;
@@ -2696,8 +2714,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         }
 
         auto& input = inputs[id];
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(*m_blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
         auto executive =
             executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
 
@@ -2732,7 +2750,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorage(
     bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist)
 {
-    auto stateStorage = m_stateStorageFactory->createStateStorage(storage, m_blockVersion);
+    auto stateStorage = m_stateStorageFactory->createStateStorage(
+        std::move(storage), m_blockVersion, ignoreNotExist, m_keyPageIgnoreTables);
     return stateStorage;
 }
 

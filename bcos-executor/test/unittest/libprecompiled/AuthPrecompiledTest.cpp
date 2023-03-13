@@ -52,7 +52,7 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -108,7 +108,7 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -204,7 +204,7 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(h2, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -323,7 +323,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("get()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -367,7 +367,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("set(string)", _value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -417,7 +417,7 @@ public:
         uint8_t type = (_type == AuthType::WHITE_LIST_MODE) ? 1 : 2;
         auto t = toString32(h256(type));
         bytes in = codec->encodeWithSig("setMethodAuthType(address,bytes4,uint8)", _path, fun, t);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -504,7 +504,7 @@ public:
         bytes fun = codec->encodeWithSig(helloMethod);
         auto func = toString32(h256(fun, FixedBytes<32>::AlignLeft));
         bytes in = codec->encodeWithSig(authMethod, _path, func, _account);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -591,7 +591,7 @@ public:
         bytes fun = codec->encodeWithSig(helloMethod);
         auto func = toString32(h256(fun, FixedBytes<32>::AlignLeft));
         bytes in = codec->encodeWithSig("getMethodAuth(address,bytes4)", _path, func);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto hash = tx->hash();
         txpool->hash2Transaction[hash] = tx;
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -654,7 +654,7 @@ public:
         bytes fun = codec->encodeWithSig(helloMethod);
         auto func = toString32(h256(fun, FixedBytes<32>::AlignLeft));
         bytes in = codec->encodeWithSig("checkMethodAuth(address,bytes4,address)", _path, func);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto hash = tx->hash();
         txpool->hash2Transaction[hash] = tx;
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -716,7 +716,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("resetAdmin(address,address)", _path, _newAdmin);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         auto wrongSender = Address("0000000000000000000000000000000000011111");
         tx->forceSender(_useWrongSender ? wrongSender.asBytes() : newSender.asBytes());
@@ -786,7 +786,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("setContractStatus(address,bool)", _path, _isFreeze);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
         auto params1 = std::make_unique<NativeExecutionMessage>();
@@ -870,7 +870,7 @@ public:
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig(
             "setContractStatus(address,uint8)", _path, static_cast<uint8_t>(status));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
         auto params1 = std::make_unique<NativeExecutionMessage>();
@@ -953,7 +953,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("contractAvailable(address)", _path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
         auto params1 = std::make_unique<NativeExecutionMessage>();
@@ -1014,7 +1014,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("getAdmin(address)", _path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -1079,7 +1079,7 @@ public:
         uint8_t type = (_authType == AuthType::WHITE_LIST_MODE) ? 1 : 2;
         auto t = toString32(h256(type));
         bytes in = codec->encodeWithSig("setDeployAuthType(uint8)", t);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -1121,7 +1121,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("deployType()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -1163,7 +1163,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("openDeployAuth(address)", _address);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -1205,7 +1205,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("closeDeployAuth(address)", _address);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -1247,7 +1247,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("hasDeployAuth(address)", _address);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -1289,7 +1289,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("initAuth(string)", _address);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto hash = tx->hash();
         txpool->hash2Transaction[hash] = tx;
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -1822,7 +1822,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         nextBlock(2);
         bytes in = codec->encodeWithSig("createUpdateGovernorProposal(address,uint32,uint256)",
             admin, codec::toString32(h256(uint32_t(2))), u256(2));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
 
         Address _admin(admin);
         tx->forceSender(_admin.asBytes());
@@ -2100,7 +2100,7 @@ BOOST_AUTO_TEST_CASE(testInitAuth)
         nextBlock(_number);
         bytes in = codec->encodeWithSig("createUpdateGovernorProposal(address,uint32,uint256)",
             admin, codec::toString32(h256(uint32_t(2))), u256(2));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
 
         Address _admin(admin);
         tx->forceSender(_admin.asBytes());

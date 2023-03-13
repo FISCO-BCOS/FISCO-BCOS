@@ -242,7 +242,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     string selfAddress = "usr/alice/hello_world";
 
     auto tx =
-        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -448,7 +448,7 @@ BOOST_AUTO_TEST_CASE(deployError)
     string selfAddress = "usr/alice/hello_world";
 
     auto tx =
-        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -649,7 +649,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
     string selfAddress = "usr/alice/hello_world";
 
     auto tx =
-        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -890,7 +890,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
         input.insert(input.end(), constructorParam.begin(), constructorParam.end());
 
         auto tx =
-            fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -977,7 +977,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
         input.insert(input.end(), constructorParam.begin(), constructorParam.end());
 
         auto tx = fakeTransaction(
-            cryptoSuite, keyPair, "", input, 102, 100001, "1", "1", helloWorldCallerAbi);
+            cryptoSuite, keyPair, "", input, std::to_string(102), 100001, "1", "1", helloWorldCallerAbi);
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -1148,7 +1148,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
     string transferAddress = "usr/alice/transfer";
 
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", transferAbi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", transferAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();

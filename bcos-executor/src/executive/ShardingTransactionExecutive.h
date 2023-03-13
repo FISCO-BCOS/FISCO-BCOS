@@ -26,15 +26,24 @@ namespace bcos::executor
 class ShardingTransactionExecutive : public CoroutineTransactionExecutive
 {
 public:
-    ShardingTransactionExecutive(std::weak_ptr<BlockContext> blockContext,
+    ShardingTransactionExecutive(const BlockContext& blockContext,
         std::string contractAddress, int64_t contextID, int64_t seq,
-        std::shared_ptr<wasm::GasInjector>& gasInjector);
+        const wasm::GasInjector& gasInjector);
 
     ~ShardingTransactionExecutive() override = default;
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;
 
     CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override;
+
+    TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
+        int64_t contextID, int64_t seq, bool useCoroutine = true) override
+    {
+        ShardingExecutiveFactory executiveFactory = ShardingExecutiveFactory(m_blockContext,
+            m_evmPrecompiled, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+
+        return executiveFactory.build(_contractAddress, contextID, seq, useCoroutine);
+    }
 
     std::string getContractShard(const std::string_view& contractAddress);
 

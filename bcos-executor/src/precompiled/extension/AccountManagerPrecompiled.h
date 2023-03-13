@@ -47,9 +47,5 @@ private:
     void createAccountWithStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec,
         std::string_view accountHex, uint8_t status = 0) const;
-
-    std::vector<Address> getGovernorList(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec) const;
 };
 }  // namespace bcos::precompiled

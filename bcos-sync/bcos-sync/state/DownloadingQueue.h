@@ -77,6 +77,11 @@ public:
         m_newBlockHandler = std::move(_newBlockHandler);
     }
 
+    void registerApplyFinishedHandler(std::function<void(bool)> _applyFinishedHandler)
+    {
+        m_applyFinishedHandler = std::move(_applyFinishedHandler);
+    }
+
     // flush m_buffer into queue
     virtual void flushBufferToQueue();
     virtual void clearExpiredQueueCache();
@@ -94,7 +99,6 @@ protected:
     virtual void clearQueue();
     virtual void clearExpiredCache(BlockQueue& _queue, SharedMutex& _lock);
     virtual bool flushOneShard(BlocksMsgInterface::Ptr _blocksData);
-    virtual bool isNewerBlock(bcos::protocol::Block::Ptr _block);
 
     virtual void commitBlock(bcos::protocol::Block::Ptr _block);
     virtual void commitBlockState(bcos::protocol::Block::Ptr _block);
@@ -104,12 +108,12 @@ protected:
 
     virtual void finalizeBlock(
         bcos::protocol::Block::Ptr _block, bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
-    virtual bool verifyExecutedBlock(
-        bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _blockHeader);
+    virtual bool verifyExecutedBlock(bcos::protocol::Block::Ptr const& _block,
+        bcos::protocol::BlockHeader::Ptr const& _blockHeader) const noexcept;
 
 private:
     // Note: this function should not be called frequently
-    std::string printBlockHeader(bcos::protocol::BlockHeader::Ptr _header);
+    std::string printBlockHeader(bcos::protocol::BlockHeader::Ptr const& _header) const noexcept;
     void fetchAndUpdateLedgerConfig();
 
     BlockSyncConfig::Ptr m_config;
@@ -123,6 +127,7 @@ private:
     mutable SharedMutex x_commitQueue;
 
     std::function<void(bcos::ledger::LedgerConfig::Ptr)> m_newBlockHandler;
+    std::function<void(bool)> m_applyFinishedHandler;
 
     std::shared_ptr<bcos::tool::LedgerConfigFetcher> m_ledgerFetcher;
 };

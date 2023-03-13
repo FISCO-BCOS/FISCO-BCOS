@@ -55,6 +55,11 @@
     },
     "fmt",
     "benchmark",
+    {
+      "name": "secp256k1",
+      "version>=": "2022-12-13#1",
+      "features": []
+    },
     "wedprcrypto",
     "range-v3"
   ],

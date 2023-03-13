@@ -358,7 +358,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     // handle normal message
     auto& message = executiveState->message;
 
-    if (!f_isSameAddr(message->to(), m_contractAddress))
+    if (f_getAddr(message->to()) != m_contractAddress)
     {
         return MessageHint::NEED_SCHEDULE_OUT;
     }
@@ -469,7 +469,7 @@ void DmcExecutor::handleExecutiveOutputs(
         executiveState->message = std::move(output);
         DMC_LOG(TRACE) << " 5.RecvFromExecutor: <<<< [" << m_name << "]:" << m_contractAddress
                        << " <<<< " << executiveState->toString();
-        if (f_isSameAddr(to, m_contractAddress))
+        if (f_getAddr(to) == m_contractAddress)
         {
             // bcos::ReadGuard lock(x_concurrentLock);
             // is my output

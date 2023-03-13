@@ -27,6 +27,7 @@
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <string.h>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
@@ -35,6 +36,7 @@ namespace bcos::rpc
 {
 // clang-format off
 struct NotFoundTransactionHash: public bcos::error::Exception {};
+struct CheckMerkleRootFailed: public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::concepts::ledger::Ledger LocalLedgerType,
@@ -278,8 +280,10 @@ public:
             {
                 co_await self->remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
                     blockNumber, block);
-                if (RANGES::empty(block.transactionsMetaData))
+                if (RANGES::empty(block.transactionsMetaData) && blockNumber != 0)
                 {
+                    LIGHTNODE_LOG(ERROR) << LOG_DESC("getBlockByNumber")
+                                         << LOG_KV("block has no transaction, blockNumber", blockNumber);
                     auto error = bcos::Error();
                     self->toErrorResp(error, respFunc);
                     co_return;
@@ -300,11 +304,25 @@ public:
                         BOOST_THROW_EXCEPTION(
                             std::runtime_error{"Unable to generate transaction merkle root!"});
                     }
+                    LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
+                                         << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
+                                         << LOG_KV("transaction number", block.transactions.size());
 
                     if (!bcos::concepts::bytebuffer::equalTo(
                             block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
                     {
-                        BOOST_THROW_EXCEPTION(std::runtime_error{"No match transaction root!"});
+                        auto merkleRoot = *RANGES::rbegin(merkles);
+                        std::ostringstream strHex;
+                        strHex << "0x" << std::hex << std::setfill('0');
+                        for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
+                            strHex << std::setw(2) << static_cast<unsigned int>(merkleRoot[i]);
+                        }
+                        LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
+                                             << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
+                                             << LOG_KV("transaction number", block.transactions.size())
+                                             << LOG_KV("merkleRoot", strHex.str());
+                        BOOST_THROW_EXCEPTION(
+                            CheckMerkleRootFailed{} << bcos::error::ErrorMessage{"Check block transactionMerkle failed!"});
                     }
                 }
 

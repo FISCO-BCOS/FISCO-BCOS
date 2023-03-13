@@ -155,7 +155,7 @@ check_sync()
     bash node0/start.sh
     # wait for sync
     sleep 10
-    block_number=$(cat node0/log/* |grep Report | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
+    block_number=$(cat node0/log/* |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
     if [ "${block_number}" == "${expected_block_number}" ]; then
         LOG_INFO "check_sync success, current blockNumber: ${block_number}"
     else

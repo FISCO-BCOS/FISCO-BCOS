@@ -91,7 +91,7 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
     NonceList nonceList;
     for (size_t i = 0; i < _txsNum; i++)
     {
-        nonceList.emplace_back(u256(123));
+        nonceList.emplace_back(std::string("123"));
     }
     block->setNonceList(nonceList);
     block->setBlockHeader(blockHeader);

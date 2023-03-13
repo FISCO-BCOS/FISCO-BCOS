@@ -268,6 +268,7 @@ private:
             {
                 co_await concepts::getRef(ledger).template getBlock<bcos::concepts::ledger::ALL>(
                     request.blockNumber, response.block);
+                LIGHTNODE_LOG(DEBUG) << "getAllBlock success:" << request.blockNumber;
             }
         }
         catch (std::exception& e)
@@ -278,11 +279,18 @@ private:
 
         bcos::bytes responseBuffer;
         bcos::concepts::serialize::encode(response, responseBuffer);
+        auto blockNumber = request.blockNumber;
         front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID,
-            bcos::ref(responseBuffer), [](Error::Ptr _error) {
+            bcos::ref(responseBuffer), [blockNumber](Error::Ptr _error) {
                 if (_error)
-                {}
+                {
+                    LIGHTNODE_LOG(ERROR) << "send getblockResponse failed " << LOG_KV("blockNumber", blockNumber);
+                }
             });
+        LIGHTNODE_LOG(DEBUG) << "asyncSendResponse: sendResponseMessage to dstNode:"  << nodeID->hex()
+                             << LOG_KV("moduleID", bcos::protocol::LIGHTNODE_GET_BLOCK)
+                             << LOG_KV("responseBuffer size", responseBuffer.size());
+
     }
 
     task::Task<void> submitTransaction(std::shared_ptr<bcos::front::FrontService> front,

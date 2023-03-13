@@ -59,13 +59,9 @@ bcos::crypto::HashType TransactionImpl::hash() const
     return hashResult;
 }
 
-bcos::u256 TransactionImpl::nonce() const
+const std::string& TransactionImpl::nonce() const
 {
-    if (!m_inner()->data.nonce.empty())
-    {
-        m_nonce = boost::lexical_cast<bcos::u256>(m_inner()->data.nonce);
-    }
-    return m_nonce;
+    return m_inner()->data.nonce;
 }
 
 bcos::bytesConstRef TransactionImpl::input() const
