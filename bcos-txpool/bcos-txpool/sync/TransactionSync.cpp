@@ -270,7 +270,8 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
     // fetch missed transactions from the local ledger
     for (auto tx : *_fetchedTxs)
     {
-        if (!_missedTxs.count(tx->hash()))
+        auto it = _missedTxs.find(tx->hash());
+        if (it == _missedTxs.end())
         {
             SYNC_LOG(WARNING) << LOG_DESC(
                                      "onGetMissedTxsFromLedger: Encounter transaction that was "
@@ -279,7 +280,7 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
             continue;
         }
         // update the missedTxs
-        _missedTxs.erase(tx->hash());
+        _missedTxs.erase(it);
     }
     if (_missedTxs.size() == 0 && _onVerifyFinished)
     {
@@ -620,11 +621,15 @@ void TransactionSync::forwardTxsFromP2P(bcos::crypto::NodeIDSet const& _connecte
         auto selectedPeers = selectPeers(tx, _connectedPeers, _consensusNodeList, expectedPeers);
         for (const auto& peer : *selectedPeers)
         {
-            if (!peerToForwardedTxs.count(peer))
+            auto it = peerToForwardedTxs.find(peer);
+            if (it != peerToForwardedTxs.end())
             {
-                peerToForwardedTxs[peer] = std::make_shared<HashList>();
+                it->second->emplace_back(tx->hash());
             }
-            peerToForwardedTxs[peer]->emplace_back(tx->hash());
+            else
+            {
+                peerToForwardedTxs[peer] = std::make_shared<HashList>(1, tx->hash());
+            }
         }
     }
     // broadcast the txsStatus

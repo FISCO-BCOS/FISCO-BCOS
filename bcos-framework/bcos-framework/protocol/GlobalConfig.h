@@ -60,11 +60,12 @@ public:
 
     ProtocolInfo::ConstPtr protocolInfo(ProtocolModuleID _moduleID) const
     {
-        if (!c_supportedProtocols.count(_moduleID))
+        auto it = c_supportedProtocols.find(_moduleID);
+        if (it == c_supportedProtocols.end())
         {
             return nullptr;
         }
-        return c_supportedProtocols.at(_moduleID);
+        return it->second;
     }
 
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> const& supportedProtocols() const

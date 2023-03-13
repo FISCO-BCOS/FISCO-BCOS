@@ -201,9 +201,10 @@ uint32_t bcos::precompiled::getFuncSelector(
     std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl)
 {
     // global function selector cache
-    if (s_name2SelectCache.count(_functionName))
+    auto it = s_name2SelectCache.find(_functionName);
+    if (it != s_name2SelectCache.end())
     {
-        return s_name2SelectCache[_functionName];
+        return it->second;
     }
     auto selector = getFuncSelectorByFunctionName(_functionName, _hashImpl);
     s_name2SelectCache.insert(std::make_pair(_functionName, selector));

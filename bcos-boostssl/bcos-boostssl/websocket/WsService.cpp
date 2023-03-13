@@ -356,11 +356,17 @@ void WsService::reconnect()
 
 bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
 {
-    UpgradableGuard l(x_msgTypeHandlers);
-    if (m_msgType2Method.count(_msgType) || !_msgHandler)
+    if (!_msgHandler)
     {
         return false;
     }
+    UpgradableGuard l(x_msgTypeHandlers);
+    auto it = m_msgType2Method.find(_msgType);
+    if (it != m_msgType2Method.end())
+    {
+        return false;
+    }
+
     UpgradeGuard ul(l);
     m_msgType2Method[_msgType] = _msgHandler;
     return true;
@@ -369,9 +375,10 @@ bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
 MsgHandler WsService::getMsgHandler(uint16_t _type)
 {
     ReadGuard l(x_msgTypeHandlers);
-    if (m_msgType2Method.count(_type))
+    auto it = m_msgType2Method.find(_type);
+    if (it != m_msgType2Method.end())
     {
-        return m_msgType2Method[_type];
+        return it->second;
     }
     return nullptr;
 }
@@ -379,12 +386,13 @@ MsgHandler WsService::getMsgHandler(uint16_t _type)
 bool WsService::eraseMsgHandler(uint16_t _type)
 {
     UpgradableGuard l(x_msgTypeHandlers);
-    if (!m_msgType2Method.count(_type))
+    auto it = m_msgType2Method.find(_type);
+    if (it == m_msgType2Method.end())
     {
         return false;
     }
     UpgradeGuard ul(l);
-    m_msgType2Method.erase(_type);
+    m_msgType2Method.erase(it);
     return true;
 }
 
