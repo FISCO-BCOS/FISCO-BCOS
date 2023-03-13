@@ -23,9 +23,10 @@ void ShardingBlockExecutive::prepare()
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("dmcExecutor try to preExecute");
 
-
-    tbb::parallel_for_each(m_dmcExecutors.begin(), m_dmcExecutors.end(),
-        [&](auto const& executorIt) { executorIt.second->preExecute(); });
+    for (auto executorIt : m_dmcExecutors)
+    {
+        executorIt.second->preExecute();
+    }
 }
 
 void ShardingBlockExecutive::asyncExecute(

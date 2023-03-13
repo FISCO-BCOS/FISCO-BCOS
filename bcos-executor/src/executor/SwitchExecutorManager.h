@@ -19,7 +19,7 @@ public:
     const int64_t STOPPED_TERM_ID = -1;
 
     SwitchExecutorManager(bcos::executor::TransactionExecutorFactory::Ptr factory)
-      : m_pool("exec", 4), m_factory(factory)
+      : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
     {
         factory->registerNeedSwitchEvent([this]() { selfAsyncRefreshExecutor(); });
 
