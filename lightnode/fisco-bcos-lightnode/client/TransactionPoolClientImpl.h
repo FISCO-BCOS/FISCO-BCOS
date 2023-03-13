@@ -11,7 +11,6 @@
 
 namespace bcos::transaction_pool
 {
-struct SubmitTransactionFailed: public bcos::error::Exception {};
 
 class TransactionPoolClientImpl
   : public bcos::concepts::transacton_pool::TransactionPoolBase<TransactionPoolClientImpl>
@@ -40,8 +39,7 @@ private:
         {
             LIGHTNODE_LOG(WARNING) << "light node submitTransaction failed, errorCode: " << response.error.errorCode
                                    << " " << response.error.errorMessage;
-            BOOST_THROW_EXCEPTION(SubmitTransactionFailed{}
-                                  << bcos::error::ErrorMessage{response.error.errorMessage});
+            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
         }
 
         std::swap(response.receipt, receipt);

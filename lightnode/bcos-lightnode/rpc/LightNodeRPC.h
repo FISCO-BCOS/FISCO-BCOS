@@ -298,6 +298,9 @@ public:
                     });
                     std::vector<std::array<std::byte, Hasher::HASH_SIZE>> merkles;
                     merkle.generateMerkle(hashesRange, merkles);
+                    for(size_t i = 0; i < hashesRange.size(); ++i){
+                        LIGHTNODE_LOG(TRACE) << LOG_KV("hashesRange txHash", toHexStringWithPrefix(hashesRange[i]));
+                    }
 
                     if (RANGES::empty(merkles))
                     {
@@ -317,7 +320,7 @@ public:
                         for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
                             strHex << std::setw(2) << static_cast<unsigned int>(merkleRoot[i]);
                         }
-                        LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
+                        LIGHTNODE_LOG(ERROR) << LOG_KV("blockNumber", blockNumber)
                                              << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
                                              << LOG_KV("transaction number", block.transactions.size())
                                              << LOG_KV("merkleRoot", strHex.str());

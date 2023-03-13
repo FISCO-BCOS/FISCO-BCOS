@@ -33,6 +33,7 @@ using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
+struct SubmitTransactionError : public bcos::error::Exception {};
 
 MemoryStorage::MemoryStorage(
     TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
@@ -123,7 +124,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         {
             if (std::holds_alternative<Error::Ptr>(m_submitResult))
             {
-                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
+                BOOST_THROW_EXCEPTION(SubmitTransactionError{} << bcos::error::ErrorMessage(std::get<Error::Ptr>(m_submitResult)->errorMessage()) );
             }
 
             return std::move(
