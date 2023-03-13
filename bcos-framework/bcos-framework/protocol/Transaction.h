@@ -76,16 +76,17 @@ public:
         auto hashResult = hash();
         // check the signatures
         auto signature = signatureData();
-        auto publicKey = signatureImpl.recover(hashResult, signature);
-        // recover the sender
-        forceSender(bcos::right160(hashImpl.hash(publicKey)).asBytes());
+        auto ret = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
+        forceSender(ret.second);
     }
 
     virtual int32_t version() const = 0;
     virtual std::string_view chainId() const = 0;
     virtual std::string_view groupId() const = 0;
     virtual int64_t blockLimit() const = 0;
-    virtual u256 nonce() const = 0;
+    virtual const std::string& nonce() const = 0;
+    // only for test
+    virtual void setNonce(std::string) = 0;
     virtual std::string_view to() const = 0;
     virtual std::string_view abi() const = 0;
 
@@ -105,7 +106,7 @@ public:
         }
         return TransactionType::ContractCreation;
     }
-    virtual void forceSender(bytes _sender) const = 0;
+    virtual void forceSender(const bcos::bytes& _sender) const = 0;
     virtual bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;

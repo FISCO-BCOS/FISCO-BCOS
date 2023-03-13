@@ -7,17 +7,35 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/ITTAPI.h>
 #include <bcos-utilities/Overloaded.h>
+#include <ittnotify.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <variant>
 
 
 using namespace bcos::scheduler;
+
+namespace bcos::scheduler
+{
+const __itt_domain* const ITT_DOMAIN_SCHEDULER_EXECUTE = __itt_domain_create("scheduler.execute");
+const __itt_domain* const ITT_DOMAIN_SCHEDULER_COMMIT = __itt_domain_create("scheduler.commit");
+
+// const std::string_view c_SCHEDULER_EXECUTE_BLOCK = "scheduler.execute";
+// const std::string_view c_SCHEDULER_COMMIT_BLOCK = "scheduler.commit";
+const __itt_string_handle* const ITT_STRING_SCHEDULER_EXECUTE =
+    __itt_string_handle_create("scheduler.execute");
+const __itt_string_handle* const ITT_STRING_SCHEDULER_COMMIT =
+    __itt_string_handle_create("scheduler.commit");
+// __itt_id ITT_SCHEDULER_EXECUTE_ID = 1;
+
+}  // namespace bcos::scheduler
 
 void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
     std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)
@@ -124,6 +142,20 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
 
 
 void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
+    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)> _callback)
+{
+    m_worker.enqueue(
+        [this, block = std::move(block), verify, callback = std::move(_callback)]() mutable {
+            __itt_frame_begin_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
+            executeBlockInternal(std::move(block), verify,
+                [callback = std::move(callback)](bcos::Error::Ptr&& err,
+                    bcos::protocol::BlockHeader::Ptr&& header, bool isSysBlock) {
+                    __itt_frame_end_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
+                    callback(std::move(err), std::move(header), isSysBlock);
+                });
+        });
+}
+void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
         _callback)
 {
@@ -175,7 +207,9 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber)
                              << "ExecuteBlock response"
+
                              << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
+
         _callback(error == nullptr ? nullptr : std::move(error), std::move(blockHeader), _sysBlock);
     };
 
@@ -268,9 +302,10 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             SCHEDULER_LOG(DEBUG) << LOG_BADGE("preExeBlock")
                                  << BLOCK_NUMBER(block->blockHeaderConst()->number())
                                  << "Not hit prepared block executive, create.";
-            // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this, 0,
-            //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
-            //     verify);
+            // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this,
+            // 0,
+            //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool,
+            //     m_gasLimit, verify);
             blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
                 m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
                 verify);
@@ -371,11 +406,13 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> _callback)
 {
+    __itt_frame_begin_v3(ITT_DOMAIN_SCHEDULER_COMMIT, nullptr);
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(header->number()) << "CommitBlock request";
 
     auto requestBlockNumber = header->number();
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](
                         bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
+        __itt_frame_end_v3(ITT_DOMAIN_SCHEDULER_COMMIT, nullptr);
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock response"
                              << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
         _callback(error == nullptr ? nullptr : std::move(error), std::move(config));
@@ -760,6 +797,7 @@ BlockExecutive::Ptr SchedulerImpl::getPreparedBlock(
     }
 }
 
+
 void SchedulerImpl::setPreparedBlock(
     bcos::protocol::BlockNumber blockNumber, int64_t timestamp, BlockExecutive::Ptr blockExecutive)
 {
@@ -821,6 +859,7 @@ void SchedulerImpl::preExecuteBlock(
         auto blockNumber = block->blockHeaderConst()->number();
         int64_t timestamp = block->blockHeaderConst()->timestamp();
         BlockExecutive::Ptr blockExecutive = getPreparedBlock(blockNumber, timestamp);
+
         if (blockExecutive != nullptr)
         {
             SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << LOG_BADGE("prepareBlockExecutive")
@@ -830,20 +869,40 @@ void SchedulerImpl::preExecuteBlock(
             return;
         }
 
-        // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this, 0,
-        //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
-        //     verify);
+        // blockExecutive = std::make_shared<SerialBlockExecutive>(std::move(block), this,
+        // 0,
+        //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool,
+        //     m_gasLimit, verify);
         fetchConfig();
+        // Note: must build blockExecutive before enqueue() for executeBlock use the same
+        // blockExecutive
         blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
             m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit, verify);
 
         blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
-        blockExecutive->prepare();
-
         setPreparedBlock(blockNumber, timestamp, blockExecutive);
 
-        callback(nullptr);
+        m_worker.enqueue([this, block, blockExecutive, callback = std::move(callback)]() {
+            try
+            {
+                if (!m_isRunning)
+                {
+                    return;
+                }
+
+                blockExecutive->prepare();
+
+                callback(nullptr);
+            }
+            catch (bcos::Error& e)
+            {
+                SCHEDULER_LOG(WARNING)
+                    << "preExeBlock in worker exception: " << LOG_KV("code", e.errorCode())
+                    << LOG_KV("message", e.errorMessage());
+                callback(BCOS_ERROR_PTR(e.errorCode(), e.errorMessage()));
+            }
+        });
     }
     catch (bcos::Error& e)
     {
@@ -1087,4 +1146,60 @@ void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
         // cast must be success
         m_blockVersion = bcos::tool::toVersionNumber(value);
     }
+}
+
+BlockExecutive::Ptr SchedulerImpl::getLatestPreparedBlock(bcos::protocol::BlockNumber blockNumber)
+{
+    bcos::ReadGuard readGuard(x_preparedBlockMutex);
+
+    auto needBlocksMapIt = m_preparedBlocks.find(blockNumber);
+    if (needBlocksMapIt == m_preparedBlocks.end())
+    {
+        return nullptr;
+    }
+    else
+    {
+        // get the biggest timestamp block
+        auto blockIt = needBlocksMapIt->second.end();
+        blockIt--;
+        return blockIt->second;
+    }
+}
+
+void SchedulerImpl::tryExecuteBlock(
+    bcos::protocol::BlockNumber number, bcos::crypto::HashType parentHash)
+{
+    return;  // TODO: Fix blockHash bug here
+
+    m_worker.enqueue([this, number, &parentHash]() {
+        if (!m_isRunning)
+        {
+            return;
+        }
+        auto blockExecutive = getLatestPreparedBlock(number);
+        if (!blockExecutive)
+        {
+            return;
+        }
+        auto block = blockExecutive->block();
+        if (!block)
+        {
+            return;
+        }
+        bcos::protocol::ParentInfoList parentInfoList;
+        bcos::protocol::ParentInfo parentInfo{number, std::move(parentHash)};
+        parentInfoList.push_back(parentInfo);
+        block->blockHeader()->setParentInfo(parentInfoList);
+        block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+
+        auto timestamp = block->blockHeaderConst()->timestamp();
+        SCHEDULER_LOG(INFO) << "tryExecuteBlock request" << LOG_KV("number", number)
+                            << LOG_KV("timestamp", timestamp);
+        executeBlock(block, false,
+            [number, timestamp](bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&& blockHeader,
+                bool _sysBlock) {
+                SCHEDULER_LOG(INFO) << "tryExecuteBlock success" << LOG_KV("number", number)
+                                    << LOG_KV("timestamp", timestamp);
+            });
+    });
 }

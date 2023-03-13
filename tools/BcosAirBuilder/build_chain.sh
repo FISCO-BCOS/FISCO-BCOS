@@ -553,6 +553,7 @@ Usage:
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
     -z <Generate tar packet>            [Optional] Pack the data on the chain to generate tar packet
+    -n <node key path>                  [Optional] set the path of the node key file to load nodeid
     -N <node path>                      [Optional] set the path of the node modified to multi ca mode
     -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -h Help
@@ -565,6 +566,8 @@ expand node e.g
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m -i 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
+    bash $0 -C expand_lightnode -c config -d config/ca -o nodes/lightnode1
+    bash $0 -C expand_lightnode -c config -d config/ca -o nodes/lightnode1 -L ./fisco-bcos-lightnode
 modify node e.g
     bash $0 -C modify -N ./node0 -u ./ca/ca.crt
     bash $0 -C modify -N ./node0 -u ./ca/ca.crt -s
@@ -1280,6 +1283,8 @@ generate_common_ini() {
     ; url of the key center, in format of ip:port
     ;key_center_url=
     ;cipher_data_key=
+    ; HSM key index for encrypt/decrypt
+    ;enc_key_index = 
 
 [consensus]
     ; min block generation time(ms)
@@ -1367,6 +1372,7 @@ generate_common_ini() {
     max_log_file_size=1024
     ; rotate the log every hour
     ;enable_rotate_by_hour=true
+    enable_rate_collector=false
 EOF
 }
 

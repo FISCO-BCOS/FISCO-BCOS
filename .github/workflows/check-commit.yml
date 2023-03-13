@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 60
+          fetch-depth: 50
 
       - name: Check
         run: |

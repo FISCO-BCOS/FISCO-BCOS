@@ -19,6 +19,7 @@
  */
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/Exceptions.h>
+#include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
@@ -101,6 +102,7 @@ BOOST_AUTO_TEST_CASE(testSM4)
     auto sm4 = std::make_shared<SM4Crypto>();
     testEncryption(sm4);
 }
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

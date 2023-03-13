@@ -80,13 +80,7 @@ public:
 
     bcos::bytesConstRef asRefBuffer()
     {
-        return {static_cast<bcos::byte*>(m_buffer.data()) + m_start, m_end - m_start};
-    }
-
-    bcos::bytes asBuffer()
-    {
-        return bcos::bytes{m_buffer.begin() + static_cast<bcos::bytes::difference_type>(m_start),
-            m_buffer.begin() + static_cast<bcos::bytes::difference_type>(m_end)};
+        return {(bcos::byte*)m_buffer.data() + m_start, m_end - m_start};
     }
 
     bool incrStartOffset(std::size_t _step)

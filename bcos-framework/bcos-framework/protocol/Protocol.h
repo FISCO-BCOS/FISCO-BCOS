@@ -27,9 +27,7 @@
 #include <string>
 #include <variant>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 // Note: both MessageExtFieldFlag and NodeType occupy the ext fields
 enum MessageExtFieldFlag : uint32_t
@@ -135,7 +133,7 @@ const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
 [[nodiscard]] inline int versionCompareTo(
-    std::variant<uint32_t, BlockVersion> _v1, BlockVersion const& _v2)
+    std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
 {
     int flag = 0;
     std::visit(
@@ -148,6 +146,32 @@ const uint8_t MIN_MAJOR_VERSION = 3;
         _v1);
     return flag;
 }
+
+constexpr auto operator<=>(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+{
+    auto flag = std::strong_ordering::equal;
+    std::visit(
+        [&_v2, &flag](auto&& arg) {
+            auto ver1 = static_cast<uint32_t>(arg);
+            auto ver2 = static_cast<uint32_t>(_v2);
+            flag = (ver1 <=> ver2);
+        },
+        _v1);
+    return flag;
+}
+
+constexpr bool operator >= (std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2){
+    auto flag = false;
+    std::visit(
+        [&_v2, &flag](auto&& arg) {
+            auto ver1 = static_cast<uint32_t>(arg);
+            auto ver2 = static_cast<uint32_t>(_v2);
+            flag = (ver1 >= ver2);
+        },
+        _v1);
+    return flag;
+}
+
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion const& _version)
 {
     switch (_version)
@@ -258,6 +282,4 @@ inline std::string moduleIDToString(ModuleID _moduleID)
     };
 }
 
-
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

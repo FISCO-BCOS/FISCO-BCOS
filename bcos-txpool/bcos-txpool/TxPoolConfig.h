@@ -20,10 +20,10 @@
  * @date 2021-05-08
  */
 #pragma once
-#include "txpool/utilities/Common.h"
 #include "txpool/interfaces/NonceCheckerInterface.h"
 #include "txpool/interfaces/TxPoolStorageInterface.h"
 #include "txpool/interfaces/TxValidatorInterface.h"
+#include "txpool/utilities/Common.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionMetaData.h>
@@ -38,13 +38,15 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
-        NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit = DEFAULT_BLOCK_LIMIT)
+        NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit = DEFAULT_BLOCK_LIMIT,
+        size_t _poolLimit = DEFAULT_POOL_LIMIT)
       : m_txValidator(std::move(_txValidator)),
         m_txResultFactory(std::move(_txResultFactory)),
         m_blockFactory(std::move(_blockFactory)),
         m_ledger(std::move(_ledger)),
         m_txPoolNonceChecker(std::move(_txpoolNonceChecker)),
-        m_blockLimit(_blockLimit)
+        m_blockLimit(_blockLimit),
+        m_poolLimit(_poolLimit)
     {}
 
     virtual ~TxPoolConfig() = default;
@@ -78,7 +80,7 @@ private:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;
     NonceCheckerInterface::Ptr m_txPoolNonceChecker;
-    size_t m_poolLimit = DEFAULT_POOL_LIMIT;
     int64_t m_blockLimit = DEFAULT_BLOCK_LIMIT;
+    size_t m_poolLimit = DEFAULT_POOL_LIMIT;
 };
 }  // namespace bcos::txpool

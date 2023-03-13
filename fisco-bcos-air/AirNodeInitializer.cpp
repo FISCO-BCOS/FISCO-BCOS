@@ -121,6 +121,7 @@ void AirNodeInitializer::start()
             bcos::boostssl::ws::WsSession::Message,
             bcos::boostssl::ws::WsStreamDelegate /*boostssl end*/,
             /*gateway start*/ bcos::gateway::Session, bcos::gateway::Socket,
+            bcos::gateway::EncodedMessage, bcos::gateway::SessionRecvBuffer,
             bcos::gateway::P2PMessage, bcos::gateway::P2PSession, bcos::gateway::P2PMessageV2,
             bcos::gateway::FrontServiceInfo, bcos::gateway::GatewayNodeStatus,
             bcos::gateway::GatewayStatus, bcos::gateway::ResponseCallback, bcos::gateway::Retry,

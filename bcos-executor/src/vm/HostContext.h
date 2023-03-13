@@ -99,11 +99,11 @@ public:
     uint64_t timestamp() const;
     int64_t blockGasLimit() const
     {
-        if (m_executive->blockContext().lock()->blockVersion() >=
+        if (m_executive->blockContext().blockVersion() >=
             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             // FISCO BCOS only has tx Gas limit. We use it as block gas limit
-            return m_executive->blockContext().lock()->txGasLimit();
+            return m_executive->blockContext().txGasLimit();
         }
         else
         {
@@ -132,16 +132,17 @@ public:
     int64_t gas() const { return m_callParameters->gas; }
     void suicide()
     {
-        if (m_executive->blockContext().lock()->blockVersion() >=
+        if (m_executive->blockContext().blockVersion() >=
             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            m_executive->blockContext().lock()->suicide(m_tableName);
+            auto& blockContext = const_cast<BlockContext&>(m_executive->blockContext());
+            blockContext.suicide(m_tableName);
         }
     }
 
     CallParameters::UniquePtr&& takeCallParameters()
     {
-        if (m_executive->blockContext().lock()->blockVersion() >=
+        if (m_executive->blockContext().blockVersion() >=
             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             for (const auto& response : m_responseStore)

@@ -3,9 +3,6 @@
 #include "Trait.h"
 #include <exception>
 #include <future>
-#include <iostream>
-#include <type_traits>
-#include <variant>
 
 namespace bcos::task
 {

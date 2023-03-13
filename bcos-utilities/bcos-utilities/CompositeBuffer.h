@@ -21,7 +21,6 @@
 
 #include "bcos-utilities/ObjectCounter.h"
 #include <bcos-utilities/Common.h>
-#include <boost/asio/buffer.hpp>
 #include <algorithm>
 #include <memory>
 #include <utility>
@@ -36,11 +35,15 @@ public:
     using Ptr = std::shared_ptr<CompositeBuffer>;
     using ConstPtr = std::shared_ptr<const CompositeBuffer>;
 
-    CompositeBuffer() = default;
+    CompositeBuffer() { m_buffers.reserve(4); }
     ~CompositeBuffer() = default;
 
     CompositeBuffer(const CompositeBuffer&) = delete;
-    CompositeBuffer(CompositeBuffer&&) = delete;
+    CompositeBuffer(CompositeBuffer&& compositeBuffer) noexcept
+      : m_buffers(std::move(compositeBuffer.m_buffers))
+    {
+        compositeBuffer.m_buffers.clear();
+    }
     CompositeBuffer& operator=(const CompositeBuffer&) = delete;
     CompositeBuffer& operator=(CompositeBuffer&& compositeBuffer) noexcept
     {
@@ -48,12 +51,22 @@ public:
         compositeBuffer.m_buffers.clear();
         return *this;
     }
-    //
-    CompositeBuffer(bcos::bytes& _buffer) { m_buffers.push_back(std::move(_buffer)); }
-    CompositeBuffer(bcos::bytes&& _buffer) { m_buffers.push_back(std::move(_buffer)); }
 
-    void append(bcos::bytes& _buffer, bool appendToHead = false)
+    CompositeBuffer(bcos::bytes&& _buffer) : CompositeBuffer()
     {
+        if (!_buffer.empty())
+        {
+            m_buffers.push_back(std::move(_buffer));
+        }
+    }
+
+    void append(bcos::bytes&& _buffer, bool appendToHead = false)
+    {
+        if (_buffer.empty())
+        {
+            return;
+        }
+
         if (appendToHead)
         {
             m_buffers.insert(m_buffers.begin(), std::move(_buffer));
@@ -66,6 +79,10 @@ public:
 
     void append(std::vector<bcos::bytes>& _buffer, bool appendToHead = false)
     {
+        if (_buffer.empty())
+        {
+            return;
+        }
         if (appendToHead)
         {
             m_buffers.insert(m_buffers.begin(), _buffer.begin(), _buffer.end());
@@ -76,30 +93,8 @@ public:
         }
     }
 
-    bcos::bytes toSingleBuffer()
-    {
-        if (m_buffers.empty())
-        {
-            return bcos::bytes{};
-        }
-
-        bcos::bytes retBuffer = std::move(m_buffers.front());
-
-        std::size_t totalSize = retBuffer.size();
-        std::for_each(m_buffers.begin() + 1, m_buffers.end(),
-            [&totalSize](const bcos::bytes& _buffer) { totalSize += _buffer.size(); });
-        retBuffer.reserve(totalSize);
-
-        std::for_each(m_buffers.begin() + 1, m_buffers.end(), [&retBuffer](bcos::bytes& _buffer) {
-            retBuffer.insert(retBuffer.end(), _buffer.begin(), _buffer.end());
-        });
-
-        m_buffers.clear();
-        return retBuffer;
-    }
-
-    // Notice:
-    bcos::bytes toSingleBuffer() const
+    // Notice: heavily memory copy
+    bcos::bytes constToSingleBuffer() const
     {
         bcos::bytes retBuffer;
         std::size_t totalSize = 0;
@@ -129,16 +124,6 @@ public:
 
     const std::vector<bcos::bytes>& buffers() const { return m_buffers; }
     std::vector<bcos::bytes>& buffers() { return m_buffers; }
-
-    std::vector<boost::asio::const_buffer> toMultiBuffers() const
-    {
-        std::vector<boost::asio::const_buffer> bufs;
-        bufs.reserve(m_buffers.size());
-        std::for_each(m_buffers.begin(), m_buffers.end(),
-            [&](const bcos::bytes& _buffer) { bufs.push_back(boost::asio::buffer(_buffer)); });
-
-        return bufs;
-    }
 
 private:
     std::vector<bcos::bytes> m_buffers;

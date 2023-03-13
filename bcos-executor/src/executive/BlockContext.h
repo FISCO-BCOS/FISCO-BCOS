@@ -20,7 +20,6 @@
  */
 
 #pragma once
-
 #include "../Common.h"
 #include "ExecutiveFactory.h"
 #include "ExecutiveFlowInterface.h"
@@ -29,6 +28,7 @@
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage/EntryCache.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <tbb/concurrent_unordered_map.h>
@@ -64,7 +64,7 @@ public:
         const protocol::Transaction::ConstPtr& _tx)>;
     virtual ~BlockContext(){};
 
-    std::shared_ptr<storage::StateStorageInterface> storage() { return m_storage; }
+    std::shared_ptr<storage::StateStorageInterface> storage() const { return m_storage; }
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
@@ -87,7 +87,7 @@ public:
     ExecutiveFlowInterface::Ptr getExecutiveFlow(std::string codeAddress);
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
-    std::shared_ptr<VMFactory> getVMFactory() { return m_vmFactory; }
+    std::shared_ptr<VMFactory> getVMFactory() const { return m_vmFactory; }
     void setVMFactory(std::shared_ptr<VMFactory> factory) { m_vmFactory = factory; }
 
     void stop()
@@ -130,6 +130,9 @@ public:
 
     auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
 
+    storage::EntryCachePtr getCodeCache() const { return m_codeCache; }
+    storage::EntryCachePtr getCodeHashCache() const { return m_codeHashCache; }
+
 private:
     mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
@@ -150,6 +153,9 @@ private:
     std::set<std::string> m_suicides;  // contract address need to selfdestruct
     mutable bcos::SharedMutex x_suicides;
     std::shared_ptr<VMFactory> m_vmFactory;
+
+    storage::EntryCachePtr m_codeCache = std::make_shared<storage::EntryCache>();
+    storage::EntryCachePtr m_codeHashCache = std::make_shared<storage::EntryCache>();
 };
 
 }  // namespace executor

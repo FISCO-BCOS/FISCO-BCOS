@@ -1186,7 +1186,7 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     bcos::crypto::KeyPairInterface::Ptr keyPair =
         m_blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
     auto tx = m_blockFactory->transactionFactory()->createTransaction(
-        0, "to", input, 200, 300, "chainid", "groupid", 800, keyPair);
+        0, "to", input, std::to_string(200), 300, "chainid", "groupid", 800, keyPair);
 
     block->appendTransaction(tx);
     auto blockTxs = std::make_shared<Transactions>();

@@ -166,7 +166,7 @@ std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesCo
         h256 r;
         h256 s;
     } in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
+    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(in)));
     // verify the signature
     auto signatureData = std::make_shared<SignatureDataWithPub>(in.r, in.s, in.pub.ref());
     try

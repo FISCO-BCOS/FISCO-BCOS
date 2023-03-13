@@ -30,10 +30,12 @@
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
     do                                                                                       \
     {                                                                                        \
-        if ((offset) > (length))                                                             \
+        if (std::cmp_greater((offset), (length)))                                            \
         {                                                                                    \
             throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) + \
-                                    " ,length: " + std::to_string(length));                  \
+                                    " ,length: " + std::to_string(length) +                  \
+                                    " ,file: " + __FILE__ + " ,func: " + __func__ +          \
+                                    " ,line: " + std::to_string(__LINE__));                  \
         }                                                                                    \
     } while (0);
 
@@ -57,8 +59,11 @@ public:
     /// groupID length(2) + nodeID length(2) + dst nodeID count(1) + moduleID(2)
     const static size_t OPTIONS_MIN_LENGTH = 7;
 
-public:
     P2PMessageOptions() { m_srcNodeID = std::make_shared<bytes>(); }
+    P2PMessageOptions(const P2PMessageOptions&) = delete;
+    P2PMessageOptions(P2PMessageOptions&&) = delete;
+    P2PMessageOptions& operator=(const P2PMessageOptions&) = delete;
+    P2PMessageOptions& operator=(P2PMessageOptions&&) = delete;
 
     virtual ~P2PMessageOptions() = default;
 
@@ -70,7 +75,7 @@ public:
     const static size_t MAX_DST_NODEID_COUNT = 255;
 
     bool encode(bytes& _buffer);
-    ssize_t decode(bytesConstRef _buffer);
+    int32_t decode(const bytesConstRef& _buffer);
 
 public:
     uint16_t moduleID() const { return m_moduleID; }
@@ -126,11 +131,14 @@ public:
     {
         m_payload = std::make_shared<bytes>();
         m_options = std::make_shared<P2PMessageOptions>();
+        m_srcP2PNodeID.reserve(512);
+        m_dstP2PNodeID.reserve(512);
     }
 
     // ~P2PMessage() override = default;
 
 public:
+    uint32_t lengthDirect() const override { return m_length; }
     uint32_t length() const override
     {
         // The length value has been set
@@ -171,14 +179,15 @@ public:
 
     void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
     bool encode(bytes& _buffer) override;
-    ssize_t decode(bytesConstRef _buffer) override;
+    bool encode(EncodedMessage& _buffer) override;
+    int32_t decode(const bytesConstRef& _buffer) override;
     bool isRespPacket() const override
     {
         return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
     }
 
     // compress payload if payload need to be compressed
-    bool tryToCompressPayload(std::shared_ptr<bytes> compressData);
+    bool tryToCompressPayload(bytes& compressData);
 
     bool hasOptions() const
     {
@@ -205,7 +214,7 @@ public:
     MessageExtAttributes::Ptr extAttributes() override { return m_extAttr; }
 
 protected:
-    virtual int32_t decodeHeader(bytesConstRef _buffer);
+    virtual int32_t decodeHeader(const bytesConstRef& _buffer);
     virtual bool encodeHeader(bytes& _buffer);
 
 protected:

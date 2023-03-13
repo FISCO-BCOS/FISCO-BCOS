@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     string transferAddress = "usr/alice/transfer";
 
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", transferAbi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", transferAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
             codec->encodeWithSig("transfer(string,string,uint32)", from, to, amount);
         input.insert(input.end(), encodedParams.begin(), encodedParams.end());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, 101 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -454,7 +454,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     string helloWorldAddress = "usr/alice/hello_world";
 
     auto tx =
-        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -585,7 +585,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
         auto encodedParams = codec->encodeWithSig("set(string)", name);
         input.insert(input.end(), encodedParams.begin(), encodedParams.end());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, 101 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -711,7 +711,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     bytes input;
     boost::algorithm::unhex(bin, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", abi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", abi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -812,7 +812,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
         bcos::u256 value(10);
 
         auto input = codec->encodeWithSig("transfer(string,string,uint256)", from, to, value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, 101 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -952,7 +952,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     bytes input;
     boost::algorithm::unhex(bin, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", abi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", abi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();

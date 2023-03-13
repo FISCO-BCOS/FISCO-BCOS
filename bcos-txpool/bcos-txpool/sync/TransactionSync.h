@@ -41,7 +41,7 @@ public:
         Worker("txsSync", 0),
         m_downloadTxsBuffer(std::make_shared<TxsSyncMsgList>()),
         m_worker(
-            std::make_shared<ThreadPool>("txsSyncWorker", std::thread::hardware_concurrency())),
+            std::make_shared<ThreadPool>("txsSyncWorker", 4)),
         m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 4)),
         m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 1))
     {

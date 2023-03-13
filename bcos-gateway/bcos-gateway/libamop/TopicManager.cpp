@@ -144,7 +144,7 @@ bool TopicManager::queryTopicItemsByClient(const std::string& _client, TopicItem
 void TopicManager::removeTopics(
     const std::string& _client, std::vector<std::string> const& _topicList)
 {
-    if (_topicList.size() == 0)
+    if (_topicList.empty())
     {
         return;
     }

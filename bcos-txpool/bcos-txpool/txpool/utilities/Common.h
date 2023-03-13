@@ -32,5 +32,5 @@ static constexpr const uint64_t TX_DEFAULT_EXPIRATION_TIME = uint64_t(60 * 10 * 
 static constexpr const uint64_t MAX_TRAVERSE_TXS_COUNT = 10000;
 static constexpr const size_t MAX_RETRY_NOTIFY_TIME = 3;
 static constexpr const size_t DEFAULT_POOL_LIMIT = 15000;
-static constexpr const int64_t DEFAULT_BLOCK_LIMIT = 1000;
+static constexpr const int64_t DEFAULT_BLOCK_LIMIT = 600;
 }  // namespace bcos::txpool

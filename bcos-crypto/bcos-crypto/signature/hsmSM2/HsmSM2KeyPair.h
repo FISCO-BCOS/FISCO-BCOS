@@ -48,6 +48,7 @@ public:
     PublicPtr priToPub(SecretPtr _secretKey);
     bool isInternalKey() const { return m_isInternalKey; }
 
+    const std::string& hsmLibPath() const { return m_hsmLibPath; }
     void setHsmLibPath(std::string _libPath) { m_hsmLibPath = _libPath; }
     unsigned int keyIndex() const { return m_keyIndex; }
     void setKeyIndex(unsigned int _keyIndex)

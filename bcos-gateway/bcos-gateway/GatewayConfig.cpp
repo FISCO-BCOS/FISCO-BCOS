@@ -194,13 +194,22 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       uuid =
       ; ssl or sm ssl
       sm_ssl=true
+      ;
+      enable_rip_protocol=false
       listen_ip=0.0.0.0
       listen_port=30300
       nodes_path=./
       nodes_file=nodes.json
+
+      enable_rip_protocol=true
+      allow_max_msg_size=
+      session_recv_buffer_size=
+      session_max_read_data_size=
+      session_max_send_data_size=
+      session_max_send_msg_count=
       */
     m_uuid = _pt.get<std::string>("p2p.uuid", "");
-    if (_uuidRequired && m_uuid.size() == 0)
+    if (_uuidRequired && m_uuid.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "initP2PConfig: invalid uuid! Must be non-empty!"));
@@ -216,21 +225,54 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     }
 
     // not set the nodePath, load from the config
-    if (m_nodePath.size() == 0)
+    if (m_nodePath.empty())
     {
         m_nodePath = _pt.get<std::string>("p2p.nodes_path", "./");
     }
 
     m_nodeFileName = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
 
+    m_enableRIPProtocol = _pt.get<bool>("p2p.enable_rip_protocol", true);
+
+    constexpr static uint32_t defaultAllowMaxMsgSize = 32 * 1024 * 1024;
+    m_allowMaxMsgSize = _pt.get<uint32_t>("p2p.allow_max_msg_size", defaultAllowMaxMsgSize);
+
+    uint32_t defaultRecvBufferSize = 2 * m_allowMaxMsgSize;
+    m_sessionRecvBufferSize =
+        _pt.get<uint32_t>("p2p.session_recv_buffer_size", defaultRecvBufferSize);
+
+    if (m_sessionRecvBufferSize < 2 * m_allowMaxMsgSize)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment("initP2PConfig: invalid p2p.allow_max_msg_size "
+                                                  "and p2p.session_recv_buffer_size config items, "
+                                                  "p2p.session_recv_buffer_size must greater equal"
+                                                  "than 2 * p2p.allow_max_msg_size"));
+    }
+
+    constexpr static uint32_t defaultMaxReadDataSize = 40 * 1024;
+    m_maxReadDataSize = _pt.get<uint32_t>("p2p.session_max_read_data_size", defaultMaxReadDataSize);
+
+    constexpr static uint32_t defaultMaxSendDataSize = 1024 * 1024;
+    m_maxSendDataSize = _pt.get<uint32_t>("p2p.session_max_send_data_size", defaultMaxSendDataSize);
+
+    constexpr static uint32_t defaultMaxSendMsgCount = 10;
+    m_maxSendMsgCount = _pt.get<uint32_t>("p2p.session_max_send_msg_count", defaultMaxSendMsgCount);
+
     m_smSSL = smSSL;
     m_listenIP = listenIP;
     m_listenPort = (uint16_t)listenPort;
 
-    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initP2PConfig ok!") << LOG_KV("listenIP", listenIP)
-                             << LOG_KV("listenPort", listenPort) << LOG_KV("smSSL", smSSL)
-                             << LOG_KV("nodePath", m_nodePath)
-                             << LOG_KV("nodeFileName", m_nodeFileName);
+    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initP2PConfig ok!") << LOG_KV("p2p.listen_ip", listenIP)
+                             << LOG_KV("p2p.listen_port", listenPort) << LOG_KV("p2p.sm_ssl", smSSL)
+                             << LOG_KV("p2p.enable_rip_protocol", m_enableRIPProtocol)
+                             << LOG_KV("p2p.allow_max_msg_size", m_allowMaxMsgSize)
+                             << LOG_KV("p2p.session_recv_buffer_size", m_sessionRecvBufferSize)
+                             << LOG_KV("p2p.session_max_read_data_size", m_maxReadDataSize)
+                             << LOG_KV("p2p.session_max_send_data_size", m_maxSendDataSize)
+                             << LOG_KV("p2p.session_max_send_msg_count", m_maxSendMsgCount)
+                             << LOG_KV("p2p.nodes_path", m_nodePath)
+                             << LOG_KV("p2p.nodes_file", m_nodeFileName);
 }
 
 // load p2p connected peers
@@ -247,7 +289,7 @@ void GatewayConfig::loadP2pConnectedNodes()
                 "initP2PConfig: unable to read nodes json file, path=" + nodeFilePath));
     }
 
-    parseConnectedJson(*jsonContent.get(), nodes);
+    parseConnectedJson(*jsonContent, nodes);
     m_connectedNodes = nodes;
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("loadP2pConnectedNodes ok!")

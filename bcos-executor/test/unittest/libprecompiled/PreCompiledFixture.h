@@ -631,7 +631,7 @@ public:
         protocol::BlockNumber _number, std::string const& path, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("list(string)", path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -669,7 +669,7 @@ public:
     ExecutionMessage::UniquePtr initBfs(protocol::BlockNumber _number, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("initBfs()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -705,7 +705,7 @@ public:
 
 public:
     CodecWrapper::Ptr codec;
-    
+
 protected:
     crypto::Hash::Ptr hashImpl;
     crypto::Hash::Ptr smHashImpl;

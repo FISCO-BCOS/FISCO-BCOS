@@ -51,15 +51,16 @@ bool GraphKeyLocks::acquireKeyLock(
         if (std::get<0>(*vertex) != contextID)
         {
             KEY_LOCK_LOG(TRACE) << boost::format(
-                                       "Acquire key lock failed, request: [%s, %s, %ld, %ld] "
+                                       "Acquire key lock failed, request: [%s:%s] -> %ld | %ld, "
                                        "exists: [%ld]") %
                                        contract % toHex(key) % contextID % seq %
                                        std::get<0>(*vertex);
 
             // Key lock holding by another context
             addEdge(contextVertex, keyVertex, seq);
-            KEY_LOCK_LOG(TRACE) << " [[" << std::string(contract) << ":" << toHex(key) << "]]  -> "
-                                << contextID << " | " << seq;
+            KEY_LOCK_LOG(TRACE) << " " << contextID << " | " << seq << " -> [["
+                                << std::string(contract) << ":" << toHex(key) << "]]";
+
             return false;
         }
     }

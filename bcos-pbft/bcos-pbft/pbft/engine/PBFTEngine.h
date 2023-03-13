@@ -123,7 +123,7 @@ protected:
         bool _needVerifyProposal, bool _generatedFromNewView = false,
         bool _needCheckSignature = true);
     // When handlePrePrepareMsg return false, then reset sealed txs
-    virtual void resetSealedTxs(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg);
+    virtual void resetSealedTxs(std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg);
 
     // To check pre-prepare msg valid
     virtual CheckResult checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg);
@@ -135,14 +135,14 @@ protected:
     virtual CheckResult checkPBFTMsgState(std::shared_ptr<PBFTMessageInterface> _pbftReq) const;
 
     // When pre-prepare proposal seems ok, then broadcast prepare msg
-    virtual void broadcastPrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg);
+    virtual void broadcastPrepareMsg(std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg);
 
     // Process the Prepare type message packet
-    virtual bool handlePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prepareMsg);
+    virtual bool handlePrepareMsg(PBFTMessageInterface::Ptr const& _prepareMsg);
     // To check 'Prepare' or 'Commit' type proposal
-    virtual CheckResult checkPBFTMsg(std::shared_ptr<PBFTMessageInterface> _prepareMsg);
+    virtual CheckResult checkPBFTMsg(PBFTMessageInterface::Ptr const& _prepareMsg);
 
-    virtual bool handleCommitMsg(std::shared_ptr<PBFTMessageInterface> _commitMsg);
+    virtual bool handleCommitMsg(PBFTMessageInterface::Ptr const& _commitMsg);
 
     virtual void onTimeout();
     virtual ViewChangeMsgInterface::Ptr generateViewChange();
@@ -172,7 +172,7 @@ protected:
         PBFTProposalInterface::Ptr _proposal, PBFTProposalInterface::Ptr _executedProposal);
     virtual void onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal);
     virtual void onLoadAndVerifyProposalFinish(
-        bool _verifyResult, Error::Ptr _error, PBFTProposalInterface::Ptr _proposal);
+        bool _verifyResult, Error::Ptr const& _error, PBFTProposalInterface::Ptr const& _proposal);
     virtual void triggerTimeout(bool _incTimeout = true);
 
     void handleRecoverResponse(PBFTMessageInterface::Ptr _recoverResponse);
@@ -207,8 +207,8 @@ private:
     // utility functions
     void waitSignal()
     {
-        boost::unique_lock<boost::mutex> l(x_signalled);
-        m_signalled.wait_for(l, boost::chrono::milliseconds(5));
+        boost::unique_lock<boost::mutex> lock(x_signalled);
+        m_signalled.wait_for(lock, boost::chrono::milliseconds(5));
     }
 
 protected:
@@ -224,8 +224,7 @@ protected:
     // for log syncing
     PBFTLogSync::Ptr m_logSync;
 
-    std::function<void(std::string const& _id, int _moduleID, bcos::crypto::NodeIDPtr _dstNode,
-        bytesConstRef _data)>
+    std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
     boost::condition_variable m_signalled;

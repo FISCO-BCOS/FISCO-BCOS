@@ -6,11 +6,9 @@
 #include <bcos-task/Task.h>
 #include <bcos-task/Trait.h>
 #include <bcos-utilities/Ranges.h>
-#include <boost/graph/graph_concepts.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <optional>
-#include <range/v3/view/transform.hpp>
 #include <type_traits>
 
 namespace bcos::storage2

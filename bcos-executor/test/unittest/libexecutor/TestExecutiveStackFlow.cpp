@@ -82,14 +82,15 @@ struct ExecutiveStackFlowFixture
 
         LedgerCache::Ptr ledgerCache =
             std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
-        std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
+        blockContext = std::make_shared<BlockContext>(
             nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
 
         executiveFactory = std::make_shared<MockExecutiveFactory>(
-            blockContext, nullptr, nullptr, nullptr, nullptr);
+            *blockContext, nullptr, nullptr, nullptr, nullptr);
     }
     std::shared_ptr<ExecutiveStackFlow> executiveStackFlow;
     std::shared_ptr<MockExecutiveFactory> executiveFactory;
+    std::shared_ptr<BlockContext> blockContext;
     std::shared_ptr<ExecutiveState> executiveState;
     std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs =
         make_shared<std::vector<CallParameters::UniquePtr>>();

@@ -22,6 +22,7 @@
 #include "BlockExecutiveFactory.h"
 #include "BlockExecutive.h"
 #include "SerialBlockExecutive.h"
+#include "ShardingBlockExecutive.h"
 
 
 using namespace std;
@@ -55,6 +56,15 @@ std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Blo
     bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
     bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
 {
+    if (block->blockHeaderConst()->version() >= (uint32_t)BlockVersion::V3_3_VERSION)
+    {
+        // In 3.3.0, DMC and serial has been combined together: Sharding
+        auto shardingBlockExecutive = std::make_shared<ShardingBlockExecutive>(block, scheduler,
+            startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,
+            _gasLimit, _syncBlock);
+        return shardingBlockExecutive;
+    }
+
     if (m_isSerialExecute)
     {
         auto serialBlockExecutive = std::make_shared<SerialBlockExecutive>(block, scheduler,

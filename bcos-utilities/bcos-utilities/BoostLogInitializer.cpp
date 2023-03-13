@@ -21,6 +21,7 @@
 #include "BoostLogInitializer.h"
 #include "bcos-framework/bcos-framework/Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include <bcos-utilities/RateCollector.h>
 #include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/core/core.hpp>
@@ -185,6 +186,16 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
         setLogFormatter(sink);
     }
     setFileLogLevel((LogLevel)logLevel);
+
+    auto enableRateCollector = _pt.get<bool>("log.enable_rate_collector", false);
+    if (enableRateCollector)
+    {
+        bcos::RateCollector::enable();
+    }
+    else
+    {
+        bcos::RateCollector::disable();
+    }
 }
 
 // rotate the log file the log every hour
