@@ -23,23 +23,26 @@ class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Receip
 private:
     constexpr static size_t DEFAULT_CHUNK_SIZE = 50;
 
-    size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                        // Maybe auto adjust
-    size_t m_maxThreads = std::thread::hardware_concurrency() * 4;  // Maybe auto adjust
+    size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                  // Maybe auto adjust
+    size_t m_maxToken = std::thread::hardware_concurrency();  // Maybe auto adjust
     using ChunkLocalStorage =
         transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
             MultiLayerStorage>;
-    struct ChunkExecuteReturn
+    struct ChunkExecuteResult
     {
         std::unique_ptr<ChunkLocalStorage> localStorage;
         ReadWriteSetStorage<ChunkLocalStorage> readWriteSetStorage;
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
+        int64_t index = 0;
+        bool compareLeft = false;
+        bool compareRight = false;
     };
 
-    task::Task<ChunkExecuteReturn> chunkExecute(protocol::IsBlockHeader auto const& blockHeader,
+    task::Task<ChunkExecuteResult> chunkExecute(protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions, int startContextID,
         std::atomic_bool& abortToken)
     {
-        ChunkExecuteReturn result{
+        ChunkExecuteResult result{
             .localStorage = std::make_unique<ChunkLocalStorage>(multiLayerStorage()),
             .readWriteSetStorage = {*(result.localStorage)},
             .receipts = {}};
@@ -93,16 +96,21 @@ public:
 
         auto chunkBegin = chunkIt;
         auto chunkEnd = RANGES::end(chunks);
+        auto endIndex = RANGES::distance(chunkBegin, chunkEnd);
 
-        std::vector<ChunkExecuteReturn> executedChunk;
+        std::vector<ChunkExecuteResult> executedChunk;
         executedChunk.reserve(RANGES::size(chunks));
         while (chunkIt != chunkEnd)
         {
             std::atomic_bool abortToken = false;
             auto currentChunk = chunkIt;
 
+            std::atomic_int64_t availableEnd(endIndex);
+            auto beginIndex = RANGES::distance(chunkBegin, chunkIt);
+            std::vector<std::optional<ChunkExecuteResult>> executedChunks(endIndex - beginIndex);
+
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
-            tbb::parallel_pipeline(m_maxThreads,
+            tbb::parallel_pipeline(m_maxToken,
                 tbb::make_filter<void,
                     std::optional<std::tuple<RANGES::range_value_t<decltype(chunks)>, int64_t>>>(
                     tbb::filter_mode::serial_in_order,
@@ -121,28 +129,46 @@ public:
                     }) &
                     tbb::make_filter<
                         std::optional<std::tuple<RANGES::range_value_t<decltype(chunks)>, int64_t>>,
-                        std::optional<ChunkExecuteReturn>>(tbb::filter_mode::parallel,
+                        std::optional<ChunkExecuteResult>>(tbb::filter_mode::parallel,
                         [&](auto input) {
                             if (input && !abortToken)
                             {
                                 auto& [transactions, index] = *input;
-                                auto startContextID = index * m_chunkSize;
-                                PARALLEL_SCHEDULER_LOG(DEBUG)
-                                    << "Chunk " << index << " executing...";
-                                auto result = std::make_optional(task::syncWait(chunkExecute(
-                                    blockHeader, transactions, startContextID, abortToken)));
-                                PARALLEL_SCHEDULER_LOG(DEBUG)
-                                    << "Chunk " << index << " execute finished";
-                                return result;
+                                if (index < availableEnd)
+                                {
+                                    auto startContextID = index * m_chunkSize;
+                                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                                        << "Chunk " << index << " executing...";
+                                    auto result = std::make_optional(task::syncWait(chunkExecute(
+                                        blockHeader, transactions, startContextID, abortToken)));
+                                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                                        << "Chunk " << index << " execute finished";
+                                    result.index = index;
+                                    return result;
+                                }
                             }
-                            return std::optional<ChunkExecuteReturn>{};
+                            return std::optional<ChunkExecuteResult>{};
                         }) &
-                    tbb::make_filter<std::optional<ChunkExecuteReturn>, void>(
+                    tbb::make_filter<std::optional<ChunkExecuteResult>, void>(
+                        tbb::filter_mode::serial_out_of_order,
+                        [&](std::optional<ChunkExecuteResult> chunkResult) {
+                            if (chunkResult)
+                            {
+                                auto index = chunkResult->index;
+                                auto arrayIndex = index - beginIndex;
+                                executedChunks[arrayIndex] = std::move(chunkResult);
+                                auto& result = executedChunks[index];
+                            }
+
+                            return std::optional<ChunkExecuteResult>{};
+                        }) &
+                    tbb::make_filter<std::optional<ChunkExecuteResult>, void>(
                         tbb::filter_mode::serial_in_order, [&](auto chunkResult) {
                             if (!chunkResult || abortToken)
                             {
                                 return;
                             }
+
                             auto& [chunkStorage, chunkReadWriteStorage, chunkReceipts] =
                                 *chunkResult;
 
@@ -179,6 +205,6 @@ public:
     }
 
     void setChunkSize(size_t chunkSize) { m_chunkSize = chunkSize; }
-    void setMaxThreads(size_t maxThreads) { m_maxThreads = maxThreads; }
+    void setMaxThreads(size_t maxThreads) { m_maxToken = maxThreads; }
 };
 }  // namespace bcos::transaction_scheduler
