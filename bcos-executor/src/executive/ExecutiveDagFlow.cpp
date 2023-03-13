@@ -87,8 +87,8 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
         else
         {
             // generate m_dagFlow
-            m_dagFlow = prepareDagFlow(m_executiveFactory->getBlockContext(),
-                m_executiveFactory, *txInputs, m_abiCache);
+            m_dagFlow = prepareDagFlow(
+                m_executiveFactory->getBlockContext(), m_executiveFactory, *txInputs, m_abiCache);
         }
 
         assert(!m_inputs);
@@ -130,7 +130,8 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
             }
 
             CallParameters::UniquePtr output;
-            bool isDagTx = m_dagFlow->isDagTx(id);
+            // bool isDagTx = m_dagFlow->isDagTx(id);
+            bool isDagTx = true;  // TODO: for test
 
             if (isDagTx) [[likely]]
             {
