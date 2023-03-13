@@ -65,11 +65,12 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
             {
                 auto const& leaderKey = _value.key();
                 UpgradableGuard l(x_keyToLeader);
-                if (!m_keyToLeader.count(leaderKey))
+                auto it = m_keyToLeader.find(leaderKey);
+                if (it == m_keyToLeader.end())
                 {
                     return;
                 }
-                auto member = m_keyToLeader.at(leaderKey);
+                auto member = it->second;
                 UpgradeGuard ul(l);
                 m_keyToLeader.erase(leaderKey);
                 onMemberDeleted(leaderKey, member);

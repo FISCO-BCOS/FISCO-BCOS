@@ -294,7 +294,7 @@ private:
     // p2p network listen Port
     uint16_t m_listenPort;
     // threadPool size
-    uint32_t m_threadPoolSize{16};
+    uint32_t m_threadPoolSize{8};
     // p2p connected nodes host list
     std::set<NodeIPEndpoint> m_connectedNodes;
     // peer black list

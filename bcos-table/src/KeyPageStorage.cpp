@@ -250,11 +250,9 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                         if (!onlyDirty || it.second->entry.dirty())
                         {
                             auto* meta = it.second->getTableMeta();
-                            auto readLock = meta->rLock();
                             Entry entry;
                             entry.setObject(*meta);
                             m_size += entry.size();
-                            readLock.unlock();
                             if (!m_readOnly)
                             {
                                 if (meta->size() <= 10)
@@ -679,7 +677,6 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
         return std::make_pair(std::move(error), std::nullopt);
     }
     auto* meta = data.value()->getTableMeta();
-    auto readLock = meta->rLock();
     if (key.empty())
     {  // table meta
         if (meta->size() > 0)
@@ -702,6 +699,7 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
         }
         return std::make_pair(nullptr, std::nullopt);
     }
+    auto readLock = meta->rLock();
     auto pageInfoOp = meta->getPageInfoNoLock(key);
     if (pageInfoOp)
     {

@@ -171,19 +171,40 @@ public:
             prepareMyData();
             m_data->pageKey = std::move(key);
         }
-        [[nodiscard]] auto getPageKey() const -> std::string { return m_data->pageKey; }
+        [[nodiscard]] auto getPageKey() const -> std::string
+        {
+            if (m_data)
+            {
+                return m_data->pageKey;
+            }
+            return {};
+        }
         void setCount(uint16_t _count)
         {
             prepareMyData();
             m_data->count = _count;
         }
-        [[nodiscard]] auto getCount() const -> uint16_t { return m_data->count; }
+        [[nodiscard]] auto getCount() const -> uint16_t
+        {
+            if (m_data)
+            {
+                return m_data->count;
+            }
+            return 0;
+        }
         void setSize(uint16_t _size)
         {
             prepareMyData();
             m_data->size = _size;
         }
-        [[nodiscard]] auto getSize() const -> uint16_t { return m_data->size; }
+        [[nodiscard]] auto getSize() const -> uint16_t
+        {
+            if (m_data)
+            {
+                return m_data->size;
+            }
+            return 0;
+        }
 
         [[nodiscard]] auto getPageData() const -> Data* { return m_pageData; }
         void setPageData(Data* data) { m_pageData = data; }
@@ -208,7 +229,7 @@ public:
             uint16_t count = 0;
             uint16_t size = 0;
         };
-        std::shared_ptr<PageInfoData> m_data = nullptr;
+        std::shared_ptr<PageInfoData> m_data = std::make_shared<PageInfoData>();
         Data* m_pageData = nullptr;
         friend class boost::serialization::access;
 
@@ -257,6 +278,8 @@ public:
             if (this != &meta)
             {
                 pages = std::make_unique<std::vector<PageInfo>>();
+                pages->reserve(meta.pages->size());
+                auto lock = std::shared_lock(meta.mutex);
                 *pages = *meta.pages;
             }
             return *this;
@@ -491,6 +514,7 @@ public:
             // }
             int invalid = 0;
             m_rows = 0;
+            auto writeLock = rLock();
             for (auto it = pages->begin(); it != pages->end();)
             {
                 if (it->getCount() == 0 || it->getPageKey().empty())

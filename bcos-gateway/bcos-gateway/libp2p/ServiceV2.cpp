@@ -212,7 +212,8 @@ void ServiceV2::onEraseSession(P2PSession::Ptr _session)
 bool ServiceV2::tryToUpdateSeq(std::string const& _p2pNodeID, uint32_t _seq)
 {
     UpgradableGuard l(x_node2Seq);
-    if (m_node2Seq.count(_p2pNodeID) && m_node2Seq.at(_p2pNodeID) >= _seq)
+    auto it = m_node2Seq.find(_p2pNodeID);
+    if (it != m_node2Seq.end() && it->second >= _seq)
     {
         return false;
     }
@@ -224,12 +225,13 @@ bool ServiceV2::tryToUpdateSeq(std::string const& _p2pNodeID, uint32_t _seq)
 bool ServiceV2::eraseSeq(std::string const& _p2pNodeID)
 {
     UpgradableGuard l(x_node2Seq);
-    if (!m_node2Seq.count(_p2pNodeID))
+    auto it = m_node2Seq.find(_p2pNodeID);
+    if (it == m_node2Seq.end())
     {
         return false;
     }
     UpgradeGuard ul(l);
-    m_node2Seq.erase(_p2pNodeID);
+    m_node2Seq.erase(it);
     return true;
 }
 
