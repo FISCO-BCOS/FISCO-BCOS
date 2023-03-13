@@ -124,7 +124,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         {
             if (std::holds_alternative<Error::Ptr>(m_submitResult))
             {
-                BOOST_THROW_EXCEPTION(SubmitTransactionError{} << bcos::error::ErrorMessage(std::get<Error::Ptr>(m_submitResult)->errorMessage()) );
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
             }
 
             return std::move(
