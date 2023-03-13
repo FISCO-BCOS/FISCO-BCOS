@@ -1372,6 +1372,7 @@ generate_common_ini() {
     max_log_file_size=1024
     ; rotate the log every hour
     ;enable_rotate_by_hour=true
+    enable_rate_collector=false
 EOF
 }
 

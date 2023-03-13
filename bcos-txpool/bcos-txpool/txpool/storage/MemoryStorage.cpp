@@ -40,17 +40,17 @@ MemoryStorage::MemoryStorage(
   : m_config(std::move(_config)),
     m_txsTable(256),
     m_txsExpirationTime(_txsExpirationTime),
-    m_inRateReporter("tx_pool_in", 1000),
-    m_sealRateReporter("tx_pool_seal", 1000),
-    m_removeRateReporter("tx_pool_rm", 1000)
+    m_inRateCollector("tx_pool_in", 1000),
+    m_sealRateCollector("tx_pool_seal", 1000),
+    m_removeRateCollector("tx_pool_rm", 1000)
 {
     m_blockNumberUpdatedTime = utcTime();
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer = std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer");
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
-    m_inRateReporter.start();
-    m_sealRateReporter.start();
-    m_removeRateReporter.start();
+    m_inRateCollector.start();
+    m_sealRateCollector.start();
+    m_removeRateCollector.start();
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
                      << LOG_KV("txsExpirationTime", m_txsExpirationTime)
@@ -266,7 +266,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
 
     // verify the transaction
     result = m_config->txValidator()->verify(transaction);
-    m_inRateReporter.update(1, true);
+    m_inRateCollector.update(1, true);
     if (result == TransactionStatus::None)
     {
         if (txSubmitCallback)
@@ -439,7 +439,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
             else if (tx)
             {
                 ++succCount;
-                m_removeRateReporter.update(1, true);
+                m_removeRateCollector.update(1, true);
                 nonceList.emplace_back(tx->nonce());
             }
             results.emplace_back(std::move(tx), txResult);
@@ -647,7 +647,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         tx->setBatchId(-1);
         tx->setBatchHash(HashType());
         m_knownLatestSealedTxHash = txHash;
-        m_sealRateReporter.update(1, true);
+        m_sealRateCollector.update(1, true);
     };
 
 

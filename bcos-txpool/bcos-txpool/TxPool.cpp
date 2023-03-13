@@ -95,6 +95,7 @@ task::Task<void> TxPool::onReceivePushTransaction(
     try
     {
         auto transaction = m_transactionFactory->createTransaction(data, false);
+        // without submitResult the compiler will warning
         auto submitResult = co_await submitTransaction(std::move(transaction));
     }
     catch (std::exception& e)

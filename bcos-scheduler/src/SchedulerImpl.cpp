@@ -7,17 +7,35 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/ITTAPI.h>
 #include <bcos-utilities/Overloaded.h>
+#include <ittnotify.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <variant>
 
 
 using namespace bcos::scheduler;
+
+namespace bcos::scheduler
+{
+const __itt_domain* const ITT_DOMAIN_SCHEDULER_EXECUTE = __itt_domain_create("scheduler.execute");
+const __itt_domain* const ITT_DOMAIN_SCHEDULER_COMMIT = __itt_domain_create("scheduler.commit");
+
+// const std::string_view c_SCHEDULER_EXECUTE_BLOCK = "scheduler.execute";
+// const std::string_view c_SCHEDULER_COMMIT_BLOCK = "scheduler.commit";
+const __itt_string_handle* const ITT_STRING_SCHEDULER_EXECUTE =
+    __itt_string_handle_create("scheduler.execute");
+const __itt_string_handle* const ITT_STRING_SCHEDULER_COMMIT =
+    __itt_string_handle_create("scheduler.commit");
+// __itt_id ITT_SCHEDULER_EXECUTE_ID = 1;
+
+}  // namespace bcos::scheduler
 
 void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
     std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)
@@ -124,12 +142,18 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
 
 
 void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
-        _callback)
+    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)> _callback)
 {
-    m_worker.enqueue([this, block = std::move(block), verify, callback = std::move(_callback)]() {
-        executeBlockInternal(std::move(block), verify, std::move(callback));
-    });
+    m_worker.enqueue(
+        [this, block = std::move(block), verify, callback = std::move(_callback)]() mutable {
+            __itt_frame_begin_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
+            executeBlockInternal(std::move(block), verify,
+                [callback = std::move(callback)](bcos::Error::Ptr&& err,
+                    bcos::protocol::BlockHeader::Ptr&& header, bool isSysBlock) {
+                    __itt_frame_end_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
+                    callback(std::move(err), std::move(header), isSysBlock);
+                });
+        });
 }
 void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
@@ -382,11 +406,13 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
 void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> _callback)
 {
+    __itt_frame_begin_v3(ITT_DOMAIN_SCHEDULER_COMMIT, nullptr);
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(header->number()) << "CommitBlock request";
 
     auto requestBlockNumber = header->number();
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](
                         bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
+        __itt_frame_end_v3(ITT_DOMAIN_SCHEDULER_COMMIT, nullptr);
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock response"
                              << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
         _callback(error == nullptr ? nullptr : std::move(error), std::move(config));

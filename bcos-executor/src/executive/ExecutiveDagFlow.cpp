@@ -87,7 +87,7 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
         else
         {
             // generate m_dagFlow
-            m_dagFlow = prepareDagFlow(*m_executiveFactory->getBlockContext().lock(),
+            m_dagFlow = prepareDagFlow(m_executiveFactory->getBlockContext(),
                 m_executiveFactory, *txInputs, m_abiCache);
         }
 
@@ -199,7 +199,7 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
 }
 
 critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
-    BlockContext& blockContext, ExecutiveFactory::Ptr executiveFactory,
+    const BlockContext& blockContext, ExecutiveFactory::Ptr executiveFactory,
     std::vector<CallParameters::UniquePtr>& inputs,
     std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
 {
@@ -352,7 +352,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                                     abiStr, selector.toBytes(), isSmCrypto);
                                 if (!functionAbi)
                                 {
-                                    DAGFLOW_LOG(DEBUG)
+                                    DAGFLOW_LOG(TRACE)
                                         << "generateDags: " << LOG_DESC("ABI deserialize failed")
                                         << LOG_KV("address", to) << LOG_KV("ABI", abiStr);
 
@@ -381,7 +381,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                         }
                         else
                         {
-                            DAGFLOW_LOG(DEBUG) << "generateDags: " << LOG_DESC("Found ABI in cache")
+                            DAGFLOW_LOG(TRACE) << "generateDags: " << LOG_DESC("Found ABI in cache")
                                                << LOG_KV("address", to)
                                                << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                             auto& functionAbi = cacheHandle.value();
@@ -391,7 +391,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                     }
                     if (conflictFields == nullptr)
                     {
-                        DAGFLOW_LOG(DEBUG)
+                        DAGFLOW_LOG(TRACE)
                             << "generateDags: "
                             << LOG_DESC("The transaction can't be executed concurrently")
                             << LOG_KV("address", to)
@@ -424,24 +424,6 @@ TxDAGFlow::Ptr ExecutiveDagFlow::generateDagFlow(
     return dagFlow;
 }
 
-
-bytes ExecutiveDagFlow::getComponentBytes(
-    size_t index, const std::string& typeName, const bytesConstRef& data)
-{
-    size_t indexOffset = index * 32;
-    auto header = bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
-    if (typeName == "string" || typeName == "bytes")
-    {
-        u256 u = fromBigEndian<u256>(header);
-        auto offset = static_cast<std::size_t>(u);
-        auto rawData = data.getCroppedData(offset);
-        auto len = static_cast<std::size_t>(
-            fromBigEndian<u256>(bytes(rawData.begin(), rawData.begin() + 32)));
-        return bytes(rawData.begin() + 32, rawData.begin() + 32 + static_cast<std::size_t>(len));
-    }
-    return header;
-}
-
 std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
     const FunctionAbi& functionAbi, const CallParameters& params, const BlockContext& _blockContext)
 {
@@ -460,9 +442,10 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
 
     auto conflictFields = make_shared<vector<bytes>>();
 
-    for (auto& conflictField : functionAbi.conflictFields)
+    for (const auto& conflictField : functionAbi.conflictFields)
     {
         auto criticalKey = bytes();
+        criticalKey.reserve(72);
 
         size_t slot = toHash;
         if (conflictField.slot.has_value())
@@ -554,12 +537,12 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
         {
             assert(!conflictField.value.empty());
             const ParameterAbi* paramAbi = nullptr;
-            auto components = &functionAbi.inputs;
+            const auto* components = &functionAbi.inputs;
             auto inputData = ref(params.data).getCroppedData(4).toBytes();
             if (_blockContext.isWasm())
             {
                 auto startPos = 0u;
-                for (auto segment : conflictField.value)
+                for (const auto& segment : conflictField.value)
                 {
                     if (segment >= components->size())
                     {
@@ -591,7 +574,7 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
             else
             {  // evm
                 auto index = conflictField.value[0];
-                auto typeName = functionAbi.flatInputs[index];
+                const auto& typeName = functionAbi.flatInputs[index];
                 if (typeName.empty())
                 {
                     return nullptr;

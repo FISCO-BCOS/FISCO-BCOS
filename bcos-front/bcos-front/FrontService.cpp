@@ -508,7 +508,7 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
  * @param _receiveMsgCallback: response callback
  * @return void
  */
-void FrontService::onReceiveMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+void FrontService::onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
     bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback)
 {
     try

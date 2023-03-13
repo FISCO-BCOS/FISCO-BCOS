@@ -90,7 +90,7 @@ public:
                 new Callback(_receiveMsgCallback), _groupID, tarsGroupNodeInfo);
     }
 
-    void onReceiveMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+    void onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
         bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override
     {
         class Callback : public FrontServicePrxCallback

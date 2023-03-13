@@ -118,6 +118,27 @@ KeyPairInterface::UniquePtr bcos::crypto::secp256k1GenerateKeyPair()
     return keyPair;
 }
 
+void secp256k1RecoverPrimitive(const HashType& _hash, char* _pubKey, bytesConstRef _signatureData)
+{
+    secp256k1_ecdsa_recoverable_signature sig;
+    secp256k1_ecdsa_recoverable_signature_parse_compact(g_SECP256K1_CTX.get(), &sig,
+        _signatureData.data(), (int)_signatureData[SECP256K1_SIGNATURE_V]);
+    if (secp256k1_ecdsa_recover(
+            g_SECP256K1_CTX.get(), (secp256k1_pubkey*)_pubKey, &sig, _hash.data()) == 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
+                                  "invalid signature: secp256k1Recover failed, msgHash : " +
+                                  _hash.hex() + ", signData:" + *toHexString(_signatureData)));
+    }
+    size_t serializedPubkeySize = SECP256K1_UNCOMPRESS_PUBLICKEY_LEN;
+    std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> data{};
+
+    secp256k1_ec_pubkey_serialize(g_SECP256K1_CTX.get(), data.data(), &serializedPubkeySize,
+        (secp256k1_pubkey*)_pubKey, SECP256K1_EC_UNCOMPRESSED);
+    assert(data[0] == 0x04);
+    memcpy(_pubKey, data.data() + 1, SECP256K1_PUBLICKEY_LEN);
+}
+
 PublicPtr bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData)
 {
 #if 0
@@ -139,30 +160,10 @@ PublicPtr bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _s
         BOOST_THROW_EXCEPTION(
             InvalidSignature() << errinfo_comment(
                 "secp256k1Sign illegal argument: recid >= 0 && recid <= 3, recid: " +
-                std::to_string((int)_signatureData[64])));
+                std::to_string((int)_signatureData[SECP256K1_SIGNATURE_V])));
     }
     auto pubKey = std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN);
-    // secp256k1_ecdsa_recoverable_signature* rawSig =
-    //     (secp256k1_ecdsa_recoverable_signature*)(_signatureData.data());
-    secp256k1_ecdsa_recoverable_signature sig;
-
-    secp256k1_ecdsa_recoverable_signature_parse_compact(g_SECP256K1_CTX.get(), &sig,
-        _signatureData.data(), (int)_signatureData[SECP256K1_SIGNATURE_V]);
-    if (!secp256k1_ecdsa_recover(
-            g_SECP256K1_CTX.get(), (secp256k1_pubkey*)pubKey->mutableData(), &sig, _hash.data()))
-    {
-        BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
-                                  "invalid signature: secp256k1Recover failed, msgHash : " +
-                                  _hash.hex() + ", signData:" + *toHexString(_signatureData)));
-    }
-    size_t serializedPubkeySize = SECP256K1_UNCOMPRESS_PUBLICKEY_LEN;
-    std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> data{};
-
-    secp256k1_ec_pubkey_serialize(g_SECP256K1_CTX.get(), data.data(), &serializedPubkeySize,
-        (secp256k1_pubkey*)pubKey->mutableData(), SECP256K1_EC_UNCOMPRESSED);
-    assert(data[0] == 0x04);
-    memcpy(pubKey->mutableData(), data.data() + 1, SECP256K1_PUBLICKEY_LEN);
-
+    secp256k1RecoverPrimitive(_hash, pubKey->mutableData(), _signatureData);
     return pubKey;
 }
 
@@ -195,6 +196,28 @@ std::pair<bool, bytes> bcos::crypto::secp256k1Recover(Hash::Ptr _hashImpl, bytes
         }
     }
     return {false, {}};
+}
+
+std::pair<bool, bytes> Secp256k1Crypto::recoverAddress(
+    crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const
+{
+    std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> data{};
+    secp256k1_ecdsa_recoverable_signature sig;
+    secp256k1_pubkey pubkey;
+    secp256k1_ecdsa_recoverable_signature_parse_compact(g_SECP256K1_CTX.get(), &sig,
+        _signatureData.data(), (int)_signatureData[SECP256K1_SIGNATURE_V]);
+    if (secp256k1_ecdsa_recover(g_SECP256K1_CTX.get(), &pubkey, &sig, _hash.data()) == 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
+                                  "invalid signature: secp256k1Recover failed, msgHash : " +
+                                  _hash.hex() + ", signData:" + *toHexString(_signatureData)));
+    }
+    size_t serializedPubkeySize = SECP256K1_UNCOMPRESS_PUBLICKEY_LEN;
+
+    secp256k1_ec_pubkey_serialize(g_SECP256K1_CTX.get(), data.data(), &serializedPubkeySize,
+        &pubkey, SECP256K1_EC_UNCOMPRESSED);
+    assert(data[0] == 0x04);
+    return {true, calculateAddress(_hashImpl, data.data() + 1, SECP256K1_PUBLICKEY_LEN)};
 }
 
 bool Secp256k1Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,

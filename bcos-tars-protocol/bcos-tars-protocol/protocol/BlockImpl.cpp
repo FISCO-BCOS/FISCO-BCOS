@@ -47,7 +47,7 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
 
 bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
 {
-    bcos::ReadGuard l(x_blockHeader);
+    // bcos::ReadGuard l(x_blockHeader);
     return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
         [inner = this->m_inner]() { return &inner->blockHeader; });
 }

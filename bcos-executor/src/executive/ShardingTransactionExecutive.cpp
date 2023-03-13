@@ -9,9 +9,9 @@ using namespace bcos::executor;
 using namespace bcos::storage;
 
 
-ShardingTransactionExecutive::ShardingTransactionExecutive(std::weak_ptr<BlockContext> blockContext,
+ShardingTransactionExecutive::ShardingTransactionExecutive(const BlockContext& blockContext,
     std::string contractAddress, int64_t contextID, int64_t seq,
-    std::shared_ptr<wasm::GasInjector>& gasInjector)
+    const wasm::GasInjector& gasInjector)
   : CoroutineTransactionExecutive(
         std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector)
 {}
@@ -35,8 +35,8 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
     }
 
     // TODO: remove this log
-    EXECUTIVE_LOG(INFO) << LOG_BADGE("Sharding")
-                        << "ShardingTransactionExecutive externalCall: " << input->toFullString();
+    EXECUTIVE_LOG(TRACE) << LOG_BADGE("Sharding")
+                         << "ShardingTransactionExecutive externalCall: " << input->toFullString();
 
     // set DMC contextID and seq
     input->contextID = contextID();
@@ -52,21 +52,21 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
         auto toShardName = getContractShard(input->receiveAddress);
         if (toShardName != m_shardName.value())
         {
-            EXECUTIVE_LOG(INFO) << LOG_BADGE("Sharding")
-                                << "ShardingTransactionExecutive call other shard: "
-                                << LOG_KV("toShard", toShardName)
-                                << LOG_KV("input", input->toFullString());
+            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Sharding")
+                                 << "ShardingTransactionExecutive call other shard: "
+                                 << LOG_KV("toShard", toShardName)
+                                 << LOG_KV("input", input->toFullString());
             return CoroutineTransactionExecutive::externalCall(std::move(input));
         }
     }
 
-    EXECUTIVE_LOG(INFO) << LOG_BADGE("Sharding") << "ShardingTransactionExecutive call local"
-                        << input->toFullString();
+    EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Sharding") << "ShardingTransactionExecutive call local"
+                         << input->toFullString();
     return TransactionExecutive::externalCall(std::move(input));
 }
 
 std::string ShardingTransactionExecutive::getContractShard(const std::string_view& contractAddress)
 {
-    auto tableName = getContractTableName(contractAddress, m_blockContext.lock()->isWasm());
+    auto tableName = getContractTableName(contractAddress, m_blockContext.isWasm());
     return ContractShardUtils::getContractShard(storage(), tableName);
 }

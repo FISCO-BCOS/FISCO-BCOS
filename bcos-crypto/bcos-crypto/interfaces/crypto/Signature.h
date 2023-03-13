@@ -48,6 +48,17 @@ public:
 
     // recover recovers the public key from the given signature
     virtual PublicPtr recover(const HashType& _hash, bytesConstRef _signatureData) const = 0;
+    virtual std::pair<bool, bytes> recoverAddress(
+        crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const
+    {
+        auto pubKey = recover(_hash, _signatureData);
+        if (!pubKey)
+        {
+            return std::make_pair(false, bytes());
+        }
+        auto address = calculateAddress(_hashImpl, pubKey);
+        return {true, address.asBytes()};
+    }
 
     // generateKeyPair generates keyPair
     virtual KeyPairInterface::UniquePtr generateKeyPair() const = 0;

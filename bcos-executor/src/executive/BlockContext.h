@@ -64,7 +64,7 @@ public:
         const protocol::Transaction::ConstPtr& _tx)>;
     virtual ~BlockContext(){};
 
-    std::shared_ptr<storage::StateStorageInterface> storage() { return m_storage; }
+    std::shared_ptr<storage::StateStorageInterface> storage() const { return m_storage; }
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
@@ -87,7 +87,7 @@ public:
     ExecutiveFlowInterface::Ptr getExecutiveFlow(std::string codeAddress);
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
-    std::shared_ptr<VMFactory> getVMFactory() { return m_vmFactory; }
+    std::shared_ptr<VMFactory> getVMFactory() const { return m_vmFactory; }
     void setVMFactory(std::shared_ptr<VMFactory> factory) { m_vmFactory = factory; }
 
     void stop()
@@ -130,8 +130,8 @@ public:
 
     auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
 
-    storage::EntryCachePtr getCodeCache() { return m_codeCache; }
-    storage::EntryCachePtr getCodeHashCache() { return m_codeHashCache; }
+    storage::EntryCachePtr getCodeCache() const { return m_codeCache; }
+    storage::EntryCachePtr getCodeHashCache() const { return m_codeHashCache; }
 
 private:
     mutable bcos::SharedMutex x_executiveFlows;

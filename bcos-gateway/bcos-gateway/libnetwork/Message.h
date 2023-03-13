@@ -128,7 +128,7 @@ public:
     [[deprecated("Use encode(EncodedMessage& _buffer)")]] virtual bool encode(
         bcos::bytes& _buffer) = 0;
 
-    virtual int32_t decode(bytesConstRef _buffer) = 0;
+    virtual int32_t decode(const bytesConstRef& _buffer) = 0;
 
     virtual bool encode(EncodedMessage& _buffer) = 0;
 

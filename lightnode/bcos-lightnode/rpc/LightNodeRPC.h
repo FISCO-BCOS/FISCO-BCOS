@@ -320,7 +320,7 @@ public:
                         for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
                             strHex << std::setw(2) << static_cast<unsigned int>(merkleRoot[i]);
                         }
-                        LIGHTNODE_LOG(ERROR) << LOG_KV("blockNumber", blockNumber)
+                        LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
                                              << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
                                              << LOG_KV("transaction number", block.transactions.size())
                                              << LOG_KV("merkleRoot", strHex.str());

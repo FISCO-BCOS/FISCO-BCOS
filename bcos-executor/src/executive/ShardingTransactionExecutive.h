@@ -26,9 +26,9 @@ namespace bcos::executor
 class ShardingTransactionExecutive : public CoroutineTransactionExecutive
 {
 public:
-    ShardingTransactionExecutive(std::weak_ptr<BlockContext> blockContext,
+    ShardingTransactionExecutive(const BlockContext& blockContext,
         std::string contractAddress, int64_t contextID, int64_t seq,
-        std::shared_ptr<wasm::GasInjector>& gasInjector);
+        const wasm::GasInjector& gasInjector);
 
     ~ShardingTransactionExecutive() override = default;
 
