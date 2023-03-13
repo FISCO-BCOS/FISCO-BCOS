@@ -83,6 +83,16 @@ std::string dev::escaped(std::string const& _s, bool _all)
     return ret;
 }
 
+static void printBytes(std::string const& _s)
+{
+    LOG(ERROR) << LOG_BADGE("fromHex") << LOG_DESC("invalid hex char")
+               << LOG_KV("length", _s.size()) << LOG_KV("str", _s);
+
+    for (const auto& c : _s)
+    {
+        LOG(INFO) << LOG_BADGE("fromHex") << LOG_KV("c", (int)c);
+    }
+}
 
 bytes dev::fromHex(std::string const& _s, WhenError _throw)
 {
@@ -97,7 +107,7 @@ bytes dev::fromHex(std::string const& _s, WhenError _throw)
             ret.push_back(h);
         else if (_throw == WhenError::Throw)
         {
-            LOG(DEBUG) << LOG_BADGE("fromHex") << LOG_DESC("invalid hex char") << LOG_KV("str", _s);
+            printBytes(_s);
             BOOST_THROW_EXCEPTION(BadHexCharacter());
         }
         else
@@ -113,7 +123,7 @@ bytes dev::fromHex(std::string const& _s, WhenError _throw)
             ret.push_back((byte)(h * 16 + l));
         else if (_throw == WhenError::Throw)
         {
-            LOG(DEBUG) << LOG_BADGE("fromHex") << LOG_DESC("invalid hex char") << LOG_KV("str", _s);
+            printBytes(_s);
             BOOST_THROW_EXCEPTION(BadHexCharacter());
         }
         else
