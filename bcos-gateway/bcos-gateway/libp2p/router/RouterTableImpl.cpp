@@ -60,18 +60,18 @@ bool RouterTable::erase(std::set<std::string>& _unreachableNodes, std::string co
     bool updated = false;
     WriteGuard l(x_routerEntries);
     // erase router-entry of the _p2pNodeID
-    if (m_routerEntries.count(_p2pNodeID))
+    auto it = m_routerEntries.find(_p2pNodeID);
+    if (it != m_routerEntries.end())
     {
         // Note: reset the distance to m_unreachableDistance, to notify that the _p2pNodeID is
         // unreachable
-        auto entry = m_routerEntries.at(_p2pNodeID);
-        entry->setDistance(m_unreachableDistance);
-        entry->clearNextHop();
-        _unreachableNodes.insert(entry->dstNode());
+        it->second->setDistance(m_unreachableDistance);
+        it->second->clearNextHop();
+        _unreachableNodes.insert(it->second->dstNode());
 
         SERVICE_ROUTER_LOG(INFO) << LOG_DESC("erase: make the router unreachable")
                                  << LOG_KV("dst", _p2pNodeID)
-                                 << LOG_KV("distance", entry->distance())
+                                 << LOG_KV("distance", it->second->distance())
                                  << LOG_KV("size", m_routerEntries.size());
         updated = true;
     }
@@ -118,12 +118,13 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
         return false;
     }
     UpgradableGuard l(x_routerEntries);
-    if (!m_routerEntries.count(_entry->dstNode()))
+    auto it = m_routerEntries.find(_generatedFrom);
+    if (it == m_routerEntries.end())
     {
         return false;
     }
     // get the latest distance
-    auto currentEntry = m_routerEntries.at(_entry->dstNode());
+    auto& currentEntry = it->second;
     auto _newDistance = currentEntry->distance();
     if (_newDistance >= m_unreachableDistance)
     {
@@ -151,7 +152,8 @@ bool RouterTable::updateDstNodeEntry(
         return false;
     }
     // insert new entry
-    if (!m_routerEntries.count(_entry->dstNode()))
+    auto it = m_routerEntries.find(_entry->dstNode());
+    if (it == m_routerEntries.end())
     {
         UpgradeGuard ul(l);
         _entry->incDistance(1);
@@ -168,6 +170,7 @@ bool RouterTable::updateDstNodeEntry(
                                  << LOG_KV("size", m_routerEntries.size());
         return true;
     }
+
     // discover smaller distance
     auto currentEntry = m_routerEntries.at(_entry->dstNode());
     auto currentDistance = currentEntry->distance();

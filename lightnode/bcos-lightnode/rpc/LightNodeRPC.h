@@ -311,6 +311,11 @@ public:
                     if (!bcos::concepts::bytebuffer::equalTo(
                             block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
                     {
+if (c_fileLogLevel <= bcos::LogLevel::TRACE) {
+                        for(size_t i = 0; i < hashesRange.size(); ++i){
+                        LIGHTNODE_LOG(TRACE) << LOG_KV("hashesRange txHash", toHexStringWithPrefix(hashesRange[i]));
+                        }
+}
                         auto merkleRoot = *RANGES::rbegin(merkles);
                         std::ostringstream strHex;
                         strHex << "0x" << std::hex << std::setfill('0');

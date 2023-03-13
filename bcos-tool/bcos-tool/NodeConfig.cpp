@@ -492,16 +492,15 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
-    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
-        [[unlikely]]
-        {
-            NodeConfig_LOG(WARNING) << LOG_DESC(
-                                           "loadTxPoolConfig: the configured txs_expiration_time "
-                                           "is smaller than default "
-                                           "consensus time, reset to the consensus time")
-                                    << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
-                                    << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
-        }
+    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS) [[unlikely]]
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+                                       "loadTxPoolConfig: the configured txs_expiration_time "
+                                       "is smaller than default "
+                                       "consensus time, reset to the consensus time")
+                                << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
+                                << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
+    }
     m_txsExpirationTime = std::max(
         {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
 
@@ -912,7 +911,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     catch (std::exception const& e)
     {
-        if (m_isAuthCheck)
+        if (m_isAuthCheck || m_compatibilityVersion >= BlockVersion::V3_3_VERSION)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "

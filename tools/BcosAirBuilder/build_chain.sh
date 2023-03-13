@@ -42,7 +42,7 @@ default_version="v3.3.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
-auth_mode="false"
+auth_mode="true"
 monitor_mode="false"
 auth_admin_account=
 binary_path=""
@@ -2008,7 +2008,6 @@ generate_template_package()
     generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
 
     LOG_INFO "Building template intstall package"
-    # TODO: auth mode handle
     LOG_INFO "Auth mode            : ${auth_mode}"
     if ${auth_mode} ; then
         LOG_INFO "Auth account     : ${auth_admin_account}"
@@ -2073,11 +2072,9 @@ generate_genesis_config_by_nodeids()
 
 check_auth_account()
 {
-  if ${auth_mode} ; then
-      if [ -z "${auth_admin_account}" ]; then
-        # get account string to auth_admin_account
-        generate_auth_account
-      fi
+  if [ -z "${auth_admin_account}" ]; then
+    # get account string to auth_admin_account
+    generate_auth_account
   fi
 }
 

@@ -33,6 +33,7 @@ using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
+struct SubmitTransactionError : public bcos::error::Exception {};
 
 MemoryStorage::MemoryStorage(
     TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)

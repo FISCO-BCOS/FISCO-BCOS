@@ -207,6 +207,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       session_max_read_data_size=
       session_max_send_data_size=
       session_max_send_msg_count=
+      thread_count=
       */
     m_uuid = _pt.get<std::string>("p2p.uuid", "");
     if (_uuidRequired && m_uuid.empty())
@@ -259,6 +260,9 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     constexpr static uint32_t defaultMaxSendMsgCount = 10;
     m_maxSendMsgCount = _pt.get<uint32_t>("p2p.session_max_send_msg_count", defaultMaxSendMsgCount);
 
+    constexpr static uint32_t defaultThreadPoolSize = 8;
+    m_threadPoolSize = _pt.get<uint32_t>("p2p.thread_count", defaultThreadPoolSize);
+
     m_smSSL = smSSL;
     m_listenIP = listenIP;
     m_listenPort = (uint16_t)listenPort;
@@ -271,6 +275,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                              << LOG_KV("p2p.session_max_read_data_size", m_maxReadDataSize)
                              << LOG_KV("p2p.session_max_send_data_size", m_maxSendDataSize)
                              << LOG_KV("p2p.session_max_send_msg_count", m_maxSendMsgCount)
+                             << LOG_KV("p2p.thread_count", m_threadPoolSize)
                              << LOG_KV("p2p.nodes_path", m_nodePath)
                              << LOG_KV("p2p.nodes_file", m_nodeFileName);
 }
