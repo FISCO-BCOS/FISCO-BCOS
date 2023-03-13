@@ -77,8 +77,8 @@ public:
         OnEmptyConflictHandler const& _onEmptyConflict, OnAllConflictHandler const& _onAllConflict,
         bool clearDepIfAllConflict = false) override
     {
-        auto dependencies = std::unordered_map<std::vector<uint8_t>, std::vector<size_t>,
-            boost::hash<std::vector<uint8_t>>>();
+        auto dependencies =
+            std::unordered_map<std::vector<uint8_t>, ID, boost::hash<std::vector<uint8_t>>>();
 
         for (ID id = 0; id < m_criticals.size(); ++id)
         {
@@ -102,12 +102,17 @@ public:
                 std::set<ID> pIds;
                 for (auto const& c : *criticals)
                 {
-                    auto& ids = dependencies[c];
-                    for (auto pId : ids)
+                    auto it = dependencies.find(c);
+                    if (it != dependencies.end())
                     {
+                        auto pId = it->second;
                         pIds.insert(pId);
+                        it->second = id;
                     }
-                    ids.push_back(id);
+                    else
+                    {
+                        dependencies[c] = id;
+                    }
                 }
 
                 if (pIds.empty())
