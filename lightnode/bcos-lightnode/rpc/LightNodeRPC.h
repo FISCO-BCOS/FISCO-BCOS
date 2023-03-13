@@ -298,9 +298,6 @@ public:
                     });
                     std::vector<std::array<std::byte, Hasher::HASH_SIZE>> merkles;
                     merkle.generateMerkle(hashesRange, merkles);
-                    for(size_t i = 0; i < hashesRange.size(); ++i){
-                        LIGHTNODE_LOG(TRACE) << LOG_KV("hashesRange txHash", toHexStringWithPrefix(hashesRange[i]));
-                    }
 
                     if (RANGES::empty(merkles))
                     {
@@ -314,6 +311,9 @@ public:
                     if (!bcos::concepts::bytebuffer::equalTo(
                             block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
                     {
+                        for(size_t i = 0; i < hashesRange.size(); ++i){
+                        LIGHTNODE_LOG(DEBUG) << LOG_KV("hashesRange txHash", toHexStringWithPrefix(hashesRange[i]));
+                        }
                         auto merkleRoot = *RANGES::rbegin(merkles);
                         std::ostringstream strHex;
                         strHex << "0x" << std::hex << std::setfill('0');
