@@ -51,9 +51,9 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
             if (!inputs.empty())
             {
                 EXECUTOR_NAME_LOG(DEBUG)
-                    << LOG_BADGE("preExeBlock") << "Input is not empty, execute directly"
-                    << LOG_KV("number", number) << LOG_KV("timestamp", timestamp)
-                    << LOG_KV("shard", contractAddress);
+                    << LOG_BADGE("BlockTrace") << LOG_BADGE("preExeBlock")
+                    << "Input is not empty, execute directly" << LOG_KV("number", number)
+                    << LOG_KV("timestamp", timestamp) << LOG_KV("shard", contractAddress);
                 TransactionExecutor::executeTransactions(
                     contractAddress, std::move(inputs), std::move(callback));
                 break;
@@ -181,8 +181,8 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
         auto blockNumber = blockHeader->number();
         auto timestamp = blockHeader->timestamp();
 
-        EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("preExeBlock") << LOG_BADGE("DAGFlow")
-                                 << "preExecuteTransactions start"
+        EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("BlockTrace") << LOG_BADGE("preExeBlock")
+                                 << LOG_BADGE("DAGFlow") << "preExecuteTransactions start"
                                  << LOG_KV("blockNumber", blockNumber)
                                  << LOG_KV("timestamp", timestamp) << LOG_KV("txNum", txNum);
 
@@ -351,7 +351,8 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
                             << LOG_KV("timestamp", timestamp);
                     }
                     EXECUTOR_NAME_LOG(DEBUG)
-                        << BLOCK_NUMBER(blockNumber) << LOG_BADGE("preExeBlock")
+                        << BLOCK_NUMBER(blockNumber) << LOG_BADGE("BlockTrace")
+                        << LOG_BADGE("preExeBlock")
                         << LOG_DESC("preExecuteTransaction prepareDagFlow finish")
                         << LOG_KV("blockNumber", blockNumber) << LOG_KV("timestamp", timestamp)
                         << LOG_KV("cost", (utcTime() - recordT));

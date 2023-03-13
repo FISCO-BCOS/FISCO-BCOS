@@ -353,8 +353,11 @@ void TransactionExecutor::initWasmEnvironment()
 
     if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_3_VERSION)
     {
+        /*
+        TODO: sharding support in wasm mode
         m_constantPrecompiled->insert({SHARDING_PRECOMPILED_NAME,
             std::make_shared<precompiled::ShardingPrecompiled>(GlobalHashImpl::g_hashImpl)});
+            */
     }
     if (m_blockVersion >= (uint32_t)protocol::BlockVersion::V3_2_VERSION)
     {
