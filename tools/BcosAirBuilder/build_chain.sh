@@ -1228,6 +1228,10 @@ generate_config_ini() {
     sm_ssl=false
     nodes_path=${file_dir}
     nodes_file=${p2p_connected_conf_name}
+    ; enable rip protocol, default: true
+    ; enable_rip_protocol=false
+    ; enable compression for p2p message, default: true
+    ; enable_compression=false
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 512

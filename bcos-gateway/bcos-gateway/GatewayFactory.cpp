@@ -595,7 +595,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // Session Factory
     auto sessionFactory = std::make_shared<SessionFactory>(pubHex, _config->sessionRecvBufferSize(),
         _config->allowMaxMsgSize(), _config->maxReadDataSize(), _config->maxSendDataSize(),
-        _config->maxMsgCountSendOneTime());
+        _config->maxMsgCountSendOneTime(), _config->enableCompress());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // Session Callback manager
@@ -619,7 +619,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setSessionCallbackManager(sessionCallbackManager);
 
     // init Service
-
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;
     if (enableRIPProtocol)
@@ -644,6 +643,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("buildService") << LOG_DESC("build service end")
                               << LOG_KV("enable rip protocol", _config->enableRIPProtocol())
+                              << LOG_KV("enable compress", _config->enableCompress())
                               << LOG_KV("myself pub id", pubHex);
     service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);
