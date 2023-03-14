@@ -21,8 +21,7 @@ template <transaction_executor::StateStorage MultiLayerStorage,
 class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
 private:
-    constexpr static size_t DEFAULT_CHUNK_SIZE = 32;  // 32 transactions for one chunk
-
+    constexpr static size_t DEFAULT_CHUNK_SIZE = 32;          // 32 transactions for one chunk
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                  // Maybe auto adjust
     size_t m_maxToken = std::thread::hardware_concurrency();  // Maybe auto adjust
     using ChunkLocalStorage =
@@ -164,59 +163,63 @@ public:
                                 currentChunkView[index].finished = task::syncWait(
                                     currentChunkView[index].execute(blockHeader, startContextID,
                                         receiptFactory(), tableNamePool(), index, lastChunk));
+
                                 if (currentChunkView[index].finished)
                                 {
                                     PARALLEL_SCHEDULER_LOG(DEBUG)
                                         << "Chunk " << offset + index << " execute finished";
+                                    bool expected = false;
+                                    // Detected RAW
+                                    if (index < lastChunk)
+                                    {
+                                        if (index > 0 &&
+                                            (int64_t)currentChunkView[index - 1].finished &&
+                                            currentChunkView[index - 1]
+                                                .compareRight.compare_exchange_strong(
+                                                    expected, true))
+                                        {
+                                            currentChunkView[index].compareLeft = true;
+                                            if (currentChunkView[index - 1]
+                                                    .readWriteSetStorage->hasRAWIntersection(
+                                                        *(currentChunkView[index]
+                                                                .readWriteSetStorage)))
+                                            {
+                                                PARALLEL_SCHEDULER_LOG(DEBUG)
+                                                    << "Detected RAW intersection, abort: "
+                                                    << offset + index;
+                                                decreaseNumber(lastChunk, index);
+                                            }
+                                        }
+                                    }
+
+                                    if (index < lastChunk)
+                                    {
+                                        expected = false;
+                                        if (index < (int64_t)(RANGES::size(currentChunkView) - 1) &&
+                                            currentChunkView[index + 1].finished &&
+                                            currentChunkView[index]
+                                                .compareRight.compare_exchange_strong(
+                                                    expected, true))
+                                        {
+                                            currentChunkView[index + 1].compareLeft = true;
+                                            if (currentChunkView[index]
+                                                    .readWriteSetStorage->hasRAWIntersection(
+                                                        *(currentChunkView[index + 1]
+                                                                .readWriteSetStorage)))
+                                            {
+                                                PARALLEL_SCHEDULER_LOG(DEBUG)
+                                                    << "Detected RAW intersection, abort: "
+                                                    << offset + index + 1;
+                                                decreaseNumber(lastChunk, index + 1);
+                                            }
+                                        }
+                                    }
                                 }
                                 else
                                 {
                                     PARALLEL_SCHEDULER_LOG(DEBUG)
                                         << "Chunk " << offset + index << " execute aborted";
-                                }
-
-                                bool expected = false;
-                                // Detected RAW
-                                if (index < lastChunk)
-                                {
-                                    if (index > 0 &&
-                                        (int64_t)currentChunkView[index - 1].finished &&
-                                        currentChunkView[index - 1]
-                                            .compareRight.compare_exchange_strong(expected, true))
-                                    {
-                                        currentChunkView[index].compareLeft = true;
-                                        if (currentChunkView[index - 1]
-                                                .readWriteSetStorage->hasRAWIntersection(
-                                                    *(currentChunkView[index].readWriteSetStorage)))
-                                        {
-                                            PARALLEL_SCHEDULER_LOG(DEBUG)
-                                                << "Detected RAW intersection, abort: "
-                                                << offset + index;
-                                            decreaseNumber(lastChunk, index);
-                                        }
-                                    }
-                                }
-
-                                if (index < lastChunk)
-                                {
-                                    expected = false;
-                                    if (index < (int64_t)(RANGES::size(currentChunkView) - 1) &&
-                                        currentChunkView[index + 1].finished &&
-                                        currentChunkView[index]
-                                            .compareRight.compare_exchange_strong(expected, true))
-                                    {
-                                        currentChunkView[index + 1].compareLeft = true;
-                                        if (currentChunkView[index]
-                                                .readWriteSetStorage->hasRAWIntersection(
-                                                    *(currentChunkView[index + 1]
-                                                            .readWriteSetStorage)))
-                                        {
-                                            PARALLEL_SCHEDULER_LOG(DEBUG)
-                                                << "Detected RAW intersection, abort: "
-                                                << offset + index + 1;
-                                            decreaseNumber(lastChunk, index + 1);
-                                        }
-                                    }
+                                    return std::optional<int64_t>{};
                                 }
 
                                 return std::make_optional<int64_t>(index);
