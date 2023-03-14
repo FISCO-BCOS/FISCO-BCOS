@@ -235,6 +235,8 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
 
     m_enableRIPProtocol = _pt.get<bool>("p2p.enable_rip_protocol", true);
 
+    m_enableCompress = _pt.get<bool>("p2p.enable_compression", true);
+
     constexpr static uint32_t defaultAllowMaxMsgSize = 32 * 1024 * 1024;
     m_allowMaxMsgSize = _pt.get<uint32_t>("p2p.allow_max_msg_size", defaultAllowMaxMsgSize);
 
@@ -270,6 +272,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initP2PConfig ok!") << LOG_KV("p2p.listen_ip", listenIP)
                              << LOG_KV("p2p.listen_port", listenPort) << LOG_KV("p2p.sm_ssl", smSSL)
                              << LOG_KV("p2p.enable_rip_protocol", m_enableRIPProtocol)
+                             << LOG_KV("p2p.enable_compression", m_enableCompress)
                              << LOG_KV("p2p.allow_max_msg_size", m_allowMaxMsgSize)
                              << LOG_KV("p2p.session_recv_buffer_size", m_sessionRecvBufferSize)
                              << LOG_KV("p2p.session_max_read_data_size", m_maxReadDataSize)
