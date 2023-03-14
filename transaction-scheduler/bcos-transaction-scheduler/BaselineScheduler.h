@@ -336,7 +336,7 @@ public:
     {
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
-            // TODO: Use real block number
+            // TODO: Use real block number and storage block header version
             auto blockHeader = self->m_blockHeaderFactory.createBlockHeader();
             blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_3_VERSION);
             auto receipt = co_await self->m_schedulerImpl.call(*blockHeader, *transaction);
