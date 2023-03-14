@@ -26,6 +26,7 @@ include(BuildInfoGenerator)
 
 include(IncludeDirectories)
 include(TargetSettings)
+include(PrecompiledHeaders)
 
 add_subdirectory(bcos-boostssl)
 add_subdirectory(bcos-framework)

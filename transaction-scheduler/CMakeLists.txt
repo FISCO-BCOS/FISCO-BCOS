@@ -6,7 +6,7 @@ add_library(transaction-scheduler INTERFACE)
 target_include_directories(transaction-scheduler INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-transaction-scheduler>)
-target_link_libraries(transaction-scheduler INTERFACE fmt::fmt-header-only)
+target_link_libraries(transaction-scheduler INTERFACE bcos-framework fmt::fmt-header-only)
 
 if (TESTS)
     enable_testing()

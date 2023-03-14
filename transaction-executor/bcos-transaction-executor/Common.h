@@ -32,7 +32,6 @@
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <evmc/instructions.h>
-#include <boost/algorithm/string/case_conv.hpp>
 
 namespace bcos::transaction_executor
 {

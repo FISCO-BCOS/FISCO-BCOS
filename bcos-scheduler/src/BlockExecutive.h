@@ -18,8 +18,6 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <boost/iterator/iterator_categories.hpp>
-#include <boost/range/any_range.hpp>
 #include <chrono>
 #include <forward_list>
 #include <mutex>
