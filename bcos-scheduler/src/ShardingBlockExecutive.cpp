@@ -13,7 +13,11 @@ void ShardingBlockExecutive::prepare()
     {
         return;
     }
+    auto breakPointT = utcTime();
     BlockExecutive::prepare();
+
+    auto schedulerPrepareCost = utcTime() - breakPointT;
+    breakPointT = utcTime();
 
     if (m_staticCall)
     {
@@ -23,10 +27,13 @@ void ShardingBlockExecutive::prepare()
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("dmcExecutor try to preExecute");
 
-    for (auto executorIt : m_dmcExecutors)
-    {
-        executorIt.second->preExecute();
-    }
+
+    tbb::parallel_for_each(m_dmcExecutors.begin(), m_dmcExecutors.end(),
+        [&](auto const& executorIt) { executorIt.second->preExecute(); });
+    SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
+                         << LOG_DESC("ShardingBlockExecutive preExecute finish")
+                         << LOG_KV("schedulerPrepareCost", schedulerPrepareCost)
+                         << LOG_KV("executorsPrepareCost", utcTime() - breakPointT);
 }
 
 void ShardingBlockExecutive::asyncExecute(
