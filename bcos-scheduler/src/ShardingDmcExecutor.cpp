@@ -198,6 +198,8 @@ void ShardingDmcExecutor::preExecute()
     auto status = future.wait_for(std::chrono::seconds(30));
     if (status != std::future_status::ready)
     {
+        m_preparedMessages = std::move(message);  // prepare failed, move back
+
         std::string reason;
         switch (status)
         {
