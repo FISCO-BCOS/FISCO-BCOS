@@ -1,4 +1,6 @@
 #pragma once
+#include <utility>
+
 #include "SchedulerImpl.h"
 
 
@@ -16,14 +18,14 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute)
-      : m_executorManager(executorManager),
-        m_ledger(ledger),
-        m_storage(storage),
-        m_executionMessageFactory(executionMessageFactory),
-        m_blockFactory(blockFactory),
-        m_txPool(txPool),
-        m_transactionSubmitResultFactory(transactionSubmitResultFactory),
-        m_hashImpl(hashImpl),
+      : m_executorManager(std::move(executorManager)),
+        m_ledger(std::move(ledger)),
+        m_storage(std::move(storage)),
+        m_executionMessageFactory(std::move(executionMessageFactory)),
+        m_blockFactory(std::move(blockFactory)),
+        m_txPool(std::move(txPool)),
+        m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
+        m_hashImpl(std::move(hashImpl)),
         m_isAuthCheck(isAuthCheck),
         m_isWasm(isWasm),
         m_isSerialExecute(isSerialExecute)

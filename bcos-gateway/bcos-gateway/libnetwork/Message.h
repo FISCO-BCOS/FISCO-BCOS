@@ -51,6 +51,8 @@ struct EncodedMessage : public bcos::ObjectCounter<EncodedMessage>
     bcos::bytes header;
     // CompositeBuffer::Ptr payload;
     std::shared_ptr<bcos::bytes> payload;
+    //
+    bool compress = true;
 
     inline std::size_t dataSize() const { return headerSize() + payloadSize(); }
     inline std::size_t headerSize() const { return header.size(); }
