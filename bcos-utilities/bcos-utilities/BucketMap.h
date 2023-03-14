@@ -134,6 +134,12 @@ public:
         return true;
     }
 
+    void clear(typename WriteAccessor::Ptr& accessor)
+    {
+        accessor = std::make_shared<WriteAccessor>(m_mutex);  // acquire lock here
+        m_values.clear();
+    }
+
 private:
     MapType m_values;
     mutable SharedMutex m_mutex;
@@ -173,13 +179,14 @@ public:
     ValueType remove(const KeyType& key)
     {
         auto idx = getBucketIndex(key);
-        return m_buckets[idx]->remove(key);
+        auto bucket = m_buckets[idx];
+        return bucket->remove(key);
     }
 
     size_t size() const
     {
         size_t size = 0;
-        for (auto& bucket : m_buckets)
+        for (auto bucket : m_buckets)
         {
             size += bucket->size();
         }
@@ -191,14 +198,16 @@ public:
     bool contains(const KeyType& key)
     {
         auto idx = getBucketIndex(key);
-        return m_buckets[idx]->contains(key);
+        auto bucket = m_buckets[idx];
+        return bucket->contains(key);
     }
 
     void clear()
     {
         for (size_t i = 0; i < m_buckets.size(); i++)
         {
-            m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+            typename WriteAccessor::Ptr accessor;
+            m_buckets[i]->clear(accessor);
         }
     }
     template <class AccessorType>  // handler return isContinue
