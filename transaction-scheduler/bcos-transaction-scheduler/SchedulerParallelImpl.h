@@ -6,6 +6,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Wait.h>
 #include <tbb/parallel_pipeline.h>
+#include <atomic>
 #include <iterator>
 #include <range/v3/view/transform.hpp>
 
@@ -40,9 +41,9 @@ private:
             DEFAULT_CHUNK_SIZE>
             receipts;
 
-        bool finished = false;
-        bool compareLeft = false;
-        bool compareRight = false;
+        std::atomic_bool finished = false;
+        std::atomic_bool compareLeft = false;
+        std::atomic_bool compareRight = false;
 
         void reset(TransactionsRange range, MultiLayerStorage& multiLayerStorage)
         {
@@ -55,9 +56,9 @@ private:
             compareRight = false;
         }
 
-        task::Task<void> execute(protocol::IsBlockHeader auto const& blockHeader,
-            int startContextID, auto& receiptFactory, auto& tableNamePool,
-            std::atomic_bool& abortToken)
+        task::Task<bool> execute(protocol::IsBlockHeader auto const& blockHeader,
+            int startContextID, auto& receiptFactory, auto& tableNamePool, int64_t index,
+            std::atomic_int64_t& lastChunk)
         {
             localStorage->newMutable();
             Executor<ReadWriteSetStorage<ChunkLocalStorage>,
@@ -65,17 +66,24 @@ private:
                 executor(*readWriteSetStorage, receiptFactory, tableNamePool);
             for (auto const& transaction : transactionsRange)
             {
-                if (abortToken)
+                if (index >= lastChunk)
                 {
-                    break;
+                    co_return false;
                 }
                 receipts.emplace_back(
                     co_await executor.execute(blockHeader, transaction, startContextID++));
             }
 
-            co_return;
+            co_return true;
         }
     };
+
+    static void decreaseNumber(std::atomic_int64_t& number, int64_t target)
+    {
+        auto current = number.load();
+        while (current > target && !number.compare_exchange_strong(current, target))
+        {}
+    }
 
 public:
     using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::SchedulerBaseImpl;
@@ -99,23 +107,23 @@ public:
         auto chunkIt = RANGES::begin(executedChunks);
         while (chunkIt != RANGES::end(executedChunks))
         {
-            std::atomic_bool abortToken = false;
             auto offset = RANGES::distance(RANGES::begin(executedChunks), chunkIt);
             auto currentChunkView = RANGES::subrange(chunkIt, RANGES::end(executedChunks));
             auto currentChunkIt = RANGES::begin(currentChunkView);
 
+            std::atomic_int64_t lastChunk = RANGES::size(currentChunkView);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
             tbb::parallel_pipeline(m_maxToken,
                 tbb::make_filter<void, std::optional<int64_t>>(tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control) {
-                        if (currentChunkIt == RANGES::end(currentChunkView) || abortToken)
+                        int64_t index =
+                            RANGES::distance(RANGES::begin(currentChunkView), currentChunkIt);
+                        if (currentChunkIt == RANGES::end(currentChunkView) || index >= lastChunk)
                         {
                             control.stop();
                             return std::optional<int64_t>{};
                         }
 
-                        int64_t index =
-                            RANGES::distance(RANGES::begin(currentChunkView), currentChunkIt);
                         currentChunkView[index].reset(chunks[index + offset], multiLayerStorage());
                         ++currentChunkIt;
                         return std::make_optional(index);
@@ -123,21 +131,21 @@ public:
                     tbb::make_filter<std::optional<int64_t>, std::optional<int64_t>>(
                         tbb::filter_mode::parallel,
                         [&](std::optional<int64_t> input) {
-                            if (input && !abortToken)
+                            if (input && *input < lastChunk)
                             {
                                 auto index = *input;
                                 auto startContextID = (offset + index) * m_chunkSize;
                                 PARALLEL_SCHEDULER_LOG(DEBUG)
                                     << "Chunk " << offset + index << " executing...";
-                                task::syncWait(currentChunkView[index].execute(blockHeader,
-                                    startContextID, receiptFactory(), tableNamePool(), abortToken));
-                                currentChunkView[index].finished = true;
+                                currentChunkView[index].finished = task::syncWait(
+                                    currentChunkView[index].execute(blockHeader, startContextID,
+                                        receiptFactory(), tableNamePool(), index, lastChunk));
                                 PARALLEL_SCHEDULER_LOG(DEBUG)
                                     << "Chunk " << offset + index << " execute finished";
 
                                 // Detected RAW
                                 bool expected = false;
-                                if (index > 0 && currentChunkView[index - 1].finished &&
+                                if (index > 0 && (int64_t)currentChunkView[index - 1].finished &&
                                     currentChunkView[index - 1]
                                         .compareRight.compare_exchange_strong(expected, true))
                                 {
@@ -145,11 +153,15 @@ public:
                                     if (currentChunkView[index - 1]
                                             .readWriteSetStorage->hasRAWIntersection(
                                                 *(currentChunkView[index].readWriteSetStorage)))
-                                    {}
+                                    {
+                                        PARALLEL_SCHEDULER_LOG(DEBUG)
+                                            << "Detected RAW intersection, abort: " << index;
+                                        decreaseNumber(lastChunk, index);
+                                    }
                                 }
 
                                 expected = false;
-                                if (index < (RANGES::size(currentChunkView) - 1) &&
+                                if (index < (int64_t)(RANGES::size(currentChunkView) - 1) &&
                                     currentChunkView[index + 1].finished &&
                                     currentChunkView[index].compareRight.compare_exchange_strong(
                                         expected, true))
@@ -158,38 +170,31 @@ public:
                                     if (currentChunkView[index]
                                             .readWriteSetStorage->hasRAWIntersection(
                                                 *(currentChunkView[index + 1].readWriteSetStorage)))
-                                    {}
+                                    {
+                                        PARALLEL_SCHEDULER_LOG(DEBUG)
+                                            << "Detected RAW intersection, abort: " << index + 1;
+                                        decreaseNumber(lastChunk, index + 1);
+                                    }
                                 }
 
                                 return std::make_optional<int64_t>(index);
                             }
                             return std::optional<int64_t>{};
                         }) &
-                    tbb::make_filter<std::optional<int64_t>,
-                        void>(tbb::filter_mode::serial_in_order, [&](std::optional<int64_t> input) {
-                        if (!input || abortToken)
-                        {
-                            return;
-                        }
-
-                        auto index = *input;
-                        if (index > 0)
-                        {
-                            if (currentChunkView[index - 1].readWriteSetStorage->hasRAWIntersection(
-                                    *(currentChunkView[index].readWriteSetStorage)))
+                    tbb::make_filter<std::optional<int64_t>, void>(
+                        tbb::filter_mode::serial_in_order, [&](std::optional<int64_t> input) {
+                            if (!input || *input >= lastChunk)
                             {
-                                PARALLEL_SCHEDULER_LOG(DEBUG) << "Detected RAW intersection, abort";
-                                abortToken = true;
                                 return;
                             }
-                        }
 
-                        auto& chunkReceipts = currentChunkView[index].receipts;
-                        PARALLEL_SCHEDULER_LOG(DEBUG)
-                            << "Inserting receipts... " << chunkReceipts.size();
-                        RANGES::move(chunkReceipts, std::back_inserter(receipts));
-                        ++chunkIt;
-                    }));
+                            auto index = *input;
+                            auto& chunkReceipts = currentChunkView[index].receipts;
+                            PARALLEL_SCHEDULER_LOG(DEBUG)
+                                << "Inserting receipts... " << chunkReceipts.size();
+                            RANGES::move(chunkReceipts, std::back_inserter(receipts));
+                            ++chunkIt;
+                        }));
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Mergeing storage... " << executedChunks.size();
             for (auto& chunk : RANGES::subrange(RANGES::begin(currentChunkView), chunkIt))
