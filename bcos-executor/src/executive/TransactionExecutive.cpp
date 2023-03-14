@@ -112,8 +112,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         else
         {
             // TODO: Add sender in this process(consider compat with ethereum)
-            newAddress = bcos::newEVMAddress(
-                m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
+            newAddress =
+                bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
         }
 
         input->receiveAddress = newAddress;
@@ -245,7 +245,6 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
 std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionExecutive::call(
     CallParameters::UniquePtr callParameters)
 {
-
     EXECUTIVE_LOG(DEBUG) << BLOCK_NUMBER(m_blockContext.number()) << LOG_DESC("executive call")
                          << LOG_KV("contract", callParameters->receiveAddress)
                          << LOG_KV("sender", callParameters->senderAddress)
@@ -300,8 +299,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
             EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";
             callParameters->type = CallParameters::REVERT;
             callParameters->status = (int32_t)TransactionStatus::OutOfGas;
-            if (versionCompareTo(
-                    m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Call precompiled out of gas.", *callParameters);
             }
@@ -738,6 +736,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     }
                     EXECUTIVE_LOG(INFO)
                         << "Revert transaction: " << LOG_DESC("deploy failed OutOfGas")
+                        << LOG_KV("need",
+                               (int64_t)(outputRef.size() * hostContext.vmSchedule().createDataGas))
+                        << LOG_KV("have", callResults->gas)
                         << LOG_KV("message", callResults->message);
                     return callResults;
                 }
@@ -761,8 +762,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                         writeErrInfoToOutput(
                             "Error occurs in building BFS dir.", *buildCallResults);
                     }
-                    EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << buildCallResults->message
-                                         << LOG_KV("tableName", tableName);
+                    EXECUTIVE_LOG(INFO) << "Revert transaction: " << buildCallResults->message
+                                        << LOG_KV("tableName", tableName);
                     return buildCallResults;
                 }
             }
