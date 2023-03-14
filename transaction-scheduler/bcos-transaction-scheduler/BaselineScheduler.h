@@ -267,11 +267,13 @@ public:
 
                 // Write states
                 co_await self->m_schedulerImpl.commit();
+                auto ledgerConfig =
+                    std::make_shared<ledger::LedgerConfig>(co_await self->m_ledger.getConfig());
+                ledgerConfig->setHash(blockHeader->hash());
+                BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << blockHeader->number();
                 commitLock.unlock();
 
-                BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << blockHeader->number();
-                callback(nullptr,
-                    std::make_shared<ledger::LedgerConfig>(co_await self->m_ledger.getConfig()));
+                callback(nullptr, std::move(ledgerConfig));
 
                 auto blockHeader = result.m_block->blockHeaderConst();
                 // Notify the result

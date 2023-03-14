@@ -20,8 +20,6 @@
  */
 
 #pragma once
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "../Common.h"
 #include "TransactionReceiptImpl.h"
@@ -33,23 +31,20 @@
 #include <bcos-utilities/Common.h>
 #include <boost/lexical_cast.hpp>
 #include <memory>
+#include <utility>
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 // Note: this will create a default transactionReceipt
 class TransactionSubmitResultImpl : public bcos::protocol::TransactionSubmitResult
 {
 public:
-    TransactionSubmitResultImpl(bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
-      : m_cryptoSuite(_cryptoSuite),
-        m_inner([inner = bcostars::TransactionSubmitResult()]() mutable { return &inner; })
+    TransactionSubmitResultImpl()
+      : m_inner([inner = bcostars::TransactionSubmitResult()]() mutable { return &inner; })
     {}
 
-    TransactionSubmitResultImpl(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
-        std::function<bcostars::TransactionSubmitResult*()> inner)
-      : m_cryptoSuite(_cryptoSuite), m_inner(std::move(inner))
+    TransactionSubmitResultImpl(std::function<bcostars::TransactionSubmitResult*()> inner)
+      : m_inner(std::move(inner))
     {}
     uint32_t status() const override { return m_inner()->status; }
     void setStatus(uint32_t status) override { m_inner()->status = status; }
@@ -58,9 +53,11 @@ public:
     {
         if (m_inner()->txHash.size() == bcos::crypto::HashType::SIZE)
         {
-            return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->txHash.data()));
+            bcos::crypto::HashType hash(
+                (const bcos::byte*)m_inner()->txHash.data(), m_inner()->txHash.size());
+            return hash;
         }
-        return bcos::crypto::HashType();
+        return {};
     }
     void setTxHash(bcos::crypto::HashType txHash) override
     {
@@ -71,9 +68,11 @@ public:
     {
         if (m_inner()->blockHash.size() == bcos::crypto::HashType::SIZE)
         {
-            return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner()->blockHash.data()));
+            bcos::crypto::HashType hash(
+                (const bcos::byte*)m_inner()->blockHash.data(), m_inner()->blockHash.size());
+            return hash;
         }
-        return bcos::crypto::HashType();
+        return {};
     }
     void setBlockHash(bcos::crypto::HashType blockHash) override
     {
@@ -83,21 +82,19 @@ public:
     int64_t transactionIndex() const override { return m_inner()->transactionIndex; }
     void setTransactionIndex(int64_t index) override { m_inner()->transactionIndex = index; }
 
-    bcos::protocol::NonceType nonce() const override
-    {
-        return bcos::protocol::NonceType(m_inner()->nonce);
-    }
+    bcos::protocol::NonceType nonce() const override { return {m_inner()->nonce}; }
     void setNonce(bcos::protocol::NonceType nonce) override { m_inner()->nonce = std::move(nonce); }
 
-    bcos::protocol::TransactionReceipt::Ptr transactionReceipt() const override
+    bcos::protocol::TransactionReceipt::ConstPtr transactionReceipt() const override
     {
         return std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
             [innerPtr = &m_inner()->transactionReceipt]() { return innerPtr; });
     }
-    void setTransactionReceipt(bcos::protocol::TransactionReceipt::Ptr transactionReceipt) override
+    void setTransactionReceipt(
+        bcos::protocol::TransactionReceipt::ConstPtr transactionReceipt) override
     {
         auto transactionReceiptImpl =
-            std::dynamic_pointer_cast<TransactionReceiptImpl>(transactionReceipt);
+            std::dynamic_pointer_cast<TransactionReceiptImpl const>(transactionReceipt);
         m_inner()->transactionReceipt = transactionReceiptImpl->inner();  // FIXME: copy here!
     }
 
@@ -113,5 +110,4 @@ private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     std::function<bcostars::TransactionSubmitResult*()> m_inner;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

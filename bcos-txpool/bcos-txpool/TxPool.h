@@ -28,7 +28,6 @@
 #include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <tbb/task_group.h>
 #include <thread>
 namespace bcos::txpool
 {

@@ -23,15 +23,13 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class TransactionSubmitResultImpl : public TransactionSubmitResult
 {
 public:
     using Ptr = std::shared_ptr<TransactionSubmitResultImpl>;
-    ~TransactionSubmitResultImpl() override {}
+    ~TransactionSubmitResultImpl() override = default;
 
     uint32_t status() const override { return m_status; }
     void setStatus(uint32_t status) override { m_status = status; }
@@ -51,8 +49,8 @@ public:
     NonceType nonce() const override { return m_nonce; }
     void setNonce(NonceType nonce) override { m_nonce = nonce; }
 
-    TransactionReceipt::Ptr transactionReceipt() const override { return m_receipt; }
-    void setTransactionReceipt(TransactionReceipt::Ptr transactionReceipt) override
+    TransactionReceipt::ConstPtr transactionReceipt() const override { return m_receipt; }
+    void setTransactionReceipt(TransactionReceipt::ConstPtr transactionReceipt) override
     {
         m_receipt = std::move(transactionReceipt);
     }
@@ -69,9 +67,8 @@ private:
     bcos::crypto::HashType m_blockHash;
     int64_t m_transactionIndex;
     NonceType m_nonce;
-    TransactionReceipt::Ptr m_receipt;
+    TransactionReceipt::ConstPtr m_receipt;
     std::string m_sender;
     std::string m_to;
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

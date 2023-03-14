@@ -319,14 +319,23 @@ public:
         auto it = co_await immutableStorage->seek(storage2::STORAGE_BEGIN);
         while (co_await it.next())
         {
+            auto&& key = co_await it.key();
             if (co_await it.hasValue())
             {
-                co_await storage2::writeOne(
-                    m_backendStorage, co_await it.key(), co_await it.value());
+                auto&& value = co_await it.value();
+                if constexpr (withCacheStorage)
+                {
+                    co_await storage2::writeOne(m_cacheStorage, key, value);
+                }
+                co_await storage2::writeOne(m_backendStorage, key, value);
             }
             else
             {
-                co_await storage2::removeOne(m_backendStorage, co_await it.key());
+                if constexpr (withCacheStorage)
+                {
+                    co_await storage2::removeOne(m_cacheStorage, key);
+                }
+                co_await storage2::removeOne(m_backendStorage, key);
             }
         }
 

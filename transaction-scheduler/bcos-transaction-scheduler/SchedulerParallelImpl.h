@@ -78,6 +78,20 @@ private:
         }
     };
 
+    task::Task<void> serialExecute(protocol::IsBlockHeader auto const& blockHeader,
+        int startContextID, auto& receiptFactory, auto& tableNamePool,
+        RANGES::range auto const& transactions, auto& receipts, auto& storage)
+    {
+        Executor<std::remove_cvref_t<decltype(storage)>,
+            std::remove_cvref_t<decltype(receiptFactory)>>
+            executor(storage, receiptFactory, tableNamePool);
+        for (auto const& transaction : transactions)
+        {
+            receipts.emplace_back(
+                co_await executor.execute(blockHeader, transaction, startContextID++));
+        }
+    }
+
     static void decreaseNumber(std::atomic_int64_t& number, int64_t target)
     {
         auto current = number.load();
@@ -107,7 +121,8 @@ public:
             RANGES::size(chunks));
 
         auto chunkIt = RANGES::begin(executedChunks);
-        while (chunkIt != RANGES::end(executedChunks))
+        auto tokens = m_maxToken;
+        while (chunkIt != RANGES::end(executedChunks) && tokens > 1)
         {
             auto offset = RANGES::distance(RANGES::begin(executedChunks), chunkIt);
             auto currentChunkView = RANGES::subrange(chunkIt, RANGES::end(executedChunks));
@@ -115,7 +130,7 @@ public:
 
             std::atomic_int64_t lastChunk = RANGES::size(currentChunkView);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
-            tbb::parallel_pipeline(m_maxToken,
+            tbb::parallel_pipeline(tokens,
                 tbb::make_filter<void, std::optional<int64_t>>(tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control) {
                         int64_t index =
@@ -215,8 +230,7 @@ public:
                                 return;
                             }
 
-                            auto index = *input;
-                            auto& chunkReceipts = currentChunkView[index].receipts;
+                            auto& chunkReceipts = currentChunkView[*input].receipts;
                             PARALLEL_SCHEDULER_LOG(DEBUG)
                                 << "Inserting receipts... " << chunkReceipts.size();
                             RANGES::move(chunkReceipts, std::back_inserter(receipts));
@@ -230,6 +244,21 @@ public:
                 localMultiLayerStorage->mutableStorage().merge(
                     chunk.localStorage->mutableStorage());
             }
+
+            tokens /= 2;
+        }
+
+        // Still have transactions, execute it serially
+        if (chunkIt != RANGES::end(executedChunks))
+        {
+            co_await serialExecute(blockHeader,
+                RANGES::distance(RANGES::begin(executedChunks), chunkIt) * m_chunkSize,
+                receiptFactory(), tableNamePool(),
+                transactions |
+                    RANGES::views::drop(
+                        RANGES::distance(RANGES::begin(executedChunks), chunkIt) * m_chunkSize),
+                receipts, *localMultiLayerStorage);
+            co_return receipts;
         }
 
         co_return receipts;
