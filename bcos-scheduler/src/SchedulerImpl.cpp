@@ -525,11 +525,12 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
             if (error)
             {
+                bcos::protocol::BlockNumber currentNumber = -1;
                 SCHEDULER_LOG(ERROR) << "CommitBlock error, " << error->errorMessage();
                 {
                     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
                     // refresh block cache
-                    bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
+                    currentNumber = getBlockNumberFromStorage();
                     // note that genesis sysBlock is blockNumber 0, we need to ignore it
                     while (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() &&
                            currentNumber != 0)
@@ -539,7 +540,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                         m_blocks->pop_front();
                     }
                 }
-                fetchConfig();
+                fetchConfig(currentNumber);
                 commitLock->unlock();
                 callback(BCOS_ERROR_UNIQUE_PTR(
                              error->errorCode(), "CommitBlock error: " + error->errorMessage()),
@@ -876,7 +877,7 @@ void SchedulerImpl::preExecuteBlock(
         // 0,
         //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool,
         //     m_gasLimit, verify);
-        fetchConfig();
+        fetchConfig(blockNumber);
         // Note: must build blockExecutive before enqueue() for executeBlock use the same
         // blockExecutive
         blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
@@ -1106,20 +1107,6 @@ void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
     }
     SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
                         << LOG_KV("requestBlockNumber", _number);
-    if (_number == -1)
-    {
-        std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> numberPromise;
-        m_ledger->asyncGetBlockNumber(
-            [&numberPromise](Error::Ptr _error, protocol::BlockNumber _number) {
-                numberPromise.set_value(std::make_tuple(std::move(_error), _number));
-            });
-        Error::Ptr error;
-        std::tie(error, _number) = numberPromise.get_future().get();
-        if (error)
-        {
-            return;
-        }
-    }
 
     {
         std::promise<std::tuple<Error::Ptr, std::string>> p;
