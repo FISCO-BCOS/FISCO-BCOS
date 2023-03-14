@@ -121,24 +121,20 @@ task::Task<bool> existsOne(ReadableStorage auto& storage, auto const& key)
     co_return co_await it.hasValue();
 }
 
-template <class Reference>
-using ValueOrReferenceWrapper = std::conditional_t<std::is_reference_v<Reference>,
-    std::reference_wrapper<std::remove_reference_t<Reference>>, Reference>;
-
 auto readOne(ReadableStorage auto& storage, auto const& key)
-    -> task::Task<std::optional<ValueOrReferenceWrapper<typename task::AwaitableReturnType<
+    -> task::Task<std::optional<std::remove_cvref_t<typename task::AwaitableReturnType<
         decltype(storage.read(storage2::singleView(key)))>::Value>>>
 {
-    using ValueType =
-        ValueOrReferenceWrapper<typename task::AwaitableReturnType<decltype(storage.read(
-            storage2::singleView(key)))>::Value>;
+    using ValueType = std::remove_cvref_t<typename task::AwaitableReturnType<decltype(storage.read(
+        storage2::singleView(key)))>::Value>;
+    static_assert(std::is_copy_assignable_v<ValueType>);
 
     auto it = co_await storage.read(storage2::singleView(key));
     co_await it.next();
     std::optional<ValueType> result;
     if (co_await it.hasValue())
     {
-        result.emplace(std::forward<ValueType>(co_await it.value()));
+        result.emplace(co_await it.value());
     }
 
     co_return result;

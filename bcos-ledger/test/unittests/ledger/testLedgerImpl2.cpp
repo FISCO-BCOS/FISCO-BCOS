@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
         bcostars::protocol::BlockHeaderImpl gotBlockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
 
-        auto view = blockHeaderEntry->get().get();
+        auto view = blockHeaderEntry->get();
         bytesConstRef buffer((const bcos::byte*)view.data(), view.size());
         bcos::concepts::serialize::decode(buffer, gotBlockHeader);
         BOOST_CHECK_EQUAL(gotBlockHeader.number(), 100786);

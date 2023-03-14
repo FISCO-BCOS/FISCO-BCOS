@@ -191,6 +191,7 @@ public:
     bool contains(const KeyType& key)
     {
         auto idx = getBucketIndex(key);
+        auto bucket = m_buckets[idx];
         return m_buckets[idx]->contains(key);
     }
 

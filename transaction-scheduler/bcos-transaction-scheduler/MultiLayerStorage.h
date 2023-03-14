@@ -33,15 +33,15 @@ private:
     static_assert(std::same_as<typename MutableStorageType::Key, typename BackendStorage::Key>);
     static_assert(std::same_as<typename MutableStorageType::Value, typename BackendStorage::Value>);
 
-    std::unique_ptr<MutableStorageType> m_mutableStorage;
-    std::list<std::unique_ptr<MutableStorageType>> m_immutableStorages;  // Ledger read data from
+    std::shared_ptr<MutableStorageType> m_mutableStorage;
+    std::list<std::shared_ptr<MutableStorageType>> m_immutableStorages;  // Ledger read data from
                                                                          // here
     BackendStorage& m_backendStorage;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::add_lvalue_reference_t<CachedStorage>, std::monostate>
         m_cacheStorage;
 
-    std::mutex m_immutablesMutex;
+    std::mutex m_listMutex;
     std::mutex m_mergeMutex;
 
     auto readStorage(
@@ -236,19 +236,30 @@ public:
         co_return;
     }
 
-    std::unique_ptr<MultiLayerStorage> fork()
+    std::unique_ptr<MultiLayerStorage> fork(bool withImmutables)
     {
-        std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);
         if constexpr (withCacheStorage)
         {
             auto newMultiLayerStorage =
                 std::make_unique<MultiLayerStorage>(m_backendStorage, m_cacheStorage);
+            if (withImmutables)
+            {
+                std::scoped_lock lock(m_listMutex);
+                newMultiLayerStorage->m_mutableStorage = m_mutableStorage;
+                newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
+            }
 
             return newMultiLayerStorage;
         }
         else
         {
             auto newMultiLayerStorage = std::make_unique<MultiLayerStorage>(m_backendStorage);
+            if (withImmutables)
+            {
+                std::scoped_lock lock(m_listMutex);
+                newMultiLayerStorage->m_mutableStorage = m_mutableStorage;
+                newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
+            }
 
             return newMultiLayerStorage;
         }
@@ -257,13 +268,18 @@ public:
     template <class... Args>
     void newMutable(Args... args)
     {
-        std::unique_lock lock(m_immutablesMutex);
+        std::unique_lock lock(m_listMutex);
         if (m_mutableStorage)
         {
             BOOST_THROW_EXCEPTION(DuplicateMutableStorageError{});
         }
 
-        m_mutableStorage = std::make_unique<MutableStorageType>(args...);
+        m_mutableStorage = std::make_shared<MutableStorageType>(args...);
+    }
+
+    void setMutable(std::shared_ptr<MutableStorageType> mutableStorage)
+    {
+        m_mutableStorage = std::move(mutableStorage);
     }
 
     void dropMutable() { m_mutableStorage.reset(); }
@@ -274,14 +290,14 @@ public:
         {
             BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
         }
-        std::unique_lock lock(m_immutablesMutex);
+        std::unique_lock lock(m_listMutex);
         m_immutableStorages.push_front(std::move(m_mutableStorage));
         m_mutableStorage.reset();
     }
 
     void popImmutableFront()
     {
-        std::unique_lock lock(m_immutablesMutex);
+        std::unique_lock lock(m_listMutex);
         if (m_immutableStorages.empty())
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
@@ -292,7 +308,7 @@ public:
     task::Task<void> mergeAndPopImmutableBack()
     {
         std::unique_lock mergeLock(m_mergeMutex);
-        std::unique_lock immutablesLock(m_immutablesMutex);
+        std::unique_lock immutablesLock(m_listMutex);
         if (m_immutableStorages.empty())
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});

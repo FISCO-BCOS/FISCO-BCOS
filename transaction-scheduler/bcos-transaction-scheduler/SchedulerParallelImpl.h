@@ -94,6 +94,8 @@ public:
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
     {
+        auto localMultiLayerStorage = multiLayerStorage().fork(true);
+
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)
         {
@@ -126,11 +128,11 @@ public:
                         if (currentChunkIt + 1 != RANGES::end(currentChunkView))
                         {
                             (currentChunkIt + 1)
-                                ->reset(chunks[index + offset + 1], multiLayerStorage());
+                                ->reset(chunks[index + offset + 1], *localMultiLayerStorage);
                         }
                         if (currentChunkIt == RANGES::begin(currentChunkView))
                         {
-                            currentChunkIt->reset(chunks[index + offset], multiLayerStorage());
+                            currentChunkIt->reset(chunks[index + offset], *localMultiLayerStorage);
                         }
                         ++currentChunkIt;
                         return std::make_optional(index);
@@ -225,7 +227,8 @@ public:
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Mergeing storage... " << RANGES::size(mergeRange);
             for (auto& chunk : mergeRange)
             {
-                multiLayerStorage().mutableStorage().merge(chunk.localStorage->mutableStorage());
+                localMultiLayerStorage->mutableStorage().merge(
+                    chunk.localStorage->mutableStorage());
             }
         }
 
