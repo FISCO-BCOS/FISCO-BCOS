@@ -88,20 +88,20 @@ std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<byt
         std::string encContextsStr((const char*)content->data(), content->size());
 
         bytes encFileBytes = fromHex(encContextsStr);
-        BCOS_LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
+        BCOS_LOG(DEBUG) << LOG_BADGE("DECFILE") << LOG_DESC("Decrypt file contents")
                         << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
         bytesPointer decFileBytesBase64Ptr =
             m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
                 encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
 
-        BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: "
+        BCOS_LOG(DEBUG) << "[ENCFILE] DecryptedFile Base64 key: "
                         << asString(*decFileBytesBase64Ptr) << endl;
         decFileBytes = base64DecodeBytes(asString(*decFileBytesBase64Ptr));
     }
     catch (exception& e)
     {
-        BCOS_LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile failed")
+        BCOS_LOG(ERROR) << LOG_DESC("[ENCFILE] DecryptedFile failed")
                         << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
