@@ -666,8 +666,8 @@ parse_params() {
 
 print_result() {
     echo "=============================================================="
-    LOG_INFO "GroupID               : ${default_group}"
-    LOG_INFO "ChainID               : ${default_chainid}"
+    LOG_INFO "GroupID              : ${default_group}"
+    LOG_INFO "ChainID              : ${default_chainid}"
     if [ -z "${docker_mode}" ];then
         LOG_INFO "${binary_name} path      : ${binary_path}"
     else
@@ -676,7 +676,7 @@ print_result() {
     fi
     LOG_INFO "Auth mode            : ${auth_mode}"
     if ${auth_mode} ; then
-        LOG_INFO "Auth account     : ${auth_admin_account}"
+        LOG_INFO "Admin account        : ${auth_admin_account}"
     fi
     LOG_INFO "Start port           : ${port_start[*]}"
     LOG_INFO "Server IP            : ${ip_array[*]}"
@@ -2095,7 +2095,13 @@ generate_auth_account()
         curl -#LO "${get_account_link}"
   fi
   auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  LOG_INFO "Admin account: ${auth_admin_account}"
   mv accounts* "${ca_dir}"
+
+  if [ "$?" -ne "0" ]; then
+      LOG_INFO "Admin account generate failed, please check ${account_script}."
+      exit 1
+  fi
 }
 
 modify_node_ca_setting(){
