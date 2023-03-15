@@ -344,7 +344,8 @@ gen_rsa_chain_cert() {
     dir_must_exists "$chaindir"
 
     openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
+    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -config ${cert_conf_path} -out "${chaindir}"/ca.crt  2>/dev/null
+    cp "${cert_conf_path}" "$chaindir"
 
     LOG_INFO "Generate rsa ca cert successfully!"
 }
@@ -376,6 +377,7 @@ gen_rsa_node_cert() {
 
     mv "$ndpath"/pkcs8_node.key "$ndpath"/"$type".key
     cp "$capath/ca.crt" "$ndpath"
+    cp "${cert_conf_path}" "$ndpath"
 
     # LOG_INFO "Generate ${ndpath} node rsa cert successful!"
 }
