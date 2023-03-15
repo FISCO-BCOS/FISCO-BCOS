@@ -513,7 +513,7 @@ void BlockSync::tryToRequestBlocks()
                 std::min(m_config->knownHighestNumber(), (topBlockHeader->number() - 1));
         }
     }
-    auto currentNumber = std::max(m_config->blockNumber(), m_config->applyingBlock());
+    auto currentNumber = m_config->blockNumber();
     // no need to request blocks
     if (currentNumber >= requestToNumber || requestToNumber <= m_config->executedBlock() ||
         requestToNumber <= m_config->applyingBlock())
