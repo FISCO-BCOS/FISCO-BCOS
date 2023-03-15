@@ -299,10 +299,10 @@ void NodeConfig::getTarsClientProxyEndpoints(
     {
         _endpoints = it->second;
 
-        NodeConfig_LOG(INFO) << LOG_BADGE("getTarsClientProxyEndpoints")
-                             << LOG_DESC("find tars client proxy endpoints")
-                             << LOG_KV("serviceName", _clientPrx)
-                             << LOG_KV("endpoints size", _endpoints.size());
+        NodeConfig_LOG(DEBUG) << LOG_BADGE("getTarsClientProxyEndpoints")
+                              << LOG_DESC("find tars client proxy endpoints")
+                              << LOG_KV("serviceName", _clientPrx)
+                              << LOG_KV("endpoints size", _endpoints.size());
     }
 
     if (_endpoints.empty())
