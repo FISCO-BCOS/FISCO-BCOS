@@ -191,7 +191,7 @@ public:
     // loads sm ca configuration items from the configuration file
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
     // loads ratelimit config
-    void initRateLimitConfig(const boost::property_tree::ptree& _pt);
+    void initFlowControlConfig(const boost::property_tree::ptree& _pt);
     // loads redis config
     void initRedisConfig(const boost::property_tree::ptree& _pt);
     // loads peer blacklist config

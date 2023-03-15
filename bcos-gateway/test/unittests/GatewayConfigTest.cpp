@@ -188,7 +188,7 @@ BOOST_AUTO_TEST_CASE(test_initSMConfig)
     }
 }
 
-BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
+BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
 {
     {
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
     {
         auto config = std::make_shared<GatewayConfig>();
         boost::property_tree::ptree pt;
-        config->initRateLimitConfig(pt);
+        config->initFlowControlConfig(pt);
         auto rateLimiterConfig = config->rateLimiterConfig();
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
@@ -227,7 +227,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         boost::property_tree::ini_parser::read_ini(configIni, pt);
 
         auto config = std::make_shared<GatewayConfig>();
-        config->initRateLimitConfig(pt);
+        config->initFlowControlConfig(pt);
 
         auto rateLimiterConfig = config->rateLimiterConfig();
         auto timeWindowSec = rateLimiterConfig.timeWindowSec;
@@ -298,7 +298,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         boost::property_tree::ini_parser::read_ini(configIni, pt);
 
         auto config = std::make_shared<GatewayConfig>();
-        config->initRateLimitConfig(pt);
+        config->initFlowControlConfig(pt);
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
