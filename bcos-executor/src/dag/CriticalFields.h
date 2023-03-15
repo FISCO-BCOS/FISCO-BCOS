@@ -102,16 +102,12 @@ public:
                 std::set<ID> pIds;
                 for (auto const& c : *criticals)
                 {
-                    auto it = dependencies.find(c);
-                    if (it != dependencies.end())
+                    auto [it, success] = dependencies.emplace(c, id);
+                    if (!success)
                     {
                         auto pId = it->second;
                         pIds.insert(pId);
                         it->second = id;
-                    }
-                    else
-                    {
-                        dependencies[c] = id;
                     }
                 }
 
