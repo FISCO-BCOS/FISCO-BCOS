@@ -243,8 +243,13 @@ gen_rsa_chain_cert() {
     mkdir -p "$chaindir"
     dir_must_exists "$chaindir"
 
+    local config_params="-config $capath/cert.cnf"
+    if [[ ! -f  $capath/cert.cnf ]];then
+        config_params=
+    fi 
+
     openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -config $capath/cert.cnf -out "${chaindir}"/ca.crt  2>/dev/null
+    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key ${config_params} -out "${chaindir}"/ca.crt  2>/dev/null
 
     LOG_INFO "Generate rsa ca cert successfully!"
 }
@@ -264,8 +269,13 @@ gen_rsa_node_cert() {
     mkdir -p "${ndpath}"
     dir_must_exists "${ndpath}"
 
+    local config_params="-config $capath/cert.cnf"
+    if [[ ! -f  $capath/cert.cnf ]];then
+        config_params=
+    fi 
+
     openssl genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config $capath/cert.cnf -out "$ndpath"/"${type}".csr
+    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key ${config_params} -out "$ndpath"/"${type}".csr
     openssl x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
         -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req 2>/dev/null
 
