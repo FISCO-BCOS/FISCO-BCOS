@@ -62,7 +62,8 @@ public:
                                << LOG_DESC("unable to send the message")
                                << LOG_KV("srcNodeID", m_srcNodeID->hex())
                                << LOG_KV("dstNodeID", m_dstNodeID->hex())
-                               << LOG_KV("seq", std::to_string(m_p2pMessage->seq()));
+                               << LOG_KV("seq", std::to_string(m_p2pMessage->seq()))
+                               << LOG_KV("moduleID", m_moduleID);
 
             if (m_respFunc)
             {
@@ -77,7 +78,7 @@ public:
         auto p2pID = chooseP2pID();
         auto self = shared_from_this();
         auto startT = utcTime();
-        auto callback = [seq, self, startT, p2pID](NetworkException e,
+        auto callback = [moduleID = m_moduleID, seq, self, startT, p2pID](NetworkException e,
                             std::shared_ptr<P2PSession> session,
                             std::shared_ptr<P2PMessage> message) {
             std::ignore = session;
@@ -99,7 +100,8 @@ public:
                 GATEWAY_LOG(ERROR)
                     << LOG_BADGE("Retry") << LOG_DESC("network callback") << LOG_KV("seq", seq)
                     << LOG_KV("dstP2P", p2pID) << LOG_KV("errorCode", e.errorCode())
-                    << LOG_KV("errorMessage", e.what()) << LOG_KV("timeCost", (utcTime() - startT));
+                    << LOG_KV("moduleID", moduleID) << LOG_KV("errorMessage", e.what())
+                    << LOG_KV("timeCost", (utcTime() - startT));
                 // try again
                 self->trySendMessage();
                 return;
@@ -116,7 +118,8 @@ public:
                 {
                     GATEWAY_LOG(WARNING)
                         << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
-                        << LOG_KV("errorCode", respCode) << LOG_KV("errorMessage", e.what());
+                        << LOG_KV("moduleID", moduleID) << LOG_KV("errorCode", respCode)
+                        << LOG_KV("errorMessage", e.what());
                     // try again
                     self->trySendMessage();
                     return;
@@ -124,7 +127,8 @@ public:
                 GATEWAY_LOG(TRACE)
                     << LOG_BADGE("Retry: asyncSendMessageByNodeID success")
                     << LOG_KV("dstP2P", p2pID) << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
-                    << LOG_KV("dstNodeID", self->m_dstNodeID->hex());
+                    << LOG_KV("dstNodeID", self->m_dstNodeID->hex())
+                    << LOG_KV("moduleID", moduleID);
                 // send message successfully
                 if (self->m_respFunc)
                 {
@@ -134,15 +138,15 @@ public:
             }
             catch (const std::exception& e)
             {
-                GATEWAY_LOG(ERROR)
-                    << LOG_BADGE("trySendMessage and receive response exception")
-                    << LOG_KV("payload",
-                           std::string(message->payload()->begin(), message->payload()->end()))
-                    << LOG_KV("packetType", message->packetType())
-                    << LOG_KV("src", message->options() ?
-                                         toHex(*(message->options()->srcNodeID())) :
-                                         "unknown")
-                    << LOG_KV("size", message->length()) << LOG_KV("error", e.what());
+                GATEWAY_LOG(ERROR) << LOG_BADGE("trySendMessage and receive response exception")
+                                   << LOG_KV("payload", std::string(message->payload()->begin(),
+                                                            message->payload()->end()))
+                                   << LOG_KV("packetType", message->packetType())
+                                   << LOG_KV("src", message->options() ?
+                                                        toHex(*(message->options()->srcNodeID())) :
+                                                        "unknown")
+                                   << LOG_KV("size", message->length()) << LOG_KV("error", e.what())
+                                   << LOG_KV("moduleID", moduleID);
 
                 self->trySendMessage();
             }
@@ -157,6 +161,7 @@ public:
     std::shared_ptr<P2PMessage> m_p2pMessage;
     std::shared_ptr<P2PInterface> m_p2pInterface;
     ErrorRespFunc m_respFunc;
+    int m_moduleID;
 };
 
 class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gateway>

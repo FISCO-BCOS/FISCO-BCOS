@@ -186,7 +186,7 @@ public:
     size_t size() const
     {
         size_t size = 0;
-        for (auto bucket : m_buckets)
+        for (auto& bucket : m_buckets)
         {
             size += bucket->size();
         }

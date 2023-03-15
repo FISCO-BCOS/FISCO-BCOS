@@ -278,8 +278,7 @@ protected:
     };
     std::list<State> m_stateStorages;
 
-    bcos::protocol::BlockHeader::Ptr m_lastCommittedBlockHeader =
-        getBlockHeaderInStorage(getBlockNumberInStorage());
+    bcos::protocol::BlockNumber m_lastCommittedBlockNumber = getBlockNumberInStorage();
 
     struct HashCombine
     {
