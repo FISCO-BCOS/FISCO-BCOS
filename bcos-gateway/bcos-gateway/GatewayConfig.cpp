@@ -156,7 +156,7 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
         initP2PConfig(pt, _uuidRequired);
         initPeerBlacklistConfig(pt);
         initPeerWhitelistConfig(pt);
-        initRateLimitConfig(pt);
+        initFlowControlConfig(pt);
         if (m_smSSL)
         {
             initSMCertConfig(pt);
@@ -415,7 +415,7 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
 }
 
 // loads rate limit configuration items from the configuration file
-void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
+void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt)
 {
     /*
     [flow_control]
@@ -445,14 +445,15 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     // stat_reporter_interval=60000
     int32_t statInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
 
-    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRateLimiterConfig")
-                             << LOG_DESC("the rate limit general config")
-                             << LOG_KV("stat_reporter_interval", statInterval)
-                             << LOG_KV("time_window_sec", timeWindowSec)
-                             << LOG_KV("enable_distributed_ratelimit", enableDistributedRatelimit)
-                             << LOG_KV("enable_distributed_ratelimit_cache",
+    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
+                             << LOG_DESC("load flow_control common config items")
+                             << LOG_KV("flow_control.stat_reporter_interval", statInterval)
+                             << LOG_KV("flow_control.time_window_sec", timeWindowSec)
+                             << LOG_KV("flow_control.enable_distributed_ratelimit",
+                                    enableDistributedRatelimit)
+                             << LOG_KV("flow_control.enable_distributed_ratelimit_cache",
                                     enableDistributedRateLimitCache)
-                             << LOG_KV("distributed_ratelimit_cache_percent",
+                             << LOG_KV("flow_control.distributed_ratelimit_cache_percent",
                                     distributedRateLimitCachePercent);
 
     // --------------------------------- outgoing begin -------------------------------------------
@@ -514,10 +515,11 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
             // TODO: modify module name to module id
             if (!optModuleID.has_value())
             {
-                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                          "unrecognized module: " + module +
-                                          " ,list of available modules: "
-                                          "raft,pbft,amop,block_sync,txs_sync,light_node"));
+                BOOST_THROW_EXCEPTION(
+                    InvalidParameter() << errinfo_comment(
+                        "load flow_control config items, unrecognized module: " + module +
+                        " ,list of available modules: "
+                        "raft,pbft,amop,block_sync,txs_sync,light_node"));
             }
             moduleIDs.insert(optModuleID.value());
         }
@@ -535,7 +537,9 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
         auto bandwidth = boost::lexical_cast<double>(value);
         totalOutgoingBwLimit = doubleMBToBit(bandwidth);
 
-        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the total_outgoing_bw_limit has been initialized")
+        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC(
+                                        "load flow_control config items, the "
+                                        "total_outgoing_bw_limit has been initialized")
                                  << LOG_KV("value", value) << LOG_KV("bandwidth", bandwidth)
                                  << LOG_KV("totalOutgoingBwLimit", totalOutgoingBwLimit);
     }
@@ -545,14 +549,17 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     value = _pt.get<std::string>("flow_control.conn_outgoing_bw_limit", "");
     if (value.empty())
     {
-        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the conn_outgoing_bw_limit is not initialized");
+        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC(
+            "load flow_control config items, the conn_outgoing_bw_limit is not initialized");
     }
     else
     {
         auto bandwidth = boost::lexical_cast<double>(value);
         connOutgoingBwLimit = doubleMBToBit(bandwidth);
 
-        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the conn_outgoing_bw_limit has been initialized")
+        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC(
+                                        "load flow_control config items, the "
+                                        "conn_outgoing_bw_limit has been initialized")
                                  << LOG_KV("value", value) << LOG_KV("bandwidth", bandwidth)
                                  << LOG_KV("connOutgoingBwLimit", connOutgoingBwLimit);
     }
@@ -562,14 +569,17 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     value = _pt.get<std::string>("flow_control.group_outgoing_bw_limit", "");
     if (value.empty())
     {
-        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the group_outgoing_bw_limit is not initialized");
+        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC(
+            "load flow_control config items, the group_outgoing_bw_limit is not initialized");
     }
     else
     {
         auto bandwidth = boost::lexical_cast<double>(value);
         groupOutgoingBwLimit = doubleMBToBit(bandwidth);
 
-        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("the group_outgoing_bw_limit has been initialized")
+        GATEWAY_CONFIG_LOG(INFO) << LOG_DESC(
+                                        "load flow_control config items, the "
+                                        "group_outgoing_bw_limit has been initialized")
                                  << LOG_KV("value", value) << LOG_KV("bandwidth", bandwidth)
                                  << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit);
     }
@@ -593,7 +603,8 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
                 {
                     BOOST_THROW_EXCEPTION(
                         InvalidParameter() << errinfo_comment(
-                            "flow_control.ip_outgoing_bw_x.x.x.x config, invalid ip format, ip: " +
+                            "load flow_control config items, flow_control.ip_outgoing_bw_x.x.x.x "
+                            "config, invalid ip format, ip: " +
                             ip));
                 }
                 auto bandwidth = doubleMBToBit(boost::lexical_cast<double>(value));
@@ -602,9 +613,10 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
                     m_rateLimiterConfig.ip2BwLimit[ip] = bandwidth;
                 }
 
-                GATEWAY_CONFIG_LOG(INFO)
-                    << LOG_BADGE("initRateLimiterConfig") << LOG_DESC("add ip bandwidth limit")
-                    << LOG_KV("ip", ip) << LOG_KV("bandwidth", bandwidth);
+                GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
+                                         << LOG_DESC("load flow_control config items")
+                                         << LOG_KV("key", "flow_control." + key) << LOG_KV("ip", ip)
+                                         << LOG_KV("bandwidth", bandwidth);
             }  // group_outgoing_bw_group0
             else if (boost::starts_with(key, "group_outgoing_bw_limit_"))
             {
@@ -617,20 +629,25 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
                 }
 
                 GATEWAY_CONFIG_LOG(INFO)
-                    << LOG_BADGE("initRateLimiterConfig") << LOG_DESC("add group bandwidth limit")
-                    << LOG_KV("group", group) << LOG_KV("bandwidth", bandwidth);
+                    << LOG_BADGE("initFlowControlConfig")
+                    << LOG_DESC("load flow_control config items")
+                    << LOG_KV("key", "flow_control." + key) << LOG_KV("group", group)
+                    << LOG_KV("bandwidth", bandwidth);
             }
         }
     }
 
     GATEWAY_CONFIG_LOG(INFO)
-        << LOG_BADGE("initRateLimiterConfig") << LOG_DESC("the outgoing bandwidth rate limit")
-        << LOG_KV("outgoing_allow_exceed_max_permit", allowExceedMaxPermitSize)
-        << LOG_KV("total_outgoing_bw_limit", totalOutgoingBwLimit)
-        << LOG_KV("conn_outgoing_bw_limit", connOutgoingBwLimit)
-        << LOG_KV("group_outgoing_bw_limit", groupOutgoingBwLimit)
-        << LOG_KV("conn_outgoing_bw_limit_x.x.x.x", m_rateLimiterConfig.ip2BwLimit.size())
-        << LOG_KV("group_outgoing_bw_limit_xx", m_rateLimiterConfig.group2BwLimit.size())
+        << LOG_BADGE("initFlowControlConfig") << LOG_DESC("load_flow control outgoing config items")
+        << LOG_KV("flow_control.outgoing_allow_exceed_max_permit", allowExceedMaxPermitSize)
+        << LOG_KV("flow_control.modules_without_bw_limit", strModulesWithoutLimit)
+        << LOG_KV("flow_control.total_outgoing_bw_limit", totalOutgoingBwLimit)
+        << LOG_KV("flow_control.conn_outgoing_bw_limit", connOutgoingBwLimit)
+        << LOG_KV("flow_control.group_outgoing_bw_limit", groupOutgoingBwLimit)
+        << LOG_KV(
+               "flow_control.conn_outgoing_bw_limit_x.x.x.x", m_rateLimiterConfig.ip2BwLimit.size())
+        << LOG_KV(
+               "flow_control.group_outgoing_bw_limit_xxx", m_rateLimiterConfig.group2BwLimit.size())
         << LOG_KV("modules_without_bw_limit size", m_rateLimiterConfig.modulesWithoutLimit.size());
 
     // --------------------------------- outgoing end -------------------------------------------
@@ -666,9 +683,10 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
             if (i < 0 && i > std::numeric_limits<uint16_t>::max())
             {
                 BOOST_THROW_EXCEPTION(
-                    InvalidParameter() << errinfo_comment("flow_control.incoming_p2p_basic_msg_"
-                                                          "type_list contains invalid module id, "
-                                                          "module id should be in range (0, 255]"));
+                    InvalidParameter() << errinfo_comment(
+                        "load flow_control config items, flow_control.incoming_p2p_basic_msg_"
+                        "type_list contains invalid module id, "
+                        "module id should be in range (0, 255]"));
             }
             p2pBasicMsgTypeList.insert(i);
         }
@@ -699,20 +717,23 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
                 {
                     m_rateLimiterConfig.moduleMsg2QPS[module] = qps;
 
-                    GATEWAY_CONFIG_LOG(INFO)
-                        << LOG_BADGE("initRateLimiterConfig") << LOG_DESC("add module qps limit")
-                        << LOG_KV("module", module) << LOG_KV("qps", qps);
+                    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
+                                             << LOG_DESC("load flow_control config items")
+                                             << LOG_KV("key", "flow_control." + key)
+                                             << LOG_KV("module", module) << LOG_KV("qps", qps);
                 }
             }
         }
     }
 
-    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRateLimiterConfig")
-                             << LOG_DESC("the incoming qps rate limit")
-                             << LOG_KV("incoming_p2p_basic_msg_type_qps_limit", p2pBasicMsgQPS)
-                             << LOG_KV("incoming_module_msg_type_qps_limit", p2pBasicMsgQPS)
-                             << LOG_KV("incoming_module_qps_limit_xxx size",
-                                    m_rateLimiterConfig.moduleMsg2QPS.size());
+    GATEWAY_CONFIG_LOG(INFO)
+        << LOG_BADGE("initFlowControlConfig")
+        << LOG_DESC("load flow_control config items, the incoming qps rate limit")
+        << LOG_KV("flow_control.incoming_p2p_basic_msg_type_list", strP2pBasicMsgTypeList)
+        << LOG_KV("flow_control.incoming_p2p_basic_msg_type_qps_limit", p2pBasicMsgQPS)
+        << LOG_KV("flow_control.incoming_module_msg_type_qps_limit", moduleMsgQPS)
+        << LOG_KV("flow_control.incoming_module_qps_limit_xxx size",
+               m_rateLimiterConfig.moduleMsg2QPS.size());
 
     // --------------------------------- incoming end -------------------------------------------
 
@@ -752,9 +773,9 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
 
     if (m_rateLimiterConfig.enableDistributedRatelimit)
     {
-        GATEWAY_CONFIG_LOG(INFO)
-            << LOG_BADGE("initRateLimiterConfig")
-            << LOG_DESC("allow distributed ratelimit, load the redis configurations");
+        GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
+                                 << LOG_DESC(
+                                        "allow distributed ratelimit, load the redis config items");
 
         initRedisConfig(_pt);
     }
@@ -815,12 +836,13 @@ void GatewayConfig::initRedisConfig(const boost::property_tree::ptree& _pt)
     m_redisConfig.password = redisPassword;
     m_redisConfig.db = redisDB;
 
-    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRedisConfig")
-                             << LOG_KV("redisServerIP", redisServerIP)
-                             << LOG_KV("redisServerPort", redisServerPort)
-                             << LOG_KV("redisDB", redisDB) << LOG_KV("redisTimeout", redisTimeout)
-                             << LOG_KV("redisPoolSize", redisPoolSize)
-                             << LOG_KV("redisPassword", redisPassword);
+    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRedisConfig") << LOG_DESC("load redis config items")
+                             << LOG_KV("redis.server_ip", redisServerIP)
+                             << LOG_KV("redis.server_port", redisServerPort)
+                             << LOG_KV("redis.db", redisDB)
+                             << LOG_KV("redis.request_timeout", redisTimeout)
+                             << LOG_KV("redis.connection_pool_size", redisPoolSize)
+                             << LOG_KV("redis.password", redisPassword);
 }
 
 void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _pt)
