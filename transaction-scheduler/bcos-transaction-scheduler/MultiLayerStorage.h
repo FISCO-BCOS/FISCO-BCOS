@@ -6,6 +6,7 @@
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
+#include <range/v3/algorithm/set_algorithm.hpp>
 #include <stdexcept>
 #include <type_traits>
 #include <variant>
@@ -199,7 +200,7 @@ public:
 
         if (!started)
         {
-            missing = co_await readStorage(myKeys, myValues, m_backendStorage);
+            co_await readStorage(myKeys, myValues, m_backendStorage);
         }
         else
         {
@@ -207,7 +208,19 @@ public:
             ](auto& tuple) -> auto const& { return *std::get<0>(tuple); });
             auto valuesView = missing | RANGES::views::transform([
             ](auto& tuple) -> auto& { return *std::get<1>(tuple); });
-            missing = co_await readStorage(keysView, valuesView, m_backendStorage);
+            co_await readStorage(keysView, valuesView, m_backendStorage);
+
+            // Write data into cache
+            if constexpr (withCacheStorage)
+            {
+                for (auto&& [key, value] : RANGES::zip_view(keysView, valuesView))
+                {
+                    if (value)
+                    {
+                        co_await storage2::writeOne(m_cacheStorage, key, *value);
+                    }
+                }
+            }
         }
 
         co_return iterator;
@@ -236,17 +249,17 @@ public:
         co_return;
     }
 
-    std::unique_ptr<MultiLayerStorage> fork(bool withImmutables)
+    std::unique_ptr<MultiLayerStorage> fork(bool withMutable)
     {
         if constexpr (withCacheStorage)
         {
             auto newMultiLayerStorage =
                 std::make_unique<MultiLayerStorage>(m_backendStorage, m_cacheStorage);
-            if (withImmutables)
+            std::unique_lock lock(m_listMutex);
+            newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
+            if (withMutable)
             {
-                std::scoped_lock lock(m_listMutex);
                 newMultiLayerStorage->m_mutableStorage = m_mutableStorage;
-                newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
             }
 
             return newMultiLayerStorage;
@@ -254,11 +267,11 @@ public:
         else
         {
             auto newMultiLayerStorage = std::make_unique<MultiLayerStorage>(m_backendStorage);
-            if (withImmutables)
+            std::unique_lock lock(m_listMutex);
+            newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
+            if (withMutable)
             {
-                std::scoped_lock lock(m_listMutex);
                 newMultiLayerStorage->m_mutableStorage = m_mutableStorage;
-                newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
             }
 
             return newMultiLayerStorage;

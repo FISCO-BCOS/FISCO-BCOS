@@ -115,16 +115,16 @@ public:
             receipts.reserve(RANGES::size(transactions));
         }
 
-        auto chunks = transactions | RANGES::views::chunk(m_chunkSize);
-        std::vector<ChunkExecuteStatus<RANGES::range_value_t<decltype(chunks)>>> executedChunks(
-            RANGES::size(chunks));
+        auto transactionChunks = transactions | RANGES::views::chunk(m_chunkSize);
+        std::vector<ChunkExecuteStatus<RANGES::range_value_t<decltype(transactionChunks)>>>
+            executeChunks(RANGES::size(transactionChunks));
 
-        auto chunkIt = RANGES::begin(executedChunks);
+        auto chunkIt = RANGES::begin(executeChunks);
         auto tokens = m_maxToken;
-        while (chunkIt != RANGES::end(executedChunks) && tokens > 1)
+        while (chunkIt != RANGES::end(executeChunks) && tokens > 1)
         {
-            auto offset = RANGES::distance(RANGES::begin(executedChunks), chunkIt);
-            auto currentChunkView = RANGES::subrange(chunkIt, RANGES::end(executedChunks));
+            auto offset = RANGES::distance(RANGES::begin(executeChunks), chunkIt);
+            auto currentChunkView = RANGES::subrange(chunkIt, RANGES::end(executeChunks));
             auto currentChunkIt = RANGES::begin(currentChunkView);
 
             std::atomic_int64_t lastChunk = RANGES::size(currentChunkView);
@@ -142,11 +142,13 @@ public:
                         if (currentChunkIt + 1 != RANGES::end(currentChunkView))
                         {
                             (currentChunkIt + 1)
-                                ->reset(chunks[index + offset + 1], *localMultiLayerStorage);
+                                ->reset(
+                                    transactionChunks[index + offset + 1], *localMultiLayerStorage);
                         }
                         if (currentChunkIt == RANGES::begin(currentChunkView))
                         {
-                            currentChunkIt->reset(chunks[index + offset], *localMultiLayerStorage);
+                            currentChunkIt->reset(
+                                transactionChunks[index + offset], *localMultiLayerStorage);
                         }
                         ++currentChunkIt;
                         return std::make_optional(index);
@@ -172,8 +174,7 @@ public:
                                     // Detected RAW
                                     if (index < lastChunk)
                                     {
-                                        if (index > 0 &&
-                                            (int64_t)currentChunkView[index - 1].finished &&
+                                        if (index > 0 && currentChunkView[index - 1].finished &&
                                             currentChunkView[index - 1]
                                                 .compareRight.compare_exchange_strong(
                                                     expected, true))
@@ -185,7 +186,7 @@ public:
                                                                 .readWriteSetStorage)))
                                             {
                                                 PARALLEL_SCHEDULER_LOG(DEBUG)
-                                                    << "Detected RAW intersection, abort: "
+                                                    << "Detected left RAW intersection, abort: "
                                                     << offset + index;
                                                 decreaseNumber(lastChunk, index);
                                             }
@@ -208,7 +209,7 @@ public:
                                                                 .readWriteSetStorage)))
                                             {
                                                 PARALLEL_SCHEDULER_LOG(DEBUG)
-                                                    << "Detected RAW intersection, abort: "
+                                                    << "Detected right RAW intersection, abort: "
                                                     << offset + index + 1;
                                                 decreaseNumber(lastChunk, index + 1);
                                             }
@@ -252,14 +253,14 @@ public:
         }
 
         // Still have transactions, execute it serially
-        if (chunkIt != RANGES::end(executedChunks))
+        if (chunkIt != RANGES::end(executeChunks))
         {
             co_await serialExecute(blockHeader,
-                RANGES::distance(RANGES::begin(executedChunks), chunkIt) * m_chunkSize,
+                RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize,
                 receiptFactory(), tableNamePool(),
                 transactions |
                     RANGES::views::drop(
-                        RANGES::distance(RANGES::begin(executedChunks), chunkIt) * m_chunkSize),
+                        RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize),
                 receipts, *localMultiLayerStorage);
             co_return receipts;
         }

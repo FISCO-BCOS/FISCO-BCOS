@@ -85,8 +85,8 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
     std::vector<std::string_view> values(total);
     for (auto i = 0U; i < unstoredTxs->size(); ++i)
     {
-        keys[i] = bcos::concepts::bytebuffer::toView((*unstoredTxsHash)[i]);
-        values[i] = bcos::concepts::bytebuffer::toView((*(*unstoredTxs)[i]));
+        keys[i] = concepts::bytebuffer::toView((*unstoredTxsHash)[i]);
+        values[i] = concepts::bytebuffer::toView((*(*unstoredTxs)[i]));
     }
     {
         // Note: transactions must be submitted serially, because transaction submissions are
