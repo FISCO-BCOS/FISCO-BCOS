@@ -171,8 +171,15 @@ void ShardingBlockExecutive::shardingExecute(
         DMCExecute(std::move(callback));
     };
 
+    std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> dmcExecutors;
+    {
+        bcos::ReadGuard l(x_dmcExecutorLock);
+        // copy to another object for m_dmcExecutors may change during parallel shardGo
+        dmcExecutors = m_dmcExecutors;
+    }
+
     tbb::parallel_for_each(
-        m_dmcExecutors.begin(), m_dmcExecutors.end(), [&executorCallback](auto const& executorIt) {
+        dmcExecutors.begin(), dmcExecutors.end(), [&executorCallback](auto const& executorIt) {
             std::dynamic_pointer_cast<ShardingDmcExecutor>(executorIt.second)
                 ->shardGo(executorCallback);
         });
