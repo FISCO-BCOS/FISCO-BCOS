@@ -14,8 +14,7 @@
 namespace bcos::transaction_scheduler
 {
 
-template <transaction_executor::StateStorage MultiLayerStorage,
-    protocol::IsTransactionReceiptFactory ReceiptFactory,
+template <class MultiLayerStorage, protocol::IsTransactionReceiptFactory ReceiptFactory,
     template <typename, typename> class Executor>
 class SchedulerBaseImpl
 {
@@ -107,11 +106,10 @@ public:
         protocol::IsBlockHeader auto const& blockHeader,
         protocol::IsTransaction auto const& transaction)
     {
-        auto storage = m_multiLayerStorage.fork(false);
-        storage->newMutable();
+        auto view = m_multiLayerStorage.fork(false);
+        view.newTemporaryMutable();
 
-        Executor<MultiLayerStorage, ReceiptFactory> executor(
-            *storage, m_receiptFactory, m_tableNamePool);
+        Executor<decltype(view), ReceiptFactory> executor(view, m_receiptFactory, m_tableNamePool);
         co_return co_await executor.execute(blockHeader, transaction, 0);
     }
 

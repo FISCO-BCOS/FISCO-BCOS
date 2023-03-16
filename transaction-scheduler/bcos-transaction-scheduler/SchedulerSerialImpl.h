@@ -7,8 +7,7 @@ namespace bcos::transaction_scheduler
 
 #define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
 
-template <transaction_executor::StateStorage MultiLayerStorage,
-    protocol::IsTransactionReceiptFactory ReceiptFactory,
+template <class MultiLayerStorage, protocol::IsTransactionReceiptFactory ReceiptFactory,
     template <typename, typename> class Executor>
 class SchedulerSerialImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
@@ -22,6 +21,7 @@ public:
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
     {
+        auto view = multiLayerStorage().fork(true);
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)
         {
@@ -29,8 +29,7 @@ public:
         }
 
         int contextID = 0;
-        Executor<MultiLayerStorage, ReceiptFactory> executor(
-            multiLayerStorage(), receiptFactory(), tableNamePool());
+        Executor<decltype(view), ReceiptFactory> executor(view, receiptFactory(), tableNamePool());
         for (auto const& transaction : transactions)
         {
             receipts.emplace_back(co_await executor.execute(blockHeader, transaction, contextID++));

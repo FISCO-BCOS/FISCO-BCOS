@@ -25,8 +25,10 @@ struct Fixture
     void prepareData(int64_t count, int layer = 0)
     {
         levelStorage.newMutable();
+
         // Write count data
         task::syncWait([this](int64_t count) -> task::Task<void> {
+            auto view = levelStorage.fork(true);
             allKeys = RANGES::iota_view<int, int>(0, count) |
                       RANGES::views::transform([tableNamePool = &m_tableNamePool](int num) {
                           return transaction_executor::StateKey{
@@ -43,7 +45,7 @@ struct Fixture
                     return entry;
                 });
 
-            co_await levelStorage.write(allKeys, allValues);
+            co_await view.write(allKeys, allValues);
         }(count));
 
         for (auto i = 0; i < layer; ++i)
@@ -72,10 +74,11 @@ static void read1(benchmark::State& state)
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        auto view = fixture.levelStorage.fork(false);
         for (auto const& it : state)
         {
-            [[maybe_unused]] auto data = co_await storage2::readOne(
-                fixture.levelStorage, fixture.allKeys[((i++) + dataCount) % dataCount]);
+            [[maybe_unused]] auto data =
+                co_await storage2::readOne(view, fixture.allKeys[((i++) + dataCount) % dataCount]);
         }
 
         co_return;
@@ -90,10 +93,11 @@ static void read10(benchmark::State& state)
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        auto view = fixture.levelStorage.fork(false);
         for (auto const& it : state)
         {
-            [[maybe_unused]] auto data = co_await storage2::readOne(
-                fixture.levelStorage, fixture.allKeys[((i++) + dataCount) % dataCount]);
+            [[maybe_unused]] auto data =
+                co_await storage2::readOne(view, fixture.allKeys[((i++) + dataCount) % dataCount]);
         }
 
         co_return;
@@ -107,11 +111,12 @@ static void write1(benchmark::State& state)
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        auto view = fixture.levelStorage.fork(true);
         for (auto const& it : state)
         {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", i));
-            co_await storage2::writeOne(fixture.levelStorage,
+            co_await storage2::writeOne(view,
                 transaction_executor::StateKey{
                     storage2::string_pool::makeStringID(fixture.m_tableNamePool, "test_table"),
                     fmt::format("key: {}", i)},

@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(conflict)
             MockConflictExecutor>
             scheduler(multiLayerStorage, receiptFactory, tableNamePool);
         scheduler.setChunkSize(1);
-        scheduler.setMaxThreads(4);
+        scheduler.setMaxToken(4);
         scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
