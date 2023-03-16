@@ -648,3 +648,10 @@ bcos::Error::Ptr RocksDBStorage::checkStatus(rocksdb::Status const& status)
     STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC(errorInfo);
     return BCOS_ERROR_PTR(DatabaseRetryable, errorInfo);
 }
+
+void RocksDBStorage::stop()
+{
+    m_db.reset();
+    m_dataEncryption.reset();
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("rocksdb stopped");
+}
