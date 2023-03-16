@@ -255,14 +255,10 @@ public:
         // Still have transactions, execute it serially
         if (chunkIt != RANGES::end(executeChunks))
         {
-            co_await serialExecute(blockHeader,
-                RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize,
-                receiptFactory(), tableNamePool(),
-                transactions |
-                    RANGES::views::drop(
-                        RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize),
-                receipts, *localMultiLayerStorage);
-            co_return receipts;
+            auto startOffset =
+                RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize;
+            co_await serialExecute(blockHeader, startOffset, receiptFactory(), tableNamePool(),
+                transactions | RANGES::views::drop(startOffset), receipts, *localMultiLayerStorage);
         }
 
         co_return receipts;
