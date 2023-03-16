@@ -6,6 +6,7 @@
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
+#include <range/v3/algorithm/set_algorithm.hpp>
 #include <stdexcept>
 #include <type_traits>
 #include <variant>
@@ -33,15 +34,15 @@ private:
     static_assert(std::same_as<typename MutableStorageType::Key, typename BackendStorage::Key>);
     static_assert(std::same_as<typename MutableStorageType::Value, typename BackendStorage::Value>);
 
-    std::unique_ptr<MutableStorageType> m_mutableStorage;
-    std::list<std::unique_ptr<MutableStorageType>> m_immutableStorages;  // Ledger read data from
+    std::shared_ptr<MutableStorageType> m_mutableStorage;
+    std::list<std::shared_ptr<MutableStorageType>> m_immutableStorages;  // Ledger read data from
                                                                          // here
     BackendStorage& m_backendStorage;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::add_lvalue_reference_t<CachedStorage>, std::monostate>
         m_cacheStorage;
 
-    std::mutex m_immutablesMutex;
+    std::mutex m_listMutex;
     std::mutex m_mergeMutex;
 
     auto readStorage(
@@ -199,7 +200,7 @@ public:
 
         if (!started)
         {
-            missing = co_await readStorage(myKeys, myValues, m_backendStorage);
+            co_await readStorage(myKeys, myValues, m_backendStorage);
         }
         else
         {
@@ -207,7 +208,19 @@ public:
             ](auto& tuple) -> auto const& { return *std::get<0>(tuple); });
             auto valuesView = missing | RANGES::views::transform([
             ](auto& tuple) -> auto& { return *std::get<1>(tuple); });
-            missing = co_await readStorage(keysView, valuesView, m_backendStorage);
+            co_await readStorage(keysView, valuesView, m_backendStorage);
+
+            // Write data into cache
+            if constexpr (withCacheStorage)
+            {
+                for (auto&& [key, value] : RANGES::zip_view(keysView, valuesView))
+                {
+                    if (value)
+                    {
+                        co_await storage2::writeOne(m_cacheStorage, key, *value);
+                    }
+                }
+            }
         }
 
         co_return iterator;
@@ -236,19 +249,30 @@ public:
         co_return;
     }
 
-    std::unique_ptr<MultiLayerStorage> fork()
+    std::unique_ptr<MultiLayerStorage> fork(bool withMutable)
     {
-        std::scoped_lock lock(m_mergeMutex, m_immutablesMutex);
         if constexpr (withCacheStorage)
         {
             auto newMultiLayerStorage =
                 std::make_unique<MultiLayerStorage>(m_backendStorage, m_cacheStorage);
+            std::unique_lock lock(m_listMutex);
+            newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
+            if (withMutable)
+            {
+                newMultiLayerStorage->m_mutableStorage = m_mutableStorage;
+            }
 
             return newMultiLayerStorage;
         }
         else
         {
             auto newMultiLayerStorage = std::make_unique<MultiLayerStorage>(m_backendStorage);
+            std::unique_lock lock(m_listMutex);
+            newMultiLayerStorage->m_immutableStorages = m_immutableStorages;
+            if (withMutable)
+            {
+                newMultiLayerStorage->m_mutableStorage = m_mutableStorage;
+            }
 
             return newMultiLayerStorage;
         }
@@ -257,13 +281,18 @@ public:
     template <class... Args>
     void newMutable(Args... args)
     {
-        std::unique_lock lock(m_immutablesMutex);
+        std::unique_lock lock(m_listMutex);
         if (m_mutableStorage)
         {
             BOOST_THROW_EXCEPTION(DuplicateMutableStorageError{});
         }
 
-        m_mutableStorage = std::make_unique<MutableStorageType>(args...);
+        m_mutableStorage = std::make_shared<MutableStorageType>(args...);
+    }
+
+    void setMutable(std::shared_ptr<MutableStorageType> mutableStorage)
+    {
+        m_mutableStorage = std::move(mutableStorage);
     }
 
     void dropMutable() { m_mutableStorage.reset(); }
@@ -274,14 +303,14 @@ public:
         {
             BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
         }
-        std::unique_lock lock(m_immutablesMutex);
+        std::unique_lock lock(m_listMutex);
         m_immutableStorages.push_front(std::move(m_mutableStorage));
         m_mutableStorage.reset();
     }
 
     void popImmutableFront()
     {
-        std::unique_lock lock(m_immutablesMutex);
+        std::unique_lock lock(m_listMutex);
         if (m_immutableStorages.empty())
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
@@ -292,7 +321,7 @@ public:
     task::Task<void> mergeAndPopImmutableBack()
     {
         std::unique_lock mergeLock(m_mergeMutex);
-        std::unique_lock immutablesLock(m_immutablesMutex);
+        std::unique_lock immutablesLock(m_listMutex);
         if (m_immutableStorages.empty())
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
@@ -303,14 +332,23 @@ public:
         auto it = co_await immutableStorage->seek(storage2::STORAGE_BEGIN);
         while (co_await it.next())
         {
+            auto&& key = co_await it.key();
             if (co_await it.hasValue())
             {
-                co_await storage2::writeOne(
-                    m_backendStorage, co_await it.key(), co_await it.value());
+                auto&& value = co_await it.value();
+                if constexpr (withCacheStorage)
+                {
+                    co_await storage2::writeOne(m_cacheStorage, key, value);
+                }
+                co_await storage2::writeOne(m_backendStorage, key, value);
             }
             else
             {
-                co_await storage2::removeOne(m_backendStorage, co_await it.key());
+                if constexpr (withCacheStorage)
+                {
+                    co_await storage2::removeOne(m_cacheStorage, key);
+                }
+                co_await storage2::removeOne(m_backendStorage, key);
             }
         }
 

@@ -107,7 +107,7 @@ public:
         protocol::IsBlockHeader auto const& blockHeader,
         protocol::IsTransaction auto const& transaction)
     {
-        auto storage = m_multiLayerStorage.fork();
+        auto storage = m_multiLayerStorage.fork(false);
         storage->newMutable();
 
         Executor<MultiLayerStorage, ReceiptFactory> executor(

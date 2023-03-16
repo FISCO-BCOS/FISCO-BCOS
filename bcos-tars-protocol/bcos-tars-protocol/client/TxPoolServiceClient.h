@@ -39,7 +39,6 @@ public:
                 const bcostars::TransactionSubmitResult& result) override
             {
                 auto bcosResult = std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(
-                    std::move(m_cryptoSuite),
                     [inner = std::move(const_cast<bcostars::TransactionSubmitResult&>(
                          result))]() mutable { return &inner; });
                 m_submitResult = std::move(bcosResult);

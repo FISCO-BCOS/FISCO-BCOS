@@ -21,8 +21,7 @@ template <transaction_executor::StateStorage MultiLayerStorage,
 class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
 private:
-    constexpr static size_t DEFAULT_CHUNK_SIZE = 32;  // 32 transactions for one chunk
-
+    constexpr static size_t DEFAULT_CHUNK_SIZE = 32;          // 32 transactions for one chunk
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                  // Maybe auto adjust
     size_t m_maxToken = std::thread::hardware_concurrency();  // Maybe auto adjust
     using ChunkLocalStorage =
@@ -78,6 +77,20 @@ private:
         }
     };
 
+    task::Task<void> serialExecute(protocol::IsBlockHeader auto const& blockHeader,
+        int startContextID, auto& receiptFactory, auto& tableNamePool,
+        RANGES::range auto const& transactions, auto& receipts, auto& storage)
+    {
+        Executor<std::remove_cvref_t<decltype(storage)>,
+            std::remove_cvref_t<decltype(receiptFactory)>>
+            executor(storage, receiptFactory, tableNamePool);
+        for (auto const& transaction : transactions)
+        {
+            receipts.emplace_back(
+                co_await executor.execute(blockHeader, transaction, startContextID++));
+        }
+    }
+
     static void decreaseNumber(std::atomic_int64_t& number, int64_t target)
     {
         auto current = number.load();
@@ -94,26 +107,29 @@ public:
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
     {
+        auto localMultiLayerStorage = multiLayerStorage().fork(true);
+
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)
         {
             receipts.reserve(RANGES::size(transactions));
         }
 
-        auto chunks = transactions | RANGES::views::chunk(m_chunkSize);
-        std::vector<ChunkExecuteStatus<RANGES::range_value_t<decltype(chunks)>>> executedChunks(
-            RANGES::size(chunks));
+        auto transactionChunks = transactions | RANGES::views::chunk(m_chunkSize);
+        std::vector<ChunkExecuteStatus<RANGES::range_value_t<decltype(transactionChunks)>>>
+            executeChunks(RANGES::size(transactionChunks));
 
-        auto chunkIt = RANGES::begin(executedChunks);
-        while (chunkIt != RANGES::end(executedChunks))
+        auto chunkIt = RANGES::begin(executeChunks);
+        auto tokens = m_maxToken;
+        while (chunkIt != RANGES::end(executeChunks) && tokens > 1)
         {
-            auto offset = RANGES::distance(RANGES::begin(executedChunks), chunkIt);
-            auto currentChunkView = RANGES::subrange(chunkIt, RANGES::end(executedChunks));
+            auto offset = RANGES::distance(RANGES::begin(executeChunks), chunkIt);
+            auto currentChunkView = RANGES::subrange(chunkIt, RANGES::end(executeChunks));
             auto currentChunkIt = RANGES::begin(currentChunkView);
 
             std::atomic_int64_t lastChunk = RANGES::size(currentChunkView);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
-            tbb::parallel_pipeline(m_maxToken,
+            tbb::parallel_pipeline(tokens,
                 tbb::make_filter<void, std::optional<int64_t>>(tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control) {
                         int64_t index =
@@ -126,11 +142,13 @@ public:
                         if (currentChunkIt + 1 != RANGES::end(currentChunkView))
                         {
                             (currentChunkIt + 1)
-                                ->reset(chunks[index + offset + 1], multiLayerStorage());
+                                ->reset(
+                                    transactionChunks[index + offset + 1], *localMultiLayerStorage);
                         }
                         if (currentChunkIt == RANGES::begin(currentChunkView))
                         {
-                            currentChunkIt->reset(chunks[index + offset], multiLayerStorage());
+                            currentChunkIt->reset(
+                                transactionChunks[index + offset], *localMultiLayerStorage);
                         }
                         ++currentChunkIt;
                         return std::make_optional(index);
@@ -147,59 +165,62 @@ public:
                                 currentChunkView[index].finished = task::syncWait(
                                     currentChunkView[index].execute(blockHeader, startContextID,
                                         receiptFactory(), tableNamePool(), index, lastChunk));
+
                                 if (currentChunkView[index].finished)
                                 {
                                     PARALLEL_SCHEDULER_LOG(DEBUG)
                                         << "Chunk " << offset + index << " execute finished";
+                                    bool expected = false;
+                                    // Detected RAW
+                                    if (index < lastChunk)
+                                    {
+                                        if (index > 0 && currentChunkView[index - 1].finished &&
+                                            currentChunkView[index - 1]
+                                                .compareRight.compare_exchange_strong(
+                                                    expected, true))
+                                        {
+                                            currentChunkView[index].compareLeft = true;
+                                            if (currentChunkView[index - 1]
+                                                    .readWriteSetStorage->hasRAWIntersection(
+                                                        *(currentChunkView[index]
+                                                                .readWriteSetStorage)))
+                                            {
+                                                PARALLEL_SCHEDULER_LOG(DEBUG)
+                                                    << "Detected left RAW intersection, abort: "
+                                                    << offset + index;
+                                                decreaseNumber(lastChunk, index);
+                                            }
+                                        }
+                                    }
+
+                                    if (index < lastChunk)
+                                    {
+                                        expected = false;
+                                        if (index < (int64_t)(RANGES::size(currentChunkView) - 1) &&
+                                            currentChunkView[index + 1].finished &&
+                                            currentChunkView[index]
+                                                .compareRight.compare_exchange_strong(
+                                                    expected, true))
+                                        {
+                                            currentChunkView[index + 1].compareLeft = true;
+                                            if (currentChunkView[index]
+                                                    .readWriteSetStorage->hasRAWIntersection(
+                                                        *(currentChunkView[index + 1]
+                                                                .readWriteSetStorage)))
+                                            {
+                                                PARALLEL_SCHEDULER_LOG(DEBUG)
+                                                    << "Detected right RAW intersection, abort: "
+                                                    << offset + index + 1;
+                                                decreaseNumber(lastChunk, index + 1);
+                                            }
+                                        }
+                                    }
                                 }
                                 else
                                 {
                                     PARALLEL_SCHEDULER_LOG(DEBUG)
                                         << "Chunk " << offset + index << " execute aborted";
-                                }
-
-                                bool expected = false;
-                                // Detected RAW
-                                if (index < lastChunk)
-                                {
-                                    if (index > 0 &&
-                                        (int64_t)currentChunkView[index - 1].finished &&
-                                        currentChunkView[index - 1]
-                                            .compareRight.compare_exchange_strong(expected, true))
-                                    {
-                                        currentChunkView[index].compareLeft = true;
-                                        if (currentChunkView[index - 1]
-                                                .readWriteSetStorage->hasRAWIntersection(
-                                                    *(currentChunkView[index].readWriteSetStorage)))
-                                        {
-                                            PARALLEL_SCHEDULER_LOG(DEBUG)
-                                                << "Detected RAW intersection, abort: "
-                                                << offset + index;
-                                            decreaseNumber(lastChunk, index);
-                                        }
-                                    }
-                                }
-
-                                if (index < lastChunk)
-                                {
-                                    expected = false;
-                                    if (index < (int64_t)(RANGES::size(currentChunkView) - 1) &&
-                                        currentChunkView[index + 1].finished &&
-                                        currentChunkView[index]
-                                            .compareRight.compare_exchange_strong(expected, true))
-                                    {
-                                        currentChunkView[index + 1].compareLeft = true;
-                                        if (currentChunkView[index]
-                                                .readWriteSetStorage->hasRAWIntersection(
-                                                    *(currentChunkView[index + 1]
-                                                            .readWriteSetStorage)))
-                                        {
-                                            PARALLEL_SCHEDULER_LOG(DEBUG)
-                                                << "Detected RAW intersection, abort: "
-                                                << offset + index + 1;
-                                            decreaseNumber(lastChunk, index + 1);
-                                        }
-                                    }
+                                    return std::optional<int64_t>{};
                                 }
 
                                 return std::make_optional<int64_t>(index);
@@ -213,8 +234,7 @@ public:
                                 return;
                             }
 
-                            auto index = *input;
-                            auto& chunkReceipts = currentChunkView[index].receipts;
+                            auto& chunkReceipts = currentChunkView[*input].receipts;
                             PARALLEL_SCHEDULER_LOG(DEBUG)
                                 << "Inserting receipts... " << chunkReceipts.size();
                             RANGES::move(chunkReceipts, std::back_inserter(receipts));
@@ -225,8 +245,20 @@ public:
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Mergeing storage... " << RANGES::size(mergeRange);
             for (auto& chunk : mergeRange)
             {
-                multiLayerStorage().mutableStorage().merge(chunk.localStorage->mutableStorage());
+                localMultiLayerStorage->mutableStorage().merge(
+                    chunk.localStorage->mutableStorage());
             }
+
+            tokens /= 2;
+        }
+
+        // Still have transactions, execute it serially
+        if (chunkIt != RANGES::end(executeChunks))
+        {
+            auto startOffset =
+                RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize;
+            co_await serialExecute(blockHeader, startOffset, receiptFactory(), tableNamePool(),
+                transactions | RANGES::views::drop(startOffset), receipts, *localMultiLayerStorage);
         }
 
         co_return receipts;

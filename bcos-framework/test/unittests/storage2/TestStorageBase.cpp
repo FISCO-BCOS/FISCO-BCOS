@@ -177,7 +177,7 @@ BOOST_AUTO_TEST_CASE(insert)
         auto oneResult =
             co_await readOne(mock, std::tuple<std::string_view, std::string_view>("table", "key2"));
         BOOST_REQUIRE(oneResult);
-        BOOST_CHECK_EQUAL(oneResult->get().get(), "fine!");
+        BOOST_CHECK_EQUAL(oneResult->get(), "fine!");
     }());
 }
 

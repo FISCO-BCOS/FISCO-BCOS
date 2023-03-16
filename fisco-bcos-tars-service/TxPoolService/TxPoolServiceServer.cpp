@@ -122,7 +122,6 @@ bcostars::Error TxPoolServiceServer::asyncNotifyBlockResult(tars::Int64 blockNum
     for (auto tarsResult : result)
     {
         auto bcosResult = std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(
-            m_txpoolInitializer->cryptoSuite(),
             [inner = std::move(const_cast<bcostars::TransactionSubmitResult&>(
                  tarsResult))]() mutable { return &inner; });
         bcosResultList->push_back(bcosResult);

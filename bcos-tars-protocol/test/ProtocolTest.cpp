@@ -478,7 +478,7 @@ BOOST_AUTO_TEST_CASE(emptyBlockHeader)
 
 BOOST_AUTO_TEST_CASE(submitResult)
 {
-    protocol::TransactionSubmitResultImpl submitResult(nullptr);
+    protocol::TransactionSubmitResultImpl submitResult;
     submitResult.setNonce(bcos::protocol::NonceType("1234567"));
 
     BOOST_CHECK_EQUAL(submitResult.nonce(), "1234567");

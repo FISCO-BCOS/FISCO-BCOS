@@ -11,7 +11,6 @@
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
-#include <range/v3/view/transform.hpp>
 
 namespace bcos::ledger
 {
@@ -137,9 +136,10 @@ private:
             co_return;
         }
 
-        bcos::storage::Entry number2TransactionHashesEntry;
         std::vector<bcos::byte> number2TransactionHashesBuffer;
-        bcos::concepts::serialize::encode(transactionsBlock, number2TransactionHashesBuffer);
+        bcos::concepts::serialize::encode(*transactionsBlock, number2TransactionHashesBuffer);
+
+        bcos::storage::Entry number2TransactionHashesEntry;
         number2TransactionHashesEntry.set(std::move(number2TransactionHashesBuffer));
         co_await storage2::writeOne(m_storage,
             transaction_executor::StateKey{
@@ -169,19 +169,18 @@ private:
             co_return;
         }
 
-        auto hashes = RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsSize()) |
-                      RANGES::views::transform([&block](uint64_t index) {
-                          auto metaData = block.transactionMetaData(index);
-                          return metaData->hash();
-                      });
-        auto buffers = RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsSize()) |
-                       RANGES::views::transform([&block](uint64_t index) {
-                           auto transaction = block.transaction(index);
-                           std::vector<bcos::byte> buffer;
-                           bcos::concepts::serialize::encode(*transaction, buffer);
+        auto availableTransactions =
+            RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsSize()) |
+            RANGES::views::transform([&block](uint64_t index) { return block.transaction(index); });
 
-                           return buffer;
-                       });
+        auto hashes = availableTransactions | RANGES::views::transform([](auto& transaction) {
+            return transaction->hash();
+        });
+        auto buffers = availableTransactions | RANGES::views::transform([](auto& transaction) {
+            std::vector<bcos::byte> buffer;
+            bcos::concepts::serialize::encode(*transaction, buffer);
+            return buffer;
+        });
         co_await setTransactions<true>(hashes, buffers);
     }
 

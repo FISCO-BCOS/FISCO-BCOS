@@ -26,16 +26,14 @@
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 
-namespace bcos
-{
-namespace initializer
+namespace bcos::initializer
 {
 class ProtocolInitializer
 {
 public:
     using Ptr = std::shared_ptr<ProtocolInitializer>;
     ProtocolInitializer();
-    virtual ~ProtocolInitializer() {}
+    virtual ~ProtocolInitializer() = default;
 
     virtual void init(bcos::tool::NodeConfig::Ptr _nodeConfig);
     void loadKeyPair(std::string const& _privateKeyPath);
@@ -73,5 +71,4 @@ private:
     int m_keyIndex;
     std::string m_password;
 };
-}  // namespace initializer
-}  // namespace bcos
+}  // namespace bcos::initializer
