@@ -45,11 +45,11 @@ private:
         m_transactionNotifier;
     crypto::Hash const& m_hashImpl;
 
-    tbb::task_group m_asyncNotifyGroup;
+    tbb::task_group m_notifyGroup;
     int64_t m_lastExecutedBlockNumber = -1;
-    std::mutex m_executeMutex;
+    std::mutex m_lastExecutedBlockNumberMutex;
     int64_t m_lastcommittedBlockNumber = -1;
-    std::mutex m_commitMutex;
+    std::mutex m_m_lastcommittedBlockNumberMutex;
 
     struct ExecuteResult
     {
@@ -59,10 +59,23 @@ private:
     std::list<ExecuteResult> m_results;
     std::mutex m_resultsMutex;
 
-    task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactionsByHash(
-        RANGES::input_range auto const& hashes)
+    task::AwaitableValue<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
+        protocol::IsBlock auto const& block)
     {
-        auto transactions = m_txpool.getTransactions(hashes);
+        if (block.transactionsSize() > 0)
+        {
+            return {RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsSize()) |
+                    RANGES::views::transform(
+                        [&block](uint64_t index) { return block.transaction(index); }) |
+                    RANGES::to<std::vector<protocol::Transaction::ConstPtr>>()};
+        }
+
+        return {m_txpool.getTransactions(
+                    RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
+                    RANGES::views::transform(
+                        [&block](uint64_t index) { return block.transactionHash(index); })) |
+                RANGES::to<std::vector<protocol::Transaction::ConstPtr>>()};
+
         // Lost transactions out of txpool
 
         // auto missingHashes =
@@ -87,8 +100,9 @@ private:
         //             transactions[index] = std::move(transaction);
         //         });
         // }
-        co_return transactions;
     }
+
+    void writeTransactions() {}
 
 public:
     BaselineScheduler(SchedulerImpl& schedulerImpl, BlockHeaderFactory& blockFactory,
@@ -106,7 +120,7 @@ public:
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;
     BaselineScheduler& operator=(BaselineScheduler&&) noexcept = default;
-    ~BaselineScheduler() noexcept override { m_asyncNotifyGroup.wait(); }
+    ~BaselineScheduler() noexcept override { m_notifyGroup.wait(); }
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>
@@ -150,11 +164,7 @@ public:
 
                 self->m_schedulerImpl.start();
 
-                auto transactions =
-                    RANGES::iota_view<uint64_t, uint64_t>(0LU, block->transactionsSize()) |
-                    RANGES::views::transform(
-                        [&block](uint64_t index) { return block->transaction(index); }) |
-                    RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
+                auto transactions = co_await self->getTransactions(*block);
                 auto receipts = co_await self->m_schedulerImpl.execute(
                     *blockHeader, transactions | RANGES::views::transform([
                     ](protocol::Transaction::ConstPtr const& transactionPtr) -> auto& {
@@ -180,7 +190,6 @@ public:
                 auto newBlockHeader = self->m_blockHeaderFactory.populateBlockHeader(blockHeader);
                 newBlockHeader->setStateRoot(stateRoot);
                 newBlockHeader->setGasUsed(totalGas);
-
                 newBlockHeader->setTxsRoot(block->calculateTransactionRoot(self->m_hashImpl));
                 newBlockHeader->setReceiptsRoot(block->calculateReceiptRoot(self->m_hashImpl));
                 newBlockHeader->calculateHash(self->m_hashImpl);
@@ -274,6 +283,7 @@ public:
 
                 if (blockHeader->number() != 0)
                 {
+                    result.m_block->setBlockHeader(blockHeader);
                     // Write block and receipt
                     co_await self->m_ledger.template setBlock<concepts::ledger::HEADER,
                         concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
@@ -292,9 +302,8 @@ public:
                 BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << blockHeader->number();
                 commitLock.unlock();
 
-                self->m_asyncNotifyGroup.run([self = self, result = std::move(result)]() {
+                self->m_notifyGroup.run([self = self, result = std::move(result)]() {
                     auto blockHeader = result.m_block->blockHeaderConst();
-                    // Notify the result
                     auto submitResults =
                         RANGES::iota_view<uint64_t, uint64_t>(0L, result.m_block->receiptsSize()) |
                         RANGES::views::transform(
@@ -398,23 +407,7 @@ public:
         [[maybe_unused]] bool verify,
         [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
     {
-        task::syncWait([](decltype(this) self, decltype(block) block,
-                           decltype(callback) callback) -> task::Task<void> {
-            if (block->transactionsSize() == 0)
-            {
-                auto transactions = co_await self->getTransactionsByHash(
-                    RANGES::iota_view<uint64_t, uint64_t>(0LU, block->transactionsMetaDataSize()) |
-                    RANGES::views::transform(
-                        [&block](uint64_t index) { return block->transactionHash(index); }));
-
-                for (auto&& transaction : transactions)
-                {
-                    block->appendTransaction(
-                        std::const_pointer_cast<protocol::Transaction>(transaction));
-                }
-            }
-            callback(nullptr);
-        }(this, std::move(block), std::move(callback)));
+        callback(nullptr);
     }
 
     void stop() override{};

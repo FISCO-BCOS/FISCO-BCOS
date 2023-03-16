@@ -169,17 +169,9 @@ private:
             co_return;
         }
 
-        std::vector<protocol::Transaction::ConstPtr> availableTransactions;
-        for (auto&& transaction :
+        auto availableTransactions =
             RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsSize()) |
-                RANGES::views::transform(
-                    [&block](uint64_t index) { return block.transaction(index); }))
-        {
-            if (!transaction->storeToBackend())
-            {
-                availableTransactions.emplace_back(transaction);
-            }
-        }
+            RANGES::views::transform([&block](uint64_t index) { return block.transaction(index); });
 
         auto hashes = availableTransactions | RANGES::views::transform([](auto& transaction) {
             return transaction->hash();
