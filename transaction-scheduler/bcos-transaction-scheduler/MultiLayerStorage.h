@@ -15,6 +15,7 @@ namespace bcos::transaction_scheduler
 
 // clang-format off
 struct DuplicateMutableStorageError : public bcos::Error {};
+struct DuplicateMutableViewError: public bcos::Error {};
 struct NonExistsKeyIteratorError: public bcos::Error {};
 struct NotExistsMutableStorageError : public bcos::Error {};
 struct NotExistsImmutableStorageError : public bcos::Error {};
@@ -34,15 +35,16 @@ private:
     static_assert(std::same_as<typename MutableStorageType::Value, typename BackendStorage::Value>);
 
     std::shared_ptr<MutableStorageType> m_mutableStorage;
-    std::deque<std::shared_ptr<MutableStorageType>> m_immutableStorages;  // Ledger read data from
-                                                                          // here
+    std::deque<std::shared_ptr<MutableStorageType>> m_immutableStorages;
+    std::mutex m_listMutex;
+    std::mutex m_mergeMutex;
+
     BackendStorage& m_backendStorage;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
         std::add_lvalue_reference_t<CachedStorage>, std::monostate>
         m_cacheStorage;
 
-    std::mutex m_listMutex;
-    std::mutex m_mergeMutex;
+    std::mutex m_mutableMutex;
 
 public:
     using MutableStorage = MutableStorageType;
@@ -58,7 +60,9 @@ public:
         [[no_unique_address]] std::conditional_t<withCacheStorage,
             std::add_lvalue_reference_t<CachedStorage>, std::monostate>
             m_cacheStorage;
+        std::unique_lock<std::mutex> m_mutableLock;
 
+    public:
         class ReadIterator
         {
             friend class View;
@@ -121,7 +125,6 @@ public:
             co_return missings;
         }
 
-    public:
         using Key = KeyType;
         using Value = ValueType;
 
@@ -293,9 +296,10 @@ public:
       : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
     {}
     MultiLayerStorage(const MultiLayerStorage&) = delete;
-    MultiLayerStorage(MultiLayerStorage&&) = delete;
+    MultiLayerStorage(MultiLayerStorage&&) noexcept = delete;
     MultiLayerStorage& operator=(const MultiLayerStorage&) = delete;
-    MultiLayerStorage& operator=(MultiLayerStorage&&) = delete;
+    MultiLayerStorage& operator=(MultiLayerStorage&&) noexcept = delete;
+    ~MultiLayerStorage() noexcept = default;
 
     View fork(bool withMutable)
     {
@@ -303,24 +307,32 @@ public:
         if constexpr (withCacheStorage)
         {
             View view(m_backendStorage, m_cacheStorage);
-
-            view.m_immutableStorages = m_immutableStorages;
             if (withMutable)
             {
+                view.m_mutableLock = {m_mutableMutex, std::try_to_lock};
+                if (!view.m_mutableLock.owns_lock())
+                {
+                    BOOST_THROW_EXCEPTION(DuplicateMutableViewError{});
+                }
                 view.m_mutableStorage = m_mutableStorage;
             }
+            view.m_immutableStorages = m_immutableStorages;
 
             return view;
         }
         else
         {
-            auto newMultiLayerStorage = std::make_unique<MultiLayerStorage>(m_backendStorage);
             View view(m_backendStorage);
-            view.m_immutableStorages = m_immutableStorages;
             if (withMutable)
             {
+                view.m_mutableLock = {m_mutableMutex, std::try_to_lock};
+                if (!view.m_mutableLock.owns_lock())
+                {
+                    BOOST_THROW_EXCEPTION(DuplicateMutableViewError{});
+                }
                 view.m_mutableStorage = m_mutableStorage;
             }
+            view.m_immutableStorages = m_immutableStorages;
 
             return view;
         }
