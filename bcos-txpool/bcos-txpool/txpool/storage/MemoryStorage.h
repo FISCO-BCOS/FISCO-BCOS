@@ -149,16 +149,11 @@ protected:
 
     using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
         std::hash<bcos::crypto::HashType>>;
+    TxsMap m_txsTable, m_invalidTxs;
 
-    TxsMap m_txsTable;
+    using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;
+    HashSet m_missedTxs;
 
-    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
-        m_invalidTxs;
-    tbb::concurrent_unordered_set<bcos::protocol::NonceType, std::hash<bcos::protocol::NonceType>>
-        m_invalidNonces;
-    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
-        m_missedTxs;
-    mutable SharedMutex x_missedTxs;
     std::atomic<size_t> m_sealedTxsSize = {0};
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};

@@ -26,6 +26,10 @@
 namespace bcos
 {
 
+class EmptyType
+{
+};
+
 template <class KeyType, class ValueType>
 class Bucket
 {
@@ -93,7 +97,7 @@ public:
     bool insert(typename WriteAccessor::Ptr& accessor, std::pair<KeyType, ValueType> kv)
     {
         accessor = std::make_shared<WriteAccessor>(m_mutex);  // acquire lock here
-        auto [it, inserted] = m_values.emplace(std::move(kv));
+        auto [it, inserted] = m_values.try_emplace(kv.first, kv.second);
         accessor->setValue(it);
         return inserted;
     }
@@ -161,6 +165,8 @@ public:
             m_buckets.push_back(std::make_shared<Bucket<KeyType, ValueType>>());
         }
     }
+
+    virtual ~BucketMap(){};
 
     // return true if found
     template <class AccessorType>
@@ -239,7 +245,7 @@ public:
         }
     }
 
-private:
+protected:
     size_t getBucketIndex(const KeyType& key)
     {
         auto hash = BucketHasher{}(key);
@@ -247,6 +253,22 @@ private:
     }
 
     std::vector<typename Bucket<KeyType, ValueType>::Ptr> m_buckets;
+};
+
+template <class KeyType, class BucketHasher = std::hash<KeyType>>
+class BucketSet : public BucketMap<KeyType, EmptyType, BucketHasher>
+{
+public:
+    BucketSet(size_t bucketSize) : BucketMap<KeyType, EmptyType, BucketHasher>(bucketSize){};
+    ~BucketSet() override = default;
+
+
+    bool insert(typename BucketMap<KeyType, EmptyType, BucketHasher>::WriteAccessor::Ptr& accessor,
+        KeyType key)
+    {
+        return BucketMap<KeyType, EmptyType, BucketHasher>::insert(
+            accessor, {std::move(key), EmptyType()});
+    }
 };
 
 }  // namespace bcos

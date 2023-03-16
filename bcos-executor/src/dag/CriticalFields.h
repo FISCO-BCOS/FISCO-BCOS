@@ -102,7 +102,7 @@ public:
                 std::set<ID> pIds;
                 for (auto const& c : *criticals)
                 {
-                    auto [it, success] = dependencies.emplace(c, id);
+                    auto [it, success] = dependencies.try_emplace(c, id);
                     if (!success)
                     {
                         auto pId = it->second;
