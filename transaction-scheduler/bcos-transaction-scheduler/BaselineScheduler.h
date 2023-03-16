@@ -47,9 +47,9 @@ private:
 
     tbb::task_group m_notifyGroup;
     int64_t m_lastExecutedBlockNumber = -1;
-    std::mutex m_lastExecutedBlockNumberMutex;
+    std::mutex m_executeMutex;
     int64_t m_lastcommittedBlockNumber = -1;
-    std::mutex m_m_lastcommittedBlockNumberMutex;
+    std::mutex m_commitMutex;
 
     struct ExecuteResult
     {
@@ -76,30 +76,7 @@ private:
                         [&block](uint64_t index) { return block.transactionHash(index); })) |
                 RANGES::to<std::vector<protocol::Transaction::ConstPtr>>()};
 
-        // Lost transactions out of txpool
-
-        // auto missingHashes =
-        //     RANGES::zip_view(transactions, RANGES::iota_view<uint64_t>(0)) |
-        //     RANGES::views::filter([&hashes](auto const& item) {
-        //         auto&& [ptr, index] = item;
-        //         if (ptr == nullptr)
-        //         {
-        //             return std::tuple<bcos::h256 const&, uint64_t>(hashes[index], index);
-        //         }
-        //     }) |
-        //     RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
-
-        // if (!RANGES::empty(missingHashes))
-        // {
-        //     auto transactionsFromLedger =
-        //         m_ledger.getTransactions(missingHashes | RANGES::views::keys);
-
-        //     RANGES::zip_view(transactionsFromLedger, missingHashes | RANGES::views::values) |
-        //         RANGES::views::for_each([&transactions](auto const& item) {
-        //             auto&& [transaction, index] = item;
-        //             transactions[index] = std::move(transaction);
-        //         });
-        // }
+        // TODO: get lost transaction from ledger
     }
 
     void writeTransactions() {}
