@@ -78,7 +78,7 @@ public:
     virtual Error::Ptr deleteRows(
         std::string_view, const std::variant<const gsl::span<std::string_view const>,
                               const gsl::span<std::string const>>&) noexcept override;
-
+    void stop() override;
 private:
     Error::Ptr checkStatus(rocksdb::Status const& status);
     std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;

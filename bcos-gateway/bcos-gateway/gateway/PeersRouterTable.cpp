@@ -54,7 +54,7 @@ std::set<P2pID> PeersRouterTable::queryP2pIDs(
         return std::set<P2pID>();
     }
     auto it2 = it->second.find(_nodeID);
-    if(it2 == it->second.end())
+    if (it2 == it->second.end())
     {
         return std::set<P2pID>();
     }
@@ -230,10 +230,11 @@ std::set<P2pID> PeersRouterTable::getAllPeers() const
 
 GatewayStatus::Ptr PeersRouterTable::gatewayInfo(std::string const& _uuid)
 {
-    ReadGuard l(x_gatewayInfos);
-    if (m_gatewayInfos.count(_uuid))
+    ReadGuard lock(x_gatewayInfos);
+    auto it = m_gatewayInfos.find(_uuid);
+    if (it != m_gatewayInfos.end())
     {
-        return m_gatewayInfos.at(_uuid);
+        return it->second;
     }
     return nullptr;
 }
@@ -268,6 +269,7 @@ void PeersRouterTable::asyncBroadcastMsg(
     uint16_t _type, std::string const& _groupID, uint16_t _moduleID, P2PMessage::Ptr _msg)
 {
     std::vector<std::string> selectedPeers;
+    selectedPeers.reserve(m_gatewayInfos.size());
     {
         ReadGuard l(x_gatewayInfos);
         for (auto const& it : m_gatewayInfos)
@@ -280,7 +282,7 @@ void PeersRouterTable::asyncBroadcastMsg(
             std::string p2pNodeID;
             if (it.second->randomChooseP2PNode(p2pNodeID, _type, _groupID))
             {
-                selectedPeers.emplace_back(p2pNodeID);
+                selectedPeers.emplace_back(std::move(p2pNodeID));
             }
         }
     }
