@@ -31,7 +31,7 @@ class EmptyType
 };
 
 template <class KeyType, class ValueType>
-class Bucket
+class Bucket : public std::enable_shared_from_this<Bucket<KeyType, ValueType>>
 {
 public:
     using Ptr = std::shared_ptr<Bucket>;
@@ -48,13 +48,16 @@ public:
     public:
         using Ptr = std::shared_ptr<WriteAccessor>;
 
-        WriteAccessor(SharedMutex& mutex) : m_writeGuard(mutex) {}
+        WriteAccessor(Bucket::Ptr bucket)
+          : m_bucket(std::move(bucket)), m_writeGuard(m_bucket->getMutex())
+        {}
         void setValue(typename MapType::iterator it) { m_it = it; };
 
         const KeyType& key() { return m_it->first; }
         ValueType& value() { return m_it->second; }
 
     private:
+        typename Bucket::Ptr m_bucket;
         typename MapType::iterator m_it;
         WriteGuard m_writeGuard;
     };
@@ -64,13 +67,17 @@ public:
     public:
         using Ptr = std::shared_ptr<ReadAccessor>;
 
-        ReadAccessor(SharedMutex& mutex) : m_readGuard(mutex) {}
+        ReadAccessor(Bucket::Ptr bucket)
+          : m_bucket(std::move(bucket)), m_readGuard(m_bucket->getMutex())
+        {}
         void setValue(typename MapType::iterator it) { m_it = it; };
 
         const KeyType& key() { return m_it->first; }
         const ValueType& value() { return m_it->second; }
 
+
     private:
+        typename Bucket::Ptr m_bucket;
         typename MapType::iterator m_it;
         ReadGuard m_readGuard;
     };
@@ -79,7 +86,7 @@ public:
     template <class AccessorType>
     bool find(typename AccessorType::Ptr& accessor, const KeyType& key)
     {
-        accessor = std::make_shared<AccessorType>(m_mutex);  // acquire lock here
+        accessor = std::make_shared<AccessorType>(this->shared_from_this());  // acquire lock here
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
@@ -96,7 +103,7 @@ public:
     // return true if insert happen
     bool insert(typename WriteAccessor::Ptr& accessor, std::pair<KeyType, ValueType> kv)
     {
-        accessor = std::make_shared<WriteAccessor>(m_mutex);  // acquire lock here
+        accessor = std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
         auto [it, inserted] = m_values.try_emplace(kv.first, kv.second);
         accessor->setValue(it);
         return inserted;
@@ -126,7 +133,7 @@ public:
     bool forEach(std::function<bool(typename AccessorType::Ptr)> handler)
     {
         typename AccessorType::Ptr accessor =
-            std::make_shared<AccessorType>(m_mutex);  // acquire lock here
+            std::make_shared<AccessorType>(this->shared_from_this());  // acquire lock here
         for (auto it = m_values.begin(); it != m_values.end(); it++)
         {
             accessor->setValue(it);
@@ -140,9 +147,11 @@ public:
 
     void clear(typename WriteAccessor::Ptr& accessor)
     {
-        accessor = std::make_shared<WriteAccessor>(m_mutex);  // acquire lock here
+        accessor = std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
         m_values.clear();
     }
+
+    SharedMutex& getMutex() { return m_mutex; }
 
 private:
     MapType m_values;
@@ -156,7 +165,6 @@ public:
     using Ptr = std::shared_ptr<BucketMap>;
     using WriteAccessor = typename Bucket<KeyType, ValueType>::WriteAccessor;
     using ReadAccessor = typename Bucket<KeyType, ValueType>::ReadAccessor;
-    constexpr static unsigned DEFAULT_BUCKETS_COUNT = 61;
 
     BucketMap(size_t bucketSize)
     {
@@ -212,8 +220,11 @@ public:
     {
         for (size_t i = 0; i < m_buckets.size(); i++)
         {
+            m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+            /*
             typename WriteAccessor::Ptr accessor;
             m_buckets[i]->clear(accessor);
+             */
         }
     }
     template <class AccessorType>  // handler return isContinue
