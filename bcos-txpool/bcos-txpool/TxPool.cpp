@@ -616,7 +616,7 @@ void bcos::txpool::TxPool::clearAllTxs()
 {
     m_txpoolStorage->clear();
 }
-auto& bcos::txpool::TxPool::transactionSync()
+bcos::sync::TransactionSyncInterface::Ptr& bcos::txpool::TxPool::transactionSync()
 {
     return m_transactionSync;
 }

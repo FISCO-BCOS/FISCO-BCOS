@@ -109,7 +109,7 @@ public:
     TxPoolConfig::Ptr txpoolConfig();
     TxPoolStorageInterface::Ptr txpoolStorage();
 
-    auto& transactionSync();
+    bcos::sync::TransactionSyncInterface::Ptr& transactionSync();
     void setTransactionSync(bcos::sync::TransactionSyncInterface::Ptr _transactionSync);
 
     virtual void init();
