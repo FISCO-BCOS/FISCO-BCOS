@@ -105,6 +105,14 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             add_compile_options(-fcoroutines)
         endif()
 
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0)
+            add_compile_options(-Wno-error=stringop-overread)
+            add_compile_options(-Wno-subobject-linkage)
+            add_compile_options(-Wno-maybe-uninitialized)
+            add_compile_options(-Wno-error=array-bounds)
+            add_compile_options(-Wno-error=aggressive-loop-optimizations)
+        endif()
+
         add_compile_options(-fPIC)
         add_compile_options(-Wno-error=restrict)
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
