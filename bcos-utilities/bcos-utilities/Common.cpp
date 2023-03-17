@@ -86,7 +86,7 @@ void errorExit(std::stringstream& _exitInfo, Exception const& _exception)
     BOOST_THROW_EXCEPTION(_exception << errinfo_comment(_exitInfo.str()));
 }
 
-inline s256 u2s(u256 _u)
+s256 u2s(u256 _u)
 {
     static const bigint c_end = bigint(1) << 256;
     /// get the +/- symbols
@@ -95,7 +95,7 @@ inline s256 u2s(u256 _u)
     else
         return s256(_u);
 }
-inline u256 s2u(s256 _u)
+u256 s2u(s256 _u)
 {
     static const bigint c_end = bigint(1) << 256;
     if (_u >= 0)
@@ -103,7 +103,7 @@ inline u256 s2u(s256 _u)
     else
         return u256(c_end + _u);
 }
-inline bool isalNumStr(std::string const& _stringData)
+bool isalNumStr(std::string const& _stringData)
 {
     for (auto ch : _stringData)
     {
@@ -115,7 +115,7 @@ inline bool isalNumStr(std::string const& _stringData)
     }
     return true;
 }
-inline double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
+double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
 {
     if (_intervalMS > 0)
     {
@@ -124,7 +124,7 @@ inline double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
     }
     return 0;
 }
-inline uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
+uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
 {
     if (_intervalMS > 0)
     {

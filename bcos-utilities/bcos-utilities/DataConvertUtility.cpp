@@ -93,31 +93,31 @@ std::string bcos::toString(string32 const& _s)
         ret.push_back(_s[i]);
     return ret;
 }
-inline std::string bcos::asString(bytes const& _b)
+std::string bcos::asString(bytes const& _b)
 {
     return std::string((char const*)_b.data(), (char const*)(_b.data() + _b.size()));
 }
-inline std::string bcos::asString(bytesConstRef _b)
+std::string bcos::asString(bytesConstRef _b)
 {
     return std::string((char const*)_b.data(), (char const*)(_b.data() + _b.size()));
 }
-inline bcos::bytes bcos::asBytes(std::string const& _b)
+bcos::bytes bcos::asBytes(std::string const& _b)
 {
     return bytes((byte const*)_b.data(), (byte const*)(_b.data() + _b.size()));
 }
-inline bcos::bytes bcos::toBigEndian(u256 _val)
+bcos::bytes bcos::toBigEndian(u256 _val)
 {
     bytes ret(32);
     toBigEndian(_val, ret);
     return ret;
 }
-inline bcos::bytes bcos::toBigEndian(u160 _val)
+bcos::bytes bcos::toBigEndian(u160 _val)
 {
     bytes ret(20);
     toBigEndian(_val, ret);
     return ret;
 }
-inline bcos::bytes bcos::toCompactBigEndian(byte _val, unsigned _min)
+bcos::bytes bcos::toCompactBigEndian(byte _val, unsigned _min)
 {
     return (_min || _val) ? bytes{_val} : bytes{};
 }

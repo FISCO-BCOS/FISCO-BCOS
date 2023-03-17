@@ -160,14 +160,14 @@ bool isHexString(std::string const& _string);
 
 /// Converts byte array to a string containing the same (binary) data. Unless
 /// the byte array happens to contain ASCII data, this won't be printable.
-inline std::string asString(bytes const& _b);
+std::string asString(bytes const& _b);
 
 /// Converts byte array ref to a string containing the same (binary) data. Unless
 /// the byte array happens to contain ASCII data, this won't be printable.
-inline std::string asString(bytesConstRef _b);
+std::string asString(bytesConstRef _b);
 
 /// Converts a string to a byte array containing the string's (byte) data.
-inline bytes asBytes(std::string const& _b);
+bytes asBytes(std::string const& _b);
 
 // Big-endian to/from host endian conversion functions.
 
@@ -201,8 +201,8 @@ inline T fromBigEndian(_In const& _bytes)
     return ret;
 }
 
-inline bytes toBigEndian(u256 _val);
-inline bytes toBigEndian(u160 _val);
+bytes toBigEndian(u256 _val);
+bytes toBigEndian(u160 _val);
 
 /// Convenience function for toBigEndian.
 /// @returns a byte array just big enough to represent @a _val.

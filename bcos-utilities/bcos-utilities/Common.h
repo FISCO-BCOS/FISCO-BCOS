@@ -107,16 +107,16 @@ inline u256 exp10<0>()
 
 //------------ Type interprets and Convertions----------------
 /// Interprets @a _u as a two's complement signed number and returns the resulting s256.
-inline s256 u2s(u256 _u);
+s256 u2s(u256 _u);
 
 /// @returns the two's complement signed representation of the signed number _u.
-inline u256 s2u(s256 _u);
+u256 s2u(s256 _u);
 
-inline bool isalNumStr(std::string const& _stringData);
+bool isalNumStr(std::string const& _stringData);
 
-inline double calcAvgRate(uint64_t _data, uint32_t _intervalMS);
+double calcAvgRate(uint64_t _data, uint32_t _intervalMS);
 
-inline uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS);
+uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS);
 
 /// Get the current time in seconds since the epoch in UTC(ms)
 uint64_t utcTime();
