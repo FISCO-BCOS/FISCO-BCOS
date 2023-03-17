@@ -40,8 +40,7 @@ public:
       : TransactionSyncInterface(std::move(config)),
         Worker("txsSync", 0),
         m_downloadTxsBuffer(std::make_shared<TxsSyncMsgList>()),
-        m_worker(
-            std::make_shared<ThreadPool>("txsSyncWorker", 4)),
+        m_worker(std::make_shared<ThreadPool>("txsSyncWorker", 4)),
         m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 4)),
         m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 1))
     {
@@ -68,9 +67,6 @@ public:
         bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
         VerifyResponseCallback _onVerifyFinished) override;
 
-    [[deprecated("Use TxPool::broadcastPushTransaction")]] virtual void maintainTransactions();
-    [[deprecated("Use TxPool::broadcastPushTransaction")]] virtual void
-    maintainDownloadingTransactions();
     void onEmptyTxs() override;
 
 protected:

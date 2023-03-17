@@ -160,23 +160,14 @@ bool isHexString(std::string const& _string);
 
 /// Converts byte array to a string containing the same (binary) data. Unless
 /// the byte array happens to contain ASCII data, this won't be printable.
-inline std::string asString(bytes const& _b)
-{
-    return std::string((char const*)_b.data(), (char const*)(_b.data() + _b.size()));
-}
+inline std::string asString(bytes const& _b);
 
 /// Converts byte array ref to a string containing the same (binary) data. Unless
 /// the byte array happens to contain ASCII data, this won't be printable.
-inline std::string asString(bytesConstRef _b)
-{
-    return std::string((char const*)_b.data(), (char const*)(_b.data() + _b.size()));
-}
+inline std::string asString(bytesConstRef _b);
 
 /// Converts a string to a byte array containing the string's (byte) data.
-inline bytes asBytes(std::string const& _b)
-{
-    return bytes((byte const*)_b.data(), (byte const*)(_b.data() + _b.size()));
-}
+inline bytes asBytes(std::string const& _b);
 
 // Big-endian to/from host endian conversion functions.
 
@@ -210,18 +201,8 @@ inline T fromBigEndian(_In const& _bytes)
     return ret;
 }
 
-inline bytes toBigEndian(u256 _val)
-{
-    bytes ret(32);
-    toBigEndian(_val, ret);
-    return ret;
-}
-inline bytes toBigEndian(u160 _val)
-{
-    bytes ret(20);
-    toBigEndian(_val, ret);
-    return ret;
-}
+inline bytes toBigEndian(u256 _val);
+inline bytes toBigEndian(u160 _val);
 
 /// Convenience function for toBigEndian.
 /// @returns a byte array just big enough to represent @a _val.
@@ -237,10 +218,7 @@ inline bytes toCompactBigEndian(T _val, unsigned _min = 0)
     toBigEndian(_val, ret);
     return ret;
 }
-inline bytes toCompactBigEndian(byte _val, unsigned _min = 0)
-{
-    return (_min || _val) ? bytes{_val} : bytes{};
-}
+inline bytes toCompactBigEndian(byte _val, unsigned _min = 0);
 
 /// Convenience function for toBigEndian.
 /// @returns a string just big enough to represent @a _val.
