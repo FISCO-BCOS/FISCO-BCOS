@@ -180,10 +180,25 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
     FRONTSERVICE_LOG(INFO) << LOG_DESC("registerGroupNodeInfoNotification success");
 
     // TXPOOL onPushTransaction
-    m_front->registerModuleMessageDispatcher(
-        protocol::SYNC_PUSH_TRANSACTION, [txpool = _txpool](bcos::crypto::NodeIDPtr nodeID,
-                                             const std::string& messageID, bytesConstRef data) {
-            task::wait(txpool->onReceivePushTransaction(std::move(nodeID), messageID, data));
+    m_front->registerModuleMessageDispatcher(protocol::SYNC_PUSH_TRANSACTION,
+        [this, txpool = _txpool](bcos::crypto::NodeIDPtr const& nodeID,
+            const std::string& messageID, bytesConstRef data) {
+            auto transaction =
+                m_protocolInitializer->blockFactory()->transactionFactory()->createTransaction(
+                    data, false);
+            task::wait(
+                [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
+                    try
+                    {
+                        [[maybe_unused]] auto submitResult =
+                            co_await txpool->submitTransaction(std::move(transaction));
+                    }
+                    catch (std::exception& e)
+                    {
+                        TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
+                                          << boost::diagnostic_information(e);
+                    }
+                }(txpool, std::move(transaction)));
         });
 }
 

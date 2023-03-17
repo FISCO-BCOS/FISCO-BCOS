@@ -63,14 +63,6 @@ void TransactionSync::stop()
 
 void TransactionSync::executeWorker()
 {
-    if (!downloadTxsBufferEmpty())
-    {
-        maintainDownloadingTransactions();
-    }
-    if (m_config->existsInGroup() && downloadTxsBufferEmpty() && m_newTransactions.load())
-    {
-        maintainTransactions();
-    }
     if (!m_config->existsInGroup() || (!m_newTransactions && downloadTxsBufferEmpty()))
     {
         boost::unique_lock<boost::mutex> l(x_signalled);
@@ -446,40 +438,6 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                     << LOG_KV("timecost", (utcTime() - recordT));
 }
 
-void TransactionSync::maintainDownloadingTransactions()
-{
-    if (downloadTxsBufferEmpty())
-    {
-        return;
-    }
-    auto localBuffer = swapDownloadTxsBuffer();
-    if (!m_config->existsInGroup())
-    {
-        SYNC_LOG(DEBUG)
-            << LOG_DESC(
-                   "stop maintainDownloadingTransactions for the node is not belong to the group")
-            << LOG_KV("txpoolSize", m_config->txpoolStorage()->size())
-            << LOG_KV("shardSize", m_downloadTxsBuffer->size());
-        return;
-    }
-    auto self = weak_from_this();
-    for (size_t i = 0; i < localBuffer->size(); ++i)
-    {
-        auto txsBuffer = (*localBuffer)[i];
-        auto transactions =
-            m_config->blockFactory()->createBlock(txsBuffer->txsData(), true, false);
-        // async here to accelerate the txs process
-        m_worker->enqueue([self, txsBuffer, transactions]() {
-            auto txsSync = self.lock();
-            if (!txsSync)
-            {
-                return;
-            }
-            txsSync->importDownloadedTxs(txsBuffer->from(), transactions);
-        });
-    }
-}
-
 bool TransactionSync::importDownloadedTxs(
     NodeIDPtr _fromNode, Block::Ptr _txsBuffer, Block::Ptr _verifiedProposal)
 {
@@ -570,32 +528,6 @@ bool TransactionSync::importDownloadedTxs(
                     << LOG_KV("submitT", (utcTime() - startT))
                     << LOG_KV("timecost", (utcTime() - recordT));
     return true;
-}
-
-void TransactionSync::maintainTransactions()
-{
-    auto consensusNodeList = m_config->consensusNodeList();
-    auto connectedNodeList = m_config->connectedNodeList();
-    // only one node
-    if (connectedNodeList.empty())
-    {
-        m_newTransactions = false;
-        return;
-    }
-    if (consensusNodeList.size() == 1 &&
-        consensusNodeList[0]->nodeID()->data() == m_config->nodeID()->data())
-    {
-        m_newTransactions = false;
-        return;
-    }
-    auto txs = m_config->txpoolStorage()->fetchNewTxs(c_maxSendTransactions);
-    if (txs->empty())
-    {
-        m_newTransactions = false;
-        return;
-    }
-    broadcastTxsFromRpc(consensusNodeList, txs);
-    forwardTxsFromP2P(connectedNodeList, consensusNodeList, txs);
 }
 
 // Randomly select a number of nodes to forward the transaction status
@@ -718,10 +650,6 @@ void TransactionSync::broadcastTxsFromRpc(
 void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::Ptr _txsStatus)
 {
     // insert all downloaded transaction into the txpool
-    while (!downloadTxsBufferEmpty())
-    {
-        maintainDownloadingTransactions();
-    }
     if (_txsStatus->txsHash().empty())
     {
         responseTxsStatus(_fromNode);

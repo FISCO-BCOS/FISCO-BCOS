@@ -59,12 +59,6 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
     }
 
-    virtual task::Task<void> onReceivePushTransaction(
-        bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data)
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
-    }
-
     virtual task::Task<std::vector<protocol::Transaction::Ptr>> getMissedTransactions(
         std::vector<crypto::HashType> transactionHashes, bcos::crypto::NodeIDPtr fromNodeID)
     {
@@ -126,13 +120,14 @@ public:
         std::function<void(Error::Ptr)> _onNotifyFinished) = 0;
 
     // called by frontService to dispatch message
-    virtual void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _id,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
+    [[deprecated]] virtual void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error,
+        std::string const& _id, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         std::function<void(Error::Ptr _error)> _onRecv) = 0;
-    virtual void notifyConsensusNodeList(
+    [[deprecated]] virtual void notifyConsensusNodeList(
         bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
-    virtual void notifyObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList,
+    [[deprecated]] virtual void notifyObserverNodeList(
+        bcos::consensus::ConsensusNodeList const& _observerNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
     // for RPC to get pending transactions
@@ -142,7 +137,7 @@ public:
     // notify to reset the txpool when the consensus module startup
     virtual void asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
-    virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
+    [[deprecated]] virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) = 0;
 
     // determine to clean up txs periodically or not

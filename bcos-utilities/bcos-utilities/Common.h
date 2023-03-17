@@ -107,58 +107,16 @@ inline u256 exp10<0>()
 
 //------------ Type interprets and Convertions----------------
 /// Interprets @a _u as a two's complement signed number and returns the resulting s256.
-inline s256 u2s(u256 _u)
-{
-    static const bigint c_end = bigint(1) << 256;
-    /// get the +/- symbols
-    if (boost::multiprecision::bit_test(_u, 255))
-        return s256(-(c_end - _u));
-    else
-        return s256(_u);
-}
+s256 u2s(u256 _u);
 
 /// @returns the two's complement signed representation of the signed number _u.
-inline u256 s2u(s256 _u)
-{
-    static const bigint c_end = bigint(1) << 256;
-    if (_u >= 0)
-        return u256(_u);
-    else
-        return u256(c_end + _u);
-}
+u256 s2u(s256 _u);
 
-inline bool isalNumStr(std::string const& _stringData)
-{
-    for (auto ch : _stringData)
-    {
-        if (isalnum(ch))
-        {
-            continue;
-        }
-        return false;
-    }
-    return true;
-}
+bool isalNumStr(std::string const& _stringData);
 
-inline double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
-{
-    if (_intervalMS > 0)
-    {
-        auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _intervalMS;
-        return avgRate;
-    }
-    return 0;
-}
+double calcAvgRate(uint64_t _data, uint32_t _intervalMS);
 
-inline uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
-{
-    if (_intervalMS > 0)
-    {
-        auto qps = _requestCount * 1000 / _intervalMS;
-        return qps;
-    }
-    return 0;
-}
+uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS);
 
 /// Get the current time in seconds since the epoch in UTC(ms)
 uint64_t utcTime();

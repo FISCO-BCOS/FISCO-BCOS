@@ -34,6 +34,30 @@ using namespace bcos::crypto;
 using namespace bcos::sync;
 using namespace bcos::consensus;
 using namespace bcos::tool;
+
+bcos::txpool::TxPool::TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::Ptr txpoolStorage,
+    bcos::sync::TransactionSyncInterface::Ptr transactionSync, size_t verifierWorkerNum)
+  : m_config(std::move(config)),
+    m_txpoolStorage(std::move(txpoolStorage)),
+    m_transactionSync(std::move(transactionSync)),
+    m_frontService(m_transactionSync->config()->frontService()),
+    m_transactionFactory(m_config->blockFactory()->transactionFactory()),
+    m_ledger(m_config->ledger())
+{
+    m_worker = std::make_shared<ThreadPool>("submitter", 4);
+    m_verifier = std::make_shared<ThreadPool>("verifier", 2);
+    m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
+    // worker to pre-store-txs
+    m_txsPreStore = std::make_shared<ThreadPool>("txsPreStore", 1);
+    TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")
+                     << LOG_KV("submitterWorkerNum", verifierWorkerNum);
+}
+
+bcos::txpool::TxPool::~TxPool() noexcept
+{
+    stop();
+}
+
 void TxPool::start()
 {
     if (m_running)
@@ -87,22 +111,6 @@ task::Task<void> TxPool::broadcastPushTransaction(const protocol::Transaction& t
         protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, bcos::ref(buffer));
 
     co_return;
-}
-
-task::Task<void> TxPool::onReceivePushTransaction(
-    bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data)
-{
-    try
-    {
-        auto transaction = m_transactionFactory->createTransaction(data, false);
-        // without submitResult the compiler will warning
-        auto submitResult = co_await submitTransaction(std::move(transaction));
-    }
-    catch (std::exception& e)
-    {
-        TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
-                          << boost::diagnostic_information(e);
-    }
 }
 
 task::Task<std::vector<protocol::Transaction::Ptr>> TxPool::getMissedTransactions(
@@ -534,4 +542,65 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
                                      << LOG_KV("timecost", (utcTime() - startT));
                 });
         });
+}
+void bcos::txpool::TxPool::notifyConnectedNodes(
+    bcos::crypto::NodeIDSet const& _connectedNodes, std::function<void(Error::Ptr)> _onResponse)
+{
+    m_transactionSync->config()->notifyConnectedNodes(_connectedNodes, _onResponse);
+    if (m_txpoolStorage->size() > 0)
+    {
+        return;
+    }
+    // try to broadcast empty txsStatus and request txs from the connected nodes when the txpool
+    // is empty
+    m_transactionSync->onEmptyTxs();
+}
+void bcos::txpool::TxPool::registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch)
+{
+    m_txpoolStorage->registerTxsCleanUpSwitch(_txsCleanUpSwitch);
+}
+void bcos::txpool::TxPool::tryToSyncTxsFromPeers()
+{
+    m_transactionSync->onEmptyTxs();
+}
+void bcos::txpool::TxPool::asyncGetPendingTransactionSize(
+    std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize)
+{
+    if (!_onGetTxsSize)
+    {
+        return;
+    }
+    auto pendingTxsSize = m_txpoolStorage->size();
+    _onGetTxsSize(nullptr, pendingTxsSize);
+}
+void bcos::txpool::TxPool::registerUnsealedTxsNotifier(
+    std::function<void(size_t, std::function<void(Error::Ptr)>)> _unsealedTxsNotifier)
+{
+    m_txpoolStorage->registerUnsealedTxsNotifier(std::move(_unsealedTxsNotifier));
+}
+void bcos::txpool::TxPool::setTransactionSync(
+    bcos::sync::TransactionSyncInterface::Ptr _transactionSync)
+{
+    m_transactionSync = std::move(_transactionSync);
+}
+bcos::txpool::TxPoolStorageInterface::Ptr bcos::txpool::TxPool::txpoolStorage()
+{
+    return m_txpoolStorage;
+}
+bcos::txpool::TxPoolConfig::Ptr bcos::txpool::TxPool::txpoolConfig()
+{
+    return m_config;
+}
+void bcos::txpool::TxPool::setTxPoolStorage(TxPoolStorageInterface::Ptr _txpoolStorage)
+{
+    m_txpoolStorage = _txpoolStorage;
+    m_transactionSync->config()->setTxPoolStorage(_txpoolStorage);
+}
+void bcos::txpool::TxPool::clearAllTxs()
+{
+    m_txpoolStorage->clear();
+}
+bcos::sync::TransactionSyncInterface::Ptr& bcos::txpool::TxPool::transactionSync()
+{
+    return m_transactionSync;
 }

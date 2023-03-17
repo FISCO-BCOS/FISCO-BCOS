@@ -324,3 +324,35 @@ void BoostLogInitializer::stopLogging(boost::shared_ptr<sink_t> sink)
     sink->flush();
     sink.reset();
 }
+void bcos::BoostLogInitializer::Sink::consume(
+    const boost::log::record_view& rec, const std::string& str)
+{
+    boost::log::sinks::text_file_backend::consume(rec, str);
+    auto severity = rec.attribute_values()[boost::log::aux::default_attribute_names::severity()]
+                        .extract<boost::log::trivial::severity_level>();
+    // bug fix: determine m_ptr before get the log level
+    //          serverity.get() will call  BOOST_ASSERT(m_ptr)
+    if (severity.get_ptr() && severity.get() == boost::log::trivial::severity_level::fatal)
+    {
+        // abort if encounter fatal, will generate coredump
+        // must make sure only use LOG(FATAL) when encounter the most serious problem
+        // forbid use LOG(FATAL) in the function that should exit normally
+        std::abort();
+    }
+}
+void bcos::BoostLogInitializer::ConsoleSink::consume(
+    const boost::log::record_view& rec, const std::string& str)
+{
+    boost::log::sinks::text_ostream_backend::consume(rec, str);
+    auto severity = rec.attribute_values()[boost::log::aux::default_attribute_names::severity()]
+                        .extract<boost::log::trivial::severity_level>();
+    // bug fix: determine m_ptr before get the log level
+    //          serverity.get() will call  BOOST_ASSERT(m_ptr)
+    if (severity.get_ptr() && severity.get() == boost::log::trivial::severity_level::fatal)
+    {
+        // abort if encounter fatal, will generate coredump
+        // must make sure only use LOG(FATAL) when encounter the most serious problem
+        // forbid use LOG(FATAL) in the function that should exit normally
+        std::abort();
+    }
+}

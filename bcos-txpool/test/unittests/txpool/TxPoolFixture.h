@@ -58,7 +58,7 @@ class FakeTransactionSync1 : public TransactionSync
 {
 public:
     explicit FakeTransactionSync1(TransactionSyncConfig::Ptr _config) : TransactionSync(_config) {}
-    ~FakeTransactionSync1() override {}
+    ~FakeTransactionSync1() override = default;
     void start() override {}
 };
 
@@ -68,20 +68,6 @@ public:
     explicit FakeTransactionSync(TransactionSyncConfig::Ptr _config) : FakeTransactionSync1(_config)
     {}
     ~FakeTransactionSync() override {}
-
-    // only broadcast txsStatus
-    void maintainTransactions() override
-    {
-        auto txs = config()->txpoolStorage()->fetchNewTxs(10000);
-        if (txs->size() == 0)
-        {
-            return;
-        }
-        auto connectedNodeList = m_config->connectedNodeList();
-        auto consensusNodeList = m_config->consensusNodeList();
-
-        forwardTxsFromP2P(connectedNodeList, consensusNodeList, txs);
-    }
 };
 
 class FakeMemoryStorage : public MemoryStorage
@@ -103,7 +89,7 @@ public:
         m_groupId(_groupId),
         m_chainId(_chainId),
         m_blockLimit(_blockLimit),
-        m_fakeGateWay(_fakeGateWay)
+        m_fakeGateWay(std::move(_fakeGateWay))
     {
         auto blockHeaderFactory =
             std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
