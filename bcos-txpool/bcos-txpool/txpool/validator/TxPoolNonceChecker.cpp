@@ -27,43 +27,44 @@ using namespace bcos::txpool;
 
 bool TxPoolNonceChecker::exists(NonceType const& _nonce)
 {
-    decltype(m_nonces)::const_accessor it;
-    return m_nonces.find(it, _nonce);
+    NonceSet::ReadAccessor::Ptr accessor;
+    return m_nonces.find<NonceSet::ReadAccessor>(accessor, _nonce);
 }
 
 TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx, bool _shouldUpdate)
 {
     auto nonce = _tx->nonce();
 
-    decltype(m_nonces)::const_accessor it;
-    if (m_nonces.find(it, nonce))
+    if (m_nonces.contains(nonce))
     {
         return TransactionStatus::NonceCheckFail;
     }
 
     if (_shouldUpdate)
     {
-        m_nonces.emplace(it, std::move(nonce), std::monostate{});
+        NonceSet::WriteAccessor::Ptr accessor;
+        m_nonces.insert(accessor, std::move(nonce));
     }
     return TransactionStatus::None;
 }
 
 void TxPoolNonceChecker::insert(NonceType const& _nonce)
 {
-    m_nonces.emplace(_nonce, std::monostate{});
+    NonceSet::WriteAccessor::Ptr accessor;
+    m_nonces.insert(accessor, _nonce);
 }
 
 void TxPoolNonceChecker::batchInsert(BlockNumber /*_batchId*/, NonceListPtr const& _nonceList)
 {
     for (auto const& nonce : *_nonceList)
     {
-        m_nonces.emplace(nonce, std::monostate{});
+        insert(nonce);
     }
 }
 
 void TxPoolNonceChecker::remove(NonceType const& _nonce)
 {
-    m_nonces.erase(_nonce);
+    m_nonces.remove(_nonce);
 }
 
 void TxPoolNonceChecker::batchRemove(NonceList const& _nonceList)

@@ -732,22 +732,6 @@ void MemoryStorage::removeInvalidTxs(bool lock)
         notifyUnsealedTxsSize();
         TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs") << LOG_KV("size", txCnt);
         m_invalidTxs.clear();
-
-        /*
-                for (auto const& txHash : m_invalidTxs)
-                {
-                    auto txResult = m_config->txResultFactory()->createTxSubmitResult();
-                    txResult->setTxHash(txHash);
-                    txResult->setStatus(static_cast<uint32_t>(TransactionStatus::TransactionPoolTimeout));
-
-                    removeSubmittedTxWithoutLock(std::move(txResult), true);
-                }
-                notifyUnsealedTxsSize();
-                // remove invalid nonce
-                m_config->txPoolNonceChecker()->batchRemove(m_invalidNonces);
-                TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs") << LOG_KV("size",
-           m_invalidTxs.size()); m_invalidTxs.clear(); m_invalidNonces.clear();
-                */
     }
     catch (std::exception const& e)
     {
