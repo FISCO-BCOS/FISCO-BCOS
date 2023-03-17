@@ -15,8 +15,7 @@ namespace bcos::transaction_scheduler
 
 #define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
 
-template <transaction_executor::StateStorage MultiLayerStorage,
-    protocol::IsTransactionReceiptFactory ReceiptFactory,
+template <class MultiLayerStorage, protocol::IsTransactionReceiptFactory ReceiptFactory,
     template <typename, typename> class Executor>
 class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
 {
@@ -25,8 +24,10 @@ private:
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                  // Maybe auto adjust
     size_t m_maxToken = std::thread::hardware_concurrency();  // Maybe auto adjust
     using ChunkLocalStorage =
-        transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
-            MultiLayerStorage>;
+        decltype(std::declval<transaction_scheduler::MultiLayerStorage<
+                     typename MultiLayerStorage::MutableStorage, void,
+                     decltype(std::declval<MultiLayerStorage>().fork(true))>>()
+                     .fork(true));
     using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::multiLayerStorage;
 
     template <class TransactionsRange>
@@ -44,10 +45,10 @@ private:
         std::atomic_bool compareLeft = false;
         std::atomic_bool compareRight = false;
 
-        void reset(TransactionsRange range, MultiLayerStorage& multiLayerStorage)
+        void reset(TransactionsRange range, auto& storage)
         {
             transactionsRange = std::move(range);
-            localStorage.emplace(multiLayerStorage);
+            localStorage.emplace(storage);
             readWriteSetStorage.emplace(*localStorage);
             receipts.clear();
             finished = false;
@@ -59,7 +60,7 @@ private:
             int startContextID, auto& receiptFactory, auto& tableNamePool, int64_t index,
             std::atomic_int64_t& lastChunk)
         {
-            localStorage->newMutable();
+            localStorage->newTemporaryMutable();
             Executor<ReadWriteSetStorage<ChunkLocalStorage>,
                 std::remove_cvref_t<decltype(receiptFactory)>>
                 executor(*readWriteSetStorage, receiptFactory, tableNamePool);
@@ -143,12 +144,12 @@ public:
                         {
                             (currentChunkIt + 1)
                                 ->reset(
-                                    transactionChunks[index + offset + 1], *localMultiLayerStorage);
+                                    transactionChunks[index + offset + 1], localMultiLayerStorage);
                         }
                         if (currentChunkIt == RANGES::begin(currentChunkView))
                         {
                             currentChunkIt->reset(
-                                transactionChunks[index + offset], *localMultiLayerStorage);
+                                transactionChunks[index + offset], localMultiLayerStorage);
                         }
                         ++currentChunkIt;
                         return std::make_optional(index);
@@ -245,8 +246,7 @@ public:
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Mergeing storage... " << RANGES::size(mergeRange);
             for (auto& chunk : mergeRange)
             {
-                localMultiLayerStorage->mutableStorage().merge(
-                    chunk.localStorage->mutableStorage());
+                localMultiLayerStorage.mutableStorage().merge(chunk.localStorage->mutableStorage());
             }
 
             tokens /= 2;
@@ -258,13 +258,13 @@ public:
             auto startOffset =
                 RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize;
             co_await serialExecute(blockHeader, startOffset, receiptFactory(), tableNamePool(),
-                transactions | RANGES::views::drop(startOffset), receipts, *localMultiLayerStorage);
+                transactions | RANGES::views::drop(startOffset), receipts, localMultiLayerStorage);
         }
 
         co_return receipts;
     }
 
     void setChunkSize(size_t chunkSize) { m_chunkSize = chunkSize; }
-    void setMaxThreads(size_t maxThreads) { m_maxToken = maxThreads; }
+    void setMaxToken(size_t maxToken) { m_maxToken = maxToken; }
 };
 }  // namespace bcos::transaction_scheduler

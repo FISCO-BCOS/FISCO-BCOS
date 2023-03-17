@@ -93,7 +93,6 @@ public:
 
         std::vector<HashType> merkle;
         generateMerkle(originHashes, merkle);
-
         generateMerkleProof(
             originHashes, merkle, RANGES::distance(RANGES::begin(originHashes), it), out);
     }
@@ -107,7 +106,6 @@ public:
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Not found hash!"});
         }
-
         generateMerkleProof(
             originHashes, merkle, RANGES::distance(RANGES::begin(originHashes), it), out);
     }
