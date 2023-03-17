@@ -113,22 +113,6 @@ task::Task<void> TxPool::broadcastPushTransaction(const protocol::Transaction& t
     co_return;
 }
 
-task::Task<void> TxPool::onReceivePushTransaction(
-    bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data)
-{
-    try
-    {
-        auto transaction = m_transactionFactory->createTransaction(data, false);
-        // without submitResult the compiler will warning
-        auto submitResult = co_await submitTransaction(std::move(transaction));
-    }
-    catch (std::exception& e)
-    {
-        TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
-                          << boost::diagnostic_information(e);
-    }
-}
-
 task::Task<std::vector<protocol::Transaction::Ptr>> TxPool::getMissedTransactions(
     std::vector<crypto::HashType> transactionHashes, bcos::crypto::NodeIDPtr fromNodeID)
 {

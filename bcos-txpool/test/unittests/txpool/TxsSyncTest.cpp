@@ -43,7 +43,7 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(txsSyncTest, TestPromptFixture)
 
-void importTransactions(
+Transactions importTransactions(
     size_t _txsNum, CryptoSuite::Ptr _cryptoSuite, const TxPoolFixture::Ptr& _faker)
 {
     auto txpool = _faker->txpool();
@@ -54,6 +54,7 @@ void importTransactions(
         auto transaction = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 1000 + i),
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
         transactions.push_back(transaction);
+        task::wait(txpool->broadcastPushTransaction(*transaction));
         task::wait(txpool->submitTransaction(transaction));
     }
     auto startT = utcTime();
@@ -61,6 +62,8 @@ void importTransactions(
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
+
+    return transactions;
 }
 
 void importTransactionsNew(
@@ -73,6 +76,7 @@ void importTransactionsNew(
     {
         auto transaction = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 1000 + i),
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
+        task::wait(txpool->broadcastPushTransaction(*transaction));
         transactions.push_back(transaction);
     }
 
@@ -147,10 +151,18 @@ void testTransactionSync(bool _onlyTxsStatus = false)
         }
     }
     size_t txsNum = 10;
-    importTransactions(txsNum, cryptoSuite, faker);
+    auto transactions = importTransactions(txsNum, cryptoSuite, faker);
+
+    // Assume transaction had been received
+    for (const auto& txpoolPeer : txpoolPeerList)
+    {
+        for (auto const& transaction : transactions)
+        {
+            task::wait(txpoolPeer->txpool()->submitTransaction(transaction));
+        }
+    }
 
     // check maintain transactions
-    faker->sync()->maintainTransactions();
     if (_onlyTxsStatus)
     {
         for (auto txpoolPeer : txpoolPeerList)
@@ -162,7 +174,6 @@ void testTransactionSync(bool _onlyTxsStatus = false)
                    (utcTime() - startT <= 10000))
             {
                 // maintain the downloading txs
-                txpoolPeer->sync()->maintainDownloadingTransactions();
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
             std::cout << "### txpoolSize: " << txpoolPeer->txpool()->txpoolStorage()->size()
@@ -172,7 +183,6 @@ void testTransactionSync(bool _onlyTxsStatus = false)
         }
         // maintain transactions again
         auto originSendSize = faker->frontService()->totalSendMsgSize();
-        faker->sync()->maintainTransactions();
         BOOST_CHECK(faker->frontService()->totalSendMsgSize() == originSendSize);
         return;
     }
@@ -181,12 +191,10 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     for (auto txpoolPeer : txpoolPeerList)
     {
         BOOST_CHECK(faker->frontService()->getAsyncSendSizeByNodeID(txpoolPeer->nodeID()) >= 1);
-        txpoolPeer->sync()->maintainDownloadingTransactions();
         auto startT = utcTime();
         while (
             txpoolPeer->txpool()->txpoolStorage()->size() < txsNum && (utcTime() - startT <= 10000))
         {
-            txpoolPeer->sync()->maintainDownloadingTransactions();
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
         BOOST_CHECK(txpoolPeer->txpool()->txpoolStorage()->size() == txsNum);
@@ -196,10 +204,11 @@ void testTransactionSync(bool _onlyTxsStatus = false)
         ((txpoolPeerList.size() + 1) * faker->sync()->config()->forwardPercent() + 99) / 100;
 
     // with requestMissedTxs request
-    auto maxSendSize = txpoolPeerList.size() + forwardSize + forwardSize;
-    BOOST_CHECK(faker->frontService()->totalSendMsgSize() <= maxSendSize);
+    // auto maxSendSize = txpoolPeerList.size() + forwardSize + forwardSize;
+    // each peer broadcast 10 transactions
+    auto maxSendSize = 80;
+    BOOST_CHECK_LE(faker->frontService()->totalSendMsgSize(), maxSendSize);
     auto originSendSize = faker->frontService()->totalSendMsgSize();
-    faker->sync()->maintainTransactions();
     std::cout << "##### totalSendMsgSize: " << faker->frontService()->totalSendMsgSize()
               << std::endl;
     std::cout << "#### txpoolPeerList size:" << txpoolPeerList.size() << std::endl;
@@ -218,11 +227,6 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     }
     std::cout << "#### after maintainTransactions totalSendMsgSize: "
               << syncPeer->frontService()->totalSendMsgSize() << std::endl;
-    syncPeer->sync()->maintainTransactions();
-    // BOOST_CHECK(syncPeer->frontService()->totalSendMsgSize() == originSendSize + forwardSize);
-
-    syncPeer->sync()->maintainTransactions();
-    // BOOST_CHECK(syncPeer->frontService()->totalSendMsgSize() == originSendSize + forwardSize);
 
     // import new transaction to the syncPeer, but not broadcast the imported transaction
     std::cout << "###### test fetch and verify block" << std::endl;

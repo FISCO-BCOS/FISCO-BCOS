@@ -48,9 +48,6 @@ public:
 
     task::Task<void> broadcastPushTransaction(const protocol::Transaction& transaction) override;
 
-    task::Task<void> onReceivePushTransaction(
-        bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data) override;
-
     task::Task<std::vector<protocol::Transaction::Ptr>> getMissedTransactions(
         std::vector<crypto::HashType> transactionHashes,
         bcos::crypto::NodeIDPtr fromNodeID) override;

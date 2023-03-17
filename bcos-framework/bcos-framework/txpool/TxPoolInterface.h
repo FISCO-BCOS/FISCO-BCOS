@@ -59,12 +59,6 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
     }
 
-    virtual task::Task<void> onReceivePushTransaction(
-        bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data)
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
-    }
-
     virtual task::Task<std::vector<protocol::Transaction::Ptr>> getMissedTransactions(
         std::vector<crypto::HashType> transactionHashes, bcos::crypto::NodeIDPtr fromNodeID)
     {

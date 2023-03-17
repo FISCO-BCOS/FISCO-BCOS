@@ -58,7 +58,7 @@ class FakeTransactionSync1 : public TransactionSync
 {
 public:
     explicit FakeTransactionSync1(TransactionSyncConfig::Ptr _config) : TransactionSync(_config) {}
-    ~FakeTransactionSync1() override {}
+    ~FakeTransactionSync1() override = default;
     void start() override {}
 };
 
@@ -89,7 +89,7 @@ public:
         m_groupId(_groupId),
         m_chainId(_chainId),
         m_blockLimit(_blockLimit),
-        m_fakeGateWay(_fakeGateWay)
+        m_fakeGateWay(std::move(_fakeGateWay))
     {
         auto blockHeaderFactory =
             std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
