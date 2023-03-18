@@ -60,4 +60,4 @@ jobs:
           alias cmake='cmake3'
           mkdir -p build && cd build
           cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Debug  -DWITH_LIGHTNODE=ON  -DWITH_TIKV=Off .. || cat *.log
-          make -j3
+          make -j8

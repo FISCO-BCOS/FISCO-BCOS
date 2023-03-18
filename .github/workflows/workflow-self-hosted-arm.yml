@@ -66,7 +66,7 @@ jobs:
           alias cmake='cmake3'
           mkdir -p build && cd build
           cmake3 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
-          make -j3
+          make -j8
       - name: Test
         run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test

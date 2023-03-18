@@ -23,7 +23,7 @@ class StringPool
 public:
     using ID = const void*;
 
-    virtual ~StringPool() = default;
+    virtual ~StringPool() noexcept = default;
     virtual ID add(std::string_view str) = 0;
     virtual std::string_view query(ID id) const = 0;
 };

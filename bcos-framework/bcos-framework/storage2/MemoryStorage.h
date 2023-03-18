@@ -497,24 +497,16 @@ public:
 
     void merge(MemoryStorage& from)
     {
-        for (auto tuple : RANGES::zip_view(m_buckets, from.m_buckets))
+        for (auto bucketPair : RANGES::zip_view(m_buckets, from.m_buckets))
         {
-            auto& [bucket, fromBucket] = tuple;
+            auto& [bucket, fromBucket] = bucketPair;
             Lock toLock(bucket.mutex);
             Lock fromLock(fromBucket.mutex);
 
             auto& index = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
-            while (!fromIndex.empty())
-            {
-                auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
-                if (!merged)
-                {
-                    auto erasedIt = index.erase(it);
-                    auto fromNode = fromIndex.extract(fromIndex.begin());
-                    index.insert(erasedIt, std::move(fromNode));
-                }
-            }
+
+            index.merge(fromIndex);
         }
     }
 };

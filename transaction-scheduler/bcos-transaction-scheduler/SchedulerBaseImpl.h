@@ -9,6 +9,7 @@
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-task/Task.h>
 #include <oneapi/tbb/combinable.h>
+#include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 
 namespace bcos::transaction_scheduler
@@ -41,60 +42,25 @@ public:
         auto range = it.range();
         tbb::combinable<bcos::h256> combinableHash;
 
-        auto currentRangeIt = RANGES::begin(range);
-        tbb::parallel_pipeline(std::thread::hardware_concurrency(),
-            tbb::make_filter<void,
-                std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
-                    RANGES::begin(range), RANGES::end(range)))>>(tbb::filter_mode::serial_in_order,
-                [&](tbb::flow_control& control)
-                    -> std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
-                        RANGES::begin(range), RANGES::end(range)))> {
-                    if (currentRangeIt == RANGES::end(range))
-                    {
-                        control.stop();
-                        return {};
-                    }
+        tbb::parallel_for_each(range, [&](auto const& keyValue) {
+            auto& entryHash = combinableHash.local();
 
-                    auto start = currentRangeIt;
-                    constexpr static int HASH_CHUNK_SIZE = 100;
-                    for (auto num = 0;
-                         num < HASH_CHUNK_SIZE && currentRangeIt != RANGES::end(range); ++num)
-                    {
-                        ++currentRangeIt;
-                    }
-                    return std::make_optional(
-                        RANGES::subrange<decltype(start)>(start, currentRangeIt));
-                }) &
-                tbb::make_filter<std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(
-                                         range))>(RANGES::begin(range), RANGES::end(range)))>,
-                    void>(tbb::filter_mode::parallel,
-                    [&combinableHash, &hashImpl, &blockHeader](auto const& entryRange) {
-                        if (!entryRange)
-                        {
-                            return;
-                        }
-
-                        auto& entryHash = combinableHash.local();
-                        for (auto const& keyValuePair : *entryRange)
-                        {
-                            auto& [key, entry] = keyValuePair;
-                            auto& [tableName, keyName] = *key;
-                            auto tableNameView = *tableName;
-                            auto keyView = keyName.toStringView();
-                            if (entry)
-                            {
-                                entryHash ^= entry->hash(
-                                    tableNameView, keyView, hashImpl, blockHeader.version());
-                            }
-                            else
-                            {
-                                storage::Entry deleteEntry;
-                                deleteEntry.setStatus(storage::Entry::DELETED);
-                                entryHash ^= deleteEntry.hash(
-                                    tableNameView, keyView, hashImpl, blockHeader.version());
-                            }
-                        }
-                    }));
+            auto& [key, entry] = keyValue;
+            auto& [tableName, keyName] = *key;
+            auto tableNameView = *tableName;
+            auto keyView = keyName.toStringView();
+            if (entry)
+            {
+                entryHash ^= entry->hash(tableNameView, keyView, hashImpl, blockHeader.version());
+            }
+            else
+            {
+                storage::Entry deleteEntry;
+                deleteEntry.setStatus(storage::Entry::DELETED);
+                entryHash ^=
+                    deleteEntry.hash(tableNameView, keyView, hashImpl, blockHeader.version());
+            }
+        });
         m_multiLayerStorage.pushMutableToImmutableFront();
 
         co_return combinableHash.combine(
