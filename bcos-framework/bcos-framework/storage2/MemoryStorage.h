@@ -495,7 +495,7 @@ public:
         return {};
     }
 
-    void merge(MemoryStorage& from)
+    void merge(MemoryStorage& from, bool overwrite)
     {
         for (auto bucketPair : RANGES::zip_view(m_buckets, from.m_buckets))
         {
@@ -506,7 +506,21 @@ public:
             auto& index = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
 
-            index.merge(fromIndex);
+            if (overwrite)
+            {
+                while (!fromIndex.empty())
+                {
+                    auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
+                    if (!merged)
+                    {
+                        index.insert(index.erase(it), fromIndex.extract(fromIndex.begin()));
+                    }
+                }
+            }
+            else
+            {
+                index.merge(fromIndex);
+            }
         }
     }
 };
