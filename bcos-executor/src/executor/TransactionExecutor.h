@@ -84,6 +84,7 @@ class ClockCache;
 class StateStorageFactory;
 struct FunctionAbi;
 struct CallParameters;
+class PrecompiledMap;
 
 using executionCallback = std::function<void(
     const Error::ConstPtr&, std::vector<protocol::ExecutionMessage::UniquePtr>&)>;
@@ -261,7 +262,6 @@ protected:
     storage::StateStorageFactory::Ptr m_stateStorageFactory;
     std::shared_ptr<BlockContext> m_blockContext;
     crypto::Hash::Ptr m_hashImpl;
-    bool m_isAuthCheck = false;
     std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> m_abiCache;
 
     struct State
@@ -308,22 +308,19 @@ protected:
             tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>>();
     std::shared_mutex m_stateStoragesMutex;
 
-    std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
-        m_precompiledContract;
-    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-        m_constantPrecompiled =
-            std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
-    mutable bcos::SharedMutex x_constantPrecompiled;
+    std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> m_evmPrecompiled;
+    std::shared_ptr<executor::PrecompiledMap> m_precompiled;
+    std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
 
-    std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     mutable bcos::RecursiveMutex x_executiveFlowLock;
+    bool m_isAuthCheck = false;
     bool m_isWasm = false;
-    uint32_t m_blockVersion = 0;
-    std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bool m_isRunning = false;
+    uint32_t m_blockVersion = 0;
     int64_t m_schedulerTermId = -1;
+    std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
 
     bcos::ThreadPool::Ptr m_threadPool;
     mutable RecursiveMutex x_resetEnvironmentLock;

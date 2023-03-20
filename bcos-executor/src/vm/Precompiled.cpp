@@ -35,6 +35,30 @@ namespace executor
 {
 PrecompiledRegistrar* PrecompiledRegistrar::s_this = nullptr;
 
+bcos::precompiled::Precompiled::Ptr bcos::executor::PrecompiledMap::at(
+    std::string const& _key, uint32_t version, bool isAuth) const noexcept
+{
+    if (!_key.starts_with(precompiled::SYS_ADDRESS_PREFIX) && !_key.starts_with(tool::FS_SYS_BIN))
+    {
+        return nullptr;
+    }
+    auto it = m_map.find(_key);
+    if (it == m_map.end())
+    {
+        return nullptr;
+    }
+    if (it->second.availableFunc(version, isAuth))
+    {
+        return it->second.precompiled;
+    }
+    return nullptr;
+}
+bool bcos::executor::PrecompiledMap::contains(
+    std::string const& key, uint32_t version, bool isAuth) const noexcept
+{
+    return at(key, version, isAuth) != nullptr;
+}
+
 PrecompiledExecutor const& PrecompiledRegistrar::executor(std::string const& _name)
 {
     if (!get()->m_execs.count(_name))

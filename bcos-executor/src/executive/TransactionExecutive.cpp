@@ -984,18 +984,13 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
 
 bool TransactionExecutive::isPrecompiled(const std::string& address) const
 {
-    return m_constantPrecompiled->contains(address);
+    return m_precompiled->at(
+               address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck()) != nullptr;
 }
 
 std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const
 {
-    auto constantPrecompiled = m_constantPrecompiled->find(address);
-
-    if (constantPrecompiled != m_constantPrecompiled->end())
-    {
-        return constantPrecompiled->second;
-    }
-    return {};
+    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck());
 }
 
 std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
@@ -1010,20 +1005,14 @@ int64_t TransactionExecutive::costOfPrecompiled(const string& _a, bytesConstRef 
 }
 
 void TransactionExecutive::setEVMPrecompiled(
-    std::shared_ptr<const std::map<std::string, PrecompiledContract::Ptr>> precompiledContract)
+    std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled)
 {
-    m_evmPrecompiled = precompiledContract;
+    m_evmPrecompiled = std::move(evmPrecompiled);
 }
-void TransactionExecutive::setConstantPrecompiled(
-    const string& address, std::shared_ptr<precompiled::Precompiled> precompiled)
+
+void TransactionExecutive::setPrecompiled(std::shared_ptr<PrecompiledMap> _precompiled)
 {
-    m_constantPrecompiled->insert({address, precompiled});
-}
-void TransactionExecutive::setConstantPrecompiled(
-    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-        _constantPrecompiled)
-{
-    m_constantPrecompiled = _constantPrecompiled;
+    m_precompiled = std::move(_precompiled);
 }
 
 void TransactionExecutive::revert()
@@ -1422,7 +1411,8 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     const auto* authMgrAddress = m_blockContext.isWasm() ? precompiled::AUTH_MANAGER_NAME :
                                                            precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
-        m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
+        m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
+            m_blockContext.isAuthCheck()));
     EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", callParameters->receiveAddress)
                          << LOG_KV("isCreate", callParameters->create)
                          << LOG_KV("originAddress", callParameters->origin);
@@ -1468,7 +1458,8 @@ int32_t TransactionExecutive::checkContractAvailable(
         return 0;
     }
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
-        m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
+        m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
+            m_blockContext.isAuthCheck()));
     // if status is normal, then return 0; else if status is abnormal, then return else
     // if return <0, it means status row not exist, check pass by default in this case
     auto status = contractAuthPrecompiled->getContractStatus(
@@ -1486,8 +1477,8 @@ uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::Unique
         return 0;
     }
     AccountPrecompiled::Ptr accountPrecompiled =
-        dynamic_pointer_cast<precompiled::AccountPrecompiled>(
-            m_constantPrecompiled->at(ACCOUNT_ADDRESS));
+        dynamic_pointer_cast<precompiled::AccountPrecompiled>(m_precompiled->at(
+            ACCOUNT_ADDRESS, m_blockContext.blockVersion(), m_blockContext.isAuthCheck()));
 
     return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this());
 }

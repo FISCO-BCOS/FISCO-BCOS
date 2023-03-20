@@ -27,9 +27,7 @@
 #include <atomic>
 #include <stack>
 
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 class BlockContext;
 class TransactionExecutive;
@@ -40,15 +38,13 @@ public:
     using Ptr = std::shared_ptr<ExecutiveFactory>;
 
     ExecutiveFactory(const BlockContext& blockContext,
-        std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
-            precompiledContract,
-        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-            constantPrecompiled,
-        std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
+        std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled,
+        std::shared_ptr<PrecompiledMap> precompiled,
+        std::shared_ptr<const std::set<std::string>> staticPrecompiled,
         const wasm::GasInjector& gasInjector)
-      : m_precompiledContract(precompiledContract),
-        m_constantPrecompiled(constantPrecompiled),
-        m_builtInPrecompiled(builtInPrecompiled),
+      : m_evmPrecompiled(std::move(evmPrecompiled)),
+        m_precompiled(std::move(precompiled)),
+        m_staticPrecompiled(std::move(staticPrecompiled)),
         m_blockContext(blockContext),
         m_gasInjector(gasInjector)
     {}
@@ -58,27 +54,16 @@ public:
         int64_t contextID, int64_t seq, bool useCoroutine = true);
     const BlockContext& getBlockContext() { return m_blockContext; };
 
-    std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& address) const
-    {
-        auto constantPrecompiled = m_constantPrecompiled->find(address);
-
-        if (constantPrecompiled != m_constantPrecompiled->end())
-        {
-            return constantPrecompiled->second;
-        }
-        return {};
-    }
+    std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& address) const;
 
 protected:
     void setParams(std::shared_ptr<TransactionExecutive> executive);
 
     void registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive);
 
-    std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
-        m_precompiledContract;
-    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-        m_constantPrecompiled;
-    std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
+    std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> m_evmPrecompiled;
+    std::shared_ptr<PrecompiledMap> m_precompiled;
+    std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
     const BlockContext& m_blockContext;
     const wasm::GasInjector& m_gasInjector;
 };
@@ -89,20 +74,17 @@ public:
     using Ptr = std::shared_ptr<ShardingExecutiveFactory>;
 
     ShardingExecutiveFactory(const BlockContext& blockContext,
-        std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
-            precompiledContract,
-        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-            constantPrecompiled,
-        std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
+        std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled,
+        std::shared_ptr<PrecompiledMap> precompiled,
+        std::shared_ptr<const std::set<std::string>> staticPrecompiled,
         const wasm::GasInjector& gasInjector)
-      : ExecutiveFactory(
-            blockContext, precompiledContract, constantPrecompiled, builtInPrecompiled, gasInjector)
+      : ExecutiveFactory(blockContext, std::move(evmPrecompiled), std::move(precompiled),
+            std::move(staticPrecompiled), gasInjector)
     {}
-    virtual ~ShardingExecutiveFactory() = default;
+    ~ShardingExecutiveFactory() override = default;
 
     std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, bool useCoroutine = true) override;
 };
 
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor
