@@ -26,6 +26,7 @@ private:
     constexpr static size_t DEFAULT_CHUNK_SIZE = 32;          // 32 transactions for one chunk
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                  // Maybe auto adjust
     size_t m_maxToken = std::thread::hardware_concurrency();  // Maybe auto adjust
+    std::unique_ptr<tbb::task_group> m_asyncTaskGroup;
     using ChunkLocalStorage =
         transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
             decltype(std::declval<MultiLayerStorage>().fork(true))>;
@@ -173,9 +174,15 @@ private:
     }
 
 public:
-    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::SchedulerBaseImpl;
     using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::receiptFactory;
     using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::tableNamePool;
+
+    SchedulerParallelImpl(MultiLayerStorage& multiLayerStorage, ReceiptFactory& receiptFactory,
+        transaction_executor::TableNamePool& tableNamePool)
+      : SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>(
+            multiLayerStorage, receiptFactory, tableNamePool),
+        m_asyncTaskGroup(std::make_unique<tbb::task_group>())
+    {}
 
     task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> execute(
         protocol::IsBlockHeader auto const& blockHeader,
@@ -298,6 +305,8 @@ public:
             auto outRange = mergeStorages(reduceRange);
             storageView.mutableStorage().merge(**(outRange.begin()), true);
             chunkSize = std::min(chunkSize * 2, (size_t)RANGES::size(transactions));
+
+            m_asyncTaskGroup->run([executeChunks = std::move(executeChunks)]() {});
         }
 
         // Still have transactions, execute it serially
