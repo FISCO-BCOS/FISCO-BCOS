@@ -161,15 +161,15 @@ private:
     };
 
     task::Task<void> serialExecute(protocol::IsBlockHeader auto const& blockHeader,
-        int startContextID, auto& receiptFactory, auto& tableNamePool,
-        RANGES::range auto&& transactionAndReceipts, auto& storage)
+        auto& receiptFactory, auto& tableNamePool, RANGES::range auto&& transactionAndReceipts,
+        auto& storage)
     {
         Executor<std::remove_cvref_t<decltype(storage)>,
             std::remove_cvref_t<decltype(receiptFactory)>>
             executor(storage, receiptFactory, tableNamePool);
-        for (auto&& [transaction, receipt] : transactionAndReceipts)
+        for (auto&& [contextID, transaction, receipt] : transactionAndReceipts)
         {
-            receipt = co_await executor.execute(blockHeader, transaction, startContextID++);
+            *receipt = co_await executor.execute(blockHeader, *transaction, contextID);
         }
     }
 

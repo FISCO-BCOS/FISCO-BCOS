@@ -113,14 +113,8 @@ task::Task<void> TxPool::broadcastPushTransaction(const protocol::Transaction& t
     co_return;
 }
 
-task::Task<std::vector<protocol::Transaction::Ptr>> TxPool::getMissedTransactions(
-    std::vector<crypto::HashType> transactionHashes, bcos::crypto::NodeIDPtr fromNodeID)
-{
-    co_return std::vector<protocol::Transaction::Ptr>{};
-}
-
 std::vector<protocol::Transaction::ConstPtr> TxPool::getTransactions(
-    RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+    RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
 {
     return m_txpoolStorage->getTransactions(std::move(hashes));
 }

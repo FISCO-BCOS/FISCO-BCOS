@@ -180,12 +180,12 @@ public:
         }
 
         [[maybe_unused]] auto [merkleNodes, merkleLevels] =
-            getMerkleSize(RANGES::size(originHashes));
+            getMerkleSize((unsigned)RANGES::size(originHashes));
         bcos::concepts::resizeTo(out, merkleNodes);
 
         // Calculate first level from originHashes
         auto it = RANGES::begin(out);
-        auto nextNodes = getNextLevelSize(RANGES::size(originHashes));
+        auto nextNodes = getNextLevelSize((unsigned)RANGES::size(originHashes));
         setNumberToHash(nextNodes, *(it++));
         auto outputRange = RANGES::subrange<decltype(it)>(it, it + nextNodes);
         calculateLevelHashes(originHashes, outputRange);
