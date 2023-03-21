@@ -4,11 +4,14 @@
 #include "ReadWriteSetStorage.h"
 #include "SchedulerBaseImpl.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-utilities/Exceptions.h"
 #include <bcos-task/Wait.h>
-#include <tbb/parallel_pipeline.h>
+#include <oneapi/tbb/parallel_pipeline.h>
+#include <boost/exception/detail/exception_ptr.hpp>
+#include <boost/throw_exception.hpp>
 #include <atomic>
 #include <iterator>
-#include <range/v3/view/transform.hpp>
+#include <stdexcept>
 
 namespace bcos::transaction_scheduler
 {
@@ -24,79 +27,149 @@ private:
     size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                  // Maybe auto adjust
     size_t m_maxToken = std::thread::hardware_concurrency();  // Maybe auto adjust
     using ChunkLocalStorage =
-        decltype(std::declval<transaction_scheduler::MultiLayerStorage<
-                     typename MultiLayerStorage::MutableStorage, void,
-                     decltype(std::declval<MultiLayerStorage>().fork(true))>>()
-                     .fork(true));
+        transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
+            decltype(std::declval<MultiLayerStorage>().fork(true))>;
     using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::multiLayerStorage;
 
-    template <class TransactionsRange>
-    struct ChunkExecuteStatus
+    template <class TransactionAndReceiptssRange>
+    class ChunkExecuteStatus
     {
-        TransactionsRange transactionsRange;
-
-        std::optional<ChunkLocalStorage> localStorage;
-        std::optional<ReadWriteSetStorage<ChunkLocalStorage>> readWriteSetStorage;
-        boost::container::small_vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>,
-            DEFAULT_CHUNK_SIZE>
-            receipts;
-
-        std::atomic_bool finished = false;
-        std::atomic_bool compareLeft = false;
-        std::atomic_bool compareRight = false;
-
-        void reset(TransactionsRange range, auto& storage)
+    private:
+        struct Storage
         {
-            transactionsRange = std::move(range);
-            localStorage.emplace(storage);
-            readWriteSetStorage.emplace(*localStorage);
-            receipts.clear();
-            finished = false;
-            compareLeft = false;
-            compareRight = false;
+            Storage(auto& storage)
+              : m_localStorage(storage),
+                m_localStorageView(forkAndMutable(m_localStorage)),
+                m_readWriteSetStorage(m_localStorageView)
+            {}
+
+            ChunkLocalStorage m_localStorage;
+            decltype(std::declval<ChunkLocalStorage>().fork(true)) m_localStorageView;
+            ReadWriteSetStorage<decltype(m_localStorageView)> m_readWriteSetStorage;
+
+            auto forkAndMutable(auto& storage)
+            {
+                storage.newMutable();
+                auto view = storage.fork(true);
+                return view;
+            }
+        };
+
+        int64_t m_chunkIndex = 0;
+        std::atomic_int64_t* m_lastChunkIndex = nullptr;
+        std::optional<Storage> m_storages;
+        TransactionAndReceiptssRange m_transactionAndReceiptsRange;
+
+        std::atomic_bool m_finished = false;
+        std::atomic_bool m_comparePrev = false;
+        std::atomic_bool m_compareNext = false;
+
+    public:
+        void init(int64_t chunkIndex, std::atomic_int64_t& lastChunkIndex,
+            TransactionAndReceiptssRange transactionAndReceiptsRange, auto& storage)
+        {
+            m_chunkIndex = chunkIndex;
+            m_lastChunkIndex = std::addressof(lastChunkIndex);
+            m_transactionAndReceiptsRange = std::move(transactionAndReceiptsRange);
+            m_storages.emplace(storage);
         }
 
+        int64_t chunkIndex() { return m_chunkIndex; }
+        auto count() { return RANGES::size(m_transactionAndReceiptsRange); }
+        ChunkLocalStorage& localStorage() & { return m_storages->m_localStorage; }
+
         task::Task<bool> execute(protocol::IsBlockHeader auto const& blockHeader,
-            int startContextID, auto& receiptFactory, auto& tableNamePool, int64_t index,
-            std::atomic_int64_t& lastChunk)
+            auto& receiptFactory, auto& tableNamePool)
         {
-            localStorage->newTemporaryMutable();
-            Executor<ReadWriteSetStorage<ChunkLocalStorage>,
+            PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
+            Executor<decltype(m_storages->m_readWriteSetStorage),
                 std::remove_cvref_t<decltype(receiptFactory)>>
-                executor(*readWriteSetStorage, receiptFactory, tableNamePool);
-            for (auto const& transaction : transactionsRange)
+                executor(m_storages->m_readWriteSetStorage, receiptFactory, tableNamePool);
+            for (auto&& [contextID, transaction, receipt] : m_transactionAndReceiptsRange)
             {
-                if (index >= lastChunk)
+                if (m_chunkIndex >= *m_lastChunkIndex)
                 {
-                    co_return false;
+                    PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute aborted";
+                    co_return m_finished;
                 }
-                receipts.emplace_back(
-                    co_await executor.execute(blockHeader, transaction, startContextID++));
+                *receipt = co_await executor.execute(blockHeader, *transaction, contextID);
             }
 
-            co_return true;
+            PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";
+            m_finished = true;
+            co_return m_finished;
+        }
+
+        void detectRAW(ChunkExecuteStatus* prev, ChunkExecuteStatus* next)
+        {
+            if (prev == nullptr && next == nullptr)
+            {
+                BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty prev and next!"});
+            }
+
+            // Detected RAW
+            if (m_chunkIndex < *m_lastChunkIndex)
+            {
+                bool expected = false;
+                if (prev && prev->m_finished &&
+                    prev->m_compareNext.compare_exchange_strong(expected, true))
+                {
+                    m_comparePrev = true;
+                    if (prev->m_storages->m_readWriteSetStorage.hasRAWIntersection(
+                            m_storages->m_readWriteSetStorage))
+                    {
+                        PARALLEL_SCHEDULER_LOG(DEBUG)
+                            << "Detected left RAW intersection, abort: " << m_chunkIndex;
+                        decreaseNumber(*m_lastChunkIndex, m_chunkIndex);
+                        return;
+                    }
+                }
+            }
+
+            if (m_chunkIndex < *m_lastChunkIndex)
+            {
+                bool expected = false;
+                if (next && next->m_finished &&
+                    m_compareNext.compare_exchange_strong(expected, true))
+                {
+                    next->m_comparePrev = true;
+                    if (m_storages->m_readWriteSetStorage.hasRAWIntersection(
+                            next->m_storages->m_readWriteSetStorage))
+                    {
+                        PARALLEL_SCHEDULER_LOG(DEBUG)
+                            << "Detected right RAW intersection, abort: " << m_chunkIndex + 1;
+                        decreaseNumber(*m_lastChunkIndex, m_chunkIndex + 1);
+                        return;
+                    }
+                }
+            }
+        }
+
+        void merge(ChunkExecuteStatus& from)
+        {
+            m_storages->m_localStorageView.mutableStorage().merge(
+                from.m_storages->m_localStorageView.mutableStorage(), false);
+        }
+
+        static void decreaseNumber(std::atomic_int64_t& number, int64_t target)
+        {
+            auto current = number.load();
+            while (current > target && !number.compare_exchange_strong(current, target))
+            {}
         }
     };
 
     task::Task<void> serialExecute(protocol::IsBlockHeader auto const& blockHeader,
         int startContextID, auto& receiptFactory, auto& tableNamePool,
-        RANGES::range auto const& transactions, auto& receipts, auto& storage)
+        RANGES::range auto&& transactionAndReceipts, auto& storage)
     {
         Executor<std::remove_cvref_t<decltype(storage)>,
             std::remove_cvref_t<decltype(receiptFactory)>>
             executor(storage, receiptFactory, tableNamePool);
-        for (auto const& transaction : transactions)
+        for (auto&& [transaction, receipt] : transactionAndReceipts)
         {
-            receipts.emplace_back(
-                co_await executor.execute(blockHeader, transaction, startContextID++));
+            receipt = co_await executor.execute(blockHeader, transaction, startContextID++);
         }
-    }
-
-    static void decreaseNumber(std::atomic_int64_t& number, int64_t target)
-    {
-        auto current = number.load();
-        while (current > target && !number.compare_exchange_strong(current, target))
-        {}
     }
 
 public:
@@ -108,160 +181,179 @@ public:
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
     {
-        auto localMultiLayerStorage = multiLayerStorage().fork(true);
-
+        auto storageView = multiLayerStorage().fork(true);
         std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
-        if constexpr (RANGES::sized_range<decltype(transactions)>)
+        receipts.resize(RANGES::size(transactions));
+
+        size_t offset = 0;
+        auto chunkSize = m_chunkSize;
+        while (offset < RANGES::size(transactions))
         {
-            receipts.reserve(RANGES::size(transactions));
-        }
+            auto transactionAndReceiptsChunks =
+                RANGES::zip_view(RANGES::iota_view(0LU, (size_t)RANGES::size(transactions)),
+                    transactions | RANGES::views::addressof, receipts | RANGES::views::addressof) |
+                RANGES::views::drop(offset) | RANGES::views::chunk(chunkSize);
+            using ChunkType =
+                ChunkExecuteStatus<RANGES::range_value_t<decltype(transactionAndReceiptsChunks)>>;
+            std::vector<ChunkType> executeChunks(
+                (size_t)RANGES::size(transactionAndReceiptsChunks));
 
-        auto transactionChunks = transactions | RANGES::views::chunk(m_chunkSize);
-        std::vector<ChunkExecuteStatus<RANGES::range_value_t<decltype(transactionChunks)>>>
-            executeChunks(RANGES::size(transactionChunks));
+            std::atomic_int64_t lastChunkIndex =
+                (int64_t)RANGES::size(transactionAndReceiptsChunks);
+            int64_t chunkIndex = 0;
+            executeChunks[chunkIndex].init(
+                chunkIndex, lastChunkIndex, transactionAndReceiptsChunks[chunkIndex], storageView);
 
-        auto chunkIt = RANGES::begin(executeChunks);
-        auto tokens = m_maxToken;
-        while (chunkIt != RANGES::end(executeChunks) && tokens > 1)
-        {
-            auto offset = RANGES::distance(RANGES::begin(executeChunks), chunkIt);
-            auto currentChunkView = RANGES::subrange(chunkIt, RANGES::end(executeChunks));
-            auto currentChunkIt = RANGES::begin(currentChunkView);
-
-            std::atomic_int64_t lastChunk = RANGES::size(currentChunkView);
+            auto executeIt = RANGES::begin(executeChunks);
+            auto finishedIt = RANGES::begin(executeChunks);
+            tbb::task_group mergeTasks;
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
-            tbb::parallel_pipeline(tokens,
-                tbb::make_filter<void, std::optional<int64_t>>(tbb::filter_mode::serial_in_order,
-                    [&](tbb::flow_control& control) {
-                        int64_t index =
-                            RANGES::distance(RANGES::begin(currentChunkView), currentChunkIt);
-                        if (currentChunkIt == RANGES::end(currentChunkView) || index >= lastChunk)
+            tbb::parallel_pipeline(m_maxToken,
+                tbb::make_filter<void, std::optional<RANGES::iterator_t<decltype(executeChunks)>>>(
+                    tbb::filter_mode::serial_in_order,
+                    [&](tbb::flow_control& control)
+                        -> std::optional<RANGES::iterator_t<decltype(executeChunks)>> {
+                        if (chunkIndex >= lastChunkIndex)
                         {
                             control.stop();
-                            return std::optional<int64_t>{};
+                            return {executeIt++};
                         }
-                        if (currentChunkIt + 1 != RANGES::end(currentChunkView))
+
+                        if ((size_t)chunkIndex != RANGES::size(transactionAndReceiptsChunks) - 1)
                         {
-                            (currentChunkIt + 1)
-                                ->reset(
-                                    transactionChunks[index + offset + 1], localMultiLayerStorage);
+                            executeChunks[chunkIndex + 1].init(chunkIndex + 1, lastChunkIndex,
+                                transactionAndReceiptsChunks[chunkIndex + 1], storageView);
                         }
-                        if (currentChunkIt == RANGES::begin(currentChunkView))
-                        {
-                            currentChunkIt->reset(
-                                transactionChunks[index + offset], localMultiLayerStorage);
-                        }
-                        ++currentChunkIt;
-                        return std::make_optional(index);
+                        ++chunkIndex;
+                        return {executeIt++};
                     }) &
-                    tbb::make_filter<std::optional<int64_t>, std::optional<int64_t>>(
+                    tbb::make_filter<std::optional<RANGES::iterator_t<decltype(executeChunks)>>,
+                        std::optional<RANGES::iterator_t<decltype(executeChunks)>>>(
                         tbb::filter_mode::parallel,
-                        [&](std::optional<int64_t> input) {
-                            if (input && *input < lastChunk)
+                        [&](std::optional<RANGES::iterator_t<decltype(executeChunks)>> input)
+                            -> std::optional<RANGES::iterator_t<decltype(executeChunks)>> {
+                            if (!input)
                             {
-                                auto index = *input;
-                                auto startContextID = (offset + index) * m_chunkSize;
-                                PARALLEL_SCHEDULER_LOG(DEBUG)
-                                    << "Chunk " << offset + index << " executing...";
-                                currentChunkView[index].finished = task::syncWait(
-                                    currentChunkView[index].execute(blockHeader, startContextID,
-                                        receiptFactory(), tableNamePool(), index, lastChunk));
-
-                                if (currentChunkView[index].finished)
-                                {
-                                    PARALLEL_SCHEDULER_LOG(DEBUG)
-                                        << "Chunk " << offset + index << " execute finished";
-                                    bool expected = false;
-                                    // Detected RAW
-                                    if (index < lastChunk)
-                                    {
-                                        if (index > 0 && currentChunkView[index - 1].finished &&
-                                            currentChunkView[index - 1]
-                                                .compareRight.compare_exchange_strong(
-                                                    expected, true))
-                                        {
-                                            currentChunkView[index].compareLeft = true;
-                                            if (currentChunkView[index - 1]
-                                                    .readWriteSetStorage->hasRAWIntersection(
-                                                        *(currentChunkView[index]
-                                                                .readWriteSetStorage)))
-                                            {
-                                                PARALLEL_SCHEDULER_LOG(DEBUG)
-                                                    << "Detected left RAW intersection, abort: "
-                                                    << offset + index;
-                                                decreaseNumber(lastChunk, index);
-                                            }
-                                        }
-                                    }
-
-                                    if (index < lastChunk)
-                                    {
-                                        expected = false;
-                                        if (index < (int64_t)(RANGES::size(currentChunkView) - 1) &&
-                                            currentChunkView[index + 1].finished &&
-                                            currentChunkView[index]
-                                                .compareRight.compare_exchange_strong(
-                                                    expected, true))
-                                        {
-                                            currentChunkView[index + 1].compareLeft = true;
-                                            if (currentChunkView[index]
-                                                    .readWriteSetStorage->hasRAWIntersection(
-                                                        *(currentChunkView[index + 1]
-                                                                .readWriteSetStorage)))
-                                            {
-                                                PARALLEL_SCHEDULER_LOG(DEBUG)
-                                                    << "Detected right RAW intersection, abort: "
-                                                    << offset + index + 1;
-                                                decreaseNumber(lastChunk, index + 1);
-                                            }
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    PARALLEL_SCHEDULER_LOG(DEBUG)
-                                        << "Chunk " << offset + index << " execute aborted";
-                                    return std::optional<int64_t>{};
-                                }
-
-                                return std::make_optional<int64_t>(index);
+                                return {};
                             }
-                            return std::optional<int64_t>{};
+
+                            auto& chunkIt = *input;
+                            if (!task::syncWait(chunkIt->execute(
+                                    blockHeader, receiptFactory(), tableNamePool())))
+                            {
+                                return {};
+                            }
+
+                            if (RANGES::size(transactionAndReceiptsChunks) > 1)
+                            {
+                                auto chunkIndex = chunkIt->chunkIndex();
+                                auto prevIt = chunkIt;
+                                auto prev =
+                                    (chunkIndex == 0 ? nullptr : std::addressof(*(--prevIt)));
+
+                                auto nextIt = chunkIt;
+                                auto next =
+                                    (chunkIndex == RANGES::size(transactionAndReceiptsChunks) - 1 ?
+                                            nullptr :
+                                            std::addressof(*(++nextIt)));
+                                chunkIt->detectRAW(prev, next);
+                            }
+
+                            return input;
                         }) &
-                    tbb::make_filter<std::optional<int64_t>, void>(
-                        tbb::filter_mode::serial_in_order, [&](std::optional<int64_t> input) {
-                            if (!input || *input >= lastChunk)
+                    tbb::make_filter<std::optional<RANGES::iterator_t<decltype(executeChunks)>>,
+                        void>(tbb::filter_mode::serial_in_order,
+                        [&](std::optional<RANGES::iterator_t<decltype(executeChunks)>> input) {
+                            if (!input || (*input)->chunkIndex() >= lastChunkIndex)
                             {
                                 return;
                             }
+                            offset += (*input)->count();
+                            ++finishedIt;
 
-                            auto& chunkReceipts = currentChunkView[*input].receipts;
-                            PARALLEL_SCHEDULER_LOG(DEBUG)
-                                << "Inserting receipts... " << chunkReceipts.size();
-                            RANGES::move(chunkReceipts, std::back_inserter(receipts));
-                            ++chunkIt;
+                            auto index = (*input)->chunkIndex();
+                            if (index > 0 && (index + 2) % 2 != 0)
+                            {
+                                mergeTasks.run([&executeChunks, index = (*input)->chunkIndex()]() {
+                                    executeChunks[index].merge(executeChunks[index - 1]);
+                                });
+                            }
                         }));
+            mergeTasks.wait();
 
-            auto mergeRange = RANGES::subrange(RANGES::begin(currentChunkView), chunkIt);
-            PARALLEL_SCHEDULER_LOG(DEBUG) << "Mergeing storage... " << RANGES::size(mergeRange);
-            for (auto& chunk : mergeRange)
-            {
-                localMultiLayerStorage.mutableStorage().merge(chunk.localStorage->mutableStorage());
-            }
+            MergeRangeType reduceRange =
+                RANGES::subrange(RANGES::begin(executeChunks), finishedIt) |
+                RANGES::views::chunk(2) |
+                RANGES::views::transform(
+                    [](auto&& input) -> typename MultiLayerStorage::MutableStorage* {
+                        if (RANGES::size(input) > 1)
+                        {
+                            auto& mutableStorage = input[1].localStorage().mutableStorage();
+                            return std::addressof(mutableStorage);
+                        }
+                        auto& mutableStorage = input[0].localStorage().mutableStorage();
+                        return std::addressof(mutableStorage);
+                    });
 
-            tokens /= 2;
+            auto outRange = mergeStorages(reduceRange);
+            storageView.mutableStorage().merge(**(outRange.begin()), true);
+            chunkSize = std::min(chunkSize * 2, (size_t)RANGES::size(transactions));
         }
 
         // Still have transactions, execute it serially
-        if (chunkIt != RANGES::end(executeChunks))
-        {
-            auto startOffset =
-                RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize;
-            co_await serialExecute(blockHeader, startOffset, receiptFactory(), tableNamePool(),
-                transactions | RANGES::views::drop(startOffset), receipts, localMultiLayerStorage);
-        }
+        // if (chunkIt != RANGES::end(executeChunks))
+        // {
+        //     auto startOffset =
+        //         RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize;
+        //     co_await serialExecute(blockHeader, startOffset, receiptFactory(), tableNamePool(),
+        //         transactionAndReceiptsChunks | RANGES::views::drop(startOffset),
+        //         localMultiLayerStorage);
+        // }
 
         co_return receipts;
+    }
+
+    using MergeRangeType = RANGES::any_view<typename MultiLayerStorage::MutableStorage*,
+        RANGES::category::mask | RANGES::category::sized>;
+    MergeRangeType mergeStorages(MergeRangeType& range)
+    {
+        auto inputRange = range | RANGES::views::chunk(2);
+        MergeRangeType outputRange =
+            inputRange | RANGES::views::transform(
+                             [](auto&& input) -> typename MultiLayerStorage::MutableStorage* {
+                                 typename MultiLayerStorage::MutableStorage* storage = nullptr;
+                                 for (auto* ptr : input)
+                                 {
+                                     storage = ptr;
+                                 }
+                                 return storage;
+                             });
+
+        tbb::task_group mergeGroup;
+        for (auto&& subrange : inputRange)
+        {
+            mergeGroup.run([subrange]() {
+                typename MultiLayerStorage::MutableStorage* storage = nullptr;
+                for (auto* ptr : subrange)
+                {
+                    if (!storage)
+                    {
+                        storage = ptr;
+                    }
+                    else
+                    {
+                        ptr->merge(*storage, false);
+                    }
+                }
+            });
+        }
+        mergeGroup.wait();
+
+        if (RANGES::size(outputRange) > 1)
+        {
+            return mergeStorages(outputRange);
+        }
+        return outputRange;
     }
 
     void setChunkSize(size_t chunkSize) { m_chunkSize = chunkSize; }

@@ -13,7 +13,6 @@ class ReadWriteSetStorage
 {
 private:
     using Empty = std::monostate;
-
     Storage& m_storage;
     [[no_unique_address]] std::conditional_t<enableReadSet,
         std::set<typename Storage::Key, std::less<>>, Empty>

@@ -449,7 +449,6 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                                     << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
             }
 
-            std::string extraData = std::string(transaction->extraData());
             auto start = utcSteadyTime();
             co_await txpool->broadcastPushTransaction(*transaction);
             auto submitResult = co_await txpool->submitTransaction(transaction);
@@ -472,7 +471,6 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                 *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
             jResp["to"] = submitResult->to();
             jResp["from"] = toHexStringWithPrefix(submitResult->sender());
-            jResp["extraData"] = extraData;
 
             // TODO: check if needed
             // jResp["input"] = toHexStringWithPrefix(transaction->input());

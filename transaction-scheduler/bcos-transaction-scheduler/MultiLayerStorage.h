@@ -62,7 +62,23 @@ public:
             m_cacheStorage;
         std::unique_lock<std::mutex> m_mutableLock;
 
+        View(BackendStorage& backendStorage) requires(!withCacheStorage)
+          : m_backendStorage(backendStorage)
+        {}
+        View(BackendStorage& backendStorage,
+            std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
+                std::monostate>
+                cacheStorage) requires(withCacheStorage)
+          : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
+        {}
+
     public:
+        View(const View&) = delete;
+        View& operator=(const View&) = delete;
+        View(View&&) noexcept = default;
+        View& operator=(View&&) noexcept = default;
+        ~View() noexcept = default;
+
         class ReadIterator
         {
             friend class View;
@@ -127,16 +143,6 @@ public:
 
         using Key = KeyType;
         using Value = ValueType;
-
-        View(BackendStorage& backendStorage) requires(!withCacheStorage)
-          : m_backendStorage(backendStorage)
-        {}
-        View(BackendStorage& backendStorage,
-            std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
-                std::monostate>
-                cacheStorage) requires(withCacheStorage)
-          : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
-        {}
 
         template <class... Args>
         void newTemporaryMutable(Args... args)
@@ -285,7 +291,7 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
+    explicit MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
     {}
 

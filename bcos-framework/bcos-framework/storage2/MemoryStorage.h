@@ -156,7 +156,7 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MemoryStorage(unsigned buckets = 0) requires(!withConcurrent)
+    MemoryStorage() requires(!withConcurrent)
     {
         if constexpr (withMRU)
         {
@@ -164,7 +164,7 @@ public:
         }
     }
 
-    MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
+    explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
       : m_buckets(std::min(buckets, getBucketSize()))
     {
         if constexpr (withMRU)
@@ -495,25 +495,31 @@ public:
         return {};
     }
 
-    void merge(MemoryStorage& from)
+    void merge(MemoryStorage& from, bool overwrite)
     {
-        for (auto tuple : RANGES::zip_view(m_buckets, from.m_buckets))
+        for (auto bucketPair : RANGES::zip_view(m_buckets, from.m_buckets))
         {
-            auto& [bucket, fromBucket] = tuple;
+            auto& [bucket, fromBucket] = bucketPair;
             Lock toLock(bucket.mutex);
             Lock fromLock(fromBucket.mutex);
 
             auto& index = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
-            while (!fromIndex.empty())
+
+            if (overwrite)
             {
-                auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
-                if (!merged)
+                while (!fromIndex.empty())
                 {
-                    auto erasedIt = index.erase(it);
-                    auto fromNode = fromIndex.extract(fromIndex.begin());
-                    index.insert(erasedIt, std::move(fromNode));
+                    auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
+                    if (!merged)
+                    {
+                        index.insert(index.erase(it), fromIndex.extract(fromIndex.begin()));
+                    }
                 }
+            }
+            else
+            {
+                index.merge(fromIndex);
             }
         }
     }

@@ -38,63 +38,39 @@ public:
         auto& mutableStorage = m_multiLayerStorage.mutableStorage();
         auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
 
-        auto range = it.range();
+        static constexpr int HASH_CHUNK_SIZE = 32;
+        auto range = it.range() | RANGES::views::chunk(HASH_CHUNK_SIZE);
         tbb::combinable<bcos::h256> combinableHash;
 
-        auto currentRangeIt = RANGES::begin(range);
-        tbb::parallel_pipeline(std::thread::hardware_concurrency(),
-            tbb::make_filter<void,
-                std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
-                    RANGES::begin(range), RANGES::end(range)))>>(tbb::filter_mode::serial_in_order,
-                [&](tbb::flow_control& control)
-                    -> std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
-                        RANGES::begin(range), RANGES::end(range)))> {
-                    if (currentRangeIt == RANGES::end(range))
-                    {
-                        control.stop();
-                        return {};
-                    }
+        tbb::task_group taskGroup;
+        for (auto&& subrange : range)
+        {
+            taskGroup.run([subrange = std::forward<decltype(subrange)>(subrange), &combinableHash,
+                              &blockHeader, &hashImpl]() {
+                auto& entryHash = combinableHash.local();
 
-                    auto start = currentRangeIt;
-                    constexpr static int HASH_CHUNK_SIZE = 100;
-                    for (auto num = 0;
-                         num < HASH_CHUNK_SIZE && currentRangeIt != RANGES::end(range); ++num)
+                for (auto const& keyValue : subrange)
+                {
+                    auto& [key, entry] = keyValue;
+                    auto& [tableName, keyName] = *key;
+                    auto tableNameView = *tableName;
+                    auto keyView = keyName.toStringView();
+                    if (entry)
                     {
-                        ++currentRangeIt;
+                        entryHash ^=
+                            entry->hash(tableNameView, keyView, hashImpl, blockHeader.version());
                     }
-                    return std::make_optional(
-                        RANGES::subrange<decltype(start)>(start, currentRangeIt));
-                }) &
-                tbb::make_filter<std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(
-                                         range))>(RANGES::begin(range), RANGES::end(range)))>,
-                    void>(tbb::filter_mode::parallel,
-                    [&combinableHash, &hashImpl, &blockHeader](auto const& entryRange) {
-                        if (!entryRange)
-                        {
-                            return;
-                        }
-
-                        auto& entryHash = combinableHash.local();
-                        for (auto const& keyValuePair : *entryRange)
-                        {
-                            auto& [key, entry] = keyValuePair;
-                            auto& [tableName, keyName] = *key;
-                            auto tableNameView = *tableName;
-                            auto keyView = keyName.toStringView();
-                            if (entry)
-                            {
-                                entryHash ^= entry->hash(
-                                    tableNameView, keyView, hashImpl, blockHeader.version());
-                            }
-                            else
-                            {
-                                storage::Entry deleteEntry;
-                                deleteEntry.setStatus(storage::Entry::DELETED);
-                                entryHash ^= deleteEntry.hash(
-                                    tableNameView, keyView, hashImpl, blockHeader.version());
-                            }
-                        }
-                    }));
+                    else
+                    {
+                        storage::Entry deleteEntry;
+                        deleteEntry.setStatus(storage::Entry::DELETED);
+                        entryHash ^= deleteEntry.hash(
+                            tableNameView, keyView, hashImpl, blockHeader.version());
+                    }
+                }
+            });
+        }
+        taskGroup.wait();
         m_multiLayerStorage.pushMutableToImmutableFront();
 
         co_return combinableHash.combine(
