@@ -6,17 +6,11 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-utilities/Exceptions.h"
 #include <bcos-task/Wait.h>
-#include <oneapi/tbb/blocked_range.h>
-#include <oneapi/tbb/parallel_reduce.h>
-#include <tbb/parallel_pipeline.h>
-#include <tbb/parallel_reduce.h>
+#include <oneapi/tbb/parallel_pipeline.h>
 #include <boost/exception/detail/exception_ptr.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <iterator>
-#include <range/v3/view/addressof.hpp>
-#include <range/v3/view/any_view.hpp>
-#include <range/v3/view/transform.hpp>
 #include <stdexcept>
 
 namespace bcos::transaction_scheduler

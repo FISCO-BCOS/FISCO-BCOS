@@ -9,7 +9,6 @@
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-task/Task.h>
 #include <oneapi/tbb/combinable.h>
-#include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 
 namespace bcos::transaction_scheduler
