@@ -241,6 +241,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     blockHeader->setNumber(1);
     std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
     blockHeader->setParentInfo(parentInfos);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
@@ -478,6 +479,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
     std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
     blockHeader->setParentInfo(parentInfos);
@@ -743,6 +745,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
     std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
     blockHeader->setParentInfo(parentInfos);
@@ -984,6 +987,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
     std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
     blockHeader->setParentInfo(parentInfos);

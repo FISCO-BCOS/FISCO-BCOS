@@ -52,6 +52,7 @@ struct PrecompiledExecResult;
 namespace executor
 {
 class HostContext;
+class BlockContext;
 
 class TransactionExecutive : public std::enable_shared_from_this<TransactionExecutive>
 {
@@ -103,18 +104,14 @@ public:
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address) const;
 
-    void setConstantPrecompiled(
-        const std::string& _address, std::shared_ptr<precompiled::Precompiled> precompiled);
-
-    void setBuiltInPrecompiled(std::shared_ptr<const std::set<std::string>> _builtInPrecompiled)
+    void setStaticPrecompiled(std::shared_ptr<const std::set<std::string>> _staticPrecompiled)
     {
-        m_builtInPrecompiled = _builtInPrecompiled;
+        m_staticPrecompiled = std::move(_staticPrecompiled);
     }
 
-    inline bool isBuiltInPrecompiled(const std::string& _a) const
+    inline bool isStaticPrecompiled(const std::string& _a) const
     {
-        return _a.starts_with(precompiled::SYS_ADDRESS_PREFIX) &&
-               m_builtInPrecompiled->contains(_a);
+        return _a.starts_with(precompiled::SYS_ADDRESS_PREFIX) && m_staticPrecompiled->contains(_a);
     }
 
     inline bool isEthereumPrecompiled(const std::string& _a) const
@@ -128,12 +125,9 @@ public:
     int64_t costOfPrecompiled(const std::string& _a, bytesConstRef _in) const;
 
     void setEVMPrecompiled(
-        std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
-            precompiledContract);
+        std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>);
 
-    void setConstantPrecompiled(
-        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-            _constantPrecompiled);
+    void setPrecompiled(std::shared_ptr<PrecompiledMap>);
 
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(
         precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
@@ -158,8 +152,8 @@ protected:
     virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, bool useCoroutine = true)
     {
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext, m_evmPrecompiled,
-            m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(
+            m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
 
 
         return executiveFactory->build(_contractAddress, contextID, seq, useCoroutine);
@@ -224,11 +218,9 @@ protected:
         std::string_view _sender, std::string_view _type, int64_t gasLeft);
 
     const BlockContext& m_blockContext;  ///< Information on the runtime environment.
-    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-        m_constantPrecompiled;
-    std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
-        m_evmPrecompiled;
-    std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
+    std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> m_evmPrecompiled;
+    std::shared_ptr<PrecompiledMap> m_precompiled;
+    std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
 
     std::string m_contractAddress;
     int64_t m_contextID;

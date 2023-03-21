@@ -40,7 +40,7 @@ public:
         int64_t contextID, int64_t seq, bool useCoroutine = true) override
     {
         ShardingExecutiveFactory executiveFactory = ShardingExecutiveFactory(m_blockContext,
-            m_evmPrecompiled, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+            m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
 
         return executiveFactory.build(_contractAddress, contextID, seq, useCoroutine);
     }
