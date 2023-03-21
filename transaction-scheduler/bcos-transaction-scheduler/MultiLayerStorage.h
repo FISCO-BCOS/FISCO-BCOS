@@ -291,7 +291,7 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
+    explicit MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
     {}
 

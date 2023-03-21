@@ -39,28 +39,62 @@ public:
         auto& mutableStorage = m_multiLayerStorage.mutableStorage();
         auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
 
-        auto range = it.range();
+        auto range = it.range() | RANGES::views::chunk(16);
         tbb::combinable<bcos::h256> combinableHash;
 
-        tbb::parallel_for_each(range, [&](auto const& keyValue) {
-            auto& entryHash = combinableHash.local();
+        tbb::task_group taskGroup;
+        for (auto&& subrange : range)
+        {
+            taskGroup.run([subrange = std::forward<decltype(subrange)>(subrange), &combinableHash,
+                              &blockHeader, &hashImpl]() {
+                auto& entryHash = combinableHash.local();
 
-            auto& [key, entry] = keyValue;
-            auto& [tableName, keyName] = *key;
-            auto tableNameView = *tableName;
-            auto keyView = keyName.toStringView();
-            if (entry)
-            {
-                entryHash ^= entry->hash(tableNameView, keyView, hashImpl, blockHeader.version());
-            }
-            else
-            {
-                storage::Entry deleteEntry;
-                deleteEntry.setStatus(storage::Entry::DELETED);
-                entryHash ^=
-                    deleteEntry.hash(tableNameView, keyView, hashImpl, blockHeader.version());
-            }
-        });
+                for (auto const& keyValue : subrange)
+                {
+                    auto& [key, entry] = keyValue;
+                    auto& [tableName, keyName] = *key;
+                    auto tableNameView = *tableName;
+                    auto keyView = keyName.toStringView();
+                    if (entry)
+                    {
+                        entryHash ^=
+                            entry->hash(tableNameView, keyView, hashImpl, blockHeader.version());
+                    }
+                    else
+                    {
+                        storage::Entry deleteEntry;
+                        deleteEntry.setStatus(storage::Entry::DELETED);
+                        entryHash ^= deleteEntry.hash(
+                            tableNameView, keyView, hashImpl, blockHeader.version());
+                    }
+                }
+            });
+        }
+        taskGroup.wait();
+        // tbb::parallel_for_each(range, [&](auto const& range) {
+        //     auto& entryHash = combinableHash.local();
+
+        //     for (auto const& keyValue : range)
+        //     {
+        //         auto& [key, entry] = keyValue;
+        //         auto& [tableName, keyName] = *key;
+        //         auto tableNameView = *tableName;
+        //         auto keyView = keyName.toStringView();
+        //         if (entry)
+        //         {
+        //             entryHash ^=
+        //                 entry->hash(tableNameView, keyView, hashImpl, blockHeader.version());
+        //         }
+        //         else
+        //         {
+        //             storage::Entry deleteEntry;
+        //             deleteEntry.setStatus(storage::Entry::DELETED);
+        //             entryHash ^=
+        //                 deleteEntry.hash(tableNameView, keyView, hashImpl,
+        //                 blockHeader.version());
+        //         }
+        //     }
+        // });
         m_multiLayerStorage.pushMutableToImmutableFront();
 
         co_return combinableHash.combine(

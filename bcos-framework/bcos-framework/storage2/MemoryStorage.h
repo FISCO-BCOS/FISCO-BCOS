@@ -156,7 +156,7 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MemoryStorage(unsigned buckets = 0) requires(!withConcurrent)
+    MemoryStorage() requires(!withConcurrent)
     {
         if constexpr (withMRU)
         {
@@ -164,7 +164,7 @@ public:
         }
     }
 
-    MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
+    explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
       : m_buckets(std::min(buckets, getBucketSize()))
     {
         if constexpr (withMRU)

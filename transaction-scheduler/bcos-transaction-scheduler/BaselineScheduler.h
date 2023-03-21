@@ -140,13 +140,12 @@ public:
                 }
 
                 self->m_schedulerImpl.start();
-
                 auto transactions = co_await self->getTransactions(*block);
-                auto receipts = co_await self->m_schedulerImpl.execute(
-                    *blockHeader, transactions | RANGES::views::transform([
-                    ](protocol::Transaction::ConstPtr const& transactionPtr) -> auto& {
-                        return *transactionPtr;
-                    }));
+                auto receipts = co_await self->m_schedulerImpl.execute(*blockHeader,
+                    transactions |
+                        RANGES::views::transform(
+                            [](protocol::Transaction::ConstPtr const& transactionPtr)
+                                -> protocol::Transaction const& { return *transactionPtr; }));
                 bcos::u256 totalGas = 0;
                 for (auto&& [receipt, index] :
                     RANGES::zip_view(receipts, RANGES::iota_view<uint64_t>(0UL)))

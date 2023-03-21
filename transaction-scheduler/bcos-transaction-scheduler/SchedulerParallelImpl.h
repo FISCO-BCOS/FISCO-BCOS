@@ -14,6 +14,8 @@
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <iterator>
+#include <range/v3/view/addressof.hpp>
+#include <range/v3/view/any_view.hpp>
 #include <range/v3/view/transform.hpp>
 #include <stdexcept>
 
@@ -96,7 +98,7 @@ private:
                     PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute aborted";
                     co_return m_finished;
                 }
-                receipt = co_await executor.execute(blockHeader, transaction, contextID);
+                *receipt = co_await executor.execute(blockHeader, *transaction, contextID);
             }
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";
@@ -190,14 +192,13 @@ public:
         receipts.resize(RANGES::size(transactions));
 
         size_t offset = 0;
+        auto chunkSize = m_chunkSize;
         while (offset < RANGES::size(transactions))
         {
             auto transactionAndReceiptsChunks =
-                RANGES::zip_view(RANGES::iota_view(offset, RANGES::size(transactions)),
-                    RANGES::subrange(
-                        RANGES::begin(transactions) + offset, RANGES::end(transactions)),
-                    RANGES::subrange(RANGES::begin(receipts) + offset, RANGES::end(receipts))) |
-                RANGES::views::chunk(m_chunkSize);
+                RANGES::zip_view(RANGES::iota_view(0LU, (size_t)RANGES::size(transactions)),
+                    transactions | RANGES::views::addressof, receipts | RANGES::views::addressof) |
+                RANGES::views::drop(offset) | RANGES::views::chunk(chunkSize);
             using ChunkType =
                 ChunkExecuteStatus<RANGES::range_value_t<decltype(transactionAndReceiptsChunks)>>;
             std::vector<ChunkType> executeChunks(
@@ -205,7 +206,6 @@ public:
 
             std::atomic_int64_t lastChunkIndex =
                 (int64_t)RANGES::size(transactionAndReceiptsChunks);
-
             int64_t chunkIndex = 0;
             executeChunks[chunkIndex].init(
                 chunkIndex, lastChunkIndex, transactionAndReceiptsChunks[chunkIndex], storageView);
@@ -214,7 +214,7 @@ public:
             auto finishedIt = RANGES::begin(executeChunks);
             tbb::task_group mergeTasks;
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
-            tbb::parallel_pipeline((size_t)RANGES::size(transactionAndReceiptsChunks),
+            tbb::parallel_pipeline(m_maxToken,
                 tbb::make_filter<void, std::optional<RANGES::iterator_t<decltype(executeChunks)>>>(
                     tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control)
@@ -287,14 +287,23 @@ public:
                         }));
             mergeTasks.wait();
 
-            auto finsihedRange = RANGES::subrange(RANGES::begin(executeChunks), finishedIt);
-            auto reduceRange = finsihedRange | RANGES::views::transform([](auto& it) -> auto* {
-                auto& mutableStorage = it.localStorage().mutableStorage();
-                return std::addressof(mutableStorage);
-            });
+            MergeRangeType reduceRange =
+                RANGES::subrange(RANGES::begin(executeChunks), finishedIt) |
+                RANGES::views::chunk(2) |
+                RANGES::views::transform(
+                    [](auto&& input) -> typename MultiLayerStorage::MutableStorage* {
+                        if (RANGES::size(input) > 1)
+                        {
+                            auto& mutableStorage = input[1].localStorage().mutableStorage();
+                            return std::addressof(mutableStorage);
+                        }
+                        auto& mutableStorage = input[0].localStorage().mutableStorage();
+                        return std::addressof(mutableStorage);
+                    });
 
             auto outRange = mergeStorages(reduceRange);
-            storageView.mutableStorage().merge(*(outRange[0]), true);
+            storageView.mutableStorage().merge(**(outRange.begin()), true);
+            chunkSize = std::min(chunkSize * 2, (size_t)RANGES::size(transactions));
         }
 
         // Still have transactions, execute it serially
@@ -310,33 +319,45 @@ public:
         co_return receipts;
     }
 
-    std::vector<typename MultiLayerStorage::MutableStorage*> mergeStorages(
-        RANGES::range auto&& range)
+    using MergeRangeType = RANGES::any_view<typename MultiLayerStorage::MutableStorage*,
+        RANGES::category::mask | RANGES::category::sized>;
+    MergeRangeType mergeStorages(MergeRangeType& range)
     {
         auto inputRange = range | RANGES::views::chunk(2);
-        auto outputRange = inputRange | RANGES::views::transform([](auto input) {
-            if (RANGES::size(input) > 1)
-            {
-                return input[1];
-            }
-            return input[0];
-        }) | RANGES::to<std::vector<typename MultiLayerStorage::MutableStorage*>>();
+        MergeRangeType outputRange =
+            inputRange | RANGES::views::transform(
+                             [](auto&& input) -> typename MultiLayerStorage::MutableStorage* {
+                                 typename MultiLayerStorage::MutableStorage* storage = nullptr;
+                                 for (auto* ptr : input)
+                                 {
+                                     storage = ptr;
+                                 }
+                                 return storage;
+                             });
 
-        tbb::parallel_for(tbb::blocked_range<size_t>(0LU, (size_t)RANGES::size(inputRange)),
-            [&inputRange](auto const& range) {
-                for (auto i = range.begin(); i < range.end(); ++i)
+        tbb::task_group mergeGroup;
+        for (auto&& subrange : inputRange)
+        {
+            mergeGroup.run([subrange]() {
+                typename MultiLayerStorage::MutableStorage* storage = nullptr;
+                for (auto* ptr : subrange)
                 {
-                    auto&& subrange = inputRange[i];
-                    if (RANGES::size(subrange) > 1)
+                    if (!storage)
                     {
-                        subrange[1]->merge((*subrange[0]), false);
+                        storage = ptr;
+                    }
+                    else
+                    {
+                        ptr->merge(*storage, false);
                     }
                 }
             });
+        }
+        mergeGroup.wait();
 
         if (RANGES::size(outputRange) > 1)
         {
-            return mergeStorages(std::move(outputRange));
+            return mergeStorages(outputRange);
         }
         return outputRange;
     }
