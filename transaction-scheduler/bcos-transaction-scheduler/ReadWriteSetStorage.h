@@ -13,6 +13,11 @@ class ReadWriteSetStorage
 {
 private:
     using Empty = std::monostate;
+    struct Flags
+    {
+        bool read = false;
+        bool write = false;
+    };
 
     Storage& m_storage;
     [[no_unique_address]] std::conditional_t<enableReadSet,

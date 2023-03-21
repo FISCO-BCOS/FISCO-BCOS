@@ -39,7 +39,8 @@ public:
         auto& mutableStorage = m_multiLayerStorage.mutableStorage();
         auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
 
-        auto range = it.range() | RANGES::views::chunk(16);
+        static constexpr int HASH_CHUNK_SIZE = 32;
+        auto range = it.range() | RANGES::views::chunk(HASH_CHUNK_SIZE);
         tbb::combinable<bcos::h256> combinableHash;
 
         tbb::task_group taskGroup;
@@ -71,30 +72,6 @@ public:
             });
         }
         taskGroup.wait();
-        // tbb::parallel_for_each(range, [&](auto const& range) {
-        //     auto& entryHash = combinableHash.local();
-
-        //     for (auto const& keyValue : range)
-        //     {
-        //         auto& [key, entry] = keyValue;
-        //         auto& [tableName, keyName] = *key;
-        //         auto tableNameView = *tableName;
-        //         auto keyView = keyName.toStringView();
-        //         if (entry)
-        //         {
-        //             entryHash ^=
-        //                 entry->hash(tableNameView, keyView, hashImpl, blockHeader.version());
-        //         }
-        //         else
-        //         {
-        //             storage::Entry deleteEntry;
-        //             deleteEntry.setStatus(storage::Entry::DELETED);
-        //             entryHash ^=
-        //                 deleteEntry.hash(tableNameView, keyView, hashImpl,
-        //                 blockHeader.version());
-        //         }
-        //     }
-        // });
         m_multiLayerStorage.pushMutableToImmutableFront();
 
         co_return combinableHash.combine(
