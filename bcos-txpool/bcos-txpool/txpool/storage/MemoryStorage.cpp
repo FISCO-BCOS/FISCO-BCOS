@@ -578,16 +578,12 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         }
 
         auto txHash = tx->hash();
-        if (m_invalidTxs.contains(txHash))
-        {
-            return;
-        }
-
         // the transaction has already been sealed for newer proposal
         if (_avoidDuplicate && tx->sealed())
         {
             return;
         }
+
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
         {
             // add to m_invalidTxs to be deleted
@@ -595,7 +591,11 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
                 TxsMap::WriteAccessor::Ptr accessor;
                 m_invalidTxs.insert(accessor, {txHash, tx});
             }
+            return;
+        }
 
+        if (m_invalidTxs.contains(txHash))
+        {
             return;
         }
         /// check nonce again when obtain transactions
@@ -750,37 +750,33 @@ void MemoryStorage::clear()
 
 HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
 {
-    for (auto txHash : _txsHashList)
-    {
-        // TODO: use batchFind
-        TxsMap::ReadAccessor::Ptr accessor;
-        auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash);
-        if (!has)
-        {
-            continue;
-        }
-        auto& tx = accessor->value();
-        if (!tx)
-        {
-            continue;
-        }
-        tx->appendKnownNode(_peer);
-    }
+    auto missList = std::make_shared<HashList>();
+    m_txsTable.batchFind<TxsMap::ReadAccessor>(
+        _txsHashList, [&_peer, &missList](auto const& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+            if (!accessor)
+            {
+                missList->push_back(txHash);
+            }
+            else
+            {
+                auto& tx = accessor->value();
+                if (!tx)
+                {
+                    return true;
+                }
+                tx->appendKnownNode(_peer);
+            }
+            return true;
+        });
+
     auto unknownTxsList = std::make_shared<HashList>();
-    for (auto const& txHash : _txsHashList)
-    {
-        if (m_txsTable.contains(txHash))
+    m_missedTxs.batchInsert(*missList, [&unknownTxsList](bool success, const HashType& hash,
+                                           HashSet::WriteAccessor::Ptr accessor) {
+        if (success)
         {
-            continue;
+            unknownTxsList->push_back(hash);
         }
-        if (m_missedTxs.contains(txHash))
-        {
-            continue;
-        }
-        unknownTxsList->push_back(txHash);
-        HashSet::WriteAccessor::Ptr accessor;
-        m_missedTxs.insert(accessor, txHash);
-    }
+    });
 
     if (m_missedTxs.size() >= m_config->poolLimit())
     {
@@ -946,14 +942,30 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     auto startT = utcTime();
     auto lockT = utcTime() - startT;
     startT = utcTime();
-    for (size_t i = 0; i < txsSize; i++)
-    {
-        auto txHash = _block->transactionHash(i);
-        if (!m_txsTable.contains(txHash))
+
+    auto txHashes =
+        RANGES::iota_view<size_t, size_t>{0, txsSize} |
+        RANGES::views::transform([&_block](size_t i) { return _block->transactionHash(i); });
+
+    m_txsTable.batchFind<TxsMap::ReadAccessor>(
+        txHashes, [&missedTxs](const auto& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+            if (!accessor)
+            {
+                missedTxs->emplace_back(txHash);
+            }
+            return true;
+        });
+
+    /*
+        for (size_t i = 0; i < txsSize; i++)
         {
-            missedTxs->emplace_back(txHash);
+            auto txHash = _block->transactionHash(i);
+            if (!m_txsTable.contains(txHash))
+            {
+                missedTxs->emplace_back(txHash);
+            }
         }
-    }
+        */
     TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal") << LOG_KV("consNum", batchId)
                      << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
                      << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT));
@@ -962,8 +974,14 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
 
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 {
-    return RANGES::all_of(_txsHashList->begin(), _txsHashList->end(),
-        [&](auto&& txHash) { return m_txsTable.contains(txHash); });
+    bool has = true;
+    m_txsTable.batchFind<TxsMap::ReadAccessor>(
+        *_txsHashList, [&has](auto const& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+            has = (accessor != nullptr);
+            return has;  // break if has is false
+        });
+
+    return has;
 }
 
 HashListPtr MemoryStorage::getTxsHash(int _limit)
@@ -1014,20 +1032,32 @@ void MemoryStorage::cleanUpExpiredTransactions()
         }
 
         auto tx = accessor->value();
-        if (m_invalidTxs.contains(tx->hash()))
-        {
-            return true;
-        }
         if (tx->sealed() && tx->batchId() >= m_blockNumber)
         {
             return true;
         }
+
         // the txs expired or not
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
         {
             TxsMap::WriteAccessor::Ptr accessor1;
-            m_invalidTxs.insert(accessor1, {tx->hash(), tx});
-            erasedTxs++;
+            if (m_invalidTxs.insert(accessor1, {tx->hash(), tx}))
+            {
+                erasedTxs++;
+            }
+            else
+            {
+                // already exist
+                return true;
+            }
+        }
+        else
+        {
+            if (m_invalidTxs.contains(tx->hash()))
+            {
+                // already exist
+                return true;
+            }
         }
 
         if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)

@@ -139,6 +139,49 @@ BOOST_AUTO_TEST_CASE(serialTest)
     BOOST_CHECK(bucketMap.empty());
 }
 
+BOOST_AUTO_TEST_CASE(batchFindTest)
+{
+    using BKMap = bcos::BucketMap<int, int, std::hash<int>>;
+    using ReadAccessor = BKMap::ReadAccessor;
+    using WriteAccessor = BKMap::WriteAccessor;
+
+    BKMap bucketMap(10);
+    std::cout << bucketMap.size() << std::endl;
+    BOOST_CHECK(bucketMap.empty());
+    std::vector<int> keys;
+
+    // insert
+    for (int i = 0; i < 100; i++)
+    {
+        WriteAccessor::Ptr accessor;
+        bucketMap.insert(accessor, {i, i});
+        keys.push_back(i);
+    }
+    BOOST_CHECK_EQUAL(100, bucketMap.size());
+
+    size_t cnt = 0;
+    bucketMap.batchFind<WriteAccessor>(keys, [&cnt](const int& key, WriteAccessor::Ptr accessor) {
+        BOOST_CHECK(accessor);
+        BOOST_CHECK_EQUAL(key, accessor->key());
+        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+        accessor->value()++;
+        cnt++;
+        return true;
+    });
+    BOOST_CHECK_EQUAL(cnt, 100);
+
+    cnt = 0;
+    bucketMap.batchFind<ReadAccessor>(keys, [&cnt](const int& key, ReadAccessor::Ptr accessor) {
+        BOOST_CHECK(accessor);
+        BOOST_CHECK_EQUAL(key, accessor->key());
+        BOOST_CHECK_EQUAL(accessor->value(), accessor->key() + 1);
+        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+        cnt++;
+        return true;
+    });
+    BOOST_CHECK_EQUAL(cnt, 100);
+}
+
 BOOST_AUTO_TEST_CASE(parallelTest)
 {
     using BKMap = bcos::BucketMap<int, int, std::hash<int>>;
