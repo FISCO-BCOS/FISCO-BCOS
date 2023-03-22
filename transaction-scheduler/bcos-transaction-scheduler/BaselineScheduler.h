@@ -17,6 +17,7 @@
 #include <tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <exception>
 #include <memory>
 #include <queue>
 #include <type_traits>
@@ -60,15 +61,8 @@ private:
     std::list<ExecuteResult> m_results;
     std::mutex m_resultsMutex;
 
-    auto transactionHashes(protocol::IsBlock auto const& block)
-    {
-        return RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
-               RANGES::views::transform(
-                   [&block](uint64_t index) { return block.transactionHash(index); });
-    }
-
     task::AwaitableValue<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
-        protocol::IsBlock auto const& block)
+        protocol::IsBlock auto const& block) const
     {
         if (block.transactionsSize() > 0)
         {
@@ -83,7 +77,6 @@ private:
                     RANGES::views::transform(
                         [&block](uint64_t index) { return block.transactionHash(index); })) |
                 RANGES::to<std::vector<protocol::Transaction::ConstPtr>>()};
-
         // TODO: get lost transaction from ledger
     }
 
@@ -153,11 +146,38 @@ public:
                     auto anyHasher = self->m_hashImpl.hasher();
                     std::visit(
                         [&](auto& hasher) {
-                            bcos::crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>>
-                                merkle;
-                            std::vector<bcos::h256> merkleTrie;
-                            merkle.generateMerkle(self->transactionHashes(*block), merkleTrie);
-                            transactionRootPromise.set_value(*RANGES::rbegin(merkleTrie));
+                            try
+                            {
+                                bcos::crypto::merkle::Merkle<
+                                    std::remove_reference_t<decltype(hasher)>>
+                                    merkle;
+                                std::vector<bcos::h256> merkleTrie;
+                                if (block->transactionsSize() > 0)
+                                {
+                                    auto hashes =
+                                        RANGES::iota_view<uint64_t, uint64_t>(
+                                            0LU, block->transactionsSize()) |
+                                        RANGES::views::transform([&block](uint64_t index) {
+                                            return block->transaction(index)->hash();
+                                        });
+                                    merkle.generateMerkle(hashes, merkleTrie);
+                                }
+                                else
+                                {
+                                    auto hashes =
+                                        RANGES::iota_view<uint64_t, uint64_t>(
+                                            0LU, block->transactionsMetaDataSize()) |
+                                        RANGES::views::transform([&block](uint64_t index) {
+                                            return block->transactionHash(index);
+                                        });
+                                    merkle.generateMerkle(hashes, merkleTrie);
+                                }
+                                transactionRootPromise.set_value(*RANGES::rbegin(merkleTrie));
+                            }
+                            catch (...)
+                            {
+                                transactionRootPromise.set_exception(std::current_exception());
+                            }
                         },
                         anyHasher);
                 });
@@ -211,7 +231,8 @@ public:
                             },
                             anyHasher);
                     });
-                newBlockHeader->setTxsRoot(transactionRootPromise.get_future().get());
+                auto transactionRootFuture = transactionRootPromise.get_future();
+                newBlockHeader->setTxsRoot(transactionRootFuture.get());
                 newBlockHeader->calculateHash(self->m_hashImpl);
 
                 BASELINE_SCHEDULER_LOG(INFO)
