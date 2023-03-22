@@ -1,4 +1,3 @@
-
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
@@ -8,6 +7,10 @@ target_link_libraries(storage PRIVATE blockverifier ethcore)
 if(APPLE)
     target_link_libraries(storage PUBLIC devcore TBB JsonCpp Boost::Serialization Boost::Thread RocksDB zdb)
 else()
-    target_link_libraries(storage PUBLIC devcore TBB JsonCpp Boost::Serialization Boost::Thread RocksDB uring zdb)
+    if(WITH_URING)
+        target_link_libraries(storage PUBLIC devcore TBB JsonCpp Boost::Serialization Boost::Thread RocksDB uring zdb)
+    else()
+        target_link_libraries(storage PUBLIC devcore TBB JsonCpp Boost::Serialization Boost::Thread RocksDB zdb)
+    endif()
 endif()
 target_compile_options(storage PRIVATE -Wno-error)
