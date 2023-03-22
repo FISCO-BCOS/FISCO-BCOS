@@ -550,7 +550,7 @@ int main(int argc, const char* argv[])
     }
 
     auto rocksdbStorage = createRocksDBStorage(storagePath, encryptKey, false, false);
-    MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
+    MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>(false);
     tableFactory->setStateStorage(rocksdbStorage);
     tableFactory->setBlockHash(h256(0));
     tableFactory->setBlockNum(0);

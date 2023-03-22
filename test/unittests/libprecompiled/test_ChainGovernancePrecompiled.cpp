@@ -51,7 +51,7 @@ struct ChainGovernancePrecompiledFixture
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
         auto memStorage = std::make_shared<MemoryStorage2>();
-        tableFactory = std::make_shared<MemoryTableFactory2>();
+        tableFactory = std::make_shared<MemoryTableFactory2>(false);
         tableFactory->setStateStorage(memStorage);
         context = std::make_shared<dev::blockverifier::ExecutiveContext>();
         context->setMemoryTableFactory(tableFactory);
