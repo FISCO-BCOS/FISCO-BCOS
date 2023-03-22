@@ -375,7 +375,13 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
                 (m_onMessageHandler ? m_onMessageHandler(session, message) : std::nullopt))
         {
             auto& error = result.value();
-            // TODO:  discard the request or response the failure ???
+            // TODO:  For p2p basic message type, direct discard request ???
+            SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message")
+                               << LOG_DESC(error.errorMessage())
+                               << LOG_KV("endpoint", nodeIPEndpoint)
+                               << LOG_KV("seq", message->seq())
+                               << LOG_KV("version", message->version())
+                               << LOG_KV("packetType", message->packetType());
             return;
         }
 

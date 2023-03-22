@@ -217,11 +217,10 @@ RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     int64_t QPS = m_rateLimiterConfig.p2pModuleMsgQPS;
     auto enableDistributedRatelimit = m_rateLimiterConfig.enableDistributedRatelimit;
 
-    const auto& moduleMsg2QPS = m_rateLimiterConfig.moduleMsg2QPS;
-    auto it = moduleMsg2QPS.find(_moduleID);
-    if (it != moduleMsg2QPS.end() && it->second > 0)
+    auto tempQPS = m_rateLimiterConfig.moduleMsg2QPS.at(_moduleID);
+    if (tempQPS > 0)
     {
-        QPS = it->second;
+        QPS = tempQPS;
     }
 
     RATELIMIT_MGR_LOG(INFO) << LOG_BADGE("getInRateLimiter")
