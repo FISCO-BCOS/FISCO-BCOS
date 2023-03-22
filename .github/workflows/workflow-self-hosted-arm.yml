@@ -20,7 +20,7 @@ concurrency:
 jobs:
   build_arm:
     name: arm ci check
-    runs-on: self-hosted-arm
+    runs-on: self-hosted-arm3.3
     strategy:
       fail-fast: false
     env:
