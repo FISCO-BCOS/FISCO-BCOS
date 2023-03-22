@@ -366,7 +366,6 @@ void TopicManager::queryNodeIDsByTopic(
             _nodeIDs.push_back(it->first);
         }
     }
-    return;
 }
 
 /**
