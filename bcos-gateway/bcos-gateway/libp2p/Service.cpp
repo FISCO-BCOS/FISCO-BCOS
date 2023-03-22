@@ -537,13 +537,13 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
     {
         std::unordered_map<P2pID, P2PSession::Ptr> sessions;
         {
-            RecursiveGuard l(x_sessions);
+            RecursiveGuard guard(x_sessions);
             sessions = m_sessions;
         }
 
-        for (auto s : sessions)
+        for (auto& session : sessions)
         {
-            asyncSendMessageByNodeID(s.first, message, CallbackFuncWithSession(), options);
+            asyncSendMessageByNodeID(session.first, message, CallbackFuncWithSession(), options);
         }
     }
     catch (std::exception& e)
@@ -558,11 +558,15 @@ P2PInfos Service::sessionInfos()
     P2PInfos infos;
     try
     {
-        RecursiveGuard l(x_sessions);
-        auto s = m_sessions;
-        for (auto const& i : s)
+        std::unordered_map<P2pID, P2PSession::Ptr> sessions;
         {
-            infos.push_back(i.second->p2pInfo());
+            RecursiveGuard l(x_sessions);
+            sessions = m_sessions;
+        }
+
+        for (auto const& session : sessions)
+        {
+            infos.push_back(session.second->p2pInfo());
         }
     }
     catch (std::exception& e)
@@ -575,7 +579,7 @@ P2PInfos Service::sessionInfos()
 
 bool Service::isConnected(P2pID const& nodeID) const
 {
-    RecursiveGuard l(x_sessions);
+    RecursiveGuard guard(x_sessions);
     auto it = m_sessions.find(nodeID);
 
     return it != m_sessions.end() && it->second->active();
@@ -609,7 +613,7 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         _dstNodeID, p2pMessage,
         [_dstNodeID, _callback](NetworkException _e, std::shared_ptr<P2PSession>,
             std::shared_ptr<P2PMessage> _p2pMessage) {
-            auto packetType = _p2pMessage ? _p2pMessage->packetType() : 0;
+            auto packetType = _p2pMessage ? _p2pMessage->packetType() : (uint16_t)0;
             if (_e.errorCode() != 0)
             {
                 SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByP2PNodeID error")
@@ -664,7 +668,7 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
 
 // receive the heartbeat msg
 void Service::Service::onReceiveHeartbeat(
-    NetworkException, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr)
+    NetworkException /*unused*/, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr /*unused*/)
 {
     std::string endpoint = "unknown";
     if (_session)
@@ -678,12 +682,13 @@ void Service::Service::onReceiveHeartbeat(
 
 // receive the protocolInfo
 void Service::onReceiveProtocol(
-    NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+    NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
 {
-    if (_e.errorCode())
+    if (_error.errorCode())
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol error")
-                             << LOG_KV("errorCode", _e.errorCode()) << LOG_KV("errorMsg", _e.what())
+                             << LOG_KV("errorCode", _error.errorCode())
+                             << LOG_KV("errorMsg", _error.what())
                              << LOG_KV("peer", _session ? _session->p2pID() : "unknown");
         return;
     }

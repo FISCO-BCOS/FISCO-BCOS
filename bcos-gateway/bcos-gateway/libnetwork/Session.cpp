@@ -745,6 +745,9 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     {
         return;
     }
+
+    SESSION_LOG(DEBUG) << LOG_BADGE("onTimeout") << LOG_KV("seq", seq);
+
     server->threadPool()->enqueue([callback]() {
         NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
         callback->callback(e, Message::Ptr());
