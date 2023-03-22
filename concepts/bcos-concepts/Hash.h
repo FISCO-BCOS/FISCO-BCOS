@@ -13,7 +13,7 @@ template <class ObjectType, class Hasher>
 concept HasADL = requires(ObjectType object, std::string out1, std::vector<char> out2,
     std::vector<unsigned char> out3, std::vector<std::byte> out4)
 {
-    bcos::crypto::hasher::Hasher<Hasher>;
+    requires bcos::crypto::hasher::Hasher<Hasher>;
     impl_calculate<Hasher>(object, out1);
     impl_calculate<Hasher>(object, out2);
     impl_calculate<Hasher>(object, out3);
