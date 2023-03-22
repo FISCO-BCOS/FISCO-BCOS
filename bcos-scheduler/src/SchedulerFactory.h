@@ -60,6 +60,7 @@ public:
 
     bcos::ledger::LedgerInterface::Ptr getLedger() { return m_ledger; }
 
+    void stop() { m_storage->stop(); }
 private:
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
