@@ -34,14 +34,14 @@ namespace bcos
 
 struct RateCollectorStat
 {
-    std::atomic<int64_t> totalDataSize{0};
-    std::atomic<int64_t> totalFailedDataSize{0};
-    std::atomic<int64_t> lastTotalDataSize{0};
-    std::atomic<int64_t> lastTotalFailedDataSize{0};
-    std::atomic<int64_t> totalCount{0};
-    std::atomic<int64_t> totalFailedCount{0};
-    std::atomic<int64_t> lastCount{0};
-    std::atomic<int64_t> lastFailedCount{0};
+    std::atomic<uint64_t> totalDataSize{0};
+    std::atomic<uint64_t> totalFailedDataSize{0};
+    std::atomic<uint64_t> lastTotalDataSize{0};
+    std::atomic<uint64_t> lastTotalFailedDataSize{0};
+    std::atomic<uint64_t> totalCount{0};
+    std::atomic<uint64_t> totalFailedCount{0};
+    std::atomic<uint64_t> lastCount{0};
+    std::atomic<uint64_t> lastFailedCount{0};
 };
 
 class RateCollector : bcos::ObjectCounter<RateCollector>

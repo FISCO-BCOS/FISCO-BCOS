@@ -140,7 +140,7 @@ inline bool isalNumStr(std::string const& _stringData)
     return true;
 }
 
-inline double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
+inline constexpr double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
 {
     if (_intervalMS > 0)
     {
@@ -150,7 +150,7 @@ inline double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
     return 0;
 }
 
-inline uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
+inline constexpr uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
 {
     if (_intervalMS > 0)
     {
@@ -158,6 +158,12 @@ inline uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
         return qps;
     }
     return 0;
+}
+
+// convert second to milliseconds
+inline constexpr int32_t toMillisecond(int32_t _seconds)
+{
+    return _seconds * 1000;
 }
 
 /// Get the current time in seconds since the epoch in UTC(ms)
