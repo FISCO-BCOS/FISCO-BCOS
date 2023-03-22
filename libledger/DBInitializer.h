@@ -33,6 +33,7 @@
 #include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
 #include <memory>
+#include <utility>
 
 #define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[DBINITIALIZER] "
 namespace dev
@@ -50,7 +51,7 @@ class DBInitializer
 {
 public:
     DBInitializer(std::shared_ptr<LedgerParamInterface> param, dev::GROUP_ID _groupID)
-      : m_groupID(_groupID), m_param(param)
+      : m_groupID(_groupID), m_param(std::move(param))
     {}
     /// create storage DB(must be storage)
     ///  must be open before init
@@ -66,7 +67,9 @@ public:
     virtual void initState(dev::h256 const& genesisHash)
     {
         if (!m_param)
+        {
             return;
+        }
         /// create state storage
         createStateFactory(genesisHash);
         /// create executive context
@@ -123,6 +126,7 @@ private:
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
     std::shared_ptr<dev::storage::CachedStorage> m_cacheStorage = nullptr;
 };
+
 int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
 dev::storage::Storage::Ptr createRocksDBStorage(
     const std::string& _dbPath, const bytes& _encryptKey, bool _disableWAL, bool _enableCache);

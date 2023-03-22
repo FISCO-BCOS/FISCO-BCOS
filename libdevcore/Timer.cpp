@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "Log.h"
 #include <iostream>
+#include <thread>
 
 using namespace dev;
 
@@ -105,7 +106,8 @@ void Timer::destroy()
     m_working = false;
     stop();
     m_ioService->stop();
-    if (m_worker->get_id() != std::this_thread::get_id())
+
+    if (!(m_worker->get_id() == std::this_thread::get_id()))
     {
         m_worker->join();
         m_worker.reset();
