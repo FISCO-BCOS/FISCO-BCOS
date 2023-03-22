@@ -67,6 +67,5 @@ private:
         std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
     int64_t m_schedulerTermId;
     mutable bcos::SharedMutex x_preExecute;
-    std::promise<bcos::Error::UniquePtr> m_preExePromise;
 };
 }  // namespace bcos::scheduler

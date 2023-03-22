@@ -20,8 +20,11 @@
 #pragma once
 
 #include "Common.h"
+#include "Ranges.h"
 #include <map>
+#include <range/v3/view/group_by.hpp>
 #include <unordered_map>
+#include <vector>
 
 namespace bcos
 {
@@ -86,7 +89,12 @@ public:
     template <class AccessorType>
     bool find(typename AccessorType::Ptr& accessor, const KeyType& key)
     {
-        accessor = std::make_shared<AccessorType>(this->shared_from_this());  // acquire lock here
+        if (!accessor)
+        {
+            accessor =
+                std::make_shared<AccessorType>(this->shared_from_this());  // acquire lock here
+        }
+
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
@@ -103,7 +111,11 @@ public:
     // return true if insert happen
     bool insert(typename WriteAccessor::Ptr& accessor, std::pair<KeyType, ValueType> kv)
     {
-        accessor = std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
+        if (!accessor)
+        {
+            accessor =
+                std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
+        }
         auto [it, inserted] = m_values.try_emplace(kv.first, kv.second);
         accessor->setValue(it);
         return inserted;
@@ -126,7 +138,11 @@ public:
     }
 
     size_t size() { return m_values.size(); }
-    bool contains(const KeyType& key) { return m_values.contains(key); }
+    bool contains(const KeyType& key)
+    {
+        ReadGuard guard(m_mutex);
+        return m_values.contains(key);
+    }
 
     // return true if need continue
     template <class AccessorType>  // handler return isContinue
@@ -147,7 +163,12 @@ public:
 
     void clear(typename WriteAccessor::Ptr& accessor)
     {
-        accessor = std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
+        if (!accessor)
+        {
+            accessor =
+                std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
+        }
+
         m_values.clear();
     }
 
@@ -175,13 +196,58 @@ public:
     }
 
     virtual ~BucketMap(){};
-
     // return true if found
     template <class AccessorType>
     bool find(typename AccessorType::Ptr& accessor, const KeyType& key)
     {
         auto idx = getBucketIndex(key);
         return m_buckets[idx]->template find<AccessorType>(accessor, key);
+    }
+
+    // handler: accessor is nullptr if not found, handler return false to break to find
+    template <class AccessorType>
+    void batchFind(
+        const auto& keys, std::function<bool(const KeyType&, typename AccessorType::Ptr)> handler)
+    {
+        auto keyBatches =
+            keys | RANGES::views::chunk_by([this](const KeyType& a, const KeyType& b) {
+                return getBucketIndex(a) == getBucketIndex(b);
+            });
+
+        for (const auto& keyBatch : keyBatches)
+        {
+            typename AccessorType::Ptr accessor;
+            auto idx = getBucketIndex(*keyBatch.begin());
+            for (const auto& key : keyBatch)
+            {
+                m_buckets[idx]->template find<AccessorType>(accessor, key);
+                if (!handler(key, accessor))
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    void batchInsert(const auto& kvs,
+        std::function<void(bool, const KeyType&, typename WriteAccessor::Ptr)> onInsert)
+    {
+        auto kvsBatches =
+            kvs | RANGES::views::chunk_by([this](const std::pair<KeyType, ValueType>& kva,
+                                              const std::pair<KeyType, ValueType>& kvb) {
+                return getBucketIndex(kva.first) == getBucketIndex(kvb.first);
+            });
+
+        for (const auto& kvBatch : kvsBatches)
+        {
+            typename WriteAccessor::Ptr accessor;
+            auto idx = getBucketIndex(*kvBatch.begin());
+            for (const auto& kv : kvBatch)
+            {
+                bool success = m_buckets[idx]->insert(accessor, std::move(kv));
+                onInsert(success, kv.first, success ? accessor : nullptr);
+            }
+        }
     }
 
     bool insert(typename WriteAccessor::Ptr& accessor, std::pair<KeyType, ValueType> kv)
@@ -273,12 +339,30 @@ public:
     BucketSet(size_t bucketSize) : BucketMap<KeyType, EmptyType, BucketHasher>(bucketSize){};
     ~BucketSet() override = default;
 
-
-    bool insert(typename BucketMap<KeyType, EmptyType, BucketHasher>::WriteAccessor::Ptr& accessor,
-        KeyType key)
+    bool insert(typename BucketSet::WriteAccessor::Ptr& accessor, KeyType key)
     {
         return BucketMap<KeyType, EmptyType, BucketHasher>::insert(
             accessor, {std::move(key), EmptyType()});
+    }
+
+    void batchInsert(const auto& keys,
+        std::function<void(bool, const KeyType&, typename BucketSet::WriteAccessor::Ptr)> onInsert)
+    {
+        auto keyBatches =
+            keys | RANGES::views::chunk_by([this](const KeyType& a, const KeyType& b) {
+                return BucketMap<KeyType, EmptyType, BucketHasher>::getBucketIndex(a) ==
+                       BucketMap<KeyType, EmptyType, BucketHasher>::getBucketIndex(b);
+            });
+
+        for (const auto& keyBatch : keyBatches)
+        {
+            typename BucketSet::WriteAccessor::Ptr accessor;
+            for (const auto& key : keyBatch)
+            {
+                bool success = insert(accessor, key);
+                onInsert(success, key, success ? accessor : nullptr);
+            }
+        }
     }
 };
 
