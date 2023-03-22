@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-utilities/Common.h"
+#include "rocksdb/convenience.h"
 #include <bcos-utilities/Error.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
@@ -651,7 +652,11 @@ bcos::Error::Ptr RocksDBStorage::checkStatus(rocksdb::Status const& status)
 
 void RocksDBStorage::stop()
 {
-    m_db.reset();
-    m_dataEncryption.reset();
+    if (!m_db)
+    {
+        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("rocksdb has already been stopped");
+        return;
+    }
+    CancelAllBackgroundWork(m_db.get(), true);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("rocksdb stopped");
 }

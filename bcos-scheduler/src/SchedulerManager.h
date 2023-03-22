@@ -126,12 +126,15 @@ public:
         }
 
         // waiting for stopped
-        while (m_scheduler.use_count() > 1)
+        int32_t waitCount = 20;
+        while (m_scheduler.use_count() > 1 && waitCount-- > 0)
         {
             SCHEDULER_LOG(DEBUG) << "Scheduler is stopping.. "
                                  << LOG_KV("unfinishedTaskNum", m_scheduler.use_count() - 1);
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
+
+        m_factory->stop();
         SCHEDULER_LOG(INFO) << "scheduler has stopped.";
         m_scheduler = nullptr;
     }
