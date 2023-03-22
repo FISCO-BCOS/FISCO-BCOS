@@ -178,7 +178,8 @@ void BlockSync::printSyncInfo()
     {
         peer_str << peer->shortHex() << "/";
     }
-    BLKSYNC_LOG(TRACE) << "\n[Sync Info] --------------------------------------------\n"
+    BLKSYNC_LOG(TRACE) << m_config->printBlockSyncState()
+                       << "\n[Sync Info] --------------------------------------------\n"
                        << "            IsSyncing:    " << isSyncing() << "\n"
                        << "            Block number: " << m_config->blockNumber() << "\n"
                        << "            Block hash:   " << m_config->hash().abridged() << "\n"
@@ -512,7 +513,7 @@ void BlockSync::tryToRequestBlocks()
                 std::min(m_config->knownHighestNumber(), (topBlockHeader->number() - 1));
         }
     }
-    auto currentNumber = std::max(m_config->blockNumber(), m_config->applyingBlock());
+    auto currentNumber = m_config->blockNumber();
     // no need to request blocks
     if (currentNumber >= requestToNumber || requestToNumber <= m_config->executedBlock() ||
         requestToNumber <= m_config->applyingBlock())
@@ -645,6 +646,11 @@ void BlockSync::maintainDownloadingQueue()
     auto topNumber = topHeader->number();
     if (topNumber > (expectedBlock))
     {
+        if (expectedBlock <= m_config->applyingBlock())
+        {
+            // expectedBlock is applying, no need to print warning log
+            return;
+        }
         BLKSYNC_LOG(WARNING) << LOG_DESC("Discontinuous block") << LOG_KV("topNumber", topNumber)
                              << LOG_KV("curNumber", m_config->blockNumber())
                              << LOG_KV("expectedBlock", expectedBlock)

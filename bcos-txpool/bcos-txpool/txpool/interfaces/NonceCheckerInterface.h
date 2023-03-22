@@ -45,7 +45,6 @@ public:
         std::hash<bcos::protocol::NonceType>> const& _nonceList) = 0;
     virtual void insert(bcos::protocol::NonceType const& _nonce) = 0;
 
-protected:
     virtual void remove(bcos::protocol::NonceType const& _nonce) = 0;
 };
 }  // namespace bcos::txpool

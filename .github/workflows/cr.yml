@@ -1,9 +1,9 @@
 name: Code Review
 
 permissions:
-  id-token: read
   contents: read
   pull-requests: write
+  # id-token: read
 
 on:
   pull_request:

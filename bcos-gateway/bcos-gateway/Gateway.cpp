@@ -205,6 +205,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
     retry->m_srcNodeID = _srcNodeID;
     retry->m_dstNodeID = _dstNodeID;
     retry->m_p2pInterface = m_p2pInterface;
+    retry->m_moduleID = _moduleID;
 
     retry->trySendMessage();
 }

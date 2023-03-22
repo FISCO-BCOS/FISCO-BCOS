@@ -387,7 +387,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
                 SCHEDULER_LOG(INFO)
                     << BLOCK_NUMBER(header->number()) << LOG_BADGE("BlockTrace")
                     << "ExecuteBlock success" << LOG_KV("hash", header->hash().abridged())
-                    << LOG_KV("state root", header->stateRoot().hex())
+                    << LOG_KV("stateRoot", header->stateRoot().hex())
                     << LOG_KV("receiptRoot", header->receiptsRoot().hex())
                     << LOG_KV("txsRoot", header->txsRoot().abridged())
                     << LOG_KV("gasUsed", header->gasUsed())

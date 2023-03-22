@@ -23,14 +23,13 @@
  * @date 2021-10-14
  */
 #pragma once
+#include "bcos-storage/bcos-storage/RocksDBStorage.h"
 #include "bcos-storage/bcos-storage/TiKVStorage.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/convenience.h"
 #include "rocksdb/write_batch.h"
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
-#include <bcos-storage/RocksDBStorage.h>
-#include <bcos-storage/TiKVStorage.h>
 
 namespace bcos::initializer
 {
@@ -95,7 +94,7 @@ public:
         const std::string& keyPath = std::string(""))
     {
         boost::filesystem::create_directories(_logPath);
-        std::shared_ptr<tikv_client::TransactionClient> cluster =
+        static std::shared_ptr<tikv_client::TransactionClient> cluster =
             storage::newTiKVClient(_pdAddrs, _logPath, caPath, certPath, keyPath);
         return std::make_shared<bcos::storage::TiKVStorage>(cluster);
     }

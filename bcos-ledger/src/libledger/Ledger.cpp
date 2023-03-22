@@ -279,7 +279,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         std::vector<std::string> txsHash(block->receiptsSize());
         std::vector<bytes> receipts(block->receiptsSize());
         std::vector<std::string_view> receiptsView(block->receiptsSize());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize()),
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize(), 256),
             [&transactionsBlock, &block, &failedCount, &totalCount, &txsHash, &receipts,
                 &receiptsView](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i < range.end(); ++i)
@@ -421,7 +421,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     std::vector<std::string> txsHash(txSize);
     std::vector<bytes> receipts(txSize);
     std::vector<std::string_view> receiptsView(txSize);
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, txSize),
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, txSize, 256),
         [&blockTxs, &block, &txsHash, &receipts, &receiptsView](
             const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
@@ -451,6 +451,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
 
     RecursiveGuard guard(m_mutex);
     size_t unstoredTxs = 0;
+    // TODO: usr block level flag to indicate whether the transactions has been stored
     for (size_t i = 0; i < txSize; i++)
     {
         auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
@@ -1453,7 +1454,7 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
 
 template<typename MerkleType, typename HashRangeType>
 static std::vector<h256> getMerkleTreeFromCache(
-    int64_t blockNumber, Ledger::CacheType& cache, std::mutex& mutex, 
+    int64_t blockNumber, Ledger::CacheType& cache, std::mutex& mutex,
     const std::string& cacheName, const MerkleType& merkle, const HashRangeType& hashesRange)
 {
     std::shared_ptr<std::vector<h256>> merkleTree;
@@ -1464,14 +1465,14 @@ static std::vector<h256> getMerkleTreeFromCache(
             merkleTree = std::make_shared<std::vector<h256>>();
             merkle.template generateMerkle(hashesRange, *merkleTree);
             cache.insert(blockNumber, merkleTree);
-            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) 
+            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName)
                               << LOG_DESC("Failed to hit the cache and build a new Merkel tree from scratch")
                               << LOG_KV("blockNumber", blockNumber);
         }
-        else 
+        else
         {
             merkleTree = *(cache.get(blockNumber));
-            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName)  << LOG_DESC("Hit cache") 
+            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName)  << LOG_DESC("Hit cache")
                               << LOG_KV("blockNumber", blockNumber);
         }
     }
@@ -1494,7 +1495,7 @@ void Ledger::getTxProof(
                 return;
             }
             auto blockNumber = _receipt->blockNumber();
-            asyncGetBlockTransactionHashes(blockNumber, 
+            asyncGetBlockTransactionHashes(blockNumber,
                 [this, _onGetProof, _txHash = std::move(_txHash), blockNumber](
                                  Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
                     if (_error || _hashList.empty())
@@ -1552,7 +1553,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
     std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof)
 {
     // receipt->number number->txs txs->receipts
-    auto blockNumber = _receipt->blockNumber();   
+    auto blockNumber = _receipt->blockNumber();
     asyncGetBlockTransactionHashes(blockNumber,
         [this, _onGetProof = std::move(_onGetProof), receiptHash = _receipt->hash(), blockNumber](
             Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
@@ -1587,9 +1588,9 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                                                    });
 
                             auto merkleTree = getMerkleTreeFromCache(
-                                        blockNumber, m_receiptProofMerkleCache, m_receiptMerkleMtx, 
+                                        blockNumber, m_receiptProofMerkleCache, m_receiptMerkleMtx,
                                         "getReceiptProof", merkle, hashesRange);
-                                        
+
                             merkle.template generateMerkleProof(
                                 hashesRange, std::move(merkleTree), receiptHash, *merkleProofPtr);
 

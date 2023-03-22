@@ -166,7 +166,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     request->gas = _msg->gas;
     // if (built in precompiled) then execute locally
 
-    if (m_executive->isBuiltInPrecompiled(request->receiveAddress))
+    if (m_executive->isStaticPrecompiled(request->receiveAddress))
     {
         return callBuiltInPrecompiled(request, false);
     }

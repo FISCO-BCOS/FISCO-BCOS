@@ -666,8 +666,8 @@ parse_params() {
 
 print_result() {
     echo "=============================================================="
-    LOG_INFO "GroupID               : ${default_group}"
-    LOG_INFO "ChainID               : ${default_chainid}"
+    LOG_INFO "GroupID              : ${default_group}"
+    LOG_INFO "ChainID              : ${default_chainid}"
     if [ -z "${docker_mode}" ];then
         LOG_INFO "${binary_name} path      : ${binary_path}"
     else
@@ -676,7 +676,7 @@ print_result() {
     fi
     LOG_INFO "Auth mode            : ${auth_mode}"
     if ${auth_mode} ; then
-        LOG_INFO "Auth account     : ${auth_admin_account}"
+        LOG_INFO "Admin account        : ${auth_admin_account}"
     fi
     LOG_INFO "Start port           : ${port_start[*]}"
     LOG_INFO "Server IP            : ${ip_array[*]}"
@@ -1331,16 +1331,26 @@ generate_common_ini() {
     ;db=0
 
 [flow_control]
-    ; the switch for distributed rate limit
-    ; enable_distributed_ratelimit=false
-
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000
+
+    ; time window for rate limiter, default: 3s
+    ; time_window_sec=3
+
+    ; enable distributed rate limiter, redis required, default: false
+    ; enable_distributed_ratelimit=false
+    ; enable local cache for distributed rate limiter, work with enable_distributed_ratelimit, default: true
+    ; enable_distributed_ratelimit_cache=true
+    ; distributed rate limiter local cache percent, work with enable_distributed_ratelimit_cache, default: 20
+    ; distributed_ratelimit_cache_percent=20
 
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ;
     ; modules_without_bw_limit=raft,pbft
+
+    ; allow the msg exceed max permit pass
+    ; outgoing_allow_exceed_max_permit=false
 
     ; restrict the outgoing bandwidth of the node
     ; both integer and decimal is support, unit: Mb
@@ -1364,6 +1374,17 @@ generate_common_ini() {
     ;   group_outgoing_bw_limit_group0=2
     ;   group_outgoing_bw_limit_group1=2
     ;   group_outgoing_bw_limit_group2=2
+
+    ; should not change incoming_p2p_basic_msg_type_list if you known what you would to do
+    ; incoming_p2p_basic_msg_type_list=
+    ; the qps limit for p2p basic msg type, the msg type has been config by incoming_p2p_basic_msg_type_list, default: -1
+    ; incoming_p2p_basic_msg_type_qps_limit=-1
+    ; default qps limit for all module message, default: -1
+    ; incoming_module_msg_type_qps_limit=-1
+    ; specify module to limit qps, incoming_module_qps_limit_moduleID=n
+    ;       incoming_module_qps_limit_xxxx=1000
+    ;       incoming_module_qps_limit_xxxx=2000
+    ;       incoming_module_qps_limit_xxxx=3000
 
 [log]
     enable=true
@@ -2095,7 +2116,13 @@ generate_auth_account()
         curl -#LO "${get_account_link}"
   fi
   auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  LOG_INFO "Admin account: ${auth_admin_account}"
   mv accounts* "${ca_dir}"
+
+  if [ "$?" -ne "0" ]; then
+      LOG_INFO "Admin account generate failed, please check ${account_script}."
+      exit 1
+  fi
 }
 
 modify_node_ca_setting(){

@@ -19,6 +19,7 @@
  * @date: 2022-03-22
  */
 
+#include "../vm/Precompiled.h"
 #include "ExecutiveFactory.h"
 #include "CoroutineTransactionExecutive.h"
 #include "ShardingTransactionExecutive.h"
@@ -53,24 +54,23 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
 
 void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
 {
-    // Code below has moved to initEvmEnvironment & initWasmEnvironment in TransactionExecutor.cpp:
-    //     m_constantPrecompiled->insert(
-    //        {ACCOUNT_MGR_ADDRESS, std::make_shared<AccountManagerPrecompiled>()});
-    //    m_constantPrecompiled->insert({ACCOUNT_MANAGER_NAME,
-    //    std::make_shared<AccountManagerPrecompiled>()});
-    //    m_constantPrecompiled->insert({ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>()});
-
     // TODO: register User developed Precompiled contract
     // registerUserPrecompiled(context);
 }
 
 void ExecutiveFactory::setParams(std::shared_ptr<TransactionExecutive> executive)
 {
-    executive->setConstantPrecompiled(m_constantPrecompiled);
-    executive->setEVMPrecompiled(m_precompiledContract);
-    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
+    executive->setPrecompiled(m_precompiled);
+    executive->setEVMPrecompiled(m_evmPrecompiled);
+    executive->setStaticPrecompiled(m_staticPrecompiled);
 
     registerExtPrecompiled(executive);
+}
+std::shared_ptr<bcos::precompiled::Precompiled> ExecutiveFactory::getPrecompiled(
+    const std::string& address) const
+{
+    return m_precompiled->at(
+        address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck());
 }
 
 std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
