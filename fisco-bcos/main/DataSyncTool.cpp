@@ -153,7 +153,7 @@ TableData::Ptr getBlockToNonceData(SQLStorage::Ptr _reader, int64_t _blockNumber
 {
     cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_BLOCK_2_NONCES;
 
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>(false);
     tableFactoryFactory->setStorage(_reader);
     auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), _blockNumber);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_BLOCK_2_NONCES);
@@ -185,7 +185,7 @@ TableData::Ptr getHashToBlockData(SQLStorage::Ptr _reader, int64_t _blockNumber)
 {
     cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_HASH_2_BLOCK;
 
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>(false);
     tableFactoryFactory->setStorage(_reader);
     auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), _blockNumber);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_NUMBER_2_HASH);
