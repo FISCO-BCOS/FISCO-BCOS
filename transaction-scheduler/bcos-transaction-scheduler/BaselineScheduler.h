@@ -19,7 +19,6 @@
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <memory>
-#include <queue>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler

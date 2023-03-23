@@ -14,11 +14,9 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <mutex>
-#include <set>
 #include <thread>
 #include <type_traits>
 #include <utility>
-#include <variant>
 
 namespace bcos::storage2::memory_storage
 {

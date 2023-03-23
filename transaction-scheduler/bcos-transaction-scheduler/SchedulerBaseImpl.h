@@ -1,6 +1,5 @@
 #pragma once
 #include "MultiLayerStorage.h"
-#include "bcos-table/src/StateStorage.h"
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>

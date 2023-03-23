@@ -66,9 +66,6 @@ void TxPool::start()
         return;
     }
 
-    // broadcast tx in txpool
-    // m_transactionSync->start();
-
     m_txpoolStorage->start();
     m_running = true;
     TXPOOL_LOG(INFO) << LOG_DESC("Start the txpool.");
@@ -89,8 +86,6 @@ void TxPool::stop()
     {
         m_txpoolStorage->stop();
     }
-
-    // m_transactionSync->stop();
 
     m_running = false;
     TXPOOL_LOG(INFO) << LOG_DESC("Stop the txpool.");

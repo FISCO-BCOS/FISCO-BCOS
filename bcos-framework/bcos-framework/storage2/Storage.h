@@ -94,7 +94,7 @@ concept RangeableIterator = requires(Iterator&& iterator)
     // clang-format on
 };
 
-static auto singleView(auto&& value)
+inline auto singleView(auto&& value)
 {
     using ValueType = decltype(value);
 
@@ -114,14 +114,14 @@ static auto singleView(auto&& value)
     }
 }
 
-task::Task<bool> existsOne(ReadableStorage auto& storage, auto const& key)
+inline task::Task<bool> existsOne(ReadableStorage auto& storage, auto const& key)
 {
     auto it = co_await storage.read(storage2::singleView(key));
     co_await it.next();
     co_return co_await it.hasValue();
 }
 
-auto readOne(ReadableStorage auto& storage, auto const& key)
+inline auto readOne(ReadableStorage auto& storage, auto const& key)
     -> task::Task<std::optional<std::remove_cvref_t<typename task::AwaitableReturnType<
         decltype(storage.read(storage2::singleView(key)))>::Value>>>
 {
@@ -140,14 +140,14 @@ auto readOne(ReadableStorage auto& storage, auto const& key)
     co_return result;
 }
 
-task::Task<void> writeOne(WriteableStorage auto& storage, auto const& key, auto&& value)
+inline task::Task<void> writeOne(WriteableStorage auto& storage, auto const& key, auto&& value)
 {
     co_await storage.write(
         storage2::singleView(key), storage2::singleView(std::forward<decltype(value)>(value)));
     co_return;
 }
 
-task::Task<void> removeOne(ErasableStorage auto& storage, auto const& key)
+inline task::Task<void> removeOne(ErasableStorage auto& storage, auto const& key)
 {
     co_await storage.remove(storage2::singleView(key));
     co_return;

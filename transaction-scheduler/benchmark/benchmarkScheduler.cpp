@@ -18,9 +18,6 @@
 #include <fmt/format.h>
 #include <transaction-executor/tests/TestBytecode.h>
 #include <boost/throw_exception.hpp>
-#include <range/v3/view/any_view.hpp>
-#include <range/v3/view/chunk.hpp>
-#include <range/v3/view/single.hpp>
 #include <variant>
 
 using namespace bcos;
