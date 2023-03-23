@@ -54,5 +54,10 @@ public:
     // determine the specified node is faulty or not
     // used to optimize consensus
     virtual bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) = 0;
+
+    virtual void updateNodeInfo(bcos::crypto::NodeIDListPtr _nodeList) = 0;
+
+    virtual void updateAllNodeInfo(
+        bcos::crypto::NodeIDListPtr _consensusNodes, bcos::crypto::NodeIDListPtr _nodeList) = 0;
 };
 }  // namespace bcos::sync

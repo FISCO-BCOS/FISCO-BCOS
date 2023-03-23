@@ -19,6 +19,7 @@
  * @date 2021-05-24
  */
 #include "bcos-sync/BlockSync.h"
+#include "bcos-framework/protocol/CommonError.h"
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <json/json.h>
 #include <boost/bind/bind.hpp>
@@ -44,6 +45,7 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
     {
         m_syncTreeTopology =
             std::make_shared<SyncTreeTopology>(m_config->nodeID(), m_config->syncTreeWidth());
+        fetchAndUpdateNodeInfo();
     }
 
     m_downloadingTimer->registerTimeoutHandler([this] { onDownloadTimeout(); });
@@ -855,6 +857,101 @@ void BlockSync::broadcastSyncStatus()
         m_config->frontService()->asyncSendMessageByNodeID(
             ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
     }
+}
+
+void BlockSync::fetchAndUpdateNodeInfo()
+{
+    bcos::consensus::ConsensusNodeListPtr consensusNodeList =
+        std::make_shared<bcos::consensus::ConsensusNodeList>();
+    bcos::consensus::ConsensusNodeListPtr observerNodeList =
+        std::make_shared<bcos::consensus::ConsensusNodeList>();
+    if (true == fetchNodeInfo(consensusNodeList, observerNodeList))
+    {
+        bcos::crypto::NodeIDListPtr consensusNodeIDs;
+        bcos::crypto::NodeIDListPtr allNodeIDs;
+        extractNodeIDList(consensusNodeList, observerNodeList, consensusNodeIDs, allNodeIDs);
+
+        updateAllNodeInfo(consensusNodeIDs, allNodeIDs);
+    }
+}
+
+void BlockSync::extractNodeIDList(bcos::consensus::ConsensusNodeListPtr _consensusNodeList,
+    bcos::consensus::ConsensusNodeListPtr _observerNodeList,
+    bcos::crypto::NodeIDListPtr _consensusNodeIDs, bcos::crypto::NodeIDListPtr _allNodeIDs)
+{
+    // sort the consensus node list
+    RANGES::sort((*_consensusNodeList),
+        [](consensus::ConsensusNodeInterface::Ptr& a, consensus::ConsensusNodeInterface::Ptr& b) {
+            return a->nodeID()->data() < b->nodeID()->data();
+        });
+    // sort the observer node list
+    RANGES::sort((*_observerNodeList),
+        [](consensus::ConsensusNodeInterface::Ptr& a, consensus::ConsensusNodeInterface::Ptr& b) {
+            return a->nodeID()->data() < b->nodeID()->data();
+        });
+
+    // extract NodeIDs
+    RANGES::for_each(*_consensusNodeList, [&_consensusNodeIDs, &_allNodeIDs](auto& node) {
+        _consensusNodeIDs->emplace_back(node->nodeID());
+        _allNodeIDs->emplace_back(node->nodeID());
+    });
+    RANGES::for_each(*_observerNodeList,
+        [&_allNodeIDs](auto& node) { _allNodeIDs->emplace_back(node->nodeID()); });
+}
+
+bool BlockSync::fetchNodeInfo(bcos::consensus::ConsensusNodeListPtr _consensusNodeList,
+    bcos::consensus::ConsensusNodeListPtr _observerNodeList)
+{
+    std::promise<std::pair<bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr>>
+        getConsensusNodeListPromise;
+    m_config->ledger()->asyncGetNodeListByType(
+        bcos::ledger::CONSENSUS_SEALER, [&getConsensusNodeListPromise](Error::Ptr _error,
+                                            consensus::ConsensusNodeListPtr _consensusNodeListPtr) {
+            getConsensusNodeListPromise.set_value(std::make_pair(_error, _consensusNodeListPtr));
+        });
+    std::pair<bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr> getConsensusNodeListPair =
+        getConsensusNodeListPromise.get_future().get();
+    auto getConsensusNodeListError = getConsensusNodeListPair.first;
+    if (nullptr != getConsensusNodeListError ||
+        bcos::protocol::CommonError::SUCCESS != getConsensusNodeListError->errorCode())
+    {
+        BLKSYNC_LOG(ERROR) << LOG_BADGE("getConsensusNodeList")
+                           << LOG_KV("errorCode", getConsensusNodeListError ?
+                                                      getConsensusNodeListError->errorCode() :
+                                                      0)
+                           << LOG_KV("errorMessage", getConsensusNodeListError ?
+                                                         getConsensusNodeListError->errorMessage() :
+                                                         "success");
+        return false;
+    }
+
+    std::promise<std::pair<bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr>>
+        getObserverNodeListPromise;
+    m_config->ledger()->asyncGetNodeListByType(
+        bcos::ledger::CONSENSUS_SEALER, [&getObserverNodeListPromise](Error::Ptr _error,
+                                            consensus::ConsensusNodeListPtr _consensusNodeListPtr) {
+            getObserverNodeListPromise.set_value(std::make_pair(_error, _consensusNodeListPtr));
+        });
+    std::pair<bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr> getObserverNodeListPair =
+        getObserverNodeListPromise.get_future().get();
+    auto getObserverNodeListError = getObserverNodeListPair.first;
+    if (nullptr != getObserverNodeListError ||
+        bcos::protocol::CommonError::SUCCESS != getObserverNodeListError->errorCode())
+    {
+        BLKSYNC_LOG(ERROR) << LOG_BADGE("getObserverNodeList")
+                           << LOG_KV("errorCode", getObserverNodeListError ?
+                                                      getObserverNodeListError->errorCode() :
+                                                      0)
+                           << LOG_KV("errorMessage", getObserverNodeListError ?
+                                                         getObserverNodeListError->errorMessage() :
+                                                         "success");
+        return false;
+    }
+
+    _consensusNodeList->swap(*(getConsensusNodeListPair.second));
+    _observerNodeList->swap(*(getObserverNodeListPair.second));
+
+    return true;
 }
 
 bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)

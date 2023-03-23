@@ -189,6 +189,19 @@ public:
             "BlockSyncServiceClient: asyncNotifyCommittedIndex: unimplemented interface!");
     }
 
+    void updateNodeInfo(bcos::crypto::NodeIDListPtr _nodeList) override
+    {
+        throw std::runtime_error(
+            "BlockSyncServiceClient: updateNodeInfo: unimplemented interface!");
+    }
+
+    void updateAllNodeInfo(
+        bcos::crypto::NodeIDListPtr _consensusNodes, bcos::crypto::NodeIDListPtr _nodeList) override
+    {
+        throw std::runtime_error(
+            "BlockSyncServiceClient: updateAllNodeInfo: unimplemented interface!");
+    }
+
     bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) override
     {
         throw std::runtime_error("BlockSyncServiceClient: faultyNode: unimplemented interface!");

@@ -80,6 +80,27 @@ public:
 
     void enableAsMaster(bool _masterNode);
 
+    // update node list info
+    void updateNodeInfo(bcos::crypto::NodeIDListPtr _nodeList) override
+    {
+        if (nullptr == m_syncTreeTopology)
+        {
+            return;
+        }
+        m_syncTreeTopology->updateNodeInfo(_nodeList);
+    }
+
+    // update all node list info
+    void updateAllNodeInfo(
+        bcos::crypto::NodeIDListPtr _consensusNodes, bcos::crypto::NodeIDListPtr _nodeList) override
+    {
+        if (nullptr == m_syncTreeTopology)
+        {
+            return;
+        }
+        m_syncTreeTopology->updateAllNodeInfo(_consensusNodes, _nodeList);
+    }
+
 protected:
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, std::function<void(bytesConstRef)> _sendResponse,
@@ -115,6 +136,14 @@ protected:
 
     virtual void downloadFinish();
 
+    // update SyncTreeTopology node info
+    virtual void fetchAndUpdateNodeInfo();
+    bool fetchNodeInfo(bcos::consensus::ConsensusNodeListPtr _consensusNodeList,
+        bcos::consensus::ConsensusNodeListPtr _observerNodeList);
+    void extractNodeIDList(bcos::consensus::ConsensusNodeListPtr _consensusNodeList,
+        bcos::consensus::ConsensusNodeListPtr _observerNodeList,
+        bcos::crypto::NodeIDListPtr _consensusNodeIDs, bcos::crypto::NodeIDListPtr _allNodeIDs);
+
 protected:
     void requestBlocks(bcos::protocol::BlockNumber _from, bcos::protocol::BlockNumber _to);
     void fetchAndSendBlock(
@@ -143,6 +172,6 @@ protected:
 
     std::atomic_bool m_masterNode = {false};
 
-    SyncTreeTopology::Ptr m_syncTreeTopology;
+    SyncTreeTopology::Ptr m_syncTreeTopology{nullptr};
 };
 }  // namespace bcos::sync

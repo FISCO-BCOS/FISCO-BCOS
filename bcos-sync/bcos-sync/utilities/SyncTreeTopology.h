@@ -21,9 +21,9 @@
 #pragma once
 #include <bcos-tool/TreeTopology.h>
 
-#define SYNCTREE_LOG(LEVEL)     \
+#define SYNCTREE_LOG(LEVEL)                                                      \
     BCOS_LOG(LEVEL) << LOG_BADGE("SYNCTREE") << LOG_KV("nodeIndex", m_nodeIndex) \
-    << LOG_KV("consIndex", m_consIndex) << LOG_KV("nodeId", m_nodeId->shortHex())
+                    << LOG_KV("consIndex", m_consIndex) << LOG_KV("nodeId", m_nodeId->shortHex())
 
 namespace bcos
 {
@@ -42,14 +42,16 @@ public:
 
     virtual ~SyncTreeTopology() {}
     // update corresponding info when the nodes changed
-    virtual void updateNodeListInfo(bcos::crypto::NodeIDListPtr _nodeList);
+    virtual void updateNodeInfo(bcos::crypto::NodeIDListPtr _nodeList);
     // consensus info must be updated with nodeList
-    virtual void updateAllNodeInfo(bcos::crypto::NodeIDListPtr _consensusNodes, bcos::crypto::NodeIDListPtr _nodeList);
+    virtual void updateAllNodeInfo(
+        bcos::crypto::NodeIDListPtr _consensusNodes, bcos::crypto::NodeIDListPtr _nodeList);
     // select the nodes by tree topology
     virtual bcos::crypto::NodeIDListPtr selectNodesForBlockSync(bcos::crypto::NodeIDSetPtr _peers);
 
 protected:
-    bool getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, ssize_t const _nodeIndex) const override;
+    bool getNodeIDByIndex(
+        bcos::crypto::NodeIDPtr& _nodeID, ssize_t const _nodeIndex) const override;
     // update the tree-topology range the nodes located in
     void updateStartAndEndIndex() override;
 
@@ -59,8 +61,8 @@ protected:
         std::int64_t const _startIndex) override;
     // select the parent nodes by tree
     void selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-                           bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _nodeIndex,
-                           std::int64_t const _startIndex, bool const _selectAll = false) override;
+        bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _nodeIndex,
+        std::int64_t const _startIndex, bool const _selectAll = false) override;
 
 private:
     bool locatedInGroup();

@@ -23,7 +23,7 @@
 using namespace bcos;
 using namespace bcos::sync;
 
-void SyncTreeTopology::updateNodeListInfo(bcos::crypto::NodeIDListPtr _nodeList)
+void SyncTreeTopology::updateNodeInfo(bcos::crypto::NodeIDListPtr _nodeList)
 {
     Guard l(m_mutex);
 
@@ -44,10 +44,11 @@ void SyncTreeTopology::updateNodeListInfo(bcos::crypto::NodeIDListPtr _nodeList)
 }
 
 void SyncTreeTopology::updateAllNodeInfo(
-        bcos::crypto::NodeIDListPtr _consensusNodes, bcos::crypto::NodeIDListPtr _nodeList)
+    bcos::crypto::NodeIDListPtr _consensusNodes, bcos::crypto::NodeIDListPtr _nodeList)
 {
     Guard l(m_mutex);
-    if (true == compareTwoNodeIDs(*_nodeList, *m_nodeList) && true == compareTwoNodeIDs(*_consensusNodes, *m_currentConsensusNodes))
+    if (true == compareTwoNodeIDs(*_nodeList, *m_nodeList) &&
+        true == compareTwoNodeIDs(*_consensusNodes, *m_currentConsensusNodes))
     {
         return;
     }
@@ -118,7 +119,8 @@ void SyncTreeTopology::updateStartAndEndIndex()
  *  false: the given node doesn't locate in the node list
  *  true:  the given node locates in the node list, and assign its node Id to _nodeID
  */
-bool SyncTreeTopology::getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, ssize_t const _nodeIndex) const
+bool SyncTreeTopology::getNodeIDByIndex(
+    bcos::crypto::NodeIDPtr& _nodeID, ssize_t const _nodeIndex) const
 {
     if (_nodeIndex >= m_nodeNum)
     {
@@ -137,8 +139,7 @@ bool SyncTreeTopology::locatedInGroup()
 
 // select the child nodes by tree
 void SyncTreeTopology::recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-    ssize_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
-                                                 std::int64_t const _startIndex)
+    ssize_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _startIndex)
 {
     // if the node doesn't locate in the group
     if (!locatedInGroup())
@@ -151,8 +152,8 @@ void SyncTreeTopology::recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _se
 
 // select the parent nodes by tree
 void SyncTreeTopology::selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-                                         bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _nodeIndex,
-    int64_t const _startIndex, bool const)
+    bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _nodeIndex, int64_t const _startIndex,
+    bool const)
 {
     // if the node doesn't locate in the group
     if (!locatedInGroup())
@@ -167,7 +168,8 @@ void SyncTreeTopology::selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNo
 
         for (auto const& consNode : *m_currentConsensusNodes)
         {
-            if (peersBytes.end() != std::find(peersBytes.begin(), peersBytes.end(), consNode->data()))
+            if (peersBytes.end() !=
+                std::find(peersBytes.begin(), peersBytes.end(), consNode->data()))
             {
                 _selectedNodeList->emplace_back(consNode);
             }
