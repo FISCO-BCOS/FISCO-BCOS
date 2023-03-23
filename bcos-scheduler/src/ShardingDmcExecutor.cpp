@@ -199,8 +199,6 @@ void ShardingDmcExecutor::preExecute()
     auto status = future.wait_for(std::chrono::seconds(30));
     if (status != std::future_status::ready)
     {
-        m_preparedMessages = std::move(message);  // prepare failed, move back
-
         std::string reason;
         switch (status)
         {
@@ -225,7 +223,6 @@ void ShardingDmcExecutor::preExecute()
     auto error = future.get();
     if (error)
     {
-        m_preparedMessages = std::move(message);  // prepare failed, move back
         DMC_LOG(ERROR) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding")
                        << "send preExecute message error:" << error->errorMessage()
                        << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
