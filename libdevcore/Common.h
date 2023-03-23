@@ -71,8 +71,7 @@ using byte = uint8_t;
         X;                       \
     }                            \
     catch (...)                  \
-    {                            \
-    }
+    {}
 
 namespace dev
 {
@@ -420,5 +419,7 @@ private:
 
 std::string newSeq();
 void pthread_setThreadName(std::string const& _n);
+
+constexpr static int RECONFIRM_COMMITTEE_COUNT = 2;
 
 }  // namespace dev
