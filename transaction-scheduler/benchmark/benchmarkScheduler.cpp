@@ -52,8 +52,8 @@ struct Fixture
             m_cryptoSuite, m_blockHeaderFactory, m_transactionFactory, m_receiptFactory)),
         m_multiLayerStorage(m_backendStorage),
         m_scheduler(std::conditional_t<parallel,
-            SchedulerParallelImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl>,
-            SchedulerSerialImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl>>(
+            SchedulerParallelImpl<MultiLayerStorageType, TransactionExecutorImpl>,
+            SchedulerSerialImpl<MultiLayerStorageType, TransactionExecutorImpl>>(
             m_multiLayerStorage, *m_receiptFactory, m_tableNamePool))
     {
         boost::log::core::get()->set_logging_enabled(false);
@@ -254,9 +254,8 @@ struct Fixture
     TableNamePool m_tableNamePool;
     bcos::bytes m_helloworldBytecodeBinary;
 
-    std::variant<
-        SchedulerSerialImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl>,
-        SchedulerParallelImpl<MultiLayerStorageType, ReceiptFactory, TransactionExecutorImpl>>
+    std::variant<SchedulerSerialImpl<MultiLayerStorageType, TransactionExecutorImpl>,
+        SchedulerParallelImpl<MultiLayerStorageType, TransactionExecutorImpl>>
         m_scheduler;
 
     std::string m_contractAddress;

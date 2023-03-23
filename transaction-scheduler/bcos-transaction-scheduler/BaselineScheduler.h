@@ -3,7 +3,9 @@
 #include "SchedulerBaseImpl.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
@@ -30,17 +32,15 @@ namespace bcos::transaction_scheduler
 struct NotFoundTransactionError: public bcos::Error {};
 // clang-format on
 
-template <class SchedulerImpl, protocol::IsBlockHeaderFactory BlockHeaderFactory,
-    concepts::ledger::IsLedger Ledger, txpool::IsTxPool TxPool,
-    protocol::IsTransactionSubmitResultFactory TransactionSubmitResultFactory>
+template <class SchedulerImpl, concepts::ledger::IsLedger Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
     SchedulerImpl& m_schedulerImpl;
-    BlockHeaderFactory& m_blockHeaderFactory;
+    protocol::BlockHeaderFactory& m_blockHeaderFactory;
     Ledger& m_ledger;
-    TxPool& m_txpool;
-    TransactionSubmitResultFactory& m_transactionSubmitResultFactory;
+    txpool::TxPoolInterface& m_txpool;
+    protocol::TransactionSubmitResultFactory& m_transactionSubmitResultFactory;
     std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(Error::Ptr)>)>
@@ -78,12 +78,10 @@ private:
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
     }
 
-    void writeTransactions() {}
-
 public:
-    BaselineScheduler(SchedulerImpl& schedulerImpl, BlockHeaderFactory& blockFactory,
-        Ledger& ledger, TxPool& txPool,
-        TransactionSubmitResultFactory& transactionSubmitResultFactory,
+    BaselineScheduler(SchedulerImpl& schedulerImpl, protocol::BlockHeaderFactory& blockFactory,
+        Ledger& ledger, txpool::TxPoolInterface& txPool,
+        protocol::TransactionSubmitResultFactory& transactionSubmitResultFactory,
         crypto::Hash const& hashImpl)
       : m_schedulerImpl(schedulerImpl),
         m_blockHeaderFactory(blockFactory),
@@ -96,7 +94,7 @@ public:
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;
     BaselineScheduler& operator=(BaselineScheduler&&) noexcept = default;
-    ~BaselineScheduler() noexcept override { m_asyncGroup.wait(); }
+    ~BaselineScheduler() noexcept override = default;
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>
@@ -170,6 +168,7 @@ public:
                                         });
                                     merkle.generateMerkle(hashes, merkleTrie);
                                 }
+                                // TODO: write merkle into storage
                                 transactionRootPromise.set_value(*RANGES::rbegin(merkleTrie));
                             }
                             catch (...)
@@ -225,6 +224,7 @@ public:
 
                                 std::vector<bcos::h256> merkleTrie;
                                 merkle.generateMerkle(hashesRange, merkleTrie);
+                                // TODO: write merkle into storage
                                 newBlockHeader->setReceiptsRoot(*RANGES::rbegin(merkleTrie));
                             },
                             anyHasher);

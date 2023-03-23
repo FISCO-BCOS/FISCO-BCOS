@@ -3,6 +3,7 @@
 #include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
 #include "SchedulerBaseImpl.h"
+#include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-utilities/Exceptions.h"
 #include <bcos-task/Wait.h>
@@ -18,9 +19,8 @@ namespace bcos::transaction_scheduler
 
 #define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
 
-template <class MultiLayerStorage, protocol::IsTransactionReceiptFactory ReceiptFactory,
-    template <typename, typename> class Executor>
-class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
+template <class MultiLayerStorage, template <typename> class Executor>
+class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Executor>
 {
 private:
     constexpr static size_t DEFAULT_CHUNK_SIZE = 32;          // 32 transactions for one chunk
@@ -30,7 +30,7 @@ private:
     using ChunkLocalStorage =
         transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
             decltype(std::declval<MultiLayerStorage>().fork(true))>;
-    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::multiLayerStorage;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor>::multiLayerStorage;
 
     template <class TransactionAndReceiptssRange>
     class ChunkExecuteStatus
@@ -83,9 +83,8 @@ private:
             auto& receiptFactory, auto& tableNamePool)
         {
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
-            Executor<decltype(m_storages->m_readWriteSetStorage),
-                std::remove_cvref_t<decltype(receiptFactory)>>
-                executor(m_storages->m_readWriteSetStorage, receiptFactory, tableNamePool);
+            Executor<decltype(m_storages->m_readWriteSetStorage)> executor(
+                m_storages->m_readWriteSetStorage, receiptFactory, tableNamePool);
             for (auto&& [contextID, transaction, receipt] : m_transactionAndReceiptsRange)
             {
                 if (m_chunkIndex >= *m_lastChunkIndex)
@@ -164,9 +163,8 @@ private:
         auto& receiptFactory, auto& tableNamePool, RANGES::range auto&& transactionAndReceipts,
         auto& storage)
     {
-        Executor<std::remove_cvref_t<decltype(storage)>,
-            std::remove_cvref_t<decltype(receiptFactory)>>
-            executor(storage, receiptFactory, tableNamePool);
+        Executor<std::remove_cvref_t<decltype(storage)>> executor(
+            storage, receiptFactory, tableNamePool);
         for (auto&& [contextID, transaction, receipt] : transactionAndReceipts)
         {
             *receipt = co_await executor.execute(blockHeader, *transaction, contextID);
@@ -174,22 +172,23 @@ private:
     }
 
 public:
-    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::receiptFactory;
-    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::tableNamePool;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor>::receiptFactory;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor>::tableNamePool;
 
-    SchedulerParallelImpl(MultiLayerStorage& multiLayerStorage, ReceiptFactory& receiptFactory,
+    SchedulerParallelImpl(MultiLayerStorage& multiLayerStorage,
+        protocol::TransactionReceiptFactory& receiptFactory,
         transaction_executor::TableNamePool& tableNamePool)
-      : SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>(
+      : SchedulerBaseImpl<MultiLayerStorage, Executor>(
             multiLayerStorage, receiptFactory, tableNamePool),
         m_asyncTaskGroup(std::make_unique<tbb::task_group>())
     {}
 
-    task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> execute(
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
     {
         auto storageView = multiLayerStorage().fork(true);
-        std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
         receipts.resize(RANGES::size(transactions));
 
         size_t offset = 0;

@@ -174,9 +174,6 @@ static const VMSchedule DefaultSchedule = FiscoBcosScheduleV320;
 
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
-bool hasWasmPreamble(const std::string_view& _input);
-bool hasWasmPreamble(const bcos::bytesConstRef& _input);
-bool hasWasmPreamble(const bcos::bytes& _input);
 bool hasPrecompiledPrefix(const std::string_view& _code);
 /**
  * @brief : trans string addess to evm address
