@@ -112,8 +112,8 @@ jobs:
           path: bin/fisco-bcos.tar.gz
 
   ubuntu20_integration_test:
-    name: ubuntu22_test
-    runs-on: ubuntu-22.04
+    name: ubuntu20_test
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
         with:
