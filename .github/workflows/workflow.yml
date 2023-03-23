@@ -140,9 +140,9 @@ jobs:
       - name: install ubuntu dependencies
         run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool && sudo apt -y remove libtbb-dev
       - name: configure
-        run: /usr/bin/cmake . -DBUILD_STATIC=ON || cat /home/runner/work/FISCO-BCOS/FISCO-BCOS/deps/src/cryptopp-stamp/cryptopp-configure-*.log
+        run: /usr/bin/cmake . -DBUILD_STATIC=ON
       - name: compile
-        run: make -j2
+        run: make -j2 || cat /home/runner/work/FISCO-BCOS/FISCO-BCOS/deps/src/cryptopp-stamp/cryptopp-configure-*.log
       - name: run integration testing
         run: cd tools && bash ci/ci_check.sh
       - name: tar fisco-bcos for Linux
