@@ -218,6 +218,9 @@ public:
     unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
+    bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
+    std::int64_t treeWidth() const { return m_treeWidth; }
+
     int sendTxTimeout() const { return m_sendTxTimeout; }
 
     bool withoutTarsFramework() const { return m_withoutTarsFramework; }
@@ -246,6 +249,7 @@ protected:
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
     virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadSyncConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
@@ -377,6 +381,10 @@ private:
     std::string m_smNodeKey;
     std::string m_enSmNodeCert;
     std::string m_enSmNodeKey;
+
+    // config for sync
+    bool m_enableSendBlockStatusByTree;
+    std::uint32_t m_treeWidth;
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default

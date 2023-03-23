@@ -22,6 +22,7 @@
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-sync/state/DownloadingQueue.h"
 #include "bcos-sync/state/SyncPeerStatus.h"
+#include "bcos-sync/utilities/SyncTreeTopology.h"
 #include "bcos-tool/NodeTimeMaintenance.h"
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -141,5 +142,7 @@ protected:
     bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
 
     std::atomic_bool m_masterNode = {false};
+
+    SyncTreeTopology::Ptr m_syncTreeTopology;
 };
 }  // namespace bcos::sync

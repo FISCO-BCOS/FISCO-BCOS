@@ -624,6 +624,12 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
                          << LOG_KV("keyCenterUrl", storageSecurityKeyCenterUrl);
 }
 
+void NodeConfig::loadSyncConfig(const boost::property_tree::ptree &_pt)
+{
+    m_enableSendBlockStatusByTree = _pt.get<bool>("sync.enable_send_block_status_by_tree", false);
+    m_treeWidth = _pt.get<std::uint32_t>("sync.tree_width", 3);
+}
+
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
