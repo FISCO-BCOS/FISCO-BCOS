@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/Timer.h"
 #include <array>
@@ -71,8 +72,6 @@ public:
         lastFailedTimes++;
     }
 
-    double calcAvgRate(uint64_t _data, uint32_t _periodMS);
-
     std::optional<std::string> toString(const std::string& _prefix, uint32_t _periodMS);
 };
 
@@ -85,11 +84,10 @@ public:
     using Ptr = std::shared_ptr<RateLimiterStat>;
     using ConstPtr = std::shared_ptr<const RateLimiterStat>;
 
-public:
     void start();
     void stop();
 
-public:
+    // ---------------- statistics on inbound and outbound begin -------------------
     void updateInComing(const std::string& _endpoint, uint64_t _dataSize, bool _suc);
     void updateInComing(
         const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool _suc);
@@ -97,11 +95,20 @@ public:
     void updateOutGoing(const std::string& _endpoint, uint64_t _dataSize, bool _suc);
     void updateOutGoing(
         const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool _suc);
+    // ---------------- statistics on inbound and outbound end -------------------
 
-public:
-    std::string toGroupKey(const std::string& _groupID);
-    std::string toModuleKey(uint16_t _moduleID);
-    std::string toEndPointKey(const std::string& _ep);
+
+    static inline std::string toGroupKey(const std::string& _groupID)
+    {
+        return " group :  " + _groupID;
+    }
+
+    static inline std::string toModuleKey(uint16_t _moduleID)
+    {
+        return " module : " + protocol::moduleIDToString((protocol::ModuleID)_moduleID);
+    }
+
+    static inline std::string toEndPointKey(const std::string& _ep) { return " endpoint:  " + _ep; }
 
     void flushStat();
 
@@ -112,6 +119,8 @@ public:
 
     int32_t statInterval() const { return m_statInterval; }
     void setStatInterval(int32_t _statInterval) { m_statInterval = _statInterval; }
+
+    bool working() const { return m_running; }
 
 private:
     bool m_running = false;

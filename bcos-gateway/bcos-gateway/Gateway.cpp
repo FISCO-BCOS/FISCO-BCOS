@@ -377,9 +377,16 @@ void Gateway::onReceiveP2PMessage(
     auto moduleID = options->moduleID();
 
     auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
-    if (result)
+    if (result.has_value())
     {
-        // TODO: response qps overflow
+        auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
+        m_p2pInterface->sendRespMessageBySession(
+            bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg, _session);
+
+        GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveP2PMessage") << LOG_DESC(result.value())
+                           << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID)
+                           << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload.size());
+        return;
     }
 
     auto srcNodeID = options->srcNodeID();
@@ -388,7 +395,8 @@ void Gateway::onReceiveP2PMessage(
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0]);
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
     onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, payload,
-        [groupID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](Error::Ptr _error) {
+        [groupID, moduleID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](
+            Error::Ptr _error) {
             auto gatewayPtr = gateway.lock();
             if (!gatewayPtr)
             {
@@ -399,10 +407,11 @@ void Gateway::onReceiveP2PMessage(
                 std::to_string(_error ? _error->errorCode() : (int)protocol::CommonError::SUCCESS);
             if (_error)
             {
-                GATEWAY_LOG(DEBUG)
-                    << "onReceiveP2PMessage callback" << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("msg", _error->errorMessage()) << LOG_KV("group", groupID)
-                    << LOG_KV("src", srcNodeIDPtr->shortHex())
+                GATEWAY_LOG(TRACE)
+                    << LOG_BADGE("onReceiveP2PMessage") << "callback error"
+                    << LOG_KV("errorCode", _error->errorCode())
+                    << LOG_KV("errorMessage", _error->errorMessage()) << LOG_KV("group", groupID)
+                    << LOG_KV("moduleID", moduleID) << LOG_KV("src", srcNodeIDPtr->shortHex())
                     << LOG_KV("dst", dstNodeIDPtr->shortHex());
             }
             gatewayPtr->m_p2pInterface->sendRespMessageBySession(
@@ -429,7 +438,7 @@ void Gateway::onReceiveBroadcastMessage(
     uint16_t moduleID = options->moduleID();
 
     auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
-    if (result)
+    if (result.has_value())
     {
         // For broadcast message, ratelimit check failed, do nothing.
         return;

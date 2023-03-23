@@ -32,7 +32,7 @@ class Service : public P2PInterface, public std::enable_shared_from_this<Service
 {
 public:
     Service(std::string const& _nodeID);
-    virtual ~Service() { stop(); }
+    virtual ~Service() override { stop(); }
 
     using Ptr = std::shared_ptr<Service>;
 
@@ -72,7 +72,7 @@ public:
     virtual std::map<NodeIPEndpoint, P2pID> staticNodes() { return m_staticNodes; }
     virtual void setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes)
     {
-        RecursiveGuard l(x_nodes);
+        RecursiveGuard lockGuard(x_nodes);
         m_staticNodes.clear();
         for (const auto& endpoint : staticNodes)
         {
@@ -91,7 +91,7 @@ public:
     bool isReachable(P2pID const& _nodeID) const override { return isConnected(_nodeID); }
 
     std::shared_ptr<Host> host() override { return m_host; }
-    virtual void setHost(std::shared_ptr<Host> host) { m_host = host; }
+    virtual void setHost(std::shared_ptr<Host> host) { m_host = std::move(host); }
 
     std::shared_ptr<MessageFactory> messageFactory() override { return m_messageFactory; }
     virtual void setMessageFactory(std::shared_ptr<MessageFactory> _messageFactory)
@@ -170,9 +170,9 @@ protected:
     // handshake protocol
     void asyncSendProtocol(P2PSession::Ptr _session);
     void onReceiveProtocol(
-        NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     void onReceiveHeartbeat(
-        NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
 
     // handlers called when new-session
     void registerOnNewSession(std::function<void(P2PSession::Ptr)> _handler)
@@ -240,7 +240,7 @@ private:
 
     bool m_run = false;
 
-    std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers;
+    std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};
 
     // the local protocol
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;

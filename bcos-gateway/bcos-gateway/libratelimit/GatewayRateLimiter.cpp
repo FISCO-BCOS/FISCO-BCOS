@@ -158,7 +158,7 @@ std::optional<std::string> GatewayRateLimiter::checkInComing(
     m_rateLimiterStat->updateInComing(_endpoint, _msgLength, result);
     return result ? std::nullopt :
                     std::make_optional<std::string>(
-                        "qps overflow, package type: " + std::to_string(_packageType) +
+                        "incoming qps overflow, package type: " + std::to_string(_packageType) +
                         " ,endpoint: " + _endpoint);
 }
 
@@ -173,6 +173,6 @@ std::optional<std::string> GatewayRateLimiter::checkInComing(
     }
     m_rateLimiterStat->updateInComing(_groupID, _moduleID, _msgLength, result);
     return result ? std::nullopt :
-                    std::make_optional<std::string>("qps overflow, groupID: " + _groupID +
+                    std::make_optional<std::string>("incoming qps overflow, groupID: " + _groupID +
                                                     " ,moduleID: " + std::to_string(_moduleID));
 }

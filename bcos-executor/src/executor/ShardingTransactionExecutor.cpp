@@ -74,14 +74,16 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
 
             if (!cache)
             {
-                EXECUTOR_NAME_LOG(DEBUG)
+                EXECUTOR_NAME_LOG(ERROR)
                     << LOG_BADGE("preExeBlock")
-                    << "Not hit prepared dagFlow cache, execute directly"
+                    << "Input is empty but not hit prepared dagFlow cache, trigger switch"
                     << LOG_KV("number", number) << LOG_KV("timestamp", timestamp)
                     << LOG_KV("shard", contractAddress);
-                TransactionExecutor::executeTransactions(
-                    contractAddress, std::move(inputs), std::move(callback));
-                break;
+
+                callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                             "Input is empty but not hit prepared dagFlow cache"),
+                    {});
+                return;
             }
 
             auto executiveFlow = getExecutiveFlow(m_blockContext, contractAddress, true, false);
@@ -96,7 +98,6 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
                 dagExecutiveFlow->setDagFlowIfNotExists(cache->dagFlow);
                 dagExecutiveFlow->submit(cache->inputs);
             }
-
 
             EXECUTOR_NAME_LOG(DEBUG)
                 << LOG_BADGE("preExeBlock") << " hit prepared dagFlow cache, use it"

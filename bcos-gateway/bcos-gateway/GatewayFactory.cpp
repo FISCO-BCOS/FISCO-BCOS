@@ -507,7 +507,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     if (_rateLimiterConfig.totalOutgoingBwLimit > 0)
     {
         totalOutgoingRateLimiter = rateLimiterFactory->buildTimeWindowRateLimiter(
-            _rateLimiterConfig.totalOutgoingBwLimit * timeWindowS, timeWindowS * 1000,
+            _rateLimiterConfig.totalOutgoingBwLimit * timeWindowS, toMillisecond(timeWindowS),
             allowExceedMaxPermitSize);
 
         rateLimiterManager->registerRateLimiter(
@@ -520,7 +520,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
         for (const auto& [ip, bandWidth] : _rateLimiterConfig.ip2BwLimit)
         {
             auto rateLimiterInterface = rateLimiterFactory->buildTimeWindowRateLimiter(
-                bandWidth * timeWindowS, timeWindowS * 1000, allowExceedMaxPermitSize);
+                bandWidth * timeWindowS, toMillisecond(timeWindowS), allowExceedMaxPermitSize);
             rateLimiterManager->registerRateLimiter(ip, rateLimiterInterface);
         }
     }
@@ -541,7 +541,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
             else
             {
                 rateLimiterInterface = rateLimiterFactory->buildTimeWindowRateLimiter(
-                    bandWidth * timeWindowS, timeWindowS * 1000, allowExceedMaxPermitSize);
+                    bandWidth * timeWindowS, toMillisecond(timeWindowS), allowExceedMaxPermitSize);
             }
 
             rateLimiterManager->registerRateLimiter(group, rateLimiterInterface);

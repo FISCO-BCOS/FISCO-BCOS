@@ -113,7 +113,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
     // rete limiter not exist, create it
     int64_t groupOutgoingBwLimit = -1;
     int32_t timeWindowS = m_rateLimiterConfig.timeWindowSec;
-    int32_t timeWindowMS = m_rateLimiterConfig.timeWindowSec * 1000;
+    int32_t timeWindowMS = toMillisecond(m_rateLimiterConfig.timeWindowSec);
     bool allowExceedMaxPermitSize = m_rateLimiterConfig.allowExceedMaxPermitSize;
 
     auto it = m_rateLimiterConfig.group2BwLimit.find(_group);
@@ -180,7 +180,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     }
 
     int32_t timeWindowS = m_rateLimiterConfig.timeWindowSec;
-    int32_t timeWindowMS = m_rateLimiterConfig.timeWindowSec * 1000;
+    int32_t timeWindowMS = toMillisecond(m_rateLimiterConfig.timeWindowSec);
     bool allowExceedMaxPermitSize = m_rateLimiterConfig.allowExceedMaxPermitSize;
     int64_t QPS = m_rateLimiterConfig.p2pBasicMsgQPS;
 
@@ -212,16 +212,15 @@ RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     }
 
     int32_t timeWindowS = m_rateLimiterConfig.timeWindowSec;
-    int32_t timeWindowMS = m_rateLimiterConfig.timeWindowSec * 1000;
+    int32_t timeWindowMS = toMillisecond(m_rateLimiterConfig.timeWindowSec);
     bool allowExceedMaxPermitSize = m_rateLimiterConfig.allowExceedMaxPermitSize;
     int64_t QPS = m_rateLimiterConfig.p2pModuleMsgQPS;
     auto enableDistributedRatelimit = m_rateLimiterConfig.enableDistributedRatelimit;
 
-    const auto& moduleMsg2QPS = m_rateLimiterConfig.moduleMsg2QPS;
-    auto it = moduleMsg2QPS.find(_moduleID);
-    if (it != moduleMsg2QPS.end() && it->second > 0)
+    auto tempQPS = m_rateLimiterConfig.moduleMsg2QPS.at(_moduleID);
+    if (tempQPS > 0)
     {
-        QPS = it->second;
+        QPS = tempQPS;
     }
 
     RATELIMIT_MGR_LOG(INFO) << LOG_BADGE("getInRateLimiter")
@@ -264,7 +263,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::stri
 
     int64_t connOutgoingBwLimit = -1;
     int32_t timeWindowS = m_rateLimiterConfig.timeWindowSec;
-    int32_t timeWindowMS = m_rateLimiterConfig.timeWindowSec * 1000;
+    int32_t timeWindowMS = toMillisecond(m_rateLimiterConfig.timeWindowSec);
     bool allowExceedMaxPermitSize = m_rateLimiterConfig.allowExceedMaxPermitSize;
 
     auto it = m_rateLimiterConfig.ip2BwLimit.find(_connIP);

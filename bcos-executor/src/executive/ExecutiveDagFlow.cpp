@@ -87,8 +87,8 @@ void ExecutiveDagFlow::submit(std::shared_ptr<std::vector<CallParameters::Unique
         else
         {
             // generate m_dagFlow
-            m_dagFlow = prepareDagFlow(m_executiveFactory->getBlockContext(),
-                m_executiveFactory, *txInputs, m_abiCache);
+            m_dagFlow = prepareDagFlow(
+                m_executiveFactory->getBlockContext(), m_executiveFactory, *txInputs, m_abiCache);
         }
 
         assert(!m_inputs);
@@ -121,66 +121,57 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
     }
 
     m_dagFlow->setExecuteTxFunc([this](ID id) {
-        try
+        DAGFLOW_LOG(DEBUG) << LOG_DESC("Execute tx: start") << LOG_KV("id", id);
+        if (!m_isRunning)
         {
-            DAGFLOW_LOG(DEBUG) << LOG_DESC("Execute tx: start") << LOG_KV("id", id);
-            if (!m_isRunning)
-            {
-                return;
-            }
-
-            CallParameters::UniquePtr output;
-            bool isDagTx = m_dagFlow->isDagTx(id);
-
-            if (isDagTx) [[likely]]
-            {
-                auto& input = (*m_inputs)[id];
-                DAGFLOW_LOG(TRACE) << LOG_DESC("Execute tx: start DAG tx") << input->toString()
-                                   << LOG_KV("to", input->receiveAddress)
-                                   << LOG_KV("data", toHexStringWithPrefix(input->data));
-
-                // dag tx no need to use coroutine
-                auto executive = m_executiveFactory->build(
-                    input->codeAddress, input->contextID, input->seq, false);
-
-                output = executive->start(std::move(input));
-
-                DAGFLOW_LOG(DEBUG) << "execute tx finish DAG " << output->toString();
-                f_onTxReturn(std::move(output));
-            }
-            else
-            {
-                // run normal tx
-                auto& input = (*m_inputs)[id];
-                DAGFLOW_LOG(DEBUG) << LOG_DESC("Execute tx: start normal tx") << input->toString()
-                                   << LOG_KV("to", input->receiveAddress)
-                                   << LOG_KV("data", toHexStringWithPrefix(input->data));
-
-                ExecutiveState::Ptr executiveState =
-                    std::make_shared<ExecutiveState>(m_executiveFactory, std::move(input));
-
-                runOne(executiveState, [&](CallParameters::UniquePtr output) {
-                    if (output->type == CallParameters::MESSAGE ||
-                        output->type == CallParameters::KEY_LOCK)
-                    {
-                        m_executives[{output->contextID, output->seq}] = std::move(executiveState);
-                        // call back
-                        DAGFLOW_LOG(DEBUG)
-                            << "Execute tx: normal externalCall " << output->toString();
-                        m_dagFlow->pause();
-                    }
-                    else
-                    {
-                        DAGFLOW_LOG(DEBUG) << "Execute tx: normal finish " << output->toString();
-                    }
-                    f_onTxReturn(std::move(output));
-                });
-            }
+            return;
         }
-        catch (std::exception& e)
+
+        CallParameters::UniquePtr output;
+        bool isDagTx = m_dagFlow->isDagTx(id);
+
+        if (isDagTx) [[likely]]
         {
-            DAGFLOW_LOG(ERROR) << "executeTransactionsWithCriticals error: "
-                               << boost::diagnostic_information(e);
+            auto& input = (*m_inputs)[id];
+            DAGFLOW_LOG(TRACE) << LOG_DESC("Execute tx: start DAG tx") << input->toString()
+                               << LOG_KV("to", input->receiveAddress)
+                               << LOG_KV("data", toHexStringWithPrefix(input->data));
+
+            // dag tx no need to use coroutine
+            auto executive =
+                m_executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
+
+            output = executive->start(std::move(input));
+
+            DAGFLOW_LOG(DEBUG) << "execute tx finish DAG " << output->toString();
+            f_onTxReturn(std::move(output));
+        }
+        else
+        {
+            // run normal tx
+            auto& input = (*m_inputs)[id];
+            DAGFLOW_LOG(DEBUG) << LOG_DESC("Execute tx: start normal tx") << input->toString()
+                               << LOG_KV("to", input->receiveAddress)
+                               << LOG_KV("data", toHexStringWithPrefix(input->data));
+
+            ExecutiveState::Ptr executiveState =
+                std::make_shared<ExecutiveState>(m_executiveFactory, std::move(input));
+
+            runOne(executiveState, [&](CallParameters::UniquePtr output) {
+                if (output->type == CallParameters::MESSAGE ||
+                    output->type == CallParameters::KEY_LOCK)
+                {
+                    m_executives[{output->contextID, output->seq}] = std::move(executiveState);
+                    // call back
+                    DAGFLOW_LOG(DEBUG) << "Execute tx: normal externalCall " << output->toString();
+                    m_dagFlow->pause();
+                }
+                else
+                {
+                    DAGFLOW_LOG(DEBUG) << "Execute tx: normal finish " << output->toString();
+                }
+                f_onTxReturn(std::move(output));
+            });
         }
     });
 
@@ -467,6 +458,7 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
         case Len:
         {
             DAGFLOW_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Len`");
+            conflictFields->emplace_back(std::move(criticalKey));
             break;
         }
         case Env:
@@ -531,6 +523,7 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
                 return nullptr;
             }
             }
+            conflictFields->emplace_back(std::move(criticalKey));
             break;
         }
         case Params:
@@ -582,7 +575,7 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
                 auto out = getComponentBytes(index, typeName, ref(params.data).getCroppedData(4));
                 criticalKey.insert(criticalKey.end(), out.begin(), out.end());
             }
-
+            conflictFields->emplace_back(std::move(criticalKey));
             DAGFLOW_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Params`")
                                << LOG_KV("functionName", functionAbi.name)
                                << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
@@ -592,6 +585,7 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
         {
             criticalKey.insert(
                 criticalKey.end(), conflictField.value.begin(), conflictField.value.end());
+            conflictFields->emplace_back(std::move(criticalKey));
             DAGFLOW_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Const`")
                                << LOG_KV("functionName", functionAbi.name)
                                << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
@@ -612,7 +606,7 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
         }
         }
 
-        conflictFields->emplace_back(std::move(criticalKey));
+
     }
     return conflictFields;
 }

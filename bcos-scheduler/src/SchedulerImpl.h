@@ -134,10 +134,6 @@ public:
         {
             blockExecutive->stop();
         }
-        if (m_storage)
-        {
-            m_storage->stop();
-        }
     }
 
     void setBlockExecutiveFactory(bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory)

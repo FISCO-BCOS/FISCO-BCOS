@@ -114,7 +114,7 @@ public:
     //----------------------------------------------------------------------
     void initP2pBasicMsgTypes();
 
-    bool isP2pBasicMsgType(uint16_t _type)
+    inline bool isP2pBasicMsgType(uint16_t _type)
     {
         if (_type >= GatewayMessageType::All)
         {

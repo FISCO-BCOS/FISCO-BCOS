@@ -65,6 +65,7 @@ void TxDAGFlow::init(critical::CriticalFieldsInterface::Ptr _txsCriticals)
 
         auto dagTask = std::dynamic_pointer_cast<DagTxsTask>(currentTask);
         dagTask->makeEdge(pId, id);
+        DAGFLOW_LOG(TRACE) << "on conflict" << LOG_KV("id", id) << LOG_KV("pId", pId);
     };
 
     auto onFirstConflictHandler = [&](critical::ID id) {
@@ -86,6 +87,7 @@ void TxDAGFlow::init(critical::CriticalFieldsInterface::Ptr _txsCriticals)
             currentTask = std::make_shared<NormalTxTask>(executeTxHandler, id);
             m_tasks.push_back(currentTask);
         }
+        DAGFLOW_LOG(TRACE) << "on first conflict" << LOG_KV("id", id);
     };
     auto onEmptyConflictHandler = [&](critical::ID id) {
         // only DAG Task
@@ -97,12 +99,14 @@ void TxDAGFlow::init(critical::CriticalFieldsInterface::Ptr _txsCriticals)
 
         auto dagTask = std::dynamic_pointer_cast<DagTxsTask>(currentTask);
         dagTask->makeVertex(id);
+        DAGFLOW_LOG(TRACE) << "on no conflict" << LOG_KV("id", id);
     };
 
     auto onAllConflictHandler = [&](critical::ID id) {
         // only Normal Task
         currentTask = std::make_shared<NormalTxTask>(executeTxHandler, id);
         m_tasks.push_back(currentTask);
+        DAGFLOW_LOG(TRACE) << "on all conflict" << LOG_KV("id", id);
     };
 
     // parse criticals
