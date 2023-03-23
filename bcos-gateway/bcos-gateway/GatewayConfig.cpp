@@ -715,7 +715,8 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
                 auto qps = boost::lexical_cast<int>(value);
                 if (qps > 0)
                 {
-                    m_rateLimiterConfig.moduleMsg2QPS[module] = qps;
+                    m_rateLimiterConfig.moduleMsg2QPS.at(module) = qps;
+                    m_rateLimiterConfig.moduleMsg2QPSSize++;
 
                     GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
                                              << LOG_DESC("load flow_control config items")
@@ -733,7 +734,7 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
         << LOG_KV("flow_control.incoming_p2p_basic_msg_type_qps_limit", p2pBasicMsgQPS)
         << LOG_KV("flow_control.incoming_module_msg_type_qps_limit", moduleMsgQPS)
         << LOG_KV("flow_control.incoming_module_qps_limit_xxx size",
-               m_rateLimiterConfig.moduleMsg2QPS.size());
+               m_rateLimiterConfig.moduleMsg2QPSSize);
 
     // --------------------------------- incoming end -------------------------------------------
 

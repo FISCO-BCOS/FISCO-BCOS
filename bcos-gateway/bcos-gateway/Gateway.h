@@ -90,7 +90,20 @@ public:
                     if (self->m_respFunc)
                     {
                         auto errorPtr = BCOS_ERROR_PTR(
-                            bcos::protocol::CommonError::NetworkBandwidthOverFlow, e.what());
+                            bcos::protocol::CommonError::GatewayBandwidthOverFlow, e.what());
+                        self->m_respFunc(errorPtr);
+                    }
+
+                    return;
+                }
+
+                // QPS overflow , do'not try again ???
+                if (e.errorCode() == P2PExceptionType::InQPSOverflow)
+                {
+                    if (self->m_respFunc)
+                    {
+                        auto errorPtr = BCOS_ERROR_PTR(
+                            bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
                         self->m_respFunc(errorPtr);
                     }
 

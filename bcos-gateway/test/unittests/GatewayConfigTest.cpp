@@ -285,7 +285,8 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         BOOST_CHECK(!rateLimiterConfig.p2pBasicMsgTypes.contains(4));
         BOOST_CHECK_EQUAL(rateLimiterConfig.p2pBasicMsgQPS, 123);
         BOOST_CHECK_EQUAL(rateLimiterConfig.p2pModuleMsgQPS, 555);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPSSize, 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS.size(), uint16_t(-1));
         BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[1], 123);
         BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[5], 456);
         BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[7], 789);

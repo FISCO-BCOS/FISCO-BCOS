@@ -35,12 +35,6 @@ using namespace bcos::gateway::ratelimiter;
 const std::string RateLimiterStat::TOTAL_INCOMING = " total    ";
 const std::string RateLimiterStat::TOTAL_OUTGOING = " total    ";
 
-double Stat::calcAvgRate(uint64_t _data, uint32_t _periodMS)
-{
-    auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _periodMS;
-    return avgRate;
-}
-
 std::optional<std::string> Stat::toString(const std::string& _prefix, uint32_t _periodMS)
 {
     if (lastDataSize.load() == 0)
@@ -117,24 +111,14 @@ void RateLimiterStat::stop()
     RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat stop end");
 }
 
-
-std::string RateLimiterStat::toGroupKey(const std::string& _groupID)
-{
-    return " group :  " + _groupID;
-}
-
-std::string RateLimiterStat::toModuleKey(uint16_t _moduleID)
-{
-    return " module : " + protocol::moduleIDToString((protocol::ModuleID)_moduleID);
-}
-
-std::string RateLimiterStat::toEndPointKey(const std::string& _ep)
-{
-    return " endpoint:  " + _ep;
-}
-
+// ---------------- statistics on inbound and outbound begin -------------------
 void RateLimiterStat::updateInComing(const std::string& _endpoint, uint64_t _dataSize, bool _suc)
 {
+    if (!working())
+    {
+        return;
+    }
+
     std::string epKey = toEndPointKey(_endpoint);
     std::string totalKey = TOTAL_OUTGOING;
 
@@ -155,6 +139,11 @@ void RateLimiterStat::updateInComing(const std::string& _endpoint, uint64_t _dat
 
 void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dataSize, bool suc)
 {
+    if (!working())
+    {
+        return;
+    }
+
     std::string epKey = toEndPointKey(_endpoint);
     std::string totalKey = TOTAL_OUTGOING;
 
@@ -181,6 +170,11 @@ void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dat
 void RateLimiterStat::updateInComing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool _suc)
 {
+    if (!working())
+    {
+        return;
+    }
+
     if (_groupID.empty() && (_moduleID != 0))
     {  // amop
         std::string moduleKey = toModuleKey(_moduleID);
@@ -202,6 +196,11 @@ void RateLimiterStat::updateInComing(
 void RateLimiterStat::updateOutGoing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc)
 {
+    if (!working())
+    {
+        return;
+    }
+
     if (_groupID.empty() && (_moduleID != 0))
     {
         std::string moduleKey = toModuleKey(_moduleID);
@@ -237,6 +236,7 @@ void RateLimiterStat::updateOutGoing(
         groupOutStat.updateFailed();
     }
 }
+// ---------------- statistics on inbound and outbound end -------------------
 
 void RateLimiterStat::flushStat()
 {

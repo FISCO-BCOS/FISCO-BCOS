@@ -240,7 +240,7 @@ private:
 
     bool m_run = false;
 
-    std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers;
+    std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};
 
     // the local protocol
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;

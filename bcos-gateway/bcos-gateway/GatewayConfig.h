@@ -12,6 +12,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <array>
 
 namespace bcos
 {
@@ -101,7 +102,8 @@ public:
         int32_t p2pBasicMsgQPS = -1;
         std::set<uint16_t> p2pBasicMsgTypes;
         int32_t p2pModuleMsgQPS = -1;
-        std::unordered_map<uint16_t, int32_t> moduleMsg2QPS;
+        int32_t moduleMsg2QPSSize = 0;
+        std::array<int32_t, std::numeric_limits<uint16_t>::max()> moduleMsg2QPS{};
 
         //-------------- incoming qps ratelimit end-----------------------
 
@@ -138,7 +140,7 @@ public:
                 return true;
             }
 
-            if (!moduleMsg2QPS.empty())
+            if (moduleMsg2QPSSize > 0)
             {
                 return true;
             }
@@ -151,13 +153,12 @@ public:
 
         bool enableInP2pModuleMsgLimit(uint16_t _moduleID) const
         {
-            if (p2pModuleMsgQPS <= 0 && moduleMsg2QPS.empty())
+            if ((p2pModuleMsgQPS <= 0) && (moduleMsg2QPSSize <= 0))
             {
                 return false;
             }
 
-            // TODO: should optimized set lookup ??
-            return p2pModuleMsgQPS > 0 || moduleMsg2QPS.contains(_moduleID);
+            return p2pModuleMsgQPS > 0 || (moduleMsg2QPS.at(_moduleID) != 0);
         }
     };
 
