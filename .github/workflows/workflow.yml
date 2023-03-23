@@ -140,7 +140,7 @@ jobs:
       - name: install ubuntu dependencies
         run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool && sudo apt -y remove libtbb-dev
       - name: configure
-        run: /usr/bin/cmake . -DBUILD_STATIC=ON
+        run: /usr/bin/cmake . -DBUILD_STATIC=ON || cat /home/runner/work/FISCO-BCOS/FISCO-BCOS/deps/src/cryptopp-stamp/cryptopp-configure-*.log
       - name: compile
         run: make -j2
       - name: run integration testing
