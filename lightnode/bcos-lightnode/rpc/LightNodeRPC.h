@@ -352,11 +352,16 @@ public:
                             !bcos::concepts::bytebuffer::equalTo(
                                     block.blockHeader.data.parentInfo[0].blockHash, parentHash))
                         {
-                            LIGHTNODE_LOG(ERROR) << "No match parentHash!";
+                            std::ostringstream parentHashHex;
+                            parentHashHex << "0x" << std::hex << std::setfill('0');
+                            for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
+                                parentHashHex << std::setw(2) << static_cast<unsigned int>(parentHash[i]);
+                            }
                             LIGHTNODE_LOG(DEBUG) << LOG_KV("blockParentNumber", block.blockHeader.data.parentInfo[0].blockNumber)
                                                  << LOG_KV("parentBlockNumber", parentBlock.blockHeader.data.blockNumber)
-                                                 << LOG_KV("calculate parentHash", parentHash)
+                                                 << LOG_KV("calculate parentHash", parentHashHex.str())
                                                  << LOG_KV("parentHash", toHexStringWithPrefix(block.blockHeader.data.parentInfo[0].blockHash));
+                            LIGHTNODE_LOG(ERROR) << "No match parentHash!";
                             BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
                         }
                     }
