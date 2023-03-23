@@ -108,10 +108,10 @@ task::Task<void> TxPool::broadcastPushTransaction(const protocol::Transaction& t
     co_return;
 }
 
-std::vector<protocol::Transaction::ConstPtr> TxPool::getTransactions(
+task::Task<std::vector<protocol::Transaction::ConstPtr>> TxPool::getTransactions(
     RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
 {
-    return m_txpoolStorage->getTransactions(std::move(hashes));
+    co_return m_txpoolStorage->getTransactions(std::move(hashes));
 }
 
 bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)

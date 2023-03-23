@@ -22,12 +22,11 @@ namespace bcos::storage2::memory_storage
 {
 
 template <class Object>
-concept HasMemberSize = requires(Object object)
-{
-    // clang-format off
+concept HasMemberSize = requires(Object object) {
+                            // clang-format off
     { object.size() } -> std::integral;
-    // clang-format on
-};
+                            // clang-format on
+                        };
 
 struct Empty
 {
@@ -120,21 +119,20 @@ private:
         }
     }
 
-    void updateMRUAndCheck(Bucket& bucket,
-        typename Container::template nth_index<0>::type::iterator entryIt) requires withMRU
+    void updateMRUAndCheck(
+        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt)
+        requires withMRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
         index.relocate(index.end(), seqIt);
 
-        size_t clearCount = 0;
         while (bucket.capacity > m_maxCapacity && !bucket.container.empty())
         {
             auto const& item = index.front();
             bucket.capacity -= getSize(item.value);
 
             index.pop_front();
-            ++clearCount;
         }
     }
 
@@ -154,7 +152,8 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MemoryStorage() requires(!withConcurrent)
+    MemoryStorage()
+        requires(!withConcurrent)
     {
         if constexpr (withMRU)
         {
@@ -162,7 +161,8 @@ public:
         }
     }
 
-    explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
+    explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT)
+        requires(withConcurrent)
       : m_buckets(std::min(buckets, getBucketSize()))
     {
         if constexpr (withMRU)
@@ -176,7 +176,11 @@ public:
     MemoryStorage& operator=(MemoryStorage&&) noexcept = default;
     ~MemoryStorage() noexcept = default;
 
-    void setMaxCapacity(int64_t capacity) requires withMRU { m_maxCapacity = capacity; }
+    void setMaxCapacity(int64_t capacity)
+        requires withMRU
+    {
+        m_maxCapacity = capacity;
+    }
 
     class ReadIterator
     {
@@ -363,7 +367,8 @@ public:
         return outputAwaitable;
     }
 
-    task::AwaitableValue<SeekIterator> seek(auto const& key) requires(withOrdered)
+    task::AwaitableValue<SeekIterator> seek(auto const& key)
+        requires(withOrdered)
     {
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();

@@ -48,7 +48,7 @@ public:
 
     task::Task<void> broadcastPushTransaction(const protocol::Transaction& transaction) override;
 
-    std::vector<protocol::Transaction::ConstPtr> getTransactions(
+    task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
         override;
     // ===============================

@@ -60,7 +60,7 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
     }
 
-    virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
+    virtual task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
@@ -144,5 +144,5 @@ public:
 
 template <class T>
 concept IsTxPool = std::derived_from<std::remove_cvref_t<T>, TxPoolInterface> ||
-    std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
+                   std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
 }  // namespace bcos::txpool

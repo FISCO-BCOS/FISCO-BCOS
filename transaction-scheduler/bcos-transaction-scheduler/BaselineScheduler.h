@@ -60,23 +60,22 @@ private:
     std::list<ExecuteResult> m_results;
     std::mutex m_resultsMutex;
 
-    task::AwaitableValue<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
+    task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         protocol::IsBlock auto const& block) const
     {
         if (block.transactionsSize() > 0)
         {
-            return {RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsSize()) |
-                    RANGES::views::transform(
-                        [&block](uint64_t index) { return block.transaction(index); }) |
-                    RANGES::to<std::vector<protocol::Transaction::ConstPtr>>()};
+            co_return RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsSize()) |
+                RANGES::views::transform(
+                    [&block](uint64_t index) { return block.transaction(index); }) |
+                RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
         }
 
-        return {m_txpool.getTransactions(
-                    RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
-                    RANGES::views::transform(
-                        [&block](uint64_t index) { return block.transactionHash(index); })) |
-                RANGES::to<std::vector<protocol::Transaction::ConstPtr>>()};
-        // TODO: get lost transaction from ledger
+        co_return co_await m_txpool.getTransactions(
+            RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
+            RANGES::views::transform(
+                [&block](uint64_t index) { return block.transactionHash(index); })) |
+            RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
     }
 
     void writeTransactions() {}
