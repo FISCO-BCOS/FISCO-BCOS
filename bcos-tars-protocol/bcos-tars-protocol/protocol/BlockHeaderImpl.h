@@ -168,6 +168,9 @@ public:
         return *m_inner();
     }
 
+    // Notice: without lock, be aware of thread-safety issues
+    bcostars::BlockHeader& mutableInner() { return *m_inner(); }
+
     void setInner(const bcostars::BlockHeader& blockHeader)
     {
         bcos::WriteGuard l(x_inner);
