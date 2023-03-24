@@ -1,6 +1,5 @@
 #pragma once
 #include "MultiLayerStorage.h"
-#include "bcos-table/src/StateStorage.h"
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
@@ -14,17 +13,17 @@
 namespace bcos::transaction_scheduler
 {
 
-template <class MultiLayerStorage, protocol::IsTransactionReceiptFactory ReceiptFactory,
-    template <typename, typename> class Executor>
+template <class MultiLayerStorage, template <typename> class Executor>
 class SchedulerBaseImpl
 {
 private:
     MultiLayerStorage& m_multiLayerStorage;
-    ReceiptFactory& m_receiptFactory;
+    protocol::TransactionReceiptFactory& m_receiptFactory;
     transaction_executor::TableNamePool& m_tableNamePool;
 
 public:
-    SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage, ReceiptFactory& receiptFactory,
+    SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage,
+        protocol::TransactionReceiptFactory& receiptFactory,
         transaction_executor::TableNamePool& tableNamePool)
       : m_multiLayerStorage(multiLayerStorage),
         m_receiptFactory(receiptFactory),
@@ -78,14 +77,14 @@ public:
     }
     task::Task<void> commit() { co_await m_multiLayerStorage.mergeAndPopImmutableBack(); }
 
-    task::Task<protocol::ReceiptFactoryReturnType<ReceiptFactory>> call(
+    task::Task<protocol::TransactionReceipt::Ptr> call(
         protocol::IsBlockHeader auto const& blockHeader,
         protocol::IsTransaction auto const& transaction)
     {
         auto view = m_multiLayerStorage.fork(false);
         view.newTemporaryMutable();
 
-        Executor<decltype(view), ReceiptFactory> executor(view, m_receiptFactory, m_tableNamePool);
+        Executor<decltype(view)> executor(view, m_receiptFactory, m_tableNamePool);
         co_return co_await executor.execute(blockHeader, transaction, 0);
     }
 

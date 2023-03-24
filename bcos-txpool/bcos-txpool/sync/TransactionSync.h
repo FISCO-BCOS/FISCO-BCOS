@@ -31,14 +31,12 @@
 namespace bcos::sync
 {
 class TransactionSync : public TransactionSyncInterface,
-                        public Worker,
                         public std::enable_shared_from_this<TransactionSync>
 {
 public:
     using Ptr = std::shared_ptr<TransactionSync>;
     explicit TransactionSync(TransactionSyncConfig::Ptr config)
       : TransactionSyncInterface(std::move(config)),
-        Worker("txsSync", 0),
         m_downloadTxsBuffer(std::make_shared<TxsSyncMsgList>()),
         m_worker(std::make_shared<ThreadPool>("txsSyncWorker", 4)),
         m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 4)),
@@ -55,9 +53,6 @@ public:
 
     ~TransactionSync() override = default;
 
-    void start() override;
-    void stop() override;
-
     using SendResponseCallback = std::function<void(bytesConstRef respData)>;
     void onRecvSyncMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, SendResponseCallback _sendResponse) override;
@@ -70,9 +65,8 @@ public:
     void onEmptyTxs() override;
 
 protected:
-#pragma region deprecated
+    // #pragma region deprecated TODO: all interfaces here marked deprecated
     virtual void responseTxsStatus(bcos::crypto::NodeIDPtr _fromNode);
-    [[deprecated("Use TxPool::broadcastPushTransaction")]] void executeWorker() override;
 
     void broadcastTxsFromRpc(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::protocol::ConstTransactionsPtr _txs);
@@ -87,7 +81,7 @@ protected:
 
     virtual void onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
         SendResponseCallback _sendResponse, bcos::crypto::PublicPtr _peer);
-#pragma endregion
+    // #pragma endregion
 
     // functions called by requestMissedTxs
     virtual void verifyFetchedTxs(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,

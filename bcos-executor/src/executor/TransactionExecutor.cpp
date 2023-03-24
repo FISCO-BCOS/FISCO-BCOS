@@ -1210,7 +1210,6 @@ void TransactionExecutor::dagExecuteTransactions(
     auto callParametersList =
         std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
 
-#pragma omp parallel for
     for (auto i = 0u; i < inputs.size(); ++i)
     {
         auto& params = inputs[i];
@@ -1218,7 +1217,6 @@ void TransactionExecutor::dagExecuteTransactions(
         {
         case ExecutionMessage::TXHASH:
         {
-#pragma omp critical
             {
                 txHashes->emplace_back(params->transactionHash());
                 indexes.emplace_back(i);
@@ -1271,7 +1269,6 @@ void TransactionExecutor::dagExecuteTransactions(
                     return;
                 }
                 auto recordT = utcTime();
-#pragma omp parallel for
                 for (size_t i = 0; i < transactions->size(); ++i)
                 {
                     assert(transactions->at(i));

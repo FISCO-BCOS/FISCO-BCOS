@@ -64,7 +64,7 @@ public:
         protocol::Transaction::Ptr transaction) override;
 
     std::vector<protocol::Transaction::ConstPtr> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
         override;
     // ============================
 

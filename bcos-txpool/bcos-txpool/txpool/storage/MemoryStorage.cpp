@@ -20,6 +20,7 @@
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-utilities/Common.h"
+#include <oneapi/tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -141,22 +142,23 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 }
 
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
-    RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+    RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
 {
-    std::vector<protocol::Transaction::ConstPtr> transactions;
-    transactions.reserve(RANGES::size(hashes));
+    std::vector<protocol::Transaction::ConstPtr> transactions(RANGES::size(hashes));
 
-    for (auto const& hash : hashes)
-    {
-        TxsMap::ReadAccessor::Ptr accessor;
-        auto exists = m_txsTable.find<TxsMap::ReadAccessor>(accessor, hash);
-        if (!exists)
-        {
-            transactions.emplace_back(nullptr);
-            continue;
-        }
-        transactions.emplace_back(accessor->value());
-    }
+    tbb::parallel_for(tbb::blocked_range(0LU, (size_t)RANGES::size(hashes)),
+        [this, &hashes, &transactions](const auto& subrange) {
+            for (auto i = subrange.begin(); i != subrange.end(); ++i)
+            {
+                auto const& hash = hashes[i];
+                TxsMap::ReadAccessor::Ptr accessor;
+                auto exists = m_txsTable.find<TxsMap::ReadAccessor>(accessor, hash);
+                if (exists)
+                {
+                    transactions[i] = accessor->value();
+                }
+            }
+        });
 
     return transactions;
 }

@@ -3,10 +3,10 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-transaction-scheduler/BaselineScheduler.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
@@ -30,11 +30,13 @@ struct MockScheduler
                     [inner = bcostars::TransactionReceipt()]() mutable {
                         return std::addressof(inner);
                     });
+                constexpr static std::string_view str = "abc";
+                receipt->mutableInner().dataHash.assign(str.begin(), str.end());
                 return receipt;
             }) |
             RANGES::to<std::vector<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>>>();
 
-        co_return std::vector<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>>{};
+        co_return receipts;
     }
     task::Task<bcos::h256> finish(auto&& block, auto&& hashImpl) { co_return bcos::h256{}; }
     task::Task<void> commit() { co_return; }
@@ -106,11 +108,11 @@ struct MockTxPool : public txpool::TxPoolInterface
         std::function<void(Error::Ptr)> _onResponse) override
     {}
 
-    std::vector<protocol::Transaction::ConstPtr> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+    task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
+        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
         override
     {
-        return {};
+        co_return std::vector<protocol::Transaction::ConstPtr>{};
     }
 };
 
@@ -152,9 +154,7 @@ public:
     MockScheduler mockScheduler;
     MockLedger mockLedger;
     MockTxPool mockTxPool;
-    BaselineScheduler<MockScheduler, bcostars::protocol::BlockHeaderFactoryImpl, MockLedger,
-        MockTxPool, decltype(*transactionSubmitResultFactory)>
-        baselineScheduler;
+    BaselineScheduler<MockScheduler, MockLedger> baselineScheduler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestBaselineScheduler, TestBaselineSchedulerFixture)
@@ -167,13 +167,23 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
     blockHeader->setVersion(200);
     blockHeader->calculateHash(*hashImpl);
 
+    // Prepare a transaction
+    bcos::bytes input;
+    block->appendTransaction(
+        transactionFactory->createTransaction(0, "to", input, "12345", 100, "chain", "group", 0));
+
+    std::promise<void> end;
     baselineScheduler.executeBlock(block, false,
-        [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& blockHeader,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& blockHeader,
             bool sysBlock) {
             BOOST_CHECK(!error);
             BOOST_CHECK(blockHeader);
             BOOST_CHECK(!sysBlock);
+
+            end.set_value();
         });
+
+    end.get_future().get();
     // baselineScheduler.commitBlock(blockHeader, std::function<void (Error::Ptr &&,
     // ledger::LedgerConfig::Ptr &&)> callback)
 }

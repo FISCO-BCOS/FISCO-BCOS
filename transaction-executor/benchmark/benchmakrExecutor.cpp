@@ -55,7 +55,7 @@ struct Fixture
     MutableStorage backendStorage;
     ReceiptFactory m_receiptFactory;
     TableNamePool m_tableNamePool;
-    bcos::transaction_executor::TransactionExecutorImpl<MutableStorage, ReceiptFactory> executor;
+    bcos::transaction_executor::TransactionExecutorImpl<MutableStorage> executor;
     bcos::bytes m_helloworldBytecodeBinary;
 
     bcostars::BlockHeader tarsBlockHeader;
