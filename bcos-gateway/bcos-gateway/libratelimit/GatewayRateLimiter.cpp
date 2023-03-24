@@ -55,7 +55,7 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
             groupOutGoingBWLimit = m_rateLimiterManager->getGroupRateLimiter(groupID);
         }
 
-        auto modulesWithoutLimit = m_rateLimiterManager->modulesWithoutLimit();
+        const auto& modulesWithoutLimit = m_rateLimiterManager->modulesWithoutLimit();
 
         // if moduleID is zero, the P2P network itself's message, the ratelimiter does not limit
         // P2P own's messages
@@ -75,7 +75,7 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
         // There are two scenarios:
         //  1. ulimit module message rate or
         //  2. limit module message rate
-        else if (modulesWithoutLimit.contains(moduleID))
+        else if (modulesWithoutLimit.at(moduleID))
         {  // case 1: ulimit module message rate or, just for statistic
 
             if (totalOutGoingBWLimit)

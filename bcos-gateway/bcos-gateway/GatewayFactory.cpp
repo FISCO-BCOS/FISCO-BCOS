@@ -549,7 +549,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     }
 
     // modules without bandwidth limit
-    rateLimiterManager->setModulesWithoutLimit(_rateLimiterConfig.modulesWithoutLimit);
+    rateLimiterManager->resetModulesWithoutLimit(_rateLimiterConfig.modulesWithoutLimit);
     rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
     rateLimiterManager->setEnableInRateLimit(_rateLimiterConfig.enableInRateLimit());
     rateLimiterManager->setEnableOutConRateLimit(_rateLimiterConfig.enableOutConnRateLimit());

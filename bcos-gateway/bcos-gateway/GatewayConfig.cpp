@@ -445,16 +445,25 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     // stat_reporter_interval=60000
     int32_t statInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
 
+    m_rateLimiterConfig.enableDistributedRatelimit = enableDistributedRatelimit;
+    m_rateLimiterConfig.enableDistributedRateLimitCache = enableDistributedRateLimitCache;
+    m_rateLimiterConfig.distributedRateLimitCachePercent = distributedRateLimitCachePercent;
+
+    m_rateLimiterConfig.timeWindowSec = timeWindowSec;
+    m_rateLimiterConfig.statInterval = statInterval;
+
     GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
                              << LOG_DESC("load flow_control common config items")
-                             << LOG_KV("flow_control.stat_reporter_interval", statInterval)
-                             << LOG_KV("flow_control.time_window_sec", timeWindowSec)
+                             << LOG_KV("flow_control.stat_reporter_interval",
+                                    m_rateLimiterConfig.statInterval)
+                             << LOG_KV("flow_control.time_window_sec",
+                                    m_rateLimiterConfig.timeWindowSec)
                              << LOG_KV("flow_control.enable_distributed_ratelimit",
-                                    enableDistributedRatelimit)
+                                    m_rateLimiterConfig.enableDistributedRatelimit)
                              << LOG_KV("flow_control.enable_distributed_ratelimit_cache",
-                                    enableDistributedRateLimitCache)
+                                    m_rateLimiterConfig.enableDistributedRateLimitCache)
                              << LOG_KV("flow_control.distributed_ratelimit_cache_percent",
-                                    distributedRateLimitCachePercent);
+                                    m_rateLimiterConfig.distributedRateLimitCachePercent);
 
     // --------------------------------- outgoing begin -------------------------------------------
 
@@ -637,18 +646,26 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
         }
     }
 
+    m_rateLimiterConfig.modulesWithoutLimit = moduleIDs;
+    m_rateLimiterConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
+    m_rateLimiterConfig.connOutgoingBwLimit = connOutgoingBwLimit;
+    m_rateLimiterConfig.groupOutgoingBwLimit = groupOutgoingBwLimit;
+    m_rateLimiterConfig.allowExceedMaxPermitSize = allowExceedMaxPermitSize;
+
     GATEWAY_CONFIG_LOG(INFO)
         << LOG_BADGE("initFlowControlConfig") << LOG_DESC("load_flow control outgoing config items")
-        << LOG_KV("flow_control.outgoing_allow_exceed_max_permit", allowExceedMaxPermitSize)
+        << LOG_KV("flow_control.outgoing_allow_exceed_max_permit",
+               m_rateLimiterConfig.allowExceedMaxPermitSize)
         << LOG_KV("flow_control.modules_without_bw_limit", strModulesWithoutLimit)
-        << LOG_KV("flow_control.total_outgoing_bw_limit", totalOutgoingBwLimit)
-        << LOG_KV("flow_control.conn_outgoing_bw_limit", connOutgoingBwLimit)
-        << LOG_KV("flow_control.group_outgoing_bw_limit", groupOutgoingBwLimit)
+        << LOG_KV("flow_control.total_outgoing_bw_limit", m_rateLimiterConfig.totalOutgoingBwLimit)
+        << LOG_KV("flow_control.conn_outgoing_bw_limit", m_rateLimiterConfig.connOutgoingBwLimit)
+        << LOG_KV("flow_control.group_outgoing_bw_limit", m_rateLimiterConfig.groupOutgoingBwLimit)
         << LOG_KV(
                "flow_control.conn_outgoing_bw_limit_x.x.x.x", m_rateLimiterConfig.ip2BwLimit.size())
         << LOG_KV(
                "flow_control.group_outgoing_bw_limit_xxx", m_rateLimiterConfig.group2BwLimit.size())
-        << LOG_KV("modules_without_bw_limit size", m_rateLimiterConfig.modulesWithoutLimit.size());
+        << LOG_KV("flow_control.modules_without_bw_limit size",
+               m_rateLimiterConfig.modulesWithoutLimit.size());
 
     // --------------------------------- outgoing end -------------------------------------------
 
@@ -727,27 +744,6 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
         }
     }
 
-    GATEWAY_CONFIG_LOG(INFO)
-        << LOG_BADGE("initFlowControlConfig")
-        << LOG_DESC("load flow_control config items, the incoming qps rate limit")
-        << LOG_KV("flow_control.incoming_p2p_basic_msg_type_list", strP2pBasicMsgTypeList)
-        << LOG_KV("flow_control.incoming_p2p_basic_msg_type_qps_limit", p2pBasicMsgQPS)
-        << LOG_KV("flow_control.incoming_module_msg_type_qps_limit", moduleMsgQPS)
-        << LOG_KV("flow_control.incoming_module_qps_limit_xxx size",
-               m_rateLimiterConfig.moduleMsg2QPSSize);
-
-    // --------------------------------- incoming end -------------------------------------------
-
-    m_rateLimiterConfig.timeWindowSec = timeWindowSec;
-    m_rateLimiterConfig.allowExceedMaxPermitSize = allowExceedMaxPermitSize;
-    m_rateLimiterConfig.statInterval = statInterval;
-    m_rateLimiterConfig.modulesWithoutLimit = moduleIDs;
-    m_rateLimiterConfig.totalOutgoingBwLimit = totalOutgoingBwLimit;
-    m_rateLimiterConfig.connOutgoingBwLimit = connOutgoingBwLimit;
-    m_rateLimiterConfig.groupOutgoingBwLimit = groupOutgoingBwLimit;
-    m_rateLimiterConfig.enableDistributedRatelimit = enableDistributedRatelimit;
-    m_rateLimiterConfig.enableDistributedRateLimitCache = enableDistributedRateLimitCache;
-    m_rateLimiterConfig.distributedRateLimitCachePercent = distributedRateLimitCachePercent;
 
     m_rateLimiterConfig.p2pBasicMsgQPS = p2pBasicMsgQPS;
     m_rateLimiterConfig.p2pModuleMsgQPS = moduleMsgQPS;
@@ -755,6 +751,19 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     {
         m_rateLimiterConfig.p2pBasicMsgTypes = p2pBasicMsgTypeList;
     }
+
+    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
+                             << LOG_DESC(
+                                    "load flow_control config items, the incoming qps rate limit")
+                             << LOG_KV("flow_control.incoming_p2p_basic_msg_type_list",
+                                    strP2pBasicMsgTypeList)
+                             << LOG_KV("flow_control.incoming_p2p_basic_msg_type_qps_limit",
+                                    m_rateLimiterConfig.p2pBasicMsgQPS)
+                             << LOG_KV("flow_control.incoming_module_msg_type_qps_limit",
+                                    m_rateLimiterConfig.p2pModuleMsgQPS)
+                             << LOG_KV("flow_control.incoming_module_qps_limit_xxx size",
+                                    m_rateLimiterConfig.moduleMsg2QPSSize);
+    // --------------------------------- incoming end -------------------------------------------
 
     if (totalOutgoingBwLimit > 0 && connOutgoingBwLimit > 0 &&
         connOutgoingBwLimit > totalOutgoingBwLimit)

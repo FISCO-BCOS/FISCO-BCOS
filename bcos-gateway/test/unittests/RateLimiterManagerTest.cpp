@@ -20,6 +20,7 @@
  */
 
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterFactory.h"
 #include "bcos-gateway/libratelimit/TimeWindowRateLimiter.h"
@@ -255,6 +256,21 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
     BOOST_CHECK(rateLimiterManager->isP2pBasicMsgType(6));
     BOOST_CHECK(rateLimiterManager->isP2pBasicMsgType(9));
     BOOST_CHECK(!rateLimiterManager->isP2pBasicMsgType(10));
+    BOOST_CHECK(!rateLimiterManager->isP2pBasicMsgType(0xff));
+
+    {
+        // modules_without_bw_limit=raft,pbft,txs_sync,amop
+        BOOST_CHECK(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::PBFT));
+        BOOST_CHECK(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::Raft));
+        BOOST_CHECK(
+            rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::TxsSync));
+        BOOST_CHECK(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::AMOP));
+        BOOST_CHECK(!rateLimiterManager->modulesWithoutLimit().at(
+            bcos::protocol::ModuleID::LIGHTNODE_GET_ABI));
+        BOOST_CHECK(
+            !rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::BlockSync));
+        BOOST_CHECK(!rateLimiterManager->modulesWithoutLimit().at(0xff));
+    }
 
     {
         /*

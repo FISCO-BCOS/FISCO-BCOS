@@ -32,6 +32,7 @@ void RateLimiterManager::initP2pBasicMsgTypes()
 {
     /** ref: enum GatewayMessageType */
     m_p2pBasicMsgTypes.fill(false);
+    m_modulesWithoutLimit.fill(false);
     for (uint16_t type : {GatewayMessageType::Heartbeat, GatewayMessageType::Handshake,
              GatewayMessageType::RequestNodeStatus, GatewayMessageType::ResponseNodeStatus,
              GatewayMessageType::SyncNodeSeq, GatewayMessageType::RouterTableSyncSeq,
