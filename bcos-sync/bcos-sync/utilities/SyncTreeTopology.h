@@ -42,10 +42,10 @@ public:
 
     virtual ~SyncTreeTopology() {}
     // update corresponding info when the nodes changed
-    virtual void updateNodeInfo(bcos::crypto::NodeIDListPtr _nodeList);
+    virtual void updateNodeInfo(bcos::crypto::NodeIDs _nodeList);
     // consensus info must be updated with nodeList
     virtual void updateAllNodeInfo(
-        bcos::crypto::NodeIDListPtr _consensusNodes, bcos::crypto::NodeIDListPtr _nodeList);
+        bcos::crypto::NodeIDs _consensusNodes, bcos::crypto::NodeIDs _nodeList);
     // select the nodes by tree topology
     virtual bcos::crypto::NodeIDListPtr selectNodesForBlockSync(bcos::crypto::NodeIDSetPtr _peers);
 

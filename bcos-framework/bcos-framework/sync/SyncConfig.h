@@ -91,6 +91,12 @@ public:
         return *m_connectedNodeList;
     }
 
+    virtual bcos::crypto::NodeIDSetPtr connectedNodeSet()
+    {
+        ReadGuard lock(x_connectedNodeList);
+        return m_connectedNodeList;
+    }
+
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet const& _connectedNodeList)
     {
         WriteGuard lock(x_connectedNodeList);
