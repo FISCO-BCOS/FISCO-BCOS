@@ -58,8 +58,11 @@ public:
 
     auto operator<=>(const StringID& rhs) const
     {
-        auto cmp = m_pool <=> rhs.m_pool;
-        if (cmp == std::strong_ordering::equal || cmp == std::strong_ordering::equivalent)
+        if (m_pool == nullptr || rhs.m_pool == nullptr)
+        {
+            return m_pool <=> rhs.m_pool;
+        }
+        if (m_pool == rhs.m_pool)
         {
             return m_stringPoolID <=> rhs.m_stringPoolID;
         }
@@ -71,7 +74,7 @@ public:
     {
         if (m_pool == nullptr || rhs.m_pool == nullptr)
         {
-            return false;
+            return true;
         }
 
         if (m_pool == rhs.m_pool)
