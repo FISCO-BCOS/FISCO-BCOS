@@ -58,7 +58,7 @@ public:
     {
         if (m_p2pIDs.empty())
         {
-            GATEWAY_LOG(ERROR) << LOG_DESC("[Gateway::Retry]")
+            GATEWAY_LOG(DEBUG) << LOG_DESC("[Gateway::Retry]")
                                << LOG_DESC("unable to send the message")
                                << LOG_KV("srcNodeID", m_srcNodeID->hex())
                                << LOG_KV("dstNodeID", m_dstNodeID->hex())
@@ -110,7 +110,7 @@ public:
                     return;
                 }
 
-                GATEWAY_LOG(ERROR)
+                GATEWAY_LOG(DEBUG)
                     << LOG_BADGE("Retry") << LOG_DESC("network callback") << LOG_KV("seq", seq)
                     << LOG_KV("dstP2P", p2pID) << LOG_KV("errorCode", e.errorCode())
                     << LOG_KV("moduleID", moduleID) << LOG_KV("errorMessage", e.what())
@@ -129,7 +129,7 @@ public:
                 // message successfully,find another gateway and try again
                 if (respCode != bcos::protocol::CommonError::SUCCESS)
                 {
-                    GATEWAY_LOG(WARNING)
+                    GATEWAY_LOG(DEBUG)
                         << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
                         << LOG_KV("moduleID", moduleID) << LOG_KV("errorCode", respCode)
                         << LOG_KV("errorMessage", e.what());
