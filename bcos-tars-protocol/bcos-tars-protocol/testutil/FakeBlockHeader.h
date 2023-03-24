@@ -20,11 +20,13 @@
 #pragma once
 #include "bcos-protocol/Common.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include <bcos-framework/protocol/Exceptions.h>
 #include <bcos-utilities/Common.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <memory>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
@@ -102,6 +104,8 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
     BlockHeaderFactory::Ptr blockHeaderFactory =
         std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
     BlockHeader::Ptr blockHeader = blockHeaderFactory->createBlockHeader();
+    auto blockHeaderImpl =
+        std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(blockHeader);
     blockHeader->setVersion(_version);
     blockHeader->setParentInfo(_parentInfo);
     blockHeader->setTxsRoot(_txsRoot);
@@ -117,6 +121,9 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
     WeightList weights;
     weights.push_back(0);
     blockHeader->setConsensusWeights(weights);
+
+    BOOST_CHECK(blockHeaderImpl->inner().dataHash.empty());
+
     if (_check)
     {
         tbb::parallel_invoke([blockHeader]() { blockHeader->hash(); },
@@ -132,6 +139,11 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
 
         // decode
         auto decodedBlockHeader = blockHeaderFactory->createBlockHeader(*encodedData);
+
+        auto decodedBlockHeaderImpl =
+            std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(decodedBlockHeader);
+
+        BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
 #if 0
     std::cout << "### PBBlockHeaderTest: encodedData:" << *toHexString(*encodedData) << std::endl;
 #endif
