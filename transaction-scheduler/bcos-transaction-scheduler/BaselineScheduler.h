@@ -6,6 +6,7 @@
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
@@ -19,6 +20,7 @@
 #include <tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <type_traits>
@@ -52,6 +54,8 @@ private:
     int64_t m_lastcommittedBlockNumber = -1;
     std::mutex m_commitMutex;
 
+    uint64_t m_lastExecute = 0;
+
     struct ExecuteResult
     {
         std::vector<protocol::Transaction::ConstPtr> m_transactions;
@@ -76,6 +80,13 @@ private:
             RANGES::views::transform(
                 [&block](uint64_t index) { return block.transactionHash(index); })) |
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
+    }
+
+    auto current() const
+    {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count();
     }
 
 public:
@@ -105,9 +116,7 @@ public:
             try
             {
                 auto blockHeader = block->blockHeaderConst();
-                BASELINE_SCHEDULER_LOG(INFO)
-                    << "Execute block: " << blockHeader->number() << " | " << verify << " | "
-                    << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
+                
                 std::unique_lock executeLock(self->m_executeMutex, std::try_to_lock);
                 if (!executeLock.owns_lock())
                 {
@@ -120,6 +129,12 @@ public:
 
                     co_return;
                 }
+
+                auto now = self->current();
+                BASELINE_SCHEDULER_LOG(INFO)
+                    << "Execute block: " << blockHeader->number() << " | " << verify << " | "
+                    << block->transactionsMetaDataSize() << " | " << block->transactionsSize()
+                    << " | " << now - self->m_lastExecute << "ms";
 
                 if (self->m_lastExecutedBlockNumber != -1 &&
                     blockHeader->number() - self->m_lastExecutedBlockNumber != 1)
@@ -233,12 +248,6 @@ public:
                 newBlockHeader->setTxsRoot(transactionRootFuture.get());
                 newBlockHeader->calculateHash(self->m_hashImpl);
 
-                BASELINE_SCHEDULER_LOG(INFO)
-                    << "Execute block finished: " << newBlockHeader->number() << " | "
-                    << newBlockHeader->hash() << " | " << newBlockHeader->stateRoot() << " | "
-                    << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot() << " | "
-                    << newBlockHeader->gasUsed();
-
                 if (verify && newBlockHeader->hash() != blockHeader->hash())
                 {
                     auto message = fmt::format("Unmatch block hash! Expect: {} got: {}",
@@ -259,6 +268,13 @@ public:
                     {.m_transactions = std::move(transactions), .m_block = std::move(block)});
                 resultsLock.unlock();
                 executeLock.unlock();
+
+                self->m_lastExecute = self->current();
+                BASELINE_SCHEDULER_LOG(INFO)
+                    << "Execute block finished: " << newBlockHeader->number() << " | "
+                    << newBlockHeader->hash() << " | " << newBlockHeader->stateRoot() << " | "
+                    << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot() << " | "
+                    << newBlockHeader->gasUsed() < " | " << self->current() - now << "ms";
 
                 callback(nullptr, std::move(newBlockHeader), false);
                 co_return;
