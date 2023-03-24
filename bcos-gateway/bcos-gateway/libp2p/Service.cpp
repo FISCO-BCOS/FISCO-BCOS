@@ -517,10 +517,8 @@ void Service::asyncSendMessageByNodeID(
 
         if (callback)
         {
-            m_host->threadPool()->enqueue([callback, e] {
-                callback(NetworkException(Disconnect, "Disconnect"), P2PSession::Ptr(),
-                    P2PMessage::Ptr());
-            });
+            callback(
+                NetworkException(Disconnect, "Disconnect"), P2PSession::Ptr(), P2PMessage::Ptr());
         }
     }
 }

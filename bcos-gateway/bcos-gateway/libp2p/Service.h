@@ -226,18 +226,14 @@ private:
 
     std::map<NodeIPEndpoint, P2pID> m_staticNodes;
     bcos::RecursiveMutex x_nodes;
-
     std::shared_ptr<Host> m_host;
 
     std::unordered_map<P2pID, P2PSession::Ptr> m_sessions;
     mutable bcos::RecursiveMutex x_sessions;
-
     std::shared_ptr<MessageFactory> m_messageFactory;
 
     P2pID m_nodeID;
-
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
-
     bool m_run = false;
 
     std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers;

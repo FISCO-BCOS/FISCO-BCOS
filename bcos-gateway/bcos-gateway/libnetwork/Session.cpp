@@ -36,7 +36,7 @@ Session::Session(size_t _recvBufferSize)
     m_idleCheckTimer = std::make_shared<bcos::Timer>(m_idleTimeInterval, "idleChecker");
 }
 
-Session::~Session()
+Session::~Session() noexcept
 {
     SESSION_LOG(INFO) << "[Session::~Session] this=" << this;
     try
@@ -83,8 +83,9 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         SESSION_LOG(WARNING) << "Session inactive";
         if (callback)
         {
-            server->threadPool()->enqueue(
-                [callback] { callback(NetworkException(-1, "Session inactive"), Message::Ptr()); });
+            m_asyncGroup.run([callback = std::move(callback)] {
+                callback(NetworkException(-1, "Session inactive"), Message::Ptr());
+            });
         }
         return;
     }
@@ -97,7 +98,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                              << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
         if (callback)
         {
-            server->threadPool()->enqueue([callback] {
+            m_asyncGroup.run([callback = std::move(callback)] {
                 callback(NetworkException(-1, "Msg size overflow"), Message::Ptr());
             });
         }
@@ -114,7 +115,8 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
             auto error = result.value();
             auto errorCode = error.errorCode();
             auto errorMessage = error.errorMessage();
-            server->threadPool()->enqueue([callback, errorCode, errorMessage] {
+            m_asyncGroup.run([callback = std::move(callback), errorCode,
+                                 errorMessage = std::move(errorMessage)] {
                 callback(NetworkException((int64_t)errorCode, errorMessage), Message::Ptr());
             });
         }
@@ -385,15 +387,9 @@ void Session::drop(DisconnectReason _reason)
 
     if (server && m_messageHandler)
     {
-        auto handler = m_messageHandler;
-        auto self = std::weak_ptr<Session>(shared_from_this());
-        server->threadPool()->enqueue([handler, self, errorCode, errorMsg]() {
-            auto session = self.lock();
-            if (!session)
-            {
-                return;
-            }
-            handler(NetworkException(errorCode, errorMsg), session, Message::Ptr());
+        m_asyncGroup.run([this, errorCode, errorMsg = std::move(errorMsg)]() {
+            m_messageHandler(
+                NetworkException(errorCode, errorMsg), shared_from_this(), Message::Ptr());
         });
     }
 
@@ -664,36 +660,29 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
     {
         return;
     }
-    auto self = std::weak_ptr<Session>(shared_from_this());
-    server->threadPool()->enqueue([e, message, self]() {
-        auto session = self.lock();
-        if (!session)
-        {
-            return;
-        }
+    m_asyncGroup.run([this, e, message]() {
         try
         {
             // TODO: move the logic to Service for deal with the forwarding message
-            if (!message->dstP2PNodeID().empty() &&
-                message->dstP2PNodeID() != session->m_hostNodeID)
+            if (!message->dstP2PNodeID().empty() && message->dstP2PNodeID() != m_hostNodeID)
             {
-                session->m_messageHandler(e, session, message);
+                m_messageHandler(e, shared_from_this(), message);
                 return;
             }
-            auto server = session->m_server.lock();
+            auto server = m_server.lock();
             // in-activate session
-            if (!session->m_active || !server || !server->haveNetwork())
+            if (!m_active || !server || !server->haveNetwork())
             {
                 return;
             }
 
             if (!message->isRespPacket())
             {
-                session->m_messageHandler(e, session, message);
+                m_messageHandler(e, shared_from_this(), message);
                 return;
             }
 
-            auto callbackManager = session->sessionCallbackManager();
+            auto callbackManager = sessionCallbackManager();
             auto callbackPtr = callbackManager->getCallback(message->seq(), true);
             // without callback, call default handler
             if (!callbackPtr)
@@ -701,8 +690,8 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                 SESSION_LOG(WARNING)
                     << LOG_BADGE("onMessage")
                     << LOG_DESC("callback not found, maybe the callback timeout")
-                    << LOG_KV("endpoint", session->nodeIPEndpoint())
-                    << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
+                    << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq())
+                    << LOG_KV("resp", message->isRespPacket());
                 return;
             }
 
@@ -744,7 +733,7 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     {
         return;
     }
-    server->threadPool()->enqueue([callback]() {
+    m_asyncGroup.run([callback = std::move(callback)]() {
         NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
         callback->callback(e, Message::Ptr());
     });

@@ -398,7 +398,6 @@ std::shared_ptr<WsSession> WsService::newSession(
 
     session->setWsStreamDelegate(_wsStreamDelegate);
     session->setIoc(m_ioservicePool->getIOService());
-    session->setThreadPool(threadPool());
     session->setMessageFactory(messageFactory());
     session->setEndPoint(endPoint);
     session->setConnectedEndPoint(endPoint);

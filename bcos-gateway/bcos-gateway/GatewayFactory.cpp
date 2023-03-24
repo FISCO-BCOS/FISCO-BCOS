@@ -611,7 +611,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // init Host
     auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
-    host->setThreadPool(std::make_shared<ThreadPool>("P2P", _config->threadPoolSize()));
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
     host->setPeerBlacklist(peerBlacklist);

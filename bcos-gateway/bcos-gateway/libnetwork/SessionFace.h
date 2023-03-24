@@ -35,7 +35,7 @@ public:
     SessionFace(SessionFace&&) = delete;
     SessionFace& operator=(SessionFace&&) = delete;
     SessionFace& operator=(const SessionFace&) = delete;
-    virtual ~SessionFace() = default;
+    virtual ~SessionFace() noexcept = default;
 
     virtual void start() = 0;
     virtual void disconnect(DisconnectReason) = 0;
