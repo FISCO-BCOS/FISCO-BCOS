@@ -172,15 +172,15 @@ struct Fixture
                 auto& inner = transaction->mutableInner();
                 inner.data.to = m_contractAddress;
 
-                auto&& [to, index] = tuple;
-                auto fromAddress = to;
+                auto&& [toAddress, index] = tuple;
+                auto fromAddress = toAddress;
                 if (index > 0)
                 {
                     fromAddress = m_addresses[index - 1];
                 }
 
                 auto input = abiCodec.abiIn(
-                    "transfer(address,address,int256)", fromAddress, to, singleTransfer);
+                    "transfer(address,address,int256)", fromAddress, toAddress, singleTransfer);
                 inner.data.input.assign(input.begin(), input.end());
                 return transaction;
             }) |
@@ -472,7 +472,7 @@ static void conflictTransfer(benchmark::State& state)
                         if (balance != singleIssue - i * singleTransfer)
                         {
                             BOOST_THROW_EXCEPTION(std::runtime_error(
-                                fmt::format("Start balance not equal to expected! {}",
+                                fmt::format("Start balance not equal to expected! {} {}", index,
                                     balance.template convert_to<std::string>())));
                         }
                     }
@@ -481,7 +481,7 @@ static void conflictTransfer(benchmark::State& state)
                         if (balance != singleIssue + i * singleTransfer)
                         {
                             BOOST_THROW_EXCEPTION(std::runtime_error(
-                                fmt::format("End balance not equal to expected! {}",
+                                fmt::format("End balance not equal to expected! {} {}", index,
                                     balance.template convert_to<std::string>())));
                         }
                     }
