@@ -15,7 +15,9 @@
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/ITTAPI.h>
 #include <fmt/format.h>
+#include <ittnotify.h>
 #include <oneapi/tbb/parallel_invoke.h>
 #include <tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -89,6 +91,10 @@ private:
             .count();
     }
 
+    __itt_domain* m_ittDomain;
+    __itt_string_handle* m_ittExecuteBlock;
+    __itt_string_handle* m_ittCommitBlock;
+
 public:
     BaselineScheduler(SchedulerImpl& schedulerImpl, protocol::BlockHeaderFactory& blockFactory,
         Ledger& ledger, txpool::TxPoolInterface& txPool,
@@ -113,15 +119,19 @@ public:
     {
         task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
                        decltype(callback) callback) -> task::Task<void> {
+            __itt_task_begin(ITT_DOMAINS::instance().BASELINE_SCHEDULER, __itt_null, __itt_null,
+                ITT_DOMAINS::instance().EXECUTE_BLOCK);
             try
             {
                 auto blockHeader = block->blockHeaderConst();
-                
+
                 std::unique_lock executeLock(self->m_executeMutex, std::try_to_lock);
                 if (!executeLock.owns_lock())
                 {
                     auto message = fmt::format(
                         "Another block:{} is executing!", self->m_lastExecutedBlockNumber);
+
+                    __itt_task_end(self->m_ittDomain);
                     BASELINE_SCHEDULER_LOG(INFO) << message;
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
@@ -145,6 +155,8 @@ public:
 
                     executeLock.unlock();
                     BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                    __itt_task_end(self->m_ittDomain);
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
                         nullptr, false);
@@ -255,6 +267,7 @@ public:
                     BASELINE_SCHEDULER_LOG(ERROR) << message;
 
                     executeLock.unlock();
+                    __itt_task_end(self->m_ittDomain);
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
                         nullptr, false);
@@ -274,8 +287,9 @@ public:
                     << "Execute block finished: " << newBlockHeader->number() << " | "
                     << newBlockHeader->hash() << " | " << newBlockHeader->stateRoot() << " | "
                     << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot() << " | "
-                    << newBlockHeader->gasUsed() < " | " << self->current() - now << "ms";
+                    << newBlockHeader->gasUsed() << " | " << (self->current() - now) << "ms";
 
+                __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                 callback(nullptr, std::move(newBlockHeader), false);
                 co_return;
             }
@@ -284,6 +298,7 @@ public:
                 auto message =
                     fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
+                __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                 callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false);
             }
@@ -295,6 +310,8 @@ public:
     {
         task::wait([](decltype(this) self, protocol::BlockHeader::Ptr blockHeader,
                        decltype(callback) callback) -> task::Task<void> {
+            __itt_task_begin(ITT_DOMAINS::instance().BASELINE_SCHEDULER, __itt_null, __itt_null,
+                ITT_DOMAINS::instance().COMMIT_BLOCK);
             try
             {
                 BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << blockHeader->number();
@@ -305,6 +322,8 @@ public:
                     auto message = fmt::format(
                         "Another block:{} is committing!", self->m_lastcommittedBlockNumber);
                     BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                    __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                         nullptr);
@@ -320,6 +339,8 @@ public:
 
                     commitLock.unlock();
                     BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                    __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
                         nullptr);
@@ -395,6 +416,8 @@ public:
                             }
                         });
                 });
+
+                __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                 callback(nullptr, std::move(ledgerConfig));
                 co_return;
             }
@@ -403,6 +426,8 @@ public:
                 auto message =
                     fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
+
+                __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                 callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr);
             }
