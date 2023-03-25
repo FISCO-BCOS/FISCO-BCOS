@@ -462,11 +462,6 @@ static void conflictTransfer(benchmark::State& state)
                 for (auto&& [balance, index] :
                     RANGES::zip_view(balances, RANGES::iota_view<size_t>(0LU)))
                 {
-                    if (balance > singleIssue)
-                    {
-                        std::cout << fmt::format("Found larger: {} {}",
-                            balance.template convert_to<std::string>(), index);
-                    }
                     if (index == 0)
                     {
                         if (balance != singleIssue - i * singleTransfer)
@@ -476,7 +471,7 @@ static void conflictTransfer(benchmark::State& state)
                                     balance.template convert_to<std::string>())));
                         }
                     }
-                    else if (index == balances.size() - i)
+                    else if (index == balances.size() - 1)
                     {
                         if (balance != singleIssue + i * singleTransfer)
                         {

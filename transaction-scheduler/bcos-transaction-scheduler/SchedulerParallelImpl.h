@@ -83,8 +83,8 @@ private:
         task::Task<bool> execute(protocol::IsBlockHeader auto const& blockHeader,
             auto& receiptFactory, auto& tableNamePool)
         {
-            __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
-                ITT_DOMAINS::instance().CHUNK_EXECUTE);
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().CHUNK_EXECUTE);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
             Executor<decltype(m_storages->m_readWriteSetStorage)> executor(
                 m_storages->m_readWriteSetStorage, receiptFactory, tableNamePool);
@@ -101,14 +101,13 @@ private:
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";
             m_finished = true;
 
-            __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
             co_return m_finished;
         }
 
         void detectRAW(ChunkExecuteStatus* prev, ChunkExecuteStatus* next)
         {
-            __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
-                ITT_DOMAINS::instance().DETECT_RAW);
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().DETECT_RAW);
             if (prev == nullptr && next == nullptr)
             {
                 BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty prev and next!"});
@@ -128,7 +127,6 @@ private:
                         PARALLEL_SCHEDULER_LOG(DEBUG)
                             << "Detected left RAW intersection, abort: " << m_chunkIndex;
                         decreaseNumber(*m_lastChunkIndex, m_chunkIndex);
-                        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
                         return;
                     }
                 }
@@ -147,21 +145,10 @@ private:
                         PARALLEL_SCHEDULER_LOG(DEBUG)
                             << "Detected right RAW intersection, abort: " << m_chunkIndex + 1;
                         decreaseNumber(*m_lastChunkIndex, m_chunkIndex + 1);
-                        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
                         return;
                     }
                 }
             }
-            __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
-        }
-
-        void merge(ChunkExecuteStatus& from)
-        {
-            __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
-                ITT_DOMAINS::instance().PIPELINE_MERGE_STORAGE);
-            m_storages->m_localStorageView.mutableStorage().merge(
-                from.m_storages->m_localStorageView.mutableStorage(), false);
-            __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
         }
 
         static void decreaseNumber(std::atomic_int64_t& number, int64_t target)
@@ -200,8 +187,8 @@ public:
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
     {
-        __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
-            ITT_DOMAINS::instance().PARALLEL_EXECUTE);
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+            ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
         auto storageView = multiLayerStorage().fork(true);
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
         receipts.resize(RANGES::size(transactions));
@@ -211,6 +198,9 @@ public:
         auto retryCount = 0;
         while (offset < RANGES::size(transactions))
         {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
+
             auto transactionAndReceiptsChunks =
                 RANGES::zip_view(RANGES::iota_view(0LU, (size_t)RANGES::size(transactions)),
                     transactions | RANGES::views::addressof, receipts | RANGES::views::addressof) |
@@ -228,9 +218,11 @@ public:
 
             auto executeIt = RANGES::begin(executeChunks);
             auto finishedIt = RANGES::begin(executeChunks);
-            tbb::task_group mergeTasks;
+            // tbb::task_group mergeTasks;
+
+            typename MultiLayerStorage::MutableStorage lastStorage;
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
-            tbb::parallel_pipeline(m_maxToken,
+            tbb::parallel_pipeline(executeChunks.size(),
                 tbb::make_filter<void, std::optional<RANGES::iterator_t<decltype(executeChunks)>>>(
                     tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control)
@@ -294,34 +286,29 @@ public:
                             ++finishedIt;
 
                             auto index = (*input)->chunkIndex();
-                            if (index > 0 && (index + 2) % 2 != 0)
                             {
-                                mergeTasks.run([&executeChunks, index = (*input)->chunkIndex()]() {
-                                    executeChunks[index].merge(executeChunks[index - 1]);
-                                });
+                                ittapi::Report report(
+                                    ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                                    ittapi::ITT_DOMAINS::instance().PIPELINE_MERGE_STORAGE);
+                                lastStorage.merge(
+                                    executeChunks[index].localStorage().mutableStorage(), true);
                             }
                         }));
-            mergeTasks.wait();
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().FINAL_MERGE_STORAGE);
+                if (storageView.mutableStorage().empty())
+                {
+                    storageView.mutableStorage().swap(lastStorage);
+                }
+                else
+                {
+                    storageView.mutableStorage().merge(lastStorage, true);
+                }
+            }
 
-            MergeRangeType reduceRange =
-                RANGES::subrange(RANGES::begin(executeChunks), finishedIt) |
-                RANGES::views::chunk(2) |
-                RANGES::views::transform(
-                    [](auto&& input) -> typename MultiLayerStorage::MutableStorage* {
-                        if (RANGES::size(input) > 1)
-                        {
-                            auto& mutableStorage = input[1].localStorage().mutableStorage();
-                            return std::addressof(mutableStorage);
-                        }
-                        auto& mutableStorage = input[0].localStorage().mutableStorage();
-                        return std::addressof(mutableStorage);
-                    });
-
-            auto outRange = mergeStorages(reduceRange);
-            storageView.mutableStorage().merge(**(outRange.begin()), true);
-            chunkSize = std::min(chunkSize * 2, (size_t)RANGES::size(transactions));
-
-            m_asyncTaskGroup->run([executeChunks = std::move(executeChunks)]() {});
+            m_asyncTaskGroup->run([executeChunks = std::move(executeChunks),
+                                      lastStorage = std::move(lastStorage)]() {});
             ++retryCount;
         }
 
@@ -338,55 +325,7 @@ public:
         //         localMultiLayerStorage);
         // }
 
-        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
         co_return receipts;
-    }
-
-    using MergeRangeType = RANGES::any_view<typename MultiLayerStorage::MutableStorage*,
-        RANGES::category::mask | RANGES::category::sized>;
-    MergeRangeType mergeStorages(MergeRangeType& range)
-    {
-        __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
-            ITT_DOMAINS::instance().FINAL_MERGE_STORAGE);
-        auto inputRange = range | RANGES::views::chunk(2);
-        MergeRangeType outputRange =
-            inputRange | RANGES::views::transform(
-                             [](auto&& input) -> typename MultiLayerStorage::MutableStorage* {
-                                 typename MultiLayerStorage::MutableStorage* storage = nullptr;
-                                 for (auto* ptr : input)
-                                 {
-                                     storage = ptr;
-                                 }
-                                 return storage;
-                             });
-
-        tbb::task_group mergeGroup;
-        for (auto&& subrange : inputRange)
-        {
-            mergeGroup.run([subrange]() {
-                typename MultiLayerStorage::MutableStorage* storage = nullptr;
-                for (auto* ptr : subrange)
-                {
-                    if (!storage)
-                    {
-                        storage = ptr;
-                    }
-                    else
-                    {
-                        ptr->merge(*storage, false);
-                    }
-                }
-            });
-        }
-        mergeGroup.wait();
-
-        if (RANGES::size(outputRange) > 1)
-        {
-            __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
-            return mergeStorages(outputRange);
-        }
-        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
-        return outputRange;
     }
 
     void setChunkSize(size_t chunkSize) { m_chunkSize = chunkSize; }

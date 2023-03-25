@@ -69,6 +69,8 @@ private:
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         protocol::IsBlock auto const& block) const
     {
+        __itt_task_begin(ITT_DOMAINS::instance().BASELINE_SCHEDULER, __itt_null, __itt_null,
+            ITT_DOMAINS::instance().GET_TRANSACTIONS);
         if (block.transactionsSize() > 0)
         {
             co_return RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsSize()) |
@@ -82,6 +84,7 @@ private:
             RANGES::views::transform(
                 [&block](uint64_t index) { return block.transactionHash(index); })) |
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
+        __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
     }
 
     auto current() const
@@ -90,10 +93,6 @@ private:
             std::chrono::steady_clock::now().time_since_epoch())
             .count();
     }
-
-    __itt_domain* m_ittDomain;
-    __itt_string_handle* m_ittExecuteBlock;
-    __itt_string_handle* m_ittCommitBlock;
 
 public:
     BaselineScheduler(SchedulerImpl& schedulerImpl, protocol::BlockHeaderFactory& blockFactory,
@@ -131,7 +130,7 @@ public:
                     auto message = fmt::format(
                         "Another block:{} is executing!", self->m_lastExecutedBlockNumber);
 
-                    __itt_task_end(self->m_ittDomain);
+                    __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                     BASELINE_SCHEDULER_LOG(INFO) << message;
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
@@ -156,7 +155,7 @@ public:
                     executeLock.unlock();
                     BASELINE_SCHEDULER_LOG(INFO) << message;
 
-                    __itt_task_end(self->m_ittDomain);
+                    __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
                         nullptr, false);
@@ -167,6 +166,7 @@ public:
                 std::promise<bcos::h256> transactionRootPromise;
                 self->m_asyncGroup.run([&]() {
                     auto anyHasher = self->m_hashImpl.hasher();
+
                     std::visit(
                         [&](auto& hasher) {
                             try
@@ -214,6 +214,9 @@ public:
                             [](protocol::Transaction::ConstPtr const& transactionPtr)
                                 -> protocol::Transaction const& { return *transactionPtr; }));
 
+
+                __itt_task_begin(ITT_DOMAINS::instance().BASELINE_SCHEDULER, __itt_null, __itt_null,
+                    ITT_DOMAINS::instance().FINISH_EXECUTE);
                 auto newBlockHeader = self->m_blockHeaderFactory.populateBlockHeader(blockHeader);
                 tbb::parallel_invoke(
                     [&]() {
@@ -267,7 +270,7 @@ public:
                     BASELINE_SCHEDULER_LOG(ERROR) << message;
 
                     executeLock.unlock();
-                    __itt_task_end(self->m_ittDomain);
+                    __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
                         nullptr, false);
@@ -282,6 +285,7 @@ public:
                 resultsLock.unlock();
                 executeLock.unlock();
 
+                __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                 self->m_lastExecute = self->current();
                 BASELINE_SCHEDULER_LOG(INFO)
                     << "Execute block finished: " << newBlockHeader->number() << " | "

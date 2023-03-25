@@ -22,8 +22,32 @@
 #pragma once
 #include "ittnotify.h"
 
-namespace bcos
+namespace bcos::ittapi
 {
+
+struct Report
+{
+    Report(const __itt_domain* const domain, __itt_string_handle* name) : m_domain(domain)
+    {
+        __itt_task_begin(domain, __itt_null, __itt_null, name);
+    }
+    Report(const Report&) = delete;
+    Report(Report&&) = default;
+    Report& operator=(const Report&) = delete;
+    Report& operator=(Report&&) = default;
+    ~Report() noexcept { release(); }
+    void release()
+    {
+        if (!m_released)
+        {
+            __itt_task_end(m_domain);
+            m_released = true;
+        }
+    }
+
+    const __itt_domain* m_domain;
+    bool m_released = false;
+};
 
 // baseline scheduler
 struct ITT_DOMAINS
@@ -42,15 +66,18 @@ struct ITT_DOMAINS
     const __itt_domain* const ITT_DOMAIN_EXECUTOR = __itt_domain_create("executor");
 
     const __itt_domain* const BASELINE_SCHEDULER = __itt_domain_create("baselineScheduler");
+    __itt_string_handle* GET_TRANSACTIONS = __itt_string_handle_create("getTransactions");
     __itt_string_handle* EXECUTE_BLOCK = __itt_string_handle_create("executeBlock");
+    __itt_string_handle* FINISH_EXECUTE = __itt_string_handle_create("finishExecute");
     __itt_string_handle* COMMIT_BLOCK = __itt_string_handle_create("commitBlock");
 
     const __itt_domain* const PARALLEL_SCHEDULER = __itt_domain_create("parallelScheduler");
     __itt_string_handle* PARALLEL_EXECUTE = __itt_string_handle_create("parallelExecute");
+    __itt_string_handle* SINGLE_PASS = __itt_string_handle_create("singlePass");
     __itt_string_handle* DETECT_RAW = __itt_string_handle_create("detectRAW");
     __itt_string_handle* CHUNK_EXECUTE = __itt_string_handle_create("chunkExecute");
     __itt_string_handle* PIPELINE_MERGE_STORAGE =
         __itt_string_handle_create("pipelineMergeStorage");
     __itt_string_handle* FINAL_MERGE_STORAGE = __itt_string_handle_create("finalMergeStorage");
 };
-}  // namespace bcos
+}  // namespace bcos::ittapi

@@ -526,6 +526,33 @@ public:
             }
         }
     }
+
+    void swap(MemoryStorage& from)
+    {
+        for (auto bucketPair : RANGES::zip_view(m_buckets, from.m_buckets))
+        {
+            auto& [bucket, fromBucket] = bucketPair;
+            Lock toLock(bucket.mutex);
+            Lock fromLock(fromBucket.mutex);
+            bucket.container.swap(fromBucket.container);
+        }
+    }
+
+    bool empty() const
+    {
+        bool allEmpty = true;
+        for (auto& bucket : m_buckets)
+        {
+            Lock lock(bucket.mutex);
+            if (!bucket.container.empty())
+            {
+                allEmpty = false;
+                break;
+            }
+        }
+
+        return allEmpty;
+    }
 };
 
 }  // namespace bcos::storage2::memory_storage
