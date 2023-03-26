@@ -39,7 +39,6 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
-#include <bcos-security/bcos-security/HsmDataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
 #include <json/value.h>
@@ -154,14 +153,7 @@ TransactionalStorageInterface::Ptr createBackendStorage(
         bcos::security::DataEncryptInterface::Ptr dataEncryption = nullptr;
         if (nodeConfig->storageSecurityEnable())
         {
-            if (nodeConfig->enableHsm())
-            {
-                dataEncryption = std::make_shared<bcos::security::HsmDataEncryption>(nodeConfig);
-            }
-            else
-            {
-                dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
-            }
+            dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
         }
         if (write)
         {

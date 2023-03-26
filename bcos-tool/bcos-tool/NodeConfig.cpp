@@ -582,15 +582,6 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
         return;
     }
 
-    if (m_enableHsm)
-    {
-        m_encKeyIndex = _pt.get<int>("storage_security.enc_key_index");
-        NodeConfig_LOG(INFO) << LOG_DESC("loadStorageSecurityConfig in HSM model")
-                             << LOG_KV("enc_key_index", m_encKeyIndex);
-        // don't need to load key_center_url/cipher_data_key in HSM model
-        return;
-    }
-
     std::string storageSecurityKeyCenterUrl =
         _pt.get<std::string>("storage_security.key_center_url", "");
 
