@@ -25,7 +25,7 @@ using namespace bcos::gateway;
 using namespace bcos::gateway::ratelimiter;
 
 std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& _endpoint,
-    const std::string& _groupID, uint16_t _moduleID, int64_t _msgLength)
+    uint16_t _pkgType, const std::string& _groupID, uint16_t _moduleID, int64_t _msgLength)
 {
     // endpoint of the p2p connection
     const std::string& endpoint = _endpoint;
@@ -37,6 +37,11 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
     int64_t msgLength = _msgLength;
 
     std::string errorMsg;
+
+    GATEWAY_LOG(TRACE) << LOG_BADGE("checkOutGoing") << LOG_KV("endpoint", _endpoint)
+                       << LOG_KV("pkgType", _pkgType) << LOG_KV("groupID", groupID)
+                       << LOG_KV("moduleID", moduleID);
+
     do
     {
         // total outgoing bandwidth
@@ -155,7 +160,7 @@ std::optional<std::string> GatewayRateLimiter::checkInComing(
     {
         result = rateLimiter->tryAcquire(1);
     }
-    m_rateLimiterStat->updateInComing(_endpoint, _msgLength, result);
+    m_rateLimiterStat->updateInComing0(_endpoint, _packageType, _msgLength, result);
     return result ? std::nullopt :
                     std::make_optional<std::string>(
                         "incoming qps overflow, package type: " + std::to_string(_packageType) +

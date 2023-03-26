@@ -69,6 +69,8 @@ public:
         // allow outgoing msg exceed max permit size
         bool allowExceedMaxPermitSize = false;
 
+        bool enableConnectDebugInfo = false;
+
         // stat reporter interval, unit: ms
         int32_t statInterval = 60000;
 

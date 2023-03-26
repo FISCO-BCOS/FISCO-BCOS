@@ -474,6 +474,7 @@ std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRat
 {
     auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
     rateLimiterStat->setStatInterval(_rateLimiterConfig.statInterval);
+    rateLimiterStat->setEnableConnectDebugInfo(_rateLimiterConfig.enableConnectDebugInfo);
 
     // redis instance
     std::shared_ptr<sw::redis::Redis> redis = nullptr;
@@ -740,9 +741,11 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
             std::string endpoint = _session->nodeIPEndpoint().address();
             int64_t msgLength = _msg->length();
+            auto pkgType = _msg->packetType();
 
             // bandwidth limit check
-            auto result = gatewayRateLimiter->checkOutGoing(endpoint, groupID, moduleID, msgLength);
+            auto result =
+                gatewayRateLimiter->checkOutGoing(endpoint, pkgType, groupID, moduleID, msgLength);
             return result ? std::make_optional(
                                 bcos::Error::buildError("", OutBWOverflow, result.value())) :
                             std::nullopt;

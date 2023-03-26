@@ -444,6 +444,8 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
         _pt.get<int32_t>("flow_control.distributed_ratelimit_cache_percent", 20);
     // stat_reporter_interval=60000
     int32_t statInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
+    // stat_reporter_interval=60000
+    bool enableConnectDebugInfo = _pt.get<bool>("flow_control.enable_connect_debug_info", false);
 
     m_rateLimiterConfig.enableDistributedRatelimit = enableDistributedRatelimit;
     m_rateLimiterConfig.enableDistributedRateLimitCache = enableDistributedRateLimitCache;
@@ -451,11 +453,14 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
 
     m_rateLimiterConfig.timeWindowSec = timeWindowSec;
     m_rateLimiterConfig.statInterval = statInterval;
+    m_rateLimiterConfig.enableConnectDebugInfo = enableConnectDebugInfo;
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
                              << LOG_DESC("load flow_control common config items")
                              << LOG_KV("flow_control.stat_reporter_interval",
                                     m_rateLimiterConfig.statInterval)
+                             << LOG_KV("flow_control.enable_connect_debug_info",
+                                    m_rateLimiterConfig.enableConnectDebugInfo)
                              << LOG_KV("flow_control.time_window_sec",
                                     m_rateLimiterConfig.timeWindowSec)
                              << LOG_KV("flow_control.enable_distributed_ratelimit",
@@ -752,17 +757,20 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
         m_rateLimiterConfig.p2pBasicMsgTypes = p2pBasicMsgTypeList;
     }
 
-    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
-                             << LOG_DESC(
-                                    "load flow_control config items, the incoming qps rate limit")
-                             << LOG_KV("flow_control.incoming_p2p_basic_msg_type_list",
-                                    strP2pBasicMsgTypeList)
-                             << LOG_KV("flow_control.incoming_p2p_basic_msg_type_qps_limit",
-                                    m_rateLimiterConfig.p2pBasicMsgQPS)
-                             << LOG_KV("flow_control.incoming_module_msg_type_qps_limit",
-                                    m_rateLimiterConfig.p2pModuleMsgQPS)
-                             << LOG_KV("flow_control.incoming_module_qps_limit_xxx size",
-                                    m_rateLimiterConfig.moduleMsg2QPSSize);
+    GATEWAY_CONFIG_LOG(INFO)
+        << LOG_BADGE("initFlowControlConfig")
+        << LOG_DESC("load flow_control config items, the incoming qps rate limit")
+        << LOG_KV("flow_control.incoming_p2p_basic_msg_type_list", strP2pBasicMsgTypeList)
+        << LOG_KV("flow_control.incoming_p2p_basic_msg_type_qps_limit",
+               m_rateLimiterConfig.p2pBasicMsgQPS)
+        << LOG_KV("flow_control.incoming_module_msg_type_qps_limit",
+               m_rateLimiterConfig.p2pModuleMsgQPS)
+        << LOG_KV("flow_control.incoming_module_qps_limit_xxx size",
+               m_rateLimiterConfig.moduleMsg2QPSSize)
+        << LOG_KV("enableOutRateLimit", m_rateLimiterConfig.enableOutRateLimit())
+        << LOG_KV("enableOutConnRateLimit", m_rateLimiterConfig.enableOutConnRateLimit())
+        << LOG_KV("enableOutGroupRateLimit", m_rateLimiterConfig.enableOutGroupRateLimit())
+        << LOG_KV("enableInRateLimit", m_rateLimiterConfig.enableInRateLimit());
     // --------------------------------- incoming end -------------------------------------------
 
     if (totalOutgoingBwLimit > 0 && connOutgoingBwLimit > 0 &&

@@ -40,14 +40,14 @@ namespace ratelimiter
 //
 struct Stat
 {
-    std::atomic<uint64_t> totalDataSize;
-    std::atomic<uint64_t> lastDataSize;
+    uint64_t totalDataSize;
+    uint64_t lastDataSize;
 
-    std::atomic<uint64_t> totalTimes;
-    std::atomic<int64_t> lastTimes;
+    uint64_t totalTimes;
+    int64_t lastTimes;
 
-    std::atomic<uint64_t> totalFailedTimes;
-    std::atomic<int64_t> lastFailedTimes;
+    uint64_t totalFailedTimes;
+    int64_t lastFailedTimes;
 
 public:
     void resetLast()
@@ -72,7 +72,7 @@ public:
         lastFailedTimes++;
     }
 
-    std::optional<std::string> toString(const std::string& _prefix, uint32_t _periodMS);
+    std::optional<std::string> toString(const std::string& _prefix, uint32_t _periodMS) const;
 };
 
 class RateLimiterStat : public std::enable_shared_from_this<RateLimiterStat>
@@ -88,7 +88,8 @@ public:
     void stop();
 
     // ---------------- statistics on inbound and outbound begin -------------------
-    void updateInComing(const std::string& _endpoint, uint64_t _dataSize, bool _suc);
+    void updateInComing0(
+        const std::string& _endpoint, uint16_t _pgkType, uint64_t _dataSize, bool _suc);
     void updateInComing(
         const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool _suc);
 
@@ -100,30 +101,57 @@ public:
 
     static inline std::string toGroupKey(const std::string& _groupID)
     {
-        return " group :  " + _groupID;
+        // return " group :  " + _groupID;
+        return _groupID;
     }
 
     static inline std::string toModuleKey(uint16_t _moduleID)
     {
-        return " module : " + protocol::moduleIDToString((protocol::ModuleID)_moduleID);
+        // return " module : " + protocol::moduleIDToString((protocol::ModuleID)_moduleID);
+        return protocol::moduleIDToString((protocol::ModuleID)_moduleID);
     }
 
-    static inline std::string toEndPointKey(const std::string& _ep) { return " endpoint:  " + _ep; }
+    static inline std::string toModuleKey(const std::string& _groupID, uint16_t _moduleID)
+    {
+        // return " group|module: " + _groupID + "|" +
+        //        protocol::moduleIDToString((protocol::ModuleID)_moduleID);
+        return _groupID + "|" + protocol::moduleIDToString((protocol::ModuleID)_moduleID);
+    }
+
+    static inline std::string toEndpointKey(const std::string& _ep)
+    {
+        // return " endpoint:  " + _ep;
+        return _ep;
+    }
+    static inline std::string toEndpointPkgTypeKey(const std::string& _ep, uint16_t _pkgType)
+    {
+        // return " endpoint|pkgType:  " + _ep + "|" + std::to_string(_pkgType);
+        return _ep + "|" + std::to_string(_pkgType);
+    }
 
     void flushStat();
 
     std::pair<std::string, std::string> inAndOutStat(uint32_t _intervalMS);
 
-    const std::unordered_map<std::string, Stat>& inStat() const { return m_inStat; }
-    const std::unordered_map<std::string, Stat>& outStat() const { return m_outStat; }
+    const auto& inStat() const { return m_inStat; }
+    const auto& outStat() const { return m_outStat; }
 
     int32_t statInterval() const { return m_statInterval; }
     void setStatInterval(int32_t _statInterval) { m_statInterval = _statInterval; }
+
+    bool enableConnectDebugInfo() const { return m_enableConnectDebugInfo; }
+    void setEnableConnectDebugInfo(bool _enableConnectDebugInfo)
+    {
+        m_enableConnectDebugInfo = _enableConnectDebugInfo;
+    }
 
     bool working() const { return m_running; }
 
 private:
     bool m_running = false;
+
+    // print more debug info
+    bool m_enableConnectDebugInfo = true;
 
     std::mutex m_inLock;
     std::mutex m_outLock;
