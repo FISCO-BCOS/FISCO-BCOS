@@ -40,7 +40,7 @@ public:
     FrontService();
     FrontService(const FrontService&) = delete;
     FrontService(FrontService&&) = delete;
-    ~FrontService() override;
+    ~FrontService() noexcept override;
 
     FrontService& operator=(const FrontService&) = delete;
     FrontService& operator=(FrontService&&) = delete;
@@ -179,11 +179,8 @@ public:
     std::shared_ptr<boost::asio::io_service> ioService() const { return m_ioService; }
     void setIoService(std::shared_ptr<boost::asio::io_service> _ioService)
     {
-        m_ioService = _ioService;
+        m_ioService = std::move(_ioService);
     }
-
-    bcos::ThreadPool::Ptr threadPool() const { return m_threadPool; }
-    void setThreadPool(bcos::ThreadPool::Ptr _threadPool) { m_threadPool = _threadPool; }
 
     // register message _dispatcher for module
     void registerModuleMessageDispatcher(int _moduleID,
@@ -265,8 +262,7 @@ protected:
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
 private:
-    // thread pool
-    bcos::ThreadPool::Ptr m_threadPool;
+    tbb::task_group m_asyncGroup;
     // timer
     std::shared_ptr<boost::asio::io_service> m_ioService;
     /// gateway interface

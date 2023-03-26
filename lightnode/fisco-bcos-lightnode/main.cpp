@@ -207,7 +207,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     front->setNodeID(protocolInitializer.keyPair()->publicKey());
     front->setIoService(std::make_shared<boost::asio::io_service>());
     front->setGatewayInterface(gateway);
-    front->setThreadPool(std::make_shared<bcos::ThreadPool>("p2p", 1));
     front->registerModuleMessageDispatcher(bcos::protocol::BlockSync,
         [](const bcos::crypto::NodeIDPtr&, const std::string&, bcos::bytesConstRef) {});
     front->registerModuleMessageDispatcher(bcos::protocol::AMOP,

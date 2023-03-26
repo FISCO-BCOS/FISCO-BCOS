@@ -41,7 +41,7 @@ FrontService::FrontService()
                     << LOG_KV("maxVersion", m_localProtocol->maxVersion());
 }
 
-FrontService::~FrontService()
+FrontService::~FrontService() noexcept
 {
     stop();
     FRONT_LOG(INFO) << LOG_DESC("~FrontService") << LOG_KV("this", this);
@@ -180,11 +180,6 @@ void FrontService::stop()
             m_ioService->stop();
         }
 
-        if (m_threadPool)
-        {
-            m_threadPool->stop();
-        }
-
         if (m_frontServiceThread && m_frontServiceThread->joinable())
         {
             m_frontServiceThread->join();
@@ -216,16 +211,10 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
 
     if (_onGetGroupNodeInfo)
     {
-        if (m_threadPool)
-        {
-            m_threadPool->enqueue([_onGetGroupNodeInfo, groupNodeInfo]() {
-                _onGetGroupNodeInfo(nullptr, groupNodeInfo);
-            });
-        }
-        else
-        {
+        m_asyncGroup.run([_onGetGroupNodeInfo = std::move(_onGetGroupNodeInfo),
+                             groupNodeInfo = std::move(groupNodeInfo)]() {
             _onGetGroupNodeInfo(nullptr, groupNodeInfo);
-        }
+        });
     }
 
     FRONT_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
@@ -375,22 +364,10 @@ void FrontService::onReceiveGroupNodeInfo(const std::string& _groupID,
                     << LOG_KV("nodeIDs.size()",
                            (_groupNodeInfo ? _groupNodeInfo->nodeIDList().size() : 0));
 
-    if (m_threadPool)
-    {
-        auto self = std::weak_ptr<FrontService>(shared_from_this());
-        m_threadPool->enqueue([self, _groupID, _groupNodeInfo]() {
-            auto front = self.lock();
-            if (!front)
-            {
-                return;
-            }
-            front->notifyGroupNodeInfo(_groupID, _groupNodeInfo);
-        });
-    }
-    else
-    {
+    auto self = std::weak_ptr<FrontService>(shared_from_this());
+    m_asyncGroup.run([this, _groupID, _groupNodeInfo = std::move(_groupNodeInfo)]() {
         notifyGroupNodeInfo(_groupID, _groupNodeInfo);
-    }
+    });
 
     if (_receiveMsgCallback)
     {
@@ -485,20 +462,15 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
         callback->timeoutHandler->cancel();
     }
 
-    if (m_threadPool)
-    {
-        // construct shared_ptr<bytes> from message->payload() first for
-        // thead safe
-        std::shared_ptr<bytes> buffer = std::make_shared<bytes>(_payLoad.begin(), _payLoad.end());
-        m_threadPool->enqueue([_uuid, _error, callback, buffer, _nodeID, respFunc] {
-            callback->callbackFunc(
-                _error, _nodeID, bytesConstRef(buffer->data(), buffer->size()), _uuid, respFunc);
-        });
-    }
-    else
-    {
-        callback->callbackFunc(_error, _nodeID, _payLoad, _uuid, respFunc);
-    }
+    // construct shared_ptr<bytes> from message->payload() first for
+    // thead safe
+    auto buffer = bytes(_payLoad.begin(), _payLoad.end());
+    m_asyncGroup.run([_uuid, _error = std::move(_error), callback = std::move(callback),
+                         buffer = std::move(buffer), _nodeID = std::move(_nodeID),
+                         respFunc = std::move(respFunc)] {
+        callback->callbackFunc(
+            _error, _nodeID, bytesConstRef(buffer.data(), buffer.size()), _uuid, respFunc);
+    });
 }
 /**
  * @brief: receive message from gateway
@@ -508,8 +480,8 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
  * @param _receiveMsgCallback: response callback
  * @return void
  */
-void FrontService::onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
-    bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback)
+void FrontService::onReceiveMessage(const std::string& _groupID,
+    const bcos::crypto::NodeIDPtr& _nodeID, bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback)
 {
     try
     {
@@ -540,21 +512,14 @@ void FrontService::onReceiveMessage(const std::string& _groupID, const bcos::cry
             auto it = m_moduleID2MessageDispatcher.find(moduleID);
             if (it != m_moduleID2MessageDispatcher.end())
             {
-                if (m_threadPool)
-                {
-                    auto callback = it->second;
-                    // construct shared_ptr<bytes> from message->payload() first for
-                    // thead safe
-                    std::shared_ptr<bytes> buffer = std::make_shared<bytes>(
-                        message->payload().begin(), message->payload().end());
-                    m_threadPool->enqueue([uuid, callback, buffer, message, _nodeID] {
-                        callback(_nodeID, uuid, bytesConstRef(buffer->data(), buffer->size()));
-                    });
-                }
-                else
-                {
-                    it->second(_nodeID, uuid, message->payload());
-                }
+                auto callback = it->second;
+                // construct shared_ptr<bytes> from message->payload() first for
+                // thead safe
+                bytes buffer(message->payload().begin(), message->payload().end());
+                m_asyncGroup.run([uuid, callback = std::move(callback), buffer = std::move(buffer),
+                                     message = std::move(message), _nodeID] {
+                    callback(_nodeID, uuid, bytesConstRef(buffer.data(), buffer.size()));
+                });
             }
             else
             {
@@ -570,14 +535,9 @@ void FrontService::onReceiveMessage(const std::string& _groupID, const bcos::cry
 
     if (_receiveMsgCallback)
     {
-        if (m_threadPool)
-        {
-            m_threadPool->enqueue([_receiveMsgCallback]() { _receiveMsgCallback(nullptr); });
-        }
-        else
-        {
+        m_asyncGroup.run([_receiveMsgCallback = std::move(_receiveMsgCallback)]() {
             _receiveMsgCallback(nullptr);
-        }
+        });
     }
 }
 
@@ -651,18 +611,10 @@ void FrontService::onMessageTimeout(const boost::system::error_code& _error,
         if (callback)
         {
             auto errorPtr = BCOS_ERROR_PTR(CommonError::TIMEOUT, "timeout");
-            if (m_threadPool)
-            {
-                m_threadPool->enqueue([_uuid, _nodeID, callback, errorPtr]() {
-                    callback->callbackFunc(errorPtr, _nodeID, bytesConstRef(), _uuid,
-                        std::function<void(bytesConstRef)>());
-                });
-            }
-            else
-            {
-                callback->callbackFunc(errorPtr, _nodeID, bytesConstRef(), _uuid,
-                    std::function<void(bytesConstRef)>());
-            }
+            m_asyncGroup.run([_uuid, _nodeID = std::move(_nodeID), callback = std::move(callback),
+                                 errorPtr = std::move(errorPtr)]() {
+                callback->callbackFunc(errorPtr, _nodeID, {}, _uuid, {});
+            });
         }
 
         FRONT_LOG(WARNING) << LOG_BADGE("onMessageTimeout") << LOG_KV("uuid", _uuid);

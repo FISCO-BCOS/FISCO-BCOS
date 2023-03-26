@@ -740,11 +740,15 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             std::string endpoint = _session->nodeIPEndpoint().address();
             int64_t msgLength = _msg->length();
 
-            // bandwidth limit check
+// TODO: block too long, remove it temparoy
+// bandwidth limit check
+#if 0
             auto result = gatewayRateLimiter->checkOutGoing(endpoint, groupID, moduleID, msgLength);
             return result ? std::make_optional(
                                 bcos::Error::buildError("", OutBWOverflow, result.value())) :
                             std::nullopt;
+#endif
+            return std::nullopt;
         });
 
         service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,

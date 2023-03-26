@@ -218,7 +218,6 @@ public:
 
             auto executeIt = RANGES::begin(executeChunks);
             auto finishedIt = RANGES::begin(executeChunks);
-            // tbb::task_group mergeTasks;
 
             typename MultiLayerStorage::MutableStorage lastStorage;
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
