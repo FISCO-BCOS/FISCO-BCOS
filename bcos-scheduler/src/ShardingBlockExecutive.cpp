@@ -248,30 +248,21 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
         m_storageWrapper.emplace(stateStorage, recorder);
     }
 
-    auto shard = m_contract2ShardCache->find(contractAddress);
     std::string shardName;
-
-    if (shard == m_contract2ShardCache->end())
+    ShardCache::WriteAccessor::Ptr accessor;
+    bool has = m_contract2ShardCache->find<ShardCache::WriteAccessor>(accessor, contractAddress);
+    if (has)
     {
-        shard = m_contract2ShardCache->find(contractAddress);
-        if (shard == m_contract2ShardCache->end())
-        {
-            auto tableName = getContractTableName(contractAddress);
-            shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
-            m_contract2ShardCache->emplace(contractAddress, shardName);
-
-            DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
-                           << "Update shard cache: " << LOG_KV("contractAddress", contractAddress)
-                           << LOG_KV("shardName", shardName);
-        }
-        else
-        {
-            shardName = shard->second;
-        }
+        shardName = accessor->value();
     }
     else
     {
-        shardName = shard->second;
+        auto tableName = getContractTableName(contractAddress);
+        shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
+        m_contract2ShardCache->insert(accessor, {contractAddress, shardName});
+        DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
+                       << "Update shard cache: " << LOG_KV("contractAddress", contractAddress)
+                       << LOG_KV("shardName", shardName);
     }
 
     return shardName;

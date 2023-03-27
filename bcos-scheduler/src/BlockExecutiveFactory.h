@@ -28,6 +28,8 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-utilities/BucketMap.h>
+
 
 namespace bcos::scheduler
 {
@@ -35,10 +37,10 @@ class BlockExecutiveFactory
 {
 public:
     using Ptr = std::shared_ptr<BlockExecutiveFactory>;
+    using ShardCache = bcos::BucketMap<std::string, std::string>;
+
     BlockExecutiveFactory(bool isSerialExecute)
-      : m_isSerialExecute(isSerialExecute),
-        m_contract2ShardCache(
-            std::make_shared<tbb::concurrent_unordered_map<std::string, std::string>>())
+      : m_isSerialExecute(isSerialExecute), m_contract2ShardCache(std::make_shared<ShardCache>(128))
     {}
     virtual ~BlockExecutiveFactory() {}
 
@@ -57,6 +59,6 @@ public:
 
 private:
     bool m_isSerialExecute;
-    std::shared_ptr<tbb::concurrent_unordered_map<std::string, std::string>> m_contract2ShardCache;
+    std::shared_ptr<ShardCache> m_contract2ShardCache;
 };
 }  // namespace bcos::scheduler
