@@ -39,8 +39,10 @@ public:
     using Ptr = std::shared_ptr<BlockExecutiveFactory>;
     using ShardCache = bcos::BucketMap<std::string, std::string>;
 
-    BlockExecutiveFactory(bool isSerialExecute)
-      : m_isSerialExecute(isSerialExecute), m_contract2ShardCache(std::make_shared<ShardCache>(128))
+    BlockExecutiveFactory(bool isSerialExecute, size_t keyPageSize)
+      : m_isSerialExecute(isSerialExecute),
+        m_contract2ShardCache(std::make_shared<ShardCache>(128)),
+        m_keyPageSize(keyPageSize)
     {}
     virtual ~BlockExecutiveFactory() {}
 
@@ -60,5 +62,6 @@ public:
 private:
     bool m_isSerialExecute;
     std::shared_ptr<ShardCache> m_contract2ShardCache;
+    size_t m_keyPageSize;
 };
 }  // namespace bcos::scheduler

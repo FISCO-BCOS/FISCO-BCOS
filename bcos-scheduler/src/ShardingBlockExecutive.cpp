@@ -240,10 +240,19 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
 
     if (!m_storageWrapper.has_value())
     {
-        // TODO: config using
-        auto stateStorage = std::make_shared<bcos::storage::KeyPageStorage>(
-            getStorage(), 10240, m_block->blockHeaderConst()->version(), nullptr, true);
-        // auto stateStorage = std::make_shared<StateStorage>(getStorage());
+        storage::StateStorageInterface::Ptr stateStorage;
+        if (m_keyPageSize > 0)
+        {
+            stateStorage = std::make_shared<bcos::storage::KeyPageStorage>(
+                getStorage(), m_keyPageSize, m_block->blockHeaderConst()->version(), nullptr, true);
+        }
+        else
+        {
+            stateStorage = std::make_shared<bcos::storage::StateStorage>(
+                getStorage(), m_block->blockHeaderConst()->version());
+        }
+
+
         auto recorder = std::make_shared<Recoder>();
         m_storageWrapper.emplace(stateStorage, recorder);
     }

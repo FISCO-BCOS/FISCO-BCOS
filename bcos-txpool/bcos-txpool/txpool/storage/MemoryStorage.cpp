@@ -713,14 +713,7 @@ void MemoryStorage::removeInvalidTxs(bool lock)
 
         // remove invalid txs
         std::atomic<size_t> txCnt = 0;
-        m_invalidTxs.clear([&](bool success, const bcos::crypto::HashType&,
-                               TxsMap::WriteAccessor::Ptr accessor) {
-            if (!success)
-            {
-                // if remove failed, just continue
-                return true;
-            }
-
+        m_invalidTxs.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
             txCnt++;
 
             auto& tx = accessor->value();
@@ -738,6 +731,7 @@ void MemoryStorage::removeInvalidTxs(bool lock)
         });
         notifyUnsealedTxsSize();
         TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs") << LOG_KV("size", txCnt);
+        m_invalidTxs.clear();
     }
     catch (std::exception const& e)
     {
