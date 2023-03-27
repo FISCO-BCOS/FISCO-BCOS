@@ -713,7 +713,13 @@ void MemoryStorage::removeInvalidTxs(bool lock)
 
         // remove invalid txs
         std::atomic<size_t> txCnt = 0;
-        m_invalidTxs.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
+        m_invalidTxs.batchRemove([&](bool success, TxsMap::WriteAccessor::Ptr accessor) {
+            if (!success)
+            {
+                // if remove failed, just continue
+                return true;
+            }
+
             txCnt++;
 
             auto& tx = accessor->value();
@@ -731,7 +737,6 @@ void MemoryStorage::removeInvalidTxs(bool lock)
         });
         notifyUnsealedTxsSize();
         TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs") << LOG_KV("size", txCnt);
-        m_invalidTxs.clear();
     }
     catch (std::exception const& e)
     {
@@ -956,16 +961,6 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
             return true;
         });
 
-    /*
-        for (size_t i = 0; i < txsSize; i++)
-        {
-            auto txHash = _block->transactionHash(i);
-            if (!m_txsTable.contains(txHash))
-            {
-                missedTxs->emplace_back(txHash);
-            }
-        }
-        */
     TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal") << LOG_KV("consNum", batchId)
                      << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
                      << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT));
