@@ -323,6 +323,7 @@ public:
         //         transactionAndReceiptsChunks | RANGES::views::drop(startOffset),
         //         localMultiLayerStorage);
         // }
+        m_asyncTaskGroup->run([storageView = std::move(storageView)]() {});
 
         co_return receipts;
     }

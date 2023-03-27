@@ -399,6 +399,103 @@ static void transfer(benchmark::State& state)
 }
 
 template <bool parallel>
+static void transfer1000User(benchmark::State& state)
+{
+    Fixture<parallel> fixture;
+    fixture.deployContract();
+
+    auto count = state.range(0) * 2;
+    fixture.prepareAddresses(count);
+    fixture.prepareIssue(count);
+
+    std::visit(
+        [&](auto& scheduler) {
+            int i = 0;
+            task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+                // First issue
+                bcostars::protocol::BlockHeaderImpl blockHeader(
+                    [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+                blockHeader.setNumber(0);
+                blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+
+                scheduler.start();
+                [[maybe_unused]] auto receipts = co_await scheduler.execute(blockHeader,
+                    fixture.m_transactions |
+                        RANGES::views::transform([
+                        ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
+                                                     -> auto& { return *transaction; }));
+                co_await scheduler.template finish<decltype(blockHeader)>(
+                    blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
+                co_await scheduler.commit();
+
+                fixture.m_transactions.clear();
+                fixture.prepareConflictTransfer(count);
+
+                // Start transfer
+                for (auto const& it : state)
+                {
+                    bcostars::protocol::BlockHeaderImpl blockHeader(
+                        [inner = bcostars::BlockHeader()]() mutable {
+                            return std::addressof(inner);
+                        });
+                    blockHeader.setNumber((i++) + 1);
+                    blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+
+                    scheduler.start();
+                    [[maybe_unused]] auto receipts = co_await scheduler.execute(blockHeader,
+                        fixture.m_transactions | RANGES::views::transform([
+                        ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
+                                                                              -> auto& {
+                            return *transaction;
+                        }));
+                    auto stateRoot = co_await scheduler.template finish<decltype(blockHeader)>(
+                        blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
+                    if (stateRoot == bcos::h256{})
+                    {
+                        BOOST_THROW_EXCEPTION(std::runtime_error("Empty state root!"));
+                    }
+                    co_await scheduler.commit();
+                }
+
+                // Check
+                auto balances = co_await fixture.balances();
+                for (auto&& [balance, index] :
+                    RANGES::zip_view(balances, RANGES::iota_view<size_t>(0LU)))
+                {
+                    if (index == 0)
+                    {
+                        if (balance != singleIssue - i * singleTransfer)
+                        {
+                            BOOST_THROW_EXCEPTION(std::runtime_error(
+                                fmt::format("Start balance not equal to expected! {} {}", index,
+                                    balance.template convert_to<std::string>())));
+                        }
+                    }
+                    else if (index == balances.size() - 1)
+                    {
+                        if (balance != singleIssue + i * singleTransfer)
+                        {
+                            BOOST_THROW_EXCEPTION(std::runtime_error(
+                                fmt::format("End balance not equal to expected! {} {}", index,
+                                    balance.template convert_to<std::string>())));
+                        }
+                    }
+                    else
+                    {
+                        if (balance != singleIssue)
+                        {
+                            BOOST_THROW_EXCEPTION(
+                                std::runtime_error(fmt::format("Balance not equal to expected! {}",
+                                    balance.template convert_to<std::string>())));
+                        }
+                    }
+                }
+            }(state));
+        },
+        fixture.m_scheduler);
+}
+
+template <bool parallel>
 static void conflictTransfer(benchmark::State& state)
 {
     Fixture<parallel> fixture;
