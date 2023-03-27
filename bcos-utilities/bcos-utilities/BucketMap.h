@@ -137,6 +137,29 @@ public:
         return ret;
     }
 
+    // return true if remove success
+    bool remove(typename WriteAccessor::Ptr& accessor, const KeyType& key)
+    {
+        if (!accessor)
+        {
+            accessor =
+                std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
+        }
+
+        auto it = m_values.find(key);
+        if (it == m_values.end())
+        {
+            accessor->setValue(m_values.end());
+            return false;
+        }
+        else
+        {
+            accessor->setValue(it);
+            m_values.erase(it);
+            return true;
+        }
+    }
+
     size_t size() { return m_values.size(); }
     bool contains(const KeyType& key)
     {
@@ -161,7 +184,8 @@ public:
         return true;
     }
 
-    void clear(typename WriteAccessor::Ptr& accessor)
+    void clear(typename WriteAccessor::Ptr& accessor,
+        std::function<void(bool, const KeyType&, typename WriteAccessor::Ptr)> onRemove = nullptr)
     {
         if (!accessor)
         {
@@ -169,7 +193,14 @@ public:
                 std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
         }
 
-        m_values.clear();
+        for (auto it = m_values.begin(); it != m_values.end(); it++)
+        {
+            if (onRemove)
+            {
+                onRemove(true, it->first, accessor);
+            }
+            m_values.erase(it);
+        }
     }
 
     SharedMutex& getMutex() { return m_mutex; }
@@ -264,7 +295,7 @@ public:
             auto idx = getBucketIndex(*keyBatch.begin());
             for (const auto& key : keyBatch)
             {
-                bool success = m_buckets[idx]->remove(key);
+                bool success = m_buckets[idx]->remove(accessor, key);
                 onRemove(success, key, success ? accessor : nullptr);
             }
         }
@@ -308,15 +339,30 @@ public:
         return bucket->contains(key);
     }
 
-    void clear()
+    void clear(
+        std::function<void(bool, const KeyType&, typename WriteAccessor::Ptr)> onRemove = nullptr)
     {
-        for (size_t i = 0; i < m_buckets.size(); i++)
+        if (!onRemove) [[likely]]
         {
-            m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
-            /*
-            typename WriteAccessor::Ptr accessor;
-            m_buckets[i]->clear(accessor);
-             */
+            for (size_t i = 0; i < m_buckets.size(); i++)
+            {
+                m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+                /*
+                typename WriteAccessor::Ptr accessor;
+                m_buckets[i]->clear(accessor);
+                 */
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < m_buckets.size(); i++)
+            {
+                auto bucket = m_buckets[i];
+                m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+
+                typename WriteAccessor::Ptr accessor;
+                bucket->clear(accessor, onRemove);
+            }
         }
     }
     template <class AccessorType>  // handler return isContinue

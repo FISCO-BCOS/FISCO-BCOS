@@ -713,7 +713,8 @@ void MemoryStorage::removeInvalidTxs(bool lock)
 
         // remove invalid txs
         std::atomic<size_t> txCnt = 0;
-        m_invalidTxs.batchRemove([&](bool success, TxsMap::WriteAccessor::Ptr accessor) {
+        m_invalidTxs.clear([&](bool success, const bcos::crypto::HashType&,
+                               TxsMap::WriteAccessor::Ptr accessor) {
             if (!success)
             {
                 // if remove failed, just continue
