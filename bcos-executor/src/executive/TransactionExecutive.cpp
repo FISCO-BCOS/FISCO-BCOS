@@ -375,9 +375,9 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         // 3.1.0 < version < 3.3, authCheck==true, then create
         // version >= 3.3, always create
         if ((m_blockContext.isAuthCheck() &&
-                versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0) ||
+                m_blockContext.blockVersion() >= BlockVersion::V3_1_VERSION) ||
             (!m_blockContext.isWasm() &&
-                versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_3_VERSION) >= 0))
+                m_blockContext.blockVersion() >= BlockVersion::V3_3_VERSION))
         {
             // Create auth table
             creatAuthTable(
@@ -392,7 +392,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         EXECUTIVE_LOG(INFO) << "create contract table " << LOG_KV("table", tableName)
                             << LOG_KV("sender", callParameters->senderAddress);
         if (m_blockContext.isAuthCheck() ||
-            versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
+            (!m_blockContext.isWasm() &&
+                m_blockContext.blockVersion() >= BlockVersion::V3_3_VERSION))
         {
             // Create auth table, always create auth table when version >= 3.3.0
             creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress,
