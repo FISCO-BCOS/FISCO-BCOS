@@ -63,6 +63,7 @@ public:
         [[no_unique_address]] std::conditional_t<withCacheStorage,
             std::add_lvalue_reference_t<CachedStorage>, std::monostate>
             m_cacheStorage;
+        std::unique_lock<std::mutex> m_mutableLock;
 
         View(BackendStorage& backendStorage)
             requires(!withCacheStorage)
