@@ -374,7 +374,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
 void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
 {
-    auto weakHost = std::weak_ptr<Host>(shared_from_this());
+    auto weakHost = weak_from_this();
     std::shared_ptr<SessionFace> session = m_sessionFactory->create_session(
         weakHost, socket, m_messageFactory, m_sessionCallbackManager);
 
@@ -483,10 +483,11 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
             /// call handshakeClient after handshake succeed
             m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
-                [this, socket, endpointPublicKey = std::move(endpointPublicKey),
+                [self = shared_from_this(), socket,
+                    endpointPublicKey = std::move(endpointPublicKey),
                     callback = std::move(callback), nodeIPEndPoint = _nodeIPEndpoint,
                     connectTimer = std::move(connectTimer)](auto error) mutable {
-                    handshakeClient(error, std::move(socket), endpointPublicKey,
+                    self->handshakeClient(error, std::move(socket), endpointPublicKey,
                         std::move(callback), nodeIPEndPoint, std::move(connectTimer));
                 });
         });
