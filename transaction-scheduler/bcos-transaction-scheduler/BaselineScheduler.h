@@ -6,6 +6,7 @@
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
@@ -14,11 +15,14 @@
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/ITTAPI.h>
 #include <fmt/format.h>
+#include <ittnotify.h>
 #include <oneapi/tbb/parallel_invoke.h>
 #include <tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <type_traits>
@@ -52,6 +56,8 @@ private:
     int64_t m_lastcommittedBlockNumber = -1;
     std::mutex m_commitMutex;
 
+    uint64_t m_lastExecute = 0;
+
     struct ExecuteResult
     {
         std::vector<protocol::Transaction::ConstPtr> m_transactions;
@@ -78,6 +84,17 @@ private:
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
     }
 
+    auto current() const
+    {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+    }
+
+    __itt_domain* m_ittDomain;
+    __itt_string_handle* m_ittExecuteBlock;
+    __itt_string_handle* m_ittCommitBlock;
+
 public:
     BaselineScheduler(SchedulerImpl& schedulerImpl, protocol::BlockHeaderFactory& blockFactory,
         Ledger& ledger, txpool::TxPoolInterface& txPool,
@@ -102,17 +119,19 @@ public:
     {
         task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
                        decltype(callback) callback) -> task::Task<void> {
+            __itt_task_begin(ITT_DOMAINS::instance().BASELINE_SCHEDULER, __itt_null, __itt_null,
+                ITT_DOMAINS::instance().EXECUTE_BLOCK);
             try
             {
                 auto blockHeader = block->blockHeaderConst();
-                BASELINE_SCHEDULER_LOG(INFO)
-                    << "Execute block: " << blockHeader->number() << " | " << verify << " | "
-                    << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
+
                 std::unique_lock executeLock(self->m_executeMutex, std::try_to_lock);
                 if (!executeLock.owns_lock())
                 {
                     auto message = fmt::format(
                         "Another block:{} is executing!", self->m_lastExecutedBlockNumber);
+
+                    __itt_task_end(self->m_ittDomain);
                     BASELINE_SCHEDULER_LOG(INFO) << message;
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
@@ -120,6 +139,12 @@ public:
 
                     co_return;
                 }
+
+                auto now = self->current();
+                BASELINE_SCHEDULER_LOG(INFO)
+                    << "Execute block: " << blockHeader->number() << " | " << verify << " | "
+                    << block->transactionsMetaDataSize() << " | " << block->transactionsSize()
+                    << " | " << now - self->m_lastExecute << "ms";
 
                 if (self->m_lastExecutedBlockNumber != -1 &&
                     blockHeader->number() - self->m_lastExecutedBlockNumber != 1)
@@ -130,6 +155,8 @@ public:
 
                     executeLock.unlock();
                     BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                    __itt_task_end(self->m_ittDomain);
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
                         nullptr, false);
@@ -233,12 +260,6 @@ public:
                 newBlockHeader->setTxsRoot(transactionRootFuture.get());
                 newBlockHeader->calculateHash(self->m_hashImpl);
 
-                BASELINE_SCHEDULER_LOG(INFO)
-                    << "Execute block finished: " << newBlockHeader->number() << " | "
-                    << newBlockHeader->hash() << " | " << newBlockHeader->stateRoot() << " | "
-                    << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot() << " | "
-                    << newBlockHeader->gasUsed();
-
                 if (verify && newBlockHeader->hash() != blockHeader->hash())
                 {
                     auto message = fmt::format("Unmatch block hash! Expect: {} got: {}",
@@ -246,6 +267,7 @@ public:
                     BASELINE_SCHEDULER_LOG(ERROR) << message;
 
                     executeLock.unlock();
+                    __itt_task_end(self->m_ittDomain);
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
                         nullptr, false);
@@ -260,6 +282,14 @@ public:
                 resultsLock.unlock();
                 executeLock.unlock();
 
+                self->m_lastExecute = self->current();
+                BASELINE_SCHEDULER_LOG(INFO)
+                    << "Execute block finished: " << newBlockHeader->number() << " | "
+                    << newBlockHeader->hash() << " | " << newBlockHeader->stateRoot() << " | "
+                    << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot() << " | "
+                    << newBlockHeader->gasUsed() << " | " << (self->current() - now) << "ms";
+
+                __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                 callback(nullptr, std::move(newBlockHeader), false);
                 co_return;
             }
@@ -268,6 +298,7 @@ public:
                 auto message =
                     fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
+                __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                 callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false);
             }
@@ -279,6 +310,8 @@ public:
     {
         task::wait([](decltype(this) self, protocol::BlockHeader::Ptr blockHeader,
                        decltype(callback) callback) -> task::Task<void> {
+            __itt_task_begin(ITT_DOMAINS::instance().BASELINE_SCHEDULER, __itt_null, __itt_null,
+                ITT_DOMAINS::instance().COMMIT_BLOCK);
             try
             {
                 BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << blockHeader->number();
@@ -289,6 +322,8 @@ public:
                     auto message = fmt::format(
                         "Another block:{} is committing!", self->m_lastcommittedBlockNumber);
                     BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                    __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                         nullptr);
@@ -304,6 +339,8 @@ public:
 
                     commitLock.unlock();
                     BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                    __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
                         nullptr);
@@ -379,6 +416,8 @@ public:
                             }
                         });
                 });
+
+                __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                 callback(nullptr, std::move(ledgerConfig));
                 co_return;
             }
@@ -387,6 +426,8 @@ public:
                 auto message =
                     fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
+
+                __itt_task_end(ITT_DOMAINS::instance().BASELINE_SCHEDULER);
                 callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr);
             }

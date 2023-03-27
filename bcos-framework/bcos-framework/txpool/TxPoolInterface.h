@@ -51,19 +51,19 @@ public:
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         [[maybe_unused]] protocol::Transaction::Ptr transaction)
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
     virtual task::Task<void> broadcastPushTransaction(
         [[maybe_unused]] const protocol::Transaction& transaction)
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
     virtual task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
     /**

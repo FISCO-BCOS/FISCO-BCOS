@@ -24,8 +24,33 @@
 
 namespace bcos
 {
-extern const __itt_domain* const ITT_DOMAIN_STORAGE;
-extern const __itt_domain* const ITT_DOMAIN_CONSENSUS;
-extern const __itt_domain* const ITT_DOMAIN_SCHEDULER;
-extern const __itt_domain* const ITT_DOMAIN_EXECUTOR;
+
+// baseline scheduler
+struct ITT_DOMAINS
+{
+    static ITT_DOMAINS& instance()
+    {
+        static ITT_DOMAINS ittDomains;
+        return ittDomains;
+    }
+
+    ITT_DOMAINS() = default;
+
+    const __itt_domain* const ITT_DOMAIN_STORAGE = __itt_domain_create("storage");
+    const __itt_domain* const ITT_DOMAIN_CONSENSUS = __itt_domain_create("consensus");
+    const __itt_domain* const ITT_DOMAIN_SCHEDULER = __itt_domain_create("scheduler");
+    const __itt_domain* const ITT_DOMAIN_EXECUTOR = __itt_domain_create("executor");
+
+    const __itt_domain* const BASELINE_SCHEDULER = __itt_domain_create("baselineScheduler");
+    __itt_string_handle* EXECUTE_BLOCK = __itt_string_handle_create("executeBlock");
+    __itt_string_handle* COMMIT_BLOCK = __itt_string_handle_create("commitBlock");
+
+    const __itt_domain* const PARALLEL_SCHEDULER = __itt_domain_create("parallelScheduler");
+    __itt_string_handle* PARALLEL_EXECUTE = __itt_string_handle_create("parallelExecute");
+    __itt_string_handle* DETECT_RAW = __itt_string_handle_create("detectRAW");
+    __itt_string_handle* CHUNK_EXECUTE = __itt_string_handle_create("chunkExecute");
+    __itt_string_handle* PIPELINE_MERGE_STORAGE =
+        __itt_string_handle_create("pipelineMergeStorage");
+    __itt_string_handle* FINAL_MERGE_STORAGE = __itt_string_handle_create("finalMergeStorage");
+};
 }  // namespace bcos

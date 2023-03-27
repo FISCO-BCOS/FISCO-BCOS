@@ -128,12 +128,6 @@ public:
     std::string moduleName() { return m_moduleName; }
     void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
 
-    std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
-    void setThreadPool(std::shared_ptr<bcos::ThreadPool> _threadPool)
-    {
-        m_threadPool = _threadPool;
-    }
-
     void setIOServicePool(IOServicePool::Ptr _ioservicePool)
     {
         m_ioservicePool = _ioservicePool;

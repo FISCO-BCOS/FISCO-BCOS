@@ -26,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
@@ -37,11 +38,7 @@
 #include <shared_mutex>
 #include <unordered_map>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 class WsService;
 // The websocket session for connection
@@ -66,7 +63,6 @@ public:
     void startAsServer(bcos::boostssl::http::HttpRequest _httpRequest);
 
     virtual void onMessage(bcos::boostssl::MessageFace::Ptr _message);
-
 
     virtual bool isConnected()
     {
@@ -115,12 +111,6 @@ public:
 
     std::shared_ptr<boost::asio::io_context> ioc() const { return m_ioc; }
     void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = _ioc; }
-
-    std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
-    void setThreadPool(std::shared_ptr<bcos::ThreadPool> _threadPool)
-    {
-        m_threadPool = _threadPool;
-    }
 
     void setVersion(uint16_t _version) { m_version.store(_version); }
     uint16_t version() const { return m_version.load(); }
@@ -221,7 +211,8 @@ protected:
     // message factory
     std::shared_ptr<MessageFaceFactory> m_messageFactory;
     // thread pool
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
+    // std::shared_ptr<bcos::ThreadPool> m_threadPool;
+    tbb::task_group m_asyncGroup;
     // ioc
     std::shared_ptr<boost::asio::io_context> m_ioc;
     // send message queue
@@ -245,6 +236,4 @@ public:
     }
 };
 
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

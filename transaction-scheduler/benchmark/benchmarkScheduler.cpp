@@ -14,6 +14,7 @@
 #include <bcos-transaction-scheduler/MultiLayerStorage.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <bcos-utilities/ITTAPI.h>
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
 #include <transaction-executor/tests/TestBytecode.h>
@@ -457,44 +458,43 @@ static void conflictTransfer(benchmark::State& state)
                 }
 
                 // Check
-                // auto balances = co_await fixture.balances();
-                // for (auto&& [balance, index] :
-                //     RANGES::zip_view(balances, RANGES::iota_view<size_t>(0LU)))
-                // {
-                //     if (balance > singleIssue)
-                //     {
-                //         std::cout << fmt::format("Found larger: {} {}",
-                //             balance.template convert_to<std::string>(), index);
-                //     }
-                //     if (index == 0)
-                //     {
-                //         if (balance != singleIssue - i * singleTransfer)
-                //         {
-                //             BOOST_THROW_EXCEPTION(std::runtime_error(
-                //                 fmt::format("Start balance not equal to expected! {}",
-                //                     balance.template convert_to<std::string>())));
-                //         }
-                //     }
-                //     else if (index == balances.size() - i)
-                //     {
-                //         if (balance != singleIssue + i * singleTransfer)
-                //         {
-                //             BOOST_THROW_EXCEPTION(std::runtime_error(
-                //                 fmt::format("End balance not equal to expected! {}",
-                //                     balance.template convert_to<std::string>())));
-                //         }
-                //     }
-                //     else
-                //     {
-                //         if (balance != singleIssue)
-                //         {
-                //             BOOST_THROW_EXCEPTION(
-                //                 std::runtime_error(fmt::format("Balance not equal to expected! {}
-                //                 ",
-                //                     balance.template convert_to<std::string>())));
-                //         }
-                //     }
-                // }
+                auto balances = co_await fixture.balances();
+                for (auto&& [balance, index] :
+                    RANGES::zip_view(balances, RANGES::iota_view<size_t>(0LU)))
+                {
+                    if (balance > singleIssue)
+                    {
+                        std::cout << fmt::format("Found larger: {} {}",
+                            balance.template convert_to<std::string>(), index);
+                    }
+                    if (index == 0)
+                    {
+                        if (balance != singleIssue - i * singleTransfer)
+                        {
+                            BOOST_THROW_EXCEPTION(std::runtime_error(
+                                fmt::format("Start balance not equal to expected! {}",
+                                    balance.template convert_to<std::string>())));
+                        }
+                    }
+                    else if (index == balances.size() - i)
+                    {
+                        if (balance != singleIssue + i * singleTransfer)
+                        {
+                            BOOST_THROW_EXCEPTION(std::runtime_error(
+                                fmt::format("End balance not equal to expected! {}",
+                                    balance.template convert_to<std::string>())));
+                        }
+                    }
+                    else
+                    {
+                        if (balance != singleIssue)
+                        {
+                            BOOST_THROW_EXCEPTION(
+                                std::runtime_error(fmt::format("Balance not equal to expected! {}",
+                                    balance.template convert_to<std::string>())));
+                        }
+                    }
+                }
             }(state));
         },
         fixture.m_scheduler);

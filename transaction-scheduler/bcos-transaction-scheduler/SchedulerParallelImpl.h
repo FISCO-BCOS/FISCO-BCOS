@@ -7,6 +7,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-utilities/Exceptions.h"
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/ITTAPI.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <boost/exception/detail/exception_ptr.hpp>
 #include <boost/throw_exception.hpp>
@@ -82,6 +83,8 @@ private:
         task::Task<bool> execute(protocol::IsBlockHeader auto const& blockHeader,
             auto& receiptFactory, auto& tableNamePool)
         {
+            __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
+                ITT_DOMAINS::instance().CHUNK_EXECUTE);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
             Executor<decltype(m_storages->m_readWriteSetStorage)> executor(
                 m_storages->m_readWriteSetStorage, receiptFactory, tableNamePool);
@@ -97,11 +100,15 @@ private:
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";
             m_finished = true;
+
+            __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
             co_return m_finished;
         }
 
         void detectRAW(ChunkExecuteStatus* prev, ChunkExecuteStatus* next)
         {
+            __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
+                ITT_DOMAINS::instance().DETECT_RAW);
             if (prev == nullptr && next == nullptr)
             {
                 BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty prev and next!"});
@@ -121,6 +128,7 @@ private:
                         PARALLEL_SCHEDULER_LOG(DEBUG)
                             << "Detected left RAW intersection, abort: " << m_chunkIndex;
                         decreaseNumber(*m_lastChunkIndex, m_chunkIndex);
+                        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
                         return;
                     }
                 }
@@ -139,16 +147,21 @@ private:
                         PARALLEL_SCHEDULER_LOG(DEBUG)
                             << "Detected right RAW intersection, abort: " << m_chunkIndex + 1;
                         decreaseNumber(*m_lastChunkIndex, m_chunkIndex + 1);
+                        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
                         return;
                     }
                 }
             }
+            __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
         }
 
         void merge(ChunkExecuteStatus& from)
         {
+            __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
+                ITT_DOMAINS::instance().PIPELINE_MERGE_STORAGE);
             m_storages->m_localStorageView.mutableStorage().merge(
                 from.m_storages->m_localStorageView.mutableStorage(), false);
+            __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
         }
 
         static void decreaseNumber(std::atomic_int64_t& number, int64_t target)
@@ -187,12 +200,15 @@ public:
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
     {
+        __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
+            ITT_DOMAINS::instance().PARALLEL_EXECUTE);
         auto storageView = multiLayerStorage().fork(true);
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
         receipts.resize(RANGES::size(transactions));
 
         size_t offset = 0;
         auto chunkSize = m_chunkSize;
+        auto retryCount = 0;
         while (offset < RANGES::size(transactions))
         {
             auto transactionAndReceiptsChunks =
@@ -306,7 +322,11 @@ public:
             chunkSize = std::min(chunkSize * 2, (size_t)RANGES::size(transactions));
 
             m_asyncTaskGroup->run([executeChunks = std::move(executeChunks)]() {});
+            ++retryCount;
         }
+
+        PARALLEL_SCHEDULER_LOG(DEBUG)
+            << "Parallel scheduler execute finished, retry counts: " << retryCount;
 
         // Still have transactions, execute it serially
         // if (chunkIt != RANGES::end(executeChunks))
@@ -318,6 +338,7 @@ public:
         //         localMultiLayerStorage);
         // }
 
+        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
         co_return receipts;
     }
 
@@ -325,6 +346,8 @@ public:
         RANGES::category::mask | RANGES::category::sized>;
     MergeRangeType mergeStorages(MergeRangeType& range)
     {
+        __itt_task_begin(ITT_DOMAINS::instance().PARALLEL_SCHEDULER, __itt_null, __itt_null,
+            ITT_DOMAINS::instance().FINAL_MERGE_STORAGE);
         auto inputRange = range | RANGES::views::chunk(2);
         MergeRangeType outputRange =
             inputRange | RANGES::views::transform(
@@ -359,8 +382,10 @@ public:
 
         if (RANGES::size(outputRange) > 1)
         {
+            __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
             return mergeStorages(outputRange);
         }
+        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
         return outputRange;
     }
 

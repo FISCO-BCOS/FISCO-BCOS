@@ -25,8 +25,6 @@
 #include "TransactionMetaData.h"
 #include "TransactionReceipt.h"
 #include "TransactionReceiptFactory.h"
-#include <range/v3/view/any_view.hpp>
-#include <range/v3/view/transform.hpp>
 
 namespace bcos::protocol
 {
