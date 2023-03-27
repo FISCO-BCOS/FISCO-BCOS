@@ -347,21 +347,23 @@ public:
             for (size_t i = 0; i < m_buckets.size(); i++)
             {
                 m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
-                /*
-                typename WriteAccessor::Ptr accessor;
-                m_buckets[i]->clear(accessor);
-                 */
             }
         }
         else
         {
+            std::vector<typename Bucket<KeyType, ValueType>::Ptr> buckets2Clear =
+                m_buckets;  // copy
+
             for (size_t i = 0; i < m_buckets.size(); i++)
             {
                 auto bucket = m_buckets[i];
                 m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+            }
 
+            for (size_t i = 0; i < buckets2Clear.size(); i++)
+            {
                 typename WriteAccessor::Ptr accessor;
-                bucket->clear(accessor, onRemove);
+                buckets2Clear[i]->clear(accessor, onRemove);
             }
         }
     }
