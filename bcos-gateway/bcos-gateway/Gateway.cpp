@@ -18,6 +18,7 @@
  * @date 2021-04-19
  */
 
+#include "bcos-front/FrontMessage.h"
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-gateway/gateway/FrontServiceInfo.h"
@@ -193,11 +194,14 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
 
     message->setPacketType(GatewayMessageType::PeerToPeerMessage);
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
-    message->options()->setGroupID(_groupID);
-    message->options()->setSrcNodeID(_srcNodeID->encode());
-    message->options()->dstNodeIDs().push_back(_dstNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
     message->setExtAttributes(msgExtAttr);
+
+    auto options = message->options();
+    options->setGroupID(_groupID);
+    options->setModuleID(_moduleID);
+    options->setSrcNodeID(_srcNodeID->encode());
+    options->dstNodeIDs().push_back(_dstNodeID->encode());
 
     retry->m_p2pMessage = message;
     retry->m_p2pIDs.insert(retry->m_p2pIDs.begin(), p2pIDs.begin(), p2pIDs.end());
@@ -257,9 +261,12 @@ void Gateway::asyncSendBroadcastMessage(uint16_t _type, const std::string& _grou
     message->setPacketType(GatewayMessageType::BroadcastMessage);
     message->setExt(_type);
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
-    message->options()->setGroupID(_groupID);
-    message->options()->setSrcNodeID(_srcNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+
+    auto options = message->options();
+    options->setGroupID(_groupID);
+    options->setSrcNodeID(_srcNodeID->encode());
+    options->setModuleID(_moduleID);
 
     auto msgExtAttr = std::make_shared<GatewayMessageExtAttributes>();
     msgExtAttr->setGroupID(_groupID);
@@ -376,7 +383,24 @@ void Gateway::onReceiveP2PMessage(
     // moduleID
     auto moduleID = options->moduleID();
 
-    auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+    // Notice: moduleID not set the previous version, try to decode from front message
+    if (moduleID == 0)
+    {
+        moduleID = front::FrontMessage::tryDecodeModuleID(payload);
+    }
+
+    if (moduleID == 0)
+    {
+        GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveP2PMessage")
+                           << LOG_DESC("front message module id not found")
+                           << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID)
+                           << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload.size());
+    }
+
+    // The moduleID is not obtained,
+    auto result =
+        ((moduleID == 0) ? std::nullopt :
+                           m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length()));
     if (result.has_value())
     {
         auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
@@ -430,16 +454,36 @@ void Gateway::onReceiveBroadcastMessage(
     }
 
     auto options = _msg->options();
-    auto msgPayload = _msg->payload();
+    auto payload = _msg->payload();
 
     // groupID
     auto groupID = options->groupID();
     // moduleID
     uint16_t moduleID = options->moduleID();
 
-    auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+    // Notice: moduleID not set the previous version, try to decode from front message
+    if (moduleID == 0)
+    {
+        moduleID =
+            front::FrontMessage::tryDecodeModuleID(bytesConstRef(payload->data(), payload->size()));
+    }
+
+    if (moduleID == 0)
+    {
+        GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveBroadcastMessage")
+                           << LOG_DESC("front message module id not found")
+                           << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID)
+                           << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload->size());
+    }
+
+    auto result =
+        ((moduleID == 0) ? std::nullopt :
+                           m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length()));
     if (result.has_value())
     {
+        GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveBroadcastMessage") << LOG_DESC(result.value())
+                           << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID)
+                           << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload->size());
         // For broadcast message, ratelimit check failed, do nothing.
         return;
     }

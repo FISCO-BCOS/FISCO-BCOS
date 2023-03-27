@@ -19,6 +19,7 @@
  * @date 2021-04-21
  */
 #pragma once
+#include "bcos-utilities/BoostLog.h"
 #include <boost/algorithm/string.hpp>
 #include <limits>
 #include <memory>
@@ -160,7 +161,8 @@ constexpr auto operator<=>(std::variant<uint32_t, BlockVersion> const& _v1, Bloc
     return flag;
 }
 
-constexpr bool operator >= (std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2){
+constexpr bool operator>=(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+{
     auto flag = false;
     std::visit(
         [&_v2, &flag](auto&& arg) {
@@ -276,8 +278,19 @@ inline std::string moduleIDToString(ModuleID _moduleID)
     case ModuleID::AMOP:
         return "amop";
     case ModuleID::LIGHTNODE_GET_BLOCK:
+    case ModuleID::LIGHTNODE_GET_TRANSACTIONS:
+    case ModuleID::LIGHTNODE_GET_RECEIPTS:
+    case ModuleID::LIGHTNODE_GET_STATUS:
+    case ModuleID::LIGHTNODE_SEND_TRANSACTION:
+    case ModuleID::LIGHTNODE_CALL:
+    case ModuleID::LIGHTNODE_GET_ABI:
         return "light_node";
+    case ModuleID::SYNC_GET_TRANSACTIONS:
+        return "sync_get";
+    case ModuleID::SYNC_PUSH_TRANSACTION:
+        return "sync_push";
     default:
+        BCOS_LOG(DEBUG) << LOG_BADGE("unrecognized module") << LOG_KV("moduleID", _moduleID);
         return "unrecognized module";
     };
 }

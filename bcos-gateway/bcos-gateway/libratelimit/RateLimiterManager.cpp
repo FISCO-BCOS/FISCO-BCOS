@@ -32,6 +32,7 @@ void RateLimiterManager::initP2pBasicMsgTypes()
 {
     /** ref: enum GatewayMessageType */
     m_p2pBasicMsgTypes.fill(false);
+    m_modulesWithoutLimit.fill(false);
     for (uint16_t type : {GatewayMessageType::Heartbeat, GatewayMessageType::Handshake,
              GatewayMessageType::RequestNodeStatus, GatewayMessageType::ResponseNodeStatus,
              GatewayMessageType::SyncNodeSeq, GatewayMessageType::RouterTableSyncSeq,
@@ -160,6 +161,15 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
 RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     const std::string& _connIP, uint16_t _packageType)
 {
+    // // TODO:check package valid
+    // if (_packageType == 0)
+    // {
+    //     RATELIMIT_MGR_LOG(ERROR) << LOG_BADGE("getInRateLimiter") << LOG_DESC("pkg type is
+    //     invalid")
+    //                              << LOG_KV("packageType", _packageType)
+    //                              << LOG_KV("connIP", _connIP);
+    // }
+
     // not enable msg type limit
     if (!m_rateLimiterConfig.enableInP2pBasicMsgLimit())
     {

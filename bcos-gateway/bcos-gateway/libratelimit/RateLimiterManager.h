@@ -70,10 +70,9 @@ public:
         m_rateLimiterFactory = _rateLimiterFactory;
     }
 
-    const std::set<uint16_t>& modulesWithoutLimit() const { return m_modulesWithoutLimit; }
-    void setModulesWithoutLimit(std::set<uint16_t> _modulesWithoutLimit)
+    inline const std::array<bool, std::numeric_limits<uint16_t>::max()>& modulesWithoutLimit() const
     {
-        m_modulesWithoutLimit = std::move(_modulesWithoutLimit);
+        return m_modulesWithoutLimit;
     }
 
     void setRateLimiterConfig(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
@@ -85,15 +84,21 @@ public:
         return m_rateLimiterConfig;
     }
 
+    void resetModulesWithoutLimit(const std::set<uint16_t>& _modulesWithoutLimit)
+    {
+        m_modulesWithoutLimit.fill(false);
+        for (const auto& moduleID : _modulesWithoutLimit)
+        {
+            m_modulesWithoutLimit.at(moduleID) = true;
+        }
+    }
+
     void resetP2pBasicMsgTypes(const std::set<uint16_t>& _p2pBasicMsgTypes)
     {
         m_p2pBasicMsgTypes.fill(false);
-        for (const auto& t : _p2pBasicMsgTypes)
+        for (const auto& msgType : _p2pBasicMsgTypes)
         {
-            if (t < GatewayMessageType::All)
-            {
-                m_p2pBasicMsgTypes.at(t) = true;
-            }
+            m_p2pBasicMsgTypes.at(msgType) = true;
         }
     }
 
@@ -114,15 +119,7 @@ public:
     //----------------------------------------------------------------------
     void initP2pBasicMsgTypes();
 
-    inline bool isP2pBasicMsgType(uint16_t _type)
-    {
-        if (_type >= GatewayMessageType::All)
-        {
-            return false;
-        }
-
-        return m_p2pBasicMsgTypes.at(_type);
-    }
+    inline bool isP2pBasicMsgType(uint16_t _type) { return m_p2pBasicMsgTypes.at(_type); }
     //----------------------------------------------------------------------
 
 private:
@@ -139,9 +136,9 @@ private:
     std::unordered_map<std::string, RateLimiterInterface::Ptr> m_rateLimiters;
 
     // the message of modules that do not limit bandwidth
-    std::set<uint16_t> m_modulesWithoutLimit;
+    std::array<bool, std::numeric_limits<uint16_t>::max()> m_modulesWithoutLimit{};
 
-    std::array<bool, GatewayMessageType::All> m_p2pBasicMsgTypes{};
+    std::array<bool, std::numeric_limits<uint16_t>::max()> m_p2pBasicMsgTypes{};
 
     GatewayConfig::RateLimiterConfig m_rateLimiterConfig;
 };
