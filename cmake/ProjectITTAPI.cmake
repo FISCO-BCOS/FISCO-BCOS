@@ -24,8 +24,8 @@ set(ITTAPI_LIBRARY ${SOURCE_DIR}/bin/libittnotify.a)
 file(MAKE_DIRECTORY ${ITTAPI_INCLUDE_DIR})  # Must exist.
 
 if(WITH_VTUNE_ITT)
-    add_library(ittapi STATIC IMPORTED GLOBAL)
-    set_property(TARGET ittapi PROPERTY IMPORTED_LOCATION ${ITTAPI_LIBRARY})
+    add_library(ittapi INTERFACE IMPORTED GLOBAL)
+    # set_property(TARGET ittapi PROPERTY IMPORTED_LOCATION ${ITTAPI_LIBRARY})
 else()
     add_library(ittapi INTERFACE IMPORTED GLOBAL)
 endif()

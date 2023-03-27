@@ -387,9 +387,14 @@ void Session::drop(DisconnectReason _reason)
 
     if (server && m_messageHandler)
     {
-        m_asyncGroup.run([this, errorCode, errorMsg = std::move(errorMsg)]() {
-            m_messageHandler(
-                NetworkException(errorCode, errorMsg), shared_from_this(), Message::Ptr());
+        m_asyncGroup.run([self = weak_from_this(), errorCode, errorMsg = std::move(errorMsg)]() {
+            auto session = self.lock();
+            if (!session)
+            {
+                return;
+            }
+            session->m_messageHandler(
+                NetworkException(errorCode, errorMsg), session, Message::Ptr());
         });
     }
 
@@ -660,29 +665,35 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
     {
         return;
     }
-    m_asyncGroup.run([this, e, message]() {
+    m_asyncGroup.run([self = weak_from_this(), e, message]() {
         try
         {
-            // TODO: move the logic to Service for deal with the forwarding message
-            if (!message->dstP2PNodeID().empty() && message->dstP2PNodeID() != m_hostNodeID)
+            auto session = self.lock();
+            if (!session)
             {
-                m_messageHandler(e, shared_from_this(), message);
                 return;
             }
-            auto server = m_server.lock();
+            // TODO: move the logic to Service for deal with the forwarding message
+            if (!message->dstP2PNodeID().empty() &&
+                message->dstP2PNodeID() != session->m_hostNodeID)
+            {
+                session->m_messageHandler(e, session, message);
+                return;
+            }
+            auto server = session->m_server.lock();
             // in-activate session
-            if (!m_active || !server || !server->haveNetwork())
+            if (!session->m_active || !server || !server->haveNetwork())
             {
                 return;
             }
 
             if (!message->isRespPacket())
             {
-                m_messageHandler(e, shared_from_this(), message);
+                session->m_messageHandler(e, session, message);
                 return;
             }
 
-            auto callbackManager = sessionCallbackManager();
+            auto callbackManager = session->sessionCallbackManager();
             auto callbackPtr = callbackManager->getCallback(message->seq(), true);
             // without callback, call default handler
             if (!callbackPtr)
@@ -690,8 +701,8 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                 SESSION_LOG(WARNING)
                     << LOG_BADGE("onMessage")
                     << LOG_DESC("callback not found, maybe the callback timeout")
-                    << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq())
-                    << LOG_KV("resp", message->isRespPacket());
+                    << LOG_KV("endpoint", session->nodeIPEndpoint())
+                    << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
                 return;
             }
 

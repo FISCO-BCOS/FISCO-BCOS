@@ -127,6 +127,7 @@ private:
                         PARALLEL_SCHEDULER_LOG(DEBUG)
                             << "Detected left RAW intersection, abort: " << m_chunkIndex;
                         decreaseNumber(*m_lastChunkIndex, m_chunkIndex);
+                        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
                         return;
                     }
                 }
@@ -145,10 +146,12 @@ private:
                         PARALLEL_SCHEDULER_LOG(DEBUG)
                             << "Detected right RAW intersection, abort: " << m_chunkIndex + 1;
                         decreaseNumber(*m_lastChunkIndex, m_chunkIndex + 1);
+                        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
                         return;
                     }
                 }
             }
+            __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
         }
 
         static void decreaseNumber(std::atomic_int64_t& number, int64_t target)
@@ -325,6 +328,7 @@ public:
         // }
         m_asyncTaskGroup->run([storageView = std::move(storageView)]() {});
 
+        __itt_task_end(ITT_DOMAINS::instance().PARALLEL_SCHEDULER);
         co_return receipts;
     }
 

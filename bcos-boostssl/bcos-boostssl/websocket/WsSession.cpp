@@ -156,7 +156,7 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
 {
     try
     {
-        auto data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(_buffer.data()));
+        auto* data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(_buffer.data()));
         auto size = boost::asio::buffer_size(m_buffer.data());
 
         auto message = m_messageFactory->buildMessage();
@@ -181,8 +181,13 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
 void WsSession::onMessage(bcos::boostssl::MessageFace::Ptr _message)
 {
     // task enqueue
-    m_asyncGroup.run([this, _message = std::move(_message)]() {
-        auto callback = getAndRemoveRespCallback(_message->seq(), true, _message);
+    m_asyncGroup.run([self = weak_from_this(), _message = std::move(_message)]() {
+        auto session = self.lock();
+        if (!session)
+        {
+            return;
+        }
+        auto callback = session->getAndRemoveRespCallback(_message->seq(), true, _message);
         if (callback)
         {
             if (callback->timer)
@@ -190,11 +195,11 @@ void WsSession::onMessage(bcos::boostssl::MessageFace::Ptr _message)
                 callback->timer->cancel();
             }
 
-            callback->respCallBack(nullptr, _message, shared_from_this());
+            callback->respCallBack(nullptr, _message, session);
         }
         else
         {
-            recvMessageHandler()(_message, shared_from_this());
+            session->recvMessageHandler()(_message, session);
         }
     });
 }
