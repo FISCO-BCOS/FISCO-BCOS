@@ -378,10 +378,15 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     std::shared_ptr<SessionFace> session = m_sessionFactory->create_session(
         weakHost, socket, m_messageFactory, m_sessionCallbackManager);
 
-    m_asyncGroup.run([this, session = std::move(session), p2pInfo]() {
-        if (m_connectionHandler)
+    m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {
+        auto host = weakHost.lock();
+        if (!host)
         {
-            m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
+            return;
+        }
+        if (host->m_connectionHandler)
+        {
+            host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
         }
         else
         {
