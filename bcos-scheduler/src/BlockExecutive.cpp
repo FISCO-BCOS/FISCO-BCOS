@@ -480,7 +480,8 @@ void BlockExecutive::asyncExecute(
 
 void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 {
-    auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage, m_block->version());
+    auto stateStorage =
+        std::make_shared<storage::StateStorage>(m_scheduler->m_storage, m_block->version());
 
     m_currentTimePoint = std::chrono::system_clock::now();
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
@@ -1084,6 +1085,18 @@ void BlockExecutive::onExecuteFinish(
     }
     else
     {
+        for (auto dmcExecutor : m_dmcExecutors)
+        {
+            if (dmcExecutor.second->hasContractTableChanged())
+            {
+                // if contract table has changed in execution,
+                // we need to break block pipeline and execute/commit block one by one
+                SCHEDULER_LOG(DEBUG)
+                    << "Break block pipeline" << LOG_KV("contract", dmcExecutor.first);
+                m_isSysBlock.store(true);
+            }
+        }
+
         // All Transaction finished, get hash
         batchGetHashes([this, callback = std::move(callback)](
                            Error::UniquePtr error, crypto::HashType hash) {
