@@ -54,14 +54,26 @@ std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Blo
     SchedulerImpl* scheduler, size_t startContextID,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
     bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-    bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
+    bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock,
+    bool _isTempForCall)
 {
     if (block->blockHeaderConst()->version() >= (uint32_t)BlockVersion::V3_3_VERSION)
     {
+        auto shardCache = decltype(m_contract2ShardCache)();
+        if (_isTempForCall)
+        {
+            auto tempCache = *m_contract2ShardCache;  // Copy the cache for temp use
+            shardCache = std::make_shared<decltype(tempCache)>(std::move(tempCache));
+        }
+        else
+        {
+            shardCache = m_contract2ShardCache;
+        }
+
         // In 3.3.0, DMC and serial has been combined together: Sharding
         auto shardingBlockExecutive = std::make_shared<ShardingBlockExecutive>(block, scheduler,
             startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,
-            _gasLimit, _syncBlock);
+            shardCache, _gasLimit, _syncBlock);
         return shardingBlockExecutive;
     }
 

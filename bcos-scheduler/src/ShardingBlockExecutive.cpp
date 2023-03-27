@@ -13,6 +13,13 @@ void ShardingBlockExecutive::prepare()
     {
         return;
     }
+
+    if (m_isSysBlock)
+    {
+        // if is sys block, clear the contract2ShardCache
+        m_contract2ShardCache->clear();
+    }
+
     auto breakPointT = utcTime();
     BlockExecutive::prepare();
 
@@ -241,18 +248,17 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
         m_storageWrapper.emplace(stateStorage, recorder);
     }
 
-    auto shard = m_contract2Shard.find(contractAddress);
+    auto shard = m_contract2ShardCache->find(contractAddress);
     std::string shardName;
 
-    if (shard == m_contract2Shard.end())
+    if (shard == m_contract2ShardCache->end())
     {
-        WriteGuard l(x_contract2Shard);
-        shard = m_contract2Shard.find(contractAddress);
-        if (shard == m_contract2Shard.end())
+        shard = m_contract2ShardCache->find(contractAddress);
+        if (shard == m_contract2ShardCache->end())
         {
             auto tableName = getContractTableName(contractAddress);
             shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
-            m_contract2Shard.emplace(contractAddress, shardName);
+            m_contract2ShardCache->emplace(contractAddress, shardName);
 
             DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
                            << "Update shard cache: " << LOG_KV("contractAddress", contractAddress)

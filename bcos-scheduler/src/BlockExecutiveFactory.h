@@ -35,7 +35,11 @@ class BlockExecutiveFactory
 {
 public:
     using Ptr = std::shared_ptr<BlockExecutiveFactory>;
-    BlockExecutiveFactory(bool isSerialExecute) : m_isSerialExecute(isSerialExecute) {}
+    BlockExecutiveFactory(bool isSerialExecute)
+      : m_isSerialExecute(isSerialExecute),
+        m_contract2ShardCache(
+            std::make_shared<tbb::concurrent_unordered_map<std::string, std::string>>())
+    {}
     virtual ~BlockExecutiveFactory() {}
 
     virtual std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,
@@ -48,9 +52,11 @@ public:
         SchedulerImpl* scheduler, size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock);
+        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock,
+        bool _isTempForCall = false);
 
 private:
     bool m_isSerialExecute;
+    std::shared_ptr<tbb::concurrent_unordered_map<std::string, std::string>> m_contract2ShardCache;
 };
 }  // namespace bcos::scheduler
