@@ -384,6 +384,9 @@ public:
                 commitLock.unlock();
 
                 self->m_asyncGroup.run([self = self, result = std::move(result)]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
+                        
                     auto blockHeader = result.m_block->blockHeaderConst();
                     auto submitResults =
                         RANGES::iota_view<uint64_t, uint64_t>(0L, result.m_block->receiptsSize()) |

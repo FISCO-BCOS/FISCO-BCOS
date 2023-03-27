@@ -70,6 +70,7 @@ struct ITT_DOMAINS
     __itt_string_handle* EXECUTE_BLOCK = __itt_string_handle_create("executeBlock");
     __itt_string_handle* FINISH_EXECUTE = __itt_string_handle_create("finishExecute");
     __itt_string_handle* COMMIT_BLOCK = __itt_string_handle_create("commitBlock");
+    __itt_string_handle* NOTIFY_RESULTS = __itt_string_handle_create("notifyResults");
 
     const __itt_domain* const PARALLEL_SCHEDULER = __itt_domain_create("parallelScheduler");
     __itt_string_handle* PARALLEL_EXECUTE = __itt_string_handle_create("parallelExecute");
