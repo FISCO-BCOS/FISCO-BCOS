@@ -956,16 +956,6 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
             return true;
         });
 
-    /*
-        for (size_t i = 0; i < txsSize; i++)
-        {
-            auto txHash = _block->transactionHash(i);
-            if (!m_txsTable.contains(txHash))
-            {
-                missedTxs->emplace_back(txHash);
-            }
-        }
-        */
     TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal") << LOG_KV("consNum", batchId)
                      << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
                      << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT));

@@ -575,20 +575,20 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
                 auto out = getComponentBytes(index, typeName, ref(params.data).getCroppedData(4));
                 criticalKey.insert(criticalKey.end(), out.begin(), out.end());
             }
-            conflictFields->emplace_back(std::move(criticalKey));
             DAGFLOW_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Params`")
                                << LOG_KV("functionName", functionAbi.name)
                                << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
+            conflictFields->emplace_back(std::move(criticalKey));
             break;
         }
         case Const:
         {
             criticalKey.insert(
                 criticalKey.end(), conflictField.value.begin(), conflictField.value.end());
-            conflictFields->emplace_back(std::move(criticalKey));
             DAGFLOW_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Const`")
                                << LOG_KV("functionName", functionAbi.name)
                                << LOG_KV("criticalKey", toHexStringWithPrefix(criticalKey));
+            conflictFields->emplace_back(std::move(criticalKey));
             break;
         }
         case None:
@@ -605,8 +605,6 @@ std::shared_ptr<std::vector<bytes>> ExecutiveDagFlow::extractConflictFields(
             return nullptr;
         }
         }
-
-
     }
     return conflictFields;
 }

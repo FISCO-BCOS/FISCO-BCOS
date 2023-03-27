@@ -13,6 +13,13 @@ void ShardingBlockExecutive::prepare()
     {
         return;
     }
+
+    if (m_isSysBlock)
+    {
+        // if is sys block, clear the contract2ShardCache
+        m_contract2ShardCache->clear();
+    }
+
     auto breakPointT = utcTime();
     BlockExecutive::prepare();
 
@@ -233,39 +240,38 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
 
     if (!m_storageWrapper.has_value())
     {
-        // TODO: config using
-        auto stateStorage = std::make_shared<bcos::storage::KeyPageStorage>(
-            getStorage(), 10240, m_block->blockHeaderConst()->version(), nullptr, true);
-        // auto stateStorage = std::make_shared<StateStorage>(getStorage());
+        storage::StateStorageInterface::Ptr stateStorage;
+        if (m_keyPageSize > 0)
+        {
+            stateStorage = std::make_shared<bcos::storage::KeyPageStorage>(
+                getStorage(), m_keyPageSize, m_block->blockHeaderConst()->version(), nullptr, true);
+        }
+        else
+        {
+            stateStorage = std::make_shared<bcos::storage::StateStorage>(
+                getStorage(), m_block->blockHeaderConst()->version());
+        }
+
+
         auto recorder = std::make_shared<Recoder>();
         m_storageWrapper.emplace(stateStorage, recorder);
     }
 
-    auto shard = m_contract2Shard.find(contractAddress);
     std::string shardName;
-
-    if (shard == m_contract2Shard.end())
+    ShardCache::WriteAccessor::Ptr accessor;
+    bool has = m_contract2ShardCache->find<ShardCache::WriteAccessor>(accessor, contractAddress);
+    if (has)
     {
-        WriteGuard l(x_contract2Shard);
-        shard = m_contract2Shard.find(contractAddress);
-        if (shard == m_contract2Shard.end())
-        {
-            auto tableName = getContractTableName(contractAddress);
-            shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
-            m_contract2Shard.emplace(contractAddress, shardName);
-
-            DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
-                           << "Update shard cache: " << LOG_KV("contractAddress", contractAddress)
-                           << LOG_KV("shardName", shardName);
-        }
-        else
-        {
-            shardName = shard->second;
-        }
+        shardName = accessor->value();
     }
     else
     {
-        shardName = shard->second;
+        auto tableName = getContractTableName(contractAddress);
+        shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
+        m_contract2ShardCache->insert(accessor, {contractAddress, shardName});
+        DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
+                       << "Update shard cache: " << LOG_KV("contractAddress", contractAddress)
+                       << LOG_KV("shardName", shardName);
     }
 
     return shardName;

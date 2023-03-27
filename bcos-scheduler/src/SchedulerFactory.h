@@ -17,7 +17,8 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
+        size_t keyPageSize = 10240)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
@@ -28,8 +29,8 @@ public:
         m_hashImpl(std::move(hashImpl)),
         m_isAuthCheck(isAuthCheck),
         m_isWasm(isWasm),
-        m_isSerialExecute(isSerialExecute)
-
+        m_isSerialExecute(isSerialExecute),
+        m_keyPageSize(keyPageSize)
     {}
 
     scheduler::SchedulerImpl::Ptr build(int64_t schedulerTermId)
@@ -37,7 +38,7 @@ public:
         auto scheduler = std::make_shared<scheduler::SchedulerImpl>(m_executorManager, m_ledger,
             m_storage, m_executionMessageFactory, m_blockFactory, m_txPool,
             m_transactionSubmitResultFactory, m_hashImpl, m_isAuthCheck, m_isWasm,
-            m_isSerialExecute, schedulerTermId);
+            m_isSerialExecute, schedulerTermId, m_keyPageSize);
         scheduler->fetchConfig();
 
         scheduler->registerBlockNumberReceiver(m_blockNumberReceiver);
@@ -61,6 +62,7 @@ public:
     bcos::ledger::LedgerInterface::Ptr getLedger() { return m_ledger; }
 
     void stop() { m_storage->stop(); }
+
 private:
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -73,6 +75,7 @@ private:
     bool m_isAuthCheck;
     bool m_isWasm;
     bool m_isSerialExecute;
+    size_t m_keyPageSize;
 
     std::function<void(protocol::BlockNumber blockNumber)> m_blockNumberReceiver;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,

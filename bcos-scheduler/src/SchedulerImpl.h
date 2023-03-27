@@ -29,10 +29,11 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId,
+        size_t keyPageSize)
       : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory,
             txPool, transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false,
-            schedulerTermId)
+            schedulerTermId, keyPageSize)
     {}
 
 
@@ -42,13 +43,13 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
-        int64_t schedulerTermId)
+        int64_t schedulerTermId, size_t keyPageSize)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
         m_blockExecutiveFactory(
-            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute)),
+            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute, keyPageSize)),
         m_blockFactory(std::move(blockFactory)),
         m_txPool(txPool),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
