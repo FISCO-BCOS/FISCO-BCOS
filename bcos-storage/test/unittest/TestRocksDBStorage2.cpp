@@ -1,3 +1,4 @@
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
@@ -148,26 +149,59 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         i = 0;
         while (co_await seekIt.next())
         {
-            // auto num = i;
-            // if (i >= 50)
-            // {
-            //     num += 20;  // 20 item has been deleted above
-            // }
-
             BOOST_CHECK(co_await seekIt.hasValue());
 
             auto key = co_await seekIt.key();
             auto& [tableName, keyName] = key;
-            // BOOST_CHECK_EQUAL(*tableName, fmt::format("Table~{}", num % 10));
-            // BOOST_CHECK_EQUAL(keyName.toStringView(), fmt::format("Key~{}", num));
 
             auto value = co_await seekIt.value();
-            // BOOST_CHECK_EQUAL(
-            //     value.get(), fmt::format("Entry value is: i am a value!!!!!!! {}", num));
-
             ++i;
         }
         BOOST_CHECK_EQUAL(i, 80);
+
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(merge)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        storage2::memory_storage::MemoryStorage<StateKey, StateValue,
+            storage2::memory_storage::ORDERED>
+            memoryStorage;
+
+        auto keys = RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([this](int num) {
+            auto tableName = fmt::format("Table~{}", num % 10);
+            auto key = fmt::format("Key~{}", num);
+            auto stateKey =
+                StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
+            return stateKey;
+        });
+        auto values = RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](int num) {
+            storage::Entry entry;
+            entry.set(fmt::format("Entry value is: i am a value!!!!!!! {}", num));
+            return entry;
+        });
+        memoryStorage.write(keys, values);
+
+        RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
+            bcos::storage2::rocksdb::StateValueResolver>
+            rocksDB(*originRocksDB, StateKeyResolver(stringPool), StateValueResolver{});
+        co_await rocksDB.merge(memoryStorage);
+        auto seekIt = co_await rocksDB.seek(storage2::STORAGE_BEGIN);
+
+        int i = 0;
+        while (co_await seekIt.next())
+        {
+            BOOST_CHECK(co_await seekIt.hasValue());
+
+            auto key = co_await seekIt.key();
+            auto& [tableName, keyName] = key;
+
+            auto value = co_await seekIt.value();
+            ++i;
+        }
+        BOOST_CHECK_EQUAL(i, 100);
 
         co_return;
     }());

@@ -582,7 +582,7 @@ static void conflictTransfer(benchmark::State& state)
                         if (balance != singleIssue)
                         {
                             BOOST_THROW_EXCEPTION(
-                                std::runtime_error(fmt::format("Balance not equal to expected! {}",
+                                std::runtime_error(fmt::format("Balance not equal to expected! {} {}", index,
                                     balance.template convert_to<std::string>())));
                         }
                     }
