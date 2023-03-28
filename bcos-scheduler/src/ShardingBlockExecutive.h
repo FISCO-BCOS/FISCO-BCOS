@@ -22,6 +22,7 @@
 #pragma once
 #include "BlockExecutive.h"
 #include <bcos-table/src/ContractShardUtils.h>
+#include <bcos-utilities/BucketMap.h>
 #include <tbb/concurrent_unordered_map.h>
 
 namespace bcos::scheduler
@@ -30,22 +31,30 @@ class ShardingBlockExecutive : public BlockExecutive
 {
 public:
     using Ptr = std::shared_ptr<ShardingBlockExecutive>;
+    using ShardCache = bcos::BucketMap<std::string, std::string>;
 
     ShardingBlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool)
+        bcos::txpool::TxPoolInterface::Ptr _txPool,
+        std::shared_ptr<ShardCache> _contract2ShardCache, size_t _keyPageSize)
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool){};
+            _blockFactory, _txPool),
+        m_contract2ShardCache(_contract2ShardCache),
+        m_keyPageSize(_keyPageSize){};
 
     ShardingBlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
+        bcos::txpool::TxPoolInterface::Ptr _txPool,
+        std::shared_ptr<ShardCache> _contract2ShardCache, uint64_t _gasLimit, bool _syncBlock,
+        size_t _keyPageSize)
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool, _gasLimit, _syncBlock)
+            _blockFactory, _txPool, _gasLimit, _syncBlock),
+        m_contract2ShardCache(_contract2ShardCache),
+        m_keyPageSize(_keyPageSize)
     {}
 
     void shardingExecute(
@@ -66,10 +75,10 @@ private:
 
     std::string getContractShard(const std::string& contractAddress);
 
-    mutable bcos::SharedMutex x_contract2Shard;
-
     std::optional<bcos::storage::StorageWrapper> m_storageWrapper;
-    // tbb::concurrent_unordered_map<std::string, std::string> m_contract2Shard;
-    std::map<std::string, std::string> m_contract2Shard;
+
+    std::shared_ptr<ShardCache> m_contract2ShardCache;
+
+    size_t m_keyPageSize;
 };
 }  // namespace bcos::scheduler

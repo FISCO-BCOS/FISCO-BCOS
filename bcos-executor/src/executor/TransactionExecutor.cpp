@@ -465,6 +465,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                                    "switch.") %
                                m_name % blockHeader->number() % prev.number;
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
+                    m_stateStorages.clear();
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, fmt.str()));
                     return;
