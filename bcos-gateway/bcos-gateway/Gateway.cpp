@@ -406,10 +406,6 @@ void Gateway::onReceiveP2PMessage(
         auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
         m_p2pInterface->sendRespMessageBySession(
             bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg, _session);
-
-        GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveP2PMessage") << LOG_DESC(result.value())
-                           << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID)
-                           << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload.size());
         return;
     }
 
@@ -481,9 +477,6 @@ void Gateway::onReceiveBroadcastMessage(
                            m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length()));
     if (result.has_value())
     {
-        GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveBroadcastMessage") << LOG_DESC(result.value())
-                           << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID)
-                           << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload->size());
         // For broadcast message, ratelimit check failed, do nothing.
         return;
     }

@@ -5,6 +5,7 @@
 
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-security/bcos-security/KeyCenter.h>
@@ -510,8 +511,8 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
         _pt.get<bool>("flow_control.outgoing_allow_exceed_max_permit", false);
 
     // modules_without_bw_limit=raft,pbft
-    std::string strModulesWithoutLimit =
-        _pt.get<std::string>("flow_control.modules_without_bw_limit", "raft,pbft,cons_txs_sync");
+    std::string strModulesWithoutLimit = _pt.get<std::string>(
+        "flow_control.modules_without_bw_limit", "raft,pbft,cons_txs_sync,txs_sync");
 
     std::set<uint16_t> moduleIDs;
     std::vector<std::string> modules;
@@ -524,9 +525,26 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
         for (auto& module : modules)
         {
             boost::trim(module);
+            if (module.empty())
+            {
+                continue;
+            }
             boost::algorithm::to_lower(module);
+
+            // support module id config items
+            if (isNumStr(module))
+            {
+                auto moduleID = boost::lexical_cast<uint16_t>(module);
+                moduleIDs.insert(moduleID);
+
+                GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
+                                         << LOG_DESC("load flow_control config items")
+                                         << LOG_KV("key", "flow_control.modules_without_bw_limit")
+                                         << LOG_KV("moduleID", moduleID);
+                continue;
+            }
+
             auto optModuleID = protocol::stringToModuleID(module);
-            // TODO: modify module name to module id
             if (!optModuleID.has_value())
             {
                 BOOST_THROW_EXCEPTION(
@@ -535,6 +553,11 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
                         " ,list of available modules: "
                         "raft,pbft,amop,block_sync,txs_sync,light_node"));
             }
+
+            GATEWAY_CONFIG_LOG(INFO)
+                << LOG_BADGE("initFlowControlConfig") << LOG_DESC("load flow_control config items")
+                << LOG_KV("key", "flow_control.modules_without_bw_limit")
+                << LOG_KV("moduleID", optModuleID.value());
             moduleIDs.insert(optModuleID.value());
         }
     }

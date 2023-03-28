@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(5));
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 4);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 6);
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
@@ -257,6 +257,12 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::TxsSync) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::AMOP) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5001) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5002) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5003) ==
                     rateLimiterConfig.modulesWithoutLimit.end());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 3);
@@ -318,7 +324,7 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(1));
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 4);
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=

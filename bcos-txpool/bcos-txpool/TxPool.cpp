@@ -272,9 +272,9 @@ void TxPool::asyncNotifyTxsSyncMessage(Error::Ptr _error, std::string const& _uu
             }
             catch (std::exception const& e)
             {
-                TXPOOL_LOG(WARNING) << LOG_DESC("asyncNotifyTxsSyncMessage: sendResponse failed")
-                                    << LOG_KV("error", boost::diagnostic_information(e))
-                                    << LOG_KV("uuid", _uuid) << LOG_KV("dst", _nodeID->shortHex());
+                TXPOOL_LOG(TRACE) << LOG_DESC("asyncNotifyTxsSyncMessage: sendResponse failed")
+                                  << LOG_KV("error", boost::diagnostic_information(e))
+                                  << LOG_KV("uuid", _uuid) << LOG_KV("dst", _nodeID->shortHex());
             }
         });
     if (!_onRecv)
@@ -460,12 +460,11 @@ void TxPool::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        TXPOOL_LOG(WARNING)
-                            << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                            << LOG_KV("module", std::to_string(_moduleID))
-                            << LOG_KV("dst", _dstNode->shortHex())
-                            << LOG_KV("code", _error->errorCode())
-                            << LOG_KV("msg", _error->errorMessage());
+                        TXPOOL_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                          << LOG_KV("module", std::to_string(_moduleID))
+                                          << LOG_KV("dst", _dstNode->shortHex())
+                                          << LOG_KV("code", _error->errorCode())
+                                          << LOG_KV("msg", _error->errorMessage());
                     }
                 });
         }

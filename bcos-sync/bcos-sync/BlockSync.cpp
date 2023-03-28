@@ -119,12 +119,11 @@ void BlockSync::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        BLKSYNC_LOG(WARNING)
-                            << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                            << LOG_KV("module", std::to_string(_moduleID))
-                            << LOG_KV("dst", _dstNode->shortHex())
-                            << LOG_KV("code", _error->errorCode())
-                            << LOG_KV("msg", _error->errorMessage());
+                        BLKSYNC_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                           << LOG_KV("module", std::to_string(_moduleID))
+                                           << LOG_KV("dst", _dstNode->shortHex())
+                                           << LOG_KV("code", _error->errorCode())
+                                           << LOG_KV("msg", _error->errorMessage());
                     }
                 });
         }

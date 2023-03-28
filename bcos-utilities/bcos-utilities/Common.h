@@ -140,6 +140,23 @@ inline bool isalNumStr(std::string const& _stringData)
     return true;
 }
 
+inline bool isNumStr(std::string const& _stringData)
+{
+    if (_stringData.empty())
+    {
+        return false;
+    }
+    for (const auto& ch : _stringData)
+    {
+        if (isdigit(ch))
+        {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
 inline constexpr double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
 {
     if (_intervalMS > 0)
