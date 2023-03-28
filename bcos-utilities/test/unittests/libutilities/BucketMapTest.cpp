@@ -261,6 +261,58 @@ BOOST_AUTO_TEST_CASE(parallelTest)
         });
 }
 
+BOOST_AUTO_TEST_CASE(parallelTest2)
+{
+    using BKMap = bcos::BucketMap<int, int, std::hash<int>>;
+    using ReadAccessor = BKMap::ReadAccessor;
+    using WriteAccessor = BKMap::WriteAccessor;
+
+    BKMap bucketMap(10);
+    std::cout << bucketMap.size() << std::endl;
+
+    int total = 500;
+
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
+            auto kvs = RANGES::iota_view<int, int>(range.begin(), range.end()) |
+                       RANGES::views::transform([](int i) { return std::make_pair(i, i); });
+
+            bucketMap.batchInsert(kvs, [](bool, const int& key, WriteAccessor::Ptr accessor) {});
+        });
+    BOOST_CHECK_EQUAL(total, bucketMap.size());
+
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
+            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end());
+
+            bucketMap.batchFind<WriteAccessor>(ks, [](const int& key, WriteAccessor::Ptr accessor) {
+                accessor->value()++;
+                return true;
+            });
+        });
+
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
+            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end());
+
+            bucketMap.batchFind<ReadAccessor>(ks, [](const int& key, ReadAccessor::Ptr accessor) {
+                BOOST_CHECK_EQUAL(accessor->value(), accessor->key() + 1);
+                return true;
+            });
+        });
+    std::cout << bucketMap.size() << std::endl;
+
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
+            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end());
+
+            bucketMap.batchRemove(ks, [](bool, const int& key, const int& value) {});
+        });
+    BOOST_CHECK_EQUAL(0, bucketMap.size());
+
+    std::cout << bucketMap.size() << std::endl;
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

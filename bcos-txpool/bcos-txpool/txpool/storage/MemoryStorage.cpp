@@ -342,17 +342,16 @@ void MemoryStorage::batchInsert(Transactions const& _txs)
     }
 }
 
-Transaction::Ptr MemoryStorage::removeWithoutLock(HashType const& _txHash)
-{
-    auto tx = m_txsTable.remove(_txHash);
-    if (!tx)
-    {
-        return nullptr;
-    }
 
-    if (tx && tx->sealed())
+void MemoryStorage::onTxRemoved(const Transaction::Ptr& _tx, bool needNotifyUnsealedTxsSize)
+{
+    if (_tx && _tx->sealed())
     {
         --m_sealedTxsSize;
+    }
+    if (needNotifyUnsealedTxsSize)
+    {
+        notifyUnsealedTxsSize();
     }
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
@@ -360,20 +359,36 @@ Transaction::Ptr MemoryStorage::removeWithoutLock(HashType const& _txHash)
                       << LOG_KV("index", tx->batchId())
                       << LOG_KV("hash", tx->batchHash().abridged()) << LOG_KV("txPointer", tx);
 #endif
+}
+
+Transaction::Ptr MemoryStorage::removeWithoutNotifyUnseal(HashType const& _txHash)
+{
+    auto tx = m_txsTable.remove(_txHash);
+    if (!tx)
+    {
+        return nullptr;
+    }
+
+    onTxRemoved(tx, false);
     return tx;
 }
 
 Transaction::Ptr MemoryStorage::remove(HashType const& _txHash)
 {
-    auto tx = removeWithoutLock(_txHash);
-    notifyUnsealedTxsSize();
+    auto tx = m_txsTable.remove(_txHash);
+    if (!tx)
+    {
+        return nullptr;
+    }
+
+    onTxRemoved(tx, true);
     return tx;
 }
 
 Transaction::Ptr MemoryStorage::removeSubmittedTxWithoutLock(
     TransactionSubmitResult::Ptr txSubmitResult, bool _notify)
 {
-    auto tx = removeWithoutLock(txSubmitResult->txHash());
+    auto tx = removeWithoutNotifyUnseal(txSubmitResult->txHash());
     if (!tx)
     {
         return nullptr;
@@ -427,34 +442,34 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
     NonceList nonceList;
-    std::vector<std::tuple<Transaction::Ptr, TransactionSubmitResult::Ptr>> results;
 
-    results.reserve(txsResult.size());
-    nonceList.reserve(txsResult.size());
+    auto range =
+        txsResult | RANGES::views::transform([](TransactionSubmitResult::Ptr const& _txResult) {
+            return std::make_pair(_txResult->txHash(), std::make_pair(nullptr, _txResult));
+        });
+    std::unordered_map<crypto::HashType, std::pair<Transaction::Ptr, TransactionSubmitResult::Ptr>>
+        results(range.begin(), range.end());
+
+
+    auto txHashes = range | RANGES::views::keys;
+    m_txsTable.batchRemove(
+        txHashes, [&](bool success, const crypto::HashType& key, Transaction::Ptr const& tx) {
+            if (!success)
+            {
+                return;
+            }
+            onTxRemoved(tx, false);
+
+            ++succCount;
+            results[key].first = std::move(tx);
+            m_removeRateCollector.update(1, true);
+        });
+
+    if (batchId > m_blockNumber)
     {
-        for (const auto& it : txsResult)
-        {
-            auto const& txResult = it;
-            auto tx = removeWithoutLock(txResult->txHash());
-            if (!tx && !txResult->nonce().empty())
-            {
-                nonceList.emplace_back(txResult->nonce());
-            }
-            else if (tx)
-            {
-                ++succCount;
-                m_removeRateCollector.update(1, true);
-                nonceList.emplace_back(tx->nonce());
-            }
-            results.emplace_back(std::move(tx), txResult);
-        }
-
-        if (batchId > m_blockNumber)
-        {
-            m_blockNumber = batchId;
-        }
-        lockT = utcTime() - startT;
+        m_blockNumber = batchId;
     }
+    lockT = utcTime() - startT;
 
     m_onChainTxsCount += txsResult.size();
     // stop stat the tps when there has no pending txs
@@ -476,7 +491,18 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     startT = utcTime();
     notifyUnsealedTxsSize();
     // update the ledger nonce
-    auto nonceListPtr = std::make_shared<decltype(nonceList)>(std::move(nonceList));
+
+    auto nonceListRange = results | RANGES::views::filter([](auto const& _result) {
+        const auto& tx = _result.second.first;
+        const auto& txResult = _result.second.second;
+        return tx == nullptr ? !txResult->nonce().empty() : true;
+    }) | RANGES::views::transform([](auto const& _result) {
+        const auto& tx = _result.second.first;
+        const auto& txResult = _result.second.second;
+        return tx != nullptr ? tx->nonce() : txResult->nonce();
+    });
+
+    auto nonceListPtr = std::make_shared<NonceList>(nonceListRange.begin(), nonceListRange.end());
     m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceListPtr);
     auto updateLedgerNonceT = utcTime() - startT;
 
@@ -485,12 +511,14 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     m_config->txPoolNonceChecker()->batchRemove(*nonceListPtr);
     auto updateTxPoolNonceT = utcTime() - startT;
 
-    for (auto& [tx, txResult] : results)
+    auto txs2Notify = results | RANGES::views::filter([](auto const& _result) {
+        const auto& tx = _result.second.first;
+        return tx != nullptr;
+    }) | RANGES::views::values;
+
+    for (auto& [tx, txResult] : txs2Notify)
     {
-        if (tx)
-        {
-            notifyTxResult(*tx, std::move(txResult));
-        }
+        notifyTxResult(*tx, std::move(txResult));
     }
 
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchRemove txs success")
@@ -713,25 +741,60 @@ void MemoryStorage::removeInvalidTxs(bool lock)
 
         // remove invalid txs
         std::atomic<size_t> txCnt = 0;
-        m_invalidTxs.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
-            txCnt++;
 
-            auto& tx = accessor->value();
-            auto const& txHash = accessor->key();
+        std::unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr> txs2Remove;
+
+        m_invalidTxs.clear([&](bool success, const bcos::crypto::HashType& txHash,
+                               const bcos::protocol::Transaction::Ptr& tx) {
+            if (!success)
+            {
+                return;
+            }
+
+            txCnt++;
+            txs2Remove.emplace(txHash, std::move(tx));
+        });
+
+        auto invalidNonceList =
+            txs2Remove | RANGES::views::values |
+            RANGES::views::transform([](auto const& tx2Remove) { return tx2Remove->nonce(); });
+        m_config->txPoolNonceChecker()->batchRemove(invalidNonceList | RANGES::to_vector);
+
+        /*
+        m_txsTable.batchRemove(txs2Remove | RANGES::views::keys,
+            [&](bool success, const crypto::HashType& key, Transaction::Ptr const& tx) {
+                if (!success)
+                {
+                    txs2Remove[key] = nullptr;
+                    return;
+                }
+            });
+            */
+        for (const auto& tx2Remove : txs2Remove | RANGES::views::keys)
+        {
+            auto tx = m_txsTable.remove(tx2Remove);
+            if (!tx)
+            {
+                txs2Remove[tx2Remove] = nullptr;
+            }
+        }
+
+        auto txs2Notify = txs2Remove | RANGES::views::filter([](auto const& tx2Remove) {
+            return tx2Remove.second != nullptr;
+        });
+
+        for (const auto& [txHash, tx] : txs2Notify)
+        {
             auto const& nonce = tx->nonce();
             auto txResult = m_config->txResultFactory()->createTxSubmitResult();
             txResult->setTxHash(txHash);
             txResult->setStatus(static_cast<uint32_t>(TransactionStatus::TransactionPoolTimeout));
-            removeSubmittedTxWithoutLock(std::move(txResult), true);
-
-            m_config->txPoolNonceChecker()->remove(nonce);
-
-
-            return true;
-        });
+            txResult->setNonce(nonce);
+            notifyTxResult(*tx, std::move(txResult));
+        }
         notifyUnsealedTxsSize();
+
         TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs") << LOG_KV("size", txCnt);
-        m_invalidTxs.clear();
     }
     catch (std::exception const& e)
     {

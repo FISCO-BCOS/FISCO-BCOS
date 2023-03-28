@@ -464,10 +464,11 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
         if (!commitLock->owns_lock())
         {
-            std::string message = (boost::format("commitBlock: Another block is committing! Block "
-                                                 "number: %ld, hash: %s") %
-                                   requestBlockNumber % header->hash().abridged())
-                                      .str();
+            std::string message =
+                (boost::format("commitBlock: Another block is committing! Block to commit "
+                               "number: %ld, hash: %s") %
+                    requestBlockNumber % header->hash().abridged())
+                    .str();
 
 
             SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock error, "
