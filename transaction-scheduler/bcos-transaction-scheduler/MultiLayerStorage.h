@@ -1,8 +1,10 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Trait.h"
+#include "bcos-task/Wait.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <oneapi/tbb/parallel_invoke.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
@@ -377,30 +379,18 @@ public:
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
-        auto& immutableStorage = m_immutableStorages.back();
+        auto immutableStorage = m_immutableStorages.back();
         immutablesLock.unlock();
 
-        auto it = co_await immutableStorage->seek(storage2::STORAGE_BEGIN);
-        while (co_await it.next())
+        if constexpr (withCacheStorage)
         {
-            auto&& key = co_await it.key();
-            if (co_await it.hasValue())
-            {
-                auto&& value = co_await it.value();
-                if constexpr (withCacheStorage)
-                {
-                    co_await storage2::writeOne(m_cacheStorage, key, value);
-                }
-                co_await storage2::writeOne(m_backendStorage, key, value);
-            }
-            else
-            {
-                if constexpr (withCacheStorage)
-                {
-                    co_await storage2::removeOne(m_cacheStorage, key);
-                }
-                co_await storage2::removeOne(m_backendStorage, key);
-            }
+            tbb::parallel_invoke(
+                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_backendStorage)); },
+                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_cacheStorage)); });
+        }
+        else
+        {
+            co_await storage2::merge(*immutableStorage, m_backendStorage);
         }
 
         immutablesLock.lock();

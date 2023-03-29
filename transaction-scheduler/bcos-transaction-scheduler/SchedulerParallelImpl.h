@@ -187,6 +187,8 @@ public:
         m_asyncTaskGroup(std::make_unique<tbb::task_group>())
     {}
 
+    ~SchedulerParallelImpl() noexcept { m_asyncTaskGroup->wait(); }
+
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
@@ -295,8 +297,10 @@ public:
                                 ittapi::Report report(
                                     ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                                     ittapi::ITT_DOMAINS::instance().PIPELINE_MERGE_STORAGE);
-                                lastStorage.merge(
-                                    executeChunks[index].localStorage().mutableStorage(), true);
+
+                                task::syncWait(storage2::merge(
+                                    executeChunks[index].localStorage().mutableStorage(),
+                                    lastStorage));
                             }
                         }));
             {
@@ -308,7 +312,7 @@ public:
                 }
                 else
                 {
-                    storageView.mutableStorage().merge(lastStorage, true);
+                    co_await storage2::merge(lastStorage, storageView.mutableStorage());
                 }
             }
 

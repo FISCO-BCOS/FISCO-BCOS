@@ -290,7 +290,7 @@ BOOST_AUTO_TEST_CASE(merge)
         storage1.write(RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
         storage2.write(RANGES::iota_view<int, int>(9, 19), RANGES::repeat_view<int>(200));
 
-        storage1.merge(storage2, true);
+        co_await storage1.merge(storage2);
         auto it = co_await storage1.seek(bcos::storage2::STORAGE_BEGIN);
         int i = 0;
         while (co_await it.next())
