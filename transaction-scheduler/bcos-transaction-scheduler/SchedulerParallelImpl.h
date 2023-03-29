@@ -207,7 +207,8 @@ public:
             RANGES::zip_view(RANGES::iota_view(0LU, (size_t)RANGES::size(transactions)),
                 transactions | RANGES::views::addressof, receipts | RANGES::views::addressof);
 
-        while (offset < RANGES::size(transactions) && retryCount < MAX_RETRY_COUNT)
+        // while (offset < RANGES::size(transactions) && retryCount < MAX_RETRY_COUNT)
+        while (offset < RANGES::size(transactions))
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
@@ -322,12 +323,13 @@ public:
         }
 
         // Still have transactions, execute it serially
-        if (offset < RANGES::size(transactions))
-        {
-            co_await serialExecute(blockHeader, receiptFactory(), tableNamePool(),
-                transactionAndReceipts | RANGES::views::drop(offset), storageView.mutableStorage());
-            ++retryCount;
-        }
+        // if (offset < RANGES::size(transactions))
+        // {
+        //     co_await serialExecute(blockHeader, receiptFactory(), tableNamePool(),
+        //         transactionAndReceipts | RANGES::views::drop(offset),
+        //         storageView.mutableStorage());
+        //     ++retryCount;
+        // }
         PARALLEL_SCHEDULER_LOG(DEBUG)
             << "Parallel scheduler execute finished, retry counts: " << retryCount;
         m_asyncTaskGroup->run([storageView = std::move(storageView)]() {});
