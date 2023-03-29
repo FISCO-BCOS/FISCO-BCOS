@@ -25,6 +25,7 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/asio.hpp>
 #include <utility>
 
