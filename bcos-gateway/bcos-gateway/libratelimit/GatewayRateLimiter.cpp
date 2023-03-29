@@ -18,6 +18,7 @@
  * @date 2022-09-30
  */
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 
 using namespace bcos;
@@ -37,10 +38,6 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
     int64_t msgLength = _msgLength;
 
     std::string errorMsg;
-
-    GATEWAY_LOG(TRACE) << LOG_BADGE("checkOutGoing") << LOG_KV("endpoint", _endpoint)
-                       << LOG_KV("pkgType", _pkgType) << LOG_KV("groupID", groupID)
-                       << LOG_KV("moduleID", moduleID);
 
     do
     {
@@ -145,6 +142,10 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
         return std::nullopt;
     } while (false);
 
+    GATEWAY_LOG(TRACE) << LOG_BADGE("checkOutGoing") << LOG_DESC("outgoing bandwidth overflow")
+                       << LOG_KV("endpoint", _endpoint) << LOG_KV("pkgType", _pkgType)
+                       << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID);
+
     m_rateLimiterStat->updateOutGoing(endpoint, msgLength, false);
     m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, false);
 
@@ -159,6 +160,13 @@ std::optional<std::string> GatewayRateLimiter::checkInComing(
     if (rateLimiter)
     {
         result = rateLimiter->tryAcquire(1);
+        if (!result)
+        {
+            GATEWAY_LOG(TRACE) << LOG_BADGE("checkInComing") << LOG_DESC("incoming qps overflow")
+                               << LOG_KV("endpoint", _endpoint)
+                               << LOG_KV("packageType", _packageType)
+                               << LOG_KV("msgLength", _msgLength);
+        }
     }
     m_rateLimiterStat->updateInComing0(_endpoint, _packageType, _msgLength, result);
     return result ? std::nullopt :
@@ -175,6 +183,12 @@ std::optional<std::string> GatewayRateLimiter::checkInComing(
     if (rateLimiter)
     {
         result = rateLimiter->tryAcquire(1);
+        if (!result)
+        {
+            GATEWAY_LOG(TRACE) << LOG_BADGE("checkInComing") << LOG_DESC("incoming qps overflow")
+                               << LOG_KV("groupID", _groupID) << LOG_KV("moduleID", _moduleID)
+                               << LOG_KV("msgLength", _msgLength);
+        }
     }
     m_rateLimiterStat->updateInComing(_groupID, _moduleID, _msgLength, result);
     return result ? std::nullopt :

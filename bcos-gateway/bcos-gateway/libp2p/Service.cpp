@@ -14,6 +14,7 @@
 #include <bcos-gateway/libp2p/P2PSession.h>  // for P2PSession
 #include <bcos-gateway/libp2p/Service.h>
 #include <boost/random.hpp>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -331,7 +332,7 @@ std::optional<bcos::Error> Service::onBeforeMessage(
 {
     if (m_beforeMessageHandler)
     {
-        return m_beforeMessageHandler(_session, _message);
+        return m_beforeMessageHandler(std::move(_session), std::move(_message));
     }
 
     return std::nullopt;
