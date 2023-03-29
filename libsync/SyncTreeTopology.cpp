@@ -122,7 +122,7 @@ void SyncTreeTopology::updateStartAndEndIndex()
  */
 bool SyncTreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex) const
 {
-    if (_nodeIndex >= m_nodeNum)
+    if (_nodeIndex >= m_nodeNum || _nodeIndex < 0)
     {
         SYNCTREE_LOG(DEBUG) << LOG_DESC("getNodeIDByIndex: invalidNode")
                             << LOG_KV("nodeIndex", _nodeIndex) << LOG_KV("nodeListSize", m_nodeNum);
