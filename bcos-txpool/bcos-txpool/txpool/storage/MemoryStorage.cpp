@@ -952,12 +952,13 @@ size_t MemoryStorage::unSealedTxsSize()
 
 size_t MemoryStorage::unSealedTxsSizeWithoutLock()
 {
-    if (m_txsTable.size() < m_sealedTxsSize)
+    auto txsSize = m_txsTable.size();
+    if (txsSize < m_sealedTxsSize)
     {
-        m_sealedTxsSize = m_txsTable.size();
+        m_sealedTxsSize = txsSize;
         return 0;
     }
-    return (m_txsTable.size() - m_sealedTxsSize);
+    return (txsSize - m_sealedTxsSize);
 }
 
 void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
