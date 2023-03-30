@@ -30,9 +30,7 @@
 #include <string_view>
 #include <optional>
 
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 struct ConflictField
 {
@@ -79,5 +77,4 @@ struct FunctionAbi
     static std::unique_ptr<FunctionAbi> deserialize(
         std::string_view abiStr, const bcos::bytes& expected, bool isSMCrypto);
 };
-}  // namespace executor
 }  // namespace bcos
