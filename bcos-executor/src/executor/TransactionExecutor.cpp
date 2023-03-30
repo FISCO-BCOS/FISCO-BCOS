@@ -1286,6 +1286,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         case Len:
         {
             EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Len`");
+            conflictFields->emplace_back(std::move(criticalKey));
             break;
         }
         case Env:
@@ -1350,6 +1351,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 return nullptr;
             }
             }
+            conflictFields->emplace_back(std::move(criticalKey));
             break;
         }
         case Params:
@@ -1401,7 +1403,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
                 auto out = getComponentBytes(index, typeName, ref(params.data).getCroppedData(4));
                 criticalKey.insert(criticalKey.end(), out.begin(), out.end());
             }
-
+            conflictFields->emplace_back(std::move(criticalKey));
             EXECUTOR_NAME_LOG(TRACE)
                 << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Params`")
                 << LOG_KV("functionName", functionAbi.name)
@@ -1412,6 +1414,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         {
             criticalKey.insert(
                 criticalKey.end(), conflictField.value.begin(), conflictField.value.end());
+            conflictFields->emplace_back(std::move(criticalKey));
             EXECUTOR_NAME_LOG(TRACE)
                 << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Const`")
                 << LOG_KV("functionName", functionAbi.name)
@@ -1432,8 +1435,6 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
             return nullptr;
         }
         }
-
-        conflictFields->emplace_back(std::move(criticalKey));
     }
     return conflictFields;
 }
