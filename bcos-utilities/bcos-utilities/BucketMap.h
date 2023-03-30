@@ -281,7 +281,8 @@ public:
     bool find(typename AccessorType::Ptr& accessor, const KeyType& key)
     {
         auto idx = getBucketIndex(key);
-        return m_buckets[idx]->template find<AccessorType>(accessor, key);
+        auto bucket = m_buckets[idx];
+        return bucket->template find<AccessorType>(accessor, key);
     }
 
     // handler: accessor is nullptr if not found, handler return false to break to find
@@ -333,7 +334,8 @@ public:
     bool insert(typename WriteAccessor::Ptr& accessor, std::pair<KeyType, ValueType> kv)
     {
         auto idx = getBucketIndex(kv.first);
-        return m_buckets[idx]->insert(accessor, std::move(kv));
+        auto bucket = m_buckets[idx];
+        return bucket->insert(accessor, std::move(kv));
     }
 
     ValueType remove(const KeyType& key)
