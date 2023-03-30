@@ -47,7 +47,7 @@ struct HelloWorldPrecompiledFixture
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
         context = std::make_shared<ExecutiveContext>();
-        ExecutiveContextFactory factory;
+        ExecutiveContextFactory factory(false);
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         factory.setStateStorage(storage);

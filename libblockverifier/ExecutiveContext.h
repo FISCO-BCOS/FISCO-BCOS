@@ -38,6 +38,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <utility>
 
 namespace dev
 {
@@ -63,7 +64,7 @@ namespace blockverifier
 class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
 {
 public:
-    typedef std::shared_ptr<ExecutiveContext> Ptr;
+    using Ptr = std::shared_ptr<ExecutiveContext>;
     using ParallelConfigKey = std::pair<Address, uint32_t>;
     ExecutiveContext() : m_addressCount(0x10000) {}
     virtual ~ExecutiveContext()
@@ -118,7 +119,7 @@ public:
 
     void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory)
     {
-        m_memoryTableFactory = memoryTableFactory;
+        m_memoryTableFactory = std::move(memoryTableFactory);
     }
 
     std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory()
@@ -135,7 +136,14 @@ public:
     std::shared_ptr<dev::storage::Storage> stateStorage();
     void setStateStorage(std::shared_ptr<dev::storage::Storage> _stateStorage);
 
+    bool enableReconfirmCommittee() const { return m_enableReconfirmCommittee; }
+    void setEnableReconfirmCommittee(bool _enableReconfirmCommittee)
+    {
+        m_enableReconfirmCommittee = _enableReconfirmCommittee;
+    }
+
 private:
+    bool m_enableReconfirmCommittee;
     tbb::concurrent_unordered_map<Address, std::shared_ptr<precompiled::Precompiled>,
         std::hash<Address>>
         m_address2Precompiled;
