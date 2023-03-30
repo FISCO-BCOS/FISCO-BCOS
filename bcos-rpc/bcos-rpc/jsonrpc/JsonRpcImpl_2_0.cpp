@@ -473,9 +473,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             jResp["to"] = submitResult->to();
             jResp["from"] = toHexStringWithPrefix(submitResult->sender());
             jResp["extraData"] = extraData;
+            jResp["input"] = toHexStringWithPrefix(transaction->input());
 
-            // TODO: check if needed
-            // jResp["input"] = toHexStringWithPrefix(transaction->input());
             if (requireProof) [[unlikely]]
             {
                 auto ledger = nodeService->ledger();
