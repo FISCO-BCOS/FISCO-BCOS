@@ -129,25 +129,33 @@ Table::Ptr MemoryTableFactory2::openTableWithoutLock(
             // set authorized address to memoryTable
             if (tableName != SYS_ACCESS_TABLE)
             {
-                setAuthorizedAddress(tableInfo);
-            }
-            else
-            {
                 if (m_enableReconfirmCommittee)
                 {
                     // Check at least 2 committee
+                    auto sysAccessTable = openTableWithoutLock(SYS_ACCESS_TABLE);
                     auto tableEntries =
-                        memoryTable->select(SYS_ACCESS_TABLE, memoryTable->newCondition());
+                        sysAccessTable->select(SYS_ACCESS_TABLE, memoryTable->newCondition());
                     auto count = tableEntries->size();
 
+                    STORAGE_LOG(DEBUG) << "Reconfirm committee count: " << count;
                     if (count < RECONFIRM_COMMITTEE_COUNT)
                     {
                         break;  // by pass authority check
                     }
                 }
-
+                setAuthorizedAddress(tableInfo);
+            }
+            else
+            {
                 auto tableEntries =
                     memoryTable->select(SYS_ACCESS_TABLE, memoryTable->newCondition());
+
+                STORAGE_LOG(DEBUG) << "Reconfirm committee count: " << tableEntries->size();
+                if (tableEntries->size() < RECONFIRM_COMMITTEE_COUNT)
+                {
+                    break;  // by pass authority check
+                }
+
                 for (size_t i = 0; i < tableEntries->size(); ++i)
                 {
                     auto entry = tableEntries->get(i);
