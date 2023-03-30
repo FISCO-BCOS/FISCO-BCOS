@@ -120,8 +120,9 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
     {
         return false;
     }
+
     UpgradableGuard l(x_routerEntries);
-    auto it = m_routerEntries.find(_generatedFrom);
+    auto it = m_routerEntries.find(_entry->dstNode());
     if (it == m_routerEntries.end())
     {
         return false;
