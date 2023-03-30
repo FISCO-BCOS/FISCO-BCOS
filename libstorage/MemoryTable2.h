@@ -75,7 +75,9 @@ public:
     bool checkAuthority(Address const& _origin) const override
     {
         if (m_tableInfo->authorizedAddress.empty())
+        {
             return true;
+        }
         auto it = find(m_tableInfo->authorizedAddress.cbegin(),
             m_tableInfo->authorizedAddress.cend(), _origin);
         return it != m_tableInfo->authorizedAddress.cend();

@@ -472,7 +472,8 @@ void DBInitializer::createExecutiveContext()
     }
 
     DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext...");
-    m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
+    m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>(
+        m_param->mutableStorageParam().enableReconfirmCommittee);
     /// storage
     m_executiveContextFactory->setStateStorage(m_storage);
     // mpt or storage
