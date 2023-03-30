@@ -118,7 +118,7 @@ public:
     void initContext()
     {
         // init storage and tables
-        ExecutiveContextFactory factory;
+        ExecutiveContextFactory factory(false);
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>(false);
         auto memStorage = std::make_shared<MemoryStorage2>();

@@ -317,7 +317,7 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
     auto condition = acTable->newCondition();
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
 
-    if (entries->size() == 0u)
+    if (entries->size() == 0u || (_context->enableReconfirmCommittee() && entries->size() == 1))
     {  // grant committee member
         result = grantTablePermission(_context, SYS_ACCESS_TABLE, _member, _origin);
         grantTablePermission(_context, SYS_CONFIG, _member, _origin);

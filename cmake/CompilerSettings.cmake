@@ -70,7 +70,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     endif ()
 
     # Configuration-specific compiler settings.
-    set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g  -DFISCO_DEBUG")
+    set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g  -DFISCO_DEBUG")
     set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
