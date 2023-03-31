@@ -1,6 +1,7 @@
 #include "ShardingBlockExecutive.h"
 #include "SchedulerImpl.h"
 #include "ShardingDmcExecutor.h"
+#include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-table/src/KeyPageStorage.h>
 #include <tbb/parallel_for_each.h>
 
@@ -127,6 +128,14 @@ void ShardingBlockExecutive::shardingExecute(
                                  << "shardGo() with error"
                                  << LOG_KV("code", error ? error->errorCode() : -1)
                                  << LOG_KV("msg", error ? error.get()->errorMessage() : "null");
+
+            if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+            {
+                SCHEDULER_LOG(ERROR)
+                    << "shardGo() SCHEDULER_TERM_ID_ERROR:" << error->errorMessage()
+                    << ". trigger switch";
+                triggerSwitch();
+            }
         }
         else
         {

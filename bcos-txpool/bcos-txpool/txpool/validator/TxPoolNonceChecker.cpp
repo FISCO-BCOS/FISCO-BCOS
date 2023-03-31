@@ -27,8 +27,7 @@ using namespace bcos::txpool;
 
 bool TxPoolNonceChecker::exists(NonceType const& _nonce)
 {
-    NonceSet::ReadAccessor::Ptr accessor;
-    return m_nonces.find<NonceSet::ReadAccessor>(accessor, _nonce);
+    return m_nonces.contains(_nonce);
 }
 
 TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx, bool _shouldUpdate)
@@ -56,10 +55,7 @@ void TxPoolNonceChecker::insert(NonceType const& _nonce)
 
 void TxPoolNonceChecker::batchInsert(BlockNumber /*_batchId*/, NonceListPtr const& _nonceList)
 {
-    for (auto const& nonce : *_nonceList)
-    {
-        insert(nonce);
-    }
+    m_nonces.batchInsert(*_nonceList);
 }
 
 void TxPoolNonceChecker::remove(NonceType const& _nonce)
@@ -69,10 +65,7 @@ void TxPoolNonceChecker::remove(NonceType const& _nonce)
 
 void TxPoolNonceChecker::batchRemove(NonceList const& _nonceList)
 {
-    for (auto const& nonce : _nonceList)
-    {
-        remove(nonce);
-    }
+    m_nonces.batchRemove(_nonceList);
 }
 
 void TxPoolNonceChecker::batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,

@@ -124,7 +124,9 @@ protected:
     bcos::protocol::TransactionStatus txpoolStorageCheck(
         const bcos::protocol::Transaction& transaction);
 
-    virtual bcos::protocol::Transaction::Ptr removeWithoutLock(
+    void onTxRemoved(const bcos::protocol::Transaction::Ptr& _tx, bool needNotifyUnsealedTxsSize);
+
+    virtual bcos::protocol::Transaction::Ptr removeWithoutNotifyUnseal(
         bcos::crypto::HashType const& _txHash);
     virtual bcos::protocol::Transaction::Ptr removeSubmittedTxWithoutLock(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult, bool _notify = true);
