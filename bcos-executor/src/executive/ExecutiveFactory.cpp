@@ -19,11 +19,13 @@
  * @date: 2022-03-22
  */
 
-#include "../vm/Precompiled.h"
 #include "ExecutiveFactory.h"
+#include "../vm/Precompiled.h"
 #include "CoroutineTransactionExecutive.h"
+#include "PromiseTransactionExecutive.h"
 #include "ShardingTransactionExecutive.h"
 #include "TransactionExecutive.h"
+#include "bcos-executor/src/precompiled/CastPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
@@ -39,8 +41,17 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
     std::shared_ptr<TransactionExecutive> executive;
     if (useCoroutine)
     {
-        executive = std::make_shared<CoroutineTransactionExecutive>(
-            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        if (m_isTiKVStorage)
+        {
+            // this logic is just for version lesser than 3.3.0, bug fix
+            executive = std::make_shared<PromiseTransactionExecutive>(m_poolForPromiseWait,
+                m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        }
+        else
+        {
+            executive = std::make_shared<CoroutineTransactionExecutive>(
+                m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        }
     }
     else
     {
@@ -69,8 +80,7 @@ void ExecutiveFactory::setParams(std::shared_ptr<TransactionExecutive> executive
 std::shared_ptr<bcos::precompiled::Precompiled> ExecutiveFactory::getPrecompiled(
     const std::string& address) const
 {
-    return m_precompiled->at(
-        address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck());
+    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck());
 }
 
 std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
@@ -78,8 +88,9 @@ std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
 {
     if (useCoroutine)
     {
-        auto executive = std::make_shared<ShardingTransactionExecutive>(
-            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        auto needUsePromise = m_isTiKVStorage;  // tikv storage need to use promise executive
+        auto executive = std::make_shared<ShardingTransactionExecutive>(m_blockContext,
+            _contractAddress, contextID, seq, m_gasInjector, m_poolForPromiseWait, needUsePromise);
         setParams(executive);
         return executive;
     }

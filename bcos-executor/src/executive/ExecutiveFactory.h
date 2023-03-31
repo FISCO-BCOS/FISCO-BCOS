@@ -23,7 +23,9 @@
 
 #include "../executor/TransactionExecutor.h"
 //#include "PromiseTransactionExecutive.h"
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <tbb/concurrent_unordered_map.h>
+#include <boost/algorithm/string.hpp>
 #include <atomic>
 #include <stack>
 
@@ -46,8 +48,15 @@ public:
         m_precompiled(std::move(precompiled)),
         m_staticPrecompiled(std::move(staticPrecompiled)),
         m_blockContext(blockContext),
-        m_gasInjector(gasInjector)
-    {}
+        m_gasInjector(gasInjector),
+        m_isTiKVStorage(boost::iequals("tikv", g_BCOSConfig.storageType()))
+    {
+        if (m_isTiKVStorage)
+        {
+            m_poolForPromiseWait = std::make_shared<bcos::ThreadPool>(
+                "promiseWait", 128);  // should max enough for promise wait
+        }
+    }
 
     virtual ~ExecutiveFactory() = default;
     virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
@@ -61,11 +70,14 @@ protected:
 
     void registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive);
 
+
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> m_evmPrecompiled;
     std::shared_ptr<PrecompiledMap> m_precompiled;
     std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
     const BlockContext& m_blockContext;
     const wasm::GasInjector& m_gasInjector;
+    bool m_isTiKVStorage;
+    bcos::ThreadPool::Ptr m_poolForPromiseWait;
 };
 
 class ShardingExecutiveFactory : public ExecutiveFactory
