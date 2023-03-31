@@ -25,6 +25,7 @@
 //#include "PromiseTransactionExecutive.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <tbb/concurrent_unordered_map.h>
+#include <boost/algorithm/string.hpp>
 #include <atomic>
 #include <stack>
 
@@ -48,7 +49,7 @@ public:
         m_staticPrecompiled(std::move(staticPrecompiled)),
         m_blockContext(blockContext),
         m_gasInjector(gasInjector),
-        m_isTiKVStorage(g_BCOSConfig.storageType().compare("TiKV") == 0)
+        m_isTiKVStorage(boost::iequals("tikv", g_BCOSConfig.storageType()))
     {
         if (m_isTiKVStorage)
         {
