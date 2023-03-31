@@ -76,6 +76,9 @@ public:
     virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = _codec; }
     virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
 
+    void setStorageType(std::string const& _storageType) { m_storageType = _storageType; }
+    std::string const& storageType() const { return m_storageType; }
+
     BlockVersion minSupportedVersion() const { return m_minSupportedVersion; }
     BlockVersion maxSupportedVersion() const { return m_maxSupportedVersion; }
 
@@ -86,7 +89,7 @@ private:
     BlockVersion m_maxSupportedVersion = BlockVersion::MAX_VERSION;
 
     ProtocolInfoCodec::Ptr m_codec;
-    mutable bcos::SharedMutex x_version;
+    std::string m_storageType;
 };
 }  // namespace protocol
 }  // namespace bcos
