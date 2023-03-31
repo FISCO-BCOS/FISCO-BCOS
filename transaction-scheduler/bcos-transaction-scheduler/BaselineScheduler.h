@@ -388,7 +388,7 @@ public:
 
                     auto blockHeader = result.m_block->blockHeaderConst();
                     auto submitResults =
-                        RANGES::views::iota(0L, result.m_block->receiptsSize()) |
+                        RANGES::views::iota(0LU, result.m_block->receiptsSize()) |
                         RANGES::views::transform(
                             [&](uint64_t index) -> protocol::TransactionSubmitResult::Ptr {
                                 auto& transaction = result.m_transactions[index];
