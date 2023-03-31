@@ -170,7 +170,7 @@ private:
         }
 
         auto availableTransactions =
-            RANGES::views::iota(0, block.transactionsSize()) |
+            RANGES::iota_view<size_t, size_t>(0LU, block.transactionsSize()) |
             RANGES::views::transform([&block](uint64_t index) { return block.transaction(index); });
 
         auto hashes = availableTransactions | RANGES::views::transform([](auto& transaction) {

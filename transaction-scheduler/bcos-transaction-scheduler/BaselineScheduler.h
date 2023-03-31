@@ -177,7 +177,8 @@ public:
                                 if (block->transactionsSize() > 0)
                                 {
                                     auto hashes =
-                                        RANGES::iota_view<size_t, size_t>(0LU, block->transactionsSize()) |
+                                        RANGES::iota_view<size_t, size_t>(
+                                            0LU, block->transactionsSize()) |
                                         RANGES::views::transform([&block](uint64_t index) {
                                             return block->transaction(index)->hash();
                                         });
@@ -186,7 +187,7 @@ public:
                                 else
                                 {
                                     auto hashes =
-                                        RANGES::views::iota(
+                                        RANGES::iota_view<size_t, size_t>(
                                             0LU, block->transactionsMetaDataSize()) |
                                         RANGES::views::transform([&block](uint64_t index) {
                                             return block->transactionHash(index);
