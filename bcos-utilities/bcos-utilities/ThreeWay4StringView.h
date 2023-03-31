@@ -9,19 +9,15 @@ namespace std
 {
 inline strong_ordering operator<=>(const string_view& lhs, const string_view& rhs)
 {
-    std::string lhsStr(lhs);
-    std::string rhsStr(rhs);
-    return lhsStr <=> rhsStr;
-
-    // if (lhs.size() == rhs.size())
-    // {
-    //     if (RANGES::lexicographical_compare(lhs, rhs))
-    //     {
-    //         return strong_ordering::greater;
-    //     }
-    //     return strong_ordering::less;
-    // }
-    // return lhs.size() <=> rhs.size();
+    if (lhs.size() == rhs.size())
+    {
+        if (RANGES::lexicographical_compare(lhs, rhs))
+        {
+            return strong_ordering::greater;
+        }
+        return strong_ordering::less;
+    }
+    return lhs.size() <=> rhs.size();
 }
 }  // namespace std
 
