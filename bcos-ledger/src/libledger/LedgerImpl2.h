@@ -208,12 +208,12 @@ private:
             ++totalTransactionCount;
         }
 
-        auto hashes = RANGES::views::iota(0LU, block.transactionsMetaDataSize()) |
+        auto hashes = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
                       RANGES::views::transform([&block](uint64_t index) {
                           auto metaData = block.transactionMetaData(index);
                           return metaData->hash();
                       });
-        auto buffers = RANGES::views::iota(0LU, block.transactionsMetaDataSize()) |
+        auto buffers = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
                        RANGES::views::transform([&block](uint64_t index) {
                            auto receipt = block.receipt(index);
                            std::vector<bcos::byte> buffer;
