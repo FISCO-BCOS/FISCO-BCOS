@@ -25,8 +25,10 @@ struct UnsupportedMethod : public bcos::Error {};
 
 template <transaction_executor::StateStorage MutableStorageType, class CachedStorage,
     transaction_executor::StateStorage BackendStorage>
-requires((std::is_void_v<CachedStorage> || (transaction_executor::StateStorage<CachedStorage>)) &&
-         storage2::SeekableStorage<MutableStorageType>) class MultiLayerStorage
+    requires(
+        (std::is_void_v<CachedStorage> || (transaction_executor::StateStorage<CachedStorage>)) &&
+        storage2::SeekableStorage<MutableStorageType>)
+class MultiLayerStorage
 {
 private:
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
@@ -63,13 +65,15 @@ public:
             m_cacheStorage;
         std::unique_lock<std::mutex> m_mutableLock;
 
-        View(BackendStorage& backendStorage) requires(!withCacheStorage)
+        View(BackendStorage& backendStorage)
+            requires(!withCacheStorage)
           : m_backendStorage(backendStorage)
         {}
         View(BackendStorage& backendStorage,
             std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
                 std::monostate>
-                cacheStorage) requires(withCacheStorage)
+                cacheStorage)
+            requires(withCacheStorage)
           : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
         {}
 
@@ -287,14 +291,16 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    explicit MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
+    explicit MultiLayerStorage(BackendStorage& backendStorage)
+        requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
     {}
 
     MultiLayerStorage(BackendStorage& backendStorage,
         std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
             std::monostate>
-            cacheStorage) requires(withCacheStorage)
+            cacheStorage)
+        requires(withCacheStorage)
       : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
     {}
     MultiLayerStorage(const MultiLayerStorage&) = delete;
