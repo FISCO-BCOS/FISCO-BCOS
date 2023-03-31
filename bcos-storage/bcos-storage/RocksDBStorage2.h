@@ -140,7 +140,7 @@ public:
     {
         ::rocksdb::WriteBatch writeBatch;
 
-        for (auto&& [key, value] : RANGES::zip_view(keys, values))
+        for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
             auto encodedKey = m_keyResolver.encode(key);
             auto encodedValue = m_valueResolver.encode(value);

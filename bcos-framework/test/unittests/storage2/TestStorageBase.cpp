@@ -81,7 +81,7 @@ public:
 
     task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, entry] : RANGES::zip_view(keys, values))
+        for (auto&& [key, entry] : RANGES::views::zip(keys, values))
         {
             auto it = m_values.find(key);
             if (it == m_values.end())

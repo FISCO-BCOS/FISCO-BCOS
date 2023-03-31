@@ -243,7 +243,7 @@ public:
                 // Write data into cache
                 if constexpr (withCacheStorage)
                 {
-                    for (auto&& [key, value] : RANGES::zip_view(keysView, valuesView))
+                    for (auto&& [key, value] : RANGES::views::zip(keysView, valuesView))
                     {
                         if (value)
                         {

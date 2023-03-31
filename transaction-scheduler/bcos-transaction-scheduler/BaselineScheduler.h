@@ -73,14 +73,14 @@ private:
             ittapi::ITT_DOMAINS::instance().GET_TRANSACTIONS);
         if (block.transactionsSize() > 0)
         {
-            co_return RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsSize()) |
+            co_return RANGES::views::iota(0LU, block.transactionsSize()) |
                 RANGES::views::transform(
                     [&block](uint64_t index) { return block.transaction(index); }) |
                 RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
         }
 
         co_return co_await m_txpool.getTransactions(
-            RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
+            RANGES::views::iota(0LU, block.transactionsMetaDataSize()) |
             RANGES::views::transform(
                 [&block](uint64_t index) { return block.transactionHash(index); })) |
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
@@ -177,8 +177,7 @@ public:
                                 if (block->transactionsSize() > 0)
                                 {
                                     auto hashes =
-                                        RANGES::iota_view<uint64_t, uint64_t>(
-                                            0LU, block->transactionsSize()) |
+                                        RANGES::views::iota(0LU, block->transactionsSize()) |
                                         RANGES::views::transform([&block](uint64_t index) {
                                             return block->transaction(index)->hash();
                                         });
@@ -187,7 +186,7 @@ public:
                                 else
                                 {
                                     auto hashes =
-                                        RANGES::iota_view<uint64_t, uint64_t>(
+                                        RANGES::views::iota(
                                             0LU, block->transactionsMetaDataSize()) |
                                         RANGES::views::transform([&block](uint64_t index) {
                                             return block->transactionHash(index);
@@ -222,7 +221,7 @@ public:
                         [&]() {
                             bcos::u256 totalGas = 0;
                             for (auto&& [receipt, index] :
-                                RANGES::zip_view(receipts, RANGES::iota_view<uint64_t>(0UL)))
+                                RANGES::views::zip(receipts, RANGES::views::iota(0UL)))
                             {
                                 totalGas += receipt->gasUsed();
                                 if (index < block->receiptsSize())
@@ -386,10 +385,10 @@ public:
                 self->m_asyncGroup.run([self = self, result = std::move(result)]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
                         ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
-                        
+
                     auto blockHeader = result.m_block->blockHeaderConst();
                     auto submitResults =
-                        RANGES::iota_view<uint64_t, uint64_t>(0L, result.m_block->receiptsSize()) |
+                        RANGES::views::iota(0L, result.m_block->receiptsSize()) |
                         RANGES::views::transform(
                             [&](uint64_t index) -> protocol::TransactionSubmitResult::Ptr {
                                 auto& transaction = result.m_transactions[index];

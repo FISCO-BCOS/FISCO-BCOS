@@ -64,14 +64,14 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
                          "Non exists key"});
         BOOST_REQUIRE(!notExistsValue);
 
-        auto keys = RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([this](int num) {
+        auto keys = RANGES::views::iota(0, 100) | RANGES::views::transform([this](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
             auto stateKey =
                 StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
             return stateKey;
         });
-        auto values = RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](int num) {
+        auto values = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {
             storage::Entry entry;
             entry.set(fmt::format("Entry value is: i am a value!!!!!!! {}", num));
             return entry;
@@ -79,14 +79,13 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
 
         BOOST_CHECK_NO_THROW(co_await rocksDB.write(keys, values));
 
-        auto queryKeys =
-            RANGES::iota_view<int, int>(0, 150) | RANGES::views::transform([this](int num) {
-                auto tableName = fmt::format("Table~{}", num % 10);
-                auto key = fmt::format("Key~{}", num);
-                auto stateKey =
-                    StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
-                return stateKey;
-            });
+        auto queryKeys = RANGES::views::iota(0, 150) | RANGES::views::transform([this](int num) {
+            auto tableName = fmt::format("Table~{}", num % 10);
+            auto key = fmt::format("Key~{}", num);
+            auto stateKey =
+                StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
+            return stateKey;
+        });
         auto it = co_await rocksDB.read(queryKeys);
         int i = 0;
         while (co_await it.next())
@@ -108,14 +107,13 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         }
 
         // Remove some
-        auto removeKeys =
-            RANGES::iota_view<int, int>(50, 70) | RANGES::views::transform([this](int num) {
-                auto tableName = fmt::format("Table~{}", num % 10);
-                auto key = fmt::format("Key~{}", num);
-                auto stateKey =
-                    StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
-                return stateKey;
-            });
+        auto removeKeys = RANGES::views::iota(50, 70) | RANGES::views::transform([this](int num) {
+            auto tableName = fmt::format("Table~{}", num % 10);
+            auto key = fmt::format("Key~{}", num);
+            auto stateKey =
+                StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
+            return stateKey;
+        });
         co_await rocksDB.remove(removeKeys);
 
         auto it2 = co_await rocksDB.read(queryKeys);
@@ -170,14 +168,14 @@ BOOST_AUTO_TEST_CASE(merge)
             storage2::memory_storage::ORDERED>
             memoryStorage;
 
-        auto keys = RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([this](int num) {
+        auto keys = RANGES::views::iota(0, 100) | RANGES::views::transform([this](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
             auto stateKey =
                 StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
             return stateKey;
         });
-        auto values = RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](int num) {
+        auto values = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {
             storage::Entry entry;
             entry.set(fmt::format("Entry value is: i am a value!!!!!!! {}", num));
             return entry;

@@ -399,7 +399,7 @@ public:
     task::AwaitableValue<void> write(
         RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, value] : RANGES::zip_view(
+        for (auto&& [key, value] : RANGES::views::zip(
                  std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
         {
             auto [bucket, lock] = getBucket(key);
@@ -500,7 +500,7 @@ public:
 
     task::Task<void> merge(MemoryStorage& from)
     {
-        for (auto bucketPair : RANGES::zip_view(m_buckets, from.m_buckets))
+        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
         {
             auto& [bucket, fromBucket] = bucketPair;
             Lock toLock(bucket.mutex);
@@ -523,7 +523,7 @@ public:
 
     void swap(MemoryStorage& from)
     {
-        for (auto bucketPair : RANGES::zip_view(m_buckets, from.m_buckets))
+        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
         {
             auto& [bucket, fromBucket] = bucketPair;
             Lock toLock(bucket.mutex);

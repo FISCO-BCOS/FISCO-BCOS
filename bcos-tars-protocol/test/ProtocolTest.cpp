@@ -450,7 +450,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
     BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
     for (auto [originParentInfo, decodeParentInfo] :
-        RANGES::zip_view(header->parentInfo(), decodedHeader->parentInfo()))
+        RANGES::views::zip(header->parentInfo(), decodedHeader->parentInfo()))
     {
         BOOST_CHECK_EQUAL(
             bcos::toString(originParentInfo.blockHash), bcos::toString(decodeParentInfo.blockHash));

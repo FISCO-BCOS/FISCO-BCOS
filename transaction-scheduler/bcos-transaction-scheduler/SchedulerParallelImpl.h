@@ -204,7 +204,7 @@ public:
 
         size_t retryCount = 0;
         auto transactionAndReceipts =
-            RANGES::zip_view(RANGES::iota_view(0LU, (size_t)RANGES::size(transactions)),
+            RANGES::views::zip(RANGES::views::iota(0LU, (size_t)RANGES::size(transactions)),
                 transactions | RANGES::views::addressof, receipts | RANGES::views::addressof);
 
         // while (offset < RANGES::size(transactions) && retryCount < MAX_RETRY_COUNT)

@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(range)
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             }));
         auto readRange = readIt.range();
-        for (auto&& [kv, num] : RANGES::zip_view(readRange, RANGES::iota_view<size_t>(0)))
+        for (auto&& [kv, num] : RANGES::views::zip(readRange, RANGES::iota_view<size_t>(0)))
         {
             auto& [key, value] = kv;
             BOOST_CHECK(key);
@@ -265,7 +265,7 @@ BOOST_AUTO_TEST_CASE(range)
         auto seekIt = co_await storage.seek(storage2::STORAGE_BEGIN);
         auto seekRange = seekIt.range();
 
-        for (auto&& [kv, num] : RANGES::zip_view(seekRange, RANGES::iota_view<size_t>(0)))
+        for (auto&& [kv, num] : RANGES::views::zip(seekRange, RANGES::iota_view<size_t>(0)))
         {
             auto& [key, value] = kv;
             BOOST_CHECK(key);

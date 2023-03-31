@@ -170,7 +170,7 @@ private:
         }
 
         auto availableTransactions =
-            RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsSize()) |
+            RANGES::views::iota(0, block.transactionsSize()) |
             RANGES::views::transform([&block](uint64_t index) { return block.transaction(index); });
 
         auto hashes = availableTransactions | RANGES::views::transform([](auto& transaction) {
@@ -208,19 +208,18 @@ private:
             ++totalTransactionCount;
         }
 
-        auto hashes = RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
+        auto hashes = RANGES::views::iota(0LU, block.transactionsMetaDataSize()) |
                       RANGES::views::transform([&block](uint64_t index) {
                           auto metaData = block.transactionMetaData(index);
                           return metaData->hash();
                       });
-        auto buffers =
-            RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
-            RANGES::views::transform([&block](uint64_t index) {
-                auto receipt = block.receipt(index);
-                std::vector<bcos::byte> buffer;
-                bcos::concepts::serialize::encode(*receipt, buffer);
-                return buffer;
-            });
+        auto buffers = RANGES::views::iota(0LU, block.transactionsMetaDataSize()) |
+                       RANGES::views::transform([&block](uint64_t index) {
+                           auto receipt = block.receipt(index);
+                           std::vector<bcos::byte> buffer;
+                           bcos::concepts::serialize::encode(*receipt, buffer);
+                           return buffer;
+                       });
 
         co_await setTransactions<false>(hashes, buffers);
 

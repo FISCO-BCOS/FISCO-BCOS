@@ -128,7 +128,7 @@ struct Fixture
         std::mt19937_64 rng(std::random_device{}());
 
         // Generation accounts
-        m_addresses = RANGES::iota_view<size_t, size_t>(0, count) |
+        m_addresses = RANGES::views::iota(0LU, count) |
                       RANGES::views::transform([&rng](size_t index) {
                           bcos::h160 address;
                           address.generateRandomFixedBytesByEngine(rng);
@@ -182,8 +182,7 @@ struct Fixture
         bcos::codec::abi::ContractABICodec abiCodec(
             bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
-            RANGES::zip_view(
-                m_addresses, RANGES::iota_view<size_t, size_t>(0LU, m_addresses.size())) |
+            RANGES::views::zip(m_addresses, RANGES::views::iota(0LU, m_addresses.size())) |
             RANGES::views::transform([this, &abiCodec](auto&& tuple) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
                     [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
@@ -509,7 +508,7 @@ static void transfer1000User(benchmark::State& state)
                 // Check
                 auto balances = co_await fixture.balances();
                 for (auto&& [balance, index] :
-                    RANGES::zip_view(balances, RANGES::iota_view<size_t>(0LU)))
+                    RANGES::views::zip(balances, RANGES::views::iota(0LU)))
                 {
                     if (index == 0)
                     {
@@ -533,8 +532,8 @@ static void transfer1000User(benchmark::State& state)
                     {
                         if (balance != singleIssue)
                         {
-                            BOOST_THROW_EXCEPTION(
-                                std::runtime_error(fmt::format("Balance not equal to expected! {} {}", index,
+                            BOOST_THROW_EXCEPTION(std::runtime_error(
+                                fmt::format("Balance not equal to expected! {} {}", index,
                                     balance.template convert_to<std::string>())));
                         }
                     }
@@ -615,7 +614,7 @@ static void conflictTransfer(benchmark::State& state)
                     // Check
                     auto balances = co_await fixture.balances();
                     for (auto&& [balance, index] :
-                        RANGES::zip_view(balances, RANGES::iota_view<size_t>(0LU)))
+                        RANGES::views::zip(balances, RANGES::views::iota(0LU)))
                     {
                         if (index == 0)
                         {
