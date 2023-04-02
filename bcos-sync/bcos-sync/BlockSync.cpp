@@ -539,7 +539,8 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
     {
         bool findPeer = false;
         // shard: [from, to]
-        m_syncStatus->foreachPeerRandom([&](PeerStatus::Ptr _p) {
+        m_syncStatus->foreachPeerRandom([this, &_from, &shard, &interval, &blockSizePerShard, &_to,
+                                            &findPeer, &shardNumber](PeerStatus::Ptr _p) {
             if (_p->number() < m_config->knownHighestNumber())
             {
                 // Only send request to nodes which are not syncing(has max number)
