@@ -3,6 +3,7 @@
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
+#include <new>
 #include <type_traits>
 
 namespace bcos::storage2::any_storage
@@ -14,10 +15,10 @@ struct UnsupportedMethodError : public bcos::Error
 
 enum Attribute : int
 {
-    READABLE = 0,
-    WRITEABLE = 1,
-    SEEKABLE = 2,
-    ERASABLE = 4
+    READABLE = 1,
+    WRITEABLE = 2,
+    SEEKABLE = 4,
+    ERASABLE = 8
 };
 
 template <class KeyType, class ValueType>
@@ -27,13 +28,14 @@ private:
     class ReadIteratorBase
     {
     public:
+        ReadIteratorBase() = default;
         virtual ~ReadIteratorBase() = default;
         ReadIteratorBase& operator=(const ReadIteratorBase&) = delete;
         ReadIteratorBase(const ReadIteratorBase&) = delete;
         ReadIteratorBase(ReadIteratorBase&&) noexcept = default;
         ReadIteratorBase& operator=(ReadIteratorBase&&) noexcept = default;
 
-        virtual task::Task<void> next() = 0;
+        virtual task::Task<bool> next() = 0;
         virtual task::Task<KeyType> key() = 0;
         virtual task::Task<ValueType> value() = 0;
         virtual task::Task<bool> hasValue() = 0;
@@ -45,9 +47,11 @@ private:
         ReadIterator m_readIterator;
 
     public:
-        ReadIteratorImpl(ReadIterator readIterator) : m_readIterator(std::move(readIterator)) {}
+        ReadIteratorImpl(ReadIterator&& readIterator)
+          : m_readIterator(std::forward<decltype(readIterator)>(readIterator))
+        {}
 
-        task::Task<void> next() override { co_return co_await m_readIterator.next(); }
+        task::Task<bool> next() override { co_return co_await m_readIterator.next(); }
         task::Task<KeyType> key() override { co_return co_await m_readIterator.key(); }
         task::Task<ValueType> value() override { co_return co_await m_readIterator.value(); }
         task::Task<bool> hasValue() override { co_return co_await m_readIterator.hasValue(); }
@@ -55,21 +59,24 @@ private:
     std::unique_ptr<ReadIteratorBase> m_readIterator;
 
 public:
+    using Key = KeyType;
+    using Value = ValueType;
+
     template <class ReadIterator>
     AnyReadIterator(ReadIterator readIterator)
       : m_readIterator(std::make_unique<ReadIteratorImpl<ReadIterator>>(std::move(readIterator)))
     {}
 
     virtual ~AnyReadIterator() = default;
-    AnyReadIterator& operator=(const AnyReadIterator&) = delete;
-    AnyReadIterator(const AnyReadIterator&) = delete;
-    AnyReadIterator(AnyReadIterator&&) = delete;
-    AnyReadIterator& operator=(AnyReadIterator&&) = delete;
+    AnyReadIterator& operator=(const AnyReadIterator&) = default;
+    AnyReadIterator(const AnyReadIterator&) = default;
+    AnyReadIterator(AnyReadIterator&&) noexcept = default;
+    AnyReadIterator& operator=(AnyReadIterator&&) noexcept = default;
 
-    task::Task<void> next() { return m_readIterator->next(); }
-    task::Task<KeyType> key() { return m_readIterator->key(); }
-    task::Task<ValueType> value() { return m_readIterator->value(); }
-    task::Task<bool> hasValue() { return m_readIterator->hasValue(); }
+    task::Task<bool> next() { co_return co_await m_readIterator->next(); }
+    task::Task<KeyType> key() { co_return co_await m_readIterator->key(); }
+    task::Task<ValueType> value() { co_return co_await m_readIterator->value(); }
+    task::Task<bool> hasValue() { co_return co_await m_readIterator->hasValue(); }
 };
 
 template <class KeyType, class ValueType, Attribute attribute>
@@ -84,9 +91,10 @@ private:
     class StorageBase
     {
     public:
-        virtual ~StorageBase() = default;
-        StorageBase& operator=(const StorageBase&) = delete;
-        StorageBase(const StorageBase&) = delete;
+        virtual ~StorageBase() noexcept = default;
+        StorageBase() = default;
+        StorageBase& operator=(const StorageBase&) = default;
+        StorageBase(const StorageBase&) = default;
         StorageBase(StorageBase&&) noexcept = default;
         StorageBase& operator=(StorageBase&&) noexcept = default;
 
@@ -97,22 +105,27 @@ private:
         virtual task::Task<AnyReadIterator<KeyType, ValueType>> seek(const KeyType& key) = 0;
         virtual task::Task<void> remove(RANGES::any_view<KeyType> keys) = 0;
     };
-    template <class Storage>
+    template <class Storage, bool dummy = false>
     class StorageImpl : public StorageBase
     {
     private:
-        Storage m_storage;
+        Storage* m_storage = nullptr;
 
     public:
-        StorageImpl(Storage storage) : m_storage(std::move(storage)) {}
+        StorageImpl(Storage* storage) : m_storage(storage) {}
+        ~StorageImpl() noexcept override = default;
+        StorageImpl& operator=(const StorageImpl&) = default;
+        StorageImpl(const StorageImpl&) = default;
+        StorageImpl(StorageImpl&&) noexcept = default;
+        StorageImpl& operator=(StorageImpl&&) noexcept = default;
 
         task::Task<AnyReadIterator<KeyType, ValueType>> read(
             RANGES::any_view<KeyType> keys) override
         {
-            if constexpr (withReadable)
+            if constexpr (withReadable && !dummy)
             {
                 co_return AnyReadIterator<KeyType, ValueType>(
-                    co_await m_storage.read(std::move(keys)));
+                    co_await m_storage->read(std::move(keys)));
             }
             else
             {
@@ -122,9 +135,9 @@ private:
         task::Task<void> write(
             RANGES::any_view<KeyType> keys, RANGES::any_view<ValueType> values) override
         {
-            if constexpr (withWriteable)
+            if constexpr (withWriteable && !dummy)
             {
-                co_return co_await m_storage.write(std::move(keys), std::move(values));
+                co_return co_await m_storage->write(std::move(keys), std::move(values));
             }
             else
             {
@@ -133,9 +146,9 @@ private:
         }
         task::Task<AnyReadIterator<KeyType, ValueType>> seek(const KeyType& key) override
         {
-            if constexpr (withSeekable)
+            if constexpr (withSeekable && !dummy)
             {
-                co_return co_await m_storage.seek(key);
+                co_return co_await m_storage->seek(key);
             }
             else
             {
@@ -144,9 +157,9 @@ private:
         }
         task::Task<void> remove(RANGES::any_view<KeyType> keys) override
         {
-            if constexpr (withErasable)
+            if constexpr (withErasable && !dummy)
             {
-                co_return co_await m_storage.remove(std::move(keys));
+                co_return co_await m_storage->remove(std::move(keys));
             }
             else
             {
@@ -154,39 +167,52 @@ private:
             }
         }
     };
-    std::unique_ptr<StorageBase> m_storage;
+    std::array<uint8_t, sizeof(StorageImpl<void, true>)> m_storage;
 
 public:
     template <class Storage>
-    AnyStorage(Storage storage)
-      : m_storage(std::make_unique<StorageImpl<Storage>>(std::move(storage)))
-    {}
+    AnyStorage(Storage& storage)
+    {
+        auto* base = (StorageBase*)m_storage.data();
+        new (base) StorageImpl<Storage>(std::addressof(storage));
+    }
+
+    using Key = KeyType;
+    using Value = ValueType;
 
     AnyStorage(AnyStorage&&) noexcept = default;
     AnyStorage& operator=(AnyStorage&&) noexcept = default;
     AnyStorage(const AnyStorage&) = delete;
     AnyStorage& operator=(const AnyStorage&) = delete;
-    ~AnyStorage() = default;
+    ~AnyStorage() noexcept
+    {
+        auto* base = (StorageBase*)m_storage.data();
+        base->~StorageBase();
+    }
 
     task::Task<AnyReadIterator<KeyType, ValueType>> read(RANGES::any_view<KeyType> keys)
         requires withReadable
     {
-        return m_storage->read(std::move(keys));
+        auto* base = (StorageBase*)m_storage.data();
+        co_return AnyReadIterator<KeyType, ValueType>(co_await base->read(std::move(keys)));
     }
     task::Task<void> write(RANGES::any_view<KeyType> keys, RANGES::any_view<ValueType> values)
         requires withWriteable
     {
-        return m_storage->write(std::move(keys), std::move(values));
+        auto* base = (StorageBase*)m_storage.data();
+        co_return co_await base->write(std::move(keys), std::move(values));
     }
     task::Task<AnyReadIterator<KeyType, ValueType>> seek(KeyType key)
         requires withSeekable
     {
-        return m_storage->seek(std::move(key));
+        auto* base = (StorageBase*)m_storage.data();
+        co_return co_await base->seek(std::move(key));
     }
     task::Task<void> remove(RANGES::any_view<KeyType> keys)
         requires withErasable
     {
-        return m_storage->remove(keys);
+        StorageBase* base = m_storage.data();
+        co_return co_await base->remove(keys);
     }
 };
 
