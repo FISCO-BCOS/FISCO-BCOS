@@ -1,4 +1,5 @@
 #pragma once
+#include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Ranges.h>
@@ -29,7 +30,7 @@ private:
     {
     public:
         ReadIteratorBase() = default;
-        virtual ~ReadIteratorBase() = default;
+        virtual ~ReadIteratorBase() noexcept = default;
         ReadIteratorBase& operator=(const ReadIteratorBase&) = delete;
         ReadIteratorBase(const ReadIteratorBase&) = delete;
         ReadIteratorBase(ReadIteratorBase&&) noexcept = default;
@@ -50,6 +51,11 @@ private:
         ReadIteratorImpl(ReadIterator&& readIterator)
           : m_readIterator(std::forward<decltype(readIterator)>(readIterator))
         {}
+        ~ReadIteratorImpl() noexcept override = default;
+        ReadIteratorImpl& operator=(const ReadIteratorImpl&) = delete;
+        ReadIteratorImpl(const ReadIteratorImpl&) = delete;
+        ReadIteratorImpl(ReadIteratorImpl&&) noexcept = default;
+        ReadIteratorImpl& operator=(ReadIteratorImpl&&) noexcept = default;
 
         task::Task<bool> next() override { co_return co_await m_readIterator.next(); }
         task::Task<KeyType> key() override { co_return co_await m_readIterator.key(); }
@@ -67,7 +73,7 @@ public:
       : m_readIterator(std::make_unique<ReadIteratorImpl<ReadIterator>>(std::move(readIterator)))
     {}
 
-    virtual ~AnyReadIterator() = default;
+    virtual ~AnyReadIterator() noexcept = default;
     AnyReadIterator& operator=(const AnyReadIterator&) = default;
     AnyReadIterator(const AnyReadIterator&) = default;
     AnyReadIterator(AnyReadIterator&&) noexcept = default;
@@ -103,6 +109,7 @@ private:
         virtual task::Task<void> write(
             RANGES::any_view<KeyType> keys, RANGES::any_view<ValueType> values) = 0;
         virtual task::Task<AnyReadIterator<KeyType, ValueType>> seek(const KeyType& key) = 0;
+        virtual task::Task<AnyReadIterator<KeyType, ValueType>> seek(STORAGE_BEGIN_TYPE key) = 0;
         virtual task::Task<void> remove(RANGES::any_view<KeyType> keys) = 0;
     };
     template <class Storage, bool dummy = false>
@@ -145,6 +152,17 @@ private:
             }
         }
         task::Task<AnyReadIterator<KeyType, ValueType>> seek(const KeyType& key) override
+        {
+            if constexpr (withSeekable && !dummy)
+            {
+                co_return co_await m_storage->seek(key);
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(UnsupportedMethodError{});
+            }
+        }
+        task::Task<AnyReadIterator<KeyType, ValueType>> seek(STORAGE_BEGIN_TYPE key) override
         {
             if constexpr (withSeekable && !dummy)
             {
@@ -207,6 +225,11 @@ public:
     {
         auto* base = (StorageBase*)m_storage.data();
         co_return co_await base->seek(std::move(key));
+    }
+    task::Task<AnyReadIterator<KeyType, ValueType>> seek(STORAGE_BEGIN_TYPE key)
+    {
+        auto* base = (StorageBase*)m_storage.data();
+        co_return co_await base->seek(key);
     }
     task::Task<void> remove(RANGES::any_view<KeyType> keys)
         requires withErasable
