@@ -3,7 +3,7 @@ console_branch="3.0.0"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
-node_list="node0 node1 node2 node3 node4"
+node_list="node0 node1 node2 node3"
 LOG_ERROR() {
     local content=${1}
     echo -e "\033[31m ${content}\033[0m"
@@ -151,11 +151,11 @@ check_sync()
     LOG_INFO "check sync..."
     expected_block_number="${1}"
     cd ${current_path}/nodes/127.0.0.1
-    bash node4/stop.sh && rm -rf node4/log && rm -rf node4/data
-    bash node4/start.sh
+    bash node0/stop.sh && rm -rf node0/log && rm -rf node0/data
+    bash node0/start.sh
     # wait for sync
     sleep 10
-    block_number=$(cat node4/log/* |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
+    block_number=$(cat node0/log/* |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
     if [ "${block_number}" == "${expected_block_number}" ]; then
         LOG_INFO "check_sync success, current blockNumber: ${block_number}"
     else
@@ -186,8 +186,13 @@ expand_node()
     bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} "${sm_option}"
     LOG_INFO "expand node success..."
     bash ${current_path}/nodes/127.0.0.1/node4/start.sh
-    nodeid=$(cat ${current_path}/nodes/127.0.0.1/node4/conf/node.nodeid)
-    bash console/console.sh addObserver "${nodeid}"
+    sleep 5
+    count=$(cat ${current_path}/nodes/127.0.0.1/node4/log/* | grep -i "heartBeat,connected count" | tail -n 1 | awk -F' ' '{print $3}' | awk -F'=' '{print $2}')
+    if [ ${count} -eq 4 ];then
+      LOG_INFO "check expand_node success..."
+    else
+      LOG_ERROR "check expand_node failed..."
+    fi
 }
 
 clear_node()
@@ -201,10 +206,10 @@ txs_num=10
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
-expand_node
-check_consensus
 download_console
 config_console "false"
+expand_node ""
+check_consensus
 send_transactions ${txs_num}
 check_sync ${txs_num}
 LOG_INFO "======== check non-sm success ========"
@@ -222,5 +227,4 @@ config_console "true"
 send_transactions ${txs_num}
 check_sync ${txs_num}
 stop_node
-clear_node
 LOG_INFO "======== check sm case success ========"
