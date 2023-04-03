@@ -78,7 +78,7 @@ private:
         }
 
         co_return co_await m_txpool.getTransactions(
-            RANGES::views::iota(0LU, block.transactionsMetaDataSize()) |
+            RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
             RANGES::views::transform(
                 [&block](uint64_t index) { return block.transactionHash(index); })) |
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
