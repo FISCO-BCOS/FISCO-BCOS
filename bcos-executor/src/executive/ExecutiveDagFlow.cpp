@@ -199,7 +199,11 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
     DAGFLOW_LOG(DEBUG) << "generateDags" << LOG_KV("transactionsNum", transactionsNum);
 
     CriticalFields::Ptr txsCriticals = make_shared<CriticalFields>(transactionsNum);
-
+    if (!g_BCOSConfig.enableDAG())
+    {
+        // return an empty vector (all object is nullptr) means every tx are conflict all
+        return txsCriticals;
+    }
     mutex tableMutex;
 
     // parallel to extract critical fields

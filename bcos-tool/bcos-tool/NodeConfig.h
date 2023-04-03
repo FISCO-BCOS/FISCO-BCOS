@@ -240,13 +240,18 @@ protected:
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
+
     virtual void loadFailOverConfig(
         boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
     virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
 
+    // load config.genesis
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
+
+    // load config.ini
+    void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);
 
     std::string getServiceName(boost::property_tree::ptree const& _pt,
         std::string const& _configSection, std::string const& _objName,
