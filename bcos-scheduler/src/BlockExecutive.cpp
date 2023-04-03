@@ -583,7 +583,10 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     Error::Ptr&& error, uint64_t startTimeStamp, const std::string& primaryKey) {
                     if (error)
                     {
-                        ++status->failed;
+                        {
+                            WriteGuard lock(status->x_lock);
+                            ++status->failed;
+                        }
                         SCHEDULER_LOG(ERROR)
                             << BLOCK_NUMBER(number())
                             << "scheduler asyncPrepare storage error: " << error->errorMessage();
@@ -591,7 +594,11 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             "asyncPrepare block error: " + error->errorMessage()));
                         return;
                     }
-                    ++status->success;
+                    else
+                    {
+                        WriteGuard lock(status->x_lock);
+                        ++status->success;
+                    }
 
                     SCHEDULER_LOG(DEBUG)
                         << BLOCK_NUMBER(number())
