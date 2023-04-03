@@ -3,7 +3,7 @@ console_branch="3.0.0"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
-node_list="node0 node1 node2 node3"
+node_list="node0 node1 node2 node3 node4"
 LOG_ERROR() {
     local content=${1}
     echo -e "\033[31m ${content}\033[0m"
@@ -184,7 +184,6 @@ expand_node()
     sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:30304",/' config/nodes.json.tmp > config/nodes.json
     cat config/nodes.json
     bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} "${sm_option}"
-    bash console
     LOG_INFO "expand node success..."
     bash ${current_path}/nodes/127.0.0.1/node4/start.sh
     nodeid=$(cat ${current_path}/nodes/127.0.0.1/node4/conf/node.nodeid)
@@ -217,6 +216,7 @@ LOG_INFO "======== clear node after non-sm test success ========"
 # sm test
 LOG_INFO "======== check sm case ========"
 init "-s"
+expand_node "-s"
 check_consensus
 config_console "true"
 send_transactions ${txs_num}
