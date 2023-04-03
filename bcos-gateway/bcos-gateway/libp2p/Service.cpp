@@ -487,18 +487,24 @@ void Service::asyncSendMessageByNodeID(
             return;
         }
 
-        RecursiveGuard l(x_sessions);
-        auto it = m_sessions.find(nodeID);
+        P2PSession::Ptr session;
+        {
+            RecursiveGuard lock(x_sessions);
+            auto it = m_sessions.find(nodeID);
+            if (it != m_sessions.end() && it->second->active())
+            {
+                session = it->second;
+            }
+        }
 
-        if (it != m_sessions.end() && it->second->active())
+        if (session)
         {
             if (message->seq() == 0)
             {
                 message->setSeq(m_messageFactory->newSeq());
             }
-            auto session = it->second;
             // for compatibility_version consideration
-            sendMessageToSession(session, message, options, callback);
+            sendMessageToSession(std::move(session), message, options, callback);
         }
         else
         {
