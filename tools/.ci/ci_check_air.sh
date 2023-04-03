@@ -167,7 +167,8 @@ check_sync()
 expand_node()
 {
     LOG_INFO "expand node..."
-    cd ${current_path}
+    cd ${current_path}/BcosAirBuilder
+    rm -rf config
     mkdir config
     cp -r ${current_path}/nodes/ca config/
     cp ${current_path}/nodes/127.0.0.1/node0/config.ini config/

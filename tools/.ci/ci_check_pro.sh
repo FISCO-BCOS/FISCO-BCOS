@@ -194,6 +194,7 @@ check_sync()
 expand_node()
 {
     cd ${current_path}/BcosBuilder/pro
+    rm -rf config-expand.toml
     LOG_INFO "expand node..."
     cp conf/config-build-example.toml config-expand.toml
     local sed_cmd="sed -i"
