@@ -3,6 +3,7 @@
 #include "Storage.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/NullLock.h>
+#include <oneapi/tbb/parallel_for_each.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -14,6 +15,7 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <mutex>
+#include <range/v3/view/transform.hpp>
 #include <thread>
 #include <type_traits>
 #include <utility>

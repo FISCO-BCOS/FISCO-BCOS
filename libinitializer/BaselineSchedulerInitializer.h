@@ -42,8 +42,7 @@ private:
         transaction_executor::StateValue, storage2::rocksdb::StateKeyResolver,
         storage2::rocksdb::StateValueResolver>
         m_rocksDBStorage;
-    bcos::ledger::LedgerImpl2<Hasher, decltype(m_rocksDBStorage), decltype(*m_blockFactory)>
-        m_ledger;
+    bcos::ledger::LedgerImpl2<Hasher, decltype(m_rocksDBStorage)> m_ledger;
 
     MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)> m_multiLayerStorage;
 

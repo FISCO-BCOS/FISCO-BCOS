@@ -31,6 +31,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
@@ -188,6 +189,7 @@ public:
 
 private:
     bool m_running{false};
+    tbb::task_group m_taskGroup;
 
     int32_t m_waitConnectFinishTimeout = 30000;
     std::string m_moduleName;
@@ -217,7 +219,6 @@ private:
     // http server
     std::shared_ptr<bcos::boostssl::http::HttpServer> m_httpServer;
 
-private:
     // mutex for m_sessions
     mutable boost::shared_mutex x_mutex;
     // all active sessions

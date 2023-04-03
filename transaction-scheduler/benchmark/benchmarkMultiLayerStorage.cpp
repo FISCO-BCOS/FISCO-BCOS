@@ -77,7 +77,8 @@ static void read1(benchmark::State& state)
         for (auto const& it : state)
         {
             [[maybe_unused]] auto data =
-                co_await storage2::readOne(view, fixture.allKeys[((i++) + dataCount) % dataCount]);
+                co_await storage2::readOne(view, fixture.allKeys[(i + dataCount) % dataCount]);
+            ++i;
         }
 
         co_return;
@@ -96,7 +97,8 @@ static void read10(benchmark::State& state)
         for (auto const& it : state)
         {
             [[maybe_unused]] auto data =
-                co_await storage2::readOne(view, fixture.allKeys[((i++) + dataCount) % dataCount]);
+                co_await storage2::readOne(view, fixture.allKeys[(i + dataCount) % dataCount]);
+            ++i;
         }
 
         co_return;
