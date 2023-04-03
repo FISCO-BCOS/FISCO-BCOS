@@ -477,6 +477,20 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             // TODO: check if needed
             // jResp["input"] = toHexStringWithPrefix(transaction->input());
 
+            if (requireProof) [[unlikely]]
+            {
+                auto ledger = nodeService->ledger();
+                ledger->asyncGetTransactionReceiptByHash(txHash, true,
+                    [&respFunc, &jResp](
+                        auto&& error, [[maybe_unused]] auto&& receipt, auto&& merkle) {
+                        // ledger logic: if error, return empty merkle
+                        // for compatibility
+                        JsonRpcImpl_2_0::addProofToResponse(jResp, "txReceiptProof", merkle);
+                        JsonRpcImpl_2_0::addProofToResponse(jResp, "receiptProof", merkle);
+                        respFunc(nullptr, jResp);
+                    });
+                co_return;
+            }
             respFunc(nullptr, jResp);
         }
         catch (bcos::Error& e)
