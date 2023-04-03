@@ -91,6 +91,7 @@ public:
     const BlockContext& blockContext() { return m_blockContext; }
     const BlockContext& blockContextReference() { return m_blockContext; }
 
+
     int64_t contextID() const { return m_contextID; }
     int64_t seq() const { return m_seq; }
 
@@ -136,6 +137,9 @@ public:
     VMSchedule const& vmSchedule() const { return m_blockContext.vmSchedule(); }
 
     bool isWasm() const { return m_blockContext.isWasm(); }
+
+    bool hasContractTableChanged() { return m_hasContractTableChanged; }
+    void setContractTableChanged() { m_hasContractTableChanged = true; }
 
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
@@ -231,6 +235,8 @@ protected:
 
     bcos::storage::Recoder::Ptr m_recoder;
     std::shared_ptr<storage::StorageWrapper> m_storageWrapper;
+
+    bool m_hasContractTableChanged = false;
 };
 
 }  // namespace executor

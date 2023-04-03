@@ -75,6 +75,7 @@ CallParameters::UniquePtr ExecutiveState::go()
     // But why output->context & output->seq here always be 0 ?????
     output->contextID = m_contextID;
     output->seq = m_seq;
+    output->hasContractTableChanged = m_executive->hasContractTableChanged();
 
     EXECUTOR_LOG(DEBUG) << "DMC Execute tx done" << output->toString();
     return output;

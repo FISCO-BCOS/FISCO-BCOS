@@ -66,6 +66,7 @@ struct CallParameters
     bool delegateCall = false;
     bytes delegateCallCode;
     std::string delegateCallSender;
+    bool hasContractTableChanged = false;
 
     std::string toString()
     {
@@ -109,7 +110,8 @@ struct CallParameters
            << "staticCall:" << staticCall << "|"
            << "create :" << create << "|"
            << "delegateCall:" << delegateCall << "|"
-           << "delegateCallSender" << delegateCallSender ;
+           << "delegateCallSender" << delegateCallSender  << "|"
+            << "hasContractTableChanged" << hasContractTableChanged;
         // clang-format on
         ss << "|logEntries: ";
         for (const auto& logEntry : logEntries)

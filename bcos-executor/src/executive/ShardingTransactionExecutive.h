@@ -38,6 +38,8 @@ public:
 
     CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override;
 
+    CallParameters::UniquePtr resume() override;
+
     TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, bool useCoroutine = true) override
     {

@@ -301,6 +301,8 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
 bool HostContext::setCode(bytes code)
 {
+    m_executive->setContractTableChanged();
+
     // set code will cause exception when exec revert
     // new logic
     if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
