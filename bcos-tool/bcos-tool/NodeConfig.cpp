@@ -73,6 +73,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     // loadSecurityConfig before loadStorageSecurityConfig for deciding whether to use HSM
     loadSecurityConfig(_pt);
     loadStorageSecurityConfig(_pt);
+    loadExecutorNormalConfig(_pt);
 
     loadFailOverConfig(_pt, _enforceMemberID);
     loadStorageConfig(_pt);
@@ -914,6 +915,15 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
                          << LOG_KV("authAdminAccount", m_authAdminAddress)
                          << LOG_KV("ismSerialExecute", m_isSerialExecute);
+}
+
+// load config.ini
+void NodeConfig::loadExecutorNormalConfig(boost::property_tree::ptree const& _configIni)
+{
+    bool enableDag = _configIni.get<bool>("executor.enable_dag", true);
+    g_BCOSConfig.setEnableDAG(enableDag);
+    NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorNormalConfig: config.ini")
+                         << LOG_KV("enableDag", enableDag);
 }
 
 // Note: make sure the consensus param checker is consistent with the precompiled param checker

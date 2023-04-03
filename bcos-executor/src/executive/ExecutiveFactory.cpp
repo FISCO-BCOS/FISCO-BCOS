@@ -41,6 +41,7 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
     std::shared_ptr<TransactionExecutive> executive;
     if (useCoroutine)
     {
+        /*
         if (m_isTiKVStorage)
         {
             // this logic is just for version lesser than 3.3.0, bug fix
@@ -49,9 +50,10 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
         }
         else
         {
-            executive = std::make_shared<CoroutineTransactionExecutive>(
-                m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
-        }
+         */
+        executive = std::make_shared<CoroutineTransactionExecutive>(
+            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        //}
     }
     else
     {
@@ -65,7 +67,7 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
 
 void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
 {
-    // TODO: register User developed Precompiled contract
+    // TODO: register User developed Precompiled contract if needed
     // registerUserPrecompiled(context);
 }
 

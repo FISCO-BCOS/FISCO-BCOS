@@ -107,7 +107,7 @@ public:
         }
         else
         {
-            return 3000000000;  // TODO: add config
+            return 3000000000;
         }
     }
 

@@ -583,7 +583,10 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     Error::Ptr&& error, uint64_t startTimeStamp, const std::string& primaryKey) {
                     if (error)
                     {
-                        ++status->failed;
+                        {
+                            WriteGuard lock(status->x_lock);
+                            ++status->failed;
+                        }
                         SCHEDULER_LOG(ERROR)
                             << BLOCK_NUMBER(number())
                             << "scheduler asyncPrepare storage error: " << error->errorMessage();
@@ -591,7 +594,11 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             "asyncPrepare block error: " + error->errorMessage()));
                         return;
                     }
-                    ++status->success;
+                    else
+                    {
+                        WriteGuard lock(status->x_lock);
+                        ++status->success;
+                    }
 
                     SCHEDULER_LOG(DEBUG)
                         << BLOCK_NUMBER(number())
@@ -1559,7 +1566,6 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             });
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
-        // TODO: Slow wait!
         dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
             auto executor = m_scheduler->executorManager()->dispatchExecutor(address);
             if (!executor)
@@ -1682,7 +1688,7 @@ void BlockExecutive::serialPrepareExecutor()
     if (needDetectDeadlock && !allFinished)
     {
         bool needRevert = false;
-        // detect deadlock and revert the first tx TODO: revert many tx in one DMC round
+        // The code below can be optimized by reverting many tx in one DMC round
         for (auto& it : m_dmcExecutors)
         {
             const auto& address = it.first;

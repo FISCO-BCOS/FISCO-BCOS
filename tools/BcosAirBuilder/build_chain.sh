@@ -1292,6 +1292,9 @@ generate_common_ini() {
     ; min block generation time(ms)
     min_seal_time=500
 
+[executor]
+    enable_dag=true
+
 [storage]
     data_path=data
     enable_cache=true

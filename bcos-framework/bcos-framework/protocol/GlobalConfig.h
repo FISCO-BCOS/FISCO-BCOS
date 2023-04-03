@@ -79,6 +79,9 @@ public:
     void setStorageType(std::string const& _storageType) { m_storageType = _storageType; }
     std::string const& storageType() const { return m_storageType; }
 
+    void setEnableDAG(bool _enableDAG) { m_enableDAG = _enableDAG; }
+    bool enableDAG() const { return m_enableDAG; }
+
     BlockVersion minSupportedVersion() const { return m_minSupportedVersion; }
     BlockVersion maxSupportedVersion() const { return m_maxSupportedVersion; }
 
@@ -90,6 +93,7 @@ private:
 
     ProtocolInfoCodec::Ptr m_codec;
     std::string m_storageType;
+    bool m_enableDAG = true;
 };
 }  // namespace protocol
 }  // namespace bcos
