@@ -7,26 +7,32 @@
 namespace bcos::transaction_scheduler
 {
 
-template <transaction_executor::StateStorage Storage, bool enableReadSet = true,
-    bool enableWriteSet = true>
+template <transaction_executor::StateStorage Storage>
 class ReadWriteSetStorage
 {
 private:
-    using Empty = std::monostate;
     Storage& m_storage;
-    [[no_unique_address]] std::conditional_t<enableReadSet,
-        std::set<typename Storage::Key, std::less<>>, Empty>
-        m_readSet;
-    [[no_unique_address]] std::conditional_t<enableWriteSet,
-        std::set<typename Storage::Key, std::less<>>, Empty>
-        m_writeSet;
-
-    void putSet(decltype(m_readSet)& set, auto const& key)
+    struct ReadWriteFlag
     {
-        auto it = set.lower_bound(key);
-        if (it == set.end() || *it != key)
+        bool read = false;
+        bool write = false;
+    };
+    std::map<typename Storage::Key, ReadWriteFlag, std::less<>> m_readWriteSet;
+    void putSet(bool write, auto const& key)
+    {
+        auto it = m_readWriteSet.lower_bound(key);
+        if (it == m_readWriteSet.end() || it->first != key)
         {
-            set.emplace_hint(it, key);
+            it = m_readWriteSet.emplace_hint(it, key, ReadWriteFlag{});
+        }
+
+        if (write)
+        {
+            it->second.write = true;
+        }
+        else
+        {
+            it->second.read = true;
         }
     }
 
@@ -38,24 +44,31 @@ public:
     // RAW means read after write
     bool hasRAWIntersection(const ReadWriteSetStorage& rhs)
     {
-        auto const& lhsSet = m_writeSet;
-        auto const& rhsSet = rhs.m_readSet;
+        auto const& lhsSet = m_readWriteSet;
+        auto const& rhsSet = rhs.m_readWriteSet;
 
         if (RANGES::empty(lhsSet) || RANGES::empty(rhsSet))
         {
             return false;
         }
 
-        if ((RANGES::back(lhsSet) < RANGES::front(rhsSet)) ||
-            (RANGES::front(lhsSet) > RANGES::back(rhsSet)))
+        if ((RANGES::back(lhsSet).first < RANGES::front(rhsSet).first) ||
+            (RANGES::front(lhsSet).first > RANGES::back(rhsSet).first))
         {
             return false;
         }
 
-        auto lBegin = RANGES::begin(lhsSet);
-        auto lEnd = RANGES::end(lhsSet);
-        auto rBegin = RANGES::begin(rhsSet);
-        auto rEnd = RANGES::end(rhsSet);
+        auto lhsRange = lhsSet |
+                        RANGES::views::filter([](auto& pair) { return pair.second.write; }) |
+                        RANGES::views::keys;
+        auto rhsRange = rhsSet |
+                        RANGES::views::filter([](auto& pair) { return pair.second.read; }) |
+                        RANGES::views::keys;
+
+        auto lBegin = RANGES::begin(lhsRange);
+        auto lEnd = RANGES::end(lhsRange);
+        auto rBegin = RANGES::begin(rhsRange);
+        auto rEnd = RANGES::end(rhsRange);
 
         // O(lhsSet.size() + rhsSet.size())
         while (lBegin != lEnd && rBegin != rEnd)
@@ -80,12 +93,9 @@ public:
     auto read(RANGES::input_range auto const& keys)
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.read(keys))>>
     {
-        if constexpr (enableReadSet)
+        for (auto&& key : keys)
         {
-            for (auto&& key : keys)
-            {
-                putSet(m_readSet, key);
-            }
+            putSet(false, key);
         }
         co_return co_await m_storage.read(keys);
     }
@@ -94,12 +104,9 @@ public:
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.write(
             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))>>
     {
-        if constexpr (enableWriteSet)
+        for (auto&& key : keys)
         {
-            for (auto&& key : keys)
-            {
-                putSet(m_writeSet, std::forward<decltype(key)>(key));
-            }
+            putSet(true, std::forward<decltype(key)>(key));
         }
         co_return co_await m_storage.write(
             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
@@ -108,12 +115,9 @@ public:
     auto remove(RANGES::input_range auto const& keys)
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.remove(keys))>>
     {
-        if constexpr (enableWriteSet)
+        for (auto&& key : keys)
         {
-            for (auto&& key : keys)
-            {
-                putSet(m_writeSet, std::forward<decltype(key)>(key));
-            }
+            putSet(true, std::forward<decltype(key)>(key));
         }
         co_return co_await m_storage.remove(keys);
     }

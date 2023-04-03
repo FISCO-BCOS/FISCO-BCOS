@@ -50,9 +50,12 @@ public:
     using Ptrs = std::vector<std::shared_ptr<WsSession>>;
 
 public:
-    WsSession(std::string _moduleName = "DEFAULT");
+    WsSession(tbb::task_group& taskGroup, std::string _moduleName = "DEFAULT");
 
-    virtual ~WsSession() { WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this); }
+    virtual ~WsSession() noexcept
+    {
+        WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this);
+    }
 
     void drop(uint32_t _reason);
 
@@ -177,6 +180,7 @@ public:
     };
 
 protected:
+    tbb::task_group& m_taskGroup;
     // flag for message that need to check respond packet like p2pmessage
     bool m_needCheckRspPacket = false;
     //
@@ -212,7 +216,7 @@ protected:
     std::shared_ptr<MessageFaceFactory> m_messageFactory;
     // thread pool
     // std::shared_ptr<bcos::ThreadPool> m_threadPool;
-    tbb::task_group m_asyncGroup;
+
     // ioc
     std::shared_ptr<boost::asio::io_context> m_ioc;
     // send message queue
@@ -229,9 +233,9 @@ public:
     virtual ~WsSessionFactory() = default;
 
 public:
-    virtual WsSession::Ptr createSession(std::string _moduleName)
+    virtual WsSession::Ptr createSession(tbb::task_group& taskGroup, std::string _moduleName)
     {
-        auto session = std::make_shared<WsSession>(_moduleName);
+        auto session = std::make_shared<WsSession>(taskGroup, _moduleName);
         return session;
     }
 };

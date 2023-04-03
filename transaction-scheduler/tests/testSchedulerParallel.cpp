@@ -154,17 +154,15 @@ BOOST_AUTO_TEST_CASE(conflict)
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
 
-        auto count = 64;
-        auto transactions =
-            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int index) {
-                auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
-                    [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
-                auto num = boost::lexical_cast<std::string>(index);
-                transaction->mutableInner().data.input.assign(num.begin(), num.end());
+        constexpr static auto count = 128;
+        auto transactions = RANGES::views::iota(0, count) | RANGES::views::transform([](int index) {
+            auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
+                [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+            auto num = boost::lexical_cast<std::string>(index);
+            transaction->mutableInner().data.input.assign(num.begin(), num.end());
 
-                return transaction;
-            }) |
-            RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+            return transaction;
+        }) | RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         auto receipts = co_await scheduler.execute(blockHeader,
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));

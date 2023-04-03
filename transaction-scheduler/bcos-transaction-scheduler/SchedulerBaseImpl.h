@@ -1,5 +1,6 @@
 #pragma once
 #include "MultiLayerStorage.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
@@ -78,8 +79,7 @@ public:
     task::Task<void> commit() { co_await m_multiLayerStorage.mergeAndPopImmutableBack(); }
 
     task::Task<protocol::TransactionReceipt::Ptr> call(
-        protocol::IsBlockHeader auto const& blockHeader,
-        protocol::IsTransaction auto const& transaction)
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction)
     {
         auto view = m_multiLayerStorage.fork(false);
         view.newTemporaryMutable();

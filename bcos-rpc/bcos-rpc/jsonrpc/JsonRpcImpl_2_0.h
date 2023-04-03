@@ -179,7 +179,7 @@ private:
     };
 };
 
-void toJsonResp(Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr);
+void toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const& transactionPtr);
 void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
 void toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, bool _onlyTxHash);
 void toJsonResp(Json::Value& jResp, std::string_view _txHash, protocol::TransactionStatus status,

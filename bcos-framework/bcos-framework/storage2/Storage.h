@@ -15,34 +15,32 @@ namespace bcos::storage2
 {
 
 template <class IteratorType>
-concept ReadIterator = requires(IteratorType&& iterator)
-{
-    requires std::convertible_to < task::AwaitableReturnType<decltype(iterator.next())>,
-    bool > ;
-    requires std::same_as < typename task::AwaitableReturnType<decltype(iterator.key())>,
-    typename IteratorType::Key > ;
-    requires std::same_as < typename task::AwaitableReturnType<decltype(iterator.value())>,
-    typename IteratorType::Value > ;
-    requires std::convertible_to < task::AwaitableReturnType<decltype(iterator.hasValue())>,
-    bool > ;
-};
+concept ReadIterator =
+    requires(IteratorType&& iterator) {
+        requires std::convertible_to<task::AwaitableReturnType<decltype(iterator.next())>, bool>;
+        requires std::same_as<typename task::AwaitableReturnType<decltype(iterator.key())>,
+            typename IteratorType::Key>;
+        requires std::same_as<typename task::AwaitableReturnType<decltype(iterator.value())>,
+            typename IteratorType::Value>;
+        requires std::convertible_to<task::AwaitableReturnType<decltype(iterator.hasValue())>,
+            bool>;
+    };
 
 template <class StorageType>
-concept ReadableStorage = requires(StorageType&& impl)
-{
-    typename StorageType::Key;
-    requires ReadIterator<task::AwaitableReturnType<decltype(impl.read(
-        std::declval<std::vector<typename StorageType::Key>>()))>>;
-};
+concept ReadableStorage = requires(StorageType&& impl) {
+                              typename StorageType::Key;
+                              requires ReadIterator<task::AwaitableReturnType<decltype(impl.read(
+                                  std::declval<std::vector<typename StorageType::Key>>()))>>;
+                          };
 
 template <class StorageType>
-concept WriteableStorage = requires(StorageType&& impl)
-{
-    typename StorageType::Key;
-    typename StorageType::Value;
-    requires task::IsAwaitable<decltype(impl.write(
-        std::vector<typename StorageType::Key>(), std::vector<typename StorageType::Value>()))>;
-};
+concept WriteableStorage =
+    requires(StorageType&& impl) {
+        typename StorageType::Key;
+        typename StorageType::Value;
+        requires task::IsAwaitable<decltype(impl.write(
+            std::vector<typename StorageType::Key>(), std::vector<typename StorageType::Value>()))>;
+    };
 
 struct STORAGE_BEGIN_TYPE
 {
@@ -50,22 +48,21 @@ struct STORAGE_BEGIN_TYPE
 inline constexpr STORAGE_BEGIN_TYPE STORAGE_BEGIN{};
 
 template <class StorageType>
-concept SeekableStorage = requires(StorageType&& impl)
-{
-    typename StorageType::Key;
-    requires ReadIterator<
-        task::AwaitableReturnType<decltype(impl.seek(std::declval<typename StorageType::Key>()))>>;
-    requires ReadIterator<
-        task::AwaitableReturnType<decltype(impl.seek(std::declval<STORAGE_BEGIN_TYPE>()))>>;
-};
+concept SeekableStorage =
+    requires(StorageType&& impl) {
+        typename StorageType::Key;
+        requires ReadIterator<task::AwaitableReturnType<decltype(impl.seek(
+            std::declval<typename StorageType::Key>()))>>;
+        requires ReadIterator<
+            task::AwaitableReturnType<decltype(impl.seek(std::declval<STORAGE_BEGIN_TYPE>()))>>;
+    };
 
 template <class StorageType>
-concept ErasableStorage = requires(StorageType&& impl)
-{
-    typename StorageType::Key;
-    requires task::IsAwaitable<decltype(impl.remove(
-        std::declval<std::vector<typename StorageType::Key>>()))>;
-};
+concept ErasableStorage = requires(StorageType&& impl) {
+                              typename StorageType::Key;
+                              requires task::IsAwaitable<decltype(impl.remove(
+                                  std::declval<std::vector<typename StorageType::Key>>()))>;
+                          };
 
 template <storage2::ReadableStorage Storage>
 struct ReadIteratorTrait
@@ -86,13 +83,12 @@ template <storage2::SeekableStorage Storage>
 using SeekIteratorType = typename SeekIteratorTrait<Storage>::type;
 
 template <class Iterator>
-concept RangeableIterator = requires(Iterator&& iterator)
-{
-    // clang-format off
-    requires storage2::ReadIterator<Iterator>;
-    { iterator.range() } -> RANGES::range;
-    // clang-format on
-};
+concept RangeableIterator = requires(Iterator&& iterator) {
+                                requires storage2::ReadIterator<Iterator>;
+                                {
+                                    iterator.range()
+                                    } -> RANGES::range;
+                            };
 
 inline auto singleView(auto&& value)
 {
@@ -152,5 +148,45 @@ inline task::Task<void> removeOne(ErasableStorage auto& storage, auto const& key
     co_await storage.remove(storage2::singleView(key));
     co_return;
 }
+
+namespace detail
+{
+template <class FromStorage, class ToStorage>
+concept HasMemberMergeMethod =
+    requires(FromStorage& fromStorage, ToStorage& toStorage) {
+        requires SeekableStorage<FromStorage>;
+        requires task::IsAwaitable<decltype(toStorage.merge(fromStorage))>;
+    };
+struct merge
+{
+    template <class ToStorage>
+        requires WriteableStorage<ToStorage> && ErasableStorage<ToStorage>
+    task::Task<void> operator()(SeekableStorage auto& fromStorage, ToStorage& toStorage) const
+    {
+        if constexpr (HasMemberMergeMethod<std::remove_cvref_t<decltype(fromStorage)>,
+                          std::remove_cvref_t<decltype(toStorage)>>)
+        {
+            co_await toStorage.merge(fromStorage);
+        }
+        else
+        {
+            auto it = co_await fromStorage.seek(storage2::STORAGE_BEGIN);
+            while (co_await it.next())
+            {
+                auto&& key = co_await it.key();
+                if (co_await it.hasValue())
+                {
+                    co_await storage2::writeOne(toStorage, key, co_await it.value());
+                }
+                else
+                {
+                    co_await storage2::removeOne(toStorage, key);
+                }
+            }
+        }
+    }
+};
+}  // namespace detail
+constexpr inline detail::merge merge{};
 
 }  // namespace bcos::storage2

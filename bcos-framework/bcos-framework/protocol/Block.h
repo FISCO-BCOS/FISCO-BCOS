@@ -108,7 +108,7 @@ public:
     virtual NonceListPtr nonces() const
     {
         return std::make_shared<NonceList>(
-            RANGES::iota_view<uint64_t, uint64_t>(0LU, transactionsSize()) |
+            RANGES::iota_view<size_t, size_t>(0LU, transactionsSize()) |
             RANGES::views::transform([this](uint64_t index) {
                 auto transaction = this->transaction(index);
                 return transaction->nonce();

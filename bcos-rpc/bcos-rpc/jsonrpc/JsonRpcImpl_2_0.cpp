@@ -209,35 +209,30 @@ void JsonRpcImpl_2_0::parseRpcResponseJson(
         JsonRpcError::InvalidRequest, "The JSON sent is not a valid Response object."));
 }
 
-void bcos::rpc::toJsonResp(
-    Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr)
+void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const& transactionPtr)
 {
     // transaction version
-    jResp["version"] = _transactionPtr->version();
+    jResp["version"] = transactionPtr.version();
     // transaction hash
-    jResp["hash"] = toHexStringWithPrefix(_transactionPtr->hash());
+    jResp["hash"] = toHexStringWithPrefix(transactionPtr.hash());
     // transaction nonce
-    jResp["nonce"] = toHex(_transactionPtr->nonce());
+    jResp["nonce"] = toHex(transactionPtr.nonce());
     // blockLimit
-    jResp["blockLimit"] = _transactionPtr->blockLimit();
+    jResp["blockLimit"] = transactionPtr.blockLimit();
     // the receiver address
-    jResp["to"] = string(_transactionPtr->to());
+    jResp["to"] = string(transactionPtr.to());
     // the sender address
-    jResp["from"] = toHexStringWithPrefix(_transactionPtr->sender());
-    // the input data
-    jResp["input"] = toHexStringWithPrefix(_transactionPtr->input());
+    jResp["from"] = toHexStringWithPrefix(transactionPtr.sender());
     // importTime
-    jResp["importTime"] = _transactionPtr->importTime();
+    jResp["importTime"] = transactionPtr.importTime();
     // the chainID
-    jResp["chainID"] = std::string(_transactionPtr->chainId());
+    jResp["chainID"] = std::string(transactionPtr.chainId());
     // the groupID
-    jResp["groupID"] = std::string(_transactionPtr->groupId());
+    jResp["groupID"] = std::string(transactionPtr.groupId());
     // the abi
-    jResp["abi"] = std::string(_transactionPtr->abi());
-    // extraData
-    jResp["extraData"] = std::string(_transactionPtr->extraData());
+    jResp["abi"] = std::string(transactionPtr.abi());
     // the signature
-    jResp["signature"] = toHexStringWithPrefix(_transactionPtr->signatureData());
+    jResp["signature"] = toHexStringWithPrefix(transactionPtr.signatureData());
 }
 
 void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
@@ -373,7 +368,8 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, boo
         }
         else
         {
-            toJsonResp(jTx, block.transaction(index));
+            auto transaction = block.transaction(index);
+            toJsonResp(jTx, *transaction);
         }
         jTxs.append(jTx);
     }
@@ -544,7 +540,7 @@ void JsonRpcImpl_2_0::getTransaction(std::string_view _groupID, std::string_view
                 if (!_transactionsPtr->empty())
                 {
                     auto transactionPtr = (*_transactionsPtr)[0];
-                    toJsonResp(jResp, transactionPtr);
+                    toJsonResp(jResp, *transactionPtr);
                 }
 
                 RPC_IMPL_LOG(TRACE)

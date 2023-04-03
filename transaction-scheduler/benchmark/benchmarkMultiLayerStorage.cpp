@@ -29,7 +29,7 @@ struct Fixture
         // Write count data
         task::syncWait([this](int64_t count) -> task::Task<void> {
             auto view = levelStorage.fork(true);
-            allKeys = RANGES::iota_view<int, int>(0, count) |
+            allKeys = RANGES::views::iota(0, count) |
                       RANGES::views::transform([tableNamePool = &m_tableNamePool](int num) {
                           return transaction_executor::StateKey{
                               storage2::string_pool::makeStringID(*tableNamePool, "test_table"),
@@ -37,13 +37,12 @@ struct Fixture
                       }) |
                       RANGES::to<decltype(allKeys)>();
 
-            auto allValues =
-                RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int num) {
-                    storage::Entry entry;
-                    entry.set(fmt::format("value: {}", num));
+            auto allValues = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
+                storage::Entry entry;
+                entry.set(fmt::format("value: {}", num));
 
-                    return entry;
-                });
+                return entry;
+            });
 
             co_await view.write(allKeys, allValues);
         }(count));

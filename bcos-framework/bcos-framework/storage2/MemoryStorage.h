@@ -3,6 +3,7 @@
 #include "Storage.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/NullLock.h>
+#include <oneapi/tbb/parallel_for_each.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -14,6 +15,7 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <mutex>
+#include <range/v3/view/transform.hpp>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -64,10 +66,8 @@ private:
     using Mutex = std::mutex;
     using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
-
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
-
     struct Data
     {
         KeyType key;
@@ -399,7 +399,7 @@ public:
     task::AwaitableValue<void> write(
         RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, value] : RANGES::zip_view(
+        for (auto&& [key, value] : RANGES::views::zip(
                  std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
         {
             auto [bucket, lock] = getBucket(key);
@@ -498,9 +498,9 @@ public:
         return {};
     }
 
-    void merge(MemoryStorage& from, bool overwrite)
+    task::Task<void> merge(MemoryStorage& from)
     {
-        for (auto bucketPair : RANGES::zip_view(m_buckets, from.m_buckets))
+        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
         {
             auto& [bucket, fromBucket] = bucketPair;
             Lock toLock(bucket.mutex);
@@ -509,27 +509,21 @@ public:
             auto& index = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
 
-            if (overwrite)
+            while (!fromIndex.empty())
             {
-                while (!fromIndex.empty())
+                auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
+                if (!merged)
                 {
-                    auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
-                    if (!merged)
-                    {
-                        index.insert(index.erase(it), fromIndex.extract(fromIndex.begin()));
-                    }
+                    index.insert(index.erase(it), fromIndex.extract(fromIndex.begin()));
                 }
             }
-            else
-            {
-                index.merge(fromIndex);
-            }
         }
+        co_return;
     }
 
     void swap(MemoryStorage& from)
     {
-        for (auto bucketPair : RANGES::zip_view(m_buckets, from.m_buckets))
+        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
         {
             auto& [bucket, fromBucket] = bucketPair;
             Lock toLock(bucket.mutex);
