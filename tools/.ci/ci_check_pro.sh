@@ -212,7 +212,7 @@ expand_node()
     ${sed_cmd1} 's/tars_listen_port=40401/tars_listen_port=40441/' config-expand.toml
     ${sed_cmd1} 's/tars_listen_port=40402/tars_listen_port=40442/' config-expand.toml
     python3  build_chain.py build -c config-expand.toml -O ${current_path}/${output_dir}
-    bash ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/start.sh
+    bash ${current_path}/${output_dir}/127.0.0.1/start_all.sh
     LOG_INFO "expand node success"
 }
 clear_node()
