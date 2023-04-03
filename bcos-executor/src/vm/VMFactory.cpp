@@ -76,12 +76,12 @@ std::shared_ptr<evmoneCodeAnalysis> VMFactory::get(
 {
     if (revision == m_revision)
     {
-        ReadGuard guard(m_cacheMutex);
-        auto analysis = m_cache.find(key);
-        guard.unlock();
-        if (analysis != m_cache.end())
+        m_cacheMutex.lock();
+        auto analysis = m_cache.get(key);
+        m_cacheMutex.unlock();
+        if (analysis)
         {
-            return analysis->second;
+            return analysis.value();
         }
     }
     return nullptr;
@@ -90,14 +90,16 @@ std::shared_ptr<evmoneCodeAnalysis> VMFactory::get(
 void VMFactory::put(const crypto::HashType& key,
     const std::shared_ptr<evmoneCodeAnalysis>& analysis, evmc_revision revision) noexcept
 {
-    WriteGuard guard(m_cacheMutex);
     if (revision != m_revision)
     {
+        std::unique_lock lock(m_cacheMutex);
         m_cache.clear();
-        m_revision = revision;
     }
-
-    m_cache.emplace(key, analysis);
+    m_revision = revision;
+    {
+        std::unique_lock lock(m_cacheMutex);
+        m_cache.insert(key, analysis);
+    }
 }
 
 }  // namespace bcos::executor
