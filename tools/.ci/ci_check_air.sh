@@ -166,6 +166,7 @@ check_sync()
 
 expand_node()
 {
+    sm_option="${1}"
     LOG_INFO "expand node..."
     cd ${current_path}
     rm -rf config
@@ -182,10 +183,12 @@ expand_node()
     ${sed_cmd}  's/listen_port=20200/listen_port=20204/g' config/config.ini
     sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:30304",/' config/nodes.json.tmp > config/nodes.json
     cat config/nodes.json
-    bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} 
+    bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} "${sm_option}"
+    bash console
     LOG_INFO "expand node success..."
     bash ${current_path}/nodes/127.0.0.1/node4/start.sh
-
+    nodeid=$(cat ${current_path}/nodes/127.0.0.1/node4/conf/node.nodeid)
+    bash console/console.sh addObserver "${nodeid}"
 }
 
 clear_node()
@@ -219,4 +222,5 @@ config_console "true"
 send_transactions ${txs_num}
 check_sync ${txs_num}
 stop_node
+clear_node
 LOG_INFO "======== check sm case success ========"
