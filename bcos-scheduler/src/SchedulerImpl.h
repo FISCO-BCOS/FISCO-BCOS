@@ -83,13 +83,6 @@ public:
     void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) override;
 
-    [[deprecated("Use SchedulerImpl::registerExecutor")]] void registerExecutor(std::string name,
-        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        std::function<void(Error::Ptr&&)> callback) override;
-
-    void unregisterExecutor(
-        const std::string& name, std::function<void(Error::Ptr&&)> callback) override;
-
     void reset(std::function<void(Error::Ptr&&)> callback) override;
     // register a block number receiver
     virtual void registerBlockNumberReceiver(

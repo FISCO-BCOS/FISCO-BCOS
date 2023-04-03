@@ -37,11 +37,6 @@ public:
         std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback) override;
     void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback) override;
-    void registerExecutor(std::string name,
-        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        std::function<void(Error::Ptr&&)> callback) override;
-    void unregisterExecutor(
-        const std::string& name, std::function<void(Error::Ptr&&)> callback) override;
     void reset(std::function<void(Error::Ptr&&)> callback) override;
     void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override;
