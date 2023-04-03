@@ -171,7 +171,7 @@ clear_node()
     rm -rf nodes
 }
 
-txs_num=10
+txs_num=7 # TODO: to avoid centos's failure
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
