@@ -151,17 +151,40 @@ check_sync()
     LOG_INFO "check sync..."
     expected_block_number="${1}"
     cd ${current_path}/nodes/127.0.0.1
-    bash node0/stop.sh && rm -rf node0/log && rm -rf node0/data
-    bash node0/start.sh
+    bash node4/stop.sh && rm -rf node4/log && rm -rf node4/data
+    bash node4/start.sh
     # wait for sync
     sleep 10
-    block_number=$(cat node0/log/* |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
+    block_number=$(cat node4/log/* |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
     if [ "${block_number}" == "${expected_block_number}" ]; then
         LOG_INFO "check_sync success, current blockNumber: ${block_number}"
     else
         exit_node "check_sync error, current blockNumber: ${block_number}, expected_block_number: ${expected_block_number}"
     fi
     LOG_INFO "check sync success..."
+}
+
+expand_node()
+{
+    LOG_INFO "expand node..."
+    cd ${current_path}
+    mkdir config
+    cp -r ${current_path}/nodes/ca config/
+    cp ${current_path}/nodes/127.0.0.1/node0/config.ini config/
+    cp ${current_path}/nodes/127.0.0.1/node0/config.genesis config/
+    cp ${current_path}/nodes/127.0.0.1/node0/nodes.json config/nodes.json.tmp
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
+    ${sed_cmd}  's/listen_port=30300/listen_port=30304/g' config/config.ini
+    ${sed_cmd}  's/listen_port=20200/listen_port=20204/g' config/config.ini
+    sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:30304",/' config/nodes.json.tmp > config/nodes.json
+    cat config/nodes.json
+    bash build_chain.sh -C expand -c config -d config/ca -o nodes/127.0.0.1/node4
+    LOG_INFO "expand node success..."
+    bash ${current_path}/nodes/127.0.0.1/node4/start.sh
+
 }
 
 clear_node()
@@ -175,6 +198,7 @@ txs_num=10
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
+expand_node
 check_consensus
 download_console
 config_console "false"

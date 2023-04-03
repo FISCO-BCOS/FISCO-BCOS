@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_ubuntu:
+  build_mac:
     name: mac ci check
     runs-on: self-hosted-mac
     strategy:
