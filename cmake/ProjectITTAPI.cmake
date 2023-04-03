@@ -1,8 +1,8 @@
 include(ExternalProject)
 
-set(ITT_INSTALL_COMMAND "objcopy --weaken <SOURCE_DIR>/bin/libittnotify.a")
-if(APPLE)
-    set(ITT_INSTALL_COMMAND "true")
+set(ITT_INSTALL_COMMAND "true")
+if(WITH_VTUNE_ITT)
+    set(ITT_INSTALL_COMMAND "objcopy --weaken <CMAKE_CURRENT_SOURCE_DIR>/bin/libittnotify.a")
 endif()
 
 ExternalProject_Add(ittapi_project
