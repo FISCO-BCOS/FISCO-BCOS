@@ -21,8 +21,7 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-utilities/FixedBytes.h>
-#include <bcos-utilities/Ranges.h>
+#include "bcos-crypto/bcos-crypto/KeyCompareTools.h"
 
 #define TREE_LOG(LEVEL)     \
     BCOS_LOG(LEVEL) << LOG_BADGE("TREE") << LOG_KV("consIndex", m_consIndex) \
@@ -77,7 +76,7 @@ namespace bcos
 
             // select the child nodes by tree
             virtual void recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-                                                   ssize_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
+                                                   std::int64_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
                                                    std::int64_t const _startIndex);
             // select the parent nodes by tree
             // _selectAll is true:
@@ -88,78 +87,11 @@ namespace bcos
 
             std::int64_t getNodeIndex(std::int64_t const _consIndex);
 
-            virtual bool getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, ssize_t const _nodeIndex) const;
+            virtual bool getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, std::int64_t const _nodeIndex) const;
 
-            virtual ssize_t getSelectedNodeIndex(ssize_t const _selectedIndex, ssize_t const _offset);
+            virtual std::int64_t getSelectedNodeIndex(std::int64_t const _selectedIndex, std::int64_t const _offset);
 
-            ssize_t getNodeIndexByNodeId(bcos::crypto::NodeIDListPtr _findSet, bcos::crypto::NodeIDPtr _nodeId);
-
-            template<RANGES::bidirectional_range NodesType>
-            requires requires
-            {
-                typename NodesType::value_type;
-                requires requires(typename NodesType::value_type value)
-                {
-                    value->data();
-                };
-            }
-            bool compareTwoNodeIDs(NodesType nodes1, NodesType nodes2)
-            {
-                if(RANGES::size(nodes1) != RANGES::size(nodes2))
-                {
-                    return false;
-                }
-
-                for(auto const& [idx, value] : nodes1 | RANGES::views::enumerate)
-                {
-                    if(nodes2[idx]->data() != value->data())
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-
-            template<RANGES::bidirectional_range NodesType, RANGES::bidirectional_range OutputType>
-            requires requires
-            {
-                typename NodesType::value_type;
-                requires requires(typename NodesType::value_type value)
-                {
-                    value->data();
-                };
-                requires requires
-                {
-                    std::declval<OutputType>().emplace_back(std::declval<typename NodesType::value_type>()->data());
-                };
-            }
-            void extractNodeIDsBytes(NodesType nodes, OutputType& values)
-            {
-                RANGES::for_each(nodes, [&values](auto& node){ values.emplace_back(node->data()); });
-            }
-
-            template<RANGES::bidirectional_range NodesType>
-            requires requires
-            {
-                typename NodesType::value_type;
-                requires requires(typename NodesType::value_type value)
-                {
-                    value->data();
-                };
-            }
-            bool isNodeIDExist(NodesType::value_type node, NodesType nodes)
-            {
-                for(auto const& n : nodes)
-                {
-                    if(n->data() == node->data())
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
+            std::int64_t getNodeIndexByNodeId(bcos::crypto::NodeIDListPtr _findSet, bcos::crypto::NodeIDPtr _nodeId);
 
         protected:
             mutable Mutex m_mutex;

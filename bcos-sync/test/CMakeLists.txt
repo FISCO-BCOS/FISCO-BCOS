@@ -21,7 +21,7 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 set(TEST_BINARY_NAME test-bcos-sync)
 find_package(Protobuf REQUIRED)
 
-add_executable(${TEST_BINARY_NAME} ${SOURCES})
+add_executable(${TEST_BINARY_NAME} ${SOURCES} unittests/utilities/SyncTreeTopologyTest.cpp)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../src ${CMAKE_SOURCE_DIR})
 
 find_package(Boost REQUIRED unit_test_framework)

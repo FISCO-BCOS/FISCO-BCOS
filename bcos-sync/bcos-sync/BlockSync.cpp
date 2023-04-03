@@ -89,7 +89,6 @@ void BlockSync::init()
     m_config->resetConfig(fetcher->ledgerConfig());
     if(true == m_config->enableSendBlockStatusByTree())
     {
-        std::cout << __FILE__ << " " <<__FUNCTION__ << " " << __LINE__ << " " << "updateTreeTopologyNodeInfo" << std::endl;
         updateTreeTopologyNodeInfo();
     }
     BLKSYNC_LOG(INFO) << LOG_DESC("init block sync success");
@@ -410,7 +409,6 @@ void BlockSync::asyncNotifyNewBlock(
         if(true == m_config->enableSendBlockStatusByTree())
         {
             // update nodelist in tree topology
-            std::cout << __FILE__ << " " <<__FUNCTION__ << " " << __LINE__ << " " << "new block, updateTreeTopologyNodeInfo" << std::endl;
             updateTreeTopologyNodeInfo();
         }
     }
@@ -869,7 +867,7 @@ void BlockSync::sendSyncStatusByTree()
         std::cout << node->shortHex() << std::endl;
     }
     auto const& groupNodeList = m_syncTreeTopology->selectNodesForBlockSync(m_config->connectedNodeSet());
-    std::cout << __FILE__ << " " << __FUNCTION__ << " " << __LINE__ << " " << "select nodes:" << std::endl;
+    std::cout << __FILE__ << " " << __FUNCTION__ << " " << __LINE__ << " list size: " << groupNodeList->size() << "select nodes:" << std::endl;
     for(auto node : *groupNodeList)
     {
         std::cout << node->shortHex() << std::endl;
@@ -914,6 +912,20 @@ void BlockSync::updateTreeTopologyNodeInfo()
     });
     RANGES::for_each(m_config->observerNodeList(),
                      [&allNodeIDs](auto& node) { allNodeIDs.emplace_back(node->nodeID()); });
+
+    std::cout << __FILE__ << " " << __FUNCTION__ << " " << __LINE__ << " " << "consensusNodes: " << std::endl;
+    for(auto node : consensusNodeIDs)
+    {
+        std::cout << node->shortHex() << std::endl;
+    }
+    std::cout << __FILE__ << " " << __FUNCTION__ << " " << __LINE__ << " " << "allNodeIDs: " << std::endl;
+    for(auto node : allNodeIDs)
+    {
+        std::cout << node->shortHex() << std::endl;
+    }
+
+    RANGES::sort(consensusNodeIDs.begin(), consensusNodeIDs.end(), [](auto& a, auto &b){ return a->data() < b->data(); });
+    RANGES::sort(allNodeIDs.begin(), allNodeIDs.end(), [](auto& a, auto &b){ return a->data() < b->data(); });
 
     std::cout << __FILE__ << " " << __FUNCTION__ << " " << __LINE__ << " " << "updateAllNodeInfo" << std::endl;
     std::cout << "consensusNodeIDs: " << std::endl;

@@ -26,7 +26,7 @@ using namespace bcos::tool;
 void TreeTopology::updateConsensusNodeInfo(bcos::crypto::NodeIDs _consensusNodes)
 {
     Guard l(m_mutex);
-    if (true == compareTwoNodeIDs(*m_currentConsensusNodes, _consensusNodes))
+    if (true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(*m_currentConsensusNodes, _consensusNodes))
     {
         return;
     }
@@ -50,10 +50,10 @@ void TreeTopology::updateStartAndEndIndex()
  *  -1: the given _nodeId doesn't exist in _findSet
  *   >=0 : the index of the given node
  */
-ssize_t TreeTopology::getNodeIndexByNodeId(bcos::crypto::NodeIDListPtr _findSet, bcos::crypto::NodeIDPtr  _nodeId)
+std::int64_t TreeTopology::getNodeIndexByNodeId(bcos::crypto::NodeIDListPtr _findSet, bcos::crypto::NodeIDPtr  _nodeId)
 {
-    ssize_t nodeIndex{-1};
-    for (ssize_t i = 0; i < static_cast<ssize_t>(_findSet->size()); ++i)
+    std::int64_t nodeIndex{-1};
+    for (std::int64_t i = 0; i < static_cast<std::int64_t>(_findSet->size()); ++i)
     {
         if (_nodeId->data() == (*_findSet)[i]->data())
         {
@@ -70,17 +70,20 @@ ssize_t TreeTopology::getNodeIndexByNodeId(bcos::crypto::NodeIDListPtr _findSet,
  *  false: the given node doesn't locate in the node list
  *  true:  the given node locates in the node list, and assign its node Id to _nodeID
  */
-bool TreeTopology::getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, ssize_t const _nodeIndex) const
+bool TreeTopology::getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, std::int64_t const _nodeIndex) const
 {
-    if (_nodeIndex >= static_cast<ssize_t>(m_currentConsensusNodes->size()))
+    std::cout << __FILE__ << " " << __FUNCTION__ << " " << __LINE__ << " TreeTopology::getNodeIDByIndex, _nodeIndex: " << _nodeIndex << std::endl;
+    if (_nodeIndex >= static_cast<std::int64_t>(m_currentConsensusNodes->size()) || _nodeIndex < 0)
     {
+        std::cout << __FILE__ << " " << __FUNCTION__ << " " << __LINE__ << std::endl;
         return false;
     }
     _nodeID = (*m_currentConsensusNodes)[_nodeIndex];
+    std::cout << __FILE__ << " " << __FUNCTION__ << " " << __LINE__ << std::endl;
     return true;
 }
 
-ssize_t TreeTopology::getSelectedNodeIndex(ssize_t const _selectedIndex, ssize_t const _offset)
+std::int64_t TreeTopology::getSelectedNodeIndex(std::int64_t const _selectedIndex, std::int64_t const _offset)
 {
     return (_selectedIndex + _offset) % m_nodeNum;
 }
@@ -94,16 +97,16 @@ ssize_t TreeTopology::getSelectedNodeIndex(ssize_t const _selectedIndex, ssize_t
  *  3. _peers: the nodeIDs of peers maintained by syncStatus
  */
 void TreeTopology::recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-                                             ssize_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
+                                             std::int64_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
                                              std::int64_t const _startIndex)
 {
     std::cout << __FILE__ << " " << __FUNCTION__ << " " << __LINE__ << " "
         << "_parentIndex: " << _parentIndex << " _startIndex: " << _startIndex << " m_treeWidth: " << m_treeWidth << std::endl;
     // if the node doesn't locate in the group
     bcos::crypto::NodeIDPtr selectedNode;
-    for (ssize_t i = 0; i < m_treeWidth; ++i)
+    for (std::int64_t i = 0; i < m_treeWidth; ++i)
     {
-        ssize_t expectedIndex = _parentIndex * m_treeWidth + i + 1;
+        std::int64_t expectedIndex = _parentIndex * m_treeWidth + i + 1;
         // when expectedIndex is bigger than m_currentConsensusNodes.size(), return
         if (expectedIndex > m_endIndex)
         {
@@ -116,7 +119,7 @@ void TreeTopology::recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _select
             continue;
         }
         // the child node exists in the peers
-        if (true == isNodeIDExist(selectedNode, *_peers))
+        if (_peers->contains(selectedNode) && false == bcos::crypto::KeyCompareTools::isNodeIDExist(selectedNode, *_selectedNodeList))
         {
             _selectedNodeList->emplace_back(selectedNode);
         }
@@ -148,8 +151,23 @@ void TreeTopology::recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _select
 void TreeTopology::selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
                                      bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _nodeIndex,
                                      std::int64_t const _startIndex, bool const _selectAll)
-{
-    ssize_t parentIndex = (_nodeIndex - 1) / m_treeWidth;
+{    // find the parent nodes
+    /*
+     * c node = 4, o node = 7
+     * c o c o c o o o c o o
+     * 1    -1 | (1 - 1) / 3 = 0
+     * 2    -1 | (2 - 1) / 3 = 0
+     * -3   5 | (-3 - 1) / 3 = -1
+     * 3    0 | (3 - 1) / 3 = 0
+     * -1   5 | (-1 - 1) / 3 = -1
+     * 3    2 | (3 - 1) / 3 = 0
+     * 1    5 | (1 - 1) / 3 = 0
+     * 2    5 | (2 - 1) / 3 = 0
+     * -1   9 | (-1 - 1) / 3 = -1
+     * 1    8 | (1 - 1) / 3 = 0
+     * 2    8 | (2 - 1) / 3 = 0
+     */
+    std::int64_t parentIndex = (_nodeIndex - 1) / m_treeWidth;
     // the parentNode is the node-slef
     if (parentIndex == _nodeIndex)
     {
@@ -160,8 +178,23 @@ void TreeTopology::selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNodeLi
     while (parentIndex >= 0)
     {
         // find the parentNode from the peers
+        /*
+         * c node = 4, o node = 7
+         * c o c o c o o o c o o
+         * 1    -1 | (1 - 1) / 3 = 0    | (0 - 1) % 11 = -1
+         * 2    -1 | (2 - 1) / 3 = 0     | (0 - 1) % 11 = -1
+         * -3   5 | (-3 - 1) / 3 = -1
+         * 3    0 | (3 - 1) / 3 = 0        | (0 + 0) % 11 = 0
+         * -1   5 | (-1 - 1) / 3 = -1
+         * 3    2 | (3 - 1) / 3 = 0        | (0 + 2) % 11 = 2
+         * 1    5 | (1 - 1) / 3 = 0        | (0 + 5) % 11 = 5
+         * 2    5 | (2 - 1) / 3 = 0        | (0 + 5) % 11 = 5
+         * -1   9 | (-1 - 1) / 3 = -1
+         * 1    8 | (1 - 1) / 3 = 0        | (0 + 8) % 11 = 8
+         * 2    8 | (2 - 1) / 3 = 0        | (0 + 8) % 11 = 8
+         */
         auto selectedIndex = getSelectedNodeIndex(parentIndex, _startIndex);
-        if (getNodeIDByIndex(selectedNode, selectedIndex) && true == isNodeIDExist(selectedNode, *_peers))
+        if (getNodeIDByIndex(selectedNode, selectedIndex) && true == _peers->contains(selectedNode) && false == bcos::crypto::KeyCompareTools::isNodeIDExist(selectedNode, *_selectedNodeList))
         {
             _selectedNodeList->emplace_back(selectedNode);
             if (!_selectAll)
@@ -209,7 +242,7 @@ bcos::crypto::NodeIDListPtr TreeTopology::selectNodes(bcos::crypto::NodeIDSetPtr
         }
 
         bcos::crypto::NodeIDPtr selectedNode;
-        if (getNodeIDByIndex(selectedNode, _consIndex) && true == isNodeIDExist(selectedNode, *_peers))
+        if (getNodeIDByIndex(selectedNode, _consIndex) && true == _peers->contains(selectedNode) && false == bcos::crypto::KeyCompareTools::isNodeIDExist(selectedNode, *selectedNodeList))
         {
             selectedNodeList->emplace_back(selectedNode);
         }
