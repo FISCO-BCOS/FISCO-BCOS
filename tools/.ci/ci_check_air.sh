@@ -182,7 +182,7 @@ expand_node()
     ${sed_cmd}  's/listen_port=20200/listen_port=20204/g' config/config.ini
     sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:30304",/' config/nodes.json.tmp > config/nodes.json
     cat config/nodes.json
-    bash build_chain.sh -C expand -c config -d config/ca -o nodes/127.0.0.1/node4
+    bash build_chain.sh -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} 
     LOG_INFO "expand node success..."
     bash ${current_path}/nodes/127.0.0.1/node4/start.sh
 
