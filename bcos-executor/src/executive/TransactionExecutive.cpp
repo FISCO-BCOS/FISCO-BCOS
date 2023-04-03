@@ -106,13 +106,11 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     {
         if (input->createSalt)
         {
-            // TODO: Add sender in this process(consider compat with ethereum)
             newAddress = bcos::newEVMAddress(m_hashImpl, input->senderAddress,
                 bytesConstRef(input->data.data(), input->data.size()), *(input->createSalt));
         }
         else
         {
-            // TODO: Add sender in this process(consider compat with ethereum)
             newAddress =
                 bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
         }
@@ -236,7 +234,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
     {
         callResults = go(*hostContext, std::move(callResults));
 
-        // TODO: check if needed
+        // TODO: check this function is ok if we need to use this
         hostContext->sub().refunds +=
             hostContext->vmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
     }

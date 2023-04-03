@@ -70,9 +70,6 @@ CallParameters::UniquePtr ExecutiveState::go()
         break;
     }
 
-    // TODO: debug in executive
-    // Bug: Must force set contextID here to fix bug.
-    // But why output->context & output->seq here always be 0 ?????
     output->contextID = m_contextID;
     output->seq = m_seq;
     output->hasContractTableChanged = m_executive->hasContractTableChanged();

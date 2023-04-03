@@ -46,7 +46,7 @@ enum class VMKind
 class VMFactory
 {
 public:
-    VMFactory(size_t cache_size = c_EVMONE_CACHE_SIZE) : m_cache(cache_size) {}
+    VMFactory(size_t cache_size = c_EVMONE_CACHE_SIZE) {}
 
     /// Creates a VM instance of the kind provided.
     VMInstance create(VMKind _kind, evmc_revision revision, const crypto::HashType& codeHash,
@@ -56,14 +56,13 @@ public:
     std::shared_ptr<evmoneCodeAnalysis> get(
         const crypto::HashType& key, evmc_revision revision) noexcept;
 
-    // TODO: add lock for put
     void put(const crypto::HashType& key, const std::shared_ptr<evmoneCodeAnalysis>& analysis,
         evmc_revision revision) noexcept;
 
 private:
-    boost::compute::detail::lru_cache<crypto::HashType, std::shared_ptr<evmoneCodeAnalysis>>
-        m_cache;
+    // boost::compute::detail::lru_cache<crypto::HashType, std::shared_ptr<evmoneCodeAnalysis>>
+    std::map<crypto::HashType, std::shared_ptr<evmoneCodeAnalysis>> m_cache;
     evmc_revision m_revision = EVMC_PARIS;
-    std::mutex m_cacheMutex;
+    mutable bcos::SharedMutex m_cacheMutex;
 };
 }  // namespace bcos::executor

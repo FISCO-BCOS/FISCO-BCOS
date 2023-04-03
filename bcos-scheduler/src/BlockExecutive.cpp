@@ -1559,7 +1559,6 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             });
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
-        // TODO: Slow wait!
         dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
             auto executor = m_scheduler->executorManager()->dispatchExecutor(address);
             if (!executor)
@@ -1682,7 +1681,7 @@ void BlockExecutive::serialPrepareExecutor()
     if (needDetectDeadlock && !allFinished)
     {
         bool needRevert = false;
-        // detect deadlock and revert the first tx TODO: revert many tx in one DMC round
+        // The code below can be optimized by reverting many tx in one DMC round
         for (auto& it : m_dmcExecutors)
         {
             const auto& address = it.first;

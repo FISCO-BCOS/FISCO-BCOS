@@ -105,7 +105,6 @@ public:
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier);
 
-    // TODO: Add async interface
     void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr&&)> callback) override;
 
