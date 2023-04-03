@@ -195,15 +195,16 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
     std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
 {
     auto transactionsNum = inputs.size();
-
-    DAGFLOW_LOG(DEBUG) << "generateDags" << LOG_KV("transactionsNum", transactionsNum);
-
     CriticalFields::Ptr txsCriticals = make_shared<CriticalFields>(transactionsNum);
     if (!g_BCOSConfig.enableDAG())
     {
+        DAGFLOW_LOG(DEBUG) << "generateDags: DAG has disabled, just return all conflict"
+                           << LOG_KV("transactionsNum", transactionsNum);
         // return an empty vector (all object is nullptr) means every tx are conflict all
         return txsCriticals;
     }
+    DAGFLOW_LOG(DEBUG) << "generateDags start" << LOG_KV("transactionsNum", transactionsNum);
+
     mutex tableMutex;
 
     // parallel to extract critical fields
