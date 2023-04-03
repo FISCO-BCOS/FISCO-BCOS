@@ -81,6 +81,7 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
     message->contextID = contextID();
     message->seq = seq();
+    message->hasContractTableChanged = m_hasContractTableChanged;
 
     EXECUTIVE_LOG(TRACE) << "Execute finish\t" << message->toFullString();
 
@@ -195,6 +196,12 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
     // update seq
     m_seq = executive->seq();
+
+    // update hasContractTableChanged
+    if (executive->hasContractTableChanged())
+    {
+        this->setContractTableChanged();
+    }
 
     if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
     {

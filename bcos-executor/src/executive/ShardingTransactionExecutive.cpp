@@ -84,6 +84,18 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
     return TransactionExecutive::externalCall(std::move(input));
 }
 
+CallParameters::UniquePtr ShardingTransactionExecutive::resume()
+{
+    if (m_usePromise)
+    {
+        return PromiseTransactionExecutive::resume();
+    }
+    else
+    {
+        return CoroutineTransactionExecutive::resume();
+    }
+}
+
 std::string ShardingTransactionExecutive::getContractShard(const std::string_view& contractAddress)
 {
     auto tableName = getContractTableName(contractAddress, m_blockContext.isWasm());

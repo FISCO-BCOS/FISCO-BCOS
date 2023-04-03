@@ -194,6 +194,9 @@ public:
 
     virtual std::string_view delegateCallSender() const = 0;
     virtual void setDelegateCallSender(std::string delegateCallSender) = 0;
+
+    virtual bool hasContractTableChanged() const = 0;
+    virtual void setHasContractTableChanged(bool hasChanged) = 0;
 };
 
 class ExecutionMessageFactory

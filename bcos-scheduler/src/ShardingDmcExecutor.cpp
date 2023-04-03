@@ -116,6 +116,11 @@ void ShardingDmcExecutor::handleShardGoOutput(
     // filter DMC messages and return not DMC messages directly
     for (auto& output : outputs)
     {
+        if (output->hasContractTableChanged()) [[unlikely]]
+        {
+            m_hasContractTableChanged = true;
+        }
+
         if (output->type() == protocol::ExecutionMessage::FINISHED ||
             output->type() == protocol::ExecutionMessage::REVERT) [[likely]]
         {

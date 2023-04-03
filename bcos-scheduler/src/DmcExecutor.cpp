@@ -461,6 +461,11 @@ void DmcExecutor::handleExecutiveOutputs(
 
     for (auto& output : outputs)
     {
+        if (output->hasContractTableChanged()) [[unlikely]]
+        {
+            m_hasContractTableChanged = true;
+        }
+
         std::string to = {output->to().data(), output->to().size()};
         auto contextID = output->contextID();
 
