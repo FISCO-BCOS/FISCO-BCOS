@@ -17,13 +17,12 @@ namespace bcos::ledger
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
 
-template <bcos::crypto::hasher::Hasher Hasher, bcos::transaction_executor::StateStorage Storage,
-    protocol::IsBlockFactory BlockFactory>
+template <bcos::crypto::hasher::Hasher Hasher, bcos::transaction_executor::StateStorage Storage>
 class LedgerImpl2
 {
 private:
     Storage& m_storage;
-    BlockFactory& m_blockFactory;
+    protocol::BlockFactory& m_blockFactory;
     transaction_executor::TableNamePool& m_tableNamePool;
 
     decltype(m_blockFactory.transactionFactory()) m_transactionFactory;
@@ -273,7 +272,7 @@ private:
     }
 
 public:
-    LedgerImpl2(Storage& storage, BlockFactory& blockFactory,
+    LedgerImpl2(Storage& storage, protocol::BlockFactory& blockFactory,
         transaction_executor::TableNamePool& tableNamePool)
       : m_storage(storage),
         m_blockFactory(blockFactory),

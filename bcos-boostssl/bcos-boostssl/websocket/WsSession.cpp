@@ -40,7 +40,8 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::http;
 
-WsSession::WsSession(std::string _moduleName) : m_moduleName(_moduleName)
+WsSession::WsSession(tbb::task_group& taskGroup, std::string _moduleName)
+  : m_taskGroup(taskGroup), m_moduleName(std::move(_moduleName))
 {
     WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
 }
@@ -81,7 +82,7 @@ void WsSession::drop(uint32_t _reason)
             WEBSOCKET_SESSION(TRACE)
                 << LOG_DESC("the session has been disconnected") << LOG_KV("seq", cbEntry.first);
 
-            m_asyncGroup.run([callback = std::move(callback), error]() {
+            m_taskGroup.run([callback = std::move(callback), error]() {
                 callback->respCallBack(error, nullptr, nullptr);
             });
         }
@@ -98,7 +99,7 @@ void WsSession::drop(uint32_t _reason)
         m_wsStreamDelegate->close();
     }
 
-    m_asyncGroup.run([self]() {
+    m_taskGroup.run([self]() {
         auto session = self.lock();
         if (session)
         {
@@ -181,7 +182,7 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
 void WsSession::onMessage(bcos::boostssl::MessageFace::Ptr _message)
 {
     // task enqueue
-    m_asyncGroup.run([self = weak_from_this(), _message = std::move(_message)]() {
+    m_taskGroup.run([self = weak_from_this(), _message = std::move(_message)]() {
         auto session = self.lock();
         if (!session)
         {
@@ -470,7 +471,7 @@ void WsSession::onRespTimeout(const boost::system::error_code& _error, const std
     WEBSOCKET_SESSION(WARNING) << LOG_BADGE("onRespTimeout") << LOG_KV("seq", _seq);
 
     auto error = BCOS_ERROR_PTR(WsError::TimeOut, "waiting for message response timed out");
-    m_asyncGroup.run([callback = std::move(callback), error = std::move(error)]() {
+    m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
         callback->respCallBack(error, nullptr, nullptr);
     });
 }
