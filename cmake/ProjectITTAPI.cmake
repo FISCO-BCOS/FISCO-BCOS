@@ -2,7 +2,7 @@ include(ExternalProject)
 
 set(ITT_INSTALL_COMMAND "true")
 if(WITH_VTUNE_ITT)
-    set(ITT_INSTALL_COMMAND "objcopy --weaken <CMAKE_CURRENT_SOURCE_DIR>/bin/libittnotify.a")
+    set(ITT_INSTALL_COMMAND "objcopy --weaken <SOURCE_DIR>/bin/libittnotify.a")
 endif()
 
 ExternalProject_Add(ittapi_project
@@ -29,8 +29,8 @@ set(ITTAPI_LIBRARY ${SOURCE_DIR}/bin/libittnotify.a)
 file(MAKE_DIRECTORY ${ITTAPI_INCLUDE_DIR})  # Must exist.
 
 if(WITH_VTUNE_ITT)
-    add_library(ittapi INTERFACE IMPORTED GLOBAL)
-    # set_property(TARGET ittapi PROPERTY IMPORTED_LOCATION ${ITTAPI_LIBRARY})
+    add_library(ittapi IMPORTED STATIC)
+    set_property(TARGET ittapi PROPERTY IMPORTED_LOCATION ${ITTAPI_LIBRARY})
 else()
     add_library(ittapi INTERFACE IMPORTED GLOBAL)
 endif()
