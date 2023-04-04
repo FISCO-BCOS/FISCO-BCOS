@@ -72,6 +72,45 @@ init()
     cd nodes/127.0.0.1 && wait_and_start
 }
 
+expand_node()
+{
+    sm_option="${1}"
+    LOG_INFO "expand node..."
+    cd ${current_path}
+    rm -rf config
+    mkdir config
+    cp -r ${current_path}/nodes/ca config/
+    cp ${current_path}/nodes/127.0.0.1/node0/config.ini config/
+    cp ${current_path}/nodes/127.0.0.1/node0/config.genesis config/
+    cp ${current_path}/nodes/127.0.0.1/node0/nodes.json config/nodes.json.tmp
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
+    ${sed_cmd}  's/listen_port=30300/listen_port=30304/g' config/config.ini
+    ${sed_cmd}  's/listen_port=20200/listen_port=20204/g' config/config.ini
+    sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:30304",/' config/nodes.json.tmp > config/nodes.json
+    cat config/nodes.json
+    bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} "${sm_option}"
+    LOG_INFO "expand node success..."
+    bash ${current_path}/nodes/127.0.0.1/node4/start.sh
+    sleep 10
+    LOG_INFO "check expand node status..."
+    flag='false'
+    for node in ${node_list}
+    do
+        count=$(cat ${current_path}/nodes/127.0.0.1/${node}/log/* | grep -i "heartBeat,connected count" | tail -n 1 | awk -F' ' '{print $3}' | awk -F'=' '{print $2}')
+        if [ ${count} -eq 4 ];then
+            flag='true'
+        fi
+    done
+    if [ ${flag} == 'true' ];then
+      LOG_INFO "check expand node status normal..."
+    else
+      LOG_ERROR "check expand node status error..."
+    fi
+}
+
 check_consensus()
 {
     cd ${current_path}/nodes/127.0.0.1
@@ -109,6 +148,7 @@ fi
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
+expand_node ""
 #check_consensus
 pwd
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes"
@@ -127,6 +167,7 @@ LOG_INFO "======== clear node after non-sm test success ========"
 # sm test
 LOG_INFO "======== check sm case ========"
 init "-s"
+expand_node "-s"
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes"
 if [[ ${?} == "0" ]]; then
         LOG_INFO "console_integrationTest success"

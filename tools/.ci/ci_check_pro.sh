@@ -3,7 +3,7 @@ console_branch="3.0.0"
 fisco_bcos_service_path="../build/fisco-bcos-tars-service/"
 build_chain_path="BcosBuilder/pro/build_chain.py"
 current_path=`pwd` # tools
-node_list="group0_node_40402 group0_node_40412"
+node_list="group0_node_40402 group0_node_40412 group0_node_40422 group0_node_40432"
 output_dir="pro_nodes"
 LOG_ERROR() {
     local content=${1}
@@ -65,7 +65,7 @@ wait_and_start()
     fi
 }
 
-init() 
+init()
 {
     sm_option="${1}"
     cd ${current_path}
@@ -113,8 +113,8 @@ check_consensus()
             LOG_ERROR "checkView failed ******* print log info for ${node} finish *******"
             exit_node "check_consensus for ${node} failed for not reachNewView"
         else
-            LOG_INFO "check_consensus for ${node} success"  
-        fi 
+            LOG_INFO "check_consensus for ${node} success"
+        fi
     done
 }
 
@@ -164,7 +164,7 @@ send_transactions()
     do
         bash console.sh deploy HelloWorld
         sleep 1
-    done  
+    done
     blockNumber=`bash console.sh getBlockNumber`
     if [ "${blockNumber}" == "${txs_num}" ]; then
         LOG_INFO "send transaction success, current blockNumber: ${blockNumber}"
@@ -178,17 +178,51 @@ check_sync()
     LOG_INFO "check sync..."
     expected_block_number="${1}"
     cd ${current_path}/${output_dir}/127.0.0.1
-    bash group0_node_40402/stop.sh && rm -rf group0_node_40402/log && rm -rf group0_node_40402/group0
-    bash group0_node_40402/start.sh
+    bash group0_node_40442/stop.sh && rm -rf group0_node_40442/log && rm -rf group0_node_40442/group0
+    bash group0_node_40442/start.sh
     # wait for sync
     sleep 10
-    block_number=$(cat group0_node_40402/log/*log |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
+    block_number=$(cat group0_node_40442/log/*log |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
     if [ "${block_number}" == "${expected_block_number}" ]; then
         LOG_INFO "check_sync success, current blockNumber: ${block_number}"
     else
         exit_node "check_sync error, current blockNumber: ${block_number}, expected_block_number: ${expected_block_number}"
     fi
     LOG_INFO "check sync success..."
+}
+
+expand_node()
+{
+    cd ${current_path}/BcosBuilder/pro
+    rm -rf config-expand.toml
+    LOG_INFO "expand node..."
+    cp conf/config-build-example.toml config-expand.toml
+    local sed_cmd="sed -i"
+    local sed_cmd1="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i ''"
+        sed_cmd1="sed -i .bkp"
+    fi
+    ${sed_cmd} 91,248d config-expand.toml
+    ${sed_cmd1} 's/name = "agencyA"/name = "agencyE"/' config-expand.toml
+    ${sed_cmd1} 's/peers=\[/peers=\["127.0.0.1:30304",/' config-expand.toml
+    ${sed_cmd1} 's/listen_port=20200/listen_port=20204/' config-expand.toml
+    ${sed_cmd1} 's/tars_listen_port=40400/tars_listen_port=40440/' config-expand.toml
+    ${sed_cmd1} 's/listen_port=30300/listen_port=30304/' config-expand.toml
+    ${sed_cmd1} 's/tars_listen_port=40401/tars_listen_port=40441/' config-expand.toml
+    ${sed_cmd1} 's/tars_listen_port=40402/tars_listen_port=40442/' config-expand.toml
+    python3  build_chain.py build -c config-expand.toml -O ${current_path}/${output_dir}
+    LOG_INFO "start expandNode gateway..."
+    bash ${current_path}/${output_dir}/127.0.0.1/gateway_30304/start.sh
+    LOG_INFO "start expandNode rpc..."
+    bash ${current_path}/${output_dir}/127.0.0.1/rpc_20204/start.sh
+    LOG_INFO "start expandNode..."
+    bash ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/start.sh
+    LOG_INFO "expand node success"
+    sleep 10
+    LOG_INFO "get new node nodeid..."
+    nodeid=$(cat ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/conf/node.nodeid)
+    bash ${current_path}/console/console.sh addObserver ${nodeid}
 }
 
 clear_node()
@@ -205,6 +239,7 @@ init ""
 check_consensus
 download_console
 config_console "false"
+expand_node
 send_transactions ${txs_num}
 check_sync ${txs_num}
 stop_node

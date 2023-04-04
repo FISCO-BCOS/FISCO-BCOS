@@ -21,11 +21,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_ubuntu:
+  build_mac:
     name: mac ci check
     runs-on: self-hosted-mac
     strategy:
       fail-fast: false
+      matrix:
+        node-version: [16.x]
     env:
       DEPS_ROOT: ~/cache/deps
       VCPKG_ROOT: ~/cache/vcpkg
@@ -40,13 +42,17 @@ jobs:
           distribution: 'zulu'
           java-version: 8
           java-package: jdk
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
 
       - name: Reuse build cache
         run: |
           mkdir -p ./build
           rm -rf deps
           ln -s ${{ env.DEPS_ROOT }} deps
-          
+
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
@@ -61,6 +67,8 @@ jobs:
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make cov
 
+
+
       - name: upload coverage report
         uses: codecov/codecov-action@v2
         with:
@@ -68,11 +76,11 @@ jobs:
           version: "v0.1.15"
           flags: unittests
           name: FISCO BCOS coverage
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           verbose: true
 
       - name: Integration test - Air
-        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+        run: cd tools && bash .ci/ci_check_air.sh
 
       - name: Integration test - Pro
-        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
+        run: cd tools && bash .ci/ci_check_pro.sh
