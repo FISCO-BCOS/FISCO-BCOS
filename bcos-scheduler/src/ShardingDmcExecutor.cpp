@@ -192,15 +192,14 @@ void ShardingDmcExecutor::preExecute()
                    << LOG_KV("blockNumber", m_block->blockHeader()->number())
                    << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
 
-
-    auto self = shared_from_this();
-    std::promise<bcos::Error::UniquePtr> preExePromise;
+    std::shared_ptr<std::promise<bcos::Error::UniquePtr>> preExePromise =
+        std::make_shared<std::promise<bcos::Error::UniquePtr>>();
     m_executor->preExecuteTransactions(m_schedulerTermId, m_block->blockHeaderConst(),
-        m_contractAddress, *message,
-        [&preExePromise, message, preExecuteGuard, self](
-            bcos::Error::UniquePtr error) { preExePromise.set_value(std::move(error)); });
+        m_contractAddress, *message, [preExePromise](bcos::Error::UniquePtr error) {
+            preExePromise->set_value(std::move(error));
+        });
 
-    auto future = preExePromise.get_future();
+    auto future = preExePromise->get_future();
     auto status = future.wait_for(std::chrono::seconds(30));
     if (status != std::future_status::ready)
     {
