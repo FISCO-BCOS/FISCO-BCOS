@@ -72,7 +72,7 @@ jobs:
           verbose: true
 
       - name: Integration test - Air
-        run: cd tools && bash .ci/ci_check_air.sh
+        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
 
       - name: Integration test - Pro
-        run: cd tools && bash .ci/ci_check_pro.sh
+        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}

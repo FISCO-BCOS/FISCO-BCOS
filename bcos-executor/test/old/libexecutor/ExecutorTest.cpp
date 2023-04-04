@@ -142,7 +142,8 @@ BOOST_AUTO_TEST_CASE(executeTransaction_DeployHelloWorld)
     auto helloworld = string(helloBin);
 
     auto input = *fromHexString(helloworld);
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
     auto sender = string_view((char*)tx->sender().data(), tx->sender().size());
     auto executive = std::make_shared<TransactionExecutive>(executiveContext);
     auto receipt = executor->dmcExecuteTransaction(tx, executive);
@@ -163,7 +164,8 @@ BOOST_AUTO_TEST_CASE(executeTransaction_DeployHelloWorld)
 
     // call helloworld get
     input = *fromHexString("0x6d4ce63c");
-    auto getTx = fakeTransaction(cryptoSuite, keyPair, newAddress, input, std::to_string(101), 100001, "1", "1");
+    auto getTx = fakeTransaction(
+        cryptoSuite, keyPair, newAddress, input, std::to_string(101), 100001, "1", "1");
     receipt = executor->dmcExecuteTransaction(getTx, executive);
     BOOST_TEST(receipt->status() == (int32_t)TransactionStatus::None);
     BOOST_TEST(receipt->gasUsed() == 22742);
@@ -186,7 +188,8 @@ BOOST_AUTO_TEST_CASE(executeTransaction_DeployHelloWorld)
         "000000000000000000000000000000000000000000000005666973636f00000000000000000000000000000000"
         "0000000000000000000000");
     // cout << "##### newAddress: " << newAddress << endl;
-    auto setTx = fakeTransaction(cryptoSuite, keyPair, newAddress, input, std::to_string(101), 100001, "1", "1");
+    auto setTx = fakeTransaction(
+        cryptoSuite, keyPair, newAddress, input, std::to_string(101), 100001, "1", "1");
     receipt = executor->dmcExecuteTransaction(setTx, executive);
     BOOST_TEST(receipt->status() == (int32_t)TransactionStatus::None);
     BOOST_TEST(receipt->gasUsed() == 30791);
@@ -232,7 +235,8 @@ BOOST_AUTO_TEST_CASE(executeBlock)
     auto to = keyPair->address(cryptoSuite->hashImpl()).asBytes();
     auto helloworld = string(helloBin);
     auto input = *fromHexString(helloworld);
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
     block->appendTransaction(tx);
     tx = fakeTransaction(cryptoSuite, keyPair, "", input, 102, 100002, "1", "1");
     block->appendTransaction(tx);
@@ -293,7 +297,6 @@ BOOST_AUTO_TEST_CASE(executeBlock)
                "00000000000000000000000000");
     BOOST_TEST(getReceipt->blockNumber() == 1);
 
-    // TODO: check block
     BOOST_TEST(block->blockType() == BlockType::CompleteBlock);
     BOOST_TEST(block->blockHeader()->gasUsed() == 883892);
     BOOST_TEST(txsRoot == block->blockHeader()->txsRoot());

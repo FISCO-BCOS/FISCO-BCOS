@@ -32,7 +32,7 @@ enum class TransactionStatus : int32_t
     None = 0,
     Unknown = 1,
     OutOfGasLimit = 2,  ///< Too little gas to pay for the base transaction cost.
-    NotEnoughCash = 7,  // TODO: remove this?
+    NotEnoughCash = 7,
     BadInstruction = 10,
     BadJumpDestination = 11,
     OutOfGas = 12,    ///< Ran out of gas executing code of the transaction.

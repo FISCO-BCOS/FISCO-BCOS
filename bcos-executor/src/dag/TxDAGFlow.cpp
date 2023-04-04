@@ -25,7 +25,6 @@ using namespace tbb::flow;
 
 void DagTxsTask::run()
 {
-    // TODO: add timeout logic
     DAGFLOW_LOG(TRACE) << "Task run: DagTxsTask" << LOG_KV("size", m_tasks.size());
     m_startTask.try_put(continue_msg());
     m_dag.wait_for_all();

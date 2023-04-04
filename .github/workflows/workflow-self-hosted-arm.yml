@@ -33,7 +33,7 @@ jobs:
 
       - name: Prepare centos tools
         run: |
-          yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel
+          yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel java-1.8.0-openjdk-devel.aarch64
           yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake
       - uses: actions-rs/toolchain@v1
         with:
@@ -68,6 +68,6 @@ jobs:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
 
       - name: Integration test - Air
-        run: cd tools && bash .ci/ci_check_air.sh
+        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
       - name: Integration test - Pro
-        run: cd tools && bash .ci/ci_check_pro.sh
+        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}

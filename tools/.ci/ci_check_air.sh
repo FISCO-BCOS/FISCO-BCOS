@@ -1,5 +1,5 @@
 #!/bin/bash
-console_branch="3.0.0"
+console_branch="master"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
@@ -61,7 +61,7 @@ wait_and_start()
     fi
 }
 
-init() 
+init()
 {
     sm_option="${1}"
     cd ${current_path}
@@ -89,79 +89,10 @@ check_consensus()
             LOG_ERROR "checkView failed ******* print log info for ${node} finish *******"
             exit_node "check_consensus for ${node} failed for not reachNewView"
         else
-            LOG_INFO "check_consensus for ${node} success"  
-        fi 
+            LOG_INFO "check_consensus for ${node} success"
+        fi
     done
-}
-
-download_console()
-{
     cd ${current_path}
-
-    LOG_INFO "Download console ..."
-    tar_file=console-${console_branch}.tar.gz
-    if [ -f "${tar_file}" ]; then
-        LOG_INFO "Use download cache"
-    else
-        curl -#LO https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/console/releases/v${console_branch}/console.tar.gz
-        LOG_INFO "Download console success, branch: ${console_branch}"
-        mv console.tar.gz ${tar_file}
-    fi
-    LOG_INFO "Build and Config console ..."
-    rm -rf console
-    tar -zxvf ${tar_file}
-    cd console
-}
-
-config_console()
-{
-    cd ${current_path}/console/
-    use_sm="${1}"
-    cp -r ${current_path}/nodes/127.0.0.1/sdk/* conf/
-    cp conf/config-example.toml conf/config.toml
-    local sed_cmd="sed -i"
-    if [ "$(uname)" == "Darwin" ];then
-        sed_cmd="sed -i .bkp"
-    fi
-    use_sm_str="useSMCrypto = \"${use_sm}\""
-    ${sed_cmd} "s/useSMCrypto = \"false\"/${use_sm_str}/g" conf/config.toml
-    LOG_INFO "Build and Config console success ..."
-}
-
-send_transactions()
-{
-    txs_num="${1}"
-    cd ${current_path}/console/
-    LOG_INFO "Deploy HelloWorld..."
-    for((i=1;i<=${txs_num};i++));
-    do
-        bash console.sh deploy HelloWorld
-        sleep 1
-    done  
-    blockNumber=`bash console.sh getBlockNumber`
-    if [ "${blockNumber}" == "${txs_num}" ]; then
-        LOG_INFO "send transaction success, current blockNumber: ${blockNumber}"
-    else
-        exit_node "send transaction failed, current blockNumber: ${blockNumber}"
-    fi
-}
-
-check_sync()
-{
-    LOG_INFO "check sync..."
-    expected_block_number="${1}"
-    cd ${current_path}/nodes/127.0.0.1
-    bash node0/stop.sh && rm -rf node0/log && rm -rf node0/data
-    bash node0/start.sh
-    # wait for sync
-    sleep 10
-    block_number=$(cat node0/log/* |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
-    if [ "${block_number}" == "${expected_block_number}" ]; then
-        LOG_INFO "check_sync success, current blockNumber: ${block_number}"
-    else
-        exit_node "check_sync error, current blockNumber: ${block_number}, expected_block_number: ${expected_block_number}"
-    fi
-    LOG_INFO "check sync success..."
 }
 
 expand_node()
@@ -206,7 +137,10 @@ clear_node()
     rm -rf nodes
 }
 
-txs_num=10
+if [[ -n "${1}" ]]; then
+     console_branch=${1}
+fi
+
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
@@ -216,6 +150,7 @@ expand_node ""
 check_consensus
 send_transactions ${txs_num}
 check_sync ${txs_num}
+
 LOG_INFO "======== check non-sm success ========"
 
 LOG_INFO "======== clear node after non-sm test ========"

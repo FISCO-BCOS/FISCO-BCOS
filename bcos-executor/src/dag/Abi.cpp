@@ -89,14 +89,14 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
         Json::Value root;
         if (!reader.parse(abiStr.begin(), abiStr.end(), root))
         {
-            BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("unable to parse contract ABI")
+            BCOS_LOG(TRACE) << LOG_BADGE("EXECUTOR") << LOG_DESC("unable to parse contract ABI")
                             << LOG_KV("abiStr", abiStr);
             return nullptr;
         }
 
         if (!root.isArray())
         {
-            BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("contract ABI is not an array")
+            BCOS_LOG(TRACE) << LOG_BADGE("EXECUTOR") << LOG_DESC("contract ABI is not an array")
                             << LOG_KV("abiStr", abiStr);
             return nullptr;
         }
@@ -150,7 +150,7 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
 
             if (expectedSelector != selector)
             {
-                BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("selector mismatch")
+                BCOS_LOG(TRACE) << LOG_BADGE("EXECUTOR") << LOG_DESC("selector mismatch")
                                 << LOG_KV("name", functionName)
                                 << LOG_KV("expected selector", expectedSelector)
                                 << LOG_KV("selector", selector);
@@ -202,7 +202,7 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
     }
     catch (std::exception& e)
     {
-        BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("unable to parse contract ABI")
+        BCOS_LOG(TRACE) << LOG_BADGE("EXECUTOR") << LOG_DESC("unable to parse contract ABI")
                         << LOG_KV("abiStr", abiStr)
                         << LOG_KV("EINFO", boost::diagnostic_information(e));
     }

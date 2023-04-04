@@ -707,34 +707,6 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     });
 }
 
-void SchedulerImpl::registerExecutor(std::string name,
-    bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-    std::function<void(Error::Ptr&&)> callback)
-{
-    // TODO: to be removed, it should not be called
-    try
-    {
-        SCHEDULER_LOG(INFO) << "registerExecutor request: " << LOG_KV("name", name);
-        m_executorManager->addExecutor(name, executor);
-    }
-    catch (std::exception& e)
-    {
-        SCHEDULER_LOG(ERROR) << "registerExecutor error: " << boost::diagnostic_information(e);
-        callback(BCOS_ERROR_WITH_PREV_PTR(-1, "addExecutor error", e));
-        return;
-    }
-
-    SCHEDULER_LOG(INFO) << "registerExecutor success" << LOG_KV("name", name);
-    callback(nullptr);
-}
-
-void SchedulerImpl::unregisterExecutor(
-    const std::string& name, std::function<void(Error::Ptr&&)> callback)
-{
-    (void)name;
-    (void)callback;
-}
-
 void SchedulerImpl::reset(std::function<void(Error::Ptr&&)> callback)
 {
     (void)callback;
