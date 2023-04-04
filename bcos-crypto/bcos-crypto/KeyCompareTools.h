@@ -27,86 +27,65 @@
 
 namespace bcos
 {
-    namespace crypto
+namespace crypto
+{
+class KeyCompareTools
+{
+public:
+    template <RANGES::bidirectional_range NodesType>
+        requires requires {
+                     typename NodesType::value_type;
+                     requires requires(typename NodesType::value_type value) { value->data(); };
+                 }
+    static bool compareTwoNodeIDs(NodesType nodes1, NodesType nodes2)
     {
-        class KeyCompareTools
+        if (RANGES::size(nodes1) != RANGES::size(nodes2))
         {
-        public:
-            template<RANGES::bidirectional_range NodesType>
-            requires requires
+            return false;
+        }
+
+        for (auto const& [idx, value] : nodes1 | RANGES::views::enumerate)
+        {
+            if (nodes2[idx]->data() != value->data())
             {
-                typename NodesType::value_type;
-                requires requires(typename NodesType::value_type value)
-                {
-                    value->data();
-                };
-            }
-            static bool compareTwoNodeIDs(NodesType nodes1, NodesType nodes2)
-            {
-                if(RANGES::size(nodes1) != RANGES::size(nodes2))
-                {
-                    return false;
-                }
-
-                for(auto const& [idx, value] : nodes1 | RANGES::views::enumerate)
-                {
-                    if(nodes2[idx]->data() != value->data())
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-
-            template<RANGES::bidirectional_range NodesType, RANGES::bidirectional_range OutputType>
-            requires requires
-            {
-                typename NodesType::value_type;
-                requires requires(typename NodesType::value_type value)
-                {
-                    value->data();
-                };
-                requires requires
-                {
-                    std::declval<OutputType>().emplace_back(std::declval<typename NodesType::value_type>()->data());
-                };
-            }
-            static void extractNodeIDsBytes(NodesType nodes, OutputType& values)
-            {
-                RANGES::for_each(nodes, [&values](auto& node){ values.emplace_back(node->data()); });
-            }
-
-            template<RANGES::bidirectional_range NodesType>
-            requires requires
-            {
-                typename NodesType::value_type;
-                requires requires(typename NodesType::value_type value)
-                {
-                    value->data();
-                };
-            }
-            static bool isNodeIDExist(NodesType::value_type node, NodesType nodes)
-            {
-                std::cout << "node: " << std::endl;
-                std::cout << node->shortHex() << std::endl;
-
-                std::cout << "nodes: " << std::endl;
-                for(auto const& n : nodes)
-                {
-                    std::cout << n->shortHex() << std::endl;
-                }
-
-                for(auto const& n : nodes)
-                {
-                    if(n->data() == node->data())
-                    {
-                        return true;
-                    }
-                }
-
                 return false;
             }
-        };
+        }
+
+        return true;
     }
-}
+
+    template <RANGES::bidirectional_range NodesType, RANGES::bidirectional_range OutputType>
+        requires requires {
+                     typename NodesType::value_type;
+                     requires requires(typename NodesType::value_type value) { value->data(); };
+                     requires requires {
+                                  std::declval<OutputType>().emplace_back(
+                                      std::declval<typename NodesType::value_type>()->data());
+                              };
+                 }
+    static void extractNodeIDsBytes(NodesType nodes, OutputType& values)
+    {
+        RANGES::for_each(nodes, [&values](auto& node) { values.emplace_back(node->data()); });
+    }
+
+    template <RANGES::bidirectional_range NodesType>
+        requires requires {
+                     typename NodesType::value_type;
+                     requires requires(typename NodesType::value_type value) { value->data(); };
+                 }
+    static bool isNodeIDExist(NodesType::value_type node, NodesType nodes)
+    {
+        for (auto const& n : nodes)
+        {
+            if (n->data() == node->data())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+};
+}  // namespace crypto
+}  // namespace bcos

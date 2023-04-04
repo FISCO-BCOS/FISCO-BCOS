@@ -20,92 +20,101 @@
  */
 #pragma once
 
-#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include "bcos-crypto/bcos-crypto/KeyCompareTools.h"
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 
-#define TREE_LOG(LEVEL)     \
+#define TREE_LOG(LEVEL)                                                      \
     BCOS_LOG(LEVEL) << LOG_BADGE("TREE") << LOG_KV("consIndex", m_consIndex) \
-    << LOG_KV("nodeId", m_nodeId->shortHex())
+                    << LOG_KV("nodeId", m_nodeId->shortHex())
 
 namespace bcos
 {
-    namespace tool
+namespace tool
+{
+
+class TreeTopology
+{
+public:
+    using Ptr = std::shared_ptr<TreeTopology>;
+
+    TreeTopology(bcos::crypto::NodeIDPtr _nodeId, std::uint32_t const _treeWidth = 3)
+      : m_nodeId(std::move(_nodeId)), m_treeWidth(_treeWidth)
     {
+        m_consensusNodes = std::make_shared<bcos::crypto::NodeIDs>();
+    }
 
-        class TreeTopology
+    virtual ~TreeTopology() = default;
+    // update corresponding info when the consensus nodes changed
+    virtual void updateConsensusNodeInfo(const bcos::crypto::NodeIDs& _consensusNodes);
+
+    // select the nodes by tree topology
+    virtual bcos::crypto::NodeIDListPtr selectNodes(bcos::crypto::NodeIDSetPtr _peers,
+        std::int64_t const _consIndex = 0, bool const _isTheStartNode = false);
+
+    virtual bcos::crypto::NodeIDListPtr selectNodesByNodeID(bcos::crypto::NodeIDSetPtr _peers,
+        bcos::crypto::NodeIDPtr _nodeID, bool const _isTheStartNode = false);
+
+    virtual bcos::crypto::NodeIDListPtr selectParent(bcos::crypto::NodeIDSetPtr _peers,
+        std::int64_t const _consIndex = 0, bool const _selectAll = false);
+
+    virtual bcos::crypto::NodeIDListPtr selectParentByNodeID(
+        bcos::crypto::NodeIDSetPtr _peers, bcos::crypto::NodeIDPtr _nodeID);
+
+    virtual std::int64_t consIndex() const
+    {
+        if (m_consIndex == -1)
         {
-        public:
-            using Ptr = std::shared_ptr<TreeTopology>;
+            std::srand(utcTime());
+            return std::rand() % m_nodeNum;
+        }
+        return m_consIndex;
+    }
 
-            TreeTopology(bcos::crypto::NodeIDPtr _nodeId, std::uint32_t const _treeWidth = 3)
-                    : m_nodeId(std::move(_nodeId)), m_treeWidth(_treeWidth)
-            {
-                m_currentConsensusNodes = std::make_shared<bcos::crypto::NodeIDs>();
-            }
+protected:
+    virtual void updateStartAndEndIndex();
 
-            virtual ~TreeTopology() = default;
-            // update corresponding info when the consensus nodes changed
-            virtual void updateConsensusNodeInfo(bcos::crypto::NodeIDs _consensusNodes);
+    // select the child nodes by tree
+    virtual void recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
+        std::int64_t const _treeIndex, bcos::crypto::NodeIDSetPtr _peers,
+        std::int64_t const _consIndex);
+    // select the parent nodes by tree
+    // _selectAll is true:
+    // select all the parent(include the grandparent) for the given node
+    virtual void selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
+        bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _nodeIndex,
+        std::int64_t const _startIndex, bool const _selectAll = false);
 
-            // select the nodes by tree topology
-            virtual bcos::crypto::NodeIDListPtr selectNodes(bcos::crypto::NodeIDSetPtr _peers,
-                                                            std::int64_t const _consIndex = 0, bool const _isTheStartNode = false);
+    // 以本节点为起始节点，环形计算其他节点的index
+    // 0 1 2 3 4 5 6 7 8 9
+    // 假设本节点为4，那么传入5，返回1；传入9，返回5；传入0，返回6；传入3，返回9；传入4，返回0
+    std::int64_t getTreeIndex(std::int64_t const _consIndex);
 
-            virtual bcos::crypto::NodeIDListPtr selectNodesByNodeID(
-                    bcos::crypto::NodeIDSetPtr _peers, bcos::crypto::NodeIDPtr _nodeID,
-                    bool const _isTheStartNode = false);
+    virtual bool getNodeIDByIndex(
+        bcos::crypto::NodeIDPtr& _nodeID, std::int64_t const _nodeIndex) const;
 
-            virtual bcos::crypto::NodeIDListPtr selectParentByNodeID(
-                    bcos::crypto::NodeIDSetPtr _peers, bcos::crypto::NodeIDPtr _nodeID);
+    /*
+     * @brief:
+     * 将树中的index转换回在m_consensusNodes中的index，注意每个节点都以自身为根节点建立自己的树
+     */
+    virtual std::int64_t transTreeIndexToNodeIndex(
+        std::int64_t const _selectedIndex, std::int64_t const _offset);
 
-            virtual bcos::crypto::NodeIDListPtr selectParent(bcos::crypto::NodeIDSetPtr _peers,
-                                                             std::int64_t const _consIndex = 0, bool const _selectAll = false);
+    std::int64_t getNodeIndexByNodeId(
+        bcos::crypto::NodeIDListPtr _nodeList, bcos::crypto::NodeIDPtr _nodeId);
 
-            virtual std::int64_t consIndex() const
-            {
-                if (m_consIndex == -1)
-                {
-                    std::srand(utcTime());
-                    return std::rand() % m_nodeNum;
-                }
-                return m_consIndex;
-            }
+protected:
+    mutable Mutex m_mutex;
+    // the list of the current consensus nodes
+    bcos::crypto::NodeIDListPtr m_consensusNodes;
+    std::atomic_int64_t m_nodeNum{0};
 
-        protected:
-            virtual void updateStartAndEndIndex();
+    bcos::crypto::NodeIDPtr m_nodeId;
+    std::uint32_t m_treeWidth;
+    std::atomic_int64_t m_consIndex{0};
 
-            // select the child nodes by tree
-            virtual void recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-                                                   std::int64_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
-                                                   std::int64_t const _startIndex);
-            // select the parent nodes by tree
-            // _selectAll is true:
-            // select all the parent(include the grandparent) for the given node
-            virtual void selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-                                           bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _nodeIndex,
-                                           std::int64_t const _startIndex, bool const _selectAll = false);
+    std::atomic_int64_t m_endIndex{0};
+    std::atomic_int64_t m_startIndex{0};
+};
 
-            std::int64_t getNodeIndex(std::int64_t const _consIndex);
-
-            virtual bool getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, std::int64_t const _nodeIndex) const;
-
-            virtual std::int64_t getSelectedNodeIndex(std::int64_t const _selectedIndex, std::int64_t const _offset);
-
-            std::int64_t getNodeIndexByNodeId(bcos::crypto::NodeIDListPtr _findSet, bcos::crypto::NodeIDPtr _nodeId);
-
-        protected:
-            mutable Mutex m_mutex;
-            // the list of the current consensus nodes
-            bcos::crypto::NodeIDListPtr m_currentConsensusNodes;
-            std::atomic_int64_t m_nodeNum{0};
-
-            bcos::crypto::NodeIDPtr m_nodeId;
-            std::uint32_t m_treeWidth;
-            std::atomic_int64_t m_consIndex{0};
-
-            std::atomic_int64_t m_endIndex{0};
-            std::atomic_int64_t m_startIndex{0};
-        };
-
-    }  // namespace sync
+}  // namespace tool
 }  // namespace bcos

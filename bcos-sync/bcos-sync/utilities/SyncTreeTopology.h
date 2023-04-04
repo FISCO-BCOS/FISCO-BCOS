@@ -57,7 +57,7 @@ protected:
 
     // select the child nodes by tree
     void recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-                                   std::int64_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
+        std::int64_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
         std::int64_t const _startIndex) override;
     // select the parent nodes by tree
     void selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
