@@ -1191,7 +1191,6 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
     }
 }
 
-/// TODO: check limit
 BOOST_AUTO_TEST_CASE(updateTest)
 {
     auto callAddress = tableTestAddress;
@@ -1297,7 +1296,6 @@ BOOST_AUTO_TEST_CASE(updateTest)
     }
 }
 
-/// TODO: check limit
 BOOST_AUTO_TEST_CASE(updateWasmTest)
 {
     init(true);
@@ -1396,7 +1394,6 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
     }
 }
 
-/// TODO: check limit
 BOOST_AUTO_TEST_CASE(removeTest)
 {
     auto callAddress = tableTestAddress;
