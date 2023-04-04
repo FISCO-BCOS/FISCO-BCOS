@@ -108,17 +108,16 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
     auto ret1 = decodeMsg1->decode(bytesConstRef(buffer->data(), buffer->size() - 1));
     BOOST_CHECK_EQUAL(ret1, MessageDecodeStatus::MESSAGE_INCOMPLETE);
 
-
     {
-        auto factory = std::make_shared<P2PMessageFactory>();
+        auto factory1 = std::make_shared<P2PMessageFactory>();
         // default P2PMessage object
-        auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
-        encodeMsg->setVersion(_version);
-        encodeMsg->setPacketType(GatewayMessageType::PeerToPeerMessage);
+        auto encodeMsg1 = std::static_pointer_cast<P2PMessage>(factory1->buildMessage());
+        encodeMsg1->setVersion(_version);
+        encodeMsg1->setPacketType(GatewayMessageType::PeerToPeerMessage);
 
-        auto buffer = std::make_shared<bytes>();
-        auto r = encodeMsg->encode(*buffer.get());
-        BOOST_CHECK_EQUAL(r, false);
+        auto buffer1 = std::make_shared<bytes>();
+        auto r1 = encodeMsg1->encode(*buffer1.get());
+        BOOST_CHECK_EQUAL(r1, false);
     }
     // test invalid message
     std::string invalidMessage =
@@ -129,8 +128,16 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
     auto p2pMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     p2pMsg->setVersion(_version);
 
-    BOOST_CHECK_EQUAL(
-        p2pMsg->decode(ref(invalidMsgBytes)), MessageDecodeStatus::MESSAGE_INCOMPLETE);
+    if (_version > 0)
+    {
+        auto ret3 = p2pMsg->decode(ref(invalidMsgBytes));
+        BOOST_CHECK_EQUAL(ret3, MessageDecodeStatus::MESSAGE_INCOMPLETE);
+    }
+    else
+    {
+        BOOST_CHECK_EQUAL(
+            p2pMsg->decode(ref(invalidMsgBytes)), MessageDecodeStatus::MESSAGE_INCOMPLETE);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage)
@@ -190,8 +197,16 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     auto p2pMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     p2pMsg->setVersion(_version);
 
-    BOOST_CHECK_EQUAL(
-        p2pMsg->decode(ref(invalidMsgBytes)), MessageDecodeStatus::MESSAGE_INCOMPLETE);
+    if (_version > 0)
+    {
+        auto ret1 = p2pMsg->decode(ref(invalidMsgBytes));
+        BOOST_CHECK_EQUAL(ret1, MessageDecodeStatus::MESSAGE_INCOMPLETE);
+    }
+    else
+    {
+        BOOST_CHECK_EQUAL(
+            p2pMsg->decode(ref(invalidMsgBytes)), MessageDecodeStatus::MESSAGE_INCOMPLETE);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_withoutOptions)

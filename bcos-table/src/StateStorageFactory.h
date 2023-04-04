@@ -51,10 +51,13 @@ constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY{
     bcos::storage::FS_USER_TABLE,
     bcos::storage::StorageInterface::SYS_TABLES,
 };
+<<<<<<< HEAD
 
 constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY_310{bcos::ledger::SYS_CONFIG,
     bcos::ledger::SYS_CONSENSUS, bcos::storage::StorageInterface::SYS_TABLES,
     bcos::ledger::SYS_CODE_BINARY, bcos::ledger::SYS_CONTRACT_ABI};
+=======
+>>>>>>> 56d51c16b2e4bb826f422c9ddedcc368fb450c8e
 
 class StateStorageFactory
 {
@@ -76,6 +79,20 @@ public:
 
         if (m_keyPageSize > 0)
         {
+            if (compatibilityVersion >= (uint32_t)protocol::BlockVersion::V3_1_VERSION &&
+                keyPageIgnoreTables != nullptr)
+            {
+                if (keyPageIgnoreTables->contains(tool::FS_ROOT))
+                {
+                    for (const auto& _sub : tool::FS_ROOT_SUBS)
+                    {
+                        std::string sub(_sub);
+                        keyPageIgnoreTables->erase(sub);
+                    }
+                }
+                keyPageIgnoreTables->insert(
+                    {std::string(ledger::SYS_CODE_BINARY), std::string(ledger::SYS_CONTRACT_ABI)});
+            }
             STORAGE_LOG(TRACE) << LOG_KV("keyPageSize", m_keyPageSize)
                                << LOG_KV("compatibilityVersion", compatibilityVersion)
                                << LOG_KV("keyPageIgnoreTables size",
