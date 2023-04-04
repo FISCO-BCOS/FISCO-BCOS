@@ -178,11 +178,11 @@ check_sync()
     LOG_INFO "check sync..."
     expected_block_number="${1}"
     cd ${current_path}/${output_dir}/127.0.0.1
-    bash group0_node_40442/stop.sh && rm -rf group0_node_40442/log && rm -rf group0_node_40442/group0
-    bash group0_node_40442/start.sh
+    bash group0_node_40402/stop.sh && rm -rf group0_node_40402/log && rm -rf group0_node_40402/group0
+    bash group0_node_40402/start.sh
     # wait for sync
     sleep 10
-    block_number=$(cat group0_node_40442/log/*log |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
+    block_number=$(cat group0_node_40402/log/*log |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
     if [ "${block_number}" == "${expected_block_number}" ]; then
         LOG_INFO "check_sync success, current blockNumber: ${block_number}"
     else
@@ -219,10 +219,10 @@ expand_node()
     LOG_INFO "start expandNode..."
     bash ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/start.sh
     LOG_INFO "expand node success"
-    sleep 10
-    LOG_INFO "get new node nodeid..."
-    nodeid=$(cat ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/conf/node.nodeid)
-    bash ${current_path}/console/console.sh addObserver ${nodeid}
+    # sleep 10
+    # LOG_INFO "get new node nodeid..."
+    # nodeid=$(cat ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/conf/node.nodeid)
+    # bash ${current_path}/console/console.sh addObserver ${nodeid}
 }
 
 clear_node()
