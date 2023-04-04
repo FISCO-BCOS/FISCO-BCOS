@@ -186,13 +186,17 @@ expand_node()
     bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} "${sm_option}"
     LOG_INFO "expand node success..."
     bash ${current_path}/nodes/127.0.0.1/node4/start.sh
-    sleep 5
-    count=$(cat ${current_path}/nodes/127.0.0.1/node4/log/* | grep -i "heartBeat,connected count" | tail -n 1 | awk -F' ' '{print $3}' | awk -F'=' '{print $2}')
-    if [ ${count} -eq 4 ];then
-      LOG_INFO "check expand_node success..."
-    else
-      LOG_ERROR "check expand_node failed..."
-    fi
+    sleep 10
+    LOG_INFO "check expand node status..."
+    for node in ${node_list}
+    do
+        count=$(cat ${current_path}/nodes/127.0.0.1/${node}/log/* | grep -i "heartBeat,connected count" | tail -n 1 | awk -F' ' '{print $3}' | awk -F'=' '{print $2}')
+        if [ ${count} -eq 4 ];then
+            LOG_INFO "check ${node} log, expand_node success..."
+        else
+            exit_node "check ${node} log, expand_node failed..."
+        fi
+    done
 }
 
 clear_node()

@@ -212,9 +212,19 @@ expand_node()
     ${sed_cmd1} 's/tars_listen_port=40401/tars_listen_port=40441/' config-expand.toml
     ${sed_cmd1} 's/tars_listen_port=40402/tars_listen_port=40442/' config-expand.toml
     python3  build_chain.py build -c config-expand.toml -O ${current_path}/${output_dir}
-    bash ${current_path}/${output_dir}/127.0.0.1/start_all.sh
+    LOG_INFO "start expandNode gateway..."
+    bash ${current_path}/${output_dir}/127.0.0.1/gateway_30304/start.sh
+    LOG_INFO "start expandNode rpc..."
+    bash ${current_path}/${output_dir}/127.0.0.1/rpc_20204/start.sh
+    LOG_INFO "start expandNode..."
+    bash ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/start.sh
     LOG_INFO "expand node success"
+    sleep 10
+    LOG_INFO "get new node nodeid..."
+    nodeid=$(cat ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/conf/node.nodeid)
+    bash ${current_path}/console/console.sh addObserver ${nodeid}
 }
+
 clear_node()
 {
     cd ${current_path}
@@ -226,10 +236,10 @@ txs_num=10
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
-expand_node
 check_consensus
 download_console
 config_console "false"
+expand_node
 send_transactions ${txs_num}
 check_sync ${txs_num}
 stop_node
