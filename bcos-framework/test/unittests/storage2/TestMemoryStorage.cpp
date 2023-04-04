@@ -4,11 +4,7 @@
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
-#include <boost/function.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/view/repeat.hpp>
-#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;

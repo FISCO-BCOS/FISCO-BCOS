@@ -19,7 +19,7 @@
 #include <fmt/format.h>
 #include <ittnotify.h>
 #include <oneapi/tbb/parallel_invoke.h>
-#include <tbb/task_group.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <chrono>
@@ -56,8 +56,6 @@ private:
     int64_t m_lastcommittedBlockNumber = -1;
     std::mutex m_commitMutex;
 
-    uint64_t m_lastExecute = 0;
-
     struct ExecuteResult
     {
         std::vector<protocol::Transaction::ConstPtr> m_transactions;
@@ -80,7 +78,7 @@ private:
         }
 
         co_return co_await m_txpool.getTransactions(
-            RANGES::views::iota(0LU, block.transactionsMetaDataSize()) |
+            RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
             RANGES::views::transform(
                 [&block](uint64_t index) { return block.transactionHash(index); })) |
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
@@ -141,8 +139,7 @@ public:
                 auto now = self->current();
                 BASELINE_SCHEDULER_LOG(INFO)
                     << "Execute block: " << blockHeader->number() << " | " << verify << " | "
-                    << block->transactionsMetaDataSize() << " | " << block->transactionsSize()
-                    << " | " << now - self->m_lastExecute << "ms";
+                    << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
 
                 if (self->m_lastExecutedBlockNumber != -1 &&
                     blockHeader->number() - self->m_lastExecutedBlockNumber != 1)
@@ -286,7 +283,6 @@ public:
                 resultsLock.unlock();
                 executeLock.unlock();
 
-                self->m_lastExecute = self->current();
                 BASELINE_SCHEDULER_LOG(INFO)
                     << "Execute block finished: " << newBlockHeader->number() << " | "
                     << newBlockHeader->hash() << " | " << newBlockHeader->stateRoot() << " | "

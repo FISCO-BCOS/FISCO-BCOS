@@ -708,6 +708,7 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
 
     // --------------------------------- incoming end -------------------------------------------
 
+    m_rateLimiterConfig.enable = _pt.get<bool>("flow_control.enable", false);
     m_rateLimiterConfig.timeWindowSec = timeWindowSec;
     m_rateLimiterConfig.allowExceedMaxPermitSize = allowExceedMaxPermitSize;
     m_rateLimiterConfig.statInterval = statInterval;
@@ -718,6 +719,8 @@ void GatewayConfig::initRateLimitConfig(const boost::property_tree::ptree& _pt)
     m_rateLimiterConfig.enableDistributedRatelimit = enableDistributedRatelimit;
     m_rateLimiterConfig.enableDistributedRateLimitCache = enableDistributedRateLimitCache;
     m_rateLimiterConfig.distributedRateLimitCachePercent = distributedRateLimitCachePercent;
+
+    GATEWAY_CONFIG_LOG(INFO) << "rateLimiter: " << m_rateLimiterConfig.enable;
 
     m_rateLimiterConfig.p2pBasicMsgQPS = p2pBasicMsgQPS;
     m_rateLimiterConfig.p2pModuleMsgQPS = moduleMsgQPS;

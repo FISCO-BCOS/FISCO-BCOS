@@ -96,16 +96,16 @@ inline auto singleView(auto&& value)
 
     if constexpr (std::is_rvalue_reference_v<ValueType>)
     {
-        return RANGES::single_view(std::forward<decltype(value)>(value));
+        return RANGES::views::single(std::forward<decltype(value)>(value));
     }
     else if constexpr (std::is_const_v<ValueType>)
     {
-        return RANGES::single_view(std::cref(value)) |
+        return RANGES::views::single(std::cref(value)) |
                RANGES::views::transform([](auto&& input) -> auto const& { return input.get(); });
     }
     else
     {
-        return RANGES::single_view(std::ref(value)) |
+        return RANGES::views::single(std::ref(value)) |
                RANGES::views::transform([](auto&& input) -> auto& { return input.get(); });
     }
 }

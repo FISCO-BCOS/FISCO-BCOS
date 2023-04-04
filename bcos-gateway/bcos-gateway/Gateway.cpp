@@ -375,10 +375,13 @@ void Gateway::onReceiveP2PMessage(
     // moduleID
     auto moduleID = options->moduleID();
 
-    auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
-    if (result)
+    if (m_gatewayRateLimiter)
     {
-        // TODO: response qps overflow
+        auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+        if (result)
+        {
+            // TODO: response qps overflow
+        }
     }
 
     auto srcNodeID = options->srcNodeID();
@@ -427,11 +430,15 @@ void Gateway::onReceiveBroadcastMessage(
     // moduleID
     uint16_t moduleID = options->moduleID();
 
-    auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
-    if (result)
+    if (m_gatewayRateLimiter)
     {
-        // For broadcast message, ratelimit check failed, do nothing.
-        return;
+        auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+
+        if (result)
+        {
+            // For broadcast message, ratelimit check failed, do nothing.
+            return;
+        }
     }
 
     auto srcNodeIDPtr =

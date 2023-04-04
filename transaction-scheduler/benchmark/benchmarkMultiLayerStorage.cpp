@@ -20,15 +20,15 @@ struct TableNameHash
 
 struct Fixture
 {
-    Fixture() : levelStorage(m_backendStorage) {}
+    Fixture() : multiLayerStorage(m_backendStorage) {}
 
     void prepareData(int64_t count, int layer = 0)
     {
-        levelStorage.newMutable();
+        multiLayerStorage.newMutable();
 
         // Write count data
         task::syncWait([this](int64_t count) -> task::Task<void> {
-            auto view = levelStorage.fork(true);
+            auto view = multiLayerStorage.fork(true);
             allKeys = RANGES::views::iota(0, count) |
                       RANGES::views::transform([tableNamePool = &m_tableNamePool](int num) {
                           return transaction_executor::StateKey{
@@ -49,8 +49,8 @@ struct Fixture
 
         for (auto i = 0; i < layer; ++i)
         {
-            levelStorage.pushMutableToImmutableFront();
-            levelStorage.newMutable();
+            multiLayerStorage.pushMutableToImmutableFront();
+            multiLayerStorage.newMutable();
         }
     }
 
@@ -61,7 +61,7 @@ struct Fixture
 
     transaction_executor::TableNamePool m_tableNamePool;
     BackendStorage m_backendStorage;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> levelStorage;
+    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
     std::vector<bcos::transaction_executor::StateKey> allKeys;
 };
 
@@ -73,11 +73,12 @@ static void read1(benchmark::State& state)
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
-        auto view = fixture.levelStorage.fork(false);
+        auto view = fixture.multiLayerStorage.fork(false);
         for (auto const& it : state)
         {
             [[maybe_unused]] auto data =
-                co_await storage2::readOne(view, fixture.allKeys[((i++) + dataCount) % dataCount]);
+                co_await storage2::readOne(view, fixture.allKeys[(i + dataCount) % dataCount]);
+            ++i;
         }
 
         co_return;
@@ -92,11 +93,12 @@ static void read10(benchmark::State& state)
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
-        auto view = fixture.levelStorage.fork(false);
+        auto view = fixture.multiLayerStorage.fork(false);
         for (auto const& it : state)
         {
             [[maybe_unused]] auto data =
-                co_await storage2::readOne(view, fixture.allKeys[((i++) + dataCount) % dataCount]);
+                co_await storage2::readOne(view, fixture.allKeys[(i + dataCount) % dataCount]);
+            ++i;
         }
 
         co_return;
@@ -106,11 +108,11 @@ static void read10(benchmark::State& state)
 static void write1(benchmark::State& state)
 {
     Fixture fixture;
-    fixture.levelStorage.newMutable();
+    fixture.multiLayerStorage.newMutable();
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
-        auto view = fixture.levelStorage.fork(true);
+        auto view = fixture.multiLayerStorage.fork(true);
         for (auto const& it : state)
         {
             storage::Entry entry;
@@ -126,6 +128,7 @@ static void write1(benchmark::State& state)
         co_return;
     }(state));
 }
+
 
 BENCHMARK(read1)->Arg(10000)->Arg(100000)->Arg(1000000);
 BENCHMARK(read10)->Arg(10000)->Arg(100000)->Arg(1000000);
