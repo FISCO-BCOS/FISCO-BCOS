@@ -73,7 +73,7 @@ public:
       : m_readIterator(std::make_unique<ReadIteratorImpl<ReadIterator>>(std::move(readIterator)))
     {}
 
-    virtual ~AnyReadIterator() noexcept = default;
+    ~AnyReadIterator() noexcept = default;
     AnyReadIterator& operator=(const AnyReadIterator&) = default;
     AnyReadIterator(const AnyReadIterator&) = default;
     AnyReadIterator(AnyReadIterator&&) noexcept = default;

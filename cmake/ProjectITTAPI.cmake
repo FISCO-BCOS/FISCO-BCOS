@@ -27,10 +27,10 @@ if(WITH_VTUNE_ITT)
     set_property(TARGET ittapi PROPERTY IMPORTED_LOCATION ${ITTAPI_LIBRARY})
     add_custom_command(TARGET ittapi_project POST_BUILD
         COMMAND ${CMAKE_OBJCOPY} --weaken ${ITTAPI_LIBRARY})
-    add_dependencies(ittapi ittapi_project)
 else()
     add_library(ittapi INTERFACE IMPORTED GLOBAL)
 endif()
+add_dependencies(ittapi ittapi_project)
 set_property(TARGET ittapi PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ITTAPI_INCLUDE_DIR})
 
 unset(SOURCE_DIR)
