@@ -51,13 +51,10 @@ constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY{
     bcos::storage::FS_USER_TABLE,
     bcos::storage::StorageInterface::SYS_TABLES,
 };
-<<<<<<< HEAD
 
 constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY_310{bcos::ledger::SYS_CONFIG,
     bcos::ledger::SYS_CONSENSUS, bcos::storage::StorageInterface::SYS_TABLES,
     bcos::ledger::SYS_CODE_BINARY, bcos::ledger::SYS_CONTRACT_ABI};
-=======
->>>>>>> 56d51c16b2e4bb826f422c9ddedcc368fb450c8e
 
 class StateStorageFactory
 {
