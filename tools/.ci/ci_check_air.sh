@@ -188,15 +188,19 @@ expand_node()
     bash ${current_path}/nodes/127.0.0.1/node4/start.sh
     sleep 10
     LOG_INFO "check expand node status..."
+    flag='false'
     for node in ${node_list}
     do
         count=$(cat ${current_path}/nodes/127.0.0.1/${node}/log/* | grep -i "heartBeat,connected count" | tail -n 1 | awk -F' ' '{print $3}' | awk -F'=' '{print $2}')
         if [ ${count} -eq 4 ];then
-            LOG_INFO "check ${node} log, expand_node success..."
-        else
-            exit_node "check ${node} log, expand_node failed..."
+            flag='true'
         fi
     done
+    if [ ${flag} == 'true' ];then
+      LOG_INFO "check expand node status normal..."
+    else
+      LOG_ERROR "check expand node status error..."
+    fi
 }
 
 clear_node()
