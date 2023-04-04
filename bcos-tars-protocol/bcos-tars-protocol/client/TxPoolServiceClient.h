@@ -38,6 +38,13 @@ public:
             void callback_submit(const bcostars::Error& ret,
                 const bcostars::TransactionSubmitResult& result) override
             {
+                if (ret.errorCode != 0)
+                {
+                    m_submitResult = toBcosError(ret);
+                    m_handle.resume();
+                    return;
+                }
+
                 auto bcosResult = std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(
                     std::move(m_cryptoSuite),
                     [inner = std::move(const_cast<bcostars::TransactionSubmitResult&>(
