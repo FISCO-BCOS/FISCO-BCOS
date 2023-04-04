@@ -620,7 +620,7 @@ public:
             if (it != entries.end())
             {
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry") << LOG_KV("pageKey",
                 //         toHex(entries.begin()->first))
@@ -637,7 +637,7 @@ public:
             else
             {
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry not found")
                 //         << LOG_KV(
@@ -657,7 +657,7 @@ public:
         }
         inline std::tuple<std::optional<Entry>, bool> setEntry(
             const std::string_view& key, Entry&& entry)
-        {  // TODO: do not exist entry optimization: insert a empty entry to cache, then
+        {  // do not exist entry optimization: insert a empty entry to cache, then
             // entry status none should return null optional
             bool pageInfoChanged = false;
             std::optional<Entry> ret;
@@ -690,7 +690,7 @@ public:
                 ret = std::move(it->second);
                 it->second = std::move(entry);
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("setEntry update")
                 //         << LOG_KV("pageKey", toHex(entries.rbegin()->first))
@@ -724,7 +724,7 @@ public:
                 }
                 entries.insert(it, std::make_pair(std::string(key), std::move(entry)));
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
                 //                        << LOG_KV("pageKey", toHex(entries.rbegin()->first))
                 //                        << LOG_KV("key", toHex(key)) << LOG_KV("valid",

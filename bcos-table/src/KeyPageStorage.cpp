@@ -256,7 +256,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                             if (!m_readOnly)
                             {
                                 if (meta->size() <= 10)
-                                {  // FIXME: this log is only for debug, comment it when release
+                                {  // this log is only for debug
                                     KeyPage_LOG(DEBUG)
                                         << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
                                         << LOG_KV("key", toHex(it.first.second))
@@ -772,7 +772,7 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
         }
         auto entry = page->getEntry(key);
         // if (c_fileLogLevel <= TRACE)
-        // {  // FIXME: this log is only for debug, comment it when release
+        // {  // this log is only for debug, comment it when release
         //     KeyPage_LOG(TRACE) << LOG_DESC("getEntry from page") << LOG_KV("table", table)
         //                        << LOG_KV("pageKey", toHex(pageKey.value()))
         //                        << LOG_KV("key", toHex(key))
@@ -868,7 +868,7 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     }
     pageKey = page->endKey();
     if (page->size() > m_pageSize && page->validCount() > 1)
-    {  // split page, TODO: if dag trigger split, it maybe split to different page?
+    {  // split page, if dag trigger split, it maybe split to different page?
         if (c_fileLogLevel <= TRACE)
         {
             KeyPage_LOG(TRACE) << LOG_DESC("trigger split page") << LOG_KV("table", table)

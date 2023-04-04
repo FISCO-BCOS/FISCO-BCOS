@@ -66,7 +66,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(std::string_view _table,
     read_options.total_order_seek = true;
     auto iter = std::unique_ptr<rocksdb::Iterator>(m_db->NewIterator(read_options));
 
-    // FIXME: check performance and add limit of primary keys
+    // check performance
     for (iter->Seek(keyPrefix); iter->Valid() && iter->key().starts_with(keyPrefix); iter->Next())
     {
         size_t start = keyPrefix.size();
