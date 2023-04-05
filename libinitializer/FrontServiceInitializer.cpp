@@ -30,6 +30,7 @@
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::initializer;
@@ -38,15 +39,13 @@ using namespace bcos::front;
 FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer,
     bcos::gateway::GatewayInterface::Ptr _gateWay)
-  : m_nodeConfig(_nodeConfig), m_protocolInitializer(_protocolInitializer), m_gateWay(_gateWay)
+  : m_nodeConfig(std::move(_nodeConfig)),
+    m_protocolInitializer(std::move(_protocolInitializer)),
+    m_gateWay(std::move(_gateWay))
 {
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(m_gateWay);
 
-    // make the threadpool configurable
-    auto threadPool =
-        std::make_shared<ThreadPool>("frontService", std::thread::hardware_concurrency());
-    frontServiceFactory->setThreadPool(threadPool);
     m_front = frontServiceFactory->buildFrontService(
         m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());
 }
@@ -77,7 +76,7 @@ void FrontServiceInitializer::stop()
 void FrontServiceInitializer::init(bcos::consensus::ConsensusInterface::Ptr _pbft,
     bcos::sync::BlockSyncInterface::Ptr _blockSync, bcos::txpool::TxPoolInterface::Ptr _txpool)
 {
-    initMsgHandlers(_pbft, _blockSync, _txpool);
+    initMsgHandlers(std::move(_pbft), std::move(_blockSync), std::move(_txpool));
 }
 
 
@@ -90,7 +89,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
         bcos::protocol::ModuleID::PBFT, [_pbft](bcos::crypto::NodeIDPtr _nodeID,
                                             const std::string& _id, bcos::bytesConstRef _data) {
             _pbft->asyncNotifyConsensusMessage(
-                nullptr, _id, _nodeID, _data, [](bcos::Error::Ptr _error) {
+                nullptr, _id, std::move(_nodeID), _data, [](const bcos::Error::Ptr& _error) {
                     if (_error)
                     {
                         FRONTSERVICE_LOG(WARNING)
@@ -104,6 +103,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
         "registerModuleMessageDispatcher for the consensus module success");
 
     // register the message dispatcher for the txsSync module
+    // 
     m_front->registerModuleMessageDispatcher(
         bcos::protocol::ModuleID::TxsSync, [_txpool](bcos::crypto::NodeIDPtr _nodeID,
                                                std::string const& _id, bcos::bytesConstRef _data) {

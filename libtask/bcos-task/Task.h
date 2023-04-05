@@ -17,7 +17,8 @@ struct NoReturnValue : public bcos::error::Exception {};
 // clang-format on
 
 template <class Value>
-requires(!std::is_rvalue_reference_v<Value>) class [[nodiscard]] Task
+    requires(!std::is_rvalue_reference_v<Value>)
+class [[nodiscard]] Task
 {
 public:
     using ReturnType = Value;
@@ -39,7 +40,7 @@ public:
         Awaitable(Awaitable&&) noexcept = default;
         Awaitable& operator=(const Awaitable&) = delete;
         Awaitable& operator=(Awaitable&&) noexcept = default;
-        ~Awaitable() = default;
+        ~Awaitable() noexcept = default;
 
         bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
 
@@ -163,10 +164,8 @@ public:
         return false;
     }
     constexpr Value await_resume() noexcept { return std::move(m_value); }
-
     const Value& value() const& { return m_value; }
     Value& value() & { return m_value; }
-
     Value toValue() && { return std::move(m_value); }
 
 private:

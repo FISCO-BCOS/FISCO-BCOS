@@ -83,5 +83,8 @@ struct ITT_DOMAINS
 
     const __itt_domain* const TRANSACTION_POOL = __itt_domain_create("transactionPool");
     __itt_string_handle* SUBMIT_TRANSACTION = __itt_string_handle_create("submitTransaction");
+
+    const __itt_domain* const TRANSACTION = __itt_domain_create("transaction");
+    __itt_string_handle* VERIFY_TRANSACTION = __itt_string_handle_create("verifyTransaction");
 };
 }  // namespace bcos::ittapi
