@@ -17,16 +17,16 @@ download_console()
     cd ${current_path}
 
     LOG_INFO "Pull console, branch: ${console_branch} ..."
-    rm -rf console
     console_file=console
-    if [ -d ${console_file} ]; then
+    if [ -d ${console_file} ] && [ -d "${console_file}/.git" ]; then
         LOG_INFO "Use download cache"
         cd ${console_file}
-        rm -rf build log
+        rm -rf build log dist
         git reset --hard
         git checkout ${console_branch}
         git pull
     else
+        rm -rf ${console_file}
         git clone -b ${console_branch} --depth 5  https://ghproxy.com/github.com/FISCO-BCOS/console.git
     fi
 }
@@ -36,19 +36,22 @@ config_console()
     cd "${current_path}/console/"
     local use_sm="${1}"
     local node_path="${2}"
-#    cp -r ${current_path}/nodes/127.0.0.1/sdk/* conf/
-#    cp conf/config-example.toml conf/config.toml
     local sed_cmd="sed -i"
     if [ "$(uname)" == "Darwin" ];then
         sed_cmd="sed -i .bkp"
     fi
     mkdir -p "./src/integration-test/resources/conf"
-    cp -r ${node_path}/127.0.0.1/sdk/* ./src/integration-test/resources/conf
+    cp -r ${node_path}/sdk/* ./src/integration-test/resources/conf
     cp ./src/integration-test/resources/config-example.toml ./src/integration-test/resources/config.toml
+    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20201\"\]/g" ./src/integration-test/resources/config.toml
     cp -r ./src/main/resources/contract ./contracts
 
+    local not_use_sm="true"
+    if [ "${use_sm}" == "true" ]; then
+      not_use_sm="false"
+    fi
     use_sm_str="useSMCrypto = \"${use_sm}\""
-    ${sed_cmd} "s/useSMCrypto = \"false\"/${use_sm_str}/g" ./src/integration-test/resources/config.toml
+    ${sed_cmd} "s/useSMCrypto = \"${not_use_sm}\"/${use_sm_str}/g" ./src/integration-test/resources/config.toml
     LOG_INFO "Build and Config console success ..."
 }
 
