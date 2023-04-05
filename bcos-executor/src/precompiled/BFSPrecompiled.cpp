@@ -853,7 +853,6 @@ void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecu
     codec.decode(_callParameters->params(), fromVersion, toVersion);
     PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("rebuildBfs")
                           << LOG_KV("fromVersion", fromVersion) << LOG_KV("toVersion", toVersion);
-    // TODO: add from and to version check
     if (fromVersion <= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) &&
         toVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {

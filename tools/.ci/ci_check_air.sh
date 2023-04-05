@@ -109,13 +109,19 @@ fi
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
-#check_consensus
 pwd
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes"
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} == "0" ]]; then
         LOG_INFO "console_integrationTest success"
     else
         echo "console_integrationTest error"
+        exit 1
+fi
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "java_sdk_integrationTest success"
+    else
+        echo "java_sdk_integrationTest error"
         exit 1
 fi
 LOG_INFO "======== check non-sm success ========"
@@ -127,11 +133,18 @@ LOG_INFO "======== clear node after non-sm test success ========"
 # sm test
 LOG_INFO "======== check sm case ========"
 init "-s"
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes"
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} == "0" ]]; then
         LOG_INFO "console_integrationTest success"
     else
         echo "console_integrationTest error"
+        exit 1
+fi
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "java_sdk_integrationTest success"
+    else
+        echo "java_sdk_integrationTest error"
         exit 1
 fi
 stop_node

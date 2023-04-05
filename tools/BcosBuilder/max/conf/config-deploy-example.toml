@@ -23,7 +23,7 @@ vm_type="evm"
 # use sm-crypto or not
 sm_crypto=false
 # enable auth-check or not
-auth_check=false
+auth_check=true
 init_auth_address=""
 
 # the genesis config
