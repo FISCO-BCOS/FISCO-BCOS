@@ -76,6 +76,20 @@ public:
 
         if (m_keyPageSize > 0)
         {
+            if (compatibilityVersion >= (uint32_t)protocol::BlockVersion::V3_1_VERSION &&
+                keyPageIgnoreTables != nullptr)
+            {
+                if (keyPageIgnoreTables->contains(tool::FS_ROOT))
+                {
+                    for (const auto& _sub : tool::FS_ROOT_SUBS)
+                    {
+                        std::string sub(_sub);
+                        keyPageIgnoreTables->erase(sub);
+                    }
+                }
+                keyPageIgnoreTables->insert(
+                    {std::string(ledger::SYS_CODE_BINARY), std::string(ledger::SYS_CONTRACT_ABI)});
+            }
             STORAGE_LOG(TRACE) << LOG_KV("keyPageSize", m_keyPageSize)
                                << LOG_KV("compatibilityVersion", compatibilityVersion)
                                << LOG_KV("keyPageIgnoreTables size",
