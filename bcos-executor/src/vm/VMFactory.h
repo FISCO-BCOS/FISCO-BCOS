@@ -56,7 +56,6 @@ public:
     std::shared_ptr<evmoneCodeAnalysis> get(
         const crypto::HashType& key, evmc_revision revision) noexcept;
 
-    // TODO: add lock for put
     void put(const crypto::HashType& key, const std::shared_ptr<evmoneCodeAnalysis>& analysis,
         evmc_revision revision) noexcept;
 

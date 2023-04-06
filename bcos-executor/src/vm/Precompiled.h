@@ -85,7 +85,6 @@ private:
     static PrecompiledRegistrar* s_this;
 };
 
-// TODO: unregister on unload with a static object.
 #define ETH_REGISTER_PRECOMPILED(Name)                                                        \
     static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name(bytesConstRef _in); \
     static bcos::executor::PrecompiledExecutor __eth_registerPrecompiledFactory##Name =       \
