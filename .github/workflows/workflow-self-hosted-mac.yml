@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_ubuntu:
+  build_mac:
     name: mac ci check
     runs-on: self-hosted-mac
     strategy:
@@ -46,7 +46,7 @@ jobs:
           mkdir -p ./build
           rm -rf deps
           ln -s ${{ env.DEPS_ROOT }} deps
-          
+
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
@@ -60,6 +60,7 @@ jobs:
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make cov
+
 
       - name: upload coverage report
         uses: codecov/codecov-action@v2
