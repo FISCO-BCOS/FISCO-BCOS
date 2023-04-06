@@ -901,6 +901,13 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     try
     {
         m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
+        if (m_authAdminAddress.empty() &&
+            (m_isAuthCheck || m_compatibilityVersion >= BlockVersion::V3_3_VERSION)) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("executor.auth_admin_account is empty, "
+                                                   "please set correct auth_admin_account"));
+        }
     }
     catch (std::exception const& e)
     {

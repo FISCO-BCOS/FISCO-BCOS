@@ -388,7 +388,6 @@ void BlockSync::asyncNotifyNewBlock(
                        << LOG_KV("hash", _ledgerConfig->hash().abridged())
                        << LOG_KV("consNodeSize", _ledgerConfig->consensusNodeList().size())
                        << LOG_KV("observerNodeSize", _ledgerConfig->observerNodeList().size());
-    // TODO: figure out why
     if (_ledgerConfig->blockNumber() > m_config->blockNumber())
     {
         onNewBlock(_ledgerConfig);

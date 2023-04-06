@@ -113,6 +113,13 @@ public:
         *this << ErrorMessage(std::move(errorMessage));
     }
 
+    virtual std::string toString() const
+    {
+        std::stringstream ss;
+        ss << "code:" << errorCode() << ", msg:" << errorMessage();
+        return ss.str();
+    }
+
     Error() = default;
 
 private:
