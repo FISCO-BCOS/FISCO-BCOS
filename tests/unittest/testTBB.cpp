@@ -12,38 +12,22 @@ BOOST_FIXTURE_TEST_SUITE(TaskTest, TBBFixture)
 
 BOOST_AUTO_TEST_CASE(resumableTask)
 {
-    oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
-        std::cout << std::this_thread::get_id() << " Out of tbb!" << std::endl;
-        // auto future = std::async([tag]() {
-            std::cout << std::this_thread::get_id() << " Resume in async thread!" << std::endl;
-            tbb::task::resume(tag);
-            std::cout << std::this_thread::get_id() << " I am still there!" << std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            std::cout << std::this_thread::get_id() << " I die now!" << std::endl;
-        // });
-    });
-
     tbb::parallel_for(tbb::blocked_range<size_t>(0, 100), [](auto const& range) {
         for (auto i = range.begin(); i != range.end(); ++i)
         {
-            if (i == 50)
-            {
-                std::cout << std::this_thread::get_id() << " suspend now!" << std::endl;
-                oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
-                    auto future = std::async([tag]() {
-                        std::cout << std::this_thread::get_id() << " waiting to resume!"
-                                  << std::endl;
-                        std::this_thread::sleep_for(std::chrono::seconds(3));
-                        std::cout << std::this_thread::get_id() << " resume now!" << std::endl;
-                        tbb::task::resume(tag);
-                        std::cout << std::this_thread::get_id() << " I am still there!"
-                                  << std::endl;
-                        std::this_thread::sleep_for(std::chrono::seconds(3));
-                        std::cout << std::this_thread::get_id() << " I die now!" << std::endl;
-                    });
+            std::cout << std::this_thread::get_id() << " suspend now!" << std::endl;
+            oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
+                auto future = std::async([tag]() {
+                    std::cout << std::this_thread::get_id() << " waiting to resume!" << std::endl;
+                    std::this_thread::sleep_for(std::chrono::seconds(3));
+                    std::cout << std::this_thread::get_id() << " resume now!" << std::endl;
+                    tbb::task::resume(tag);
+                    std::cout << std::this_thread::get_id() << " I am still there!" << std::endl;
+                    std::this_thread::sleep_for(std::chrono::seconds(3));
+                    std::cout << std::this_thread::get_id() << " I die now!" << std::endl;
                 });
-                std::cout << std::this_thread::get_id() << " suspend is over!" << std::endl;
-            }
+            });
+            std::cout << std::this_thread::get_id() << " suspend is over!" << std::endl;
         }
     });
 

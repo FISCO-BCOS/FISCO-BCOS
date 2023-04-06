@@ -25,6 +25,7 @@ file(MAKE_DIRECTORY ${ITTAPI_INCLUDE_DIR})  # Must exist.
 if(WITH_VTUNE_ITT)
     add_library(ittapi IMPORTED STATIC GLOBAL)
     set_property(TARGET ittapi PROPERTY IMPORTED_LOCATION ${ITTAPI_LIBRARY})
+    add_compile_definitions(TBB_USE_PROFILING_TOOLS=1)
     add_custom_command(TARGET ittapi_project POST_BUILD
         COMMAND ${CMAKE_OBJCOPY} --weaken ${ITTAPI_LIBRARY})
 else()
