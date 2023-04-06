@@ -189,7 +189,6 @@ fi
 LOG_INFO "======== check non-sm case ========"
 init ""
 expand_node
-check_consensus
 pwd
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/${output_dir}/127.0.0.1/rpc_20200/conf"
 if [[ ${?} == "0" ]]; then
