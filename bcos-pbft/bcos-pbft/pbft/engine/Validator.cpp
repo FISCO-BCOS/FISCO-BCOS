@@ -28,7 +28,6 @@ void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
     PBFTProposalInterface::Ptr _proposal,
     std::function<void(Error::Ptr, bool)> _verifyFinishedHandler)
 {
-    // TODO: check the sealerList here
     auto block = m_blockFactory->createBlock(_proposal->data());
     auto blockHeader = block->blockHeader();
     if (blockHeader->number() != _proposal->index())

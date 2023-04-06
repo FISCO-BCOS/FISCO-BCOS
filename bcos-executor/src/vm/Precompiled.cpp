@@ -306,8 +306,9 @@ h256 sha256(bytesConstRef _in) noexcept
     h256 ret;
     CInputBuffer in{(const char*)_in.data(), _in.size()};
     COutputBuffer result{(char*)ret.data(), h256::SIZE};
-    if (wedpr_sha256_hash(&in, &result) != 0)
-    {  // TODO: add some log
+    if (wedpr_sha256_hash(&in, &result) != 0) [[unlikely]]
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("sha256 failed.") << _in.toString();
         return ret;
     }
     return ret;
@@ -318,8 +319,10 @@ h160 ripemd160(bytesConstRef _in)
     h160 ret;
     CInputBuffer in{(const char*)_in.data(), _in.size()};
     COutputBuffer result{(char*)ret.data(), h160::SIZE};
-    if (wedpr_ripemd160_hash(&in, &result) != 0)
-    {  // TODO: add some log
+    if (wedpr_ripemd160_hash(&in, &result) != 0) [[unlikely]]
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ripemd160 failed.")
+                        << _in.toString();
         return ret;
     }
     return ret;
