@@ -150,7 +150,7 @@ LOG_INFO "======== check non-sm case ========"
 init ""
 expand_node ""
 pwd
-bash$ {current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} == "0" ]]; then
         LOG_INFO "console_integrationTest success"
     else
