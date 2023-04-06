@@ -69,6 +69,7 @@ int32_t P2PMessageV2::decodeHeader(const bytesConstRef& _buffer)
         return offset;
     }
 
+    // The packet was not fully received by the network.
     if (_buffer.size() < m_length)
     {
         return MessageDecodeStatus::MESSAGE_INCOMPLETE;

@@ -337,8 +337,8 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
 
     int32_t offset = decodeHeader(_buffer);
     if (offset <= 0)
-    {
-        return offset;
+    {  // The packet was not fully received by the network.
+        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
 
     // check if packet header fully received

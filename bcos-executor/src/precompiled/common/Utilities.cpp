@@ -264,17 +264,7 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     {
         return ContractStatus::NotContractAddress;
     }
-
-    // FIXME: frozen in BFS
-    auto frozenEntry = table->getRow(executor::ACCOUNT_FROZEN);
-    if (frozenEntry != std::nullopt && "true" == frozenEntry->getField(0))
-    {
-        return ContractStatus::Frozen;
-    }
-    else
-    {
-        return ContractStatus::Available;
-    }
+    return ContractStatus::Available;
 }
 
 bool precompiled::checkPathValid(
@@ -325,7 +315,6 @@ bool precompiled::checkPathValid(
             << LOG_KV("path", _path);
         return false;
     }
-    // TODO: adapt Chinese, should use wstring
     std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']*$)");
     if (versionCompareTo(version, BlockVersion::V3_2_VERSION) >= 0)
     {

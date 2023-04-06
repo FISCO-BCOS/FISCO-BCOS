@@ -679,7 +679,7 @@ void BFSPrecompiled::readLink(const std::shared_ptr<executor::TransactionExecuti
             auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
             auto contractAddress = std::string(addressEntry->getField(0));
             auto codecAddress = blockContext.isWasm() ? codec.encode(contractAddress) :
-                                                         codec.encode(Address(contractAddress));
+                                                        codec.encode(Address(contractAddress));
             _callParameters->setExecResult(codecAddress);
             return;
         }
@@ -853,7 +853,6 @@ void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecu
     codec.decode(_callParameters->params(), fromVersion, toVersion);
     PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("rebuildBfs")
                           << LOG_KV("fromVersion", fromVersion) << LOG_KV("toVersion", toVersion);
-    // TODO: add from and to version check
     if (fromVersion <= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) &&
         toVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
@@ -1102,7 +1101,7 @@ void BFSPrecompiled::buildSysSubs(const std::shared_ptr<executor::TransactionExe
         {
             continue;
         }
-        if (sysSub == CAST_NAME && toVersion <=> BlockVersion::V3_2_VERSION < 0) [[unlikely]]
+        if (sysSub == CAST_NAME && versionCompareTo(toVersion, BlockVersion::V3_2_VERSION) < 0)
         {
             continue;
         }
@@ -1120,7 +1119,9 @@ void BFSPrecompiled::buildSysSubs(const std::shared_ptr<executor::TransactionExe
         {
             continue;
         }
-        if (name == CAST_NAME && toVersion <=> BlockVersion::V3_2_VERSION < 0) [[unlikely]]
+
+        if (name == CAST_NAME && versionCompareTo(toVersion, BlockVersion::V3_2_VERSION) < 0)
+
         {
             continue;
         }
