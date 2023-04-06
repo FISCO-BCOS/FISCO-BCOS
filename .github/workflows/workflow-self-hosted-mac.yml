@@ -26,8 +26,6 @@ jobs:
     runs-on: self-hosted-mac
     strategy:
       fail-fast: false
-      matrix:
-        node-version: [16.x]
     env:
       DEPS_ROOT: ~/cache/deps
       VCPKG_ROOT: ~/cache/vcpkg
@@ -42,10 +40,6 @@ jobs:
           distribution: 'zulu'
           java-version: 8
           java-package: jdk
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v2
-        with:
-          node-version: ${{ matrix.node-version }}
 
       - name: Reuse build cache
         run: |
@@ -66,7 +60,6 @@ jobs:
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make cov
-
 
 
       - name: upload coverage report
