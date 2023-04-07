@@ -20,9 +20,9 @@
 
 #pragma once
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-cpp-sdk/event/Common.h>
 #include <bcos-cpp-sdk/event/EventSubInterface.h>
 #include <bcos-cpp-sdk/event/EventSubParams.h>
+#include <bcos-framework/bcos-framework/protocol/Protocol.h>
 #include <atomic>
 
 namespace bcos

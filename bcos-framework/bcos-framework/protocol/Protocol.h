@@ -19,6 +19,7 @@
  * @date 2021-04-21
  */
 #pragma once
+#include <bcos-utilities/BoostLog.h>
 #include <boost/algorithm/string.hpp>
 #include <limits>
 #include <memory>
@@ -26,6 +27,15 @@
 #include <ostream>
 #include <string>
 #include <variant>
+
+// The largest number of topic in one event log
+#define EVENT_LOG_TOPICS_MAX_INDEX (4)
+
+#define EVENT_TASK(LEVEL) BCOS_LOG(LEVEL) << "[EVENT][TASK]"
+#define EVENT_PARAMS(LEVEL) BCOS_LOG(LEVEL) << "[EVENT][PARAMS]"
+#define EVENT_REQUEST(LEVEL) BCOS_LOG(LEVEL) << "[EVENT][REQUEST]"
+#define EVENT_RESPONSE(LEVEL) BCOS_LOG(LEVEL) << "[EVENT][RESPONSE]"
+#define EVENT_SUB(LEVEL) BCOS_LOG(LEVEL) << "[EVENT][SUB]"
 
 namespace bcos::protocol
 {
@@ -160,7 +170,8 @@ constexpr auto operator<=>(std::variant<uint32_t, BlockVersion> const& _v1, Bloc
     return flag;
 }
 
-constexpr bool operator >= (std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2){
+constexpr bool operator>=(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+{
     auto flag = false;
     std::visit(
         [&_v2, &flag](auto&& arg) {

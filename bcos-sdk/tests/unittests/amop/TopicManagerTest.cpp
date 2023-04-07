@@ -18,8 +18,8 @@
  * @author: octopus
  * @date 2021-09-22
  */
-#include <bcos-cpp-sdk/amop/AMOPRequest.h>
 #include <bcos-cpp-sdk/amop/TopicManager.h>
+#include <bcos-framework/protocol/AMOPRequest.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/beast/websocket/rfc6455.hpp>
 #include <boost/test/tools/old/interface.hpp>

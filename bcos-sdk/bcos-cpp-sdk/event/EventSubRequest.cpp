@@ -18,8 +18,8 @@
  * @date 2021-09-03
  */
 
-#include <bcos-cpp-sdk/event/Common.h>
 #include <bcos-cpp-sdk/event/EventSubRequest.h>
+#include <bcos-framework/bcos-framework/protocol/Protocol.h>
 
 #include <json/json.h>
 #include <exception>
@@ -108,7 +108,7 @@ bool EventSubUnsubRequest::fromJson(const std::string& _request)
 }
 
 
-std::string EventSubSubRequest::generateJson() const
+std::string EventSubRequest::generateJson() const
 {
     /*
     {
@@ -172,7 +172,7 @@ std::string EventSubSubRequest::generateJson() const
     return result;
 }
 
-bool EventSubSubRequest::fromJson(const std::string& _request)
+bool EventSubRequest::fromJson(const std::string& _request)
 {
     std::string id;
     std::string group;

@@ -18,6 +18,7 @@
  * @date 2021-08-10
  */
 
+#include "boost/format.hpp"
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-cpp-sdk/rpc/Common.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>

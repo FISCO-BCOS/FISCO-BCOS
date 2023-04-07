@@ -17,8 +17,8 @@
  * @author: octopus
  * @date 2021-09-09
  */
-#include <bcos-cpp-sdk/event/Common.h>
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
+#include <bcos-framework/bcos-framework/protocol/Protocol.h>
 #include <json/json.h>
 #include <boost/exception/diagnostic_information.hpp>
 
@@ -43,6 +43,8 @@ std::string EventSubResponse::generateJson()
     jResult["id"] = m_id;
     // status
     jResult["status"] = m_status;
+
+    m_jResp = jResult;
 
     Json::FastWriter writer;
     std::string result = writer.write(jResult);

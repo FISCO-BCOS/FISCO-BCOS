@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include <bcos-cpp-sdk/event/Common.h>
+#include <bcos-framework/bcos-framework/protocol/Protocol.h>
 #include <json/value.h>
 #include <set>
 #include <string>
