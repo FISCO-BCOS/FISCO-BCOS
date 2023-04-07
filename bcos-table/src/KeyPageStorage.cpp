@@ -831,12 +831,16 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
 
         if (pageInfoChanged)
         {
-            if (pageData->entry.status() == Entry::Status::EMPTY)
+            // NOTE: add type=NormalEntry condition to adapt the old data without keyPage info
+            // rewrite to new data with keyPage.
+            if (pageData->entry.status() == Entry::Status::EMPTY ||
+                pageData->type == Data::Type::NormalEntry)
             {  // new page insert, if entries is empty means page delete entry which not exist
                 meta->insertPageInfoNoLock(PageInfo(page->endKey(), (uint16_t)page->validCount(),
                     (uint16_t)page->size(), pageData));
                 // pageData->entry.setStatus(Entry::Status::NORMAL);
                 pageData->entry.setStatus(Entry::Status::MODIFIED);
+                pageData->type = Data::Type::Page;
             }
             else
             {

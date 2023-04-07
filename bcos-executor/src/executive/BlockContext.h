@@ -53,16 +53,18 @@ public:
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
+        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+        storage::StorageInterface::Ptr backendStorage = nullptr);
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
-        bool _isAuthCheck, std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
+        bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage = nullptr,
+        std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
 
     using getTxCriticalsHandler = std::function<std::shared_ptr<std::vector<std::string>>(
         const protocol::Transaction::ConstPtr& _tx)>;
-    virtual ~BlockContext(){};
+    virtual ~BlockContext() = default;
 
     std::shared_ptr<storage::StateStorageInterface> storage() { return m_storage; }
 
@@ -130,6 +132,8 @@ public:
 
     auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
 
+    auto backendStorage() const { return m_backendStorage; }
+
 private:
     mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
@@ -150,6 +154,7 @@ private:
     std::set<std::string> m_suicides;  // contract address need to selfdestruct
     mutable bcos::SharedMutex x_suicides;
     std::shared_ptr<VMFactory> m_vmFactory;
+    bcos::storage::StorageInterface::Ptr m_backendStorage;
 };
 
 }  // namespace executor
