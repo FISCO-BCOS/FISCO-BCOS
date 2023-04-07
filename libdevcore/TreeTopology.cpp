@@ -74,7 +74,7 @@ ssize_t TreeTopology::getNodeIndexByNodeId(
  */
 bool TreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex) const
 {
-    if (_nodeIndex >= (ssize_t)m_currentConsensusNodes->size())
+    if (_nodeIndex >= (ssize_t)m_currentConsensusNodes->size() || _nodeIndex < 0)
     {
         return false;
     }
