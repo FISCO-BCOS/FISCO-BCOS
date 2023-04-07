@@ -75,10 +75,13 @@ PrecompiledExecResult::Ptr ConsensusPrecompiled::call(
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer func")
                                << LOG_KV("nodeID", nodeID);
-        if (nodeID.size() != 128u)
+        if ((nodeID.size() != 128u) ||
+            (g_BCOSConfig.version() >= V2_10_0 &&
+                (std::count_if(nodeID.begin(), nodeID.end(),
+                     [](unsigned char c) { return std::isxdigit(c); }) != 128u)))
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
-                                   << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                                   << LOG_DESC("invalid nodeid format") << LOG_KV("nodeID", nodeID);
             result = CODE_INVALID_NODEID;
         }
         else
@@ -142,12 +145,17 @@ PrecompiledExecResult::Ptr ConsensusPrecompiled::call(
         abi.abiOut(data, nodeID);
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
+
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver func")
                                << LOG_KV("nodeID", nodeID);
-        if (nodeID.size() != 128u)
+
+        if ((nodeID.size() != 128u) ||
+            (g_BCOSConfig.version() >= V2_10_0 &&
+                (std::count_if(nodeID.begin(), nodeID.end(),
+                     [](unsigned char c) { return std::isxdigit(c); }) != 128u)))
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
-                                   << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                                   << LOG_DESC("invalid nodeid format") << LOG_KV("nodeID", nodeID);
             result = CODE_INVALID_NODEID;
         }
         else
@@ -215,10 +223,13 @@ PrecompiledExecResult::Ptr ConsensusPrecompiled::call(
         boost::to_lower(nodeID);
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove func")
                                << LOG_KV("nodeID", nodeID);
-        if (nodeID.size() != 128u)
+        if ((nodeID.size() != 128u) ||
+            (g_BCOSConfig.version() >= V2_10_0 &&
+                (std::count_if(nodeID.begin(), nodeID.end(),
+                     [](unsigned char c) { return std::isxdigit(c); }) != 128u)))
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
-                                   << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                                   << LOG_DESC("invalid nodeid format") << LOG_KV("nodeID", nodeID);
             result = CODE_INVALID_NODEID;
         }
         else
