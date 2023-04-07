@@ -53,16 +53,18 @@ public:
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
+        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+        storage::StorageInterface::Ptr backendStorage = nullptr);
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
-        bool _isAuthCheck, std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
+        bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage = nullptr,
+        std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
 
     using getTxCriticalsHandler = std::function<std::shared_ptr<std::vector<std::string>>(
         const protocol::Transaction::ConstPtr& _tx)>;
-    virtual ~BlockContext(){};
+    virtual ~BlockContext() = default;
 
     std::shared_ptr<storage::StateStorageInterface> storage() const { return m_storage; }
 
@@ -132,6 +134,7 @@ public:
 
     storage::EntryCachePtr getCodeCache() const { return m_codeCache; }
     storage::EntryCachePtr getCodeHashCache() const { return m_codeHashCache; }
+    auto backendStorage() const { return m_backendStorage; }
 
 private:
     mutable bcos::SharedMutex x_executiveFlows;
@@ -156,6 +159,7 @@ private:
 
     storage::EntryCachePtr m_codeCache = std::make_shared<storage::EntryCache>();
     storage::EntryCachePtr m_codeHashCache = std::make_shared<storage::EntryCache>();
+    bcos::storage::StorageInterface::Ptr m_backendStorage;
 };
 
 }  // namespace executor
