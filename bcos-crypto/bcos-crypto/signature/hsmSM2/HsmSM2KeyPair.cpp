@@ -30,7 +30,8 @@ using namespace hsm;
 
 #define SDR_OK 0x0
 
-HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, SecretPtr _secretKey) : HsmSM2KeyPair(_libPath)
+HsmSM2KeyPair::HsmSM2KeyPair(const std::string& _libPath, SecretPtr _secretKey)
+  : HsmSM2KeyPair(_libPath)
 {
     if (_secretKey->size() != HSM_SM2_PRIVATE_KEY_LEN)
     {
@@ -42,7 +43,8 @@ HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, SecretPtr _secretKey) : HsmSM
     m_publicKey = priToPub(_secretKey);
 }
 
-HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, unsigned int _keyIndex, std::string _password)
+HsmSM2KeyPair::HsmSM2KeyPair(
+    const std::string& _libPath, unsigned int _keyIndex, const std::string& _password)
   : HsmSM2KeyPair(_libPath)
 {
     m_keyIndex = _keyIndex;

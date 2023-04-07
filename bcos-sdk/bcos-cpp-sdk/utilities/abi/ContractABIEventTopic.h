@@ -13,17 +13,16 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file ContractEventTopic.h
+ * @file ContractABIEventTopic.h
  * @author: octopus
  * @date 2021-09-01
  */
 
 #pragma once
-#include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
+#include <bcos-cpp-sdk/utilities/abi/ContractABITypeCodec.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <sys/types.h>
 #include <string>
 #include <vector>
 
@@ -35,19 +34,14 @@ namespace codec
 {
 namespace abi
 {
-class ContractEventTopic
+class ContractABIEventTopic
 {
 public:
-    using Ptr = std::shared_ptr<ContractEventTopic>;
-    using ConstPtr = std::shared_ptr<const ContractEventTopic>;
+    using Ptr = std::shared_ptr<ContractABIEventTopic>;
+    using ConstPtr = std::shared_ptr<const ContractABIEventTopic>;
 
 public:
-    explicit ContractEventTopic(bcos::crypto::Hash::Ptr _hashImpl)
-      : m_hashImpl(_hashImpl), m_contractABICodec(_hashImpl)
-    {}
-
-public:
-    bcos::crypto::Hash::Ptr hashImpl() const { return m_hashImpl; }
+    explicit ContractABIEventTopic(bcos::crypto::Hash::Ptr _hashImpl) : m_hashImpl(_hashImpl) {}
 
 public:
     /**
@@ -71,14 +65,16 @@ public:
     // u256 => topic
     std::string u256ToTopic(bcos::u256 _u)
     {
-        auto data = m_contractABICodec.serialise(_u);
+        bcos::bytes data;
+        m_solCodec.serialize(_u, 256, data);
         return toHexStringWithPrefix(data);
     }
 
     // s256 => topic
     std::string i256ToTopic(bcos::s256 _i)
     {
-        auto data = m_contractABICodec.serialise(_i);
+        bcos::bytes data;
+        m_solCodec.serialize(_i, 256, data);
         return toHexStringWithPrefix(data);
     }
 
@@ -99,21 +95,15 @@ public:
     // bytesN(eg:bytes32) => topic
     std::string bytesNToTopic(const bcos::bytes& _bsn)
     {
-        if (_bsn.size() > 32)
-        {
-            BOOST_THROW_EXCEPTION(bcos::InvalidParameter()
-                                  << bcos::errinfo_comment("byteN can't be more than 32 byte."));
-        }
-
-        auto temp = _bsn;
-        temp.resize(32);
-
-        return toHexStringWithPrefix(temp);
+        bcos::bytes data;
+        m_solCodec.serialize(_bsn, true, data);
+        return toHexStringWithPrefix(data);
     }
 
 private:
     bcos::crypto::Hash::Ptr m_hashImpl;
-    codec::abi::ContractABICodec m_contractABICodec;
+
+    bcos::cppsdk::abi::ContractABITypeCodecSolImpl m_solCodec;
 };
 
 }  // namespace abi

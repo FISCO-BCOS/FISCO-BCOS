@@ -20,8 +20,8 @@
 
 #pragma once
 #include <bcos-boostssl/websocket/WsSession.h>
+#include <bcos-cpp-sdk/event/EventSubParams.h>
 #include <bcos-rpc/event/Common.h>
-#include <bcos-rpc/event/EventSubParams.h>
 #include <json/json.h>
 #include <json/value.h>
 #include <functional>
@@ -71,8 +71,11 @@ public:
     void setGroup(const std::string& _group) { m_group = _group; }
     std::string group() const { return m_group; }
 
-    void setParams(std::shared_ptr<EventSubParams> _params) { m_params = _params; }
-    std::shared_ptr<EventSubParams> params() const { return m_params; }
+    void setParams(std::shared_ptr<const bcos::cppsdk::event::EventSubParams> _params)
+    {
+        m_params = _params;
+    }
+    std::shared_ptr<const bcos::cppsdk::event::EventSubParams> params() const { return m_params; }
 
     void setState(std::shared_ptr<EventSubTaskState> _state) { m_state = _state; }
     std::shared_ptr<EventSubTaskState> state() const { return m_state; }
@@ -108,7 +111,7 @@ private:
     std::string m_group;
 
     std::shared_ptr<bcos::boostssl::ws::WsSession> m_session;
-    std::shared_ptr<EventSubParams> m_params;
+    std::shared_ptr<const bcos::cppsdk::event::EventSubParams> m_params;
     std::shared_ptr<EventSubTaskState> m_state;
 
 private:

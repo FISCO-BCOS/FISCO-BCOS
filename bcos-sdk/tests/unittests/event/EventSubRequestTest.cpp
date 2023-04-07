@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(test_EventSubSubRequestTest)
         auto params = std::make_shared<bcos::cppsdk::event::EventSubParams>();
         auto state = std::make_shared<bcos::cppsdk::event::EventSubTaskState>();
 
-        auto request = std::make_shared<bcos::cppsdk::event::EventSubSubRequest>();
+        auto request = std::make_shared<bcos::cppsdk::event::EventSubRequest>();
         request->setId(id);
         request->setGroup(group);
         request->setParams(params);
@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(test_EventSubSubRequestTest)
 
         auto json = request->generateJson();
         {
-            auto request = std::make_shared<bcos::cppsdk::event::EventSubSubRequest>();
+            auto request = std::make_shared<bcos::cppsdk::event::EventSubRequest>();
             auto r = request->fromJson(json);
             BOOST_CHECK(r);
             BOOST_CHECK_EQUAL(id, request->id());
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(test_EventSubSubRequestTest)
         auto state = std::make_shared<bcos::cppsdk::event::EventSubTaskState>();
         state->setCurrentBlockNumber(curBlk);
 
-        auto request = std::make_shared<bcos::cppsdk::event::EventSubSubRequest>();
+        auto request = std::make_shared<bcos::cppsdk::event::EventSubRequest>();
         request->setId(id);
         request->setGroup(group);
         request->setParams(params);
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(test_EventSubSubRequestTest)
 
         auto json = request->generateJson();
         {
-            auto request = std::make_shared<bcos::cppsdk::event::EventSubSubRequest>();
+            auto request = std::make_shared<bcos::cppsdk::event::EventSubRequest>();
             auto r = request->fromJson(json);
             BOOST_CHECK(r);
             BOOST_CHECK_EQUAL(id, request->id());

@@ -18,6 +18,7 @@
  * @date 2021-08-10
  */
 
+#include "boost/format.hpp"
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-cpp-sdk/rpc/Common.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
@@ -68,7 +69,7 @@ void JsonRpcImpl::genericMethod(const std::string& _groupID, const std::string& 
     const std::string& _data, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -82,7 +83,7 @@ void JsonRpcImpl::call(const std::string& _groupID, const std::string& _nodeName
     const std::string& _to, const std::string& _data, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -103,22 +104,22 @@ void JsonRpcImpl::sendTransaction(const std::string& _groupID, const std::string
     const std::string& _data, bool _requireProof, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
 
-    auto groupInfo = m_service->getGroupInfo(_groupID);
-    if (!groupInfo)
-    {
-        auto error = BCOS_ERROR_PTR(bcos::boostssl::ws::WsError::EndPointNotExist,
-            "the group does not exist, group: " + _groupID);
-        _respFunc(error, nullptr);
-        return;
-    }
+    boost::format fmt(
+        "{\"id\":%1%,\"jsonrpc\":\"2.0\",\"method\":\"sendTransaction\",\"params\":[\"%2%\",\"%3%"
+        "\",\"%4%\",%5%]}");
+    fmt % m_factory->nextId();
+    fmt % _groupID;
+    fmt % name;
+    fmt % _data;
+    fmt % _requireProof;
 
-    auto txBytes = fromHexString(_data);
-
+    std::string s = fmt.str();
+    /*
     Json::Value params = Json::Value(Json::arrayValue);
     params.append(_groupID);
     params.append(name);
@@ -127,15 +128,19 @@ void JsonRpcImpl::sendTransaction(const std::string& _groupID, const std::string
 
     auto request = m_factory->buildRequest("sendTransaction", params);
     auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("sendTransaction") << LOG_KV("request", s);
+    */
+
+    m_sender("", "", s, _respFunc);
+    RPCIMPL_LOG(DEBUG) << LOG_BADGE("sendTransaction")
+                       << LOG_KV("sendRequestToHighestBlockNode", m_sendRequestToHighestBlockNode)
+                       << LOG_KV("request", s);
 }
 
 void JsonRpcImpl::getTransaction(const std::string& _groupID, const std::string& _nodeName,
     const std::string& _txHash, bool _requireProof, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -156,7 +161,7 @@ void JsonRpcImpl::getTransactionReceipt(const std::string& _groupID, const std::
     const std::string& _txHash, bool _requireProof, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -177,7 +182,7 @@ void JsonRpcImpl::getBlockByHash(const std::string& _groupID, const std::string&
     const std::string& _blockHash, bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -199,7 +204,7 @@ void JsonRpcImpl::getBlockByNumber(const std::string& _groupID, const std::strin
     int64_t _blockNumber, bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -221,7 +226,7 @@ void JsonRpcImpl::getBlockHashByNumber(const std::string& _groupID, const std::s
     int64_t _blockNumber, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -241,7 +246,7 @@ void JsonRpcImpl::getBlockNumber(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -260,7 +265,7 @@ void JsonRpcImpl::getCode(const std::string& _groupID, const std::string& _nodeN
     const std::string _contractAddress, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -280,7 +285,7 @@ void JsonRpcImpl::getSealerList(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -299,7 +304,7 @@ void JsonRpcImpl::getObserverList(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -318,7 +323,7 @@ void JsonRpcImpl::getPbftView(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -337,7 +342,7 @@ void JsonRpcImpl::getPendingTxSize(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -356,7 +361,7 @@ void JsonRpcImpl::getSyncStatus(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -375,7 +380,7 @@ void JsonRpcImpl::getConsensusStatus(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -394,7 +399,7 @@ void JsonRpcImpl::getSystemConfigByKey(const std::string& _groupID, const std::s
     const std::string& _keyValue, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -414,7 +419,7 @@ void JsonRpcImpl::getTotalTransactionCount(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }

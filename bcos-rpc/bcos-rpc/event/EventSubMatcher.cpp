@@ -24,6 +24,7 @@
 
 using namespace bcos;
 using namespace bcos::event;
+using namespace bcos::cppsdk::event;
 
 uint32_t EventSubMatcher::matches(
     EventSubParams::ConstPtr _params, bcos::protocol::Block::ConstPtr _block, Json::Value& _result)

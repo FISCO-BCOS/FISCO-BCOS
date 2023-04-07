@@ -19,12 +19,12 @@
  */
 
 #include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-cpp-sdk/event/EventSubRequest.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/event/EventSub.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
-#include <bcos-rpc/event/EventSubRequest.h>
 #include <bcos-rpc/event/EventSubResponse.h>
 #include <bcos-rpc/event/EventSubTask.h>
 #include <chrono>
@@ -34,6 +34,7 @@
 
 using namespace bcos;
 using namespace bcos::event;
+using namespace bcos::cppsdk::event;
 
 EventSub::EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService)
   : bcos::Worker("t_event_sub"), m_wsService(_wsService)

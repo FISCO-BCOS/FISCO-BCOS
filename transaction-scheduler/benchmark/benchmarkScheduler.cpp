@@ -1,5 +1,5 @@
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
+#include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/StringPool.h>

@@ -30,12 +30,7 @@ class HsmSM2KeyPairFactory : public KeyPairFactory
 {
 public:
     using Ptr = std::shared_ptr<HsmSM2KeyPairFactory>;
-    HsmSM2KeyPairFactory(std::string _libPath)
-    {
-        m_hsmLibPath = _libPath;
-        CRYPTO_LOG(INFO) << "[HsmSM2KeyPairFactory::HsmSM2KeyPairFactory]"
-                         << LOG_KV("_libPath", _libPath) << LOG_KV("lib_path", m_hsmLibPath);
-    }
+    HsmSM2KeyPairFactory(std::string _libPath) { m_hsmLibPath = _libPath; }
     ~HsmSM2KeyPairFactory() override {}
 
     void setHsmLibPath(std::string _libPath) { m_hsmLibPath = _libPath; }

@@ -18,6 +18,7 @@
  * @date 2021-12-04
  */
 #pragma once
+#include "rpc/JsonRpcServiceImpl.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-cpp-sdk/amop/AMOP.h>
@@ -40,8 +41,13 @@ public:
 public:
     Sdk(bcos::cppsdk::service::Service::Ptr _service,
         bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr _jsonRpc, bcos::cppsdk::amop::AMOP::Ptr _amop,
-        bcos::cppsdk::event::EventSub::Ptr _eventSub)
-      : m_service(_service), m_jsonRpc(_jsonRpc), m_amop(_amop), m_eventSub(_eventSub)
+        bcos::cppsdk::event::EventSub::Ptr _eventSub,
+        bcos::cppsdk::jsonrpc::JsonRpcServiceImpl::Ptr _jsonRpcService)
+      : m_service(_service),
+        m_jsonRpc(_jsonRpc),
+        m_amop(_amop),
+        m_eventSub(_eventSub),
+        m_jsonRpcService(_jsonRpcService)
     {}
     virtual ~Sdk() { stop(); }
 
@@ -50,6 +56,7 @@ private:
     bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr m_jsonRpc;
     bcos::cppsdk::amop::AMOP::Ptr m_amop;
     bcos::cppsdk::event::EventSub::Ptr m_eventSub;
+    bcos::cppsdk::jsonrpc::JsonRpcServiceImpl::Ptr m_jsonRpcService;
 
 public:
     virtual void start()
@@ -101,6 +108,10 @@ public:
 public:
     bcos::cppsdk::service::Service::Ptr service() const { return m_service; }
     bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr jsonRpc() const { return m_jsonRpc; }
+    bcos::cppsdk::jsonrpc::JsonRpcServiceImpl::Ptr jsonRpcService() const
+    {
+        return m_jsonRpcService;
+    }
     bcos::cppsdk::amop::AMOP::Ptr amop() const { return m_amop; }
 
     bcos::cppsdk::event::EventSub::Ptr eventSub() const { return m_eventSub; }

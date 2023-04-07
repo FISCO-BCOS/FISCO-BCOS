@@ -21,7 +21,7 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-cpp-sdk/amop/AMOP.h>
-#include <bcos-cpp-sdk/amop/Common.h>
+#include <bcos-rpc/Common.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <json/json.h>
@@ -34,6 +34,7 @@ using namespace bcos::boostssl::ws;
 using namespace bcos;
 using namespace bcos::cppsdk;
 using namespace bcos::cppsdk::amop;
+using namespace bcos::rpc;
 
 void AMOP::start()
 {
@@ -104,7 +105,7 @@ void AMOP::sendResponse(
     auto msg = m_messageFactory->buildMessage();
     msg->setSeq(_seq);
     msg->setPayload(std::make_shared<bytes>(_data.begin(), _data.end()));
-    msg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_RESPONSE);
+    msg->setPacketType(AMOPClientMessageType::AMOP_RESPONSE);
 
     m_service->asyncSendMessageByEndPoint(_endPoint, msg);
 }
@@ -122,7 +123,7 @@ void AMOP::publish(
 
     auto sendMsg = m_messageFactory->buildMessage();
     sendMsg->setSeq(m_messageFactory->newSeq());
-    sendMsg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_REQUEST);
+    sendMsg->setPacketType(AMOPClientMessageType::AMOP_REQUEST);
     sendMsg->setPayload(buffer);
 
     auto sendBuffer = std::make_shared<bytes>();
@@ -138,7 +139,6 @@ void AMOP::publish(
             {
                 auto errorNew = BCOS_ERROR_PTR(wsMessage->status(),
                     std::string(wsMessage->payload()->begin(), wsMessage->payload()->end()));
-
                 AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response error")
                                      << LOG_KV("errorCode", errorNew->errorCode())
                                      << LOG_KV("errorMessage", errorNew->errorMessage());
@@ -162,7 +162,7 @@ void AMOP::broadcast(const std::string& _topic, bcos::bytesConstRef _data)
 
     auto sendMsg = m_messageFactory->buildMessage();
     sendMsg->setSeq(m_messageFactory->newSeq());
-    sendMsg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_BROADCAST);
+    sendMsg->setPacketType(AMOPClientMessageType::AMOP_BROADCAST);
     sendMsg->setPayload(buffer);
 
     auto sendBuffer = std::make_shared<bytes>();
@@ -188,7 +188,7 @@ void AMOP::updateTopicsToRemote(std::shared_ptr<bcos::boostssl::ws::WsSession> _
     std::string request = m_topicManager->toJson();
     auto msg = m_messageFactory->buildMessage();
     msg->setSeq(m_messageFactory->newSeq());
-    msg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_SUBTOPIC);
+    msg->setPacketType(AMOPClientMessageType::AMOP_SUBTOPIC);
     msg->setPayload(std::make_shared<bytes>(request.begin(), request.end()));
 
     _session->asyncSendMessage(msg);

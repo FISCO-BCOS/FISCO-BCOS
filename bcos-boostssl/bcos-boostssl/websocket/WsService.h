@@ -31,6 +31,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/bcos-utilities/NewTimer.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/dispatch.hpp>
@@ -71,6 +72,12 @@ public:
     virtual void stop();
     virtual void reconnect();
     virtual void reportConnectedNodes();
+
+    std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
+    void setThreadPool(std::shared_ptr<bcos::ThreadPool> _threadPool)
+    {
+        m_threadPool = _threadPool;
+    }
 
     std::shared_ptr<std::vector<std::shared_ptr<
         std::promise<std::tuple<boost::beast::error_code, std::string, std::string>>>>>
@@ -155,6 +162,9 @@ public:
         m_httpServer = _httpServer;
     }
 
+    void setTimerFactory(timer::TimerFactory::Ptr _timerFactory) { m_timerFactory = _timerFactory; }
+    timer::TimerFactory::Ptr timerFactory() { return m_timerFactory; }
+
     bool registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler);
 
     MsgHandler getMsgHandler(uint16_t _type);
@@ -218,7 +228,9 @@ private:
     std::shared_ptr<boost::asio::deadline_timer> m_heartbeat;
     // http server
     std::shared_ptr<bcos::boostssl::http::HttpServer> m_httpServer;
+    timer::TimerFactory::Ptr m_timerFactory;
 
+private:
     // mutex for m_sessions
     mutable boost::shared_mutex x_mutex;
     // all active sessions

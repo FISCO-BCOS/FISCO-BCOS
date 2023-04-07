@@ -18,11 +18,11 @@
  * @date 2021-09-10
  */
 #pragma once
+#include <bcos-cpp-sdk/event/EventSubParams.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
-#include <bcos-rpc/event/EventSubParams.h>
 #include <json/json.h>
 
 namespace bcos
@@ -38,15 +38,15 @@ public:
     virtual ~EventSubMatcher() {}
 
 public:
-    virtual bool matches(
-        EventSubParams::ConstPtr _params, const bcos::protocol::LogEntry& _logEntry);
+    virtual bool matches(bcos::cppsdk::event::EventSubParams::ConstPtr _params,
+        const bcos::protocol::LogEntry& _logEntry);
 
 public:
-    uint32_t matches(EventSubParams::ConstPtr _params,
+    uint32_t matches(bcos::cppsdk::event::EventSubParams::ConstPtr _params,
         bcos::protocol::TransactionReceipt::ConstPtr _receipt,
         bcos::protocol::Transaction::ConstPtr _tx, std::size_t _txIndex, Json::Value& _result);
-    uint32_t matches(EventSubParams::ConstPtr _params, bcos::protocol::Block::ConstPtr _block,
-        Json::Value& _result);
+    uint32_t matches(bcos::cppsdk::event::EventSubParams::ConstPtr _params,
+        bcos::protocol::Block::ConstPtr _block, Json::Value& _result);
 };
 
 }  // namespace event

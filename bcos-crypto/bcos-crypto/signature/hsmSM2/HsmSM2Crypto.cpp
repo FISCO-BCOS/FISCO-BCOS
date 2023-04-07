@@ -45,9 +45,6 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
         auto pwdConstPtr =
             std::make_shared<bytes>(hsmKeyPair.password().begin(), hsmKeyPair.password().end());
         key = Key(hsmKeyPair.keyIndex(), pwdConstPtr);
-        CRYPTO_LOG(DEBUG) << "[HSMSignature::key] is internal key "
-                          << LOG_KV("keyIndex", key.identifier())
-                          << LOG_KV("password", hsmKeyPair.password());
     }
     else
     {

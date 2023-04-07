@@ -21,11 +21,11 @@
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-cpp-sdk/event/Common.h>
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/event/EventSubRequest.h>
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
 #include <bcos-cpp-sdk/event/EventSubStatus.h>
+#include <bcos-framework/bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <json/reader.h>
 #include <boost/thread/thread.hpp>
@@ -81,7 +81,7 @@ void EventSub::doLoop()
     m_timer->restart();
     {
         boost::shared_lock<boost::shared_mutex> lock(x_tasks);
-        EVENT_SUB(INFO) << LOG_BADGE("doLoop") << LOG_DESC("event sub tasks")
+        EVENT_SUB(INFO) << LOG_BADGE("doLoop") << LOG_DESC("event sub tasks report")
                         << LOG_KV("working event sub count", m_workingTasks.size())
                         << LOG_KV("suspend event sub count", m_suspendTasks.size());
     }
@@ -348,7 +348,7 @@ void EventSub::subscribeEvent(EventSubTask::Ptr _task, Callback _callback)
     auto id = _task->id();
     auto group = _task->group();
 
-    auto request = std::make_shared<EventSubSubRequest>();
+    auto request = std::make_shared<EventSubRequest>();
     request->setId(id);
     request->setParams(_task->params());
     request->setGroup(_task->group());
@@ -358,7 +358,7 @@ void EventSub::subscribeEvent(EventSubTask::Ptr _task, Callback _callback)
 
     auto message = m_messagefactory->buildMessage();
     message->setSeq(m_messagefactory->newSeq());
-    message->setPacketType(bcos::cppsdk::event::MessageType::EVENT_SUBSCRIBE);
+    message->setPacketType(bcos::protocol::MessageType::EVENT_SUBSCRIBE);
     message->setPayload(std::make_shared<bytes>(jsonReq.begin(), jsonReq.end()));
 
     EVENT_SUB(INFO) << LOG_BADGE("subscribeEvent") << LOG_DESC("subscribe event")
@@ -473,7 +473,7 @@ void EventSub::unsubscribeEvent(const std::string& _id)
 
     auto message = m_messagefactory->buildMessage();
     message->setSeq(m_messagefactory->newSeq());
-    message->setPacketType(bcos::cppsdk::event::MessageType::EVENT_UNSUBSCRIBE);
+    message->setPacketType(bcos::protocol::MessageType::EVENT_UNSUBSCRIBE);
     message->setPayload(std::make_shared<bytes>(strReq.begin(), strReq.end()));
 
     session->asyncSendMessage(message, Options(),

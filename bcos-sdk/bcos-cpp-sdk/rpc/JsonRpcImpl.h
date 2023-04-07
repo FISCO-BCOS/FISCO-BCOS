@@ -135,11 +135,18 @@ public:
     JsonRpcSendFunc sender() const { return m_sender; }
     void setSender(JsonRpcSendFunc _sender) { m_sender = _sender; }
 
-    std::shared_ptr<bcos::boostssl::ws::WsService> service() const { return m_service; }
+    std::shared_ptr<bcos::cppsdk::service::Service> service() const { return m_service; }
     void setService(std::shared_ptr<bcos::cppsdk::service::Service> _service)
     {
         m_service = _service;
     }
+
+    void setSendRequestToHighestBlockNode(bool _sendRequestToHighestBlockNode)
+    {
+        m_sendRequestToHighestBlockNode = _sendRequestToHighestBlockNode;
+    }
+
+    bool sendRequestToHighestBlockNode() const { return m_sendRequestToHighestBlockNode; }
 
 private:
     std::shared_ptr<bcos::cppsdk::service::Service> m_service;
@@ -148,6 +155,8 @@ private:
         const std::string& _request, RespFunc _respFunc)>
         m_sender;
     bcos::group::GroupInfoCodec::Ptr m_groupInfoCodec;
+
+    bool m_sendRequestToHighestBlockNode = false;
 };
 
 }  // namespace jsonrpc
