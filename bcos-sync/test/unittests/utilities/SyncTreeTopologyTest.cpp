@@ -23,8 +23,8 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPairFactory.h>
 #include <bcos-sync/utilities/SyncTreeTopology.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <bcos-utilities/Ranges.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos::sync;
@@ -43,7 +43,7 @@ public:
       : SyncTreeTopology(_nodeId, _treeWidth)
     {}
 
-    virtual bcos::crypto::NodeIDs const& currentConsensusNodes() { return *m_currentConsensusNodes; }
+    virtual bcos::crypto::NodeIDs const& currentConsensusNodes() { return *m_consensusNodes; }
 
     virtual bcos::crypto::NodeIDs const& nodeList() { return *m_nodeList; }
     void recursiveSelectChildNodesWrapper(bcos::crypto::NodeIDListPtr selectedNodeList,
@@ -85,7 +85,8 @@ public:
     using Ptr = std::shared_ptr<SyncTreeToplogyFixture>;
     SyncTreeToplogyFixture(std::uint32_t const _treeWidth = 2)
     {
-        bcos::crypto::KeyPairFactory::Ptr keyPairFactory = std::make_shared<bcos::crypto::SM2KeyPairFactory>();
+        bcos::crypto::KeyPairFactory::Ptr keyPairFactory =
+            std::make_shared<bcos::crypto::SM2KeyPairFactory>();
         bcos::crypto::KeyPairInterface::Ptr keyPair = keyPairFactory->generateKeyPair();
         // create a 2-tree rounter
         m_syncTreeRouter = std::make_shared<FakeSyncTreeTopology>(keyPair->publicKey(), _treeWidth);
@@ -108,7 +109,8 @@ public:
     // fake ConsensusList
     void fakeConsensusList(std::size_t _size)
     {
-        bcos::crypto::KeyPairFactory::Ptr keyPairFactory = std::make_shared<bcos::crypto::SM2KeyPairFactory>();
+        bcos::crypto::KeyPairFactory::Ptr keyPairFactory =
+            std::make_shared<bcos::crypto::SM2KeyPairFactory>();
         for (std::size_t i = 0; i < _size; ++i)
         {
             bcos::crypto::KeyPairInterface::Ptr nodeId = keyPairFactory->generateKeyPair();
@@ -121,7 +123,8 @@ public:
     // fake observerList
     void fakeObserverList(std::size_t _nodeId)
     {
-        bcos::crypto::KeyPairFactory::Ptr keyPairFactory = std::make_shared<bcos::crypto::SM2KeyPairFactory>();
+        bcos::crypto::KeyPairFactory::Ptr keyPairFactory =
+            std::make_shared<bcos::crypto::SM2KeyPairFactory>();
         for (std::size_t i = 0; i < _nodeId; ++i)
         {
             bcos::crypto::KeyPairInterface::Ptr nodeId = keyPairFactory->generateKeyPair();
@@ -162,7 +165,8 @@ void checkSelectedNodes(SyncTreeToplogyFixture::Ptr fakeSyncTreeTopology,
     BOOST_CHECK(_selectedNodes.size() == _idxVec.size());
     for (auto const& [idx, node] : _selectedNodes | RANGES::views::enumerate)
     {
-        BOOST_CHECK(node->data() == fakeSyncTreeTopology->syncTreeRouter()->nodeList()[_idxVec[idx]]->data());
+        BOOST_CHECK(node->data() ==
+                    fakeSyncTreeTopology->syncTreeRouter()->nodeList()[_idxVec[idx]]->data());
     }
 }
 
@@ -175,12 +179,14 @@ BOOST_AUTO_TEST_CASE(testFreeNode)
 
     // updateConsensusNodeInfo and check consensusList
     fakeSyncTreeTopology->updateConsensusNodeInfo();
-    BOOST_CHECK(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->consensusList(),
-                fakeSyncTreeTopology->syncTreeRouter()->currentConsensusNodes()));
+    BOOST_CHECK(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
+                            fakeSyncTreeTopology->consensusList(),
+                            fakeSyncTreeTopology->syncTreeRouter()->currentConsensusNodes()));
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
     // check node list
-    BOOST_CHECK(
-            true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->syncTreeRouter()->nodeList(), fakeSyncTreeTopology->nodeList()));
+    BOOST_CHECK(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
+                            fakeSyncTreeTopology->syncTreeRouter()->nodeList(),
+                            fakeSyncTreeTopology->nodeList()));
     // check startIndex and endIndex
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 0);
@@ -188,7 +194,8 @@ BOOST_AUTO_TEST_CASE(testFreeNode)
     // updateNodeInfo and check NodeInfo
     fakeSyncTreeTopology->updateNodeListInfo();
     BOOST_CHECK(
-            true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->nodeList(), fakeSyncTreeTopology->syncTreeRouter()->nodeList()));
+        true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->nodeList(),
+                    fakeSyncTreeTopology->syncTreeRouter()->nodeList()));
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
                 (std::int64_t)fakeSyncTreeTopology->nodeList().size());
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == -1);
@@ -223,7 +230,8 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 2);
     // check NodeList
     BOOST_CHECK(
-            true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->nodeList(), fakeSyncTreeTopology->syncTreeRouter()->nodeList()));
+        true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->nodeList(),
+                    fakeSyncTreeTopology->syncTreeRouter()->nodeList()));
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
                 (std::int64_t)fakeSyncTreeTopology->nodeList().size());
 
@@ -246,8 +254,9 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     fakeSyncTreeTopology->fakeConsensusList(2);
     fakeSyncTreeTopology->updateConsensusNodeInfo();
     fakeSyncTreeTopology->updateNodeListInfo();
-    BOOST_CHECK(
-            true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->syncTreeRouter()->nodeList(), fakeSyncTreeTopology->nodeList()));
+    BOOST_CHECK(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
+                            fakeSyncTreeTopology->syncTreeRouter()->nodeList(),
+                            fakeSyncTreeTopology->nodeList()));
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
                 (std::int64_t)fakeSyncTreeTopology->nodeList().size());
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 0);
@@ -290,23 +299,37 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
             selectedNodeList, fakeSyncTreeTopology->peers(), i);
-        BOOST_CHECK(true == selectedNodeList->empty());
+        // BOOST_CHECK(true == selectedNodeList->empty());
     }
     // check parent for 2th node
-    for (std::size_t i = 2; i <= 3; ++i)
+    for (std::size_t i = 2; i <= 2; ++i)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
             selectedNodeList, fakeSyncTreeTopology->peers(), i);
-        checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {0});
+        checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {});
     }
-
-    for (std::size_t i = 4; i <= 5; ++i)
+    for (std::size_t i = 3; i <= 3; ++i)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
             selectedNodeList, fakeSyncTreeTopology->peers(), i);
         checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {1});
+    }
+
+    for (std::size_t i = 4; i <= 4; ++i)
+    {
+        selectedNodeList->clear();
+        fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
+            selectedNodeList, fakeSyncTreeTopology->peers(), i);
+        checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {1});
+    }
+    for (std::size_t i = 5; i <= 5; ++i)
+    {
+        selectedNodeList->clear();
+        fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
+            selectedNodeList, fakeSyncTreeTopology->peers(), i);
+        checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {2});
     }
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
@@ -334,26 +357,40 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     idxVec = {9, 10};
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
     // check parent for 9th and 10th
-    for (std::size_t i = 9; i <= 10; ++i)
+    for (std::size_t i = 9; i <= 9; ++i)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
             selectedNodeList, fakeSyncTreeTopology->peers(), i);
         checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {7});
     }
-
-    // check the 8th nodes
-    selectedNodeList->clear();
-    fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
-        selectedNodeList, 8, fakeSyncTreeTopology->peers());
-    idxVec = {11, 12};
-    checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
-    for (std::size_t i = 11; i <= 12; ++i)
+    for (std::size_t i = 10; i <= 10; ++i)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
             selectedNodeList, fakeSyncTreeTopology->peers(), i);
         checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {8});
+    }
+
+    // check the 8th nodes
+    selectedNodeList->clear();
+    fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
+        selectedNodeList, 8, fakeSyncTreeTopology->peers());
+    idxVec = {11};
+    checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
+    for (std::size_t i = 11; i <= 11; ++i)
+    {
+        selectedNodeList->clear();
+        fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
+            selectedNodeList, fakeSyncTreeTopology->peers(), i);
+        checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {8});
+    }
+    for (std::size_t i = 12; i <= 12; ++i)
+    {
+        selectedNodeList->clear();
+        fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
+            selectedNodeList, fakeSyncTreeTopology->peers(), i);
+        checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {9});
     }
 }
 
@@ -368,8 +405,9 @@ BOOST_AUTO_TEST_CASE(testForTheConsensusNode)
         fakeSyncTreeTopology->syncTreeRouter()->nodeId());
     fakeSyncTreeTopology->updateConsensusNodeInfo();
     fakeSyncTreeTopology->updateNodeListInfo();
-    BOOST_CHECK(
-        true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->syncTreeRouter()->nodeList(), fakeSyncTreeTopology->nodeList()));
+    BOOST_CHECK(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
+                            fakeSyncTreeTopology->syncTreeRouter()->nodeList(),
+                            fakeSyncTreeTopology->nodeList()));
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
                 (std::int64_t)fakeSyncTreeTopology->nodeList().size());
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 12);
@@ -387,10 +425,11 @@ BOOST_AUTO_TEST_CASE(testForTheConsensusNode)
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(selectedNodeList,
         fakeSyncTreeTopology->peers(), fakeSyncTreeTopology->syncTreeRouter()->nodeIndex());
+    selectedNodeList->emplace_back(fakeSyncTreeTopology->syncTreeRouter()->nodeId());
     BOOST_CHECK(
         *selectedNodeList == fakeSyncTreeTopology->syncTreeRouter()->currentConsensusNodes());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

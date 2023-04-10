@@ -152,7 +152,7 @@ void TreeTopology::selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNodeLi
     std::int64_t const _startIndex, bool const _selectAll)
 {
     // find the parent nodes
-    std::int64_t parentIndex = (_nodeIndex - 1) / m_treeWidth;
+    std::int64_t parentIndex = (_nodeIndex - 1 + m_treeWidth - 1) / m_treeWidth;
     // the parentNode is the node-slef
     if (parentIndex == _nodeIndex)
     {
@@ -189,7 +189,6 @@ std::int64_t TreeTopology::getTreeIndex(std::int64_t const _consIndex)
     std::int64_t nodeIndex = 0;
     if (m_consIndex >= _consIndex)
     {
-        // 以本节点为起始点，计算_consIndex与本节点的距离
         nodeIndex = m_consIndex - _consIndex;
     }
     else

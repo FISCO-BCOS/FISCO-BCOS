@@ -84,18 +84,15 @@ protected:
         bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _nodeIndex,
         std::int64_t const _startIndex, bool const _selectAll = false);
 
-    // 以本节点为起始节点，环形计算其他节点的index
+    // starting from this node, calculate the index of other nodes in a ring
     // 0 1 2 3 4 5 6 7 8 9
-    // 假设本节点为4，那么传入5，返回1；传入9，返回5；传入0，返回6；传入3，返回9；传入4，返回0
+    // suppost this node is 4: then pass in 5, return 1; pass in 9, return 5; pass in 0, return 6;
+    // pass in 3, return 9; pass in 4, return 0
     std::int64_t getTreeIndex(std::int64_t const _consIndex);
 
     virtual bool getNodeIDByIndex(
         bcos::crypto::NodeIDPtr& _nodeID, std::int64_t const _nodeIndex) const;
 
-    /*
-     * @brief:
-     * 将树中的index转换回在m_consensusNodes中的index，注意每个节点都以自身为根节点建立自己的树
-     */
     virtual std::int64_t transTreeIndexToNodeIndex(
         std::int64_t const _selectedIndex, std::int64_t const _offset);
 
