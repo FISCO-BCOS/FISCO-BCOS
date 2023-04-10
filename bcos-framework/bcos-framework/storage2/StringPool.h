@@ -42,10 +42,10 @@ public:
       : m_pool(std::addressof(pool)), m_stringPoolID(stringPoolID)
     {}
     StringID(const StringID&) = default;
-    StringID(StringID&&) = default;
+    StringID(StringID&&) noexcept = default;
     StringID& operator=(const StringID&) = default;
-    StringID& operator=(StringID&&) = default;
-    ~StringID() = default;
+    StringID& operator=(StringID&&) noexcept = default;
+    ~StringID() noexcept = default;
 
     std::string_view operator*() const
     {
@@ -62,7 +62,6 @@ public:
         {
             return m_pool <=> rhs.m_pool;
         }
-
         if (m_pool == rhs.m_pool)
         {
             return m_stringPoolID <=> rhs.m_stringPoolID;
@@ -131,10 +130,6 @@ private:
     tbb::concurrent_unordered_set<StringType, Hash, EqualTo> m_storage;
 
 public:
-    struct UnexceptStringID : public bcos::Error
-    {
-    };
-
     FixedStringPool() noexcept = default;
     FixedStringPool(const FixedStringPool&) = delete;
     FixedStringPool(FixedStringPool&&) = delete;

@@ -101,7 +101,7 @@ struct P2PInfo
 {
     using Ptr = std::shared_ptr<P2PInfo>;
     P2PInfo() = default;
-    ~P2PInfo() {}
+    ~P2PInfo() noexcept = default;
     std::string p2pID;
     std::string p2pIDWithoutExtInfo;
     std::string agencyName;

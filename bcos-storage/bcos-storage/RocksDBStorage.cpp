@@ -298,7 +298,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
 void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageInterface& storage,
     std::function<void(Error::Ptr, uint64_t startTS, const std::string&)> callback)
 {
-    __itt_task_begin(ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
+    __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
         const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_PREPARE));
     std::ignore = param;
     try
@@ -418,13 +418,13 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
     {
         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Prepare failed! ", e), 0, "");
     }
-    __itt_task_end(ITT_DOMAIN_STORAGE);
+    __itt_task_end(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE);
 }
 
 void RocksDBStorage::asyncCommit(
     const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback)
 {
-    __itt_task_begin(ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
+    __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
         const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_COMMIT));
 
     size_t count = 0;
@@ -453,7 +453,7 @@ void RocksDBStorage::asyncCommit(
         }
     }
     auto end = utcSteadyTime();
-    __itt_task_end(ITT_DOMAIN_STORAGE);
+    __itt_task_end(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE);
     callback(nullptr, 0);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit finished")
                               << LOG_KV("blockNumber", params.number)
@@ -483,7 +483,7 @@ void RocksDBStorage::asyncCommit(
 void RocksDBStorage::asyncRollback(
     const TwoPCParams& params, std::function<void(Error::Ptr)> callback)
 {
-    __itt_task_begin(ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
+    __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
         const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_COMMIT));
 
     auto start = utcSteadyTime();
@@ -494,7 +494,7 @@ void RocksDBStorage::asyncRollback(
         m_writeBatch = nullptr;
     }
     auto end = utcSteadyTime();
-    __itt_task_end(ITT_DOMAIN_STORAGE);
+    __itt_task_end(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE);
 
     callback(nullptr);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number)
@@ -508,7 +508,7 @@ bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,
         _keys,
     std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>> _values) noexcept
 {
-    __itt_task_begin(ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
+    __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
         const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_SET_ROWS));
     bcos::Error::Ptr err = nullptr;
     std::visit(
@@ -579,7 +579,7 @@ bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,
                 << LOG_KV("dataSize", dataSize) << LOG_KV("time(ms)", utcSteadyTime() - start);
         },
         _keys, _values);
-    __itt_task_end(ITT_DOMAIN_STORAGE);
+    __itt_task_end(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE);
     return err;
 }
 

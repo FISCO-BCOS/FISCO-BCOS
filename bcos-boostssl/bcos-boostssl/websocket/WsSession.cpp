@@ -40,7 +40,8 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::http;
 
-WsSession::WsSession(std::string _moduleName) : m_moduleName(_moduleName)
+WsSession::WsSession(tbb::task_group& taskGroup, std::string _moduleName)
+  : m_taskGroup(taskGroup), m_moduleName(std::move(_moduleName))
 {
     WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
 }
@@ -62,8 +63,8 @@ void WsSession::drop(uint32_t _reason)
     auto self = std::weak_ptr<WsSession>(shared_from_this());
     // call callbacks
     {
-        auto error = BCOS_ERROR_PTR(
-            WsError::SessionDisconnect, "the session has been disconnected");
+        auto error =
+            BCOS_ERROR_PTR(WsError::SessionDisconnect, "the session has been disconnected");
 
         ReadGuard l(x_callback);
         WEBSOCKET_SESSION(INFO) << LOG_BADGE("drop") << LOG_KV("reason", _reason)
@@ -81,8 +82,9 @@ void WsSession::drop(uint32_t _reason)
             WEBSOCKET_SESSION(TRACE)
                 << LOG_DESC("the session has been disconnected") << LOG_KV("seq", cbEntry.first);
 
-            m_threadPool->enqueue(
-                [callback, error]() { callback->respCallBack(error, nullptr, nullptr); });
+            m_taskGroup.run([callback = std::move(callback), error]() {
+                callback->respCallBack(error, nullptr, nullptr);
+            });
         }
     }
 
@@ -97,7 +99,7 @@ void WsSession::drop(uint32_t _reason)
         m_wsStreamDelegate->close();
     }
 
-    m_threadPool->enqueue([self]() {
+    m_taskGroup.run([self]() {
         auto session = self.lock();
         if (session)
         {
@@ -155,7 +157,7 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
 {
     try
     {
-        auto data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(_buffer.data()));
+        auto* data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(_buffer.data()));
         auto size = boost::asio::buffer_size(m_buffer.data());
 
         auto message = m_messageFactory->buildMessage();
@@ -179,9 +181,8 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
 
 void WsSession::onMessage(bcos::boostssl::MessageFace::Ptr _message)
 {
-    auto self = std::weak_ptr<WsSession>(shared_from_this());
     // task enqueue
-    m_threadPool->enqueue([_message, self]() {
+    m_taskGroup.run([self = weak_from_this(), _message = std::move(_message)]() {
         auto session = self.lock();
         if (!session)
         {
@@ -346,8 +347,8 @@ void WsSession::asyncSendMessage(
 
         if (_respFunc)
         {
-            auto error = BCOS_ERROR_PTR(
-                WsError::SessionDisconnect, "the session has been disconnected");
+            auto error =
+                BCOS_ERROR_PTR(WsError::SessionDisconnect, "the session has been disconnected");
             _respFunc(error, nullptr, nullptr);
         }
 
@@ -377,8 +378,7 @@ void WsSession::asyncSendMessage(
     {
         if (_respFunc)
         {
-            auto error =
-                BCOS_ERROR_PTR(WsError::MessageEncodeError, "Message encode failed");
+            auto error = BCOS_ERROR_PTR(WsError::MessageEncodeError, "Message encode failed");
             _respFunc(error, nullptr, nullptr);
         }
 
@@ -470,7 +470,8 @@ void WsSession::onRespTimeout(const boost::system::error_code& _error, const std
 
     WEBSOCKET_SESSION(WARNING) << LOG_BADGE("onRespTimeout") << LOG_KV("seq", _seq);
 
-    auto error =
-        BCOS_ERROR_PTR(WsError::TimeOut, "waiting for message response timed out");
-    m_threadPool->enqueue([callback, error]() { callback->respCallBack(error, nullptr, nullptr); });
+    auto error = BCOS_ERROR_PTR(WsError::TimeOut, "waiting for message response timed out");
+    m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
+        callback->respCallBack(error, nullptr, nullptr);
+    });
 }

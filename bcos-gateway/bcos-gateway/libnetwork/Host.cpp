@@ -374,15 +374,19 @@ void Host::handshakeServer(const boost::system::error_code& error,
 void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
 {
-    auto weakHost = std::weak_ptr<Host>(shared_from_this());
-    std::shared_ptr<SessionFace> ps = m_sessionFactory->create_session(
+    auto weakHost = weak_from_this();
+    std::shared_ptr<SessionFace> session = m_sessionFactory->create_session(
         weakHost, socket, m_messageFactory, m_sessionCallbackManager);
 
-    auto connectionHandler = m_connectionHandler;
-    m_threadPool->enqueue([ps, connectionHandler, p2pInfo]() {
-        if (connectionHandler)
+    m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {
+        auto host = weakHost.lock();
+        if (!host)
         {
-            connectionHandler(NetworkException(0, ""), p2pInfo, ps);
+            return;
+        }
+        if (host->m_connectionHandler)
+        {
+            host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
         }
         else
         {
@@ -438,9 +442,9 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
 
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
     /// if async connect timeout, close the socket directly
-    auto connect_timer = std::make_shared<boost::asio::deadline_timer>(
+    auto connectTimer = std::make_shared<boost::asio::deadline_timer>(
         *(socket->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
-    connect_timer->async_wait([=, this](const boost::system::error_code& error) {
+    connectTimer->async_wait([=, this](const boost::system::error_code& error) {
         /// return when cancel has been called
         if (error == boost::asio::error::operation_aborted)
         {
@@ -463,32 +467,35 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         }
     });
     /// callback async connect
-    m_asioInterface->asyncResolveConnect(socket, [=, this](boost::system::error_code const& ec) {
-        if (ec)
-        {
-            HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
-                            << LOG_KV("endpoint", _nodeIPEndpoint)
-                            << LOG_KV("message", ec.message());
-            socket->close();
+    m_asioInterface->asyncResolveConnect(socket,
+        [this, callback = std::move(callback), _nodeIPEndpoint, socket,
+            connectTimer = std::move(connectTimer)](boost::system::error_code const& ec) mutable {
+            if (ec)
+            {
+                HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
+                                << LOG_KV("endpoint", _nodeIPEndpoint)
+                                << LOG_KV("message", ec.message());
+                socket->close();
 
-            m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
-                callback(NetworkException(ConnectError, "Connect failed"), P2PInfo(),
-                    std::shared_ptr<SessionFace>());
-            });
-            return;
-        }
-        else
-        {
+                m_asyncGroup.run([callback = std::move(callback)]() {
+                    callback(NetworkException(ConnectError, "Connect failed"), {}, {});
+                });
+                return;
+            }
             insertPendingConns(_nodeIPEndpoint);
             /// get the public key of the server during handshake
             std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
             m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
             /// call handshakeClient after handshake succeed
             m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
-                boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error,
-                    socket, endpointPublicKey, callback, _nodeIPEndpoint, connect_timer));
-        }
-    });
+                [self = shared_from_this(), socket,
+                    endpointPublicKey = std::move(endpointPublicKey),
+                    callback = std::move(callback), nodeIPEndPoint = _nodeIPEndpoint,
+                    connectTimer = std::move(connectTimer)](auto error) mutable {
+                    self->handshakeClient(error, std::move(socket), endpointPublicKey,
+                        std::move(callback), nodeIPEndPoint, std::move(connectTimer));
+                });
+        });
 }
 
 /**
@@ -550,8 +557,5 @@ void Host::stop()
     {
         m_asioInterface->stop();
     }
-    if (m_threadPool)
-    {
-        m_threadPool->stop();
-    }
+    m_asyncGroup.wait();
 }

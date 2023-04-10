@@ -59,7 +59,6 @@ class FakeTransactionSync1 : public TransactionSync
 public:
     explicit FakeTransactionSync1(TransactionSyncConfig::Ptr _config) : TransactionSync(_config) {}
     ~FakeTransactionSync1() override = default;
-    void start() override {}
 };
 
 class FakeTransactionSync : public FakeTransactionSync1
@@ -124,10 +123,6 @@ public:
         if (m_txpool)
         {
             m_txpool->stop();
-        }
-        if (m_sync)
-        {
-            m_sync->stop();
         }
     }
 

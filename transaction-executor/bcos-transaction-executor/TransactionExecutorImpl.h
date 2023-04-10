@@ -25,7 +25,7 @@ namespace bcos::transaction_executor
 struct InvalidArgumentsError: public bcos::Error {};
 // clang-format on
 
-template <StateStorage Storage, protocol::IsTransactionReceiptFactory ReceiptFactory>
+template <StateStorage Storage>
 class TransactionExecutorImpl
 {
 private:
@@ -54,16 +54,16 @@ private:
 
     VMFactory vmFactory;
     Storage& m_storage;
-    ReceiptFactory& m_receiptFactory;
+    protocol::TransactionReceiptFactory& m_receiptFactory;
     TableNamePool& m_tableNamePool;
 
 public:
-    TransactionExecutorImpl(
-        Storage& storage, ReceiptFactory& receiptFactory, TableNamePool& tableNamePool)
+    TransactionExecutorImpl(Storage& storage, protocol::TransactionReceiptFactory& receiptFactory,
+        TableNamePool& tableNamePool)
       : m_storage(storage), m_receiptFactory(receiptFactory), m_tableNamePool(tableNamePool)
     {}
 
-    task::Task<protocol::ReceiptFactoryReturnType<ReceiptFactory>> execute(
+    task::Task<protocol::TransactionReceipt::Ptr> execute(
         protocol::IsBlockHeader auto const& blockHeader,
         protocol::IsTransaction auto const& transaction, int contextID)
     {

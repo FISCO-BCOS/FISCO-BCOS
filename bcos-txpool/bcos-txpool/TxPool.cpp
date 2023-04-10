@@ -24,9 +24,11 @@
 #include "txpool/validator/TxValidator.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
-#include <tbb/parallel_for.h>
+#include <bcos-utilities/ITTAPI.h>
+#include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
+
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
@@ -66,9 +68,6 @@ void TxPool::start()
         return;
     }
 
-    // broadcast tx in txpool
-    // m_transactionSync->start();
-
     m_txpoolStorage->start();
     m_running = true;
     TXPOOL_LOG(INFO) << LOG_DESC("Start the txpool.");
@@ -90,8 +89,6 @@ void TxPool::stop()
         m_txpoolStorage->stop();
     }
 
-    // m_transactionSync->stop();
-
     m_running = false;
     TXPOOL_LOG(INFO) << LOG_DESC("Stop the txpool.");
 }
@@ -99,6 +96,8 @@ void TxPool::stop()
 task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     protocol::Transaction::Ptr transaction)
 {
+    ittapi::Report report(ittapi::ITT_DOMAINS::instance().TRANSACTION_POOL,
+        ittapi::ITT_DOMAINS::instance().SUBMIT_TRANSACTION);
     co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 
@@ -113,16 +112,10 @@ task::Task<void> TxPool::broadcastPushTransaction(const protocol::Transaction& t
     co_return;
 }
 
-task::Task<std::vector<protocol::Transaction::Ptr>> TxPool::getMissedTransactions(
-    std::vector<crypto::HashType> transactionHashes, bcos::crypto::NodeIDPtr fromNodeID)
+task::Task<std::vector<protocol::Transaction::ConstPtr>> TxPool::getTransactions(
+    RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
 {
-    co_return std::vector<protocol::Transaction::Ptr>{};
-}
-
-std::vector<protocol::Transaction::ConstPtr> TxPool::getTransactions(
-    RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
-{
-    return m_txpoolStorage->getTransactions(std::move(hashes));
+    co_return m_txpoolStorage->getTransactions(std::move(hashes));
 }
 
 bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)

@@ -394,11 +394,10 @@ std::shared_ptr<WsSession> WsService::newSession(
     _wsStreamDelegate->setMaxReadMsgSize(m_config->maxMsgSize());
 
     std::string endPoint = _wsStreamDelegate->remoteEndpoint();
-    auto session = m_sessionFactory->createSession(m_moduleName);
+    auto session = m_sessionFactory->createSession(m_taskGroup, m_moduleName);
 
-    session->setWsStreamDelegate(_wsStreamDelegate);
+    session->setWsStreamDelegate(std::move(_wsStreamDelegate));
     session->setIoc(m_ioservicePool->getIOService());
-    session->setThreadPool(threadPool());
     session->setMessageFactory(messageFactory());
     session->setEndPoint(endPoint);
     session->setConnectedEndPoint(endPoint);

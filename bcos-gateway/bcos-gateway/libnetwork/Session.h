@@ -15,8 +15,8 @@
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
-#include <bcos-utilities/Common.h>
 #include <bcos-utilities/Timer.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <cstddef>
@@ -143,7 +143,7 @@ public:
     Session& operator=(Session&&) = delete;
     Session& operator=(const Session&) = delete;
 
-    ~Session() override;
+    ~Session() noexcept override;
 
     using Ptr = std::shared_ptr<Session>;
 
@@ -295,8 +295,8 @@ private:
     std::atomic<uint64_t> m_lastReadTime;
     std::atomic<uint64_t> m_lastWriteTime;
     std::shared_ptr<bcos::Timer> m_idleCheckTimer;
-
     std::string m_hostNodeID;
+    tbb::task_group m_asyncGroup;
 };
 
 class SessionFactory

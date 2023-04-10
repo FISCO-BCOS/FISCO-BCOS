@@ -3,9 +3,11 @@
 #include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
 #include "SchedulerBaseImpl.h"
+#include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-utilities/Exceptions.h"
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/ITTAPI.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <boost/exception/detail/exception_ptr.hpp>
 #include <boost/throw_exception.hpp>
@@ -18,18 +20,20 @@ namespace bcos::transaction_scheduler
 
 #define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
 
-template <class MultiLayerStorage, protocol::IsTransactionReceiptFactory ReceiptFactory,
-    template <typename, typename> class Executor>
-class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>
+template <class MultiLayerStorage, template <typename> class Executor>
+class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Executor>
 {
 private:
-    constexpr static size_t DEFAULT_CHUNK_SIZE = 32;          // 32 transactions for one chunk
-    size_t m_chunkSize = DEFAULT_CHUNK_SIZE;                  // Maybe auto adjust
-    size_t m_maxToken = std::thread::hardware_concurrency();  // Maybe auto adjust
+    std::unique_ptr<tbb::task_group> m_asyncTaskGroup;
     using ChunkLocalStorage =
         transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
             decltype(std::declval<MultiLayerStorage>().fork(true))>;
-    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::multiLayerStorage;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor>::multiLayerStorage;
+    constexpr static size_t MIN_CHUNK_SIZE = 32;
+    constexpr static size_t MAX_RETRY_COUNT = 30;
+
+    size_t m_chunkSize = MIN_CHUNK_SIZE;
+    size_t m_maxToken = 0;
 
     template <class TransactionAndReceiptssRange>
     class ChunkExecuteStatus
@@ -81,10 +85,11 @@ private:
         task::Task<bool> execute(protocol::IsBlockHeader auto const& blockHeader,
             auto& receiptFactory, auto& tableNamePool)
         {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().CHUNK_EXECUTE);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
-            Executor<decltype(m_storages->m_readWriteSetStorage),
-                std::remove_cvref_t<decltype(receiptFactory)>>
-                executor(m_storages->m_readWriteSetStorage, receiptFactory, tableNamePool);
+            Executor<decltype(m_storages->m_readWriteSetStorage)> executor(
+                m_storages->m_readWriteSetStorage, receiptFactory, tableNamePool);
             for (auto&& [contextID, transaction, receipt] : m_transactionAndReceiptsRange)
             {
                 if (m_chunkIndex >= *m_lastChunkIndex)
@@ -97,11 +102,15 @@ private:
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";
             m_finished = true;
+
             co_return m_finished;
         }
 
         void detectRAW(ChunkExecuteStatus* prev, ChunkExecuteStatus* next)
         {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().DETECT_RAW);
+
             if (prev == nullptr && next == nullptr)
             {
                 BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty prev and next!"});
@@ -145,12 +154,6 @@ private:
             }
         }
 
-        void merge(ChunkExecuteStatus& from)
-        {
-            m_storages->m_localStorageView.mutableStorage().merge(
-                from.m_storages->m_localStorageView.mutableStorage(), false);
-        }
-
         static void decreaseNumber(std::atomic_int64_t& number, int64_t target)
         {
             auto current = number.load();
@@ -159,40 +162,60 @@ private:
         }
     };
 
-    task::Task<void> serialExecute(protocol::IsBlockHeader auto const& blockHeader,
-        int startContextID, auto& receiptFactory, auto& tableNamePool,
+    task::Task<void> serialExecute(protocol::BlockHeader const& blockHeader,
+        protocol::TransactionReceiptFactory& receiptFactory,
+        transaction_executor::TableNamePool& tableNamePool,
         RANGES::range auto&& transactionAndReceipts, auto& storage)
     {
-        Executor<std::remove_cvref_t<decltype(storage)>,
-            std::remove_cvref_t<decltype(receiptFactory)>>
-            executor(storage, receiptFactory, tableNamePool);
-        for (auto&& [transaction, receipt] : transactionAndReceipts)
+        Executor<std::remove_cvref_t<decltype(storage)>> executor(
+            storage, receiptFactory, tableNamePool);
+        for (auto&& [contextID, transaction, receipt] : transactionAndReceipts)
         {
-            receipt = co_await executor.execute(blockHeader, transaction, startContextID++);
+            *receipt = co_await executor.execute(blockHeader, *transaction, contextID);
         }
     }
 
 public:
-    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::SchedulerBaseImpl;
-    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::receiptFactory;
-    using SchedulerBaseImpl<MultiLayerStorage, ReceiptFactory, Executor>::tableNamePool;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor>::receiptFactory;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor>::tableNamePool;
 
-    task::Task<std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>>> execute(
+    SchedulerParallelImpl(MultiLayerStorage& multiLayerStorage,
+        protocol::TransactionReceiptFactory& receiptFactory,
+        transaction_executor::TableNamePool& tableNamePool)
+      : SchedulerBaseImpl<MultiLayerStorage, Executor>(
+            multiLayerStorage, receiptFactory, tableNamePool),
+        m_asyncTaskGroup(std::make_unique<tbb::task_group>())
+    {}
+
+    ~SchedulerParallelImpl() noexcept { m_asyncTaskGroup->wait(); }
+
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
         protocol::IsBlockHeader auto const& blockHeader,
         RANGES::input_range auto const& transactions)
     {
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+            ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
         auto storageView = multiLayerStorage().fork(true);
-        std::vector<protocol::ReceiptFactoryReturnType<ReceiptFactory>> receipts;
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
         receipts.resize(RANGES::size(transactions));
 
         size_t offset = 0;
         auto chunkSize = m_chunkSize;
+
+        size_t retryCount = 0;
+        auto transactionAndReceipts =
+            RANGES::views::zip(RANGES::views::iota(0LU, (size_t)RANGES::size(transactions)),
+                transactions | RANGES::views::addressof, receipts | RANGES::views::addressof);
+
+        // while (offset < RANGES::size(transactions) && retryCount < MAX_RETRY_COUNT)
         while (offset < RANGES::size(transactions))
         {
-            auto transactionAndReceiptsChunks =
-                RANGES::zip_view(RANGES::iota_view(0LU, (size_t)RANGES::size(transactions)),
-                    transactions | RANGES::views::addressof, receipts | RANGES::views::addressof) |
-                RANGES::views::drop(offset) | RANGES::views::chunk(chunkSize);
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
+
+            auto transactionAndReceiptsChunks = transactionAndReceipts |
+                                                RANGES::views::drop(offset) |
+                                                RANGES::views::chunk(chunkSize);
             using ChunkType =
                 ChunkExecuteStatus<RANGES::range_value_t<decltype(transactionAndReceiptsChunks)>>;
             std::vector<ChunkType> executeChunks(
@@ -205,10 +228,10 @@ public:
                 chunkIndex, lastChunkIndex, transactionAndReceiptsChunks[chunkIndex], storageView);
 
             auto executeIt = RANGES::begin(executeChunks);
-            auto finishedIt = RANGES::begin(executeChunks);
-            tbb::task_group mergeTasks;
+            typename MultiLayerStorage::MutableStorage lastStorage;
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
-            tbb::parallel_pipeline(m_maxToken,
+
+            tbb::parallel_pipeline(m_maxToken == 0 ? executeChunks.size() : m_maxToken,
                 tbb::make_filter<void, std::optional<RANGES::iterator_t<decltype(executeChunks)>>>(
                     tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control)
@@ -269,91 +292,49 @@ public:
                                 return;
                             }
                             offset += (*input)->count();
-                            ++finishedIt;
 
                             auto index = (*input)->chunkIndex();
-                            if (index > 0 && (index + 2) % 2 != 0)
                             {
-                                mergeTasks.run([&executeChunks, index = (*input)->chunkIndex()]() {
-                                    executeChunks[index].merge(executeChunks[index - 1]);
-                                });
+                                ittapi::Report report(
+                                    ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                                    ittapi::ITT_DOMAINS::instance().PIPELINE_MERGE_STORAGE);
+
+                                task::syncWait(storage2::merge(
+                                    executeChunks[index].localStorage().mutableStorage(),
+                                    lastStorage));
                             }
                         }));
-            mergeTasks.wait();
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().FINAL_MERGE_STORAGE);
+                if (storageView.mutableStorage().empty())
+                {
+                    storageView.mutableStorage().swap(lastStorage);
+                }
+                else
+                {
+                    co_await storage2::merge(lastStorage, storageView.mutableStorage());
+                }
+            }
 
-            MergeRangeType reduceRange =
-                RANGES::subrange(RANGES::begin(executeChunks), finishedIt) |
-                RANGES::views::chunk(2) |
-                RANGES::views::transform(
-                    [](auto&& input) -> typename MultiLayerStorage::MutableStorage* {
-                        if (RANGES::size(input) > 1)
-                        {
-                            auto& mutableStorage = input[1].localStorage().mutableStorage();
-                            return std::addressof(mutableStorage);
-                        }
-                        auto& mutableStorage = input[0].localStorage().mutableStorage();
-                        return std::addressof(mutableStorage);
-                    });
-
-            auto outRange = mergeStorages(reduceRange);
-            storageView.mutableStorage().merge(**(outRange.begin()), true);
-            chunkSize = std::min(chunkSize * 2, (size_t)RANGES::size(transactions));
+            m_asyncTaskGroup->run([executeChunks = std::move(executeChunks),
+                                      lastStorage = std::move(lastStorage)]() {});
+            ++retryCount;
         }
 
         // Still have transactions, execute it serially
-        // if (chunkIt != RANGES::end(executeChunks))
+        // if (offset < RANGES::size(transactions))
         // {
-        //     auto startOffset =
-        //         RANGES::distance(RANGES::begin(executeChunks), chunkIt) * m_chunkSize;
-        //     co_await serialExecute(blockHeader, startOffset, receiptFactory(), tableNamePool(),
-        //         transactionAndReceiptsChunks | RANGES::views::drop(startOffset),
-        //         localMultiLayerStorage);
+        //     co_await serialExecute(blockHeader, receiptFactory(), tableNamePool(),
+        //         transactionAndReceipts | RANGES::views::drop(offset),
+        //         storageView.mutableStorage());
+        //     ++retryCount;
         // }
+        PARALLEL_SCHEDULER_LOG(DEBUG)
+            << "Parallel scheduler execute finished, retry counts: " << retryCount;
+        m_asyncTaskGroup->run([storageView = std::move(storageView)]() {});
 
         co_return receipts;
-    }
-
-    using MergeRangeType = RANGES::any_view<typename MultiLayerStorage::MutableStorage*,
-        RANGES::category::mask | RANGES::category::sized>;
-    MergeRangeType mergeStorages(MergeRangeType& range)
-    {
-        auto inputRange = range | RANGES::views::chunk(2);
-        MergeRangeType outputRange =
-            inputRange | RANGES::views::transform(
-                             [](auto&& input) -> typename MultiLayerStorage::MutableStorage* {
-                                 typename MultiLayerStorage::MutableStorage* storage = nullptr;
-                                 for (auto* ptr : input)
-                                 {
-                                     storage = ptr;
-                                 }
-                                 return storage;
-                             });
-
-        tbb::task_group mergeGroup;
-        for (auto&& subrange : inputRange)
-        {
-            mergeGroup.run([subrange]() {
-                typename MultiLayerStorage::MutableStorage* storage = nullptr;
-                for (auto* ptr : subrange)
-                {
-                    if (!storage)
-                    {
-                        storage = ptr;
-                    }
-                    else
-                    {
-                        ptr->merge(*storage, false);
-                    }
-                }
-            });
-        }
-        mergeGroup.wait();
-
-        if (RANGES::size(outputRange) > 1)
-        {
-            return mergeStorages(outputRange);
-        }
-        return outputRange;
     }
 
     void setChunkSize(size_t chunkSize) { m_chunkSize = chunkSize; }

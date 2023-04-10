@@ -308,7 +308,7 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                     keys[j] = std::string((char*)transactionHash.data(), transactionHash.size());
                     // write transactions and receipts to archive database
                     Json::Value transactionJson;
-                    bcos::rpc::toJsonResp(transactionJson, transaction);
+                    bcos::rpc::toJsonResp(transactionJson, *transaction);
                     transactionValues[j] = transactionJson.toStyledString();
                     // read the receipt and store to archive database use json format
                     Json::Value receiptJson;

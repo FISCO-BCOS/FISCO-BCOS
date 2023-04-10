@@ -4,11 +4,7 @@
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
-#include <boost/function.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/view/repeat.hpp>
-#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -249,7 +245,7 @@ BOOST_AUTO_TEST_CASE(range)
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             }));
         auto readRange = readIt.range();
-        for (auto&& [kv, num] : RANGES::zip_view(readRange, RANGES::iota_view<size_t>(0)))
+        for (auto&& [kv, num] : RANGES::views::zip(readRange, RANGES::iota_view<size_t>(0)))
         {
             auto& [key, value] = kv;
             BOOST_CHECK(key);
@@ -265,7 +261,7 @@ BOOST_AUTO_TEST_CASE(range)
         auto seekIt = co_await storage.seek(storage2::STORAGE_BEGIN);
         auto seekRange = seekIt.range();
 
-        for (auto&& [kv, num] : RANGES::zip_view(seekRange, RANGES::iota_view<size_t>(0)))
+        for (auto&& [kv, num] : RANGES::views::zip(seekRange, RANGES::iota_view<size_t>(0)))
         {
             auto& [key, value] = kv;
             BOOST_CHECK(key);
@@ -290,7 +286,7 @@ BOOST_AUTO_TEST_CASE(merge)
         storage1.write(RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
         storage2.write(RANGES::iota_view<int, int>(9, 19), RANGES::repeat_view<int>(200));
 
-        storage1.merge(storage2, true);
+        co_await storage1.merge(storage2);
         auto it = co_await storage1.seek(bcos::storage2::STORAGE_BEGIN);
         int i = 0;
         while (co_await it.next())

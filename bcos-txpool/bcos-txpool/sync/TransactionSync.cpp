@@ -32,44 +32,6 @@ using namespace bcos::ledger;
 using namespace bcos::consensus;
 static unsigned const c_maxSendTransactions = 10000;
 
-void TransactionSync::start()
-{
-    startWorking();
-    m_running.store(true);
-    SYNC_LOG(DEBUG) << LOG_DESC("start TransactionSync");
-}
-
-void TransactionSync::stop()
-{
-    if (!m_running)
-    {
-        SYNC_LOG(DEBUG) << LOG_DESC("TransactionSync already stopped");
-        return;
-    }
-    m_running.store(false);
-    if (m_worker)
-    {
-        m_worker->stop();
-    }
-    if (m_txsRequester)
-    {
-        m_txsRequester->stop();
-    }
-    finishWorker();
-    stopWorking();
-    terminate();
-    SYNC_LOG(DEBUG) << LOG_DESC("stop SyncTransaction");
-}
-
-void TransactionSync::executeWorker()
-{
-    if (!m_config->existsInGroup() || (!m_newTransactions && downloadTxsBufferEmpty()))
-    {
-        boost::unique_lock<boost::mutex> l(x_signalled);
-        m_signalled.wait_for(l, boost::chrono::milliseconds(10));
-    }
-}
-
 void TransactionSync::onRecvSyncMessage(
     Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data, SendResponseCallback _sendResponse)
 {

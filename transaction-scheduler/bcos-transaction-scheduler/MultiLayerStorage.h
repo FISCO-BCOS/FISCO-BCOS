@@ -1,8 +1,11 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Trait.h"
+#include "bcos-task/Wait.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <oneapi/tbb/parallel_invoke.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
@@ -24,8 +27,10 @@ struct UnsupportedMethod : public bcos::Error {};
 
 template <transaction_executor::StateStorage MutableStorageType, class CachedStorage,
     transaction_executor::StateStorage BackendStorage>
-requires((std::is_void_v<CachedStorage> || (transaction_executor::StateStorage<CachedStorage>)) &&
-         storage2::SeekableStorage<MutableStorageType>) class MultiLayerStorage
+    requires(
+        (std::is_void_v<CachedStorage> || (transaction_executor::StateStorage<CachedStorage>)) &&
+        storage2::SeekableStorage<MutableStorageType>)
+class MultiLayerStorage
 {
 private:
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
@@ -62,15 +67,48 @@ public:
             m_cacheStorage;
         std::unique_lock<std::mutex> m_mutableLock;
 
-        View(BackendStorage& backendStorage) requires(!withCacheStorage)
+        View(BackendStorage& backendStorage)
+            requires(!withCacheStorage)
           : m_backendStorage(backendStorage)
         {}
         View(BackendStorage& backendStorage,
             std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
                 std::monostate>
-                cacheStorage) requires(withCacheStorage)
+                cacheStorage)
+            requires(withCacheStorage)
           : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
         {}
+
+        template <RANGES::input_range Keys, RANGES::input_range Values>
+        using ReadStorageReturnType = boost::container::small_vector<
+            std::tuple<std::add_pointer_t<std::add_const_t<RANGES::range_value_t<Keys>>>,
+                std::add_pointer_t<RANGES::range_value_t<Values>>>,
+            1>;
+        static auto readStorage(
+            RANGES::input_range auto const& keys, RANGES::input_range auto& values, auto& storage)
+            -> task::Task<ReadStorageReturnType<decltype(keys), decltype(values)>>
+        {
+            ReadStorageReturnType<decltype(keys), decltype(values)> missings;
+
+            auto keyIt = RANGES::begin(keys);
+            auto valueIt = RANGES::begin(values);
+            auto it = co_await storage.read(keys);
+            while (co_await it.next())
+            {
+                if (co_await it.hasValue())
+                {
+                    (*valueIt).emplace(co_await it.value());
+                }
+                else
+                {
+                    missings.emplace_back(
+                        std::make_tuple(std::addressof(*keyIt), std::addressof(*valueIt)));
+                }
+                RANGES::advance(keyIt, 1);
+                RANGES::advance(valueIt, 1);
+            }
+            co_return missings;
+        }
 
     public:
         View(const View&) = delete;
@@ -109,38 +147,6 @@ public:
             task::AwaitableValue<bool> hasValue() const { return {m_values[m_index].has_value()}; }
         };
 
-        auto readStorage(
-            RANGES::input_range auto const& keys, RANGES::input_range auto& values, auto& storage)
-            -> task::Task<boost::container::small_vector<
-                std::tuple<const RANGES::range_value_t<decltype(keys)>*,
-                    RANGES::range_value_t<decltype(values)>*>,
-                1>>
-        {
-            boost::container::small_vector<std::tuple<const RANGES::range_value_t<decltype(keys)>*,
-                                               RANGES::range_value_t<decltype(values)>*>,
-                1>
-                missings;
-
-            auto keyIt = RANGES::begin(keys);
-            auto valueIt = RANGES::begin(values);
-            auto it = co_await storage.read(keys);
-            while (co_await it.next())
-            {
-                if (co_await it.hasValue())
-                {
-                    (*valueIt).emplace(co_await it.value());
-                }
-                else
-                {
-                    missings.emplace_back(
-                        std::make_tuple(std::addressof(*keyIt), std::addressof(*valueIt)));
-                }
-                RANGES::advance(keyIt, 1);
-                RANGES::advance(valueIt, 1);
-            }
-            co_return missings;
-        }
-
         using Key = KeyType;
         using Value = ValueType;
 
@@ -160,14 +166,10 @@ public:
             ReadIterator iterator;
             iterator.m_keys = keys | RANGES::to<decltype(iterator.m_keys)>();
             iterator.m_values.resize(RANGES::size(iterator.m_keys));
-            auto const& myKeys = iterator.m_keys;
+            const auto& myKeys = iterator.m_keys;
             auto& myValues = iterator.m_values;
 
-            boost::container::small_vector<
-                std::tuple<const RANGES::range_value_t<decltype(myKeys)>*,
-                    RANGES::range_value_t<decltype(myValues)>*>,
-                1>
-                missing;
+            ReadStorageReturnType<decltype(myKeys), decltype(myValues)> missing;
 
             bool started = false;
             if (m_mutableStorage)
@@ -241,7 +243,7 @@ public:
                 // Write data into cache
                 if constexpr (withCacheStorage)
                 {
-                    for (auto&& [key, value] : RANGES::zip_view(keysView, valuesView))
+                    for (auto&& [key, value] : RANGES::views::zip(keysView, valuesView))
                     {
                         if (value)
                         {
@@ -291,14 +293,16 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    explicit MultiLayerStorage(BackendStorage& backendStorage) requires(!withCacheStorage)
+    explicit MultiLayerStorage(BackendStorage& backendStorage)
+        requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
     {}
 
     MultiLayerStorage(BackendStorage& backendStorage,
         std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
             std::monostate>
-            cacheStorage) requires(withCacheStorage)
+            cacheStorage)
+        requires(withCacheStorage)
       : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
     {}
     MultiLayerStorage(const MultiLayerStorage&) = delete;
@@ -375,30 +379,18 @@ public:
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
-        auto& immutableStorage = m_immutableStorages.back();
+        auto immutableStorage = m_immutableStorages.back();
         immutablesLock.unlock();
 
-        auto it = co_await immutableStorage->seek(storage2::STORAGE_BEGIN);
-        while (co_await it.next())
+        if constexpr (withCacheStorage)
         {
-            auto&& key = co_await it.key();
-            if (co_await it.hasValue())
-            {
-                auto&& value = co_await it.value();
-                if constexpr (withCacheStorage)
-                {
-                    co_await storage2::writeOne(m_cacheStorage, key, value);
-                }
-                co_await storage2::writeOne(m_backendStorage, key, value);
-            }
-            else
-            {
-                if constexpr (withCacheStorage)
-                {
-                    co_await storage2::removeOne(m_cacheStorage, key);
-                }
-                co_await storage2::removeOne(m_backendStorage, key);
-            }
+            tbb::parallel_invoke(
+                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_backendStorage)); },
+                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_cacheStorage)); });
+        }
+        else
+        {
+            co_await storage2::merge(*immutableStorage, m_backendStorage);
         }
 
         immutablesLock.lock();

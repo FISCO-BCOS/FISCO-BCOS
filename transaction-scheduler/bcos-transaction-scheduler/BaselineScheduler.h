@@ -3,20 +3,29 @@
 #include "SchedulerBaseImpl.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-concepts/ledger/Ledger.h>
+#include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/ITTAPI.h>
 #include <fmt/format.h>
-#include <tbb/task_group.h>
+#include <ittnotify.h>
+#include <oneapi/tbb/parallel_invoke.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
+#include <exception>
 #include <memory>
-#include <queue>
+#include <type_traits>
 
 namespace bcos::transaction_scheduler
 {
@@ -27,25 +36,21 @@ namespace bcos::transaction_scheduler
 struct NotFoundTransactionError: public bcos::Error {};
 // clang-format on
 
-template <class SchedulerImpl, protocol::IsBlockHeaderFactory BlockHeaderFactory,
-    concepts::ledger::IsLedger Ledger, txpool::IsTxPool TxPool,
-    protocol::IsTransactionSubmitResultFactory TransactionSubmitResultFactory>
+template <class SchedulerImpl, concepts::ledger::IsLedger Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
     SchedulerImpl& m_schedulerImpl;
-    BlockHeaderFactory& m_blockHeaderFactory;
+    protocol::BlockHeaderFactory& m_blockHeaderFactory;
     Ledger& m_ledger;
-    TxPool& m_txpool;
-    TransactionSubmitResultFactory& m_transactionSubmitResultFactory;
-
+    txpool::TxPoolInterface& m_txpool;
+    protocol::TransactionSubmitResultFactory& m_transactionSubmitResultFactory;
     std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(Error::Ptr)>)>
         m_transactionNotifier;
     crypto::Hash const& m_hashImpl;
-
-    tbb::task_group m_notifyGroup;
+    tbb::task_group m_asyncGroup;
     int64_t m_lastExecutedBlockNumber = -1;
     std::mutex m_executeMutex;
     int64_t m_lastcommittedBlockNumber = -1;
@@ -59,32 +64,37 @@ private:
     std::list<ExecuteResult> m_results;
     std::mutex m_resultsMutex;
 
-    task::AwaitableValue<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
-        protocol::IsBlock auto const& block)
+    task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
+        protocol::IsBlock auto const& block) const
     {
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+            ittapi::ITT_DOMAINS::instance().GET_TRANSACTIONS);
         if (block.transactionsSize() > 0)
         {
-            return {RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsSize()) |
-                    RANGES::views::transform(
-                        [&block](uint64_t index) { return block.transaction(index); }) |
-                    RANGES::to<std::vector<protocol::Transaction::ConstPtr>>()};
+            co_return RANGES::views::iota(0LU, block.transactionsSize()) |
+                RANGES::views::transform(
+                    [&block](uint64_t index) { return block.transaction(index); }) |
+                RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
         }
 
-        return {m_txpool.getTransactions(
-                    RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
-                    RANGES::views::transform(
-                        [&block](uint64_t index) { return block.transactionHash(index); })) |
-                RANGES::to<std::vector<protocol::Transaction::ConstPtr>>()};
-
-        // TODO: get lost transaction from ledger
+        co_return co_await m_txpool.getTransactions(
+            RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
+            RANGES::views::transform(
+                [&block](uint64_t index) { return block.transactionHash(index); })) |
+            RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
     }
 
-    void writeTransactions() {}
+    auto current() const
+    {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+    }
 
 public:
-    BaselineScheduler(SchedulerImpl& schedulerImpl, BlockHeaderFactory& blockFactory,
-        Ledger& ledger, TxPool& txPool,
-        TransactionSubmitResultFactory& transactionSubmitResultFactory,
+    BaselineScheduler(SchedulerImpl& schedulerImpl, protocol::BlockHeaderFactory& blockFactory,
+        Ledger& ledger, txpool::TxPoolInterface& txPool,
+        protocol::TransactionSubmitResultFactory& transactionSubmitResultFactory,
         crypto::Hash const& hashImpl)
       : m_schedulerImpl(schedulerImpl),
         m_blockHeaderFactory(blockFactory),
@@ -97,7 +107,7 @@ public:
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;
     BaselineScheduler& operator=(BaselineScheduler&&) noexcept = default;
-    ~BaselineScheduler() noexcept override { m_notifyGroup.wait(); }
+    ~BaselineScheduler() noexcept override = default;
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>
@@ -105,17 +115,19 @@ public:
     {
         task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
                        decltype(callback) callback) -> task::Task<void> {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().EXECUTE_BLOCK);
             try
             {
                 auto blockHeader = block->blockHeaderConst();
-                BASELINE_SCHEDULER_LOG(INFO)
-                    << "Execute block: " << blockHeader->number() << " | " << verify << " | "
-                    << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
+
                 std::unique_lock executeLock(self->m_executeMutex, std::try_to_lock);
                 if (!executeLock.owns_lock())
                 {
                     auto message = fmt::format(
                         "Another block:{} is executing!", self->m_lastExecutedBlockNumber);
+
+                    report.release();
                     BASELINE_SCHEDULER_LOG(INFO) << message;
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
@@ -123,6 +135,11 @@ public:
 
                     co_return;
                 }
+
+                auto now = self->current();
+                BASELINE_SCHEDULER_LOG(INFO)
+                    << "Execute block: " << blockHeader->number() << " | " << verify << " | "
+                    << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
 
                 if (self->m_lastExecutedBlockNumber != -1 &&
                     blockHeader->number() - self->m_lastExecutedBlockNumber != 1)
@@ -133,11 +150,57 @@ public:
 
                     executeLock.unlock();
                     BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                    report.release();
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
                         nullptr, false);
                     co_return;
                 }
+
+                // start calucate transaction root
+                std::promise<bcos::h256> transactionRootPromise;
+                self->m_asyncGroup.run([&]() {
+                    auto anyHasher = self->m_hashImpl.hasher();
+
+                    std::visit(
+                        [&](auto& hasher) {
+                            try
+                            {
+                                bcos::crypto::merkle::Merkle<
+                                    std::remove_reference_t<decltype(hasher)>>
+                                    merkle;
+                                std::vector<bcos::h256> merkleTrie;
+                                if (block->transactionsSize() > 0)
+                                {
+                                    auto hashes =
+                                        RANGES::iota_view<size_t, size_t>(
+                                            0LU, block->transactionsSize()) |
+                                        RANGES::views::transform([&block](uint64_t index) {
+                                            return block->transaction(index)->hash();
+                                        });
+                                    merkle.generateMerkle(hashes, merkleTrie);
+                                }
+                                else
+                                {
+                                    auto hashes =
+                                        RANGES::iota_view<size_t, size_t>(
+                                            0LU, block->transactionsMetaDataSize()) |
+                                        RANGES::views::transform([&block](uint64_t index) {
+                                            return block->transactionHash(index);
+                                        });
+                                    merkle.generateMerkle(hashes, merkleTrie);
+                                }
+                                // TODO: write merkle into storage
+                                transactionRootPromise.set_value(*RANGES::rbegin(merkleTrie));
+                            }
+                            catch (...)
+                            {
+                                transactionRootPromise.set_exception(std::current_exception());
+                            }
+                        },
+                        anyHasher);
+                });
 
                 self->m_schedulerImpl.start();
                 auto transactions = co_await self->getTransactions(*block);
@@ -146,35 +209,57 @@ public:
                         RANGES::views::transform(
                             [](protocol::Transaction::ConstPtr const& transactionPtr)
                                 -> protocol::Transaction const& { return *transactionPtr; }));
-                bcos::u256 totalGas = 0;
-                for (auto&& [receipt, index] :
-                    RANGES::zip_view(receipts, RANGES::iota_view<uint64_t>(0UL)))
-                {
-                    totalGas += receipt->gasUsed();
-                    if (index < block->receiptsSize())
-                    {
-                        block->setReceipt(index, std::move(receipt));
-                    }
-                    else
-                    {
-                        block->appendReceipt(std::move(receipt));
-                    }
-                }
-                auto stateRoot =
-                    co_await self->m_schedulerImpl.finish(*blockHeader, self->m_hashImpl);
 
                 auto newBlockHeader = self->m_blockHeaderFactory.populateBlockHeader(blockHeader);
-                newBlockHeader->setStateRoot(stateRoot);
-                newBlockHeader->setGasUsed(totalGas);
-                newBlockHeader->setTxsRoot(block->calculateTransactionRoot(self->m_hashImpl));
-                newBlockHeader->setReceiptsRoot(block->calculateReceiptRoot(self->m_hashImpl));
-                newBlockHeader->calculateHash(self->m_hashImpl);
+                {
+                    ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
 
-                BASELINE_SCHEDULER_LOG(INFO)
-                    << "Execute block finished: " << newBlockHeader->number() << " | "
-                    << newBlockHeader->hash() << " | " << stateRoot << " | "
-                    << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot() << " | "
-                    << totalGas;
+                    tbb::parallel_invoke(
+                        [&]() {
+                            bcos::u256 totalGas = 0;
+                            for (auto&& [receipt, index] :
+                                RANGES::views::zip(receipts, RANGES::views::iota(0UL)))
+                            {
+                                totalGas += receipt->gasUsed();
+                                if (index < block->receiptsSize())
+                                {
+                                    block->setReceipt(index, receipt);
+                                }
+                                else
+                                {
+                                    block->appendReceipt(receipt);
+                                }
+                            }
+                            newBlockHeader->setGasUsed(totalGas);
+                        },
+                        [&]() {
+                            newBlockHeader->setStateRoot(task::syncWait(
+                                self->m_schedulerImpl.finish(*blockHeader, self->m_hashImpl)));
+                        },
+                        [&]() {
+                            auto anyHasher = self->m_hashImpl.hasher();
+                            std::visit(
+                                [&](auto& hasher) {
+                                    bcos::crypto::merkle::Merkle<
+                                        std::remove_reference_t<decltype(hasher)>>
+                                        merkle;
+                                    auto hashesRange = receipts | RANGES::views::transform(
+                                                                      [](const auto& receipt) {
+                                                                          return receipt->hash();
+                                                                      });
+
+                                    std::vector<bcos::h256> merkleTrie;
+                                    merkle.generateMerkle(hashesRange, merkleTrie);
+                                    // TODO: write merkle into storage
+                                    newBlockHeader->setReceiptsRoot(*RANGES::rbegin(merkleTrie));
+                                },
+                                anyHasher);
+                        });
+                    auto transactionRootFuture = transactionRootPromise.get_future();
+                    newBlockHeader->setTxsRoot(transactionRootFuture.get());
+                    newBlockHeader->calculateHash(self->m_hashImpl);
+                }
 
                 if (verify && newBlockHeader->hash() != blockHeader->hash())
                 {
@@ -183,6 +268,7 @@ public:
                     BASELINE_SCHEDULER_LOG(ERROR) << message;
 
                     executeLock.unlock();
+                    report.release();
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
                         nullptr, false);
@@ -197,6 +283,13 @@ public:
                 resultsLock.unlock();
                 executeLock.unlock();
 
+                BASELINE_SCHEDULER_LOG(INFO)
+                    << "Execute block finished: " << newBlockHeader->number() << " | "
+                    << newBlockHeader->hash() << " | " << newBlockHeader->stateRoot() << " | "
+                    << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot() << " | "
+                    << newBlockHeader->gasUsed() << " | " << (self->current() - now) << "ms";
+
+                report.release();
                 callback(nullptr, std::move(newBlockHeader), false);
                 co_return;
             }
@@ -205,6 +298,8 @@ public:
                 auto message =
                     fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
+
+                report.release();
                 callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false);
             }
@@ -216,6 +311,8 @@ public:
     {
         task::wait([](decltype(this) self, protocol::BlockHeader::Ptr blockHeader,
                        decltype(callback) callback) -> task::Task<void> {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().COMMIT_BLOCK);
             try
             {
                 BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << blockHeader->number();
@@ -226,6 +323,8 @@ public:
                     auto message = fmt::format(
                         "Another block:{} is committing!", self->m_lastcommittedBlockNumber);
                     BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                    report.release();
                     callback(
                         BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                         nullptr);
@@ -241,6 +340,8 @@ public:
 
                     commitLock.unlock();
                     BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                    report.release();
                     callback(BCOS_ERROR_UNIQUE_PTR(
                                  scheduler::SchedulerError::InvalidBlockNumber, message),
                         nullptr);
@@ -278,10 +379,13 @@ public:
                 BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << blockHeader->number();
                 commitLock.unlock();
 
-                self->m_notifyGroup.run([self = self, result = std::move(result)]() {
+                self->m_asyncGroup.run([self = self, result = std::move(result)]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
+
                     auto blockHeader = result.m_block->blockHeaderConst();
                     auto submitResults =
-                        RANGES::iota_view<uint64_t, uint64_t>(0L, result.m_block->receiptsSize()) |
+                        RANGES::views::iota(0LU, result.m_block->receiptsSize()) |
                         RANGES::views::transform(
                             [&](uint64_t index) -> protocol::TransactionSubmitResult::Ptr {
                                 auto& transaction = result.m_transactions[index];
@@ -316,6 +420,8 @@ public:
                             }
                         });
                 });
+
+                report.release();
                 callback(nullptr, std::move(ledgerConfig));
                 co_return;
             }
@@ -324,6 +430,8 @@ public:
                 auto message =
                     fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
+
+                report.release();
                 callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr);
             }

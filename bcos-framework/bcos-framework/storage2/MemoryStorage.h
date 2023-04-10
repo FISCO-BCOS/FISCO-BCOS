@@ -3,6 +3,7 @@
 #include "Storage.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/NullLock.h>
+#include <oneapi/tbb/parallel_for_each.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -14,22 +15,20 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <mutex>
-#include <set>
+#include <range/v3/view/transform.hpp>
 #include <thread>
 #include <type_traits>
 #include <utility>
-#include <variant>
 
 namespace bcos::storage2::memory_storage
 {
 
 template <class Object>
-concept HasMemberSize = requires(Object object)
-{
-    // clang-format off
+concept HasMemberSize = requires(Object object) {
+                            // clang-format off
     { object.size() } -> std::integral;
-    // clang-format on
-};
+                            // clang-format on
+                        };
 
 struct Empty
 {
@@ -67,10 +66,8 @@ private:
     using Mutex = std::mutex;
     using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
-
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
-
     struct Data
     {
         KeyType key;
@@ -122,21 +119,20 @@ private:
         }
     }
 
-    void updateMRUAndCheck(Bucket& bucket,
-        typename Container::template nth_index<0>::type::iterator entryIt) requires withMRU
+    void updateMRUAndCheck(
+        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt)
+        requires withMRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
         index.relocate(index.end(), seqIt);
 
-        size_t clearCount = 0;
         while (bucket.capacity > m_maxCapacity && !bucket.container.empty())
         {
             auto const& item = index.front();
             bucket.capacity -= getSize(item.value);
 
             index.pop_front();
-            ++clearCount;
         }
     }
 
@@ -156,7 +152,8 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MemoryStorage() requires(!withConcurrent)
+    MemoryStorage()
+        requires(!withConcurrent)
     {
         if constexpr (withMRU)
         {
@@ -164,7 +161,8 @@ public:
         }
     }
 
-    explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT) requires(withConcurrent)
+    explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT)
+        requires(withConcurrent)
       : m_buckets(std::min(buckets, getBucketSize()))
     {
         if constexpr (withMRU)
@@ -178,7 +176,11 @@ public:
     MemoryStorage& operator=(MemoryStorage&&) noexcept = default;
     ~MemoryStorage() noexcept = default;
 
-    void setMaxCapacity(int64_t capacity) requires withMRU { m_maxCapacity = capacity; }
+    void setMaxCapacity(int64_t capacity)
+        requires withMRU
+    {
+        m_maxCapacity = capacity;
+    }
 
     class ReadIterator
     {
@@ -322,7 +324,7 @@ public:
         }
     };
 
-    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto const& keys)
+    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto&& keys)
     {
         task::AwaitableValue<ReadIterator> outputAwaitable(ReadIterator{});
         ReadIterator& output = outputAwaitable.value();
@@ -365,7 +367,8 @@ public:
         return outputAwaitable;
     }
 
-    task::AwaitableValue<SeekIterator> seek(auto const& key) requires(withOrdered)
+    task::AwaitableValue<SeekIterator> seek(auto const& key)
+        requires(withOrdered)
     {
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
@@ -396,7 +399,7 @@ public:
     task::AwaitableValue<void> write(
         RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, value] : RANGES::zip_view(
+        for (auto&& [key, value] : RANGES::views::zip(
                  std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
         {
             auto [bucket, lock] = getBucket(key);
@@ -495,9 +498,9 @@ public:
         return {};
     }
 
-    void merge(MemoryStorage& from, bool overwrite)
+    task::Task<void> merge(MemoryStorage& from)
     {
-        for (auto bucketPair : RANGES::zip_view(m_buckets, from.m_buckets))
+        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
         {
             auto& [bucket, fromBucket] = bucketPair;
             Lock toLock(bucket.mutex);
@@ -506,22 +509,43 @@ public:
             auto& index = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
 
-            if (overwrite)
+            while (!fromIndex.empty())
             {
-                while (!fromIndex.empty())
+                auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
+                if (!merged)
                 {
-                    auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
-                    if (!merged)
-                    {
-                        index.insert(index.erase(it), fromIndex.extract(fromIndex.begin()));
-                    }
+                    index.insert(index.erase(it), fromIndex.extract(fromIndex.begin()));
                 }
             }
-            else
+        }
+        co_return;
+    }
+
+    void swap(MemoryStorage& from)
+    {
+        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
+        {
+            auto& [bucket, fromBucket] = bucketPair;
+            Lock toLock(bucket.mutex);
+            Lock fromLock(fromBucket.mutex);
+            bucket.container.swap(fromBucket.container);
+        }
+    }
+
+    bool empty() const
+    {
+        bool allEmpty = true;
+        for (auto& bucket : m_buckets)
+        {
+            Lock lock(bucket.mutex);
+            if (!bucket.container.empty())
             {
-                index.merge(fromIndex);
+                allEmpty = false;
+                break;
             }
         }
+
+        return allEmpty;
     }
 };
 

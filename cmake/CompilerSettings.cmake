@@ -40,7 +40,6 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     add_compile_options(-Wno-unused-variable)
     add_compile_options(-Wno-error=unknown-pragmas)
     add_compile_options(-Wno-error=deprecated-declarations)
-
     add_compile_options(-fno-omit-frame-pointer)
 
     if(NOT APPLE)
@@ -68,7 +67,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
         endif()
 
-        # SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Bdynamic -ldl -lpthread -Wl,-Bstatic -static-libstdc++ ")
+        # SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-Bdynamic -ldl -lpthread -Wl,-Bstatic")
     endif()
 
     if(TESTS)
@@ -110,17 +109,16 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
 
         add_compile_options(-fPIC)
-        add_compile_options(-Wno-error=restrict)
-        add_compile_options(-Wno-error=stringop-overflow)
         add_compile_options(-Wno-error=nonnull)
         add_compile_options(-foptimize-sibling-calls)
+        add_compile_options(-Wno-stringop-overflow)
+        add_compile_options(-Wno-restrict)
 
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0)
-            add_compile_options(-Wno-error=stringop-overread)
-            add_compile_options(-Wno-subobject-linkage)
+            add_compile_options(-Wno-stringop-overread)
             add_compile_options(-Wno-maybe-uninitialized)
-            add_compile_options(-Wno-error=array-bounds)
-            add_compile_options(-Wno-error=aggressive-loop-optimizations)
+            add_compile_options(-Wno-array-bounds)
+            add_compile_options(-Wno-aggressive-loop-optimizations)
         endif()
         # add_compile_options(-fconcepts-diagnostics-depth=10)
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")

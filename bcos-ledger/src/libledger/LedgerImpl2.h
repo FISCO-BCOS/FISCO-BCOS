@@ -17,13 +17,12 @@ namespace bcos::ledger
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
 
-template <bcos::crypto::hasher::Hasher Hasher, bcos::transaction_executor::StateStorage Storage,
-    protocol::IsBlockFactory BlockFactory>
+template <bcos::crypto::hasher::Hasher Hasher, bcos::transaction_executor::StateStorage Storage>
 class LedgerImpl2
 {
 private:
     Storage& m_storage;
-    BlockFactory& m_blockFactory;
+    protocol::BlockFactory& m_blockFactory;
     transaction_executor::TableNamePool& m_tableNamePool;
 
     decltype(m_blockFactory.transactionFactory()) m_transactionFactory;
@@ -170,7 +169,7 @@ private:
         }
 
         auto availableTransactions =
-            RANGES::iota_view<uint64_t, uint64_t>(0, block.transactionsSize()) |
+            RANGES::iota_view<size_t, size_t>(0LU, block.transactionsSize()) |
             RANGES::views::transform([&block](uint64_t index) { return block.transaction(index); });
 
         auto hashes = availableTransactions | RANGES::views::transform([](auto& transaction) {
@@ -208,19 +207,18 @@ private:
             ++totalTransactionCount;
         }
 
-        auto hashes = RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
+        auto hashes = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
                       RANGES::views::transform([&block](uint64_t index) {
                           auto metaData = block.transactionMetaData(index);
                           return metaData->hash();
                       });
-        auto buffers =
-            RANGES::iota_view<uint64_t, uint64_t>(0LU, block.transactionsMetaDataSize()) |
-            RANGES::views::transform([&block](uint64_t index) {
-                auto receipt = block.receipt(index);
-                std::vector<bcos::byte> buffer;
-                bcos::concepts::serialize::encode(*receipt, buffer);
-                return buffer;
-            });
+        auto buffers = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
+                       RANGES::views::transform([&block](uint64_t index) {
+                           auto receipt = block.receipt(index);
+                           std::vector<bcos::byte> buffer;
+                           bcos::concepts::serialize::encode(*receipt, buffer);
+                           return buffer;
+                       });
 
         co_await setTransactions<false>(hashes, buffers);
 
@@ -274,7 +272,7 @@ private:
     }
 
 public:
-    LedgerImpl2(Storage& storage, BlockFactory& blockFactory,
+    LedgerImpl2(Storage& storage, protocol::BlockFactory& blockFactory,
         transaction_executor::TableNamePool& tableNamePool)
       : m_storage(storage),
         m_blockFactory(blockFactory),

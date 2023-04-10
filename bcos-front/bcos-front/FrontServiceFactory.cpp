@@ -55,7 +55,6 @@ FrontService::Ptr FrontServiceFactory::buildFrontService(
     frontService->setNodeID(_nodeID);
     frontService->setIoService(ioService);
     frontService->setGatewayInterface(m_gatewayInterface);
-    frontService->setThreadPool(m_threadPool);
 
     return frontService;
 }
