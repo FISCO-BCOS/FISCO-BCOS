@@ -15,12 +15,6 @@ void ShardingBlockExecutive::prepare()
         return;
     }
 
-    if (m_isSysBlock)
-    {
-        // if is sys block, clear the contract2ShardCache
-        m_contract2ShardCache->clear();
-    }
-
     auto breakPointT = utcTime();
     BlockExecutive::prepare();
 
@@ -69,6 +63,19 @@ void ShardingBlockExecutive::asyncExecute(
     startT = utcTime();
     if (!m_staticCall)
     {
+        // sysBlock need to clear shard cache
+        if (m_isSysBlock) [[unlikely]]
+        {
+            callback = [this, callback = std::move(callback)](Error::UniquePtr error,
+                           protocol::BlockHeader::Ptr blockHeader, bool isSysBlock) {
+                if (!error)
+                {
+                    m_contract2ShardCache->clear();  // sysBlock need to clear shard cache
+                }
+                callback(std::move(error), std::move(blockHeader), isSysBlock);
+            };
+        }
+
         // Execute nextBlock
         batchNextBlock([this, callback = std::move(callback)](Error::UniquePtr error) {
             if (!m_isRunning)
