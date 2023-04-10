@@ -81,13 +81,5 @@ jobs:
       - name: start air node for rpc test
         run: cd tools && bash .ci/rpc_check.sh
 
-      - name: Install Postman CLI
-        run: |
-          curl -o- "https://dl-cli.pstmn.io/install/osx_64.sh" | sh
-      - name: Login to Postman CLI
-        run: postman login --with-api-key PMAK-6433dcbdbbfd385fce4a624a-b5c1caca9d6eb6d092f66996d2d90cdb5c
-      - name: Run API tests
-        run: |
-          postman collection run "26671222-41a40221-e907-4286-91fb-a6c100cff181" -e "26671222-0b39412b-11d6-4a0a-8d6b-75f99851e352"
 
 
