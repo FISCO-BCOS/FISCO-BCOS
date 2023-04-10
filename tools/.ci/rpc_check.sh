@@ -1,9 +1,5 @@
 #!/bin/bash
-console_branch="master"
-fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
-build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
-node_list="node0 node1 node2 node3"
 LOG_ERROR() {
     local content=${1}
     echo -e "\033[31m ${content}\033[0m"
@@ -43,7 +39,7 @@ start_node()
     fi
 }
 
-install_postmanCLI()
+rpc_apiTest()
 {
     cd ${current_path}
     LOG_INFO " >>>>>>>>>> download postmanCLI  <<<<<<<<<<<<"
@@ -57,5 +53,5 @@ install_postmanCLI()
 # non-sm test
 LOG_INFO "======== FISCOBCOS 3.0 RPC API check ========"
 start_node
-install_postmanCLI
+rpc_apiTest
 stop_node
