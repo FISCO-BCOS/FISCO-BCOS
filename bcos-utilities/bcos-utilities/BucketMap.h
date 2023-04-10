@@ -379,9 +379,9 @@ public:
             std::queue<std::pair<size_t, typename Bucket<KeyType, ValueType>::Ptr>> bucket2Remove;
             for (size_t i = 0; i < m_buckets.size(); i++)
             {
-                const auto& bucket = m_buckets[i];
-                bucket2Remove.emplace(i, std::move(bucket));
+                auto bucket = m_buckets[i];
                 m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+                bucket2Remove.emplace(i, std::move(bucket));
             }
 
             while (!bucket2Remove.empty())

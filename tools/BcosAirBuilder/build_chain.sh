@@ -1246,6 +1246,8 @@ generate_config_ini() {
     sm_ssl=false
     ; ssl connection switch, if disable the ssl connection, default: false
     ${disable_ssl_content}
+    ; return input params in sendTransaction() return, default: true
+    ; return_input_params=false
 
 [cert]
     ; directory the certificates located in

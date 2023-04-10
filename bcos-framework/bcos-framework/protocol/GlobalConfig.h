@@ -82,6 +82,9 @@ public:
     void setEnableDAG(bool _enableDAG) { m_enableDAG = _enableDAG; }
     bool enableDAG() const { return m_enableDAG; }
 
+    void setNeedRetInput(bool _needRetInput) { m_needRetInput = _needRetInput; }
+    bool needRetInput() const { return m_needRetInput; }
+
     BlockVersion minSupportedVersion() const { return m_minSupportedVersion; }
     BlockVersion maxSupportedVersion() const { return m_maxSupportedVersion; }
 
@@ -94,6 +97,7 @@ private:
     ProtocolInfoCodec::Ptr m_codec;
     std::string m_storageType;
     bool m_enableDAG = true;
+    bool m_needRetInput = false;  // need add 'input' param in sendTransaction() return value
 };
 }  // namespace protocol
 }  // namespace bcos
