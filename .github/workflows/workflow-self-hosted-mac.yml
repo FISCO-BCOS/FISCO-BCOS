@@ -77,3 +77,13 @@ jobs:
 
       - name: Integration test - Pro
         run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
+
+      - name: start air node for rpc test
+        run: cd tools && bash .ci/rpc_check.sh
+
+      - name: Integration test - RPC API TEST
+        uses: matt-ball/newman-action@master
+        with:
+          collection: https://github.com/wenlinlee/FISCOBCOS-RPC-API/blob/main/fiscobcos3.0_rpc.postman_collection.json
+
+
