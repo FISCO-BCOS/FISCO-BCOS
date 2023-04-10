@@ -359,16 +359,19 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     int threadCount = _pt.get<int>("rpc.thread_count", 8);
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
     bool disableSsl = _pt.get<bool>("rpc.disable_ssl", false);
+    bool needRetInput = _pt.get<bool>("rpc.return_input_params", true);
 
     m_rpcListenIP = listenIP;
     m_rpcListenPort = listenPort;
     m_rpcThreadPoolSize = threadCount;
     m_rpcDisableSsl = disableSsl;
     m_rpcSmSsl = smSsl;
+    g_BCOSConfig.setNeedRetInput(needRetInput);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadRpcConfig") << LOG_KV("listenIP", listenIP)
                          << LOG_KV("listenPort", listenPort) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("smSsl", smSsl) << LOG_KV("disableSsl", disableSsl);
+                         << LOG_KV("smSsl", smSsl) << LOG_KV("disableSsl", disableSsl)
+                         << LOG_KV("needRetInput", needRetInput);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
