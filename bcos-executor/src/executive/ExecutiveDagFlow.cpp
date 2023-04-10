@@ -150,7 +150,9 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
         {
             // run normal tx
             auto& input = (*m_inputs)[id];
-            DAGFLOW_LOG(DEBUG) << LOG_DESC("Execute tx: start normal tx") << input->toString()
+            DAGFLOW_LOG(DEBUG) << LOG_DESC("Execute tx: start normal tx") << LOG_KV("id", id)
+                               << LOG_KV("to", input->receiveAddress);
+            DAGFLOW_LOG(TRACE) << LOG_DESC("txData") << input->toString() << LOG_KV("id", id)
                                << LOG_KV("to", input->receiveAddress)
                                << LOG_KV("data", toHexStringWithPrefix(input->data));
 
