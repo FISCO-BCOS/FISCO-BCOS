@@ -70,6 +70,8 @@ void ShardingBlockExecutive::asyncExecute(
                            protocol::BlockHeader::Ptr blockHeader, bool isSysBlock) {
                 if (!error)
                 {
+                    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number())
+                                        << "Clear contract2ShardCache after sysBlock has executed";
                     m_contract2ShardCache->clear();  // sysBlock need to clear shard cache
                 }
                 callback(std::move(error), std::move(blockHeader), isSysBlock);
