@@ -133,7 +133,7 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
 {
     // Note: not block seal new block here
     auto self = weak_from_this();
-    m_sealer->enqueue([self, _txsLimit, _avoidTxs, _sealCallback]() {
+    m_sealer->enqueue([self, this, _txsLimit, _avoidTxs, _sealCallback]() {
         auto txpool = self.lock();
         if (!txpool)
         {
@@ -141,7 +141,10 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         }
         auto fetchedTxs = txpool->m_config->blockFactory()->createBlock();
         auto sysTxs = txpool->m_config->blockFactory()->createBlock();
-        txpool->m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
+        {
+            bcos::RecursiveGuard guard(x_markTxsMutex);
+            txpool->m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
+        }
         _sealCallback(nullptr, fetchedTxs, sysTxs);
     });
 }
@@ -379,7 +382,11 @@ void TxPool::asyncMarkTxs(HashListPtr _txsHash, bool _sealedFlag,
     bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
-    m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
+    {
+        bcos::RecursiveGuard guard(x_markTxsMutex);
+        m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
+    }
+
     if (!_onRecvResponse)
     {
         return;

@@ -204,5 +204,9 @@ private:
     ThreadPool::Ptr m_sealer;
     ThreadPool::Ptr m_txsPreStore;
     std::atomic_bool m_running = {false};
+
+    // Note: This x_markTxsMutex is used for locking asyncSealTxs() during sealBlock
+    // because memory storage is not contain a big lock now
+    bcos::RecursiveMutex x_markTxsMutex;
 };
 }  // namespace bcos::txpool
