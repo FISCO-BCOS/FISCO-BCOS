@@ -12,6 +12,32 @@ struct TBBFixture
 
 BOOST_FIXTURE_TEST_SUITE(TBBTest, TBBFixture)
 
+BOOST_AUTO_TEST_CASE(pointerTest)
+{
+    auto future = std::async([]() {
+        std::cout << "Main future started!" << std::endl;
+        int a = 100;
+        int b = 200;
+        oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
+            auto future = std::async([&, tag]() {
+                std::cout << "Sub future started!" << std::endl;
+
+                std::this_thread::sleep_for(std::chrono::seconds(3));
+                std::cout << "A: " << a << std::endl;
+
+                tbb::task::resume(tag);
+
+                std::this_thread::sleep_for(std::chrono::seconds(3));
+                std::cout << "Sub future ended!" << std::endl;
+            });
+        });
+
+        std::cout << "Main future ended!" << std::endl;
+    });
+
+    future.wait();
+}
+
 BOOST_AUTO_TEST_CASE(resumeableTaskTest)
 {
     tbb::parallel_for(tbb::blocked_range<size_t>(0, 100), [](auto const& range) {

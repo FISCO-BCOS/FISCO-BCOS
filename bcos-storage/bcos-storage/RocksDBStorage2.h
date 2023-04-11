@@ -2,7 +2,8 @@
 #include "bcos-concepts/Exception.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/storage2/Storage.h>
-#include <bcos-task/TBBWait.h>
+#include <bcos-task/AwaitableValue.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/Error.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <rocksdb/db.h>
@@ -292,7 +293,7 @@ public:
             tbb::make_filter<void, PipelineItem>(tbb::filter_mode::serial_in_order,
                 [&](tbb::flow_control& control) {
                     PipelineItem output;
-                    task::tbb::syncWait([&]() -> task::Task<void> {
+                    task::syncWait([&]() -> task::Task<void> {
                         if (!co_await it.next())
                         {
                             control.stop();

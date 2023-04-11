@@ -1,9 +1,10 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
+#include "bcos-task/Wait.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <bcos-task/AwaitableValue.h>
 #include <oneapi/tbb/parallel_invoke.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/container/small_vector.hpp>
@@ -385,10 +386,8 @@ public:
         if constexpr (withCacheStorage)
         {
             tbb::parallel_invoke(
-                [&]() {
-                    task::tbb::syncWait(storage2::merge(*immutableStorage, m_backendStorage));
-                },
-                [&]() { task::tbb::syncWait(storage2::merge(*immutableStorage, m_cacheStorage)); });
+                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_backendStorage)); },
+                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_cacheStorage)); });
         }
         else
         {

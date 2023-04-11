@@ -111,7 +111,7 @@ private:
             },
             [&]() {
                 newBlockHeader.setStateRoot(
-                    task::tbb::syncWait(m_schedulerImpl.finish(blockHeader, m_hashImpl)));
+                    task::syncWait(m_schedulerImpl.finish(blockHeader, m_hashImpl)));
             },
             [&]() {
                 auto anyHasher = m_hashImpl.hasher();

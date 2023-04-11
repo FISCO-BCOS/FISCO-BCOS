@@ -6,7 +6,7 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-utilities/Exceptions.h"
-#include <bcos-task/TBBWait.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <boost/exception/detail/exception_ptr.hpp>
@@ -261,7 +261,7 @@ public:
                             }
 
                             auto& chunkIt = *input;
-                            if (!task::tbb::syncWait(chunkIt->execute(
+                            if (!task::syncWait(chunkIt->execute(
                                     blockHeader, receiptFactory(), tableNamePool())))
                             {
                                 return {};
@@ -299,7 +299,7 @@ public:
                                     ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                                     ittapi::ITT_DOMAINS::instance().PIPELINE_MERGE_STORAGE);
 
-                                task::tbb::syncWait(storage2::merge(
+                                task::syncWait(storage2::merge(
                                     executeChunks[index].localStorage().mutableStorage(),
                                     lastStorage));
                             }
