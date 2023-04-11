@@ -92,7 +92,7 @@ jobs:
         if: always()
         with:
           name: postman-test-results
-          path: ./tools/fiscobcos_rpcapi_test_report.xml
+          path: ./tools/rpcapitest-report.xml
 
 
 
