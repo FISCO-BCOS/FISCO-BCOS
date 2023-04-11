@@ -84,8 +84,15 @@ jobs:
       - name: Integration test - Pro
         run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
 
-      - name: start air node for rpc test
+      - name: Integration test - RPCAPI Test
         run: cd tools && bash .ci/rpc_check.sh
+
+      - name: Upload Postman Test Report
+        uses: actions/upload-artifact@v2.1.1
+        if: always()
+        with:
+          name: postman-test-results
+          path: ./tools/fiscobcos_rpcapi_test_report.xml
 
 
 

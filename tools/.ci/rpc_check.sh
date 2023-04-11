@@ -59,10 +59,7 @@ rpc_apiTest()
     LOG_INFO ">>>>>>>>>>> Run API tests  <<<<<<<<<<<<<<"
     postman collection run "26671222-41a40221-e907-4286-91fb-a6c100cff181" -e "26671222-0b39412b-11d6-4a0a-8d6b-75f99851e352"
     LOG_INFO ">>>>>>>>>>> check API tests result <<<<<<<<<<<<<<"
-    if [ -z "$(postman collection run 26671222-41a40221-e907-4286-91fb-a6c100cff181 -e 26671222-0b39412b-11d6-4a0a-8d6b-75f99851e352 | grep 'failure')" ]; then
-      LOG_INFO "test rpc_api failure"
-      exit 1
-    fi
+    postman collection run 26671222-41a40221-e907-4286-91fb-a6c100cff181 -e 26671222-0b39412b-11d6-4a0a-8d6b-75f99851e352 --reporters junit --reporter-junit-export fiscobcos_rpcapi_test_report.xml
 }
 
 open_disablessl
