@@ -1,5 +1,6 @@
 #!/bin/bash
 current_path=`pwd`
+fisco_bcos_rpc_path="FISCOBCOS-RPC-API"
 LOG_ERROR() {
     local content=${1}
     echo -e "\033[31m ${content}\033[0m"
@@ -52,11 +53,33 @@ open_disablessl(){
 rpc_apiTest()
 {
     cd ${current_path}
+    LOG_INFO " >>>>>>>>>> download postmanCLI  <<<<<<<<<<<<"
+    curl -o- "https://dl-cli.pstmn.io/install/osx_64.sh" | sh
+    LOG_INFO " >>>>>>>>>> login postmanCLI <<<<<<<<"
+    postman login --with-api-key PMAK-6433dcbdbbfd385fce4a624a-b5c1caca9d6eb6d092f66996d2d90cdb5c
     LOG_INFO ">>>>>>>>>>> Run API tests  <<<<<<<<<<<<<<"
-    newman run fiscobcos.rpcapi.collection.json --reporters junit --reporter-junit-export rpcapitest-report.xml
+    postman collection run "26671222-41a40221-e907-4286-91fb-a6c100cff181" -e "26671222-0b39412b-11d6-4a0a-8d6b-75f99851e352"
+}
+
+check_rpctest_result()
+{
+  LOG_INFO ">>>>>>> git clone collection.json file <<<<<<<<<<<<<<"
+  if [ ! -d ${fisco_bcos_rpc_path} ]; then
+    git clone https://github.com/wenlinlee/FISCOBCOS-RPC-API.git
+  fi
+  newman run ./FISCOBCOS-RPC-API/fiscobcos.rpcapi.collection.json --reporters junit --reporter-junit-export rpcapitest-report.xml
+  failurecount=$(cat rpcapitest-report.xml | grep -i 'failures=' | awk -F' ' '{print $6}' | awk -F'"' '{print $2}' | awk '{sum+=$1} END {print sum}')
+  errorcount=$(cat rpcapitest-report.xml | grep -i 'errors=' | awk -F' ' '{print $7}' | awk -F'"' '{print $2}' |  awk '{sum+=$1} END {print sum}')
+  if [  $((${failurecount} + ${errorcount})) -eq 0 ];then
+      LOG_INFO "Run API tests all success..."
+  else
+      LOG_ERROR "Run API tests have failures or errors, please check it..."
+      exit 1
+  fi
 }
 
 open_disablessl
 start_node
 rpc_apiTest
+check_rpctest_result
 stop_node
