@@ -85,11 +85,14 @@ jobs:
         run: cd tools && bash .ci/rpc_check.sh
 
       - name: Upload Postman Test Report
-        uses: actions/upload-artifact@v2.1.1
-        if: always()
+        uses: codecov/codecov-action@v2
         with:
-          name: postman-test-results
-          path: ./tools/rpcapitest-report.xml
+          files: ./tools/rpcapitest-report.xml
+          version: "v0.1.15"
+          flags: postman-rpcapi-test-results
+          name: FISCO BCOS RPCAPI
+          fail_ci_if_error: false
+          verbose: true
 
       - name: Integration test - Pro
         run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
