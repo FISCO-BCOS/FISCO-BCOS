@@ -828,6 +828,13 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     }
     // if new entry is too big, it will trigger split
     auto* page = pageData->getPage();
+    // NOTE: add this condition to adapt the old data without keyPage info
+    // rewrite to new data with keyPage.
+    if (page == nullptr && pageData->type == Data::NormalEntry &&
+        pageData->entry.status() == Entry::DELETED)
+    {
+        page = &std::get<0>(pageData->data);
+    }
     {
         auto ret = page->setEntry(key, std::move(entry));
         entryOld = std::move(std::get<0>(ret));

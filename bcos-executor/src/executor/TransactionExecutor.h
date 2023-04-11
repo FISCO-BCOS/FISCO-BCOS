@@ -181,6 +181,9 @@ public:
 
     void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
 
+    // only for test, do not use in formal environment
+    void setKeyPageIgnoreTable(auto ignoreTable) { m_keyPageIgnoreTables = std::move(ignoreTable); }
+
 protected:
     void executeTransactionsInternal(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs, bool useCoroutine,

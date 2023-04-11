@@ -55,7 +55,7 @@ private:
         PrecompiledExecResult::Ptr const& _callParameters);
     void rebuildBfs310(const std::shared_ptr<executor::TransactionExecutive>& _executive);
     void fixBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-                PrecompiledExecResult::Ptr const& _callParameters);
+        PrecompiledExecResult::Ptr const& _callParameters);
     void fixBfs330(const std::shared_ptr<executor::TransactionExecutive>& _executive);
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,

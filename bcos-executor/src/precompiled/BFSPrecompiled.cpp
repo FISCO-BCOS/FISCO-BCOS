@@ -887,7 +887,7 @@ void BFSPrecompiled::fixBfs(const std::shared_ptr<executor::TransactionExecutive
                               << LOG_DESC("fixBfs version not supported")
                               << LOG_KV("fixVersion", fixVersion)
                               << LOG_KV("blockVersion", blockContext.blockVersion());
-        BOOST_THROW_EXCEPTION(PrecompiledError("BFSPrecompiled fixBfs version not supported."));
+        BOOST_THROW_EXCEPTION(PrecompiledError("BFSPrecompiled call undefined function!"));
     }
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
