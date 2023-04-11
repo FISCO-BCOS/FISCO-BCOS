@@ -63,10 +63,12 @@ rpc_apiTest()
 
 check_rpctest_result()
 {
+  LOG_INFO ">>>>>>> Check RPCAPI Test Result.json file <<<<<<<<<<<<"
   LOG_INFO ">>>>>>> git clone collection.json file <<<<<<<<<<<<<<"
   if [ ! -d ${fisco_bcos_rpc_path} ]; then
     git clone https://github.com/wenlinlee/FISCOBCOS-RPC-API.git
   fi
+  LOG_INFO ">>>>>>> Check RPCAPI Test Result.json file <<<<<<<<<<<<<<"
   newman run ./FISCOBCOS-RPC-API/fiscobcos.rpcapi.collection.json --reporters junit --reporter-junit-export rpcapitest-report.xml
   failurecount=$(cat rpcapitest-report.xml | grep -i 'failures=' | awk -F' ' '{print $6}' | awk -F'"' '{print $2}' | awk '{sum+=$1} END {print sum}')
   errorcount=$(cat rpcapitest-report.xml | grep -i 'errors=' | awk -F' ' '{print $7}' | awk -F'"' '{print $2}' |  awk '{sum+=$1} END {print sum}')
