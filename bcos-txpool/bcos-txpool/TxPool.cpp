@@ -133,7 +133,7 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
 {
     // Note: not block seal new block here
     auto self = weak_from_this();
-    m_sealer->enqueue([self, _txsLimit, _avoidTxs, _sealCallback]() {
+    m_sealer->enqueue([self, this, _txsLimit, _avoidTxs, _sealCallback]() {
         auto txpool = self.lock();
         if (!txpool)
         {
@@ -142,7 +142,7 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         auto fetchedTxs = txpool->m_config->blockFactory()->createBlock();
         auto sysTxs = txpool->m_config->blockFactory()->createBlock();
         {
-            bcos::RecursiveGuard guard(self->x_markTxsMutex);
+            bcos::RecursiveGuard guard(x_markTxsMutex);
             txpool->m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
         }
         _sealCallback(nullptr, fetchedTxs, sysTxs);
