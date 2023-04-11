@@ -153,8 +153,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
-        storage = StorageInitializer::build(
-            storagePath, m_protocolInitializer->dataEncryption(), m_nodeConfig->keyPageSize());
+        storage = StorageInitializer::build(storagePath, m_protocolInitializer->dataEncryption(),
+            m_nodeConfig->keyPageSize(), m_nodeConfig->maxWriteBufferNumber(),
+            m_nodeConfig->maxBackgroundJobs());
         schedulerStorage = storage;
         consensusStorage = StorageInitializer::build(
             consensusStoragePath, m_protocolInitializer->dataEncryption());

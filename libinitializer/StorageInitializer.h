@@ -36,7 +36,8 @@ namespace bcos::initializer
 class StorageInitializer
 {
 public:
-    static auto createRocksDB(const std::string& _path)
+    static auto createRocksDB(
+        const std::string& _path, int _max_write_buffer_number = 3, int _max_background_jobs = 3)
     {
         boost::filesystem::create_directories(_path);
         rocksdb::DB* db;
@@ -47,6 +48,9 @@ public:
         // options.OptimizeLevelStyleCompaction();
         // create the DB if it's not already present
         options.create_if_missing = true;
+        // to mitigate write stalls
+        options.max_background_jobs = _max_background_jobs;
+        options.max_write_buffer_number = _max_write_buffer_number;
         // FIXME: enable blob support when space amplification is acceptable
         // options.enable_blob_files = keyPageSize > 1 ? true : false;
         options.compression = rocksdb::kZSTD;
@@ -80,10 +84,12 @@ public:
             });
     }
     static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
-        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt,
-        [[maybe_unused]] size_t keyPageSize = 0)
+        const bcos::security::DataEncryptInterface::Ptr& _dataEncrypt,
+        [[maybe_unused]] size_t keyPageSize = 0, int _max_write_buffer_number = 3,
+        int _max_background_jobs = 3)
     {
-        auto unique_db = createRocksDB(_storagePath);
+        auto unique_db =
+            createRocksDB(_storagePath, _max_write_buffer_number, _max_background_jobs);
         return std::make_shared<bcos::storage::RocksDBStorage>(std::move(unique_db), _dataEncrypt);
     }
 
