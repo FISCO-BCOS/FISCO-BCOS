@@ -76,3 +76,6 @@ jobs:
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+
+      - name: Integration test - RPCAPI Test
+          run: cd tools && bash .ci/rpc_check.sh
