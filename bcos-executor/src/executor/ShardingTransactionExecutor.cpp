@@ -208,26 +208,11 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
             WriteGuard l(x_preparedCache);
             std::tuple<bcos::protocol::BlockNumber, int64_t, const std::string> key = {
                 blockNumber, timestamp, contractAddress};
-            hasPrepared = !m_preparedCache.try_emplace(key, cache).second;
 
-            if (!hasPrepared)
-            {
-                // acquire lock start to prepare
-                cacheGuard = std::make_shared<bcos::WriteGuard>(cache->x_cache);
-            }
+            // acquire lock start to prepare
+            cacheGuard = std::make_shared<bcos::WriteGuard>(cache->x_cache);
+            m_preparedCache[key] = cache;
         }
-
-        if (hasPrepared)
-        {
-            EXECUTOR_NAME_LOG(DEBUG)
-                << LOG_BADGE("preExeBlock") << LOG_BADGE("DAGFlow")
-                << "preExecuteTransactions: dagFlow has been prepared"
-                << LOG_KV("blockNumber", blockNumber) << LOG_KV("timestamp", timestamp);
-            callback(
-                BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, "dagFlow has been prepared"));
-            return;
-        }
-
 
         auto recoredT = utcTime();
         auto startT = utcTime();
