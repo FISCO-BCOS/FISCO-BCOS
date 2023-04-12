@@ -23,25 +23,27 @@ namespace bcos::crypto::merkle
 {
 
 template <class Range>
-concept HashRange = RANGES::random_access_range<Range> &&
+concept HashRange =
+    RANGES::random_access_range<Range> &&
     bcos::concepts::bytebuffer::ByteBuffer<std::remove_cvref_t<RANGES::range_value_t<Range>>>;
 
 template <class Range>
 concept MerkleRange = HashRange<Range>;
 
 template <class Range>
-concept ProofRange = bcos::concepts::DynamicRange<Range> &&
+concept ProofRange =
+    bcos::concepts::DynamicRange<Range> &&
     bcos::concepts::bytebuffer::ByteBuffer<std::remove_cvref_t<RANGES::range_value_t<Range>>>;
 
 template <bcos::crypto::hasher::Hasher HasherType, size_t width = 2>
 class Merkle
 {
     static_assert(width >= 2, "Width too short, at least 2");
-    static_assert(HasherType::HASH_SIZE >= 4, "Hash size too short!");
-
-    using HashType = std::array<std::byte, HasherType::HASH_SIZE>;
+    using HashType = bcos::bytes;
 
 public:
+    Merkle(HasherType hasher) : m_hasher(std::move(hasher)) { assert(m_hasher.hashSize() > 4); }
+
     bool verifyMerkleProof(ProofRange auto const& proof, bcos::concepts::bytebuffer::Hash auto hash,
         bcos::concepts::bytebuffer::Hash auto const& root)
     {
@@ -62,7 +64,7 @@ public:
                     return false;
                 }
 
-                HasherType hasher;
+                auto hasher = m_hasher.clone();
                 for (auto& merkleHash : range)
                 {
                     hasher.update(merkleHash);
@@ -135,7 +137,6 @@ public:
         auto count = std::min((size_t)(RANGES::size(originHashes) - index), (size_t)width);
 
         setNumberToHash(count, out.emplace_back());
-
         for (auto it = RANGES::begin(originHashes) + index;
              it < RANGES::begin(originHashes) + index + count; ++it)
         {
@@ -206,6 +207,8 @@ public:
     }
 
 private:
+    HasherType m_hasher;
+
     auto indexAlign(std::integral auto index) const { return index - ((index + width) % width); }
 
     void setNumberToHash(uint32_t number, bcos::concepts::bytebuffer::Hash auto& output) const
@@ -244,8 +247,8 @@ private:
 
         auto outputSize = RANGES::size(output);
         tbb::parallel_for(tbb::blocked_range<size_t>(0, outputSize),
-            [&input, &output](const tbb::blocked_range<size_t>& range) {
-                HasherType hasher;
+            [this, &input, &output](const tbb::blocked_range<size_t>& range) {
+                auto hasher = m_hasher.clone();
 
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
