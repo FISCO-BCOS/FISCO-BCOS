@@ -142,7 +142,7 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         auto fetchedTxs = txpool->m_config->blockFactory()->createBlock();
         auto sysTxs = txpool->m_config->blockFactory()->createBlock();
         {
-            bcos::RecursiveGuard guard(x_markTxsMutex);
+            bcos::WriteGuard guard(x_markTxsMutex);
             txpool->m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
         }
         _sealCallback(nullptr, fetchedTxs, sysTxs);
@@ -383,7 +383,7 @@ void TxPool::asyncMarkTxs(HashListPtr _txsHash, bool _sealedFlag,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
     {
-        bcos::RecursiveGuard guard(x_markTxsMutex);
+        bcos::ReadGuard guard(x_markTxsMutex);
         m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
     }
 
