@@ -10,7 +10,6 @@
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Error.h>
-#include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for_each.h>
 #include <boost/algorithm/hex.hpp>
@@ -612,7 +611,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     executorParams.primaryKey = primaryKey;
                     executorParams.timestamp = startTimeStamp;
                     status->startTS = startTimeStamp;
-                    for (const auto& executorIt : m_scheduler->m_executorManager->range())
+                    for (const auto& executorIt : *(m_scheduler->m_executorManager))
                     {
                         executorIt->prepare(executorParams, [this, status](Error::Ptr&& error) {
                             {
@@ -1360,8 +1359,8 @@ void BlockExecutive::batchBlockCommit(
         executorParams.number = number();
         executorParams.timestamp = commitTS;
 
-        auto range = m_scheduler->m_executorManager->range();
-        for (auto const& executorIt : range)
+        // TODO: new parallel_for_each no suite
+        for (auto const& executorIt : *m_scheduler->m_executorManager)
         {
             SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
 
