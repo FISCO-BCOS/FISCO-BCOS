@@ -2,6 +2,7 @@
 #include "bcos-concepts/Exception.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/storage2/Storage.h>
+#include <bcos-task/AwaitableValue.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Error.h>
 #include <oneapi/tbb/parallel_pipeline.h>

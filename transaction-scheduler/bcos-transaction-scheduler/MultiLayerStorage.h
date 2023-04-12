@@ -4,6 +4,7 @@
 #include "bcos-task/Wait.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <bcos-task/AwaitableValue.h>
 #include <oneapi/tbb/parallel_invoke.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/container/small_vector.hpp>

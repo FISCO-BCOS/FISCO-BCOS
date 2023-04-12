@@ -96,8 +96,6 @@ void TxPool::stop()
 task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     protocol::Transaction::Ptr transaction)
 {
-    ittapi::Report report(ittapi::ITT_DOMAINS::instance().TRANSACTION_POOL,
-        ittapi::ITT_DOMAINS::instance().SUBMIT_TRANSACTION);
     co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 

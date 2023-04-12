@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Storage.h"
-#include "bcos-task/Task.h"
+#include "bcos-task/AwaitableValue.h"
 #include <bcos-utilities/NullLock.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <boost/container/small_vector.hpp>

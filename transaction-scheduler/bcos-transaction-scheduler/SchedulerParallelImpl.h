@@ -322,14 +322,6 @@ public:
             ++retryCount;
         }
 
-        // Still have transactions, execute it serially
-        // if (offset < RANGES::size(transactions))
-        // {
-        //     co_await serialExecute(blockHeader, receiptFactory(), tableNamePool(),
-        //         transactionAndReceipts | RANGES::views::drop(offset),
-        //         storageView.mutableStorage());
-        //     ++retryCount;
-        // }
         PARALLEL_SCHEDULER_LOG(DEBUG)
             << "Parallel scheduler execute finished, retry counts: " << retryCount;
         m_asyncTaskGroup->run([storageView = std::move(storageView)]() {});

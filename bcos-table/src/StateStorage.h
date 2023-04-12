@@ -39,7 +39,6 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <mutex>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcos::storage
 {

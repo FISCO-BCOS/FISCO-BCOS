@@ -23,6 +23,8 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/ITTAPI.h>
+#include <boost/throw_exception.hpp>
 #include <concepts>
 #include <shared_mutex>
 #include <span>
@@ -67,6 +69,8 @@ public:
 
     virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) const
     {
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().TRANSACTION,
+            ittapi::ITT_DOMAINS::instance().VERIFY_TRANSACTION);
         // The tx has already been verified
         if (!sender().empty())
         {
