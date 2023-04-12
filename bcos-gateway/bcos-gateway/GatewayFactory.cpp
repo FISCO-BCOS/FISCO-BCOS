@@ -749,10 +749,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
                 std::string endpoint = _session->nodeIPEndpoint().address();
                 int64_t msgLength = _msg->length();
+                auto pkgType = _msg->packetType();
 
-
-                auto result =
-                    gatewayRateLimiter->checkOutGoing(endpoint, groupID, moduleID, msgLength);
+                auto result = gatewayRateLimiter->checkOutGoing(
+                    endpoint, pkgType, groupID, moduleID, msgLength);
                 return result ? std::make_optional(
                                     bcos::Error::buildError("", OutBWOverflow, result.value())) :
                                 std::nullopt;

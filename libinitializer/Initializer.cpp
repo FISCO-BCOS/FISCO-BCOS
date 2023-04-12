@@ -302,7 +302,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             executionMessageFactory, m_protocolInitializer->blockFactory(),
             m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute());
+            m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize());
 
         int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                    // switch to a leader during startup

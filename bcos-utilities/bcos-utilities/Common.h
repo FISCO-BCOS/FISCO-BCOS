@@ -131,25 +131,8 @@ inline bool isNumStr(std::string const& _stringData)
     return true;
 }
 
-inline constexpr double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
-{
-    if (_intervalMS > 0)
-    {
-        auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _intervalMS;
-        return avgRate;
-    }
-    return 0;
-}
-
-inline constexpr uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
-{
-    if (_intervalMS > 0)
-    {
-        auto qps = _requestCount * 1000 / _intervalMS;
-        return qps;
-    }
-    return 0;
-}
+double calcAvgRate(uint64_t _data, uint32_t _intervalMS);
+uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS);
 
 // convert second to milliseconds
 inline constexpr int32_t toMillisecond(int32_t _seconds)

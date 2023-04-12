@@ -460,17 +460,6 @@ public:
         }(this, std::move(transaction), std::move(callback)));
     }
 
-    void registerExecutor([[maybe_unused]] std::string name,
-        [[maybe_unused]] bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
-    {}
-
-    void unregisterExecutor([[maybe_unused]] const std::string& name,
-        [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
-    {
-        callback(nullptr);
-    }
-
     void reset([[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
     {
         callback(nullptr);

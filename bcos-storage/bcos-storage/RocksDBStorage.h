@@ -81,6 +81,8 @@ public:
 
     rocksdb::DB& rocksDB() { return *m_db; }
 
+    void stop() override;
+
 private:
     Error::Ptr checkStatus(rocksdb::Status const& status);
     std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
