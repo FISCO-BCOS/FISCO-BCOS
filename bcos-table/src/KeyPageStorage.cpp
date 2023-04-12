@@ -250,15 +250,13 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                         if (!onlyDirty || it.second->entry.dirty())
                         {
                             auto* meta = it.second->getTableMeta();
-                            auto readLock = meta->rLock();
                             Entry entry;
                             entry.setObject(*meta);
                             m_size += entry.size();
-                            readLock.unlock();
                             if (!m_readOnly)
                             {
                                 if (meta->size() <= 10)
-                                {  // FIXME: this log is only for debug, comment it when release
+                                {  // this log is only for debug
                                     KeyPage_LOG(DEBUG)
                                         << LOG_DESC("TableMeta") << LOG_KV("table", it.first.first)
                                         << LOG_KV("key", toHex(it.first.second))
@@ -679,7 +677,6 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
         return std::make_pair(std::move(error), std::nullopt);
     }
     auto* meta = data.value()->getTableMeta();
-    auto readLock = meta->rLock();
     if (key.empty())
     {  // table meta
         if (meta->size() > 0)
@@ -702,6 +699,7 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
         }
         return std::make_pair(nullptr, std::nullopt);
     }
+    auto readLock = meta->rLock();
     auto pageInfoOp = meta->getPageInfoNoLock(key);
     if (pageInfoOp)
     {
@@ -774,7 +772,7 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
         }
         auto entry = page->getEntry(key);
         // if (c_fileLogLevel <= TRACE)
-        // {  // FIXME: this log is only for debug, comment it when release
+        // {  // this log is only for debug, comment it when release
         //     KeyPage_LOG(TRACE) << LOG_DESC("getEntry from page") << LOG_KV("table", table)
         //                        << LOG_KV("pageKey", toHex(pageKey.value()))
         //                        << LOG_KV("key", toHex(key))
@@ -830,6 +828,13 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     }
     // if new entry is too big, it will trigger split
     auto* page = pageData->getPage();
+    // NOTE: add this condition to adapt the old data without keyPage info
+    // rewrite to new data with keyPage.
+    if (page == nullptr && pageData->type == Data::NormalEntry &&
+        pageData->entry.status() == Entry::DELETED)
+    {
+        page = &std::get<0>(pageData->data);
+    }
     {
         auto ret = page->setEntry(key, std::move(entry));
         entryOld = std::move(std::get<0>(ret));
@@ -837,12 +842,16 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
 
         if (pageInfoChanged)
         {
-            if (pageData->entry.status() == Entry::Status::EMPTY)
+            // NOTE: add type=NormalEntry condition to adapt the old data without keyPage info
+            // rewrite to new data with keyPage.
+            if (pageData->entry.status() == Entry::Status::EMPTY ||
+                pageData->type == Data::Type::NormalEntry)
             {  // new page insert, if entries is empty means page delete entry which not exist
                 meta->insertPageInfoNoLock(PageInfo(page->endKey(), (uint16_t)page->validCount(),
                     (uint16_t)page->size(), pageData));
                 // pageData->entry.setStatus(Entry::Status::NORMAL);
                 pageData->entry.setStatus(Entry::Status::MODIFIED);
+                pageData->type = Data::Type::Page;
             }
             else
             {
@@ -870,7 +879,7 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     }
     pageKey = page->endKey();
     if (page->size() > m_pageSize && page->validCount() > 1)
-    {  // split page, TODO: if dag trigger split, it maybe split to different page?
+    {  // split page, if dag trigger split, it maybe split to different page?
         if (c_fileLogLevel <= TRACE)
         {
             KeyPage_LOG(TRACE) << LOG_DESC("trigger split page") << LOG_KV("table", table)

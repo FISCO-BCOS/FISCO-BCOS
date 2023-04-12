@@ -85,4 +85,5 @@ check_and_clear_cache bcos-protocol/bcos-protocol ${BUILD_DIR}/bcos-protocol
 check_and_clear_cache bcos-pbft/bcos-pbft/core/proto ${BUILD_DIR}/bcos-pbft/bcos-pbft/core
 check_and_clear_cache bcos-pbft/bcos-pbft/pbft/protocol/proto ${BUILD_DIR}/bcos-pbft/bcos-pbft/pbft/protocol
 check_and_clear_cache bcos-txpool/bcos-txpool/sync/protocol/proto ${BUILD_DIR}/bcos-txpool
+check_and_clear_cache cmake "${BUILD_DIR}/../deps/*"
 

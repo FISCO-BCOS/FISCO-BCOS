@@ -1,6 +1,7 @@
 #include "ShardingBlockExecutive.h"
 #include "SchedulerImpl.h"
 #include "ShardingDmcExecutor.h"
+#include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-table/src/KeyPageStorage.h>
 #include <tbb/parallel_for_each.h>
 
@@ -13,7 +14,12 @@ void ShardingBlockExecutive::prepare()
     {
         return;
     }
+
+    auto breakPointT = utcTime();
     BlockExecutive::prepare();
+
+    auto schedulerPrepareCost = utcTime() - breakPointT;
+    breakPointT = utcTime();
 
     if (m_staticCall)
     {
@@ -23,9 +29,13 @@ void ShardingBlockExecutive::prepare()
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("dmcExecutor try to preExecute");
 
-
+    auto self = shared_from_this();
     tbb::parallel_for_each(m_dmcExecutors.begin(), m_dmcExecutors.end(),
-        [&](auto const& executorIt) { executorIt.second->preExecute(); });
+        [self](auto const& executorIt) { executorIt.second->preExecute(); });
+    SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
+                         << LOG_DESC("ShardingBlockExecutive preExecute finish")
+                         << LOG_KV("schedulerPrepareCost", schedulerPrepareCost)
+                         << LOG_KV("executorsPrepareCost", utcTime() - breakPointT);
 }
 
 void ShardingBlockExecutive::asyncExecute(
@@ -53,6 +63,21 @@ void ShardingBlockExecutive::asyncExecute(
     startT = utcTime();
     if (!m_staticCall)
     {
+        // sysBlock need to clear shard cache
+        if (m_isSysBlock) [[unlikely]]
+        {
+            callback = [this, callback = std::move(callback)](Error::UniquePtr error,
+                           protocol::BlockHeader::Ptr blockHeader, bool isSysBlock) {
+                if (!error)
+                {
+                    SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number())
+                                        << "Clear contract2ShardCache after sysBlock has executed";
+                    m_contract2ShardCache->clear();  // sysBlock need to clear shard cache
+                }
+                callback(std::move(error), std::move(blockHeader), isSysBlock);
+            };
+        }
+
         // Execute nextBlock
         batchNextBlock([this, callback = std::move(callback)](Error::UniquePtr error) {
             if (!m_isRunning)
@@ -112,6 +137,14 @@ void ShardingBlockExecutive::shardingExecute(
                                  << "shardGo() with error"
                                  << LOG_KV("code", error ? error->errorCode() : -1)
                                  << LOG_KV("msg", error ? error.get()->errorMessage() : "null");
+
+            if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+            {
+                SCHEDULER_LOG(ERROR)
+                    << "shardGo() SCHEDULER_TERM_ID_ERROR:" << error->errorMessage()
+                    << ". trigger switch";
+                triggerSwitch();
+            }
         }
         else
         {
@@ -163,8 +196,15 @@ void ShardingBlockExecutive::shardingExecute(
         DMCExecute(std::move(callback));
     };
 
+    std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> dmcExecutors;
+    {
+        bcos::ReadGuard l(x_dmcExecutorLock);
+        // copy to another object for m_dmcExecutors may change during parallel shardGo
+        dmcExecutors = m_dmcExecutors;
+    }
+
     tbb::parallel_for_each(
-        m_dmcExecutors.begin(), m_dmcExecutors.end(), [&executorCallback](auto const& executorIt) {
+        dmcExecutors.begin(), dmcExecutors.end(), [&executorCallback](auto const& executorIt) {
             std::dynamic_pointer_cast<ShardingDmcExecutor>(executorIt.second)
                 ->shardGo(executorCallback);
         });
@@ -218,39 +258,38 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
 
     if (!m_storageWrapper.has_value())
     {
-        // TODO: config using
-        auto stateStorage = std::make_shared<bcos::storage::KeyPageStorage>(
-            getStorage(), 10240, m_block->blockHeaderConst()->version(), nullptr, true);
-        // auto stateStorage = std::make_shared<StateStorage>(getStorage());
+        storage::StateStorageInterface::Ptr stateStorage;
+        if (m_keyPageSize > 0)
+        {
+            stateStorage = std::make_shared<bcos::storage::KeyPageStorage>(
+                getStorage(), m_keyPageSize, m_block->blockHeaderConst()->version(), nullptr, true);
+        }
+        else
+        {
+            stateStorage = std::make_shared<bcos::storage::StateStorage>(
+                getStorage(), m_block->blockHeaderConst()->version());
+        }
+
+
         auto recorder = std::make_shared<Recoder>();
         m_storageWrapper.emplace(stateStorage, recorder);
     }
 
-    auto shard = m_contract2Shard.find(contractAddress);
     std::string shardName;
-
-    if (shard == m_contract2Shard.end())
+    ShardCache::WriteAccessor::Ptr accessor;
+    bool has = m_contract2ShardCache->find<ShardCache::WriteAccessor>(accessor, contractAddress);
+    if (has)
     {
-        WriteGuard l(x_contract2Shard);
-        shard = m_contract2Shard.find(contractAddress);
-        if (shard == m_contract2Shard.end())
-        {
-            auto tableName = getContractTableName(contractAddress);
-            shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
-            m_contract2Shard.emplace(contractAddress, shardName);
-
-            DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
-                           << "Update shard cache: " << LOG_KV("contractAddress", contractAddress)
-                           << LOG_KV("shardName", shardName);
-        }
-        else
-        {
-            shardName = shard->second;
-        }
+        shardName = accessor->value();
     }
     else
     {
-        shardName = shard->second;
+        auto tableName = getContractTableName(contractAddress);
+        shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
+        m_contract2ShardCache->insert(accessor, {contractAddress, shardName});
+        DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
+                       << "Update shard cache: " << LOG_KV("contractAddress", contractAddress)
+                       << LOG_KV("shardName", shardName);
     }
 
     return shardName;

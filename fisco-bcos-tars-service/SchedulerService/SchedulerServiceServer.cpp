@@ -104,20 +104,6 @@ bcostars::Error SchedulerServiceServer::commitBlock(
     return bcostars::Error();
 }
 
-bcostars::Error SchedulerServiceServer::registerExecutor(
-    std::string const& _name, tars::TarsCurrentPtr _current)
-{
-    _current->setResponse(false);
-
-    auto executorServicePrx = bcostars::createServantProxy<bcostars::ExecutorServicePrx>(_name);
-
-    auto executor = std::make_shared<bcostars::ExecutorServiceClient>(executorServicePrx);
-    m_scheduler->registerExecutor(_name, executor, [_current](bcos::Error::Ptr&& _error) {
-        async_response_registerExecutor(_current, toTarsError(_error));
-    });
-    return bcostars::Error();
-}
-
 bcostars::Error SchedulerServiceServer::preExecuteBlock(
     const bcostars::Block& _block, tars::Bool _verify, tars::TarsCurrentPtr _current)
 {

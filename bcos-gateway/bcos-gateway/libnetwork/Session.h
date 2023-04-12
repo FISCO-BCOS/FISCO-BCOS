@@ -214,6 +214,9 @@ public:
     uint32_t allowMaxMsgSize() const { return m_allowMaxMsgSize; }
     void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize) { m_allowMaxMsgSize = _allowMaxMsgSize; }
 
+    void setEnableCompress(bool _enableCompress) { m_enableCompress = _enableCompress; }
+    bool enableCompress() const { return m_enableCompress; }
+
     SessionRecvBuffer& recvBuffer() { return m_recvBuffer; }
     const SessionRecvBuffer& recvBuffer() const { return m_recvBuffer; }
     /**
@@ -249,6 +252,8 @@ private:
     uint32_t m_maxSendMsgCountS = 10;
     //  Maximum size of message that is allowed to send or receive, default: 32M
     uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
+    //
+    bool m_enableCompress = true;
     // ------ for optimize send message parameters  end ---------------
 
     /// Drop the connection for the reason @a _reason.
@@ -304,13 +309,14 @@ class SessionFactory
 public:
     SessionFactory(std::string _hostNodeID, uint32_t _sessionRecvBufferSize,  // NOLINT
         uint32_t _allowMaxMsgSize, uint32_t _maxReadDataSize, uint32_t _maxSendDataSize,
-        uint32_t _maxSendMsgCountS)
+        uint32_t _maxSendMsgCountS, bool _enableCompress)
       : m_hostNodeID(std::move(_hostNodeID)),
         m_sessionRecvBufferSize(_sessionRecvBufferSize),
         m_allowMaxMsgSize(_allowMaxMsgSize),
         m_maxReadDataSize(_maxReadDataSize),
         m_maxSendDataSize(_maxSendDataSize),
-        m_maxSendMsgCountS(_maxSendMsgCountS)
+        m_maxSendMsgCountS(_maxSendMsgCountS),
+        m_enableCompress(_enableCompress)
     {}
     SessionFactory(const SessionFactory&) = delete;
     SessionFactory(SessionFactory&&) = delete;
@@ -332,12 +338,14 @@ public:
         session->setMaxReadDataSize(m_maxReadDataSize);
         session->setMaxSendDataSize(m_maxSendDataSize);
         session->setMaxSendMsgCountS(m_maxSendMsgCountS);
+        session->setEnableCompress(m_enableCompress);
         BCOS_LOG(INFO) << LOG_BADGE("SessionFactory") << LOG_DESC("create new session")
                        << LOG_KV("sessionRecvBufferSize", m_sessionRecvBufferSize)
                        << LOG_KV("allowMaxMsgSize", m_allowMaxMsgSize)
                        << LOG_KV("maxReadDataSize", m_maxReadDataSize)
                        << LOG_KV("maxSendDataSize", m_maxSendDataSize)
-                       << LOG_KV("maxSendMsgCountS", m_maxSendMsgCountS);
+                       << LOG_KV("maxSendMsgCountS", m_maxSendMsgCountS)
+                       << LOG_KV("enableCompress", m_enableCompress);
         return session;
     }
 
@@ -348,6 +356,7 @@ private:
     uint32_t m_maxReadDataSize{0};
     uint32_t m_maxSendDataSize{0};
     uint32_t m_maxSendMsgCountS{0};
+    bool m_enableCompress = true;
 };
 
 }  // namespace gateway

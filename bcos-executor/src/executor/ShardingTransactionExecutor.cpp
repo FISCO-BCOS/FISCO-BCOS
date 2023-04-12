@@ -51,9 +51,9 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
             if (!inputs.empty())
             {
                 EXECUTOR_NAME_LOG(DEBUG)
-                    << LOG_BADGE("preExeBlock") << "Input is not empty, execute directly"
-                    << LOG_KV("number", number) << LOG_KV("timestamp", timestamp)
-                    << LOG_KV("shard", contractAddress);
+                    << LOG_BADGE("BlockTrace") << LOG_BADGE("preExeBlock")
+                    << "Input is not empty, execute directly" << LOG_KV("number", number)
+                    << LOG_KV("timestamp", timestamp) << LOG_KV("shard", contractAddress);
                 TransactionExecutor::executeTransactions(
                     contractAddress, std::move(inputs), std::move(callback));
                 break;
@@ -74,14 +74,16 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
 
             if (!cache)
             {
-                EXECUTOR_NAME_LOG(DEBUG)
+                EXECUTOR_NAME_LOG(ERROR)
                     << LOG_BADGE("preExeBlock")
-                    << "Not hit prepared dagFlow cache, execute directly"
+                    << "Input is empty but not hit prepared dagFlow cache, trigger switch"
                     << LOG_KV("number", number) << LOG_KV("timestamp", timestamp)
                     << LOG_KV("shard", contractAddress);
-                TransactionExecutor::executeTransactions(
-                    contractAddress, std::move(inputs), std::move(callback));
-                break;
+
+                callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                             "Input is empty but not hit prepared dagFlow cache"),
+                    {});
+                return;
             }
 
             auto executiveFlow = getExecutiveFlow(m_blockContext, contractAddress, true, false);
@@ -93,10 +95,23 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
                     << LOG_KV("number", number) << LOG_KV("timestamp", timestamp)
                     << LOG_KV("codeAddress", contractAddress);
                 bcos::ReadGuard cacheGuard(cache->x_cache);
+
+                if (!cache->inputs)
+                {
+                    EXECUTOR_NAME_LOG(WARNING)
+                        << LOG_BADGE("preExeBlock")
+                        << "dagFlow cache is not prepared, maybe get tx miss, trigger switch"
+                        << LOG_KV("number", number) << LOG_KV("timestamp", timestamp)
+                        << LOG_KV("codeAddress", contractAddress);
+                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                                 "dagFlow cache is not prepared, maybe get tx miss"),
+                        {});
+                    return;
+                }
+
                 dagExecutiveFlow->setDagFlowIfNotExists(cache->dagFlow);
                 dagExecutiveFlow->submit(cache->inputs);
             }
-
 
             EXECUTOR_NAME_LOG(DEBUG)
                 << LOG_BADGE("preExeBlock") << " hit prepared dagFlow cache, use it"
@@ -174,15 +189,15 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
     if (blockHeader->version() >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         auto blockContext = createTmpBlockContext(blockHeader);
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(*blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(
+            *blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
 
         auto txNum = inputs.size();
         auto blockNumber = blockHeader->number();
         auto timestamp = blockHeader->timestamp();
 
-        EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("preExeBlock") << LOG_BADGE("DAGFlow")
-                                 << "preExecuteTransactions start"
+        EXECUTOR_NAME_LOG(DEBUG) << LOG_BADGE("BlockTrace") << LOG_BADGE("preExeBlock")
+                                 << LOG_BADGE("DAGFlow") << "preExecuteTransactions start"
                                  << LOG_KV("blockNumber", blockNumber)
                                  << LOG_KV("timestamp", timestamp) << LOG_KV("txNum", txNum);
 
@@ -193,26 +208,11 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
             WriteGuard l(x_preparedCache);
             std::tuple<bcos::protocol::BlockNumber, int64_t, const std::string> key = {
                 blockNumber, timestamp, contractAddress};
-            hasPrepared = !m_preparedCache.try_emplace(key, cache).second;
 
-            if (!hasPrepared)
-            {
-                // acquire lock start to prepare
-                cacheGuard = std::make_shared<bcos::WriteGuard>(cache->x_cache);
-            }
+            // acquire lock start to prepare
+            cacheGuard = std::make_shared<bcos::WriteGuard>(cache->x_cache);
+            m_preparedCache[key] = cache;
         }
-
-        if (hasPrepared)
-        {
-            EXECUTOR_NAME_LOG(DEBUG)
-                << LOG_BADGE("preExeBlock") << LOG_BADGE("DAGFlow")
-                << "preExecuteTransactions: dagFlow has been prepared"
-                << LOG_KV("blockNumber", blockNumber) << LOG_KV("timestamp", timestamp);
-            callback(
-                BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR, "dagFlow has been prepared"));
-            return;
-        }
-
 
         auto recoredT = utcTime();
         auto startT = utcTime();
@@ -351,7 +351,8 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
                             << LOG_KV("timestamp", timestamp);
                     }
                     EXECUTOR_NAME_LOG(DEBUG)
-                        << BLOCK_NUMBER(blockNumber) << LOG_BADGE("preExeBlock")
+                        << BLOCK_NUMBER(blockNumber) << LOG_BADGE("BlockTrace")
+                        << LOG_BADGE("preExeBlock")
                         << LOG_DESC("preExecuteTransaction prepareDagFlow finish")
                         << LOG_KV("blockNumber", blockNumber) << LOG_KV("timestamp", timestamp)
                         << LOG_KV("cost", (utcTime() - recordT));
@@ -408,9 +409,8 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
         {
             if (!isStaticCall)
             {
-                auto executiveFactory =
-                    std::make_shared<ShardingExecutiveFactory>(*blockContext, m_precompiledContract,
-                        m_constantPrecompiled, m_builtInPrecompiled, *m_gasInjector);
+                auto executiveFactory = std::make_shared<ShardingExecutiveFactory>(*blockContext,
+                    m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
                 executiveFlow = std::make_shared<ExecutiveDagFlow>(executiveFactory, m_abiCache);
                 blockContext->setExecutiveFlow(codeAddress, executiveFlow);
                 executiveFlow->setThreadPool(m_threadPool);

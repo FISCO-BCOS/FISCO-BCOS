@@ -26,6 +26,7 @@
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
@@ -468,9 +469,26 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             jResp["to"] = submitResult->to();
             jResp["from"] = toHexStringWithPrefix(submitResult->sender());
 
-            // TODO: check if needed
-            // jResp["input"] = toHexStringWithPrefix(transaction->input());
+            if (g_BCOSConfig.needRetInput())
+            {
+                jResp["input"] = toHexStringWithPrefix(transaction->input());
+            }
 
+
+            if (requireProof) [[unlikely]]
+            {
+                auto ledger = nodeService->ledger();
+                ledger->asyncGetTransactionReceiptByHash(txHash, true,
+                    [&respFunc, &jResp](
+                        auto&& error, [[maybe_unused]] auto&& receipt, auto&& merkle) {
+                        // ledger logic: if error, return empty merkle
+                        // for compatibility
+                        JsonRpcImpl_2_0::addProofToResponse(jResp, "txReceiptProof", merkle);
+                        JsonRpcImpl_2_0::addProofToResponse(jResp, "receiptProof", merkle);
+                        respFunc(nullptr, jResp);
+                    });
+                co_return;
+            }
             respFunc(nullptr, jResp);
         }
         catch (bcos::Error& e)

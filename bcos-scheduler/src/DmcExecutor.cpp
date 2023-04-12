@@ -115,7 +115,7 @@ bool DmcExecutor::detectLockAndRevert()
                                << " REVERT";
                 found = true;
                 return false;  // break at once found a tx can be revert
-                // just detect one TODO: detect and unlock more deadlock
+                // just detect one
             }
             else
             {
@@ -332,13 +332,11 @@ void DmcExecutor::handleCreateMessage(
             auto newSeq = currentSeq;
             if (message->createSalt())
             {
-                // TODO: Add sender in this process(consider compat with ethereum)
                 message->setTo(
                     newEVMAddress(message->from(), message->data(), *(message->createSalt())));
             }
             else
             {
-                // TODO: Add sender in this process(consider compat with ethereum)
                 message->setTo(
                     newEVMAddress(m_block->blockHeaderConst()->number(), contextID, newSeq));
             }
@@ -461,6 +459,11 @@ void DmcExecutor::handleExecutiveOutputs(
 
     for (auto& output : outputs)
     {
+        if (output->hasContractTableChanged()) [[unlikely]]
+        {
+            m_hasContractTableChanged = true;
+        }
+
         std::string to = {output->to().data(), output->to().size()};
         auto contextID = output->contextID();
 

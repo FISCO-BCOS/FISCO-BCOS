@@ -176,7 +176,7 @@ std::pair<bool, bytes> bcos::crypto::secp256k1Recover(Hash::Ptr _hashImpl, bytes
         h256 r;
         h256 s;
     } in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
+    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(in)));
     u256 v = (u256)in.v;
     if (v >= 27 && v <= 28)
     {

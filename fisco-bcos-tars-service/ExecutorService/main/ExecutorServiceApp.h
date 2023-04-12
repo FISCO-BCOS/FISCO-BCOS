@@ -49,7 +49,6 @@ public:
 
 protected:
     virtual void createAndInitExecutor();
-    virtual void registerExecutor();
 
 private:
     std::string m_iniConfigPath;
@@ -64,6 +63,5 @@ private:
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     std::string m_executorName;
     std::shared_ptr<bcos::Timer> m_timer;
-    bool m_registerExecutorSuccess = false;
 };
 }  // namespace bcostars

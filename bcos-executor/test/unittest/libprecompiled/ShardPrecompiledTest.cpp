@@ -853,38 +853,6 @@ BOOST_AUTO_TEST_CASE(makeShardTest)
     }
 }
 
-BOOST_AUTO_TEST_CASE(makeShardWasmTest)
-{
-    /*
-     TODO: fix me
-    init(true);
-    bcos::protocol::BlockNumber _number = 3;
-
-    {
-        auto result = makeShard(_number++, "hello");
-        int32_t m;
-        codec->decode(result->data(), m);
-        BOOST_TEST(m == 0u);
-
-        auto lsResult = list(_number++, "/shards");
-        std::vector<BfsTuple> ls;
-        int32_t code;
-        codec->decode(lsResult->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(std::get<0>(ls[0]) == "hello");
-        BOOST_CHECK(std::get<1>(ls[0]) == executor::FS_TYPE_DIR);
-    }
-
-    {
-        auto result = makeShard(_number++, "/shards/hello", CODE_FILE_INVALID_TYPE, true);
-    }
-
-    {
-        auto result = makeShard(_number++, "hello/world", CODE_FILE_INVALID_TYPE, true);
-    }
-     */
-}
-
 BOOST_AUTO_TEST_CASE(couldNotMakeShardTest)
 {
     init(false, protocol::BlockVersion::V3_3_VERSION);

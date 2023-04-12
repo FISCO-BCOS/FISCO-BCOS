@@ -1,6 +1,6 @@
 #pragma once
 
-#if __APPLE__ && __clang__
+#if !__cpp_impl_coroutine
 #include <experimental/coroutine>
 namespace CO_STD = std::experimental;
 #else

@@ -35,10 +35,19 @@ namespace bcos::test
 class MockKeyPageStorage : public bcos::storage::TransactionalStorageInterface
 {
 public:
-    MockKeyPageStorage(bcos::crypto::Hash::Ptr hashImpl) : m_hashImpl(std::move(hashImpl))
+    MockKeyPageStorage(bcos::crypto::Hash::Ptr hashImpl) : m_hashImpl(hashImpl)
     {
         auto pre = std::make_shared<MockTransactionalStorage>(hashImpl);
         m_inner = std::make_shared<bcos::storage::KeyPageStorage>(std::move(pre));
+    }
+
+    MockKeyPageStorage(bcos::crypto::Hash::Ptr hashImpl, uint32_t version,
+        std::shared_ptr<std::set<std::string, std::less<>>> _ignoreTables = nullptr)
+      : m_hashImpl(hashImpl)
+    {
+        auto pre = std::make_shared<MockTransactionalStorage>(hashImpl);
+        m_inner = std::make_shared<bcos::storage::KeyPageStorage>(
+            std::move(pre), 10240, version, _ignoreTables);
     }
 
     void asyncGetPrimaryKeys(std::string_view table,

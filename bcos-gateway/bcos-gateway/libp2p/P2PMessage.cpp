@@ -185,15 +185,27 @@ bool P2PMessage::encodeHeader(bytes& _buffer)
 
 bool P2PMessage::encode(EncodedMessage& _buffer)
 {
-    // compress payload
-    // bcos::bytes compressData;
-    // bool isCompressSuccess = false;
-    // TODO: add enable_compress switch
-    // if (tryToCompressPayload(compressData))
-    // {
-    //     isCompressSuccess = true;
-    // }
+    bool isCompressSuccess = false;
+    if (_buffer.compress)
+    {
+        auto compressData = std::make_shared<bcos::bytes>();
+        if (tryToCompressPayload(*compressData))
+        {
+            isCompressSuccess = true;
+            // set compress flag
+            m_ext |= bcos::protocol::MessageExtFieldFlag::Compress;
+            _buffer.payload = std::move(compressData);
+        }
+    }
+
+    // No data compression is performed
+    if (!isCompressSuccess)
+    {
+        _buffer.payload = m_payload;
+    }
+
     bytes headerBuffer;
+    // encode header
     if (!encodeHeader(headerBuffer))
     {
         return false;
@@ -204,8 +216,9 @@ bool P2PMessage::encode(EncodedMessage& _buffer)
         return false;
     }
 
-    auto headerSize = headerBuffer.size();
-    auto payloadSize = m_payload ? m_payload->size() : 0;
+    std::size_t headerSize = headerBuffer.size();
+    std::size_t payloadSize = _buffer.payloadSize();
+
     m_length = headerSize + payloadSize;
     // calc total length and modify the length value in the buffer
     auto length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)(m_length));
@@ -213,7 +226,6 @@ bool P2PMessage::encode(EncodedMessage& _buffer)
     std::copy((byte*)&length, (byte*)&length + 4, headerBuffer.data());
 
     _buffer.header = std::move(headerBuffer);
-    _buffer.payload = m_payload;
 
     return true;
 }
@@ -226,10 +238,11 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
     // compress payload
     bcos::bytes compressData;
     bool isCompressSuccess = false;
-    // TODO: add enable_compress switch
     if (tryToCompressPayload(compressData))
     {
         isCompressSuccess = true;
+        // set compress flag
+        m_ext |= bcos::protocol::MessageExtFieldFlag::Compress;
     }
 
     if (!encodeHeader(_buffer))
@@ -281,13 +294,7 @@ bool P2PMessage::tryToCompressPayload(bytes& compressData)
 
     bool isCompressSuccess =
         ZstdCompress::compress(ref(*m_payload), compressData, bcos::gateway::c_zstdCompressLevel);
-    if (!isCompressSuccess)
-    {
-        return false;
-    }
-    // update compress flag
-    m_ext |= bcos::protocol::MessageExtFieldFlag::Compress;
-    return true;
+    return isCompressSuccess;
 }
 
 int32_t P2PMessage::decodeHeader(const bytesConstRef& _buffer)
@@ -330,8 +337,8 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
 
     int32_t offset = decodeHeader(_buffer);
     if (offset <= 0)
-    {
-        return offset;
+    {  // The packet was not fully received by the network.
+        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
 
     // check if packet header fully received

@@ -17,6 +17,9 @@
     pd_addrs=
     key_page_size=10240
 
+[executor]
+    enable_dag=true
+
 [log]
     enable=true
     log_path=./log

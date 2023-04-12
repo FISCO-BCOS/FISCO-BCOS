@@ -475,6 +475,7 @@ std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRat
 {
     auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
     rateLimiterStat->setStatInterval(_rateLimiterConfig.statInterval);
+    rateLimiterStat->setEnableConnectDebugInfo(_rateLimiterConfig.enableConnectDebugInfo);
 
     // redis instance
     std::shared_ptr<sw::redis::Redis> redis = nullptr;
@@ -508,7 +509,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     if (_rateLimiterConfig.totalOutgoingBwLimit > 0)
     {
         totalOutgoingRateLimiter = rateLimiterFactory->buildTimeWindowRateLimiter(
-            _rateLimiterConfig.totalOutgoingBwLimit * timeWindowS, timeWindowS * 1000,
+            _rateLimiterConfig.totalOutgoingBwLimit * timeWindowS, toMillisecond(timeWindowS),
             allowExceedMaxPermitSize);
 
         rateLimiterManager->registerRateLimiter(
@@ -521,7 +522,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
         for (const auto& [ip, bandWidth] : _rateLimiterConfig.ip2BwLimit)
         {
             auto rateLimiterInterface = rateLimiterFactory->buildTimeWindowRateLimiter(
-                bandWidth * timeWindowS, timeWindowS * 1000, allowExceedMaxPermitSize);
+                bandWidth * timeWindowS, toMillisecond(timeWindowS), allowExceedMaxPermitSize);
             rateLimiterManager->registerRateLimiter(ip, rateLimiterInterface);
         }
     }
@@ -542,7 +543,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
             else
             {
                 rateLimiterInterface = rateLimiterFactory->buildTimeWindowRateLimiter(
-                    bandWidth * timeWindowS, timeWindowS * 1000, allowExceedMaxPermitSize);
+                    bandWidth * timeWindowS, toMillisecond(timeWindowS), allowExceedMaxPermitSize);
             }
 
             rateLimiterManager->registerRateLimiter(group, rateLimiterInterface);
@@ -550,7 +551,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     }
 
     // modules without bandwidth limit
-    rateLimiterManager->setModulesWithoutLimit(_rateLimiterConfig.modulesWithoutLimit);
+    rateLimiterManager->resetModulesWithoutLimit(_rateLimiterConfig.modulesWithoutLimit);
     rateLimiterManager->setRateLimiterFactory(rateLimiterFactory);
     rateLimiterManager->setEnableInRateLimit(_rateLimiterConfig.enableInRateLimit());
     rateLimiterManager->setEnableOutConRateLimit(_rateLimiterConfig.enableOutConnRateLimit());
@@ -596,7 +597,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // Session Factory
     auto sessionFactory = std::make_shared<SessionFactory>(pubHex, _config->sessionRecvBufferSize(),
         _config->allowMaxMsgSize(), _config->maxReadDataSize(), _config->maxSendDataSize(),
-        _config->maxMsgCountSendOneTime());
+        _config->maxMsgCountSendOneTime(), _config->enableCompress());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // Session Callback manager
@@ -619,7 +620,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setSessionCallbackManager(sessionCallbackManager);
 
     // init Service
-
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;
     if (enableRIPProtocol)
@@ -644,6 +644,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("buildService") << LOG_DESC("build service end")
                               << LOG_KV("enable rip protocol", _config->enableRIPProtocol())
+                              << LOG_KV("enable compress", _config->enableCompress())
                               << LOG_KV("myself pub id", pubHex);
     service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);

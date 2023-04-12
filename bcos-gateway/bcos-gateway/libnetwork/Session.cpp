@@ -158,6 +158,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     }
 
     EncodedMessage::Ptr encodedMessage = std::make_shared<EncodedMessage>();
+    encodedMessage->compress = m_enableCompress;
     message->encode(*encodedMessage);
 
     if (c_fileLogLevel <= LogLevel::TRACE)

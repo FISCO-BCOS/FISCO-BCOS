@@ -19,7 +19,10 @@
  * @date 2021-04-20
  */
 #pragma once
+#include "../impl/TarsHashable.h"
+
 #include "BlockHeaderImpl.h"
+#include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
 #include <utility>
 
@@ -30,7 +33,7 @@ class BlockHeaderFactoryImpl : public bcos::protocol::BlockHeaderFactory
 {
 public:
     BlockHeaderFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
-      : m_cryptoSuite(std::move(cryptoSuite))
+      : m_cryptoSuite(std::move(cryptoSuite)), m_hashImpl(m_cryptoSuite->hashImpl())
     {}
     ~BlockHeaderFactoryImpl() override = default;
     bcos::protocol::BlockHeader::Ptr createBlockHeader() override
@@ -44,8 +47,24 @@ public:
     }
     bcos::protocol::BlockHeader::Ptr createBlockHeader(bcos::bytesConstRef _data) override
     {
-        auto blockHeader = createBlockHeader();
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+            [m_header = bcostars::BlockHeader()]() mutable { return &m_header; });
         blockHeader->decode(_data);
+
+        auto& inner = blockHeader->mutableInner();
+        if (inner.dataHash.empty())
+        {
+            // Update the hash field
+            std::visit(
+                [&inner](auto&& hasher) {
+                    using HasherType = std::decay_t<decltype(hasher)>;
+                    bcos::concepts::hash::calculate<HasherType>(inner, inner.dataHash);
+                },
+                m_hashImpl->hasher());
+
+            BCOS_LOG(TRACE) << LOG_BADGE("createBlockHeader")
+                            << LOG_DESC("recalculate blockHeader dataHash");
+        }
 
         return blockHeader;
     }
@@ -59,5 +78,6 @@ public:
 
 private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    bcos::crypto::Hash::Ptr m_hashImpl;
 };
 }  // namespace bcostars::protocol

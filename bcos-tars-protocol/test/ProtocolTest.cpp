@@ -440,10 +440,21 @@ BOOST_AUTO_TEST_CASE(blockHeader)
 
     header->setParentInfo(parentInfoList);
 
+    auto headerImpl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+
+    BOOST_CHECK(headerImpl->inner().dataHash.empty());
+
     bcos::bytes buffer;
     header->encode(buffer);
 
+    // BOOST_CHECK_EQUAL(header->, decodedHeader->number());
+
     auto decodedHeader = blockHeaderFactory->createBlockHeader(buffer);
+
+    auto decodedBlockHeaderImpl =
+        std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(decodedHeader);
+
+    BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
 
     BOOST_CHECK_EQUAL(header->number(), decodedHeader->number());
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
@@ -459,6 +470,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
 
     BOOST_CHECK_NO_THROW(header->setExtraData(header->extraData().toBytes()));
 }
+
 
 BOOST_AUTO_TEST_CASE(emptyBlockHeader)
 {

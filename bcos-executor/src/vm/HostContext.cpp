@@ -184,7 +184,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     request->gas = _msg->gas;
     // if (built in precompiled) then execute locally
 
-    if (m_executive->isBuiltInPrecompiled(request->receiveAddress))
+    if (m_executive->isStaticPrecompiled(request->receiveAddress))
     {
         return callBuiltInPrecompiled(request, false);
     }
@@ -301,6 +301,8 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
 bool HostContext::setCode(bytes code)
 {
+    m_executive->setContractTableChanged();
+
     // set code will cause exception when exec revert
     // new logic
     if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))

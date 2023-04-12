@@ -82,6 +82,8 @@ public:
     virtual bool encode(bytes& _buffer);
     virtual ssize_t decode(bytesConstRef _buffer);
 
+    static uint16_t tryDecodeModuleID(bytesConstRef _buffer);
+
 protected:
     uint16_t m_moduleID = 0;
     std::shared_ptr<bytes> m_uuid;
