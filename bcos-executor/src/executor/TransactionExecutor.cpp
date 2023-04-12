@@ -367,9 +367,14 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader,
     storage::StateStorageInterface::Ptr storage)
 {
+    bcos::storage::StorageInterface::Ptr backend = m_backendStorage;
+    if (m_cachedStorage != nullptr)
+    {
+        backend = m_cachedStorage;
+    }
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
         currentHeader, getVMSchedule((uint32_t)currentHeader->version()), m_isWasm, m_isAuthCheck,
-        m_keyPageIgnoreTables);
+        std::move(backend), m_keyPageIgnoreTables);
     context->setVMFactory(m_vmFactory);
     if (f_onNeedSwitchEvent)
     {

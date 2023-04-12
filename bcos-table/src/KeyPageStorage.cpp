@@ -828,6 +828,13 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     }
     // if new entry is too big, it will trigger split
     auto* page = pageData->getPage();
+    // NOTE: add this condition to adapt the old data without keyPage info
+    // rewrite to new data with keyPage.
+    if (page == nullptr && pageData->type == Data::NormalEntry &&
+        pageData->entry.status() == Entry::DELETED)
+    {
+        page = &std::get<0>(pageData->data);
+    }
     {
         auto ret = page->setEntry(key, std::move(entry));
         entryOld = std::move(std::get<0>(ret));
@@ -835,12 +842,16 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
 
         if (pageInfoChanged)
         {
-            if (pageData->entry.status() == Entry::Status::EMPTY)
+            // NOTE: add type=NormalEntry condition to adapt the old data without keyPage info
+            // rewrite to new data with keyPage.
+            if (pageData->entry.status() == Entry::Status::EMPTY ||
+                pageData->type == Data::Type::NormalEntry)
             {  // new page insert, if entries is empty means page delete entry which not exist
                 meta->insertPageInfoNoLock(PageInfo(page->endKey(), (uint16_t)page->validCount(),
                     (uint16_t)page->size(), pageData));
                 // pageData->entry.setStatus(Entry::Status::NORMAL);
                 pageData->entry.setStatus(Entry::Status::MODIFIED);
+                pageData->type = Data::Type::Page;
             }
             else
             {

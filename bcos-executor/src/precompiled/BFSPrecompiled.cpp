@@ -24,6 +24,7 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/string/split.hpp>
@@ -47,6 +48,7 @@ constexpr const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
 constexpr const char* const FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
 constexpr const char* const FILE_SYSTEM_METHOD_INIT = "initBfs()";
 constexpr const char* const FILE_SYSTEM_METHOD_REBUILD = "rebuildBfs(uint256,uint256)";
+constexpr const char* const FILE_SYSTEM_METHOD_FIX = "fixBfs(uint256)";
 
 BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -62,6 +64,7 @@ BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashI
     name2Selector[FILE_SYSTEM_METHOD_INIT] = getFuncSelector(FILE_SYSTEM_METHOD_INIT, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_REBUILD] =
         getFuncSelector(FILE_SYSTEM_METHOD_REBUILD, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_FIX] = getFuncSelector(FILE_SYSTEM_METHOD_FIX);
     BfsTypeSet = {FS_TYPE_DIR, FS_TYPE_CONTRACT, FS_TYPE_LINK};
 }
 
@@ -118,6 +121,10 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     {
         // initBfs for the first time
         rebuildBfs(_executive, _callParameters);
+    }
+    else if (version >= BlockVersion::V3_3_VERSION && func == name2Selector[FILE_SYSTEM_METHOD_FIX])
+    {
+        fixBfs(_executive, _callParameters);
     }
     else [[unlikely]]
     {
@@ -859,6 +866,123 @@ void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecu
         rebuildBfs310(_executive);
     }
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+}
+
+void BFSPrecompiled::fixBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters)
+{
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    uint32_t fixVersion = 0;
+    codec.decode(_callParameters->params(), fixVersion);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("fixBfs")
+                          << LOG_KV("fixVersion", fixVersion);
+    if (fixVersion == static_cast<uint32_t>(BlockVersion::V3_3_VERSION)) [[likely]]
+    {
+        fixBfs330(_executive);
+    }
+    else [[unlikely]]
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
+                              << LOG_DESC("fixBfs version not supported")
+                              << LOG_KV("fixVersion", fixVersion)
+                              << LOG_KV("blockVersion", blockContext.blockVersion());
+        BOOST_THROW_EXCEPTION(PrecompiledError("BFSPrecompiled call undefined function!"));
+    }
+    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+}
+
+void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecutive>& _executive)
+{
+    const auto& blockContext = _executive->blockContext();
+    auto keyPageIgnoreTables = blockContext.keyPageIgnoreTables();
+    auto backendStorage = blockContext.backendStorage();
+    if (backendStorage == nullptr) [[unlikely]]
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("BFSPrecompiled")
+                               << LOG_DESC("fixBfs320 backendStorage is null");
+        BOOST_THROW_EXCEPTION(PrecompiledError("BFSPrecompiled fixBfs320 backendStorage is null."));
+    }
+    auto existEntries = _executive->storage().getRows(tool::FS_ROOT, tool::FS_ROOT_SUBS_NAME);
+    if (std::all_of(existEntries.begin(), existEntries.end(),
+            [](const auto& entry) { return entry.has_value(); }))
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
+                              << LOG_DESC("BFS logical looks good, skip fix.");
+        return;
+    }
+
+    for (const auto& dir : tool::FS_ROOT_SUBS)
+    {
+        std::string sysDir = std::string(dir);
+        std::vector<std::string> keys;
+        if (dir == tool::FS_ROOT)
+        {
+            keys.assign(tool::FS_ROOT_SUBS_NAME.begin(), tool::FS_ROOT_SUBS_NAME.end());
+        }
+        else
+        {
+            storage::Condition condition{};
+            condition.startsWith(sysDir + "/");
+            std::promise<std::vector<std::string>> promise;
+            blockContext.backendStorage()->asyncGetPrimaryKeys(
+                "s_tables", condition, [&promise](auto&& error, auto&& keys) {
+                    if (error)
+                    {
+                        PRECOMPILED_LOG(ERROR) << LOG_BADGE("BFSPrecompiled")
+                                               << LOG_DESC("fixBfs320 asyncGetPrimaryKeys error")
+                                               << LOG_KV("errorCode", error->errorCode())
+                                               << LOG_KV("errorMessage", error->errorMessage());
+                        BOOST_THROW_EXCEPTION(PrecompiledError(
+                            "BFSPrecompiled fixBfs320 asyncGetPrimaryKeys error."));
+                    }
+                    promise.set_value(std::forward<decltype(keys)>(keys));
+                });
+            keys = promise.get_future().get();
+        }
+        std::unordered_set<std::string> tablePathFilter;
+        // read without keyPage
+
+        for (const auto& key : keys)
+        {
+            auto index = key.find_first_of('/', dir.size() + 1);
+            auto subPath =
+                (dir == tool::FS_ROOT) ?
+                    key :
+                    key.substr(dir.size() + 1,
+                        index == std::string::npos ? std::string::npos : index - dir.size() - 1);
+            if (subPath.empty() || tablePathFilter.contains(subPath))
+            {
+                continue;
+            }
+            std::promise<std::optional<storage::Entry>> getRowPromise;
+            backendStorage->asyncGetRow(dir, subPath, [&getRowPromise](auto&& error, auto&& entry) {
+                if (error)
+                {
+                    PRECOMPILED_LOG(ERROR)
+                        << LOG_BADGE("BFSPrecompiled") << LOG_DESC("fixBfs320 asyncGetRow error")
+                        << LOG_KV("errorCode", error->errorCode())
+                        << LOG_KV("errorMessage", error->errorMessage());
+                    BOOST_THROW_EXCEPTION(
+                        PrecompiledError("BFSPrecompiled fixBfs320 asyncGetRow error."));
+                }
+                getRowPromise.set_value(std::forward<decltype(entry)>(entry));
+            });
+            auto entry = getRowPromise.get_future().get();
+            if (!entry.has_value()) [[unlikely]]
+            {
+                continue;
+            }
+            keyPageIgnoreTables->insert(sysDir);
+            Entry deletedEntry;
+            deletedEntry.setStatus(Entry::Status::DELETED);
+            _executive->storage().setRow(dir, subPath, std::move(deletedEntry));
+            keyPageIgnoreTables->erase(sysDir);
+            // write in keyPage
+            _executive->storage().setRow(dir, subPath, entry.value());
+            tablePathFilter.insert(subPath);
+        }
+    }
 }
 
 void BFSPrecompiled::rebuildBfs310(

@@ -101,7 +101,7 @@ private:
         auto seqIt = index.iterator_to(*entryIt);
         index.relocate(index.end(), seqIt);
 
-        size_t clearCount = 0;
+        [[maybe_unused]] size_t clearCount = 0;
         while (bucket.capacity > m_maxCapacity && !bucket.container.empty())
         {
             auto const& item = index.front();
