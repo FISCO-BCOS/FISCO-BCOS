@@ -210,30 +210,20 @@ void JsonRpcImpl_2_0::parseRpcResponseJson(
         JsonRpcError::InvalidRequest, "The JSON sent is not a valid Response object."));
 }
 
-void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const& transactionPtr)
+void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const& transaction)
 {
-    // transaction version
-    jResp["version"] = transactionPtr.version();
-    // transaction hash
-    jResp["hash"] = toHexStringWithPrefix(transactionPtr.hash());
-    // transaction nonce
-    jResp["nonce"] = toHex(transactionPtr.nonce());
-    // blockLimit
-    jResp["blockLimit"] = transactionPtr.blockLimit();
-    // the receiver address
-    jResp["to"] = string(transactionPtr.to());
-    // the sender address
-    jResp["from"] = toHexStringWithPrefix(transactionPtr.sender());
-    // importTime
-    jResp["importTime"] = transactionPtr.importTime();
-    // the chainID
-    jResp["chainID"] = std::string(transactionPtr.chainId());
-    // the groupID
-    jResp["groupID"] = std::string(transactionPtr.groupId());
-    // the abi
-    jResp["abi"] = std::string(transactionPtr.abi());
-    // the signature
-    jResp["signature"] = toHexStringWithPrefix(transactionPtr.signatureData());
+    jResp["version"] = transaction.version();
+    jResp["hash"] = toHexStringWithPrefix(transaction.hash());
+    jResp["nonce"] = toHex(transaction.nonce());
+    jResp["blockLimit"] = transaction.blockLimit();
+    jResp["to"] = string(transaction.to());
+    jResp["from"] = toHexStringWithPrefix(transaction.sender());
+    jResp["importTime"] = transaction.importTime();
+    jResp["chainID"] = std::string(transaction.chainId());
+    jResp["groupID"] = std::string(transaction.groupId());
+    jResp["abi"] = std::string(transaction.abi());
+    jResp["signature"] = toHexStringWithPrefix(transaction.signatureData());
+    jResp["extraData"] = std::string(transaction.extraData());
 }
 
 void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
