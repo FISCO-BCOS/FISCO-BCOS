@@ -158,6 +158,6 @@ private:
 
     // Note: This x_markTxsMutex is used for locking asyncSealTxs() during sealBlock
     // because memory storage is not contain a big lock now
-    bcos::RecursiveMutex x_markTxsMutex;
+    mutable bcos::SharedMutex x_markTxsMutex;
 };
 }  // namespace bcos::txpool

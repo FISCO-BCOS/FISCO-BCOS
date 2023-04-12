@@ -352,15 +352,8 @@ void TransactionExecutor::initWasmEnvironment()
 
 void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)
 {
-    if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_1_VERSION)
-    {
-        // Only 3.1 goes here, here is a bug, ignore init test precompiled
-    }
-    else
-    {
-        SmallBankPrecompiled::createTable(storage);
-        DagTransferPrecompiled::createDagTable(storage);
-    }
+    SmallBankPrecompiled::createTable(storage);
+    DagTransferPrecompiled::createDagTable(storage);
 }
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
@@ -491,6 +484,14 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
             if (blockHeader->number() == 0)
             {
+                if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+                {
+                    // Only 3.1 goes here,for compat with the bug:
+                    // 3.1 only init these two precompiled in genesis block
+                    CpuHeavyPrecompiled::registerPrecompiled(m_precompiled);
+                    SmallBankPrecompiled::registerPrecompiled(m_precompiled);
+                }
+
                 initTestPrecompiledTable(stateStorage);
             }
         }
