@@ -65,6 +65,7 @@ public:
 
     void final(concepts::bytebuffer::ByteBuffer auto& output)
     {
+        concepts::resizeTo(output, hashSize());
         m_anyHasher->final(
             std::span<std::byte>((std::byte*)RANGES::data(output), RANGES::size(output)));
     }
