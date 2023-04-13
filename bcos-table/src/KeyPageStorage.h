@@ -1010,7 +1010,7 @@ public:
         {
             std::ignore = version;
             ar&(uint32_t)m_validCount;
-            size_t count = 0;
+            [[maybe_unused]] size_t count = 0;
             for (const auto& i : entries)
             {
                 if (i.second.status() == Entry::Status::DELETED)
