@@ -313,13 +313,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
 #ifdef WITH_TIKV
-        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr = m_scheduler;
+        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr =
+            std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
         auto switchHandler = [scheduler = schedulerWeakPtr]() {
             if (scheduler.lock())
             {
                 scheduler.lock()->triggerSwitch();
             }
-        }; 
+        };
         if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
         {
             dynamic_pointer_cast<bcos::storage::TiKVStorage>(airExecutorStorage)
