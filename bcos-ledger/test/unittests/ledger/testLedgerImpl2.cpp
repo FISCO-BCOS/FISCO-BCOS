@@ -36,8 +36,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
             bcos::storage2::memory_storage::ORDERED>
             storage;
 
-        LedgerImpl2<crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storage)> ledger(
-            storage, blockFactory, tableNamePool);
+        LedgerImpl2<decltype(storage)> ledger(storage, blockFactory, tableNamePool);
 
         bcostars::protocol::BlockImpl block;
         auto blockHeader = block.blockHeader();

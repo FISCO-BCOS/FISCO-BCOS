@@ -63,3 +63,80 @@ bcos::u256 TransactionReceiptImpl::gasUsed() const
     }
     return {};
 }
+int32_t bcostars::protocol::TransactionReceiptImpl::version() const
+{
+    return m_inner()->data.version;
+}
+std::string_view bcostars::protocol::TransactionReceiptImpl::contractAddress() const
+{
+    return m_inner()->data.contractAddress;
+}
+int32_t bcostars::protocol::TransactionReceiptImpl::status() const
+{
+    return m_inner()->data.status;
+}
+bcos::bytesConstRef bcostars::protocol::TransactionReceiptImpl::output() const
+{
+    return {(const unsigned char*)m_inner()->data.output.data(), m_inner()->data.output.size()};
+}
+gsl::span<const bcos::protocol::LogEntry> bcostars::protocol::TransactionReceiptImpl::logEntries()
+    const
+{
+    if (m_logEntries.empty())
+    {
+        m_logEntries.reserve(m_inner()->data.logEntries.size());
+        for (auto& it : m_inner()->data.logEntries)
+        {
+            auto bcosLogEntry = toBcosLogEntry(it);
+            m_logEntries.emplace_back(std::move(bcosLogEntry));
+        }
+    }
+
+    return {m_logEntries.data(), m_logEntries.size()};
+}
+bcos::protocol::BlockNumber bcostars::protocol::TransactionReceiptImpl::blockNumber() const
+{
+    return m_inner()->data.blockNumber;
+}
+const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner() const
+{
+    return *m_inner();
+}
+bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::mutableInner()
+{
+    return *m_inner();
+}
+void bcostars::protocol::TransactionReceiptImpl::setInner(const bcostars::TransactionReceipt& inner)
+{
+    *m_inner() = inner;
+}
+void bcostars::protocol::TransactionReceiptImpl::setInner(bcostars::TransactionReceipt&& inner)
+{
+    *m_inner() = std::move(inner);
+}
+std::function<bcostars::TransactionReceipt*()> const&
+bcostars::protocol::TransactionReceiptImpl::innerGetter()
+{
+    return m_inner;
+}
+void bcostars::protocol::TransactionReceiptImpl::setLogEntries(
+    std::vector<bcos::protocol::LogEntry> const& _logEntries)
+{
+    m_logEntries.clear();
+    m_inner()->data.logEntries.clear();
+    m_inner()->data.logEntries.reserve(_logEntries.size());
+
+    for (const auto& it : _logEntries)
+    {
+        auto tarsLogEntry = toTarsLogEntry(it);
+        m_inner()->data.logEntries.emplace_back(std::move(tarsLogEntry));
+    }
+}
+std::string const& bcostars::protocol::TransactionReceiptImpl::message() const
+{
+    return m_inner()->message;
+}
+void bcostars::protocol::TransactionReceiptImpl::setMessage(std::string message)
+{
+    m_inner()->message = std::move(message);
+}

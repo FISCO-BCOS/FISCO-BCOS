@@ -48,55 +48,25 @@ public:
     void encode(bcos::bytes& _encodedData) const override;
     bcos::crypto::HashType hash() const override;
 
-    int32_t version() const override { return m_inner()->data.version; }
+    int32_t version() const override;
     bcos::u256 gasUsed() const override;
 
-    std::string_view contractAddress() const override { return m_inner()->data.contractAddress; }
-    int32_t status() const override { return m_inner()->data.status; }
-    bcos::bytesConstRef output() const override
-    {
-        return {(const unsigned char*)m_inner()->data.output.data(), m_inner()->data.output.size()};
-    }
-    gsl::span<const bcos::protocol::LogEntry> logEntries() const override
-    {
-        if (m_logEntries.empty())
-        {
-            m_logEntries.reserve(m_inner()->data.logEntries.size());
-            for (auto& it : m_inner()->data.logEntries)
-            {
-                auto bcosLogEntry = toBcosLogEntry(it);
-                m_logEntries.emplace_back(std::move(bcosLogEntry));
-            }
-        }
+    std::string_view contractAddress() const override;
+    int32_t status() const override;
+    bcos::bytesConstRef output() const override;
+    gsl::span<const bcos::protocol::LogEntry> logEntries() const override;
+    bcos::protocol::BlockNumber blockNumber() const override;
 
-        return {m_logEntries.data(), m_logEntries.size()};
-    }
-    bcos::protocol::BlockNumber blockNumber() const override { return m_inner()->data.blockNumber; }
+    const bcostars::TransactionReceipt& inner() const;
+    bcostars::TransactionReceipt& mutableInner();
 
-    const bcostars::TransactionReceipt& inner() const { return *m_inner(); }
-    bcostars::TransactionReceipt& mutableInner() { return *m_inner(); }
+    void setInner(const bcostars::TransactionReceipt& inner);
+    void setInner(bcostars::TransactionReceipt&& inner);
 
-    void setInner(const bcostars::TransactionReceipt& inner) { *m_inner() = inner; }
-    void setInner(bcostars::TransactionReceipt&& inner) { *m_inner() = std::move(inner); }
-
-    std::function<bcostars::TransactionReceipt*()> const& innerGetter() { return m_inner; }
-
-    void setLogEntries(std::vector<bcos::protocol::LogEntry> const& _logEntries)
-    {
-        m_logEntries.clear();
-        m_inner()->data.logEntries.clear();
-        m_inner()->data.logEntries.reserve(_logEntries.size());
-
-        for (const auto& it : _logEntries)
-        {
-            auto tarsLogEntry = toTarsLogEntry(it);
-            m_inner()->data.logEntries.emplace_back(std::move(tarsLogEntry));
-        }
-    }
-
-    std::string const& message() const override { return m_inner()->message; }
-
-    void setMessage(std::string message) override { m_inner()->message = std::move(message); }
+    std::function<bcostars::TransactionReceipt*()> const& innerGetter();
+    void setLogEntries(std::vector<bcos::protocol::LogEntry> const& _logEntries);
+    std::string const& message() const override;
+    void setMessage(std::string message) override;
 
 private:
     std::function<bcostars::TransactionReceipt*()> m_inner;
