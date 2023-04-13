@@ -118,37 +118,28 @@ public:
             return txsRoot;
         }
 
-        auto anyHasher = hashImpl.hasher();
-        std::visit(
-            [this, &txsRoot](auto& hasher) {
-                using Hasher = std::remove_reference_t<decltype(hasher)>;
-                bcos::crypto::merkle::Merkle<Hasher> merkle;
-
-                if (transactionsSize() > 0)
-                {
-                    auto hashesRange =
-                        m_inner->transactions |
-                        RANGES::views::transform([](const bcostars::Transaction& transaction) {
-                            std::array<std::byte, Hasher::HASH_SIZE> hash;
-                            bcos::concepts::hash::calculate<Hasher>(transaction, hash);
-                            return hash;
-                        });
-                    merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
-                }
-                else if (transactionsMetaDataSize() > 0)
-                {
-                    auto hashesRange =
-                        m_inner->transactionsMetaData |
-                        RANGES::views::transform(
-                            [](const bcostars::TransactionMetaData& transactionMetaData) {
-                                return transactionMetaData.hash;
-                            });
-                    merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
-                }
-                bcos::concepts::bytebuffer::assignTo(
-                    *RANGES::rbegin(m_inner->transactionsMerkle), txsRoot);
-            },
-            anyHasher);
+        bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
+        if (transactionsSize() > 0)
+        {
+            auto hashesRange =
+                m_inner->transactions |
+                RANGES::views::transform([&](const bcostars::Transaction& transaction) {
+                    bcos::bytes hash;
+                    bcos::concepts::hash::calculate(hashImpl.hasher(), transaction, hash);
+                    return hash;
+                });
+            merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
+        }
+        else if (transactionsMetaDataSize() > 0)
+        {
+            auto hashesRange = m_inner->transactionsMetaData |
+                               RANGES::views::transform(
+                                   [](const bcostars::TransactionMetaData& transactionMetaData) {
+                                       return transactionMetaData.hash;
+                                   });
+            merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
+        }
+        bcos::concepts::bytebuffer::assignTo(*RANGES::rbegin(m_inner->transactionsMerkle), txsRoot);
 
         return txsRoot;
     }
@@ -161,23 +152,17 @@ public:
         {
             return receiptsRoot;
         }
-        auto anyHasher = hashImpl.hasher();
-        std::visit(
-            [this, &receiptsRoot](auto& hasher) {
-                using Hasher = std::remove_reference_t<decltype(hasher)>;
-                auto hashesRange =
-                    m_inner->receipts |
-                    RANGES::views::transform([](const bcostars::TransactionReceipt& receipt) {
-                        std::array<std::byte, Hasher::HASH_SIZE> hash;
-                        bcos::concepts::hash::calculate<Hasher>(receipt, hash);
-                        return hash;
-                    });
-                bcos::crypto::merkle::Merkle<Hasher> merkle;
-                merkle.generateMerkle(hashesRange, m_inner->receiptsMerkle);
-                bcos::concepts::bytebuffer::assignTo(
-                    *RANGES::rbegin(m_inner->receiptsMerkle), receiptsRoot);
-            },
-            anyHasher);
+        auto hashesRange =
+            m_inner->receipts |
+            RANGES::views::transform([&](const bcostars::TransactionReceipt& receipt) {
+                bcos::bytes hash;
+                bcos::concepts::hash::calculate(hashImpl.hasher(), receipt, hash);
+                return hash;
+            });
+        bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
+        merkle.generateMerkle(hashesRange, m_inner->receiptsMerkle);
+        bcos::concepts::bytebuffer::assignTo(
+            *RANGES::rbegin(m_inner->receiptsMerkle), receiptsRoot);
 
         return receiptsRoot;
     }

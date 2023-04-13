@@ -221,7 +221,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     {
         auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
-            std::move(storageWrapper), protocolInitializer.blockFactory(), storage);
+            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
+            protocolInitializer.blockFactory(), storage);
 
         LIGHTNODE_LOG(INFO) << "start sm light node...";
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
@@ -230,7 +231,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     {
         auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
-            std::move(storageWrapper), protocolInitializer.blockFactory(), storage);
+            bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}, std::move(storageWrapper),
+            protocolInitializer.blockFactory(), storage);
 
         LIGHTNODE_LOG(INFO) << "start light node...";
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);

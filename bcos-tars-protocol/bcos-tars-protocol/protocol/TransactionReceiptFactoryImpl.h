@@ -49,12 +49,7 @@ public:
         if (inner.dataHash.empty())
         {
             // Update the hash field
-            std::visit(
-                [&inner](auto&& hasher) {
-                    using HasherType = std::decay_t<decltype(hasher)>;
-                    bcos::concepts::hash::calculate<HasherType>(inner, inner.dataHash);
-                },
-                m_hashImpl->hasher());
+            bcos::concepts::hash::calculate(m_hashImpl->hasher(), inner, inner.dataHash);
 
             BCOS_LOG(TRACE) << LOG_BADGE("createReceipt")
                             << LOG_DESC("recalculate receipt dataHash");
@@ -85,12 +80,7 @@ public:
         inner.data.blockNumber = blockNumber;
 
         // Update the hash field
-        std::visit(
-            [&inner](auto&& hasher) {
-                using HasherType = std::decay_t<decltype(hasher)>;
-                bcos::concepts::hash::calculate<HasherType>(inner, inner.dataHash);
-            },
-            m_hashImpl->hasher());
+        bcos::concepts::hash::calculate(m_hashImpl->hasher(), inner, inner.dataHash);
         return transactionReceipt;
     }
 

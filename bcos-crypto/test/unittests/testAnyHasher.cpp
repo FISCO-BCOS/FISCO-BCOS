@@ -1,4 +1,4 @@
-#include "bcos-crypto/hasher/AnyHasher2.h"
+#include "bcos-crypto/hasher/AnyHasher.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include <boost/test/unit_test.hpp>
 
@@ -12,9 +12,9 @@ BOOST_FIXTURE_TEST_SUITE(TestAnyHasher2, TestAnyHasher2Fixture)
 
 BOOST_AUTO_TEST_CASE(testHash)
 {
-    AnyHasher2 anyHasher2(std::make_unique<AnyHasher2Impl<openssl::OpenSSL_SHA3_256_Hasher>>());
+    AnyHasher anyHasher2(openssl::OpenSSL_SHA3_256_Hasher{});
 
-    auto s = sizeof(AnyHasher2Impl<openssl::OpenSSL_SHA3_256_Hasher>);
+    auto s = sizeof(AnyHasherImpl<openssl::OpenSSL_SHA3_256_Hasher>);
     std::string a = "str123456789012345678901234567890";
     anyHasher2.update(a);
     std::string result1(32, 0);

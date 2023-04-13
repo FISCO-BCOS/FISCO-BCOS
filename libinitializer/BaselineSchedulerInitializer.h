@@ -4,6 +4,7 @@
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-storage/bcos-storage/StateKVResolver.h"
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>

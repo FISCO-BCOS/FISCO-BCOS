@@ -114,20 +114,16 @@ private:
                     task::syncWait(m_schedulerImpl.finish(blockHeader, m_hashImpl)));
             },
             [&]() {
-                auto anyHasher = m_hashImpl.hasher();
-                std::visit(
-                    [&](auto& hasher) {
-                        bcos::crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>>
-                            merkle;
-                        auto hashesRange =
-                            receipts | RANGES::views::transform(
-                                           [](const auto& receipt) { return receipt->hash(); });
+                auto hasher = m_hashImpl.hasher();
+                bcos::crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
+                    std::move(hasher));
+                auto hashesRange = receipts | RANGES::views::transform([](const auto& receipt) {
+                    return receipt->hash();
+                });
 
-                        std::vector<bcos::h256> merkleTrie;
-                        merkle.generateMerkle(hashesRange, merkleTrie);
-                        newBlockHeader.setReceiptsRoot(*RANGES::rbegin(merkleTrie));
-                    },
-                    anyHasher);
+                std::vector<bcos::h256> merkleTrie;
+                merkle.generateMerkle(hashesRange, merkleTrie);
+                newBlockHeader.setReceiptsRoot(*RANGES::rbegin(merkleTrie));
             });
     }
 
@@ -204,45 +200,38 @@ public:
                 // start calucate transaction root
                 std::promise<bcos::h256> transactionRootPromise;
                 self->m_asyncGroup.run([&]() {
-                    auto anyHasher = self->m_hashImpl.hasher();
+                    auto hasher = self->m_hashImpl.hasher();
 
-                    std::visit(
-                        [&](auto& hasher) {
-                            try
-                            {
-                                bcos::crypto::merkle::Merkle<
-                                    std::remove_reference_t<decltype(hasher)>>
-                                    merkle;
-                                std::vector<bcos::h256> merkleTrie;
-                                if (block->transactionsSize() > 0)
-                                {
-                                    auto hashes =
-                                        RANGES::iota_view<size_t, size_t>(
-                                            0LU, block->transactionsSize()) |
-                                        RANGES::views::transform([&block](uint64_t index) {
-                                            return block->transaction(index)->hash();
-                                        });
-                                    merkle.generateMerkle(hashes, merkleTrie);
-                                }
-                                else
-                                {
-                                    auto hashes =
-                                        RANGES::iota_view<size_t, size_t>(
-                                            0LU, block->transactionsMetaDataSize()) |
-                                        RANGES::views::transform([&block](uint64_t index) {
-                                            return block->transactionHash(index);
-                                        });
-                                    merkle.generateMerkle(hashes, merkleTrie);
-                                }
-                                // TODO: write merkle into storage
-                                transactionRootPromise.set_value(*RANGES::rbegin(merkleTrie));
-                            }
-                            catch (...)
-                            {
-                                transactionRootPromise.set_exception(std::current_exception());
-                            }
-                        },
-                        anyHasher);
+                    try
+                    {
+                        bcos::crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>>
+                            merkle(hasher.clone());
+                        std::vector<bcos::h256> merkleTrie;
+                        if (block->transactionsSize() > 0)
+                        {
+                            auto hashes =
+                                RANGES::iota_view<size_t, size_t>(0LU, block->transactionsSize()) |
+                                RANGES::views::transform([&block](uint64_t index) {
+                                    return block->transaction(index)->hash();
+                                });
+                            merkle.generateMerkle(hashes, merkleTrie);
+                        }
+                        else
+                        {
+                            auto hashes = RANGES::iota_view<size_t, size_t>(
+                                              0LU, block->transactionsMetaDataSize()) |
+                                          RANGES::views::transform([&block](uint64_t index) {
+                                              return block->transactionHash(index);
+                                          });
+                            merkle.generateMerkle(hashes, merkleTrie);
+                        }
+                        // TODO: write merkle into storage
+                        transactionRootPromise.set_value(*RANGES::rbegin(merkleTrie));
+                    }
+                    catch (...)
+                    {
+                        transactionRootPromise.set_exception(std::current_exception());
+                    }
                 });
 
                 self->m_schedulerImpl.start();

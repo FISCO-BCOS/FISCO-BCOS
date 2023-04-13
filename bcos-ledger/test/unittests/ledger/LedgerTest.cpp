@@ -104,7 +104,8 @@ public:
 class LedgerFixture : public TestPromptFixture
 {
 public:
-    LedgerFixture() : TestPromptFixture()
+    LedgerFixture()
+      : TestPromptFixture(), merkleUtility(crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{})
     {
         m_blockFactory = createBlockFactory(createCryptoSuite());
         auto keyFactor = std::make_shared<MockKeyFactory>();
@@ -840,7 +841,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     auto hashList = std::make_shared<protocol::HashList>();
     auto errorHashList = std::make_shared<protocol::HashList>();
     auto fullHashList = std::make_shared<protocol::HashList>();
-    auto fullHashList1 = std::make_shared<protocol::HashList>();    
+    auto fullHashList1 = std::make_shared<protocol::HashList>();
     hashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(0));
     hashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(1));
     hashList->emplace_back(m_fakeBlocks->at(4)->transactionHash(0));
@@ -869,12 +870,13 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
                 {
                     auto& hash = (*fullHashList1)[i];
                     BOOST_CHECK(_proof->at(hash.hex()) != nullptr);
-                    auto ret = merkleUtility.verifyMerkleProof(
-                        *_proof->at(hash.hex()), hash, m_fakeBlocks->at(i+1)->blockHeader()->txsRoot());
+                    auto ret = merkleUtility.verifyMerkleProof(*_proof->at(hash.hex()), hash,
+                        m_fakeBlocks->at(i + 1)->blockHeader()->txsRoot());
                     BOOST_CHECK(ret);
                 }
 
-                BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
+                BOOST_CHECK(
+                    _proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
                 p.set_value(true);
             });
         BOOST_CHECK_EQUAL(f.get(), true);
@@ -884,7 +886,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     // fill the cache
     fillCache();
     // access the cache
-    fillCache();    
+    fillCache();
     LEDGER_LOG(INFO) << "------------------------------------------------------------";
 
     std::promise<bool> p1;
@@ -988,11 +990,12 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     auto checkGetReceipt = [this](int blockNumber, int hashIndex) {
         std::promise<bool> p1;
         auto f1 = p1.get_future();
-        m_ledger->asyncGetTransactionReceiptByHash(m_fakeBlocks->at(blockNumber)->transactionHash(hashIndex), true,
+        m_ledger->asyncGetTransactionReceiptByHash(
+            m_fakeBlocks->at(blockNumber)->transactionHash(hashIndex), true,
             [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
                 BOOST_CHECK_EQUAL(_error, nullptr);
-                BOOST_CHECK_EQUAL(
-                    _receipt->hash().hex(), m_fakeBlocks->at(blockNumber)->receipt(hashIndex)->hash().hex());
+                BOOST_CHECK_EQUAL(_receipt->hash().hex(),
+                    m_fakeBlocks->at(blockNumber)->receipt(hashIndex)->hash().hex());
 
                 auto hash = _receipt->hash();
                 BOOST_CHECK(_proof != nullptr);

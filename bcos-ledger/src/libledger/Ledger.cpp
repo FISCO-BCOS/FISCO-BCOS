@@ -1452,10 +1452,10 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
     });
 }
 
-template<typename MerkleType, typename HashRangeType>
-static std::vector<h256> getMerkleTreeFromCache(
-    int64_t blockNumber, Ledger::CacheType& cache, std::mutex& mutex,
-    const std::string& cacheName, const MerkleType& merkle, const HashRangeType& hashesRange)
+template <typename MerkleType, typename HashRangeType>
+static std::vector<h256> getMerkleTreeFromCache(int64_t blockNumber, Ledger::CacheType& cache,
+    std::mutex& mutex, const std::string& cacheName, const MerkleType& merkle,
+    const HashRangeType& hashesRange)
 {
     std::shared_ptr<std::vector<h256>> merkleTree;
     {
@@ -1465,14 +1465,15 @@ static std::vector<h256> getMerkleTreeFromCache(
             merkleTree = std::make_shared<std::vector<h256>>();
             merkle.template generateMerkle(hashesRange, *merkleTree);
             cache.insert(blockNumber, merkleTree);
-            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName)
-                              << LOG_DESC("Failed to hit the cache and build a new Merkel tree from scratch")
-                              << LOG_KV("blockNumber", blockNumber);
+            LEDGER_LOG(DEBUG)
+                << LOG_BADGE(cacheName)
+                << LOG_DESC("Failed to hit the cache and build a new Merkel tree from scratch")
+                << LOG_KV("blockNumber", blockNumber);
         }
         else
         {
             merkleTree = *(cache.get(blockNumber));
-            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName)  << LOG_DESC("Hit cache")
+            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) << LOG_DESC("Hit cache")
                               << LOG_KV("blockNumber", blockNumber);
         }
     }
@@ -1495,8 +1496,8 @@ void Ledger::getTxProof(
                 return;
             }
             auto blockNumber = _receipt->blockNumber();
-            asyncGetBlockTransactionHashes(blockNumber,
-                [this, _onGetProof, _txHash = std::move(_txHash), blockNumber](
+            asyncGetBlockTransactionHashes(
+                blockNumber, [this, _onGetProof, _txHash = std::move(_txHash), blockNumber](
                                  Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
                     if (_error || _hashList.empty())
                     {
@@ -1521,27 +1522,22 @@ void Ledger::getTxProof(
                                 return;
                             }
                             auto merkleProofPtr = std::make_shared<MerkleProof>();
-                            auto anyHasher = cryptoSuite->hashImpl()->hasher();
-                            std::visit(
-                                [this, txHash = std::move(_txHash), &_txList, &merkleProofPtr,
-                                    &blockNumber](auto&& hasher) {
-                                    using Hasher = std::remove_reference_t<decltype(hasher)>;
-                                    bcos::crypto::merkle::Merkle<Hasher> merkle;
-                                    auto hashesRange =
-                                        _txList | RANGES::views::transform(
-                                                      [](const Transaction::Ptr& transaction) {
-                                                          return transaction->hash();
-                                                      });
+                            bcos::crypto::merkle::Merkle merkle(cryptoSuite->hashImpl()->hasher());
+                            auto hashesRange =
+                                _txList |
+                                RANGES::views::transform([](const Transaction::Ptr& transaction) {
+                                    return transaction->hash();
+                                });
 
-                                    auto merkleTree = getMerkleTreeFromCache(
-                                        blockNumber, m_txProofMerkleCache, m_txMerkleMtx, "getTxProof", merkle, hashesRange);
-                                    merkle.template generateMerkleProof(
-                                        hashesRange, std::move(merkleTree), txHash, *merkleProofPtr);
+                            auto merkleTree =
+                                getMerkleTreeFromCache(blockNumber, m_txProofMerkleCache,
+                                    m_txMerkleMtx, "getTxProof", merkle, hashesRange);
+                            merkle.template generateMerkleProof(
+                                hashesRange, merkleTree, _txHash, *merkleProofPtr);
 
-                                    LEDGER_LOG(TRACE) << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
-                                                      << LOG_KV("txHash", txHash.hex());
-                                },
-                                anyHasher);
+                            LEDGER_LOG(TRACE)
+                                << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
+                                << LOG_KV("txHash", _txHash.hex());
 
                             _onGetProof(nullptr, std::move(merkleProofPtr));
                         });
@@ -1575,29 +1571,21 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                         return;
                     }
                     auto merkleProofPtr = std::make_shared<MerkleProof>();
-                    auto anyHasher = cryptoSuite->hashImpl()->hasher();
-                    std::visit(
-                        [this, receiptHash = std::move(receiptHash), &_receiptList, &merkleProofPtr,
-                            blockNumber](auto&& hasher) {
-                            using Hasher = std::remove_reference_t<decltype(hasher)>;
-                            bcos::crypto::merkle::Merkle<Hasher> merkle;
-                            auto hashesRange =
-                                _receiptList | RANGES::views::transform(
-                                                   [](const TransactionReceipt::Ptr& receipt) {
-                                                       return receipt->hash();
-                                                   });
+                    bcos::crypto::merkle::Merkle merkle(cryptoSuite->hashImpl()->hasher());
+                    auto hashesRange =
+                        _receiptList |
+                        RANGES::views::transform(
+                            [](const TransactionReceipt::Ptr& receipt) { return receipt->hash(); });
 
-                            auto merkleTree = getMerkleTreeFromCache(
-                                        blockNumber, m_receiptProofMerkleCache, m_receiptMerkleMtx,
-                                        "getReceiptProof", merkle, hashesRange);
+                    auto merkleTree = getMerkleTreeFromCache(blockNumber, m_receiptProofMerkleCache,
+                        m_receiptMerkleMtx, "getReceiptProof", merkle, hashesRange);
 
-                            merkle.template generateMerkleProof(
-                                hashesRange, std::move(merkleTree), receiptHash, *merkleProofPtr);
+                    merkle.template generateMerkleProof(
+                        hashesRange, merkleTree, receiptHash, *merkleProofPtr);
 
-                            LEDGER_LOG(TRACE) << LOG_BADGE("getReceiptProof") << LOG_DESC("get merkle proof success")
-                                              << LOG_KV("receiptHash", receiptHash.hex());
-                        },
-                        anyHasher);
+                    LEDGER_LOG(TRACE)
+                        << LOG_BADGE("getReceiptProof") << LOG_DESC("get merkle proof success")
+                        << LOG_KV("receiptHash", receiptHash.hex());
                     _onGetProof(nullptr, std::move(merkleProofPtr));
                 });
         });

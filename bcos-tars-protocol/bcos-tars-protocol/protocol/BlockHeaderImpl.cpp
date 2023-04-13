@@ -65,16 +65,9 @@ bcos::crypto::HashType BlockHeaderImpl::hash() const
 
 void BlockHeaderImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
-    auto anyHasher = hashImpl.hasher();
     bcos::crypto::HashType hashResult;
-    std::visit(
-        [this, &hashResult](auto& hasher) {
-            using Hasher = std::remove_cvref_t<decltype(hasher)>;
-            bcos::concepts::hash::calculate<Hasher>(*m_inner(), hashResult);
-
-            m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
-        },
-        anyHasher);
+    bcos::concepts::hash::calculate(hashImpl.hasher(), *m_inner(), hashResult);
+    m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
 }
 
 void BlockHeaderImpl::clear()

@@ -53,10 +53,10 @@ public:
 
     bcos::crypto::HashType hash() const override;
 
-    template <bcos::crypto::hasher::Hasher Hasher>
-    void calculateHash()
+    void calculateHash(bcos::crypto::hasher::Hasher auto&& hasher)
     {
-        bcos::concepts::hash::calculate<Hasher>(*m_inner(), m_inner()->dataHash);
+        bcos::concepts::hash::calculate(
+            std::forward<decltype(hasher)>(hasher), *m_inner(), m_inner()->dataHash);
     }
 
     int32_t version() const override { return m_inner()->data.version; }

@@ -48,26 +48,27 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
     friend bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>;
 
 public:
-    LedgerImpl(Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
+    LedgerImpl(Hasher hasher, Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storageInterface)
       : Ledger(std::move(blockFactory), storageInterface),
+        m_hasher(std::move(hasher)),
         m_backupStorage(storageInterface),
-        m_storage{std::move(storage)}
+        m_storage{std::move(storage)},
+        m_merkle{m_hasher.clone()}
     {}
     using statusInfoType = std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber>;
 
     void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
 
     template <bcos::concepts::block::Block BlockType>
-    void checkParentBlock(BlockType parentBlock,
-        BlockType block)
+    void checkParentBlock(BlockType parentBlock, BlockType block)
     {
         std::array<std::byte, Hasher::HASH_SIZE> parentHash;
-        bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
+        bcos::concepts::hash::calculate(m_hasher.clone(), parentBlock, parentHash);
 
         if (RANGES::empty(block.blockHeader.data.parentInfo) ||
             (block.blockHeader.data.parentInfo[0].blockNumber !=
-             parentBlock.blockHeader.data.blockNumber) ||
+                parentBlock.blockHeader.data.blockNumber) ||
             !bcos::concepts::bytebuffer::equalTo(
                 block.blockHeader.data.parentInfo[0].blockHash, parentHash))
         {
@@ -77,21 +78,21 @@ public:
         }
     }
 
-    crypto::NodeIDs filterSyncNodeList(statusInfoType const& peersStatusInfo,
-        bcos::protocol::BlockNumber needBlockNumber)
+    crypto::NodeIDs filterSyncNodeList(
+        statusInfoType const& peersStatusInfo, bcos::protocol::BlockNumber needBlockNumber)
     {
         crypto::NodeIDs requestNodeIDList;
-        for(const auto &nodeStatus : peersStatusInfo)
+        for (const auto& nodeStatus : peersStatusInfo)
         {
             LEDGER_LOG(INFO) << LOG_KV("nodeID", nodeStatus.first->hex())
                              << LOG_KV("blockNumber: ", nodeStatus.second)
                              << LOG_KV("，needBlockNumber: ", needBlockNumber);
-            if(nodeStatus.second >= needBlockNumber)
+            if (nodeStatus.second >= needBlockNumber)
             {
                 requestNodeIDList.push_back(nodeStatus.first);
             }
         }
-        LEDGER_LOG(DEBUG) << LOG_KV( "requestNodeIDList size",requestNodeIDList.size());
+        LEDGER_LOG(DEBUG) << LOG_KV("requestNodeIDList size", requestNodeIDList.size());
         return requestNodeIDList;
     }
 
@@ -199,9 +200,9 @@ private:
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(m_keyPageSize);
         // getABI function begin in version 320
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
-                storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
-        auto stateStorage =
-            stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion, true, keyPageIgnoreTables);
+            storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+        auto stateStorage = stateStorageFactory->createStateStorage(
+            m_backupStorage, m_compatibilityVersion, true, keyPageIgnoreTables);
 
         // try to get codeHash
         auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");
@@ -328,8 +329,8 @@ private:
             entry.importFields({std::move(buffers[i])});
 
             auto const& hash = hashes[i];
-            storage().setRow(
-                tableName, std::string_view(std::data(hash), RANGES::size(hash)), std::move(entry));
+            storage().setRow(tableName,
+                std::string_view((const char*)hash.data(), RANGES::size(hash)), std::move(entry));
         }
 
         co_return;
@@ -342,9 +343,9 @@ private:
         auto status = co_await impl_getStatus();
         auto allPeersStatus = co_await sourceLedger.getAllPeersStatus();
         bcos::protocol::BlockNumber currentMaxBlockNumber = 0;
-        for(const auto &nodeStatus : allPeersStatus)
+        for (const auto& nodeStatus : allPeersStatus)
         {
-            if(nodeStatus.second > currentMaxBlockNumber)
+            if (nodeStatus.second > currentMaxBlockNumber)
             {
                 currentMaxBlockNumber = nodeStatus.second;
             }
@@ -354,12 +355,12 @@ private:
         std::optional<BlockType> parentBlock;
         size_t syncedBlock = 0;
         auto syncBlockNumber = status.blockNumber + LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT;
-        if(allPeersStatus.size() != 0 && currentMaxBlockNumber < syncBlockNumber)
+        if (allPeersStatus.size() != 0 && currentMaxBlockNumber < syncBlockNumber)
         {
             syncBlockNumber = currentMaxBlockNumber;
         }
         // sync block
-        for (auto blockNumber = status.blockNumber + 1 ; blockNumber <= syncBlockNumber;
+        for (auto blockNumber = status.blockNumber + 1; blockNumber <= syncBlockNumber;
              ++blockNumber)
         {
             LEDGER_LOG(INFO) << "Syncing block from remote: " << blockNumber << " | "
@@ -377,11 +378,13 @@ private:
                     blockNumber, block, syncNodeList);
             }
             // if getBlockByNodeList return empty block, break
-            if(RANGES::empty(block.blockHeader.data.parentInfo)){
-                LEDGER_LOG(WARNING) << LOG_DESC("No blockHeader in block") << LOG_KV("blockNumber", blockNumber);
+            if (RANGES::empty(block.blockHeader.data.parentInfo))
+            {
+                LEDGER_LOG(WARNING)
+                    << LOG_DESC("No blockHeader in block") << LOG_KV("blockNumber", blockNumber);
                 break;
             }
-            if(blockNumber > 0)
+            if (blockNumber > 0)
             {
                 if (!parentBlock)
                 {
@@ -446,10 +449,10 @@ private:
     }
 
     template <class Type>
-    requires std::same_as<Type, concepts::ledger::TRANSACTIONS> ||
-        std::same_as<Type, concepts::ledger::RECEIPTS>
-            task::Task<void> getBlockData(
-                std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+        requires std::same_as<Type, concepts::ledger::TRANSACTIONS> ||
+                 std::same_as<Type, concepts::ledger::RECEIPTS>
+    task::Task<void> getBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
         LEDGER_LOG(DEBUG) << "getBlockData transactions or receipts: " << blockNumberKey;
 
@@ -510,7 +513,8 @@ private:
             co_await getBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
             co_await getBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
         }
-        catch (std::exception const& e){
+        catch (std::exception const& e)
+        {
             LEDGER_LOG(ERROR) << "getBlockData all failed";
             BOOST_THROW_EXCEPTION(
                 GetBlockDataError{} << bcos::error::ErrorMessage{"getBlockData all failed!"});
@@ -577,11 +581,11 @@ private:
         {
             block.transactionsMetaData.resize(block.transactions.size());
             tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
-                [&block](const tbb::blocked_range<size_t>& range) {
+                [&block, this](const tbb::blocked_range<size_t>& range) {
                     for (auto i = range.begin(); i < range.end(); ++i)
                     {
-                        bcos::concepts::hash::calculate<Hasher>(
-                            block.transactions[i], block.transactionsMetaData[i].hash);
+                        bcos::concepts::hash::calculate(m_hasher.clone(), block.transactions[i],
+                            block.transactionsMetaData[i].hash);
                     }
                 });
         }
@@ -729,6 +733,7 @@ private:
 
     auto& storage() { return bcos::concepts::getRef(m_storage); }
 
+    Hasher m_hasher;
     bcos::storage::StorageInterface::Ptr m_backupStorage;
     Storage m_storage;
     crypto::merkle::Merkle<Hasher> m_merkle;  // Use the default width 2

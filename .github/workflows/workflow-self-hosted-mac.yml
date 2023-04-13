@@ -61,7 +61,6 @@ jobs:
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make cov
 
-
       - name: upload coverage report
         uses: codecov/codecov-action@v2
         with:
@@ -76,8 +75,4 @@ jobs:
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
 
       - name: Integration test - Pro
-<<<<<<< HEAD
         run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
-=======
-        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
->>>>>>> upstream/release-3.3.0

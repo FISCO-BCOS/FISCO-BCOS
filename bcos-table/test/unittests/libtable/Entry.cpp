@@ -195,35 +195,25 @@ BOOST_AUTO_TEST_CASE(entryHash)
     auto deletedHash =
         entry.hash(table, key, *sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-    auto anyHasher = sm3->hasher();
-    auto deletedExpect = std::visit(
-        [&](auto& hasher) {
-            hasher.update(table);
-            hasher.update(key);
+    auto hasher = sm3->hasher();
+    hasher.update(table);
+    hasher.update(key);
 
-            bcos::crypto::HashType hash;
-            hasher.final(hash);
-            return hash;
-        },
-        anyHasher);
+    bcos::crypto::HashType deletedExpect;
+    hasher.final(deletedExpect);
     BOOST_CHECK_EQUAL(deletedHash, deletedExpect);
 
     entry.setStatus(Entry::MODIFIED);
     entry.setField(0, data);
     auto modifyHash =
         entry.hash(table, key, *sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-    anyHasher = sm3->hasher();
-    auto modifyExpect = std::visit(
-        [&](auto& hasher) {
-            hasher.update(table);
-            hasher.update(key);
-            hasher.update(data);
+    hasher = sm3->hasher();
+    hasher.update(table);
+    hasher.update(key);
+    hasher.update(data);
 
-            bcos::crypto::HashType hash;
-            hasher.final(hash);
-            return hash;
-        },
-        anyHasher);
+    bcos::crypto::HashType modifyExpect;
+    hasher.final(modifyExpect);
     BOOST_CHECK_EQUAL(modifyHash, modifyExpect);
 
     entry.setStatus(Entry::NORMAL);
