@@ -118,15 +118,14 @@ public:
             return txsRoot;
         }
 
-        auto hasher = hashImpl.hasher();
-        bcos::crypto::merkle::Merkle merkle(hasher.clone());
+        bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
         if (transactionsSize() > 0)
         {
             auto hashesRange =
                 m_inner->transactions |
                 RANGES::views::transform([&](const bcostars::Transaction& transaction) {
-                    bcos::bytes hash(hasher.hashSize());
-                    bcos::concepts::hash::calculate<Hasher>(transaction, hash);
+                    bcos::bytes hash;
+                    bcos::concepts::hash::calculate(hashImpl.hasher(), transaction, hash);
                     return hash;
                 });
             merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
@@ -153,23 +152,17 @@ public:
         {
             return receiptsRoot;
         }
-        auto anyHasher = hashImpl.hasher();
-        std::visit(
-            [this, &receiptsRoot](auto& hasher) {
-                using Hasher = std::remove_reference_t<decltype(hasher)>;
-                auto hashesRange =
-                    m_inner->receipts |
-                    RANGES::views::transform([](const bcostars::TransactionReceipt& receipt) {
-                        std::array<std::byte, Hasher::HASH_SIZE> hash;
-                        bcos::concepts::hash::calculate<Hasher>(receipt, hash);
-                        return hash;
-                    });
-                bcos::crypto::merkle::Merkle<Hasher> merkle;
-                merkle.generateMerkle(hashesRange, m_inner->receiptsMerkle);
-                bcos::concepts::bytebuffer::assignTo(
-                    *RANGES::rbegin(m_inner->receiptsMerkle), receiptsRoot);
-            },
-            anyHasher);
+        auto hashesRange =
+            m_inner->receipts |
+            RANGES::views::transform([&](const bcostars::TransactionReceipt& receipt) {
+                bcos::bytes hash;
+                bcos::concepts::hash::calculate(hashImpl.hasher(), receipt, hash);
+                return hash;
+            });
+        bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
+        merkle.generateMerkle(hashesRange, m_inner->receiptsMerkle);
+        bcos::concepts::bytebuffer::assignTo(
+            *RANGES::rbegin(m_inner->receiptsMerkle), receiptsRoot);
 
         return receiptsRoot;
     }

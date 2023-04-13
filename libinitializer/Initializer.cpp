@@ -41,7 +41,7 @@
 #include "bcos-tool/BfsFileFactory.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
-#include <bcos-crypto/hasher/AnyHasher2.h>
+#include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -230,69 +230,63 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto useBaselineScheduler = m_nodeConfig->enableBaselineScheduler();
     if (useBaselineScheduler)
     {
-        auto anyHasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
+        auto hasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             m_protocolInitializer->cryptoSuite()->hashImpl();
+        using Hasher = std::remove_cvref_t<decltype(hasher)>;
+        auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(storage);
+
+        std::variant<
+            std::shared_ptr<transaction_scheduler::BaselineSchedulerInitializer<Hasher, false>>,
+            std::shared_ptr<transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>>
+            baselineSchedulerInitializer;
+
+        auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
+        if (baselineSchedulerConfig.parallel)
+        {
+            baselineSchedulerInitializer =
+                std::make_shared<transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>(
+                    existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
+                    m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
+        }
+        else
+        {
+            baselineSchedulerInitializer = std::make_shared<
+                transaction_scheduler::BaselineSchedulerInitializer<Hasher, false>>(
+                existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
+        }
         std::visit(
-            [&](auto& hasher) {
-                using Hasher = std::remove_cvref_t<decltype(hasher)>;
-                auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(storage);
-
-                std::variant<std::shared_ptr<transaction_scheduler::BaselineSchedulerInitializer<
-                                 Hasher, false>>,
-                    std::shared_ptr<
-                        transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>>
-                    baselineSchedulerInitializer;
-
-                auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
-                if (baselineSchedulerConfig.parallel)
+            [&, this](auto& initializer) {
+                auto scheduler = initializer->buildScheduler();
+                if constexpr (std::same_as<decltype(initializer),
+                                  std::shared_ptr<transaction_scheduler::
+                                          BaselineSchedulerInitializer<Hasher, true>>>)
                 {
-                    baselineSchedulerInitializer = std::make_shared<
-                        transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>(
-                        existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
-                        m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
+                    if (baselineSchedulerConfig.parallel)
+                    {
+                        scheduler->setChunkSize(baselineSchedulerConfig.chunkSize);
+                        scheduler->setMaxThreads(baselineSchedulerConfig.maxThread);
+                    }
                 }
-                else
-                {
-                    baselineSchedulerInitializer = std::make_shared<
-                        transaction_scheduler::BaselineSchedulerInitializer<Hasher, false>>(
-                        existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
-                        m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
-                }
-                std::visit(
-                    [&, this](auto& initializer) {
-                        auto scheduler = initializer->buildScheduler();
-                        if constexpr (std::same_as<decltype(initializer),
-                                          std::shared_ptr<transaction_scheduler::
-                                                  BaselineSchedulerInitializer<Hasher, true>>>)
-                        {
-                            if (baselineSchedulerConfig.parallel)
-                            {
-                                scheduler->setChunkSize(baselineSchedulerConfig.chunkSize);
-                                scheduler->setMaxThreads(baselineSchedulerConfig.maxThread);
-                            }
-                        }
 
-                        scheduler->registerTransactionNotifier(
-                            [txpool = m_txpoolInitializer->txpool()](
-                                bcos::protocol::BlockNumber blockNumber,
-                                bcos::protocol::TransactionSubmitResultsPtr result,
-                                std::function<void(bcos::Error::Ptr)> callback) mutable {
-                                txpool->asyncNotifyBlockResult(
-                                    blockNumber, std::move(result), std::move(callback));
-                            });
-                        m_setBaselineSchedulerBlockNumberNotifier =
-                            [scheduler](std::function<void(protocol::BlockNumber)> notifier) {
-                                scheduler->registerBlockNumberNotifier(std::move(notifier));
-                            };
+                scheduler->registerTransactionNotifier(
+                    [txpool = m_txpoolInitializer->txpool()](
+                        bcos::protocol::BlockNumber blockNumber,
+                        bcos::protocol::TransactionSubmitResultsPtr result,
+                        std::function<void(bcos::Error::Ptr)> callback) mutable {
+                        txpool->asyncNotifyBlockResult(
+                            blockNumber, std::move(result), std::move(callback));
+                    });
+                m_setBaselineSchedulerBlockNumberNotifier =
+                    [scheduler](std::function<void(protocol::BlockNumber)> notifier) {
+                        scheduler->registerBlockNumberNotifier(std::move(notifier));
+                    };
 
-                        m_scheduler = scheduler;
-                        m_baselineSchedulerInitializerHolder = [initializer =
-                                                                       std::move(initializer)]() {};
-                    },
-                    baselineSchedulerInitializer);
+                m_scheduler = scheduler;
+                m_baselineSchedulerInitializerHolder = [initializer = std::move(initializer)]() {};
             },
-            anyHasher);
+            baselineSchedulerInitializer);
     }
     else
     {
@@ -448,30 +442,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 #ifdef WITH_LIGHTNODE
     bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
 
-    auto anyHasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
-    std::visit(
-        [&](auto& hasher) {
-            using Hasher = std::remove_cvref_t<decltype(hasher)>;
-            auto ledger =
-                std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(
-                    std::move(storageWrapper), m_protocolInitializer->blockFactory(), storage);
-            ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
+    auto hasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
+    using Hasher = std::remove_cvref_t<decltype(hasher)>;
+    auto lightNodeLedger =
+        std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(hasher.clone(),
+            std::move(storageWrapper), m_protocolInitializer->blockFactory(), storage);
+    lightNodeLedger->setKeyPageSize(m_nodeConfig->keyPageSize());
 
-            auto txpool = m_txpoolInitializer->txpool();
-            auto transactionPool =
-                std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(
-                    m_protocolInitializer->cryptoSuite(), txpool);
-            auto scheduler = std::make_shared<bcos::scheduler::SchedulerWrapperImpl<
-                std::shared_ptr<bcos::scheduler::SchedulerInterface>>>(
-                m_scheduler, m_protocolInitializer->cryptoSuite());
+    auto txpool = m_txpoolInitializer->txpool();
+    auto transactionPool =
+        std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(
+            m_protocolInitializer->cryptoSuite(), txpool);
+    auto scheduler = std::make_shared<bcos::scheduler::SchedulerWrapperImpl<
+        std::shared_ptr<bcos::scheduler::SchedulerInterface>>>(
+        m_scheduler, m_protocolInitializer->cryptoSuite());
 
-            m_lightNodeInitializer = std::make_shared<LightNodeInitializer>();
-            m_lightNodeInitializer->initLedgerServer(
-                std::dynamic_pointer_cast<bcos::front::FrontService>(
-                    m_frontServiceInitializer->front()),
-                ledger, transactionPool, scheduler);
-        },
-        anyHasher);
+    m_lightNodeInitializer = std::make_shared<LightNodeInitializer>();
+    m_lightNodeInitializer->initLedgerServer(
+        std::dynamic_pointer_cast<bcos::front::FrontService>(m_frontServiceInitializer->front()),
+        lightNodeLedger, transactionPool, scheduler);
 #endif
 }
 

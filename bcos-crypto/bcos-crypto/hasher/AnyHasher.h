@@ -1,5 +1,6 @@
 #pragma once
 #include "Hasher.h"
+#include "bcos-crypto/TrivialObject.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <span>
 
@@ -56,10 +57,10 @@ public:
     AnyHasher& operator=(const AnyHasher&) = delete;
     ~AnyHasher() = default;
 
-    void update(concepts::bytebuffer::ByteBuffer auto const& input)
+    void update(auto const& input)
     {
-        m_anyHasher->update(
-            std::span<std::byte const>((const std::byte*)RANGES::data(input), RANGES::size(input)));
+        auto view = bcos::crypto::trivial::toView(std::forward<decltype(input)>(input));
+        m_anyHasher->update(view);
     }
 
     void final(concepts::bytebuffer::ByteBuffer auto& output)

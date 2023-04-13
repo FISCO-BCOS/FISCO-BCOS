@@ -17,6 +17,7 @@
  * @file Header256Hash.h
  */
 
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <functional>
 

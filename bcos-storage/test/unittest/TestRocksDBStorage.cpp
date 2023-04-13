@@ -1,3 +1,4 @@
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include "boost/filesystem.hpp"

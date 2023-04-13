@@ -211,36 +211,31 @@ public:
         bcos::crypto::HashType entryHash(0);
         if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            auto anyHasher = hashImpl.hasher();
+            auto hasher = hashImpl.hasher();
+            hasher.update(table);
+            hasher.update(key);
 
-            std::visit(
-                [this, &table, &key, &entryHash](auto& hasher) {
-                    hasher.update(table);
-                    hasher.update(key);
-
-                    switch (m_status)
-                    {
-                    case MODIFIED:
-                    {
-                        auto data = get();
-                        hasher.update(data);
-                        hasher.final(entryHash);
-                        break;
-                    }
-                    case DELETED:
-                    {
-                        hasher.final(entryHash);
-                        break;
-                    }
-                    default:
-                    {
-                        STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | "
-                                           << toHex(key) << " | " << (int)m_status;
-                        break;
-                    }
-                    }
-                },
-                anyHasher);
+            switch (m_status)
+            {
+            case MODIFIED:
+            {
+                auto data = get();
+                hasher.update(data);
+                hasher.final(entryHash);
+                break;
+            }
+            case DELETED:
+            {
+                hasher.final(entryHash);
+                break;
+            }
+            default:
+            {
+                STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | " << toHex(key)
+                                   << " | " << (int)m_status;
+                break;
+            }
+            }
         }
         else
         {  // 3.0.0

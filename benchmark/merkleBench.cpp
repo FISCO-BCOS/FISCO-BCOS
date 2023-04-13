@@ -52,7 +52,7 @@ void testNewMerkle(const std::vector<bcos::bytes>& datas)
     auto timePoint = std::chrono::high_resolution_clock::now();
     std::vector<bcos::bytes> out;
 
-    bcos::crypto::merkle::Merkle<Hasher, 16> merkle;
+    bcos::crypto::merkle::Merkle<Hasher, 16> merkle(Hasher{});
     merkle.generateMerkle(datas, out);
 
     auto root = *(out.rbegin());
