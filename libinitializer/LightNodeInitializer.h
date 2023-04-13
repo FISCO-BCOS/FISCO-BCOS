@@ -288,6 +288,7 @@ private:
                 }
             });
         LIGHTNODE_LOG(DEBUG) << "asyncSendResponse: sendResponseMessage to dstNode:"  << nodeID->hex()
+                             << LOG_KV("blockNUmber", blockNumber)
                              << LOG_KV("moduleID", bcos::protocol::LIGHTNODE_GET_BLOCK)
                              << LOG_KV("responseBuffer size", responseBuffer.size());
 

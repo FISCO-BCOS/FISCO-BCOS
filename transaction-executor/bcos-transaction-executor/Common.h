@@ -181,7 +181,7 @@ bool hasPrecompiledPrefix(const std::string_view& _code);
  * @return evmc_address : the transformed evm address
  */
 inline evmc_address toEvmC(const std::string_view& addr)
-{  // TODO: add another interfaces for wasm
+{
     evmc_address ret;
     constexpr static auto evmAddressLength = sizeof(ret);
 

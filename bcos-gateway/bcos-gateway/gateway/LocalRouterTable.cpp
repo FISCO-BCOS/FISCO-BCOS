@@ -49,13 +49,15 @@ std::vector<FrontServiceInfo::Ptr> LocalRouterTable::getGroupFrontServiceList(
 {
     std::vector<FrontServiceInfo::Ptr> nodeServiceList;
     ReadGuard l(x_nodeList);
-    if (!m_nodeList.count(_groupID))
+    auto it = m_nodeList.find(_groupID);
+    if (it == m_nodeList.end())
     {
         return nodeServiceList;
     }
-    for (auto const& it : m_nodeList.at(_groupID))
+    nodeServiceList.reserve(it->second.size());
+    for (auto const& item : it->second)
     {
-        nodeServiceList.emplace_back(it.second);
+        nodeServiceList.emplace_back(item.second);
     }
     return nodeServiceList;
 }
@@ -64,11 +66,12 @@ void LocalRouterTable::getGroupNodeInfoList(
     GroupNodeInfo::Ptr _groupNodeInfo, const std::string& _groupID) const
 {
     ReadGuard l(x_nodeList);
-    if (!m_nodeList.count(_groupID))
+    auto it = m_nodeList.find(_groupID);
+    if (it == m_nodeList.end())
     {
         return;
     }
-    for (auto const& item : m_nodeList.at(_groupID))
+    for (auto const& item : it->second)
     {
         _groupNodeInfo->appendNodeID(item.first);
         _groupNodeInfo->appendProtocol(item.second->protocolInfo());
@@ -82,16 +85,18 @@ std::map<std::string, std::map<std::string, uint32_t>> LocalRouterTable::nodeLis
     for (auto const& it : m_nodeList)
     {
         auto groupID = it.first;
-        if (!nodeList.count(groupID))
+        auto it2 = nodeList.find(groupID);
+        if (it2 == nodeList.end())
         {
             nodeList[groupID] = std::map<std::string, uint32_t>();
         }
+        it2 = nodeList.find(groupID);
         auto const& infos = it.second;
         for (auto const& nodeIt : infos)
         {
             auto nodeID = nodeIt.first;
             auto nodeType = nodeIt.second->nodeType();
-            nodeList[groupID].insert(std::pair<std::string, uint32_t>(nodeID, nodeType));
+            it2->second.insert(std::pair<std::string, uint32_t>(nodeID, nodeType));
         }
     }
     return nodeList;

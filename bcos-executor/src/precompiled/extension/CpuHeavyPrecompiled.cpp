@@ -36,9 +36,9 @@ contract HelloWorld {
 // set interface
 const char* const METHOD_SORT = "sort(uint256,uint256)";
 
-CpuHeavyPrecompiled::CpuHeavyPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
+CpuHeavyPrecompiled::CpuHeavyPrecompiled() : Precompiled(GlobalHashImpl::g_hashImpl)
 {
-    name2Selector[METHOD_SORT] = getFuncSelector(METHOD_SORT, _hashImpl);
+    name2Selector[METHOD_SORT] = getFuncSelector(METHOD_SORT);
 }
 
 

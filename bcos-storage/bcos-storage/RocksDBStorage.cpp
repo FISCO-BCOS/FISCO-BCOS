@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-utilities/Common.h"
+#include "rocksdb/convenience.h"
 #include <bcos-utilities/Error.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
@@ -65,7 +66,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(std::string_view _table,
     read_options.total_order_seek = true;
     auto iter = std::unique_ptr<rocksdb::Iterator>(m_db->NewIterator(read_options));
 
-    // FIXME: check performance and add limit of primary keys
+    // check performance
     for (iter->Seek(keyPrefix); iter->Valid() && iter->key().starts_with(keyPrefix); iter->Next())
     {
         size_t start = keyPrefix.size();
@@ -445,7 +446,7 @@ void RocksDBStorage::asyncCommit(
                     << LOG_DESC("asyncCommit failed") << LOG_KV("blockNumber", params.number)
                     << LOG_KV("message", err->errorMessage()) << LOG_KV("startTS", params.timestamp)
                     << LOG_KV("time(ms)", utcSteadyTime() - start);
-                lock.release();
+                lock.unlock();
                 callback(err, 0);
                 return;
             }
@@ -647,4 +648,15 @@ bcos::Error::Ptr RocksDBStorage::checkStatus(rocksdb::Status const& status)
     errorInfo = errorInfo + ", please try again!";
     STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC(errorInfo);
     return BCOS_ERROR_PTR(DatabaseRetryable, errorInfo);
+}
+
+void RocksDBStorage::stop()
+{
+    if (!m_db)
+    {
+        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("rocksdb has already been stopped");
+        return;
+    }
+    CancelAllBackgroundWork(m_db.get(), true);
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("rocksdb stopped");
 }

@@ -98,6 +98,7 @@ public:
         });
         return result;
     };
+    virtual void stop(){};
 };
 
 class TraverseStorageInterface : public virtual StorageInterface

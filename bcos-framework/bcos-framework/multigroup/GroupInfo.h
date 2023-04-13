@@ -60,7 +60,8 @@ public:
     {
         UpgradableGuard l(x_nodeInfos);
         auto const& nodeName = _nodeInfo->nodeName();
-        if (m_nodeInfos.count(nodeName))
+        auto it = m_nodeInfos.find(nodeName);
+        if (it != m_nodeInfos.end())
         {
             return false;
         }
@@ -73,9 +74,10 @@ public:
     {
         WriteGuard l(x_nodeInfos);
         auto const& nodeName = _nodeInfo->nodeName();
-        if (m_nodeInfos.count(nodeName))
+        auto it = m_nodeInfos.find(nodeName);
+        if (it != m_nodeInfos.end())
         {
-            *(m_nodeInfos[nodeName]) = *_nodeInfo;
+            *(it->second) = *_nodeInfo;
             return;
         }
         m_nodeInfos[nodeName] = _nodeInfo;
@@ -84,12 +86,13 @@ public:
     virtual bool removeNodeInfo(std::string const& _nodeName)
     {
         UpgradableGuard l(x_nodeInfos);
-        if (!m_nodeInfos.count(_nodeName))
+        auto it = m_nodeInfos.find(_nodeName);
+        if (it == m_nodeInfos.end())
         {
             return false;
         }
         UpgradeGuard ul(l);
-        m_nodeInfos.erase(_nodeName);
+        m_nodeInfos.erase(it);
         return true;
     }
 

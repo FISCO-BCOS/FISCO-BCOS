@@ -107,7 +107,7 @@ public:
         }
         else
         {
-            return 3000000000;  // TODO: add config
+            return 3000000000;
         }
     }
 
@@ -132,6 +132,7 @@ public:
     int64_t gas() const { return m_callParameters->gas; }
     void suicide()
     {
+        m_executive->setContractTableChanged();
         if (m_executive->blockContext().blockVersion() >=
             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {

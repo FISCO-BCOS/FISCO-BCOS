@@ -32,7 +32,6 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
-#include <bcos-security/bcos-security/HsmDataEncryption.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -77,17 +76,20 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
 
     if (true == _nodeConfig->storageSecurityEnable())
     {
-        // storage security with HSM
-        if (_nodeConfig->enableHsm())
-        {
-            INITIALIZER_LOG(DEBUG)
-                << LOG_DESC("storage_security.enable = true, storage security with HSM");
-            m_dataEncryption = std::make_shared<HsmDataEncryption>(_nodeConfig);
-        }
-        else
-        {
-            m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
-        }
+        // Notice: the reason we don't use HSM for storage security is that the encrypt function in
+        // HSM only support data length from 0 to 65536 byte
+
+        // // storage security with HSM
+        // if (_nodeConfig->enableHsm())
+        // {
+        //     INITIALIZER_LOG(DEBUG)
+        //         << LOG_DESC("storage_security.enable = true, storage security with HSM");
+        //     m_dataEncryption = std::make_shared<HsmDataEncryption>(_nodeConfig);
+        // }
+        // else
+        // {
+        m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
+        // }
 
         INITIALIZER_LOG(INFO) << LOG_DESC(
             "storage_security.enable = true, init data encryption success");

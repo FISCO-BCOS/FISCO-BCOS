@@ -1,5 +1,5 @@
 #!/bin/bash
-console_branch="3.0.0"
+console_branch="master"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
@@ -61,7 +61,7 @@ wait_and_start()
     fi
 }
 
-init() 
+init()
 {
     sm_option="${1}"
     cd ${current_path}
@@ -70,6 +70,45 @@ init()
     rm -rf nodes
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
     cd nodes/127.0.0.1 && wait_and_start
+}
+
+expand_node()
+{
+    sm_option="${1}"
+    LOG_INFO "expand node..."
+    cd ${current_path}
+    rm -rf config
+    mkdir config
+    cp -r ${current_path}/nodes/ca config/
+    cp ${current_path}/nodes/127.0.0.1/node0/config.ini config/
+    cp ${current_path}/nodes/127.0.0.1/node0/config.genesis config/
+    cp ${current_path}/nodes/127.0.0.1/node0/nodes.json config/nodes.json.tmp
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
+    ${sed_cmd}  's/listen_port=30300/listen_port=30304/g' config/config.ini
+    ${sed_cmd}  's/listen_port=20200/listen_port=20204/g' config/config.ini
+    sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:30304",/' config/nodes.json.tmp > config/nodes.json
+    cat config/nodes.json
+    bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} "${sm_option}"
+    LOG_INFO "expand node success..."
+    bash ${current_path}/nodes/127.0.0.1/node4/start.sh
+    sleep 10
+    LOG_INFO "check expand node status..."
+    flag='false'
+    for node in ${node_list}
+    do
+        count=$(cat ${current_path}/nodes/127.0.0.1/${node}/log/* | grep -i "heartBeat,connected count" | tail -n 1 | awk -F' ' '{print $3}' | awk -F'=' '{print $2}')
+        if [ ${count} -eq 4 ];then
+            flag='true'
+        fi
+    done
+    if [ ${flag} == 'true' ];then
+      LOG_INFO "check expand node status normal..."
+    else
+      LOG_ERROR "check expand node status error..."
+    fi
 }
 
 check_consensus()
@@ -89,79 +128,10 @@ check_consensus()
             LOG_ERROR "checkView failed ******* print log info for ${node} finish *******"
             exit_node "check_consensus for ${node} failed for not reachNewView"
         else
-            LOG_INFO "check_consensus for ${node} success"  
-        fi 
+            LOG_INFO "check_consensus for ${node} success"
+        fi
     done
-}
-
-download_console()
-{
     cd ${current_path}
-
-    LOG_INFO "Download console ..."
-    tar_file=console-${console_branch}.tar.gz
-    if [ -f "${tar_file}" ]; then
-        LOG_INFO "Use download cache"
-    else
-        curl -#LO https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/console/releases/v${console_branch}/console.tar.gz
-        LOG_INFO "Download console success, branch: ${console_branch}"
-        mv console.tar.gz ${tar_file}
-    fi
-    LOG_INFO "Build and Config console ..."
-    rm -rf console
-    tar -zxvf ${tar_file}
-    cd console
-}
-
-config_console()
-{
-    cd ${current_path}/console/
-    use_sm="${1}"
-    cp -r ${current_path}/nodes/127.0.0.1/sdk/* conf/
-    cp conf/config-example.toml conf/config.toml
-    local sed_cmd="sed -i"
-    if [ "$(uname)" == "Darwin" ];then
-        sed_cmd="sed -i .bkp"
-    fi
-    use_sm_str="useSMCrypto = \"${use_sm}\""
-    ${sed_cmd} "s/useSMCrypto = \"false\"/${use_sm_str}/g" conf/config.toml
-    LOG_INFO "Build and Config console success ..."
-}
-
-send_transactions()
-{
-    txs_num="${1}"
-    cd ${current_path}/console/
-    LOG_INFO "Deploy HelloWorld..."
-    for((i=1;i<=${txs_num};i++));
-    do
-        bash console.sh deploy HelloWorld
-        sleep 1
-    done  
-    blockNumber=`bash console.sh getBlockNumber`
-    if [ "${blockNumber}" == "${txs_num}" ]; then
-        LOG_INFO "send transaction success, current blockNumber: ${blockNumber}"
-    else
-        exit_node "send transaction failed, current blockNumber: ${blockNumber}"
-    fi
-}
-
-check_sync()
-{
-    LOG_INFO "check sync..."
-    expected_block_number="${1}"
-    cd ${current_path}/nodes/127.0.0.1
-    bash node0/stop.sh && rm -rf node0/log && rm -rf node0/data
-    bash node0/start.sh
-    # wait for sync
-    sleep 10
-    block_number=$(cat node0/log/* |grep "Report," | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
-    if [ "${block_number}" == "${expected_block_number}" ]; then
-        LOG_INFO "check_sync success, current blockNumber: ${block_number}"
-    else
-        exit_node "check_sync error, current blockNumber: ${block_number}, expected_block_number: ${expected_block_number}"
-    fi
-    LOG_INFO "check sync success..."
 }
 
 clear_node()
@@ -171,15 +141,29 @@ clear_node()
     rm -rf nodes
 }
 
-txs_num=10
+if [[ -n "${1}" ]]; then
+     console_branch=${1}
+fi
+
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
-check_consensus
-download_console
-config_console "false"
-send_transactions ${txs_num}
-check_sync ${txs_num}
+expand_node ""
+pwd
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "console_integrationTest success"
+    else
+        echo "console_integrationTest error"
+        exit 1
+fi
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "java_sdk_integrationTest success"
+    else
+        echo "java_sdk_integrationTest error"
+        exit 1
+fi
 LOG_INFO "======== check non-sm success ========"
 
 LOG_INFO "======== clear node after non-sm test ========"
@@ -189,9 +173,20 @@ LOG_INFO "======== clear node after non-sm test success ========"
 # sm test
 LOG_INFO "======== check sm case ========"
 init "-s"
-check_consensus
-config_console "true"
-send_transactions ${txs_num}
-check_sync ${txs_num}
+expand_node "-s"
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "console_integrationTest success"
+    else
+        echo "console_integrationTest error"
+        exit 1
+fi
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "java_sdk_integrationTest success"
+    else
+        echo "java_sdk_integrationTest error"
+        exit 1
+fi
 stop_node
 LOG_INFO "======== check sm case success ========"

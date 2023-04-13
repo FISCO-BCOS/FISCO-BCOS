@@ -126,6 +126,7 @@ public:
         // do nothing
     }
 
+    bool hasContractTableChanged() { return m_hasContractTableChanged; }
 
 protected:
     virtual void executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -162,6 +163,7 @@ protected:
     bcos::crypto::Hash::Ptr m_hashImpl;
     DmcStepRecorder::Ptr m_dmcRecorder;
     ExecutivePool m_executivePool;
+    bool m_hasContractTableChanged = false;
 
 
     mutable SharedMutex x_concurrentLock;

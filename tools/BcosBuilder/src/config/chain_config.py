@@ -54,7 +54,7 @@ class GenesisConfig:
         self.auth_check = utilities.get_item_value(
             self.config, "auth_check", False, False, self.desc)
         self.init_auth_address = utilities.get_item_value(
-            self.config, "init_auth_address", "", self.auth_check, self.desc)
+            self.config, "init_auth_address", "", True, self.desc)
 
 
 class AgencyConfig:
@@ -257,14 +257,8 @@ class GroupConfig:
             output_dir + "/", self.chain_id, self.group_id, "config.genesis")
         self.genesis_config_path = utilities.get_item_value(
             self.config, "genesis_config_path", default_genesis_config_path, False, self.desc)
-        # self.vm_type = utilities.get_item_value(
-        #     self.config, "vm_type", "evm", False, self.desc)
         self.sm_crypto = utilities.get_item_value(
             self.config, "sm_crypto", False, False, self.desc)
-        # self.auth_check = utilities.get_item_value(
-        #     self.config, "auth_check", False, False, self.desc)
-        # self.init_auth_address = utilities.get_item_value(
-        #     self.config, "init_auth_address", "", self.auth_check, self.desc)
         self.genesis_config = GenesisConfig(
             self.config, self.sm_crypto, self.chain_id, self.group_id)
         self.node_list = []

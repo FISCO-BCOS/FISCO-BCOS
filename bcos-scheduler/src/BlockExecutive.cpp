@@ -10,7 +10,6 @@
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Error.h>
-#include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for_each.h>
 #include <boost/algorithm/hex.hpp>
@@ -481,7 +480,8 @@ void BlockExecutive::asyncExecute(
 
 void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 {
-    auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage, m_block->version());
+    auto stateStorage =
+        std::make_shared<storage::StateStorage>(m_scheduler->m_storage, m_block->version());
 
     m_currentTimePoint = std::chrono::system_clock::now();
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
@@ -583,7 +583,10 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     Error::Ptr&& error, uint64_t startTimeStamp, const std::string& primaryKey) {
                     if (error)
                     {
-                        ++status->failed;
+                        {
+                            WriteGuard lock(status->x_lock);
+                            ++status->failed;
+                        }
                         SCHEDULER_LOG(ERROR)
                             << BLOCK_NUMBER(number())
                             << "scheduler asyncPrepare storage error: " << error->errorMessage();
@@ -591,7 +594,11 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             "asyncPrepare block error: " + error->errorMessage()));
                         return;
                     }
-                    ++status->success;
+                    else
+                    {
+                        WriteGuard lock(status->x_lock);
+                        ++status->success;
+                    }
 
                     SCHEDULER_LOG(DEBUG)
                         << BLOCK_NUMBER(number())
@@ -604,7 +611,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     executorParams.primaryKey = primaryKey;
                     executorParams.timestamp = startTimeStamp;
                     status->startTS = startTimeStamp;
-                    for (const auto& executorIt : m_scheduler->m_executorManager->range())
+                    for (const auto& executorIt : *(m_scheduler->m_executorManager))
                     {
                         executorIt->prepare(executorParams, [this, status](Error::Ptr&& error) {
                             {
@@ -1085,6 +1092,18 @@ void BlockExecutive::onExecuteFinish(
     }
     else
     {
+        for (auto dmcExecutor : m_dmcExecutors)
+        {
+            if (dmcExecutor.second->hasContractTableChanged())
+            {
+                // if contract table has changed in execution,
+                // we need to break block pipeline and execute/commit block one by one
+                SCHEDULER_LOG(DEBUG)
+                    << "Break block pipeline" << LOG_KV("contract", dmcExecutor.first);
+                m_isSysBlock.store(true);
+            }
+        }
+
         // All Transaction finished, get hash
         batchGetHashes([this, callback = std::move(callback)](
                            Error::UniquePtr error, crypto::HashType hash) {
@@ -1340,8 +1359,8 @@ void BlockExecutive::batchBlockCommit(
         executorParams.number = number();
         executorParams.timestamp = commitTS;
 
-        auto range = m_scheduler->m_executorManager->range();
-        for (auto const& executorIt : range)
+        // TODO: new parallel_for_each no suite
+        for (auto const& executorIt : *m_scheduler->m_executorManager)
         {
             SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
 
@@ -1548,7 +1567,6 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             });
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
-        // TODO: Slow wait!
         dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
             auto executor = m_scheduler->executorManager()->dispatchExecutor(address);
             if (!executor)
@@ -1671,7 +1689,7 @@ void BlockExecutive::serialPrepareExecutor()
     if (needDetectDeadlock && !allFinished)
     {
         bool needRevert = false;
-        // detect deadlock and revert the first tx TODO: revert many tx in one DMC round
+        // The code below can be optimized by reverting many tx in one DMC round
         for (auto& it : m_dmcExecutors)
         {
             const auto& address = it.first;

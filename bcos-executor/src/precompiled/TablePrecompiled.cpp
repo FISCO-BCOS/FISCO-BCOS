@@ -292,7 +292,6 @@ void TablePrecompiled::desc(precompiled::TableInfo& _tableInfo, const std::strin
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto tableName = _tableName.starts_with("u_") ? _tableName.substr(2) : _tableName;
-    PRECOMPILED_LOG(DEBUG) << LOG_DESC("TablePrecompiled desc") << LOG_KV("tableName", tableName);
 
     auto input = withKeyOrder ? codec.encodeWithSig("descWithKeyOrder(string)", tableName) :
                                 codec.encodeWithSig("desc(string)", tableName);
@@ -438,8 +437,6 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key);
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
-                           << LOG_KV("tableName", tableName);
 
     std::string originKey = key;
     if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION &&
@@ -462,8 +459,12 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
     // update the memory gas and the computation gas
     gasPricer->updateMemUsed(values.size());
     gasPricer->appendOperation(InterfaceOpcode::Select);
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
-                           << LOG_KV("key", key) << LOG_KV("valueSize", values.size());
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
+                               << LOG_KV("originKey", originKey) << LOG_KV("key", key)
+                               << LOG_KV("valueSize", values.size());
+    }
 
     // Return the original key instead of the key converted to numerical order
     EntryTuple entryTuple = {originKey, std::move(values)};
@@ -705,7 +706,8 @@ void TablePrecompiled::insert(const std::string& tableName,
     precompiled::TableInfo tableInfo;
     // external call table manager desc
     std::vector<std::string> columns;
-    if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    auto originKey = key;
+    if (blockContext.blockVersion() >= bcos::protocol::BlockVersion::V3_2_VERSION)
     {
         desc(tableInfo, tableName, _executive, _callParameters, true);
         if (isNumericalOrder(tableInfo.info_v320))
@@ -720,9 +722,12 @@ void TablePrecompiled::insert(const std::string& tableName,
         columns = std::get<1>(tableInfo.info);
     }
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
-                           << LOG_KV("tableName", tableName) << LOG_KV("key", key)
-                           << LOG_KV("valueSize", values.size());
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
+                               << LOG_KV("tableName", tableName) << LOG_KV("originKey", originKey)
+                               << LOG_KV("key", key) << LOG_KV("valueSize", values.size());
+    }
 
     if (values.size() != columns.size())
     {
@@ -771,6 +776,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
     // external call table manager desc
     std::string keyField;
     std::vector<std::string> columns;
+    auto originKey = key;
     if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
         desc(tableInfo, tableName, _executive, _callParameters, true);
@@ -787,9 +793,13 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
         keyField = std::get<0>(tableInfo.info);
         columns = std::get<1>(tableInfo.info);
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
-                           << LOG_KV("tableName", tableName) << LOG_KV("updateKey", key)
-                           << LOG_KV("updateFieldsSize", updateFields.size());
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+                               << LOG_KV("tableName", tableName) << LOG_KV("originKey", originKey)
+                               << LOG_KV("updateKey", key)
+                               << LOG_KV("updateFieldsSize", updateFields.size());
+    }
     auto existEntry = _executive->storage().getRow(tableName, key);
     if (!existEntry)
     {
@@ -1048,13 +1058,18 @@ void TablePrecompiled::removeByKey(const std::string& tableName,
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key);
-    PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table remove") << LOG_KV("tableName", tableName)
-                           << LOG_KV("removeKey", key);
+    auto originKey = key;
 
     if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION &&
         isNumericalOrder(_executive, _callParameters, tableName))
     {
         key = toNumericalOrder(key);
+    }
+
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table remove") << LOG_KV("tableName", tableName)
+                               << LOG_KV("originKey", originKey) << LOG_KV("removeKey", key);
     }
 
     auto existEntry = _executive->storage().getRow(tableName, key);

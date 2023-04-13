@@ -201,9 +201,10 @@ uint32_t bcos::precompiled::getFuncSelector(
     std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl)
 {
     // global function selector cache
-    if (s_name2SelectCache.count(_functionName))
+    auto it = s_name2SelectCache.find(_functionName);
+    if (it != s_name2SelectCache.end())
     {
-        return s_name2SelectCache[_functionName];
+        return it->second;
     }
     auto selector = getFuncSelectorByFunctionName(_functionName, _hashImpl);
     s_name2SelectCache.insert(std::make_pair(_functionName, selector));
@@ -263,17 +264,7 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     {
         return ContractStatus::NotContractAddress;
     }
-
-    // FIXME: frozen in BFS
-    auto frozenEntry = table->getRow(executor::ACCOUNT_FROZEN);
-    if (frozenEntry != std::nullopt && "true" == frozenEntry->getField(0))
-    {
-        return ContractStatus::Frozen;
-    }
-    else
-    {
-        return ContractStatus::Available;
-    }
+    return ContractStatus::Available;
 }
 
 bool precompiled::checkPathValid(
@@ -324,7 +315,6 @@ bool precompiled::checkPathValid(
             << LOG_KV("path", _path);
         return false;
     }
-    // TODO: adapt Chinese, should use wstring
     std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']*$)");
     if (versionCompareTo(version, BlockVersion::V3_2_VERSION) >= 0)
     {

@@ -22,13 +22,15 @@ void NodeTimeMaintenance::tryToUpdatePeerTimeInfo(
         Guard l(x_mutex);
         // The time information of the same node is within m_minTimeOffset,
         // and the time information of the node is not updated
-        if (m_node2TimeOffset.count(nodeID))
+        auto it = m_node2TimeOffset.find(nodeID);
+        if (it != m_node2TimeOffset.end())
         {
-            auto orgTimeOffset = m_node2TimeOffset[nodeID];
+            auto orgTimeOffset = it->second;
             if (std::abs(orgTimeOffset - peerTimeOffset) <= m_minTimeOffset)
+            {
                 return;
-
-            m_node2TimeOffset[nodeID] = peerTimeOffset;
+            }
+            it->second = peerTimeOffset;
         }
         else
         {
@@ -65,7 +67,7 @@ void NodeTimeMaintenance::updateTimeInfo()
     std::sort(timeOffsetVec.begin(), timeOffsetVec.end());
 
     auto medianIndex = timeOffsetVec.size() >> 1;
-    std::int64_t medianTimeOffset{ 0 };
+    std::int64_t medianTimeOffset{0};
     if (timeOffsetVec.size() % 2 == 0)
     {
         medianTimeOffset =

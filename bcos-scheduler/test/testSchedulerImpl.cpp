@@ -552,19 +552,6 @@ BOOST_AUTO_TEST_CASE(call)
     }
 }
 
-BOOST_AUTO_TEST_CASE(registerExecutor)
-{
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
-    auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
-    auto executor2 = std::make_shared<MockDmcExecutor>("executor2");
-    scheduler->registerExecutor(
-        "executor1", executor1, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
-    scheduler->registerExecutor(
-        "executor2", executor2, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
-}
-
 
 BOOST_AUTO_TEST_CASE(testDeploySysContract)
 {

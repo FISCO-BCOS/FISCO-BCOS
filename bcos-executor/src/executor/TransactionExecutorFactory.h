@@ -73,7 +73,6 @@ public:
         // copy constructor
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             storage::IGNORED_ARRAY.begin(), storage::IGNORED_ARRAY.end());
-        //  TODO: config to enable dag
         auto executor = std::make_shared<ShardingTransactionExecutor>(m_ledger, m_txpool,
             m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
             m_executionMessageFactory, m_stateStorageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,

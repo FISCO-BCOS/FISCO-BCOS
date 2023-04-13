@@ -1070,7 +1070,7 @@ bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _chec
 
 void PBFTCacheProcessor::eraseCommittedProposalList(bcos::protocol::BlockNumber _index)
 {
-    if (!m_committedProposalList.count(_index))
+    if (!m_committedProposalList.contains(_index))
     {
         return;
     }

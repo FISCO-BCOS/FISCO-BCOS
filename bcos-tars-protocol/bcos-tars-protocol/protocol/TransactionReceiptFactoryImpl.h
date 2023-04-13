@@ -22,6 +22,7 @@
 #include "../impl/TarsHashable.h"
 
 #include "TransactionReceiptImpl.h"
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <utility>
@@ -43,6 +44,21 @@ public:
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
 
         transactionReceipt->decode(_receiptData);
+
+        auto& inner = transactionReceipt->mutableInner();
+        if (inner.dataHash.empty())
+        {
+            // Update the hash field
+            std::visit(
+                [&inner](auto&& hasher) {
+                    using HasherType = std::decay_t<decltype(hasher)>;
+                    bcos::concepts::hash::calculate<HasherType>(inner, inner.dataHash);
+                },
+                m_hashImpl->hasher());
+
+            BCOS_LOG(TRACE) << LOG_BADGE("createReceipt")
+                            << LOG_DESC("recalculate receipt dataHash");
+        }
 
         return transactionReceipt;
     }

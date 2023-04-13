@@ -258,7 +258,6 @@ BOOST_AUTO_TEST_CASE(TestRun2)
 BOOST_AUTO_TEST_CASE(TestRun4)
 {
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
-    // FIXME
     // txDagDeepTreeTest(txDag);
 }
 

@@ -119,12 +119,11 @@ void BlockSync::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        BLKSYNC_LOG(WARNING)
-                            << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                            << LOG_KV("module", std::to_string(_moduleID))
-                            << LOG_KV("dst", _dstNode->shortHex())
-                            << LOG_KV("code", _error->errorCode())
-                            << LOG_KV("msg", _error->errorMessage());
+                        BLKSYNC_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                           << LOG_KV("module", std::to_string(_moduleID))
+                                           << LOG_KV("dst", _dstNode->shortHex())
+                                           << LOG_KV("code", _error->errorCode())
+                                           << LOG_KV("msg", _error->errorMessage());
                     }
                 });
         }
@@ -178,7 +177,8 @@ void BlockSync::printSyncInfo()
     {
         peer_str << peer->shortHex() << "/";
     }
-    BLKSYNC_LOG(TRACE) << "\n[Sync Info] --------------------------------------------\n"
+    BLKSYNC_LOG(TRACE) << m_config->printBlockSyncState()
+                       << "\n[Sync Info] --------------------------------------------\n"
                        << "            IsSyncing:    " << isSyncing() << "\n"
                        << "            Block number: " << m_config->blockNumber() << "\n"
                        << "            Block hash:   " << m_config->hash().abridged() << "\n"
@@ -388,7 +388,6 @@ void BlockSync::asyncNotifyNewBlock(
                        << LOG_KV("hash", _ledgerConfig->hash().abridged())
                        << LOG_KV("consNodeSize", _ledgerConfig->consensusNodeList().size())
                        << LOG_KV("observerNodeSize", _ledgerConfig->observerNodeList().size());
-    // TODO: figure out why
     if (_ledgerConfig->blockNumber() > m_config->blockNumber())
     {
         onNewBlock(_ledgerConfig);
@@ -512,7 +511,7 @@ void BlockSync::tryToRequestBlocks()
                 std::min(m_config->knownHighestNumber(), (topBlockHeader->number() - 1));
         }
     }
-    auto currentNumber = std::max(m_config->blockNumber(), m_config->applyingBlock());
+    auto currentNumber = m_config->blockNumber();
     // no need to request blocks
     if (currentNumber >= requestToNumber || requestToNumber <= m_config->executedBlock() ||
         requestToNumber <= m_config->applyingBlock())
@@ -539,7 +538,8 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
     {
         bool findPeer = false;
         // shard: [from, to]
-        m_syncStatus->foreachPeerRandom([&](PeerStatus::Ptr _p) {
+        m_syncStatus->foreachPeerRandom([this, &_from, &shard, &interval, &blockSizePerShard, &_to,
+                                            &findPeer, &shardNumber](PeerStatus::Ptr _p) {
             if (_p->number() < m_config->knownHighestNumber())
             {
                 // Only send request to nodes which are not syncing(has max number)
@@ -645,6 +645,11 @@ void BlockSync::maintainDownloadingQueue()
     auto topNumber = topHeader->number();
     if (topNumber > (expectedBlock))
     {
+        if (expectedBlock <= m_config->applyingBlock())
+        {
+            // expectedBlock is applying, no need to print warning log
+            return;
+        }
         BLKSYNC_LOG(WARNING) << LOG_DESC("Discontinuous block") << LOG_KV("topNumber", topNumber)
                              << LOG_KV("curNumber", m_config->blockNumber())
                              << LOG_KV("expectedBlock", expectedBlock)

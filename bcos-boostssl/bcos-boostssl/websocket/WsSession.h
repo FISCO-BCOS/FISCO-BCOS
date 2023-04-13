@@ -104,7 +104,7 @@ public:
     {
         m_recvMessageHandler = _recvMessageHandler;
     }
-    WsRecvMessageHandler recvMessageHandler() { return m_recvMessageHandler; }
+    const WsRecvMessageHandler& recvMessageHandler() { return m_recvMessageHandler; }
 
     std::shared_ptr<MessageFaceFactory> messageFactory() { return m_messageFactory; }
     void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)

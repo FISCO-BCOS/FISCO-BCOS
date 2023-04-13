@@ -29,10 +29,11 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId,
+        size_t keyPageSize)
       : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory,
             txPool, transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false,
-            schedulerTermId)
+            schedulerTermId, keyPageSize)
     {}
 
 
@@ -42,13 +43,13 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
-        int64_t schedulerTermId)
+        int64_t schedulerTermId, size_t keyPageSize)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
         m_blockExecutiveFactory(
-            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute)),
+            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute, keyPageSize)),
         m_blockFactory(std::move(blockFactory)),
         m_txPool(txPool),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
@@ -57,7 +58,8 @@ public:
         m_isWasm(isWasm),
         m_isSerialExecute(isSerialExecute),
         m_schedulerTermId(schedulerTermId),
-        m_worker("scheduler", 8)
+        m_preExeWorker("preExeScheduler", 2),  // assume that preExe is no slower than exe speed/2
+        m_exeWorker("exeScheduler", 1)
     {
         start();
     }
@@ -81,13 +83,6 @@ public:
     void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) override;
 
-    [[deprecated("Use SchedulerImpl::registerExecutor")]] void registerExecutor(std::string name,
-        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        std::function<void(Error::Ptr&&)> callback) override;
-
-    void unregisterExecutor(
-        const std::string& name, std::function<void(Error::Ptr&&)> callback) override;
-
     void reset(std::function<void(Error::Ptr&&)> callback) override;
     // register a block number receiver
     virtual void registerBlockNumberReceiver(
@@ -103,7 +98,6 @@ public:
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier);
 
-    // TODO: Add async interface
     void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr&&)> callback) override;
 
@@ -233,6 +227,7 @@ private:
 
     std::function<void(int64_t)> f_onNeedSwitchEvent;
 
-    bcos::ThreadPool m_worker;
+    bcos::ThreadPool m_preExeWorker;
+    bcos::ThreadPool m_exeWorker;
 };
 }  // namespace bcos::scheduler

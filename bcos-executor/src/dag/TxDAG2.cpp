@@ -89,7 +89,6 @@ void TxDAG2::init(critical::CriticalFieldsInterface::Ptr _txsCriticals)
 
 void TxDAG2::run(unsigned int threadNum)
 {
-    // TODO: add timeout logic
     (void)threadNum;
     m_startTask.try_put(continue_msg());
     m_dag.wait_for_all();
