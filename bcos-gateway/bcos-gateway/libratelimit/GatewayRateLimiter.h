@@ -64,13 +64,16 @@ public:
         m_running = true;
         auto enableOutRateLimit = m_rateLimiterManager->rateLimiterConfig().enableOutRateLimit();
         auto enableInRateLimit = m_rateLimiterManager->rateLimiterConfig().enableInRateLimit();
+        bool bStartStat = false;
         if ((enableOutRateLimit || enableInRateLimit) && m_rateLimiterStat)
         {
             m_rateLimiterStat->start();
+            bStartStat = true;
         }
 
         RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
                             << LOG_DESC("gateway ratelimiter start end")
+                            << LOG_KV("bStartStat", bStartStat)
                             << LOG_KV("enableOutRateLimit", enableOutRateLimit)
                             << LOG_KV("enableInRateLimit", enableInRateLimit);
     }
@@ -95,7 +98,7 @@ public:
     }
 
 public:
-    std::optional<std::string> checkOutGoing(const std::string& _endpoint,
+    std::optional<std::string> checkOutGoing(const std::string& _endpoint, uint16_t _pkgType,
         const std::string& _groupID, uint16_t _moduleID, int64_t _msgLength);
 
     std::optional<std::string> checkInComing(

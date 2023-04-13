@@ -64,11 +64,12 @@ public:
     {
         if (m_enableLocalCache)
         {
-            m_clearCacheTimer = std::make_shared<Timer>(_intervalSec * 1000);
+            m_clearCacheTimer = std::make_shared<Timer>(toMillisecond(_intervalSec));
             m_clearCacheTimer->registerTimeoutHandler([this]() { refreshLocalCache(); });
             m_clearCacheTimer->start();
         }
 
+        // TODO: add switch
         m_statTimer = std::make_shared<Timer>(60000);
         m_statTimer->registerTimeoutHandler([this]() { stat(); });
         m_statTimer->start();

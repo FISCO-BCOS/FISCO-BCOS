@@ -88,11 +88,11 @@ void PBFTEngine::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        PBFT_LOG(WARNING) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                          << LOG_KV("module", std::to_string(_moduleID))
-                                          << LOG_KV("dst", _dstNode->shortHex())
-                                          << LOG_KV("code", _error->errorCode())
-                                          << LOG_KV("msg", _error->errorMessage());
+                        PBFT_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                        << LOG_KV("module", std::to_string(_moduleID))
+                                        << LOG_KV("dst", _dstNode->shortHex())
+                                        << LOG_KV("code", _error->errorCode())
+                                        << LOG_KV("msg", _error->errorMessage());
                     }
                 });
         }
@@ -650,12 +650,12 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
         handleCheckPointMsg(checkPointMsg);
         break;
     }
-        [[unlikely]] case PacketType::RecoverRequest:
-        {
-            auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
-            handleRecoverRequest(request);
-            break;
-        }
+    [[unlikely]] case PacketType::RecoverRequest:
+    {
+        auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+        handleRecoverRequest(request);
+        break;
+    }
     case PacketType::RecoverResponse:
     {
         auto recoverResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);

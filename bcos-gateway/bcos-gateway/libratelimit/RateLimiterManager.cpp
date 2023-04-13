@@ -32,6 +32,7 @@ void RateLimiterManager::initP2pBasicMsgTypes()
 {
     /** ref: enum GatewayMessageType */
     m_p2pBasicMsgTypes.fill(false);
+    m_modulesWithoutLimit.fill(false);
     for (uint16_t type : {GatewayMessageType::Heartbeat, GatewayMessageType::Handshake,
              GatewayMessageType::RequestNodeStatus, GatewayMessageType::ResponseNodeStatus,
              GatewayMessageType::SyncNodeSeq, GatewayMessageType::RouterTableSyncSeq,
@@ -113,7 +114,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
     // rete limiter not exist, create it
     int64_t groupOutgoingBwLimit = -1;
     int32_t timeWindowS = m_rateLimiterConfig.timeWindowSec;
-    int32_t timeWindowMS = m_rateLimiterConfig.timeWindowSec * 1000;
+    int32_t timeWindowMS = toMillisecond(m_rateLimiterConfig.timeWindowSec);
     bool allowExceedMaxPermitSize = m_rateLimiterConfig.allowExceedMaxPermitSize;
 
     auto it = m_rateLimiterConfig.group2BwLimit.find(_group);
@@ -160,6 +161,15 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
 RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     const std::string& _connIP, uint16_t _packageType)
 {
+    // // TODO:check package valid
+    // if (_packageType == 0)
+    // {
+    //     RATELIMIT_MGR_LOG(ERROR) << LOG_BADGE("getInRateLimiter") << LOG_DESC("pkg type is
+    //     invalid")
+    //                              << LOG_KV("packageType", _packageType)
+    //                              << LOG_KV("connIP", _connIP);
+    // }
+
     // not enable msg type limit
     if (!m_rateLimiterConfig.enableInP2pBasicMsgLimit())
     {
@@ -180,7 +190,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     }
 
     int32_t timeWindowS = m_rateLimiterConfig.timeWindowSec;
-    int32_t timeWindowMS = m_rateLimiterConfig.timeWindowSec * 1000;
+    int32_t timeWindowMS = toMillisecond(m_rateLimiterConfig.timeWindowSec);
     bool allowExceedMaxPermitSize = m_rateLimiterConfig.allowExceedMaxPermitSize;
     int64_t QPS = m_rateLimiterConfig.p2pBasicMsgQPS;
 
@@ -212,16 +222,15 @@ RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     }
 
     int32_t timeWindowS = m_rateLimiterConfig.timeWindowSec;
-    int32_t timeWindowMS = m_rateLimiterConfig.timeWindowSec * 1000;
+    int32_t timeWindowMS = toMillisecond(m_rateLimiterConfig.timeWindowSec);
     bool allowExceedMaxPermitSize = m_rateLimiterConfig.allowExceedMaxPermitSize;
     int64_t QPS = m_rateLimiterConfig.p2pModuleMsgQPS;
     auto enableDistributedRatelimit = m_rateLimiterConfig.enableDistributedRatelimit;
 
-    const auto& moduleMsg2QPS = m_rateLimiterConfig.moduleMsg2QPS;
-    auto it = moduleMsg2QPS.find(_moduleID);
-    if (it != moduleMsg2QPS.end() && it->second > 0)
+    auto tempQPS = m_rateLimiterConfig.moduleMsg2QPS.at(_moduleID);
+    if (tempQPS > 0)
     {
-        QPS = it->second;
+        QPS = tempQPS;
     }
 
     RATELIMIT_MGR_LOG(INFO) << LOG_BADGE("getInRateLimiter")
@@ -264,7 +273,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::stri
 
     int64_t connOutgoingBwLimit = -1;
     int32_t timeWindowS = m_rateLimiterConfig.timeWindowSec;
-    int32_t timeWindowMS = m_rateLimiterConfig.timeWindowSec * 1000;
+    int32_t timeWindowMS = toMillisecond(m_rateLimiterConfig.timeWindowSec);
     bool allowExceedMaxPermitSize = m_rateLimiterConfig.allowExceedMaxPermitSize;
 
     auto it = m_rateLimiterConfig.ip2BwLimit.find(_connIP);

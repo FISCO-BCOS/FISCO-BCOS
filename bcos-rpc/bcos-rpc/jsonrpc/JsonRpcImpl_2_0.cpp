@@ -26,6 +26,7 @@
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/Common.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
@@ -209,30 +210,20 @@ void JsonRpcImpl_2_0::parseRpcResponseJson(
         JsonRpcError::InvalidRequest, "The JSON sent is not a valid Response object."));
 }
 
-void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const& transactionPtr)
+void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const& transaction)
 {
-    // transaction version
-    jResp["version"] = transactionPtr.version();
-    // transaction hash
-    jResp["hash"] = toHexStringWithPrefix(transactionPtr.hash());
-    // transaction nonce
-    jResp["nonce"] = toHex(transactionPtr.nonce());
-    // blockLimit
-    jResp["blockLimit"] = transactionPtr.blockLimit();
-    // the receiver address
-    jResp["to"] = string(transactionPtr.to());
-    // the sender address
-    jResp["from"] = toHexStringWithPrefix(transactionPtr.sender());
-    // importTime
-    jResp["importTime"] = transactionPtr.importTime();
-    // the chainID
-    jResp["chainID"] = std::string(transactionPtr.chainId());
-    // the groupID
-    jResp["groupID"] = std::string(transactionPtr.groupId());
-    // the abi
-    jResp["abi"] = std::string(transactionPtr.abi());
-    // the signature
-    jResp["signature"] = toHexStringWithPrefix(transactionPtr.signatureData());
+    jResp["version"] = transaction.version();
+    jResp["hash"] = toHexStringWithPrefix(transaction.hash());
+    jResp["nonce"] = toHex(transaction.nonce());
+    jResp["blockLimit"] = transaction.blockLimit();
+    jResp["to"] = string(transaction.to());
+    jResp["from"] = toHexStringWithPrefix(transaction.sender());
+    jResp["importTime"] = transaction.importTime();
+    jResp["chainID"] = std::string(transaction.chainId());
+    jResp["groupID"] = std::string(transaction.groupId());
+    jResp["abi"] = std::string(transaction.abi());
+    jResp["signature"] = toHexStringWithPrefix(transaction.signatureData());
+    jResp["extraData"] = std::string(transaction.extraData());
 }
 
 void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
@@ -468,9 +459,26 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             jResp["to"] = submitResult->to();
             jResp["from"] = toHexStringWithPrefix(submitResult->sender());
 
-            // TODO: check if needed
-            // jResp["input"] = toHexStringWithPrefix(transaction->input());
+            if (g_BCOSConfig.needRetInput())
+            {
+                jResp["input"] = toHexStringWithPrefix(transaction->input());
+            }
 
+
+            if (requireProof) [[unlikely]]
+            {
+                auto ledger = nodeService->ledger();
+                ledger->asyncGetTransactionReceiptByHash(txHash, true,
+                    [&respFunc, &jResp](
+                        auto&& error, [[maybe_unused]] auto&& receipt, auto&& merkle) {
+                        // ledger logic: if error, return empty merkle
+                        // for compatibility
+                        JsonRpcImpl_2_0::addProofToResponse(jResp, "txReceiptProof", merkle);
+                        JsonRpcImpl_2_0::addProofToResponse(jResp, "receiptProof", merkle);
+                        respFunc(nullptr, jResp);
+                    });
+                co_return;
+            }
             respFunc(nullptr, jResp);
         }
         catch (bcos::Error& e)

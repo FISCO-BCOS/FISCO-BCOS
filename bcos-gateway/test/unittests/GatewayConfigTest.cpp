@@ -116,7 +116,7 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 3);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 16);
+        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 
     {
@@ -125,7 +125,7 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 0);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 16);
+        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 
     {
@@ -137,7 +137,7 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 2);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 16);
+        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 }
 
@@ -188,7 +188,7 @@ BOOST_AUTO_TEST_CASE(test_initSMConfig)
     }
 }
 
-BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
+BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
 {
     {
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
     {
         auto config = std::make_shared<GatewayConfig>();
         boost::property_tree::ptree pt;
-        config->initRateLimitConfig(pt);
+        config->initFlowControlConfig(pt);
         auto rateLimiterConfig = config->rateLimiterConfig();
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
@@ -227,7 +227,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         boost::property_tree::ini_parser::read_ini(configIni, pt);
 
         auto config = std::make_shared<GatewayConfig>();
-        config->initRateLimitConfig(pt);
+        config->initFlowControlConfig(pt);
 
         auto rateLimiterConfig = config->rateLimiterConfig();
         auto timeWindowSec = rateLimiterConfig.timeWindowSec;
@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(5));
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 4);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 6);
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
@@ -257,6 +257,12 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::TxsSync) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::AMOP) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5001) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5002) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5003) ==
                     rateLimiterConfig.modulesWithoutLimit.end());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 3);
@@ -285,7 +291,8 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK(!rateLimiterConfig.p2pBasicMsgTypes.contains(4));
         BOOST_CHECK_EQUAL(rateLimiterConfig.p2pBasicMsgQPS, 123);
         BOOST_CHECK_EQUAL(rateLimiterConfig.p2pModuleMsgQPS, 555);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPSSize, 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS.size(), uint16_t(-1));
         BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[1], 123);
         BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[5], 456);
         BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[7], 789);
@@ -298,7 +305,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         boost::property_tree::ini_parser::read_ini(configIni, pt);
 
         auto config = std::make_shared<GatewayConfig>();
-        config->initRateLimitConfig(pt);
+        config->initFlowControlConfig(pt);
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
@@ -317,7 +324,7 @@ BOOST_AUTO_TEST_CASE(test_initRateLimiterConfig)
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(1));
 
-        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 4);
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
         BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=

@@ -61,7 +61,7 @@ std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Blo
         // In 3.3.0, DMC and serial has been combined together: Sharding
         auto shardingBlockExecutive = std::make_shared<ShardingBlockExecutive>(block, scheduler,
             startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,
-            _gasLimit, _syncBlock);
+            m_contract2ShardCache, _gasLimit, _syncBlock, m_keyPageSize);
         return shardingBlockExecutive;
     }
 

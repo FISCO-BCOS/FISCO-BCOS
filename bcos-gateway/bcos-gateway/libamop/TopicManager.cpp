@@ -150,15 +150,17 @@ void TopicManager::removeTopics(
     }
     {
         std::unique_lock lock(x_clientTopics);
-        if (!m_client2TopicItems.count(_client))
+        auto it = m_client2TopicItems.find(_client);
+        if (it == m_client2TopicItems.end())
         {
             return;
         }
         for (auto const& topic : _topicList)
         {
-            if (m_client2TopicItems[_client].count(topic))
+            auto topicItem = it->second.find(topic);
+            if (topicItem != it->second.end())
             {
-                m_client2TopicItems[_client].erase(topic);
+                it->second.erase(topicItem);
             }
             TOPIC_LOG(INFO) << LOG_BADGE("removeTopics") << LOG_KV("client", _client)
                             << LOG_KV("topicSeq", topicSeq()) << LOG_KV("topic", topic);
@@ -364,7 +366,6 @@ void TopicManager::queryNodeIDsByTopic(
             _nodeIDs.push_back(it->first);
         }
     }
-    return;
 }
 
 /**
@@ -393,15 +394,15 @@ void TopicManager::queryClientsByTopic(
                     << LOG_KV("clients size", _clients.size());
 }
 
-//
 bcos::rpc::RPCInterface::Ptr TopicManager::createAndGetServiceByClient(std::string const& _clientID)
 {
     try
     {
         UpgradableGuard l(x_clientInfo);
-        if (m_clientInfo.count(_clientID))
+        auto it = m_clientInfo.find(_clientID);
+        if (it != m_clientInfo.end())
         {
-            return m_clientInfo[_clientID];
+            return it->second;
         }
 
         auto serviceName = m_rpcServiceName;

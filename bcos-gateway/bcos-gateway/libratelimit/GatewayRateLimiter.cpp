@@ -18,6 +18,7 @@
  * @date 2022-09-30
  */
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 
 using namespace bcos;
@@ -25,7 +26,7 @@ using namespace bcos::gateway;
 using namespace bcos::gateway::ratelimiter;
 
 std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& _endpoint,
-    const std::string& _groupID, uint16_t _moduleID, int64_t _msgLength)
+    uint16_t _pkgType, const std::string& _groupID, uint16_t _moduleID, int64_t _msgLength)
 {
     // endpoint of the p2p connection
     const std::string& endpoint = _endpoint;
@@ -37,6 +38,7 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
     int64_t msgLength = _msgLength;
 
     std::string errorMsg;
+
     do
     {
         // total outgoing bandwidth
@@ -55,7 +57,7 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
             groupOutGoingBWLimit = m_rateLimiterManager->getGroupRateLimiter(groupID);
         }
 
-        auto modulesWithoutLimit = m_rateLimiterManager->modulesWithoutLimit();
+        const auto& modulesWithoutLimit = m_rateLimiterManager->modulesWithoutLimit();
 
         // if moduleID is zero, the P2P network itself's message, the ratelimiter does not limit
         // P2P own's messages
@@ -75,7 +77,7 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
         // There are two scenarios:
         //  1. ulimit module message rate or
         //  2. limit module message rate
-        else if (modulesWithoutLimit.contains(moduleID))
+        else if (modulesWithoutLimit.at(moduleID))
         {  // case 1: ulimit module message rate or, just for statistic
 
             if (totalOutGoingBWLimit)
@@ -140,6 +142,10 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
         return std::nullopt;
     } while (false);
 
+    GATEWAY_LOG(TRACE) << LOG_BADGE("checkOutGoing") << LOG_DESC("outgoing bandwidth overflow")
+                       << LOG_KV("endpoint", _endpoint) << LOG_KV("pkgType", _pkgType)
+                       << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID);
+
     m_rateLimiterStat->updateOutGoing(endpoint, msgLength, false);
     m_rateLimiterStat->updateOutGoing(groupID, moduleID, msgLength, false);
 
@@ -154,11 +160,18 @@ std::optional<std::string> GatewayRateLimiter::checkInComing(
     if (rateLimiter)
     {
         result = rateLimiter->tryAcquire(1);
+        if (!result)
+        {
+            GATEWAY_LOG(TRACE) << LOG_BADGE("checkInComing") << LOG_DESC("incoming qps overflow")
+                               << LOG_KV("endpoint", _endpoint)
+                               << LOG_KV("packageType", _packageType)
+                               << LOG_KV("msgLength", _msgLength);
+        }
     }
-    m_rateLimiterStat->updateInComing(_endpoint, _msgLength, result);
+    m_rateLimiterStat->updateInComing0(_endpoint, _packageType, _msgLength, result);
     return result ? std::nullopt :
                     std::make_optional<std::string>(
-                        "qps overflow, package type: " + std::to_string(_packageType) +
+                        "incoming qps overflow, package type: " + std::to_string(_packageType) +
                         " ,endpoint: " + _endpoint);
 }
 
@@ -170,9 +183,15 @@ std::optional<std::string> GatewayRateLimiter::checkInComing(
     if (rateLimiter)
     {
         result = rateLimiter->tryAcquire(1);
+        if (!result)
+        {
+            GATEWAY_LOG(TRACE) << LOG_BADGE("checkInComing") << LOG_DESC("incoming qps overflow")
+                               << LOG_KV("groupID", _groupID) << LOG_KV("moduleID", _moduleID)
+                               << LOG_KV("msgLength", _msgLength);
+        }
     }
     m_rateLimiterStat->updateInComing(_groupID, _moduleID, _msgLength, result);
     return result ? std::nullopt :
-                    std::make_optional<std::string>("qps overflow, groupID: " + _groupID +
+                    std::make_optional<std::string>("incoming qps overflow, groupID: " + _groupID +
                                                     " ,moduleID: " + std::to_string(_moduleID));
 }

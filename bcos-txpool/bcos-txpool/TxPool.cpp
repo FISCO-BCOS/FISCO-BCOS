@@ -138,7 +138,7 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
 {
     // Note: not block seal new block here
     auto self = weak_from_this();
-    m_sealer->enqueue([self, _txsLimit, _avoidTxs, _sealCallback]() {
+    m_sealer->enqueue([self, this, _txsLimit, _avoidTxs, _sealCallback]() {
         auto txpool = self.lock();
         if (!txpool)
         {
@@ -146,7 +146,10 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         }
         auto fetchedTxs = txpool->m_config->blockFactory()->createBlock();
         auto sysTxs = txpool->m_config->blockFactory()->createBlock();
-        txpool->m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
+        {
+            bcos::RecursiveGuard guard(x_markTxsMutex);
+            txpool->m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
+        }
         _sealCallback(nullptr, fetchedTxs, sysTxs);
     });
 }
@@ -277,9 +280,9 @@ void TxPool::asyncNotifyTxsSyncMessage(Error::Ptr _error, std::string const& _uu
             }
             catch (std::exception const& e)
             {
-                TXPOOL_LOG(WARNING) << LOG_DESC("asyncNotifyTxsSyncMessage: sendResponse failed")
-                                    << LOG_KV("error", boost::diagnostic_information(e))
-                                    << LOG_KV("uuid", _uuid) << LOG_KV("dst", _nodeID->shortHex());
+                TXPOOL_LOG(TRACE) << LOG_DESC("asyncNotifyTxsSyncMessage: sendResponse failed")
+                                  << LOG_KV("error", boost::diagnostic_information(e))
+                                  << LOG_KV("uuid", _uuid) << LOG_KV("dst", _nodeID->shortHex());
             }
         });
     if (!_onRecv)
@@ -384,7 +387,11 @@ void TxPool::asyncMarkTxs(HashListPtr _txsHash, bool _sealedFlag,
     bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
-    m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
+    {
+        bcos::RecursiveGuard guard(x_markTxsMutex);
+        m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
+    }
+
     if (!_onRecvResponse)
     {
         return;
@@ -465,12 +472,11 @@ void TxPool::initSendResponseHandler()
                 _id, _moduleID, _dstNode, _data, [_id, _moduleID, _dstNode](Error::Ptr _error) {
                     if (_error)
                     {
-                        TXPOOL_LOG(WARNING)
-                            << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                            << LOG_KV("module", std::to_string(_moduleID))
-                            << LOG_KV("dst", _dstNode->shortHex())
-                            << LOG_KV("code", _error->errorCode())
-                            << LOG_KV("msg", _error->errorMessage());
+                        TXPOOL_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                          << LOG_KV("module", std::to_string(_moduleID))
+                                          << LOG_KV("dst", _dstNode->shortHex())
+                                          << LOG_KV("code", _error->errorCode())
+                                          << LOG_KV("msg", _error->errorMessage());
                     }
                 });
         }

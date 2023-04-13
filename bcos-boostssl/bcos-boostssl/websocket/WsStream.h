@@ -74,8 +74,9 @@ public:
 
     void initDefaultOpt()
     {
-        /* //TODO: close compress temp
-        // default open compress option
+        /*
+        // default close compress option because the loss of network compression is relatively large
+        with boost websocket
         {
             boost::beast::websocket::permessage_deflate opt;
             opt.client_enable = true;  // for clients

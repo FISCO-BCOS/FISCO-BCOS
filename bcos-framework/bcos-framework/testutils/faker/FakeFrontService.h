@@ -157,7 +157,7 @@ public:
     void asyncSendMessageByNodeIDs(
         int _moduleId, const std::vector<NodeIDPtr>& _nodeIdList, bytesConstRef _data) override
     {
-        for (auto node : _nodeIdList)
+        for (const auto& node : _nodeIdList)
         {
             if (node->data() == m_nodeId->data())
             {

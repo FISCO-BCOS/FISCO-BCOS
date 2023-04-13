@@ -81,6 +81,7 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
     message->contextID = contextID();
     message->seq = seq();
+    message->hasContractTableChanged = m_hasContractTableChanged;
 
     EXECUTIVE_LOG(TRACE) << "Execute finish\t" << message->toFullString();
 
@@ -105,15 +106,13 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     {
         if (input->createSalt)
         {
-            // TODO: Add sender in this process(consider compat with ethereum)
             newAddress = bcos::newEVMAddress(m_hashImpl, input->senderAddress,
                 bytesConstRef(input->data.data(), input->data.size()), *(input->createSalt));
         }
         else
         {
-            // TODO: Add sender in this process(consider compat with ethereum)
-            newAddress = bcos::newEVMAddress(
-                m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
+            newAddress =
+                bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
         }
 
         input->receiveAddress = newAddress;
@@ -196,6 +195,12 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     // update seq
     m_seq = executive->seq();
 
+    // update hasContractTableChanged
+    if (executive->hasContractTableChanged())
+    {
+        this->setContractTableChanged();
+    }
+
     if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
     {
         EXECUTIVE_LOG(TRACE) << "externalCall finish\t" << output->toFullString();
@@ -229,7 +234,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
     {
         callResults = go(*hostContext, std::move(callResults));
 
-        // TODO: check if needed
+        // TODO: check this function is ok if we need to use this
         hostContext->sub().refunds +=
             hostContext->vmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
     }
@@ -245,7 +250,6 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
 std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionExecutive::call(
     CallParameters::UniquePtr callParameters)
 {
-
     EXECUTIVE_LOG(DEBUG) << BLOCK_NUMBER(m_blockContext.number()) << LOG_DESC("executive call")
                          << LOG_KV("contract", callParameters->receiveAddress)
                          << LOG_KV("sender", callParameters->senderAddress)
@@ -300,8 +304,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
             EXECUTIVE_LOG(INFO) << "Revert transaction: call precompiled out of gas.";
             callParameters->type = CallParameters::REVERT;
             callParameters->status = (int32_t)TransactionStatus::OutOfGas;
-            if (versionCompareTo(
-                    m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+            if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Call precompiled out of gas.", *callParameters);
             }
@@ -377,9 +380,9 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         // 3.1.0 < version < 3.3, authCheck==true, then create
         // version >= 3.3, always create
         if ((m_blockContext.isAuthCheck() &&
-                versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0) ||
+                m_blockContext.blockVersion() >= BlockVersion::V3_1_VERSION) ||
             (!m_blockContext.isWasm() &&
-                versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_3_VERSION) >= 0))
+                m_blockContext.blockVersion() >= BlockVersion::V3_3_VERSION))
         {
             // Create auth table
             creatAuthTable(
@@ -394,7 +397,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         EXECUTIVE_LOG(INFO) << "create contract table " << LOG_KV("table", tableName)
                             << LOG_KV("sender", callParameters->senderAddress);
         if (m_blockContext.isAuthCheck() ||
-            versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
+            (!m_blockContext.isWasm() &&
+                m_blockContext.blockVersion() >= BlockVersion::V3_3_VERSION))
         {
             // Create auth table, always create auth table when version >= 3.3.0
             creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress,
@@ -738,6 +742,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     }
                     EXECUTIVE_LOG(INFO)
                         << "Revert transaction: " << LOG_DESC("deploy failed OutOfGas")
+                        << LOG_KV("need",
+                               (int64_t)(outputRef.size() * hostContext.vmSchedule().createDataGas))
+                        << LOG_KV("have", callResults->gas)
                         << LOG_KV("message", callResults->message);
                     return callResults;
                 }
@@ -761,8 +768,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                         writeErrInfoToOutput(
                             "Error occurs in building BFS dir.", *buildCallResults);
                     }
-                    EXECUTIVE_LOG(DEBUG) << "Revert transaction: " << buildCallResults->message
-                                         << LOG_KV("tableName", tableName);
+                    EXECUTIVE_LOG(INFO) << "Revert transaction: " << buildCallResults->message
+                                        << LOG_KV("tableName", tableName);
                     return buildCallResults;
                 }
             }
@@ -983,18 +990,13 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
 
 bool TransactionExecutive::isPrecompiled(const std::string& address) const
 {
-    return m_constantPrecompiled->contains(address);
+    return m_precompiled->at(
+               address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck()) != nullptr;
 }
 
 std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const
 {
-    auto constantPrecompiled = m_constantPrecompiled->find(address);
-
-    if (constantPrecompiled != m_constantPrecompiled->end())
-    {
-        return constantPrecompiled->second;
-    }
-    return {};
+    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck());
 }
 
 std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
@@ -1009,20 +1011,14 @@ int64_t TransactionExecutive::costOfPrecompiled(const string& _a, bytesConstRef 
 }
 
 void TransactionExecutive::setEVMPrecompiled(
-    std::shared_ptr<const std::map<std::string, PrecompiledContract::Ptr>> precompiledContract)
+    std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled)
 {
-    m_evmPrecompiled = precompiledContract;
+    m_evmPrecompiled = std::move(evmPrecompiled);
 }
-void TransactionExecutive::setConstantPrecompiled(
-    const string& address, std::shared_ptr<precompiled::Precompiled> precompiled)
+
+void TransactionExecutive::setPrecompiled(std::shared_ptr<PrecompiledMap> _precompiled)
 {
-    m_constantPrecompiled->insert({address, precompiled});
-}
-void TransactionExecutive::setConstantPrecompiled(
-    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-        _constantPrecompiled)
-{
-    m_constantPrecompiled = _constantPrecompiled;
+    m_precompiled = std::move(_precompiled);
 }
 
 void TransactionExecutive::revert()
@@ -1421,7 +1417,8 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     const auto* authMgrAddress = m_blockContext.isWasm() ? precompiled::AUTH_MANAGER_NAME :
                                                            precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
-        m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
+        m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
+            m_blockContext.isAuthCheck()));
     EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", callParameters->receiveAddress)
                          << LOG_KV("isCreate", callParameters->create)
                          << LOG_KV("originAddress", callParameters->origin);
@@ -1467,7 +1464,8 @@ int32_t TransactionExecutive::checkContractAvailable(
         return 0;
     }
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
-        m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
+        m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
+            m_blockContext.isAuthCheck()));
     // if status is normal, then return 0; else if status is abnormal, then return else
     // if return <0, it means status row not exist, check pass by default in this case
     auto status = contractAuthPrecompiled->getContractStatus(
@@ -1485,8 +1483,8 @@ uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::Unique
         return 0;
     }
     AccountPrecompiled::Ptr accountPrecompiled =
-        dynamic_pointer_cast<precompiled::AccountPrecompiled>(
-            m_constantPrecompiled->at(ACCOUNT_ADDRESS));
+        dynamic_pointer_cast<precompiled::AccountPrecompiled>(m_precompiled->at(
+            ACCOUNT_ADDRESS, m_blockContext.blockVersion(), m_blockContext.isAuthCheck()));
 
     return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this());
 }

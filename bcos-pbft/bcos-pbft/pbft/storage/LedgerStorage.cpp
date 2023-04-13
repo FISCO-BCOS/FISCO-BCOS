@@ -422,9 +422,8 @@ void LedgerStorage::asyncRemove(std::string const& _dbName, std::string const& _
                                    << LOG_KV("key", _key);
             return;
         }
-        // TODO: remove failed
         PBFT_STORAGE_LOG(WARNING) << LOG_DESC("asyncRemove failed") << LOG_KV("dbName", _dbName)
-                                  << LOG_KV("key", _key);
+                                  << LOG_KV("key", _key) << LOG_KV("msg", _error->toString());
     });
 }
 

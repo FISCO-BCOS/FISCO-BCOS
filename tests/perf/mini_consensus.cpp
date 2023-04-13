@@ -68,13 +68,7 @@ public:
         [[maybe_unused]] std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>
             function) override
     {}
-    void registerExecutor([[maybe_unused]] std::string name,
-        [[maybe_unused]] bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
-    {}
-    void unregisterExecutor([[maybe_unused]] const std::string& name,
-        [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
-    {}
+
     void reset([[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override {}
     void getCode([[maybe_unused]] std::string_view contract,
         std::function<void(Error::Ptr, bcos::bytes)> callback) override

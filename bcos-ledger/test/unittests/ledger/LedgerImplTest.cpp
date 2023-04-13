@@ -252,7 +252,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
         receipt.data.contractAddress = "contract to";
         if (i >= 70)
         {
-            // receipt.data.status = -1; // FIXME: This line cause ut failed on aarch64
+            receipt.data.status = 16;
         }
 
         block.transactions.emplace_back(std::move(transaction));

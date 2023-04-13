@@ -74,8 +74,10 @@ void ShardingDmcExecutor::shardGo(std::function<void(bcos::Error::UniquePtr, Sta
                            << LOG_KV("cost", utcTime() - lastT);
         }
 
+        auto self = shared_from_this();
         executorExecuteTransactions(m_contractAddress, *messages,
-            [this, lastT, messages, callback = std::move(callback)](bcos::Error::UniquePtr error,
+            [this, self, lastT, messages, callback = std::move(callback)](
+                bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
                 // update batch
                 DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DAGExecute:\t <-- Receive from executor\t"
@@ -114,6 +116,11 @@ void ShardingDmcExecutor::handleShardGoOutput(
     // filter DMC messages and return not DMC messages directly
     for (auto& output : outputs)
     {
+        if (output->hasContractTableChanged()) [[unlikely]]
+        {
+            m_hasContractTableChanged = true;
+        }
+
         if (output->type() == protocol::ExecutionMessage::FINISHED ||
             output->type() == protocol::ExecutionMessage::REVERT) [[likely]]
         {
@@ -167,8 +174,7 @@ void ShardingDmcExecutor::executorExecuteTransactions(std::string contractAddres
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
 {
-    m_executor->executeTransactions(
-        std::move(contractAddress), std::move(inputs), std::move(callback));
+    m_executor->executeTransactions(std::move(contractAddress), inputs, std::move(callback));
 }
 
 
@@ -180,31 +186,59 @@ void ShardingDmcExecutor::preExecute()
     {
         return;
     }
-    DMC_LOG(DEBUG) << LOG_BADGE("Sharding") << "send preExecute message" << LOG_KV("name", m_name)
-                   << LOG_KV("contract", m_contractAddress) << LOG_KV("txNum", message->size())
+    DMC_LOG(DEBUG) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding") << "send preExecute message"
+                   << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
+                   << LOG_KV("txNum", message->size())
                    << LOG_KV("blockNumber", m_block->blockHeader()->number())
                    << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
 
-
-    auto self = shared_from_this();
+    std::shared_ptr<std::promise<bcos::Error::UniquePtr>> preExePromise =
+        std::make_shared<std::promise<bcos::Error::UniquePtr>>();
     m_executor->preExecuteTransactions(m_schedulerTermId, m_block->blockHeaderConst(),
-        m_contractAddress, *message,
-        [this, &message, preExecuteGuard, self](bcos::Error::UniquePtr error) {
-            if (error)
-            {
-                m_preparedMessages = std::move(message);  // prepare failed, move back
-                DMC_LOG(DEBUG) << LOG_BADGE("Sharding")
-                               << "send preExecute message error:" << error->errorMessage()
-                               << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
-                               << LOG_KV("blockNumber", m_block->blockHeader()->number())
-                               << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
-            }
-            else
-            {
-                DMC_LOG(DEBUG) << LOG_BADGE("Sharding") << "send preExecute message success "
-                               << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
-                               << LOG_KV("blockNumber", m_block->blockHeader()->number())
-                               << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
-            }
+        m_contractAddress, *message, [preExePromise](bcos::Error::UniquePtr error) {
+            preExePromise->set_value(std::move(error));
         });
+
+    auto future = preExePromise->get_future();
+    auto status = future.wait_for(std::chrono::seconds(30));
+    if (status != std::future_status::ready)
+    {
+        std::string reason;
+        switch (status)
+        {
+        case std::future_status::deferred:
+            reason = "deferred\n";
+            break;
+        case std::future_status::timeout:
+            reason = "timeout\n";
+            break;
+        case std::future_status::ready:
+            reason = "ready!\n";
+            break;
+        }
+        DMC_LOG(ERROR) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding")
+                       << "send preExecute message error:" << LOG_KV("reason", reason)
+                       << LOG_KV("contract", m_contractAddress)
+                       << LOG_KV("blockNumber", m_block->blockHeader()->number())
+                       << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
+        return;
+    }
+
+    auto error = future.get();
+    if (error)
+    {
+        DMC_LOG(ERROR) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding")
+                       << "send preExecute message error:" << error->errorMessage()
+                       << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
+                       << LOG_KV("blockNumber", m_block->blockHeader()->number())
+                       << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
+    }
+    else
+    {
+        DMC_LOG(DEBUG) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding")
+                       << "send preExecute message success " << LOG_KV("name", m_name)
+                       << LOG_KV("contract", m_contractAddress)
+                       << LOG_KV("blockNumber", m_block->blockHeader()->number())
+                       << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
+    }
 }

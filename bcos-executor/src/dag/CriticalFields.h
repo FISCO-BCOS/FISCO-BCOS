@@ -64,7 +64,7 @@ public:
     using CriticalField = std::vector<std::vector<uint8_t>>;
     using CriticalFieldPtr = std::shared_ptr<CriticalField>;
 
-    CriticalFields(size_t _size) : m_criticals(std::vector<CriticalFieldPtr>(_size)) {}
+    CriticalFields(size_t _size) : m_criticals(std::vector<CriticalFieldPtr>(_size, nullptr)) {}
     virtual ~CriticalFields() {}
 
     size_t size() override { return m_criticals.size(); }
@@ -77,8 +77,8 @@ public:
         OnEmptyConflictHandler const& _onEmptyConflict, OnAllConflictHandler const& _onAllConflict,
         bool clearDepIfAllConflict = false) override
     {
-        auto dependencies = std::unordered_map<std::vector<uint8_t>, std::vector<size_t>,
-            boost::hash<std::vector<uint8_t>>>();
+        auto dependencies =
+            std::unordered_map<std::vector<uint8_t>, ID, boost::hash<std::vector<uint8_t>>>();
 
         for (ID id = 0; id < m_criticals.size(); ++id)
         {
@@ -102,12 +102,13 @@ public:
                 std::set<ID> pIds;
                 for (auto const& c : *criticals)
                 {
-                    auto& ids = dependencies[c];
-                    for (auto pId : ids)
+                    auto [it, success] = dependencies.try_emplace(c, id);
+                    if (!success)
                     {
+                        auto pId = it->second;
                         pIds.insert(pId);
+                        it->second = id;
                     }
-                    ids.push_back(id);
                 }
 
                 if (pIds.empty())

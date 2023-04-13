@@ -91,8 +91,6 @@ public:
         f_onNeedSwitchEvent = std::move(_onNeedSwitchEvent);
     }
 
-    void reset();
-
 private:
     void triggerSwitch();
 

@@ -12,6 +12,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <array>
 
 namespace bcos
 {
@@ -69,6 +70,8 @@ public:
         // allow outgoing msg exceed max permit size
         bool allowExceedMaxPermitSize = false;
 
+        bool enableConnectDebugInfo = false;
+
         // stat reporter interval, unit: ms
         int32_t statInterval = 60000;
 
@@ -102,7 +105,8 @@ public:
         int32_t p2pBasicMsgQPS = -1;
         std::set<uint16_t> p2pBasicMsgTypes;
         int32_t p2pModuleMsgQPS = -1;
-        std::unordered_map<uint16_t, int32_t> moduleMsg2QPS;
+        int32_t moduleMsg2QPSSize = 0;
+        std::array<int32_t, std::numeric_limits<uint16_t>::max()> moduleMsg2QPS{};
 
         //-------------- incoming qps ratelimit end-----------------------
 
@@ -139,7 +143,7 @@ public:
                 return true;
             }
 
-            if (!moduleMsg2QPS.empty())
+            if (moduleMsg2QPSSize > 0)
             {
                 return true;
             }
@@ -152,13 +156,12 @@ public:
 
         bool enableInP2pModuleMsgLimit(uint16_t _moduleID) const
         {
-            if (p2pModuleMsgQPS <= 0 && moduleMsg2QPS.empty())
+            if ((p2pModuleMsgQPS <= 0) && (moduleMsg2QPSSize <= 0))
             {
                 return false;
             }
 
-            // TODO: should optimized set lookup ??
-            return p2pModuleMsgQPS > 0 || moduleMsg2QPS.contains(_moduleID);
+            return p2pModuleMsgQPS > 0 || (moduleMsg2QPS.at(_moduleID) != 0);
         }
     };
 
@@ -192,7 +195,7 @@ public:
     // loads sm ca configuration items from the configuration file
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
     // loads ratelimit config
-    void initRateLimitConfig(const boost::property_tree::ptree& _pt);
+    void initFlowControlConfig(const boost::property_tree::ptree& _pt);
     // loads redis config
     void initRedisConfig(const boost::property_tree::ptree& _pt);
     // loads peer blacklist config
@@ -295,7 +298,7 @@ private:
     // p2p network listen Port
     uint16_t m_listenPort;
     // threadPool size
-    uint32_t m_threadPoolSize{16};
+    uint32_t m_threadPoolSize{8};
     // p2p connected nodes host list
     std::set<NodeIPEndpoint> m_connectedNodes;
     // peer black list

@@ -135,7 +135,10 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     {
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "handleBlockQueue exception"
                              << boost::diagnostic_information(e);
-        blocksLock.unlock();
+        if (blocksLock.owns_lock())
+        {
+            blocksLock.unlock();
+        }
         whenException(e);
     }
 }
@@ -144,7 +147,7 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
 void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)> _callback)
 {
-    m_worker.enqueue(
+    m_exeWorker.enqueue(
         [this, block = std::move(block), verify, callback = std::move(_callback)]() mutable {
             __itt_frame_begin_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
             executeBlockInternal(std::move(block), verify,
@@ -384,7 +387,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
                 SCHEDULER_LOG(INFO)
                     << BLOCK_NUMBER(header->number()) << LOG_BADGE("BlockTrace")
                     << "ExecuteBlock success" << LOG_KV("hash", header->hash().abridged())
-                    << LOG_KV("state root", header->stateRoot().hex())
+                    << LOG_KV("stateRoot", header->stateRoot().hex())
                     << LOG_KV("receiptRoot", header->receiptsRoot().hex())
                     << LOG_KV("txsRoot", header->txsRoot().abridged())
                     << LOG_KV("gasUsed", header->gasUsed())
@@ -461,10 +464,11 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
         if (!commitLock->owns_lock())
         {
-            std::string message = (boost::format("commitBlock: Another block is committing! Block "
-                                                 "number: %ld, hash: %s") %
-                                   requestBlockNumber % header->hash().abridged())
-                                      .str();
+            std::string message =
+                (boost::format("commitBlock: Another block is committing! Block to commit "
+                               "number: %ld, hash: %s") %
+                    requestBlockNumber % header->hash().abridged())
+                    .str();
 
 
             SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock error, "
@@ -522,11 +526,12 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
             if (error)
             {
+                bcos::protocol::BlockNumber currentNumber = -1;
                 SCHEDULER_LOG(ERROR) << "CommitBlock error, " << error->errorMessage();
                 {
                     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
                     // refresh block cache
-                    bcos::protocol::BlockNumber currentNumber = getBlockNumberFromStorage();
+                    currentNumber = getBlockNumberFromStorage();
                     // note that genesis sysBlock is blockNumber 0, we need to ignore it
                     while (!m_blocks->empty() && currentNumber >= m_blocks->front()->number() &&
                            currentNumber != 0)
@@ -536,7 +541,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                         m_blocks->pop_front();
                     }
                 }
-                fetchConfig();
+                fetchConfig(currentNumber);
                 commitLock->unlock();
                 callback(BCOS_ERROR_UNIQUE_PTR(
                              error->errorCode(), "CommitBlock error: " + error->errorMessage()),
@@ -591,7 +596,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
                 if (blockExecutive->isSysBlock())
                 {
-                    removeAllPreparedBlock();  // must clear prepared cacche
+                    removeAllPreparedBlock();  // must clear prepared cache
                 }
 
                 SCHEDULER_LOG(INFO)
@@ -700,34 +705,6 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
         SCHEDULER_LOG(DEBUG) << "Call success";
         callback(nullptr, std::move(receipt));
     });
-}
-
-void SchedulerImpl::registerExecutor(std::string name,
-    bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-    std::function<void(Error::Ptr&&)> callback)
-{
-    // TODO: to be removed, it should not be called
-    try
-    {
-        SCHEDULER_LOG(INFO) << "registerExecutor request: " << LOG_KV("name", name);
-        m_executorManager->addExecutor(name, executor);
-    }
-    catch (std::exception& e)
-    {
-        SCHEDULER_LOG(ERROR) << "registerExecutor error: " << boost::diagnostic_information(e);
-        callback(BCOS_ERROR_WITH_PREV_PTR(-1, "addExecutor error", e));
-        return;
-    }
-
-    SCHEDULER_LOG(INFO) << "registerExecutor success" << LOG_KV("name", name);
-    callback(nullptr);
-}
-
-void SchedulerImpl::unregisterExecutor(
-    const std::string& name, std::function<void(Error::Ptr&&)> callback)
-{
-    (void)name;
-    (void)callback;
 }
 
 void SchedulerImpl::reset(std::function<void(Error::Ptr&&)> callback)
@@ -873,7 +850,7 @@ void SchedulerImpl::preExecuteBlock(
         // 0,
         //     m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool,
         //     m_gasLimit, verify);
-        fetchConfig();
+        fetchConfig(blockNumber);
         // Note: must build blockExecutive before enqueue() for executeBlock use the same
         // blockExecutive
         blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
@@ -883,11 +860,23 @@ void SchedulerImpl::preExecuteBlock(
 
         setPreparedBlock(blockNumber, timestamp, blockExecutive);
 
-        m_worker.enqueue([this, block, blockExecutive, callback = std::move(callback)]() {
+        m_preExeWorker.enqueue([this, blockNumber, timestamp, block, blockExecutive,
+                                   callback = std::move(callback)]() {
             try
             {
                 if (!m_isRunning)
                 {
+                    return;
+                }
+
+                auto currentBlockNumber = getCurrentBlockNumber();
+                if (blockNumber <= currentBlockNumber)
+                {
+                    SCHEDULER_LOG(DEBUG)
+                        << "preExeBlock: block has executed. " << LOG_KV("needNumber", blockNumber)
+                        << LOG_KV("currentNumber", currentBlockNumber)
+                        << LOG_KV("timestamp", timestamp);
+                    callback(nullptr);
                     return;
                 }
 
@@ -1091,20 +1080,6 @@ void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
     }
     SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
                         << LOG_KV("requestBlockNumber", _number);
-    if (_number == -1)
-    {
-        std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> numberPromise;
-        m_ledger->asyncGetBlockNumber(
-            [&numberPromise](Error::Ptr _error, protocol::BlockNumber _number) {
-                numberPromise.set_value(std::make_tuple(std::move(_error), _number));
-            });
-        Error::Ptr error;
-        std::tie(error, _number) = numberPromise.get_future().get();
-        if (error)
-        {
-            return;
-        }
-    }
 
     {
         std::promise<std::tuple<Error::Ptr, std::string>> p;
@@ -1171,7 +1146,7 @@ void SchedulerImpl::tryExecuteBlock(
 {
     return;  // TODO: Fix blockHash bug here
 
-    m_worker.enqueue([this, number, &parentHash]() {
+    m_exeWorker.enqueue([this, number, &parentHash]() {
         if (!m_isRunning)
         {
             return;
