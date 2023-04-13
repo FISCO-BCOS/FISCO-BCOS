@@ -625,6 +625,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
     m_maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 3);
     m_maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", 3);
+    m_enableDBStatistics = _pt.get<bool>("storage.enable_statistics", false);
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
