@@ -175,9 +175,9 @@ void VRFBasedrPBFTEngine::resetConfig()
 {
     PBFTEngine::resetConfig();
     // Reach consensus on new blocks, update m_shouldRotateSealers to false
-    if (true == m_shouldRotateSealers.load())
+    if (true == shouldRotateSealers())
     {
-        m_shouldRotateSealers.store(false);
+        setShouldRotateSealers(false);
     }
     // update m_f
     m_f = (m_workingSealersNum - 1) / 3;
@@ -203,7 +203,7 @@ void VRFBasedrPBFTEngine::resetConfig()
     }
     if (notifyRotateFlag)
     {
-        m_shouldRotateSealers.store(true);
+        setShouldRotateSealers(true);
         VRFRPBFTEngine_LOG(INFO) << LOG_DESC(
             "resetConfig: the previous leader forged an illegal transaction-rotating, still roate "
             "working sealers in this epoch");
@@ -214,17 +214,17 @@ void VRFBasedrPBFTEngine::resetConfig()
     auto maxWorkingSealerNum = std::min(m_epochSize.load(), m_sealersNum.load());
     if (m_workingSealersNum.load() < maxWorkingSealerNum)
     {
-        m_shouldRotateSealers.store(true);
+        setShouldRotateSealers(true);
     }
     // After the last batch of workingsealers agreed on m_rotatingInterval blocks,
     // set m_shouldRotateSealers to true to notify VRFBasedrPBFTSealer to update workingSealer
     if (epochUpdated ||
         (0 == (m_blockChain->number() - m_rotatingIntervalEnableNumber) % m_rotatingInterval))
     {
-        m_shouldRotateSealers.store(true);
+        setShouldRotateSealers(true);
     }
     VRFRPBFTEngine_LOG(DEBUG) << LOG_DESC("resetConfig") << LOG_KV("blkNum", m_blockChain->number())
-                              << LOG_KV("shouldRotateSealers", m_shouldRotateSealers)
+                              << LOG_KV("shouldRotateSealers", shouldRotateSealers())
                               << LOG_KV("workingSealersNum", m_workingSealersNum)
                               << LOG_KV("epochBlockNum", m_rotatingInterval)
                               << LOG_KV("configuredEpochSealers", m_epochSize);
@@ -237,7 +237,7 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
 {
     // Note: if the block contains rotatingTx when m_shouldRotateSealers is false
     //       the rotatingTx will be reverted by the ordinary node when executing
-    if (!m_shouldRotateSealers.load())
+    if (!shouldRotateSealers())
     {
         return;
     }
