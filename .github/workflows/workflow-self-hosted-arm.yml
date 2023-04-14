@@ -34,7 +34,8 @@ jobs:
       - name: Prepare centos tools
         run: |
           yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel java-1.8.0-openjdk-devel.aarch64
-          yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake
+          yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake nodejs npm
+          sudo npm install -g newman
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28
@@ -69,5 +70,7 @@ jobs:
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+      - name: Integration test - RPCAPI Test
+        run: cd tools && bash .ci/rpc_check.sh
       - name: Integration test - Pro
         run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}

@@ -82,6 +82,8 @@ check_rpctest_result()
 
 open_disablessl
 start_node
-rpc_apiTest
+if [ "$(uname)" == "Darwin" ];then
+      rpc_apiTest
+fi
 check_rpctest_result
 stop_node
