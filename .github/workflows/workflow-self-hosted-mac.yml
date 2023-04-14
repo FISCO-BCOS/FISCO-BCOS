@@ -34,12 +34,18 @@ jobs:
       - uses: actions/checkout@v3
         with:
           clean: false
+
       - name: Set up JDK 1.8
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: 8
           java-package: jdk
+
+      - name: Set up Node.js 16.x
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16.x'
 
       - name: Reuse build cache
         run: |
@@ -74,6 +80,9 @@ jobs:
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+
+      - name: Integration test - RPCAPI Test
+        run: cd tools && bash .ci/rpc_check.sh
 
       - name: Integration test - Pro
         run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
