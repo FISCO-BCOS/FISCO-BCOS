@@ -102,8 +102,8 @@ public:
     // get receipts size
     uint64_t receiptsSize() const override { return m_inner->receipts.size(); }
 
-    void setNonceList(RANGES::any_view<bcos::u256> nonces) override;
-    RANGES::any_view<bcos::u256> nonceList() const override;
+    void setNonceList(RANGES::any_view<std::string> nonces) override;
+    RANGES::any_view<std::string> nonceList() const override;
 
     const bcostars::Block& inner() const { return *m_inner; }
     void setInner(bcostars::Block inner) { *m_inner = std::move(inner); }

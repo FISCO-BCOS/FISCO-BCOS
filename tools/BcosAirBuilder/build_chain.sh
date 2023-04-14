@@ -23,12 +23,14 @@ cert_conf="${output_dir}/cert.cnf"
 days=36500
 rsa_key_length=2048
 sm_mode='false'
+enable_hsm='false'
 macOS=""
 x86_64_arch="true"
 sm2_params="sm_sm2.param"
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
 nodeid_list=""
+nodeid_list_from_path=""
 file_dir="./"
 p2p_connected_conf_name="nodes.json"
 command="deploy"
@@ -36,11 +38,11 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.2.0"
+default_version="v3.3.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
-auth_mode="false"
+auth_mode="true"
 monitor_mode="false"
 auth_admin_account=
 binary_path=""
@@ -49,7 +51,7 @@ download_lightnode_binary="false"
 mtail_binary_path=""
 wasm_mode="false"
 serial_mode="true"
-nodeids_dir=""
+node_key_dir=""
 # if the config.genesis path has been set, don't generate genesis file, use the config instead
 genesis_conf_path=""
 lightnode_flag="false"
@@ -57,6 +59,10 @@ download_timeout=240
 make_tar=
 default_group="group0"
 default_chainid="chain0"
+
+# for modifying multipy ca node
+modify_node_path=""
+multi_ca_path=""
 
 LOG_WARN() {
     local content=${1}
@@ -114,6 +120,12 @@ check_name() {
         LOG_FATAL "$name name [$value] invalid, it should match regex: ^[a-zA-Z0-9._-]+\$"
     }
 }
+
+generate_random_num(){
+    num=`${OPENSSL_CMD} rand -hex 4`
+    echo $num
+}
+randNum=$(generate_random_num)
 
 generate_sm_sm2_param() {
     local output=$1
@@ -300,7 +312,7 @@ gen_chain_cert() {
     dir_must_exists "$chaindir"
 
     ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt  2>/dev/null
+    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt  2>/dev/null
     if [ ! -f "${chaindir}/cert.cnf" ];then
         mv "${cert_conf}" "${chaindir}"
     fi
@@ -324,7 +336,7 @@ gen_rsa_node_cert() {
     dir_must_exists "${ndpath}"
 
     ${OPENSSL_CMD} genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
-    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
+    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
     ${OPENSSL_CMD} x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
         -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req -extfile "$capath"/cert.cnf 2>/dev/null
 
@@ -413,7 +425,7 @@ download_monitor_bin()
     local mtail_postfix=""
     if [[ -n "${macOS}" ]];then
         if [[ "${platform}" == "arm64" ]];then
-            mtail_postfix ="Darwin_arm64"
+            mtail_postfix="Darwin_arm64"
         elif [[ "${platform}" == "x86_64" ]];then
             mtail_postfix="Darwin_x86_64"
         else
@@ -422,7 +434,7 @@ download_monitor_bin()
         fi
     else
         if [[ "${platform}" == "aarch64" ]];then
-            mtail_postfix ="Linux_arm64"
+            mtail_postfix="Linux_arm64"
         elif [[ "${platform}" == "x86_64" ]];then
             mtail_postfix="Linux_x86_64"
         else
@@ -464,7 +476,7 @@ gen_sm_chain_cert() {
     dir_must_exists "$chaindir"
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$chaindir/sm_ca.key" 2>/dev/null
-    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt" 2>/dev/null
+    "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS-${randNum}/O=FISCO-BCOS-${randNum}/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt" 2>/dev/null
     if [ ! -f "${chaindir}/${sm_cert_conf}" ];then
         cp "${sm_cert_conf}" "${chaindir}"
     fi
@@ -486,7 +498,7 @@ gen_sm_node_cert_with_ext() {
     file_must_not_exists "$ndpath/sm_${type}.key"
 
     "$OPENSSL_CMD" genpkey -paramfile "$capath/${sm2_params}" -out "$certpath/sm_${type}.key" 2> /dev/null
-    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr" 2> /dev/null
+    "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS-${randNum}/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr" 2> /dev/null
 
     "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions" 2> /dev/null
 
@@ -522,16 +534,16 @@ Usage:
     -I <chain id>                       [Optional] set the chain id, default: chain0
     -v <FISCO-BCOS binary version>      [Optional] Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -L <fisco bcos lightnode exec>      [Optional] fisco bcos lightnode executable，input "download_binary" to download lightnode binary or assign correct lightnode binary path
+    -L <fisco bcos lightnode exec>      [Optional] fisco bcos lightnode executable, input "download_binary" to download lightnode binary or assign correct lightnode binary path
     -e <fisco-bcos exec>                [Optional] fisco-bcos binary exec
     -t <mtail exec>                     [Optional] mtail binary exec
     -o <output dir>                     [Optional] output directory, default ./nodes
     -p <Start port>                     [Optional] Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
     -s <SM model>                       [Optional] SM SSL connection or not, default is false
+    -H <HSM model>                      [Optional] Whether to use HSM(Hardware secure module), default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -D, build with docker
-    -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -R <Serial_mode>                    [Optional] Whether to use serial execute,default is true
@@ -540,6 +552,9 @@ Usage:
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
     -z <Generate tar packet>            [Optional] Pack the data on the chain to generate tar packet
+    -n <node key path>                  [Optional] set the path of the node key file to load nodeid
+    -N <node path>                      [Optional] set the path of the node modified to multi ca mode
+    -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -h Help
 
 deploy nodes e.g
@@ -550,12 +565,17 @@ expand node e.g
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m -i 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
+    bash $0 -C expand_lightnode -c config -d config/ca -o nodes/lightnode1
+    bash $0 -C expand_lightnode -c config -d config/ca -o nodes/lightnode1 -L ./fisco-bcos-lightnode
+modify node e.g
+    bash $0 -C modify -N ./node0 -u ./ca/ca.crt
+    bash $0 -C modify -N ./node0 -u ./ca/ca.crt -s
 EOF
     exit 0
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshmn:AR:a:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -590,6 +610,7 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
+        H) enable_hsm="true";;
         g) default_group="${OPTARG}"
             check_name "group" "${default_group}"
             ;;
@@ -602,8 +623,8 @@ parse_params() {
            monitor_mode="true"
            ;;
         n)
-           nodeids_dir="${OPTARG}"
-           dir_must_exists "${nodeids_dir}"
+           node_key_dir="${OPTARG}"
+           dir_must_exists "${node_key_dir}"
            ;;
         i)
            mtail_ip_param="${OPTARG}"
@@ -615,15 +636,25 @@ parse_params() {
                 LOG_FATAL "Not support docker mode for macOS now"
            fi
         ;;
-        A) auth_mode="true" ;;
         w) wasm_mode="true";;
         R) serial_mode="${OPTARG}";;
         a)
-          auth_mode="true"
           auth_admin_account="${OPTARG}"
         ;;
         v) compatibility_version="${OPTARG}";;
         z) make_tar="true";;
+        N)
+            modify_node_path=$OPTARG
+            dir_must_exists "${modify_node_path}"
+            ;; 
+        u)
+            multi_ca_path="$OPTARG"
+            local last_char=${multi_ca_path: -1}
+            if [ ${last_char} == "/" ]; then
+                multi_ca_path=${OPTARG%/*}
+            fi
+            file_must_exists "${multi_ca_path}"
+            ;;
         h) help ;;
         *) help ;;
         esac
@@ -632,8 +663,8 @@ parse_params() {
 
 print_result() {
     echo "=============================================================="
-    LOG_INFO "GroupID               : ${default_group}"
-    LOG_INFO "ChainID               : ${default_chainid}"
+    LOG_INFO "GroupID              : ${default_group}"
+    LOG_INFO "ChainID              : ${default_chainid}"
     if [ -z "${docker_mode}" ];then
         LOG_INFO "${binary_name} path      : ${binary_path}"
     else
@@ -642,11 +673,12 @@ print_result() {
     fi
     LOG_INFO "Auth mode            : ${auth_mode}"
     if ${auth_mode} ; then
-        LOG_INFO "Auth account     : ${auth_admin_account}"
+        LOG_INFO "Admin account        : ${auth_admin_account}"
     fi
     LOG_INFO "Start port           : ${port_start[*]}"
     LOG_INFO "Server IP            : ${ip_array[*]}"
     LOG_INFO "SM model             : ${sm_mode}"
+    LOG_INFO "enable HSM           : ${enable_hsm}"
     LOG_INFO "Output dir           : ${output_dir}"
     LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -1193,6 +1225,10 @@ generate_config_ini() {
     sm_ssl=false
     nodes_path=${file_dir}
     nodes_file=${p2p_connected_conf_name}
+    ; enable rip protocol, default: true
+    ; enable_rip_protocol=false
+    ; enable compression for p2p message, default: true
+    ; enable_compression=false
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 512
@@ -1210,6 +1246,8 @@ generate_config_ini() {
     sm_ssl=false
     ; ssl connection switch, if disable the ssl connection, default: false
     ${disable_ssl_content}
+    ; return input params in sendTransaction() return, default: true
+    ; return_input_params=false
 
 [cert]
     ; directory the certificates located in
@@ -1220,6 +1258,9 @@ generate_config_ini() {
     node_key=ssl.key
     ; the node certificate file
     node_cert=ssl.crt
+    ; directory the multiple certificates located in
+    multi_ca_path=multiCaPath
+
 EOF
     generate_common_ini "${output}"
 }
@@ -1233,6 +1274,11 @@ generate_common_ini() {
 
 [security]
     private_key_path=conf/node.pem
+    enable_hsm=${enable_hsm}
+    ; path of hsm dynamic library
+    ;hsm_lib_path=
+    ;key_index=
+    ;password=
 
 [storage_security]
     ; enable data disk encryption or not, default is false
@@ -1244,6 +1290,9 @@ generate_common_ini() {
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
+
+[executor]
+    enable_dag=true
 
 [storage]
     data_path=data
@@ -1282,16 +1331,26 @@ generate_common_ini() {
     ;db=0
 
 [flow_control]
-    ; the switch for distributed rate limit
-    ; enable_distributed_ratelimit=false
-
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000
+
+    ; time window for rate limiter, default: 3s
+    ; time_window_sec=3
+
+    ; enable distributed rate limiter, redis required, default: false
+    ; enable_distributed_ratelimit=false
+    ; enable local cache for distributed rate limiter, work with enable_distributed_ratelimit, default: true
+    ; enable_distributed_ratelimit_cache=true
+    ; distributed rate limiter local cache percent, work with enable_distributed_ratelimit_cache, default: 20
+    ; distributed_ratelimit_cache_percent=20
 
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ;
     ; modules_without_bw_limit=raft,pbft
+
+    ; allow the msg exceed max permit pass
+    ; outgoing_allow_exceed_max_permit=false
 
     ; restrict the outgoing bandwidth of the node
     ; both integer and decimal is support, unit: Mb
@@ -1316,6 +1375,17 @@ generate_common_ini() {
     ;   group_outgoing_bw_limit_group1=2
     ;   group_outgoing_bw_limit_group2=2
 
+    ; should not change incoming_p2p_basic_msg_type_list if you known what you would to do
+    ; incoming_p2p_basic_msg_type_list=
+    ; the qps limit for p2p basic msg type, the msg type has been config by incoming_p2p_basic_msg_type_list, default: -1
+    ; incoming_p2p_basic_msg_type_qps_limit=-1
+    ; default qps limit for all module message, default: -1
+    ; incoming_module_msg_type_qps_limit=-1
+    ; specify module to limit qps, incoming_module_qps_limit_moduleID=n
+    ;       incoming_module_qps_limit_xxxx=1000
+    ;       incoming_module_qps_limit_xxxx=2000
+    ;       incoming_module_qps_limit_xxxx=3000
+
 [log]
     enable=true
     ; print the log to std::cout or not, default print to the log files
@@ -1327,6 +1397,7 @@ generate_common_ini() {
     max_log_file_size=1024
     ; rotate the log every hour
     ;enable_rotate_by_hour=true
+    enable_rate_collector=false
 EOF
 }
 
@@ -1382,6 +1453,9 @@ generate_sm_config_ini() {
     sm_ennode_key=sm_enssl.key
     ; the node certificate file
     sm_ennode_cert=sm_enssl.crt
+    ; directory the multiple certificates located in
+    multi_ca_path=multiCaPath
+
 EOF
     generate_common_ini "${output}"
 }
@@ -1439,15 +1513,21 @@ generate_secp256k1_node_account() {
     if [ ! -d "${output_path}" ]; then
         mkdir -p ${output_path}
     fi
-    if [ ! -f /tmp/secp256k1.param ]; then
-        ${OPENSSL_CMD} ecparam -out /tmp/secp256k1.param -name secp256k1
+
+    # generate nodeids from file
+    if [ ! -z "${node_key_dir}" ]; then
+        generate_nodeids_from_path "${node_key_dir}" "pem" "${node_index}" "${output_path}"
+    else
+        if [ ! -f /tmp/secp256k1.param ]; then
+            ${OPENSSL_CMD} ecparam -out /tmp/secp256k1.param -name secp256k1
+        fi
+        ${OPENSSL_CMD} genpkey -paramfile /tmp/secp256k1.param -out ${output_path}/node.pem 2>/dev/null
+        # generate nodeid
+        ${OPENSSL_CMD} ec -text -noout -in "${output_path}/node.pem" 2>/dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$output_path"/node.nodeid
+        local node_id=$(cat "${output_path}/node.nodeid")
+        nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}: 1
+        "
     fi
-    ${OPENSSL_CMD} genpkey -paramfile /tmp/secp256k1.param -out ${output_path}/node.pem 2>/dev/null
-    # generate nodeid
-    ${OPENSSL_CMD} ec -text -noout -in "${output_path}/node.pem" 2>/dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$output_path"/node.nodeid
-    local node_id=$(cat "${output_path}/node.nodeid")
-    nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}: 1
-    "
 }
 
 generate_sm_node_account() {
@@ -1456,14 +1536,23 @@ generate_sm_node_account() {
     if [ ! -d "${output_path}" ]; then
         mkdir -p ${output_path}
     fi
-    if [ ! -f ${sm2_params} ]; then
-        generate_sm_sm2_param ${sm2_params}
+
+    if [ "${enable_hsm}" == "true" ] && [ -z "${node_key_dir}" ]; then
+        LOG_FATAL "Must input path of node key in HSM mode, eg: bash build_chain.sh -H -n node_key_dir"
     fi
-    ${OPENSSL_CMD} genpkey -paramfile ${sm2_params} -out ${output_path}/node.pem 2>/dev/null
-    $OPENSSL_CMD ec -in "$output_path/node.pem" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$output_path/node.nodeid"
-    local node_id=$(cat "${output_path}/node.nodeid")
-    nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}:1
-    "
+
+    if [ ! -z "${node_key_dir}" ]; then
+        generate_nodeids_from_path "${node_key_dir}" "pem" "${node_index}" "${output_path}"
+    else
+        if [ ! -f ${sm2_params} ]; then
+            generate_sm_sm2_param ${sm2_params}
+        fi
+        ${OPENSSL_CMD} genpkey -paramfile ${sm2_params} -out ${output_path}/node.pem 2>/dev/null
+        $OPENSSL_CMD ec -in "$output_path/node.pem" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$output_path/node.nodeid"
+        local node_id=$(cat "${output_path}/node.nodeid")
+        nodeid_list=$"${nodeid_list}node.${node_index}=${node_id}:1
+        "
+    fi
 }
 
 generate_genesis_config() {
@@ -1493,8 +1582,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.2.0
-    compatibility_version=3.2.0
+    ; the default is 3.3.0
+    compatibility_version=3.3.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
@@ -1585,6 +1674,9 @@ generate_node_account()
     local account_dir="${2}"
     local count="${3}"
     if [[ "${sm_mode}" == "false" ]]; then
+        if [ "${enable_hsm}" == "true" ]; then
+            LOG_FATAL "HSM is only supported in sm mode"
+        fi
         generate_secp256k1_node_account "${account_dir}" "${count}"
     else
         generate_sm_node_account "${account_dir}" "${count}"
@@ -1670,6 +1762,57 @@ expand_node()
     LOG_INFO "sdk dir         : ${sdk_path}"
     LOG_INFO "SM Model         : ${sm_mode}"
 
+    LOG_INFO "output dir         : ${output_dir}"
+    LOG_INFO "All completed. Files in ${output_dir}"
+}
+
+expand_lighenode()
+{
+    local sm_mode="${1}"
+    local ca_dir="${2}"
+    local lightnode_dir="${3}"
+    local config_path="${4}"
+    local mtail_ip_param="${5}"
+    local prometheus_dir="${6}"
+    if [ -d "${lightnode_dir}" ];then
+        LOG_FATAL "expand node failed for ${lightnode_dir} already exists!"
+    fi
+    file_must_exists "${config_path}/config.ini"
+    file_must_exists "${config_path}/config.genesis"
+    file_must_exists "${config_path}/nodes.json"
+    # check binary,parent_path is ./nodes
+    parent_path=$(dirname ${lightnode_dir})
+    mkdir -p "${lightnode_dir}"
+    if [ "${lightnode_flag}" == "true" ] && [ -f  "${lightnode_binary_path}" ]; then
+        echo "Checking ${lightnode_flag}, lightnode_binary_path is ${lightnode_binary_path}, lightnode_dir is ${lightnode_dir}"
+        chmod u+x ${lightnode_binary_path}
+        cp "${lightnode_binary_path}" ${lightnode_dir}/
+    elif [ "${lightnode_flag}" == "false" ]; then
+        download_lightnode_bin
+        cp "${lightnode_binary_path}" ${lightnode_dir}/
+    fi
+
+    LOG_INFO "generate_lightnode_scripts ..."
+    generate_lightnode_scripts "${lightnode_dir}" "fisco-bcos-lightnode"
+    LOG_INFO "generate_lightnode_scripts success..."
+
+    # generate cert
+    LOG_INFO "generate_lightnode_cert ..."
+    generate_node_cert "${sm_mode}" "${ca_dir}" "${lightnode_dir}/conf"
+    LOG_INFO "generate_lightnode_cert success..."
+    # generate node account
+    LOG_INFO "generate_lightnode_account ..."
+    generate_node_account "${sm_mode}" "${lightnode_dir}/conf" "${i}"
+    LOG_INFO "generate_lightnode_account success..."
+
+    LOG_INFO "copy configurations ..."
+    cp "${config_path}/config.ini" "${lightnode_dir}"
+    cp "${config_path}/config.genesis" "${lightnode_dir}"
+    cp "${config_path}/nodes.json" "${lightnode_dir}"
+    LOG_INFO "copy configurations success..."
+    echo "=============================================================="
+
+    LOG_INFO "SM Model         : ${sm_mode}"
     LOG_INFO "output dir         : ${output_dir}"
     LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -1801,7 +1944,12 @@ deploy_nodes()
             local rpc_port=$((rpc_listen_port + node_count))
             generate_config "${sm_mode}" "${node_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
             generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
-            generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list}"
+            if [ ! -z "${node_key_dir}" ]; then
+                # generate nodeids from file
+                generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list_from_path}"
+            else
+                generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list}"
+            fi
             set_value ${ip//./}_count $(($(get_value ${ip//./}_count) + 1))
             ((++count))
         done
@@ -1885,13 +2033,46 @@ generate_template_package()
     generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
 
     LOG_INFO "Building template intstall package"
-    # TODO: auth mode handle
     LOG_INFO "Auth mode            : ${auth_mode}"
     if ${auth_mode} ; then
         LOG_INFO "Auth account     : ${auth_admin_account}"
     fi
     LOG_INFO "SM model             : ${sm_mode}"
+    LOG_INFO "enable HSM           : ${enable_hsm}"
     LOG_INFO "All completed. Files in ${output_dir}"
+}
+
+generate_nodeids_from_path()
+{
+    local node_key_dir="${1}"
+    local file_type="${2}"
+    local file_index="${3}"
+    local output_dir="${4}"
+
+    if [ ! -d "${output_dir}" ]; then
+        mkdir -p "${output_dir}"
+    fi
+
+    local node_key_file_list=$(ls "${node_key_dir}" | tr "\n" " ")
+    local node_key_file_array=(${node_key_file_list})
+
+    if [[ ! -f "${node_key_dir}/${node_key_file_array[${file_index}]}" ]]; then
+        LOG_WARN " node key file not exist, ${node_key_dir}/${node_key_file_array[${file_index}]}"
+        continue
+    fi
+    local nodeid=""
+    if [ "${file_type}" == "pem" ]; then
+        ${OPENSSL_CMD} ec -text -noout -in "${node_key_dir}/${node_key_file_array[${file_index}]}" 2>/dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$node_key_dir"/node.nodeid
+        nodeid=$(cat "${node_key_dir}/node.nodeid")
+        cp -f "${node_key_dir}/${node_key_file_array[${file_index}]}" "${output_dir}/node.pem"
+        rm -f "${node_key_dir}/node.nodeid"
+    elif [ "${file_type}" == "nodeid" ]; then
+        nodeid=$(cat "${nodeid_dir}/${nodeid_file}")
+    else
+        LOG_FATAL "generate_nodeids_from_path function only support pem and nodeid file type, don't support ${file_type} yet"
+    fi
+    nodeid_list_from_path=$"${nodeid_list_from_path}node.${node_index}=${nodeid}: 1
+    "
 }
 
 generate_genesis_config_by_nodeids()
@@ -1899,43 +2080,26 @@ generate_genesis_config_by_nodeids()
     local nodeid_dir="${1}"
     local output_dir="${2}"
 
-    local nodeid_list=""
-    local node_index=0
-
     local nodeid_file_list=$(ls "${nodeid_dir}" | tr "\n" " ")
     local nodeid_file_array=(${nodeid_file_list})
-    # gen node.N=xxxx first
-    for nodeid_file in ${nodeid_file_array[@]}
-    do
-        if [[ ! -f "${nodeid_dir}/${nodeid_file}" ]]; then
-            LOG_WARN " x.nodeid file not exist, ${nodeid_dir}/${nodeid_file}"
-            continue
-        fi
-        local nodeid=$(cat "${nodeid_dir}/${nodeid_file}")
-        nodeid_list=$"${nodeid_list}node.${node_index}=${nodeid}: 1
-        "
 
-        ((node_index += 1))
+    local total_files_sum="${#nodeid_file_array[*]}"
+    for ((local file_index=0; file_index < total_files_sum; ++file_index)); do
+        generate_nodeids_from_path "${nodeid_file_array}" "nodeid" "${file_index}" "${output_dir}"
     done
 
-    if [[ -z "${nodeid_list}" ]]; then
+    if [[ -z "${nodeid_list_from_path}" ]]; then
         LOG_FATAL "generate config.genesis failed, please check if the nodeids directory correct"
     fi
 
-    if [ ! -d "${output_dir}" ]; then
-        mkdir -p "${output_dir}"
-    fi
-
-    generate_genesis_config "${output_dir}/config.genesis" "${nodeid_list}"
+    generate_genesis_config "${output_dir}/config.genesis" "${generate_nodeids_from_path}"
 }
 
 check_auth_account()
 {
-  if ${auth_mode} ; then
-      if [ -z "${auth_admin_account}" ]; then
-        # get account string to auth_admin_account
-        generate_auth_account
-      fi
+  if [ -z "${auth_admin_account}" ]; then
+    # get account string to auth_admin_account
+    generate_auth_account
   fi
 }
 
@@ -1952,7 +2116,32 @@ generate_auth_account()
         curl -#LO "${get_account_link}"
   fi
   auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  LOG_INFO "Admin account: ${auth_admin_account}"
   mv accounts* "${ca_dir}"
+
+  if [ "$?" -ne "0" ]; then
+      LOG_INFO "Admin account generate failed, please check ${account_script}."
+      exit 1
+  fi
+}
+
+modify_node_ca_setting(){
+    dir_must_not_exists "${modify_node_path}/conf/multiCaPath"
+    file_must_exists "${multi_ca_path}"
+    mkdir ${modify_node_path}/conf/multiCaPath 2>/dev/null
+    cp ${multi_ca_path} ${modify_node_path}/conf/multiCaPath/${1}.0 2>/dev/null
+    # sed -i "s/; mul_ca_path=multiCaPath/mul_ca_path=multiCaPath/g" ${modify_node_path}/config.ini
+
+    LOG_INFO "Modify node ca setting success"
+}
+
+modify_multiple_ca_node(){
+    check_and_install_tassl
+    subject_hash=`${OPENSSL_CMD} x509 -hash -noout -in ${multi_ca_path} 2>/dev/null`
+    if [[ ! "${multi_ca_path}" || ! "${modify_node_path}" ]];then
+        LOG_FATAL "multi_ca_path and modify_node_path are required!"
+    fi
+    modify_node_ca_setting "${subject_hash}"
 }
 
 main() {
@@ -1964,6 +2153,9 @@ main() {
     elif [[ "${command}" == "expand" ]]; then
         dir_must_exists "${ca_dir}"
         expand_node "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
+    elif [[ "${command}" == "expand_lightnode" ]]; then
+        dir_must_exists "${ca_dir}"
+        expand_lighenode "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
     elif [[ "${command}" == "generate-template-package"  ]]; then
         local node_name="node0"
         if [[ -n "${genesis_conf_path}" ]]; then
@@ -1971,9 +2163,9 @@ main() {
             # config.genesis is set
             file_must_exists "${genesis_conf_path}"
             generate_template_package "${node_name}" "${binary_path}" "${genesis_conf_path}" "${output_dir}"
-        elif [[ -n "${nodeids_dir}" ]] && [[ -d "${nodeids_dir}" ]]; then
+        elif [[ -n "${node_key_dir}" ]] && [[ -d "${node_key_dir}" ]]; then
             dir_must_not_exists "${output_dir}"
-            generate_genesis_config_by_nodeids "${nodeids_dir}" "${output_dir}/"
+            generate_genesis_config_by_nodeids "${node_key_dir}" "${output_dir}/"
             file_must_exists "${output_dir}/config.genesis"
             generate_template_package "${node_name}" "${binary_path}" "${output_dir}/config.genesis" "${output_dir}"
         else
@@ -1983,6 +2175,8 @@ main() {
             echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis -s"
             echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -n nodeids -s -R"
         fi
+    elif [[ "${command}" == "modify" ]]; then
+        modify_multiple_ca_node
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
     fi

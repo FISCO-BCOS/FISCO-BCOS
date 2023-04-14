@@ -102,8 +102,8 @@ std::string LedgerConfigFetcher::fetchSystemConfig(std::string_view _key)
                           << LOG_KV("errorCode", error->errorCode())
                           << LOG_KV("errorMessage", error->errorMessage()) << LOG_KV("key", _key);
         BOOST_THROW_EXCEPTION(
-            LedgerConfigFetcherException()
-            << errinfo_comment("LedgerConfigFetcher: fetchSystemConfig for " + std::string{_key} + " failed"));
+            LedgerConfigFetcherException() << errinfo_comment(
+                "LedgerConfigFetcher: fetchSystemConfig for " + std::string{_key} + " failed"));
     }
     return std::get<1>(ret);
 }
@@ -122,9 +122,9 @@ ConsensusNodeListPtr LedgerConfigFetcher::fetchNodeListByNodeType(std::string_vi
         TOOL_LOG(WARNING) << LOG_DESC("fetchNodeListByNodeType failed") << LOG_KV("type", _type)
                           << LOG_KV("code", error->errorCode())
                           << LOG_KV("msg", error->errorMessage());
-        BOOST_THROW_EXCEPTION(
-            LedgerConfigFetcherException() << errinfo_comment(
-                "LedgerConfigFetcher: fetchNodeListByNodeType of type " + std::string{_type} + " failed"));
+        BOOST_THROW_EXCEPTION(LedgerConfigFetcherException() << errinfo_comment(
+                                  "LedgerConfigFetcher: fetchNodeListByNodeType of type " +
+                                  std::string{_type} + " failed"));
     }
     return ret.second;
 }
@@ -192,7 +192,7 @@ void LedgerConfigFetcher::fetchCompatibilityVersion()
     {
         m_ledgerConfig->setCompatibilityVersion((uint32_t)(bcos::protocol::DEFAULT_VERSION));
         TOOL_LOG(INFO) << LOG_DESC("fetchCompatibilityVersion: empty version, use " +
-                                   bcos::protocol::V3_1_VERSION_STR + " as default version.");
+                                   bcos::protocol::DEFAULT_VERSION_STR + " as default version.");
         return;
     }
     auto version = toVersionNumber(versionStr);
@@ -201,4 +201,15 @@ void LedgerConfigFetcher::fetchCompatibilityVersion()
                    << LOG_KV("versionNumber", version)
                    << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
                    << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
+}
+
+void LedgerConfigFetcher::fetchAuthCheckStatus()
+{
+    if (versionCompareTo(m_ledgerConfig->compatibilityVersion(), BlockVersion::V3_3_VERSION) < 0)
+    {
+        return;
+    }
+    auto ret = fetchSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS);
+    TOOL_LOG(INFO) << LOG_DESC("fetchAuthCheckStatus success") << LOG_KV("value", ret);
+    m_ledgerConfig->setAuthCheckStatus(boost::lexical_cast<uint32_t>(ret));
 }

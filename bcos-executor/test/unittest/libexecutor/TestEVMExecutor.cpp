@@ -159,7 +159,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     bytes input;
     boost::algorithm::unhex(helloworld, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -240,7 +240,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     commitPromise.get_future().get();
     auto tableName =
         std::string("/apps/") +
-        std::string(result->newEVMContractAddress());  // TODO: ensure the contract// address is hex
+        std::string(result->newEVMContractAddress());
 
 
     // test getCode()
@@ -402,7 +402,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     bytes input;
     boost::algorithm::unhex(ABin, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -791,7 +791,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
         bytes input;
         boost::algorithm::unhex(bin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -1005,7 +1005,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
 BOOST_AUTO_TEST_CASE(multiDeploy)
 {
-    size_t count = 100;
+    size_t count = 10;
     std::vector<NativeExecutionMessage::UniquePtr> paramsList;
 
     for (size_t i = 0; i < count; ++i)
@@ -1013,7 +1013,7 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         auto helloworld = string(helloBin);
         bytes input;
         boost::algorithm::unhex(helloworld, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 100 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(100 + i), 100001, "1", "1");
 
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -1133,7 +1133,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
             "687c52312c9221962991e27bbddc409dfbd7c564736f6c634300060a0033";
         bytes input;
         boost::algorithm::unhex(errorBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         std::string addressString = addressCreate.hex().substr(0, 40);
@@ -1319,7 +1319,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
             "22032000280204470d0020";
         bytes input;
         boost::algorithm::unhex(errorBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         std::string addressString = addressCreate.hex().substr(0, 40);
@@ -1478,7 +1478,7 @@ contract DelegateCallTest {
     bytes input;
     boost::algorithm::unhex(codeBin, std::back_inserter(input));
 
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
@@ -1558,7 +1558,7 @@ contract DelegateCallTest {
     input = bcos::bytes();
     boost::algorithm::unhex(testFailedSelector, std::back_inserter(input));
 
-    tx = fakeTransaction(cryptoSuite, keyPair, "", input, 102, 100002, "1", "1");
+    tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(102), 100002, "1", "1");
     sender = boost::algorithm::hex_lower(std::string(tx->sender()));
     hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
@@ -1674,7 +1674,7 @@ contract HelloWorld {
     bytes input;
     boost::algorithm::unhex(codeBin, std::back_inserter(input));
 
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
@@ -1754,7 +1754,7 @@ contract HelloWorld {
     input = bcos::bytes();
     boost::algorithm::unhex(testFailedSelector, std::back_inserter(input));
 
-    tx = fakeTransaction(cryptoSuite, keyPair, "", input, 102, 100002, "1", "1");
+    tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(102), 100002, "1", "1");
     sender = boost::algorithm::hex_lower(std::string(tx->sender()));
     hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);

@@ -73,34 +73,50 @@ public:
         assert(cryptoSuite);
         smCryptoSuite = std::make_shared<CryptoSuite>(smHashImpl, sm2Sign, nullptr);
         txpool = std::make_shared<MockTxPool>();
-        assert(DEFAULT_PERMISSION_ADDRESS);
     }
 
-    virtual ~PrecompiledFixture() {}
+    virtual ~PrecompiledFixture() = default;
 
     /// must set isWasm
     void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true,
-        protocol::BlockVersion version = BlockVersion::V3_1_VERSION)
+        protocol::BlockVersion version = DEFAULT_VERSION,
+        std::shared_ptr<std::set<std::string, std::less<>>> _ignoreTables = nullptr)
     {
         isWasm = _isWasm;
+        storage = std::make_shared<MockTransactionalStorage>(hashImpl);
         if (_isKeyPage)
         {
-            storage = std::make_shared<MockKeyPageStorage>(hashImpl);
-        }
-        else
-        {
-            storage = std::make_shared<MockTransactionalStorage>(hashImpl);
+            if (_ignoreTables != nullptr)
+            {
+                storage = std::make_shared<MockKeyPageStorage>(
+                    hashImpl, (uint32_t)m_blockVersion, _ignoreTables);
+            }
+            else
+            {
+                storage = std::make_shared<MockKeyPageStorage>(hashImpl);
+            }
         }
         blockFactory = createBlockFactory(cryptoSuite);
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
         header->setNumber(1);
-        ledger = std::make_shared<MockLedger>();
+        ledger = std::make_shared<MockLedger>(storage);
         ledger->setBlockNumber(header->number() - 1);
+        std::promise<bool> p;
+        Entry authEntry;
+        authEntry.setObject(SystemConfigEntry(_isCheckAuth ? "1" : "0", 0));
+        storage->asyncSetRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_AUTH_CHECK_STATUS,
+            std::move(authEntry), [&p](auto&& e) { p.set_value(true); });
+        p.get_future().get();
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-            storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth);
+            storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth,
+            std::string("executor"));
+        if (_ignoreTables != nullptr)
+        {
+            executor->setKeyPageIgnoreTable(_ignoreTables);
+        }
 
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -228,7 +244,7 @@ public:
                 appsTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
             }
 
-            // create /usr table
+            // create /sys table
             {
                 std::promise<std::optional<Table>> promise4;
                 storage->asyncCreateTable(
@@ -239,6 +255,7 @@ public:
                 auto appsTable = promise4.get_future().get();
                 storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
                 std::map<std::string, std::string> newSubMap;
+                newSubMap.insert({"auth", "contract"});
                 tEntry.importFields({executor::FS_TYPE_DIR});
                 newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
                 aclTypeEntry.importFields({"0"});
@@ -255,8 +272,7 @@ public:
         }
     }
 
-    void nextBlock(
-        int64_t blockNumber, protocol::BlockVersion version = protocol::BlockVersion::V3_2_VERSION)
+    void nextBlock(int64_t blockNumber, protocol::BlockVersion version = protocol::DEFAULT_VERSION)
     {
         if (blockNumber < 0) [[unlikely]]
         {
@@ -626,7 +642,8 @@ public:
         protocol::BlockNumber _number, std::string const& path, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("list(string)", path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -664,7 +681,8 @@ public:
     ExecutionMessage::UniquePtr initBfs(protocol::BlockNumber _number, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("initBfs()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -698,6 +716,9 @@ public:
         return result2;
     };
 
+public:
+    CodecWrapper::Ptr codec;
+
 protected:
     crypto::Hash::Ptr hashImpl;
     crypto::Hash::Ptr smHashImpl;
@@ -711,10 +732,9 @@ protected:
     std::shared_ptr<MockLedger> ledger;
     KeyPairInterface::Ptr keyPair;
 
-    CodecWrapper::Ptr codec;
     int64_t gas = MockLedger::TX_GAS_LIMIT;
     bool isWasm = false;
     std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";
-    protocol::BlockVersion m_blockVersion = protocol::BlockVersion::V3_1_VERSION;
+    protocol::BlockVersion m_blockVersion = protocol::DEFAULT_VERSION;
 };
 }  // namespace bcos::test

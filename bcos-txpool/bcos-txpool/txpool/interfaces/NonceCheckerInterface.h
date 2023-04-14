@@ -26,16 +26,14 @@
 
 #define NONCECHECKER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXPOOL") << LOG_BADGE("NonceChecker")
 
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class NonceCheckerInterface
 {
 public:
     using Ptr = std::shared_ptr<NonceCheckerInterface>;
     NonceCheckerInterface() = default;
-    virtual ~NonceCheckerInterface() {}
+    virtual ~NonceCheckerInterface() = default;
 
     virtual bcos::protocol::TransactionStatus checkNonce(
         bcos::protocol::Transaction::ConstPtr _tx, bool _shouldUpdate = false) = 0;
@@ -44,11 +42,9 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::protocol::NonceListPtr const& _nonceList) = 0;
     virtual void batchRemove(bcos::protocol::NonceList const& _nonceList) = 0;
     virtual void batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
-        std::hash<bcos::crypto::HashType>> const& _nonceList) = 0;
+        std::hash<bcos::protocol::NonceType>> const& _nonceList) = 0;
     virtual void insert(bcos::protocol::NonceType const& _nonce) = 0;
 
-protected:
     virtual void remove(bcos::protocol::NonceType const& _nonce) = 0;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

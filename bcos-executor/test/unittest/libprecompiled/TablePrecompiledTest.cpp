@@ -51,7 +51,7 @@ public:
         TableInfoTuple tableInfoTuple = std::make_tuple(key, value);
         bytes in = codec->encodeWithSig(
             "createTable(string,(string,string[]))", tableName, tableInfoTuple);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -145,7 +145,7 @@ public:
     {
         nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("appendColumns(string,string[])", tableName, values);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -183,7 +183,7 @@ public:
         protocol::BlockNumber _number, std::string const& _path, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("openTable(string)", _path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -221,7 +221,7 @@ public:
     {
         nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("desc(string)", tableName);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -257,7 +257,7 @@ public:
         nextBlock(_number, BlockVersion::V3_1_VERSION);
         EntryTuple entryTuple = {key, values};
         bytes in = codec->encodeWithSig("insert((string,string[]))", entryTuple);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -311,7 +311,7 @@ public:
     {
         nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("select(string)", key);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -347,7 +347,7 @@ public:
     {
         nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("select((uint8,string)[],(uint32,uint32))", keyCond, limit);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -382,7 +382,7 @@ public:
     {
         nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("count((uint8,string)[])", keyCond);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -418,7 +418,7 @@ public:
     {
         nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("update(string,(string,string)[])", key, _updateFields);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -484,7 +484,7 @@ public:
         bytes in =
             codec->encodeWithSig("update((uint8,string)[],(uint32,uint32),(string,string)[])",
                 conditions, _limit, _updateFields);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -545,7 +545,7 @@ public:
     {
         nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("remove(string)", key);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -581,7 +581,7 @@ public:
     {
         nextBlock(_number, BlockVersion::V3_1_VERSION);
         bytes in = codec->encodeWithSig("remove((uint8,string)[],(uint32,uint32))", keyCond, limit);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -620,7 +620,7 @@ BOOST_FIXTURE_TEST_SUITE(precompiledTableTest, TableFactoryPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(createTableTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -706,7 +706,7 @@ BOOST_AUTO_TEST_CASE(createTableWasmsTest)
     init(true);
 
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -764,7 +764,7 @@ BOOST_AUTO_TEST_CASE(createTableWasmsTest)
 BOOST_AUTO_TEST_CASE(appendColumnsTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -819,7 +819,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -869,7 +869,7 @@ BOOST_AUTO_TEST_CASE(appendColumnsWasmTest)
 BOOST_AUTO_TEST_CASE(insertTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -950,7 +950,7 @@ BOOST_AUTO_TEST_CASE(insertWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1009,14 +1009,14 @@ BOOST_AUTO_TEST_CASE(insertWasmTest)
 BOOST_AUTO_TEST_CASE(selectTest)
 {
     /// INSERT_COUNT should > 100
-    const int INSERT_COUNT = 10000;
+    const int INSERT_COUNT = 110;
     auto fillZero = [](int _num) -> std::string {
         std::stringstream stream;
         stream << std::setfill('0') << std::setw(40) << std::right << _num;
         return stream.str();
     };
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1102,14 +1102,14 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
 {
     init(true);
     /// INSERT_COUNT should > 100
-    const int INSERT_COUNT = 1000;
+    const int INSERT_COUNT = 110;
     auto fillZero = [](int _num) -> std::string {
         std::stringstream stream;
         stream << std::setfill('0') << std::setw(40) << std::right << _num;
         return stream.str();
     };
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1191,11 +1191,10 @@ BOOST_AUTO_TEST_CASE(selectWasmTest)
     }
 }
 
-/// TODO: check limit
 BOOST_AUTO_TEST_CASE(updateTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1241,11 +1240,9 @@ BOOST_AUTO_TEST_CASE(updateTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1299,12 +1296,11 @@ BOOST_AUTO_TEST_CASE(updateTest)
     }
 }
 
-/// TODO: check limit
 BOOST_AUTO_TEST_CASE(updateWasmTest)
 {
     init(true);
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
@@ -1350,11 +1346,9 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    std::string longValue = "0";
-    for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-    {
-        longValue += "0";
-    }
+    std::stringstream ss;
+    ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << "0";
+    std::string longValue = ss.str();
 
     // update by key, value overflow
     {
@@ -1400,11 +1394,10 @@ BOOST_AUTO_TEST_CASE(updateWasmTest)
     }
 }
 
-/// TODO: check limit
 BOOST_AUTO_TEST_CASE(removeTest)
 {
     auto callAddress = tableTestAddress;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     {
         creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }

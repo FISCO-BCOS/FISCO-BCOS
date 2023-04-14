@@ -35,7 +35,7 @@
 //#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
-class DmcExecutor
+class DmcExecutor : public std::enable_shared_from_this<DmcExecutor>
 {
 public:
     using MessageHint = bcos::scheduler::ExecutivePool::MessageHint;
@@ -63,13 +63,15 @@ public:
         m_dmcRecorder(dmcRecorder)
     {}
 
-    void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
+    virtual ~DmcExecutor() = default;
+
+    virtual void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
     bool prepare();        // return true if has schedule out message
     bool unlockPrepare();  // return true if need to detect deadlock
     void releaseOutdatedLock();
     bool detectLockAndRevert();  // return true if detect a tx and revert
 
-    void go(std::function<void(bcos::Error::UniquePtr, Status)> callback);
+    virtual void go(std::function<void(bcos::Error::UniquePtr, Status)> callback);
     bool hasFinished() { return m_executivePool.empty(); }
 
     void scheduleIn(ExecutiveState::Ptr executive);
@@ -95,6 +97,12 @@ public:
         f_onGetCodeEvent = std::move(onGetCodeEvent);
     }
 
+
+    void setGetAddrHandler(std::function<std::string(const std::string_view&)> getFromFunc)
+    {
+        f_getAddr = std::move(getFromFunc);
+    }
+
     void triggerSwitch()
     {
         if (f_onNeedSwitchEvent)
@@ -113,9 +121,32 @@ public:
             });
     }
 
-private:
+    virtual void preExecute()
+    {
+        // do nothing
+    }
+
+    bool hasContractTableChanged() { return m_hasContractTableChanged; }
+
+protected:
+    virtual void executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback);
+
+    virtual void executorExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+
+        // called every time at all tx stop( pause or finish)
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback);
+
+    void handleCreateMessage(protocol::ExecutionMessage::UniquePtr& message, int64_t currentSeq);
+
+protected:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
-    void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
+    virtual void handleExecutiveOutputs(
+        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
     void scheduleOut(ExecutiveState::Ptr executiveState);
 
     void handleCreateMessage(ExecutiveState::Ptr executive);
@@ -123,7 +154,7 @@ private:
     std::string newEVMAddress(
         const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
 
-private:
+protected:
     std::string m_name;
     std::string m_contractAddress;
     bcos::protocol::Block::Ptr m_block;
@@ -132,6 +163,7 @@ private:
     bcos::crypto::Hash::Ptr m_hashImpl;
     DmcStepRecorder::Ptr m_dmcRecorder;
     ExecutivePool m_executivePool;
+    bool m_hasContractTableChanged = false;
 
 
     mutable SharedMutex x_concurrentLock;
@@ -140,6 +172,8 @@ private:
     std::function<void()> f_onNeedSwitchEvent;
     std::function<void(ExecutiveState::Ptr)> f_onSchedulerOut;
     std::function<bcos::bytes(std::string_view)> f_onGetCodeEvent;
+    std::function<std::string(const std::string_view&)> f_getAddr =
+        [](const std::string_view& addr) { return std::string(addr); };
 };
 
 }  // namespace bcos::scheduler

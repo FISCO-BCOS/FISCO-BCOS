@@ -398,7 +398,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 STORAGE_TIKV_LOG(INFO)
                     << "asyncPrepare secondary finished" << LOG_KV("blockNumber", params.number)
                     << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
-                    << LOG_KV("dataSize(B)", dataSize) << LOG_KV("primaryLock", primaryLock)
+                    << LOG_KV("dataSize(B)", dataSize) << LOG_KV("primaryLock", toHex(primaryLock))
                     << LOG_KV("startTS", params.timestamp)
                     << LOG_KV("encodeTime(ms)", encode - start)
                     << LOG_KV("prepareTime(ms)", write - encode);
@@ -433,7 +433,7 @@ void TiKVStorage::asyncCommit(
                 << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
                 << LOG_KV("timestamp", params.timestamp);
             auto start = utcTime();
-            uint64_t ts = 0;
+            uint64_t timestamp = 0;
             if (m_committer)
             {
                 if (params.timestamp > 0)
@@ -442,18 +442,18 @@ void TiKVStorage::asyncCommit(
                 }
                 else
                 {
-                    ts = m_committer->commit_primary();
-                    m_committer->commit_secondary(ts);
+                    timestamp = m_committer->commit_primary();
+                    m_committer->commit_secondary(timestamp);
                 }
                 m_committer = nullptr;
             }
             auto end = utcTime();
             STORAGE_TIKV_LOG(INFO)
                 << LOG_DESC("asyncCommit finished") << LOG_KV("blockNumber", params.number)
-                << LOG_KV("commitTS", params.timestamp) << LOG_KV("primaryCommitTS", ts)
+                << LOG_KV("commitTS", params.timestamp) << LOG_KV("primaryCommitTS", timestamp)
                 << LOG_KV("time(ms)", end - start);
             lock.unlock();
-            callback(nullptr, ts);
+            callback(nullptr, timestamp);
         }
         else
         {
@@ -569,7 +569,7 @@ bcos::Error::Ptr TiKVStorage::setRows(std::string_view table,
                 for (size_t i = 0; i < keys.size(); ++i)
                 {
                     dataSize += realKeys[i].size() + values[i].size();
-                    txn.put(std::move(realKeys[i]), std::string(std::move(values[i])));
+                    txn.put(realKeys[i], std::string(std::move(values[i])));
                 }
                 auto encode = utcTime();
                 txn.commit();

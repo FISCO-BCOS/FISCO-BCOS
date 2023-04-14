@@ -21,21 +21,41 @@
 #pragma once
 
 #include "bcos-txpool/TxPoolConfig.h"
+#include "bcos-txpool/txpool/utilities/Common.h"
+#include <bcos-utilities/BucketMap.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/RateCollector.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
-#include <tbb/concurrent_unordered_map.h>
-#include <tbb/concurrent_unordered_set.h>
+#include <tbb/concurrent_hash_map.h>
+#include <tbb/concurrent_queue.h>
 #include <boost/thread/pthread/shared_mutex.hpp>
 
 namespace bcos::txpool
 {
+
+class HashCompare
+{
+public:
+    size_t hash(const bcos::crypto::HashType& x) const
+    {
+        uint64_t const* data = reinterpret_cast<uint64_t const*>(x.data());
+        return boost::hash_range(data, data + 4);
+    }
+    // True if strings are equal
+    bool equal(const bcos::crypto::HashType& x, const bcos::crypto::HashType& y) const
+    {
+        return x == y;
+    }
+};
+
 class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
 {
 public:
     // the default txsExpirationTime is 10 minutes
     explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
-        int64_t _txsExpirationTime = 10 * 60 * 1000);
+        uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override = default;
 
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
@@ -45,6 +65,7 @@ public:
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
 
     bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) override;
+    // invoke when scheduler finished block executed and notify txpool new block result
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
     bcos::protocol::Transaction::Ptr removeSubmittedTx(
@@ -53,23 +74,20 @@ public:
     bcos::protocol::TransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
 
+    // FIXME: deprecated, after using txpool::broadcastPushTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override
     {
-        ReadGuard lock(x_txpoolMutex);
-        auto it = m_txsTable.find(_txHash);
-        return it != m_txsTable.end();
+        TxsMap::ReadAccessor::Ptr accessor;
+        return m_txsTable.find<TxsMap::ReadAccessor>(accessor, _txHash);
     }
-    size_t size() const override
-    {
-        ReadGuard l(x_txpoolMutex);
-        return m_txsTable.size();
-    }
+    size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 
+    // FIXME: deprecated, after using txpool::broadcastPushTransaction
     bcos::crypto::HashListPtr filterUnknownTxs(
         bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
@@ -80,7 +98,6 @@ public:
 
     void stop() override;
     void start() override;
-    void printPendingTxs() override;
 
     std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
         bcos::protocol::Block::Ptr _block) override;
@@ -107,7 +124,9 @@ protected:
     bcos::protocol::TransactionStatus txpoolStorageCheck(
         const bcos::protocol::Transaction& transaction);
 
-    virtual bcos::protocol::Transaction::Ptr removeWithoutLock(
+    void onTxRemoved(const bcos::protocol::Transaction::Ptr& _tx, bool needNotifyUnsealedTxsSize);
+
+    virtual bcos::protocol::Transaction::Ptr removeWithoutNotifyUnseal(
         bcos::crypto::HashType const& _txHash);
     virtual bcos::protocol::Transaction::Ptr removeSubmittedTxWithoutLock(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult, bool _notify = true);
@@ -128,39 +147,33 @@ protected:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag);
 
-protected:
     TxPoolConfig::Ptr m_config;
 
-    tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
-        std::hash<bcos::crypto::HashType>>
-        m_txsTable;
-    mutable SharedMutex x_txpoolMutex;
+    using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
+        std::hash<bcos::crypto::HashType>>;
+    TxsMap m_txsTable, m_invalidTxs;
 
-    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
-        m_invalidTxs;
-    tbb::concurrent_unordered_set<bcos::protocol::NonceType, std::hash<bcos::crypto::HashType>>
-        m_invalidNonces;
-    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
-        m_missedTxs;
-    mutable SharedMutex x_missedTxs;
+    using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;
+    HashSet m_missedTxs;
+
     std::atomic<size_t> m_sealedTxsSize = {0};
 
-    size_t c_maxRetryTime = 3;
-
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
-    std::atomic_bool m_printed = {false};
     uint64_t m_blockNumberUpdatedTime;
 
     // the txs expiration time, default is 10 minutes
-    int64_t m_txsExpirationTime = 10 * 60 * 1000;
+    uint64_t m_txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME;
     // timer to clear up the expired txs in-period
     std::shared_ptr<Timer> m_cleanUpTimer;
-    // Maximum number of transactions traversed by m_cleanUpTimer,
-    // The limit set here is to minimize the impact of the cleanup operation on txpool performance
-    uint64_t c_maxTraverseTxsNum = 10000;
 
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
+
+    RateCollector m_inRateCollector;
+    RateCollector m_sealRateCollector;
+    RateCollector m_removeRateCollector;
+
+    bcos::crypto::HashType m_knownLatestSealedTxHash;
 };
 }  // namespace bcos::txpool

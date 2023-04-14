@@ -45,7 +45,12 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
         getFuncSelector(SYSCONFIG_METHOD_SET_STR, GlobalHashImpl::g_hashImpl);
     name2Selector[SYSCONFIG_METHOD_GET_STR] =
         getFuncSelector(SYSCONFIG_METHOD_GET_STR, GlobalHashImpl::g_hashImpl);
-    auto defaultCmp = [](std::string_view _key, int64_t _value, int64_t _minValue) {
+    auto defaultCmp = [](std::string_view _key, int64_t _value, int64_t _minValue, uint32_t version,
+                          BlockVersion minVersion = BlockVersion::V3_0_VERSION) {
+        if (versionCompareTo(version, minVersion) < 0) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + std::string(_key)));
+        }
         if (_value >= _minValue)
         {
             return;
@@ -54,29 +59,41 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
             "Invalid value " + std::to_string(_value) + " ,the value for " + std::string{_key} +
             " must be no less than " + std::to_string(_minValue)));
     };
-    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT, [defaultCmp](int64_t _value) {
-        defaultCmp(SYSTEM_KEY_TX_GAS_LIMIT, _value, TX_GAS_LIMIT_MIN);
-    }));
     m_sysValueCmp.insert(
-        std::make_pair(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, [defaultCmp](int64_t _value) {
-            defaultCmp(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, _value, 1);
+        std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT, [defaultCmp](int64_t _value, uint32_t version) {
+            defaultCmp(SYSTEM_KEY_TX_GAS_LIMIT, _value, TX_GAS_LIMIT_MIN, version);
         }));
-    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_TX_COUNT_LIMIT, [defaultCmp](int64_t _value) {
-        defaultCmp(SYSTEM_KEY_TX_COUNT_LIMIT, _value, TX_COUNT_LIMIT_MIN);
+    m_sysValueCmp.insert(std::make_pair(
+        SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, [defaultCmp](int64_t _value, uint32_t version) {
+            defaultCmp(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, _value, 1, version);
+        }));
+    m_sysValueCmp.insert(
+        std::make_pair(SYSTEM_KEY_TX_COUNT_LIMIT, [defaultCmp](int64_t _value, uint32_t version) {
+            defaultCmp(SYSTEM_KEY_TX_COUNT_LIMIT, _value, TX_COUNT_LIMIT_MIN, version);
+        }));
+    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_AUTH_CHECK_STATUS, [defaultCmp](int64_t _value,
+                                                                          uint32_t version) {
+        defaultCmp(SYSTEM_KEY_AUTH_CHECK_STATUS, _value, 0, version, BlockVersion::V3_3_VERSION);
+        if (_value > (decltype(_value))UINT8_MAX)[[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(PrecompiledError(
+                "Invalid status value, must less than " + std::to_string(UINT8_MAX)));
+        }
     }));
     // for compatibility
     // Note: the compatibility_version is not compatibility
-    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](int64_t _value) {
-        if (_value < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
-        {
-            std::stringstream errorMsg;
-            errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) +
-                                 " failed for lower than min_supported_version")
-                     << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion());
-            PRECOMPILED_LOG(INFO) << errorMsg.str() << LOG_KV("setValue", _value);
-            BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
-        }
-    }));
+    m_sysValueCmp.insert(
+        std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](int64_t _value, uint32_t version) {
+            if (_value < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
+            {
+                std::stringstream errorMsg;
+                errorMsg << LOG_DESC("set " + std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) +
+                                     " failed for lower than min_supported_version")
+                         << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion());
+                PRECOMPILED_LOG(INFO) << errorMsg.str() << LOG_KV("setValue", _value);
+                BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
+            }
+        }));
     m_valueConverter.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION,
         [](const std::string& _value, uint32_t blockVersion) -> uint64_t {
             auto version = bcos::tool::toVersionNumber(_value);
@@ -98,13 +115,13 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 {
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
 
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
-        if (blockContext->isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
+        if (blockContext.isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
         {
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
@@ -118,21 +135,21 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             codec.decode(_callParameters->params(), configKey, configValue);
             // Uniform lowercase configKey
             boost::to_lower(configKey);
-            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                                   << LOG_BADGE("SystemConfigPrecompiled")
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            int64_t value = checkValueValid(configKey, configValue, blockContext->blockVersion());
+            int64_t value = checkValueValid(configKey, configValue, blockContext.blockVersion());
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
-            auto systemConfigEntry = SystemConfigEntry{configValue, blockContext->number() + 1};
+            auto systemConfigEntry = SystemConfigEntry{configValue, blockContext.number() + 1};
             entry.setObject(systemConfigEntry);
 
             table->setRow(configKey, std::move(entry));
 
-            if (shouldUpgradeChain(configKey, blockContext->blockVersion(), value))
+            if (shouldUpgradeChain(configKey, blockContext.blockVersion(), value))
             {
                 upgradeChain(_executive, _callParameters, codec, value);
             }
@@ -140,7 +157,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                                   << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue)
-                                  << LOG_KV("enableNum", blockContext->number() + 1);
+                                  << LOG_KV("enableNum", blockContext.number() + 1);
             _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
         }
     }
@@ -171,7 +188,7 @@ int64_t SystemConfigPrecompiled::checkValueValid(
 {
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
-    if (!c_supportedKey.contains(key))
+    if (!m_sysValueCmp.contains(key) && !m_valueConverter.contains(key))
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
     }
@@ -214,7 +231,7 @@ int64_t SystemConfigPrecompiled::checkValueValid(
     }
     if (m_sysValueCmp.contains(key))
     {
-        (m_sysValueCmp.at(key))(configuredValue);
+        (m_sysValueCmp.at(key))(configuredValue, blockVersion);
     }
     return configuredValue;
 }
@@ -251,18 +268,31 @@ void SystemConfigPrecompiled::upgradeChain(
     const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
     uint32_t toVersion) const
 {
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
+    auto version = blockContext.blockVersion();
 
-    if (blockContext->blockVersion() <= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) &&
-        toVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    if (versionCompareTo(toVersion, BlockVersion::V3_3_VERSION) >= 0)
+    {
+        auto entry = _executive->storage().getRow(SYS_CONFIG, SYSTEM_KEY_AUTH_CHECK_STATUS);
+        if (!entry)
+        {
+            Entry newAuthEntry;
+            newAuthEntry.setObject(SystemConfigEntry{
+                blockContext.isAuthCheck() ? "1" : "0", blockContext.number() + 1});
+            _executive->storage().setRow(
+                SYS_CONFIG, SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(newAuthEntry));
+        }
+    }
+    if (versionCompareTo(version, BlockVersion::V3_0_VERSION) <= 0 &&
+        versionCompareTo(toVersion, BlockVersion::V3_1_VERSION) >= 0)
     {
         // rebuild Bfs
         auto input = codec.encodeWithSig(
-            "rebuildBfs(uint256,uint256)", blockContext->blockVersion(), toVersion);
+            "rebuildBfs(uint256,uint256)", blockContext.blockVersion(), toVersion);
         std::string sender =
-            blockContext->isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS;
+            blockContext.isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS;
         std::string toAddress =
-            blockContext->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
+            blockContext.isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
         auto response = externalRequest(_executive, ref(input), _callParameters->m_origin, sender,
             toAddress, false, false, _callParameters->m_gasLeft);
 
@@ -276,9 +306,9 @@ void SystemConfigPrecompiled::upgradeChain(
 
         // create new system tables of 3.1.0
         // clang-format off
-            std::string_view tables[] = {
-                SYS_CODE_BINARY, bcos::ledger::SYS_VALUE,
-                SYS_CONTRACT_ABI, bcos::ledger::SYS_VALUE,
+           constexpr std::string_view tables[] = {
+                SYS_CODE_BINARY, SYS_VALUE_FIELDS,
+                SYS_CONTRACT_ABI, SYS_VALUE_FIELDS,
             };
         // clang-format on
         size_t total = sizeof(tables) / sizeof(std::string_view);

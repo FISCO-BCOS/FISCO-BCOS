@@ -57,11 +57,12 @@ public:
     bcos::protocol::MemberInterface::Ptr leader(std::string const& _key) const
     {
         ReadGuard l(x_keyToLeader);
-        if (!m_keyToLeader.count(_key))
+        auto it = m_keyToLeader.find(_key);
+        if (it == m_keyToLeader.end())
         {
             return nullptr;
         }
-        return m_keyToLeader.at(_key);
+        return it->second;
     }
 
     void addMemberChangeNotificationHandler(

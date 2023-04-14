@@ -9,7 +9,7 @@ add_library(bcos-utilities ${SRCS})
 target_include_directories(bcos-utilities PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-utilities>)
-target_link_libraries(bcos-utilities PUBLIC Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization zstd::libzstd_static)
+target_link_libraries(bcos-utilities PUBLIC Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization zstd::libzstd_static ittapi)
 
 if(TESTS)
     enable_testing()

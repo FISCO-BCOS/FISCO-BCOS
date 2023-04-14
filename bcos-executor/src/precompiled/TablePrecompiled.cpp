@@ -242,8 +242,8 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     // [tableName,keyField,valueFields][actualParams]
     std::vector<std::string> dynamicParams;
     bytes param;
@@ -267,7 +267,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     if (selector != selector2Func.end()) [[likely]]
     {
         auto& [minVersion, execFunc] = selector->second;
-        if (versionCompareTo(blockContext->blockVersion(), minVersion) >= 0)
+        if (versionCompareTo(blockContext.blockVersion(), minVersion) >= 0)
         {
             if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
             {
@@ -289,22 +289,21 @@ void TablePrecompiled::desc(precompiled::TableInfo& _tableInfo, const std::strin
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, bool withKeyOrder) const
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto tableName = _tableName.starts_with("u_") ? _tableName.substr(2) : _tableName;
-    PRECOMPILED_LOG(DEBUG) << LOG_DESC("TablePrecompiled desc") << LOG_KV("tableName", tableName);
 
     auto input = withKeyOrder ? codec.encodeWithSig("descWithKeyOrder(string)", tableName) :
                                 codec.encodeWithSig("desc(string)", tableName);
     std::string tableManagerAddress =
-        blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
+        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
 
     // external call to get desc
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
         _callParameters->m_codeAddress, tableManagerAddress, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gasLeft);
 
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION &&
+    if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION &&
         withKeyOrder)
     {
         codec.decode(ref(response->data), _tableInfo.info_v320);
@@ -435,14 +434,12 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
 {
     /// select(string)
     std::string key;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key);
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
-                           << LOG_KV("tableName", tableName);
 
     std::string originKey = key;
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION &&
+    if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION &&
         isNumericalOrder(_executive, _callParameters, tableName))
     {
         key = toNumericalOrder(key);
@@ -462,8 +459,12 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
     // update the memory gas and the computation gas
     gasPricer->updateMemUsed(values.size());
     gasPricer->appendOperation(InterfaceOpcode::Select);
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
-                           << LOG_KV("key", key) << LOG_KV("valueSize", values.size());
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
+                               << LOG_KV("originKey", originKey) << LOG_KV("key", key)
+                               << LOG_KV("valueSize", values.size());
+    }
 
     // Return the original key instead of the key converted to numerical order
     EntryTuple entryTuple = {originKey, std::move(values)};
@@ -477,8 +478,8 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     /// select((uint8,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limit;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions, limit);
 
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("SELECT")
@@ -518,8 +519,8 @@ void TablePrecompiled::selectByConditionV32(const std::string& tableName,
     /// select((uint8,string,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTupleV320> conditions;
     precompiled::LimitTuple limit;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     bool _isNumericalOrder = false;
 
     codec.decode(data, conditions, limit);
@@ -593,8 +594,8 @@ void TablePrecompiled::count(const std::string& tableName,
 {
     /// count((uint8,string)[])
     std::vector<precompiled::ConditionTuple> conditions;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("COUNT")
                            << LOG_KV("tableName", tableName)
@@ -605,13 +606,13 @@ void TablePrecompiled::count(const std::string& tableName,
     do
     {
         auto keyCondition = std::make_shared<storage::Condition>();
-        if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             // will throw exception when wrong condition cmp or limit count overflow
             buildKeyCondition(
                 keyCondition, conditions, {0 + totalCount, USER_TABLE_MAX_LIMIT_COUNT});
         }
-        else if (versionCompareTo(blockContext->blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
+        else if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_0_VERSION) <= 0)
         {
             /// NOTE: if version <= 3.0, here will use empty limit, which means count always return
             /// 0
@@ -640,8 +641,8 @@ void TablePrecompiled::countV32(const std::string& tableName,
 {
     /// count((uint8,string,string)[])
     std::vector<precompiled::ConditionTupleV320> conditions;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     codec.decode(data, conditions);
     precompiled::TableInfo tableInfo;
@@ -695,8 +696,8 @@ void TablePrecompiled::insert(const std::string& tableName,
 {
     /// insert((string,string[]))
     precompiled::EntryTuple insertEntry;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, insertEntry);
 
     auto& key = std::get<0>(insertEntry);
@@ -705,7 +706,8 @@ void TablePrecompiled::insert(const std::string& tableName,
     precompiled::TableInfo tableInfo;
     // external call table manager desc
     std::vector<std::string> columns;
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    auto originKey = key;
+    if (blockContext.blockVersion() >= bcos::protocol::BlockVersion::V3_2_VERSION)
     {
         desc(tableInfo, tableName, _executive, _callParameters, true);
         if (isNumericalOrder(tableInfo.info_v320))
@@ -720,9 +722,12 @@ void TablePrecompiled::insert(const std::string& tableName,
         columns = std::get<1>(tableInfo.info);
     }
 
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
-                           << LOG_KV("tableName", tableName) << LOG_KV("key", key)
-                           << LOG_KV("valueSize", values.size());
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
+                               << LOG_KV("tableName", tableName) << LOG_KV("originKey", originKey)
+                               << LOG_KV("key", key) << LOG_KV("valueSize", values.size());
+    }
 
     if (values.size() != columns.size())
     {
@@ -763,15 +768,16 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
     /// update(string,(string,string)[])
     std::string key;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key, updateFields);
 
     precompiled::TableInfo tableInfo;
     // external call table manager desc
     std::string keyField;
     std::vector<std::string> columns;
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    auto originKey = key;
+    if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
         desc(tableInfo, tableName, _executive, _callParameters, true);
         if (isNumericalOrder(tableInfo.info_v320))
@@ -787,9 +793,13 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
         keyField = std::get<0>(tableInfo.info);
         columns = std::get<1>(tableInfo.info);
     }
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
-                           << LOG_KV("tableName", tableName) << LOG_KV("updateKey", key)
-                           << LOG_KV("updateFieldsSize", updateFields.size());
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
+                               << LOG_KV("tableName", tableName) << LOG_KV("originKey", originKey)
+                               << LOG_KV("updateKey", key)
+                               << LOG_KV("updateFieldsSize", updateFields.size());
+    }
     auto existEntry = _executive->storage().getRow(tableName, key);
     if (!existEntry)
     {
@@ -842,8 +852,8 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limitTuple;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions, limitTuple, updateFields);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                            << LOG_KV("tableName", tableName)
@@ -926,8 +936,8 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
     std::vector<precompiled::ConditionTupleV320> conditions;
     precompiled::LimitTuple limitTuple;
     std::vector<precompiled::UpdateFieldTuple> updateFields;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     codec.decode(data, conditions, limitTuple, updateFields);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
@@ -1045,16 +1055,21 @@ void TablePrecompiled::removeByKey(const std::string& tableName,
 {
     /// remove(string)
     std::string key;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key);
-    PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table remove") << LOG_KV("tableName", tableName)
-                           << LOG_KV("removeKey", key);
+    auto originKey = key;
 
-    if (blockContext->blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION &&
+    if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION &&
         isNumericalOrder(_executive, _callParameters, tableName))
     {
         key = toNumericalOrder(key);
+    }
+
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table remove") << LOG_KV("tableName", tableName)
+                               << LOG_KV("originKey", originKey) << LOG_KV("removeKey", key);
     }
 
     auto existEntry = _executive->storage().getRow(tableName, key);
@@ -1080,8 +1095,8 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
     /// remove((uint8,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limitTuple;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions, limitTuple);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
                            << LOG_KV("tableName", tableName)
@@ -1122,9 +1137,9 @@ void TablePrecompiled::removeByConditionV32(const std::string& tableName,
     /// remove((uint8,string,string)[],(uint32,uint32))
     std::vector<precompiled::ConditionTupleV320> conditions;
     precompiled::LimitTuple limitTuple;
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
 
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, conditions, limitTuple);
     precompiled::TableInfo tableInfo;
     // external call table manager desc

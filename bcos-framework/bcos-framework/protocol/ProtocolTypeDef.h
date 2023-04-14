@@ -23,7 +23,7 @@
 namespace bcos::protocol
 {
 using BlockNumber = int64_t;
-using NonceType = u256;
+using NonceType = std::string;
 using NonceList = std::vector<NonceType>;
 using NonceListPtr = std::shared_ptr<NonceList>;
 using BytesList = std::vector<std::shared_ptr<bytes>>;

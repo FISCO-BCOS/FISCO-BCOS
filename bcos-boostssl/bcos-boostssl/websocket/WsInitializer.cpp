@@ -60,7 +60,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
                                                           std::thread::hardware_concurrency();
     if (!threadPoolSize)
     {
-        threadPoolSize = 16;
+        threadPoolSize = 4;
     }
     auto wsServiceWeakPtr = std::weak_ptr<WsService>(_wsService);
     auto ioServicePool = std::make_shared<IOServicePool>();

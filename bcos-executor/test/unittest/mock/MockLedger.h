@@ -1,9 +1,13 @@
 #pragma once
 
 #include "MockBlock.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <boost/archive/binary_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
 #include <boost/test/unit_test.hpp>
+#include <future>
 #include <sstream>
 
 namespace bcos::test
@@ -13,6 +17,12 @@ class MockLedger : public bcos::ledger::LedgerInterface
 public:
     using Ptr = std::shared_ptr<MockLedger>;
     static const uint32_t TX_GAS_LIMIT = 3000000666;
+    bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
+
+    MockLedger() = default;
+    MockLedger(bcos::storage::TransactionalStorageInterface::Ptr _storage)
+      : m_storage(std::move(_storage))
+    {}
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
@@ -123,6 +133,22 @@ public:
         else if (std::string(bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT) == std::string(_key))
         {
             _onGetConfig(nullptr, std::to_string(MockLedger::TX_GAS_LIMIT), m_blockNumber);
+            return;
+        }
+        else if (std::string(bcos::ledger::SYSTEM_KEY_AUTH_CHECK_STATUS) == std::string(_key))
+        {
+            if (m_storage)
+            {
+                std::promise<storage::Entry> promise;
+                m_storage->asyncGetRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_AUTH_CHECK_STATUS,
+                    [&promise](auto&& e, std::optional<storage::Entry> entry) {
+                        promise.set_value(entry.value());
+                    });
+                auto entry = promise.get_future().get().getObject<ledger::SystemConfigEntry>();
+                _onGetConfig(nullptr, std::get<0>(entry), std::get<1>(entry));
+                return;
+            }
+            _onGetConfig(nullptr, "0", m_blockNumber);
             return;
         }
 

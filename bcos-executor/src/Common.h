@@ -64,6 +64,7 @@ static constexpr std::string_view USER_TABLE_PREFIX = "/tables/";
 static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
 static constexpr std::string_view USER_SYS_PREFIX = "/sys/";
 static constexpr std::string_view USER_USR_PREFIX = "/usr/";
+static constexpr std::string_view USER_SHARD_PREFIX = "/shards/";
 
 static const char* const STORAGE_VALUE = "value";
 static const char* const ACCOUNT_CODE_HASH = "codeHash";
@@ -73,6 +74,7 @@ static const char* const ACCOUNT_ABI = "abi";
 static const char* const ACCOUNT_NONCE = "nonce";
 static const char* const ACCOUNT_ALIVE = "alive";
 static const char* const ACCOUNT_FROZEN = "frozen";
+static const char* const ACCOUNT_SHARD = "shard";
 
 /// auth
 static constexpr const std::string_view CONTRACT_SUFFIX = "_accessAuth";
@@ -168,7 +170,6 @@ struct VMSchedule
     unsigned createDataGas = 20;
     unsigned maxEvmCodeSize = 0x40000;
     unsigned maxWasmCodeSize = 0xF00000;  // 15MB
-
 };
 
 static const VMSchedule FiscoBcosSchedule = [] {
@@ -179,7 +180,7 @@ static const VMSchedule FiscoBcosSchedule = [] {
 static const VMSchedule FiscoBcosScheduleV320 = [] {
     VMSchedule schedule = VMSchedule();
     schedule.enablePairs = true;
-    schedule.maxEvmCodeSize = 0x100000;  // 1MB
+    schedule.maxEvmCodeSize = 0x100000;   // 1MB
     schedule.maxWasmCodeSize = 0xF00000;  // 15MB
     return schedule;
 }();
@@ -198,7 +199,7 @@ bool hasPrecompiledPrefix(const std::string_view& _code);
  * @return evmc_address : the transformed evm address
  */
 inline evmc_address toEvmC(const std::string_view& addr)
-{  // TODO: add another interfaces for wasm
+{
     evmc_address ret;
     constexpr static auto evmAddressLength = sizeof(ret);
 
@@ -260,9 +261,9 @@ inline bytes toBytes(const std::string_view& _addr)
     return {(char*)_addr.data(), (char*)(_addr.data() + _addr.size())};
 }
 
-inline std::string getContractTableName(const std::string_view& _address)
+inline std::string getContractTableName(
+    const std::string_view& prefix, const std::string_view& _address)
 {
-    constexpr static std::string_view prefix("/apps/");
     std::string out;
     if (_address[0] == '/')
     {
@@ -280,4 +281,5 @@ inline std::string getContractTableName(const std::string_view& _address)
     return out;
 }
 
+bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data);
 }  // namespace bcos

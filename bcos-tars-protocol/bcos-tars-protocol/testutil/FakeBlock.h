@@ -166,7 +166,7 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     // fake transactions
     for (size_t i = 0; i < _txsNum; i++)
     {
-        auto tx = fakeTransaction(_cryptoSuite, utcTime() + i);
+        auto tx = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + i));
         block->appendTransaction(tx);
 
         auto metaData = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>();

@@ -22,7 +22,7 @@ public:
     {
         if constexpr (withError)
         {
-            auto error = std::make_shared<bcos::Error>(-1, "mock error!");
+            auto error = BCOS_ERROR_PTR(-1, "mock error!");
             BOOST_THROW_EXCEPTION(*error);
         }
         else

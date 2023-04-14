@@ -173,15 +173,21 @@ private:
     void erasePendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
     {
         bcos::Guard l(x_pendingConns);
-        if (m_pendingConns.count(_nodeIPEndpoint))
-            m_pendingConns.erase(_nodeIPEndpoint);
+        auto it = m_pendingConns.find(_nodeIPEndpoint);
+        if (it != m_pendingConns.end())
+        {
+            m_pendingConns.erase(it);
+        }
     }
 
     void insertPendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
     {
         bcos::Guard l(x_pendingConns);
-        if (!m_pendingConns.count(_nodeIPEndpoint))
+        auto it = m_pendingConns.find(_nodeIPEndpoint);
+        if (it == m_pendingConns.end())
+        {
             m_pendingConns.insert(_nodeIPEndpoint);
+        }
     }
 
     std::shared_ptr<bcos::ThreadPool> m_threadPool;

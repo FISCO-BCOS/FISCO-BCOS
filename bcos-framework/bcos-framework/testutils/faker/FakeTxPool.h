@@ -96,7 +96,7 @@ public:
                 return;
             }
             _onVerifyFinished(
-                std::make_unique<Error>(CommonError::TransactionsMissing, "TransactionsMissing"),
+                BCOS_ERROR_UNIQUE_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
                 m_verifyResult);
         });
     }

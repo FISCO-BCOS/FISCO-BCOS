@@ -42,8 +42,8 @@ public:
 
 private:
     int64_t checkValueValid(std::string_view key, std::string_view value, uint32_t blockVersion);
-    inline bool shouldUpgradeChain(
-        std::string_view key, uint32_t fromVersion, uint32_t toVersion) const noexcept
+    constexpr static inline bool shouldUpgradeChain(
+        std::string_view key, uint32_t fromVersion, uint32_t toVersion) noexcept
     {
         return key == bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION && toVersion > fromVersion;
     }
@@ -51,11 +51,9 @@ private:
         const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
         uint32_t toVersion) const;
 
-    std::map<std::string, std::function<int64_t(std::string, uint32_t)>> m_valueConverter;
-    std::map<std::string, std::function<void(int64_t)>> m_sysValueCmp;
-    const std::set<std::string_view> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-        bcos::ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, bcos::ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
-        bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION};
+    std::unordered_map<std::string, std::function<int64_t(std::string, uint32_t)>> m_valueConverter;
+    // value, version
+    std::unordered_map<std::string, std::function<void(int64_t, uint32_t)>> m_sysValueCmp;
 };
 
 }  // namespace bcos::precompiled

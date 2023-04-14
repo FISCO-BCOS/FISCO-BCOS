@@ -70,10 +70,12 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
+    // loadSecurityConfig before loadStorageSecurityConfig for deciding whether to use HSM
+    loadSecurityConfig(_pt);
     loadStorageSecurityConfig(_pt);
+    loadExecutorNormalConfig(_pt);
 
     loadFailOverConfig(_pt, _enforceMemberID);
-    loadSecurityConfig(_pt);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
     loadOthersConfig(_pt);
@@ -298,10 +300,10 @@ void NodeConfig::getTarsClientProxyEndpoints(
     {
         _endpoints = it->second;
 
-        NodeConfig_LOG(INFO) << LOG_BADGE("getTarsClientProxyEndpoints")
-                             << LOG_DESC("find tars client proxy endpoints")
-                             << LOG_KV("serviceName", _clientPrx)
-                             << LOG_KV("endpoints size", _endpoints.size());
+        NodeConfig_LOG(DEBUG) << LOG_BADGE("getTarsClientProxyEndpoints")
+                              << LOG_DESC("find tars client proxy endpoints")
+                              << LOG_KV("serviceName", _clientPrx)
+                              << LOG_KV("endpoints size", _endpoints.size());
     }
 
     if (_endpoints.empty())
@@ -357,16 +359,19 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     int threadCount = _pt.get<int>("rpc.thread_count", 8);
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
     bool disableSsl = _pt.get<bool>("rpc.disable_ssl", false);
+    bool needRetInput = _pt.get<bool>("rpc.return_input_params", true);
 
     m_rpcListenIP = listenIP;
     m_rpcListenPort = listenPort;
     m_rpcThreadPoolSize = threadCount;
     m_rpcDisableSsl = disableSsl;
     m_rpcSmSsl = smSsl;
+    g_BCOSConfig.setNeedRetInput(needRetInput);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadRpcConfig") << LOG_KV("listenIP", listenIP)
                          << LOG_KV("listenPort", listenPort) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("smSsl", smSsl) << LOG_KV("disableSsl", disableSsl);
+                         << LOG_KV("smSsl", smSsl) << LOG_KV("disableSsl", disableSsl)
+                         << LOG_KV("needRetInput", needRetInput);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -491,16 +496,15 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
-    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
-        [[unlikely]]
-        {
-            NodeConfig_LOG(WARNING) << LOG_DESC(
-                                           "loadTxPoolConfig: the configured txs_expiration_time "
-                                           "is smaller than default "
-                                           "consensus time, reset to the consensus time")
-                                    << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
-                                    << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
-        }
+    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS) [[unlikely]]
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+                                       "loadTxPoolConfig: the configured txs_expiration_time "
+                                       "is smaller than default "
+                                       "consensus time, reset to the consensus time")
+                                << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
+                                << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
+    }
     m_txsExpirationTime = std::max(
         {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
 
@@ -547,8 +551,8 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
-    m_hsmEnable = _pt.get<bool>("security.enable_hsm", false);
-    if (m_hsmEnable)
+    m_enableHsm = _pt.get<bool>("security.enable_hsm", false);
+    if (m_enableHsm)
     {
         m_hsmLibPath =
             _pt.get<std::string>("security.hsm_lib_path", "/usr/local/lib/libgmt0018.so");
@@ -559,7 +563,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
                              << LOG_KV("password", m_password);
     }
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_hsmEnable)
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_enableHsm)
                          << LOG_KV("privateKeyPath", m_privateKeyPath);
 }
 
@@ -581,6 +585,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
     {
         return;
     }
+
     std::string storageSecurityKeyCenterUrl =
         _pt.get<std::string>("storage_security.key_center_url", "");
 
@@ -618,6 +623,9 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
     m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
+    m_maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 3);
+    m_maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", 3);
+    m_enableDBStatistics = _pt.get<bool>("storage.enable_statistics", false);
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
@@ -637,6 +645,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     boost::split(m_pd_addrs, pd_addrs, boost::is_any_of(","));
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
+    g_BCOSConfig.setStorageType(m_storageType);  // Set storageType to global
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
                          << LOG_KV("KeyPage", m_keyPageSize) << LOG_KV("storageType", m_storageType)
                          << LOG_KV("pdAddrs", pd_addrs) << LOG_KV("pdCaPath", m_pdCaPath)
@@ -683,8 +692,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig")
-                         << LOG_KV("sendTxTimeout", m_sendTxTimeout)
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize);
 }
 
@@ -899,10 +907,17 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     try
     {
         m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
+        if (m_authAdminAddress.empty() &&
+            (m_isAuthCheck || m_compatibilityVersion >= BlockVersion::V3_3_VERSION)) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("executor.auth_admin_account is empty, "
+                                                   "please set correct auth_admin_account"));
+        }
     }
     catch (std::exception const& e)
     {
-        if (m_isAuthCheck)
+        if (m_isAuthCheck || m_compatibilityVersion >= BlockVersion::V3_3_VERSION)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
@@ -913,6 +928,15 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                          << LOG_KV("isAuthCheck", m_isAuthCheck)
                          << LOG_KV("authAdminAccount", m_authAdminAddress)
                          << LOG_KV("ismSerialExecute", m_isSerialExecute);
+}
+
+// load config.ini
+void NodeConfig::loadExecutorNormalConfig(boost::property_tree::ptree const& _configIni)
+{
+    bool enableDag = _configIni.get<bool>("executor.enable_dag", true);
+    g_BCOSConfig.setEnableDAG(enableDag);
+    NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorNormalConfig: config.ini")
+                         << LOG_KV("enableDag", enableDag);
 }
 
 // Note: make sure the consensus param checker is consistent with the precompiled param checker

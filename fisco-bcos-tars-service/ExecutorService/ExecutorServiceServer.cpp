@@ -118,6 +118,29 @@ bcostars::Error ExecutorServiceServer::executeTransactions(std::string const& _c
     return bcostars::Error();
 }
 
+bcostars::Error ExecutorServiceServer::preExecuteTransactions(tars::Int64 schedulerTermId,
+    bcostars::BlockHeader const& _blockHeader, std::string const& _contractAddress,
+    std::vector<bcostars::ExecutionMessage> const& _inputs, tars::TarsCurrentPtr _current)
+{
+    _current->setResponse(false);
+    auto header = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_header = _blockHeader]() mutable { return &m_header; });
+
+    auto executionMessages =
+        std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
+    for (auto const& input : _inputs)
+    {
+        auto msg = std::make_unique<bcostars::protocol::ExecutionMessageImpl>(
+            [m_message = input]() mutable { return &m_message; });
+        executionMessages->emplace_back(std::move(msg));
+    }
+    m_executor->preExecuteTransactions(schedulerTermId, header, _contractAddress,
+        *executionMessages, [_current](bcos::Error::UniquePtr _error) {
+            async_response_preExecuteTransactions(_current, toTarsError(std::move(_error)));
+        });
+    return bcostars::Error();
+}
+
 bcostars::Error ExecutorServiceServer::dmcExecuteTransactions(std::string const& _contractAddress,
     std::vector<bcostars::ExecutionMessage> const& _inputs,
     std::vector<bcostars::ExecutionMessage>&, tars::TarsCurrentPtr _current)

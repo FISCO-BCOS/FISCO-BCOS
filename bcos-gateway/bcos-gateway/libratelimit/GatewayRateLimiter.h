@@ -41,7 +41,6 @@ public:
     using ConstPtr = std::shared_ptr<const GatewayRateLimiter>;
     using UniquePtr = std::unique_ptr<const GatewayRateLimiter>;
 
-public:
     GatewayRateLimiter(ratelimiter::RateLimiterManager::Ptr& _rateLimiterManager,
         ratelimiter::RateLimiterStat::Ptr& _rateLimiterStat)
       : m_rateLimiterManager(_rateLimiterManager), m_rateLimiterStat(_rateLimiterStat)
@@ -54,7 +53,6 @@ public:
 
     ~GatewayRateLimiter() { stop(); }
 
-public:
     void start()
     {
         if (m_running)
@@ -64,14 +62,20 @@ public:
             return;
         }
         m_running = true;
-        if (m_rateLimiterManager->rateLimiterConfig().enableRateLimit() &&
-            m_rateLimiterStat)
+        auto enableOutRateLimit = m_rateLimiterManager->rateLimiterConfig().enableOutRateLimit();
+        auto enableInRateLimit = m_rateLimiterManager->rateLimiterConfig().enableInRateLimit();
+        bool bStartStat = false;
+        if ((enableOutRateLimit || enableInRateLimit) && m_rateLimiterStat)
         {
             m_rateLimiterStat->start();
+            bStartStat = true;
         }
 
         RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
-                            << LOG_DESC("gateway ratelimiter start ok");
+                            << LOG_DESC("gateway ratelimiter start end")
+                            << LOG_KV("bStartStat", bStartStat)
+                            << LOG_KV("enableOutRateLimit", enableOutRateLimit)
+                            << LOG_KV("enableInRateLimit", enableInRateLimit);
     }
 
     void stop()
@@ -94,13 +98,13 @@ public:
     }
 
 public:
-    std::pair<bool, std::string> checkOutGoing(const std::string& _endpoint,
-        const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength);
+    std::optional<std::string> checkOutGoing(const std::string& _endpoint, uint16_t _pkgType,
+        const std::string& _groupID, uint16_t _moduleID, int64_t _msgLength);
 
-
-    std::pair<bool, std::string> checkInComing(const std::string& _endpoint, uint64_t _msgLength);
-    std::pair<bool, std::string> checkInComing(
-        const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength);
+    std::optional<std::string> checkInComing(
+        const std::string& _endpoint, uint16_t _packageType, int64_t _msgLength, bool /*unused*/);
+    std::optional<std::string> checkInComing(
+        const std::string& _groupID, uint16_t _moduleID, int64_t _msgLength);
 
 private:
     bool m_running = false;

@@ -26,26 +26,27 @@ using namespace bcos::crypto;
 using namespace bcos::protocol;
 
 PeerStatus::PeerStatus(BlockSyncConfig::Ptr _config, PublicPtr _nodeId, BlockNumber _number,
-    HashType const& _hash, HashType const& _gensisHash)
-  : m_nodeId(_nodeId),
+    HashType const& _hash, HashType const& _genesisHash)
+  : m_nodeId(std::move(_nodeId)),
     m_number(_number),
     m_hash(_hash),
-    m_genesisHash(_gensisHash),
+    m_genesisHash(_genesisHash),
     m_downloadRequests(std::make_shared<DownloadRequestQueue>(_config, m_nodeId))
 {}
 
 PeerStatus::PeerStatus(BlockSyncConfig::Ptr _config, PublicPtr _nodeId)
-  : PeerStatus(_config, _nodeId, 0, HashType(), HashType())
+  : PeerStatus(std::move(_config), std::move(_nodeId), 0, HashType(), HashType())
 {}
 
 PeerStatus::PeerStatus(
     BlockSyncConfig::Ptr _config, PublicPtr _nodeId, BlockSyncStatusInterface::ConstPtr _status)
-  : PeerStatus(_config, _nodeId, _status->number(), _status->hash(), _status->genesisHash())
+  : PeerStatus(std::move(_config), std::move(_nodeId), _status->number(), _status->hash(),
+        _status->genesisHash())
 {}
 
 bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 {
-    UpgradableGuard l(x_mutex);
+    UpgradableGuard lock(x_mutex);
     if (m_hash == _status->hash() && _status->number() == m_number &&
         m_archivedNumber == _status->archivedBlockNumber())
     {
@@ -61,7 +62,7 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
                              << LOG_KV("storedGenesisHash", m_genesisHash.abridged());
         return false;
     }
-    UpgradeGuard ul(l);
+    UpgradeGuard ulock(lock);
     m_number = _status->number();
     m_archivedNumber = _status->archivedBlockNumber();
     m_hash = _status->hash();
@@ -78,14 +79,14 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 
 bool SyncPeerStatus::hasPeer(PublicPtr _peer)
 {
-    ReadGuard l(x_peersStatus);
-    return m_peersStatus.count(_peer);
+    ReadGuard lock(x_peersStatus);
+    return m_peersStatus.contains(_peer);
 }
 
 PeerStatus::Ptr SyncPeerStatus::peerStatus(bcos::crypto::PublicPtr _peer)
 {
-    ReadGuard l(x_peersStatus);
-    if (!m_peersStatus.count(_peer))
+    ReadGuard lock(x_peersStatus);
+    if (!m_peersStatus.contains(_peer))
     {
         return nullptr;
     }
@@ -94,7 +95,7 @@ PeerStatus::Ptr SyncPeerStatus::peerStatus(bcos::crypto::PublicPtr _peer)
 
 PeerStatus::Ptr SyncPeerStatus::insertEmptyPeer(PublicPtr _peer)
 {
-    WriteGuard l(x_peersStatus);
+    WriteGuard lock(x_peersStatus);
     // create and insert the new peer status
     auto peerStatus = std::make_shared<PeerStatus>(m_config, _peer);
     m_peersStatus.insert(std::make_pair(_peer, peerStatus));
@@ -104,7 +105,7 @@ PeerStatus::Ptr SyncPeerStatus::insertEmptyPeer(PublicPtr _peer)
 bool SyncPeerStatus::updatePeerStatus(
     PublicPtr _peer, BlockSyncStatusInterface::ConstPtr _peerStatus)
 {
-    WriteGuard l(x_peersStatus);
+    WriteGuard lock(x_peersStatus);
     // check the status
     if (_peerStatus->genesisHash() != m_config->genesisHash())
     {
@@ -117,7 +118,7 @@ bool SyncPeerStatus::updatePeerStatus(
         return false;
     }
     // update the existed peer status
-    if (m_peersStatus.count(_peer))
+    if (m_peersStatus.contains(_peer))
     {
         auto status = m_peersStatus[_peer];
         if (status->update(_peerStatus))
@@ -155,7 +156,7 @@ void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr 
 
 void SyncPeerStatus::deletePeer(PublicPtr _peer)
 {
-    WriteGuard l(x_peersStatus);
+    WriteGuard lock(x_peersStatus);
     auto peer = m_peersStatus.find(_peer);
     if (peer != m_peersStatus.end())
     {
@@ -165,7 +166,7 @@ void SyncPeerStatus::deletePeer(PublicPtr _peer)
 
 void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
-    ReadGuard l(x_peersStatus);
+    ReadGuard lock(x_peersStatus);
     if (m_peersStatus.empty())
     {
         return;
@@ -202,8 +203,8 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
 
 void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
-    ReadGuard l(x_peersStatus);
-    for (auto peer : m_peersStatus)
+    ReadGuard lock(x_peersStatus);
+    for (const auto& peer : m_peersStatus)
     {
         if (peer.second && !_f(peer.second))
         {
@@ -215,8 +216,10 @@ void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f)
 std::shared_ptr<NodeIDs> SyncPeerStatus::peers()
 {
     auto nodeIds = std::make_shared<NodeIDs>();
-    ReadGuard l(x_peersStatus);
+    ReadGuard lock(x_peersStatus);
     for (auto& peer : m_peersStatus)
+    {
         nodeIds->emplace_back(peer.first);
+    }
     return nodeIds;
 }

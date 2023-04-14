@@ -45,10 +45,10 @@ public:
         m_transactionFactory(m_config->blockFactory()->transactionFactory()),
         m_ledger(m_config->ledger())
     {
-        m_worker = std::make_shared<ThreadPool>("submitter", verifierWorkerNum);
-        m_verifier = std::make_shared<ThreadPool>("verifier", 4);
+        m_worker = std::make_shared<ThreadPool>("submitter", 4);
+        m_verifier = std::make_shared<ThreadPool>("verifier", 2);
         m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
-        // worker to pre-store-texs
+        // worker to pre-store-txs
         m_txsPreStore = std::make_shared<ThreadPool>("txsPreStore", 1);
         TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")
                          << LOG_KV("submitterWorkerNum", verifierWorkerNum);
@@ -73,30 +73,44 @@ public:
         bcos::crypto::NodeIDPtr fromNodeID) override;
     // ended
 
+    // sealer module call this method for seal a block
     void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
             _sealCallback) override;
 
+    // hook for scheduler, invoke notify when block execute finished
     void asyncNotifyBlockResult(bcos::protocol::BlockNumber _blockNumber,
         bcos::protocol::TransactionSubmitResultsPtr _txsResult,
         std::function<void(Error::Ptr)> _onNotifyFinished) override;
 
+    // for consensus module, to verify whether block's txs in txpool or not, invoke when consensus
+    // receive proposal
     void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID, bytesConstRef const& _block,
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override;
 
+    // hook for tx/consensus sync message receive
+    // FIXME: deprecated, since use broadcastPushTransaction
     void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _uuid,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-        std::function<void(Error::Ptr _error)> _onRecv) override;
+        std::function<void(Error::Ptr)> _onRecv) override;
 
+    // hook for validator, update consensus nodes info in config, for broadcast tx to consensus
+    // nodes
+    // FIXME: deprecated, not used when use txpool::broadcastPushTransaction
     void notifyConsensusNodeList(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) override;
 
-    void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) override;
-
+    // hook for validator, update observer nodes info in config, for broadcast tx to observer nodes
+    // FIXME: deprecated, not used when use txpool::broadcastPushTransaction
     void notifyObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) override;
 
+    // for scheduler to fetch txs
+    void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
+        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) override;
+
+    // for consensus and sealer, for batch mark txs sealed flag
+    // trigger scene such as view change, submit proposal, etc.
     void asyncMarkTxs(bcos::crypto::HashListPtr _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         std::function<void(Error::Ptr)> _onRecvResponse) override;
@@ -130,6 +144,7 @@ public:
         _onGetTxsSize(nullptr, pendingTxsSize);
     }
 
+    // deprecated
     void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) override
     {
@@ -181,8 +196,7 @@ private:
     bcos::protocol::TransactionFactory::Ptr m_transactionFactory;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 
-    std::function<void(std::string const& _id, int _moduleID, bcos::crypto::NodeIDPtr _dstNode,
-        bytesConstRef _data)>
+    std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
     ThreadPool::Ptr m_worker;
@@ -190,5 +204,9 @@ private:
     ThreadPool::Ptr m_sealer;
     ThreadPool::Ptr m_txsPreStore;
     std::atomic_bool m_running = {false};
+
+    // Note: This x_markTxsMutex is used for locking asyncSealTxs() during sealBlock
+    // because memory storage is not contain a big lock now
+    mutable bcos::SharedMutex x_markTxsMutex;
 };
 }  // namespace bcos::txpool

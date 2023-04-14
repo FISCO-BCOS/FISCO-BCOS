@@ -171,19 +171,40 @@ public:
             prepareMyData();
             m_data->pageKey = std::move(key);
         }
-        [[nodiscard]] auto getPageKey() const -> std::string { return m_data->pageKey; }
+        [[nodiscard]] auto getPageKey() const -> std::string
+        {
+            if (m_data)
+            {
+                return m_data->pageKey;
+            }
+            return {};
+        }
         void setCount(uint16_t _count)
         {
             prepareMyData();
             m_data->count = _count;
         }
-        [[nodiscard]] auto getCount() const -> uint16_t { return m_data->count; }
+        [[nodiscard]] auto getCount() const -> uint16_t
+        {
+            if (m_data)
+            {
+                return m_data->count;
+            }
+            return 0;
+        }
         void setSize(uint16_t _size)
         {
             prepareMyData();
             m_data->size = _size;
         }
-        [[nodiscard]] auto getSize() const -> uint16_t { return m_data->size; }
+        [[nodiscard]] auto getSize() const -> uint16_t
+        {
+            if (m_data)
+            {
+                return m_data->size;
+            }
+            return 0;
+        }
 
         [[nodiscard]] auto getPageData() const -> Data* { return m_pageData; }
         void setPageData(Data* data) { m_pageData = data; }
@@ -208,7 +229,7 @@ public:
             uint16_t count = 0;
             uint16_t size = 0;
         };
-        std::shared_ptr<PageInfoData> m_data = nullptr;
+        std::shared_ptr<PageInfoData> m_data = std::make_shared<PageInfoData>();
         Data* m_pageData = nullptr;
         friend class boost::serialization::access;
 
@@ -257,16 +278,18 @@ public:
             if (this != &meta)
             {
                 pages = std::make_unique<std::vector<PageInfo>>();
+                pages->reserve(meta.pages->size());
+                auto lock = std::shared_lock(meta.mutex);
                 *pages = *meta.pages;
             }
             return *this;
         }
-        TableMeta(TableMeta&& t) { pages = std::move(t.pages); }
-        TableMeta& operator=(TableMeta&& t)
+        TableMeta(TableMeta&& meta) noexcept : pages(std::move(meta.pages)) {}
+        TableMeta& operator=(TableMeta&& meta) noexcept
         {
-            if (this != &t)
+            if (this != &meta)
             {
-                pages = std::move(t.pages);
+                pages = std::move(meta.pages);
             }
             return *this;
         }
@@ -491,6 +514,7 @@ public:
             // }
             int invalid = 0;
             m_rows = 0;
+            auto writeLock = rLock();
             for (auto it = pages->begin(); it != pages->end();)
             {
                 if (it->getCount() == 0 || it->getPageKey().empty())
@@ -596,7 +620,7 @@ public:
             if (it != entries.end())
             {
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry") << LOG_KV("pageKey",
                 //         toHex(entries.begin()->first))
@@ -613,7 +637,7 @@ public:
             else
             {
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry not found")
                 //         << LOG_KV(
@@ -633,7 +657,7 @@ public:
         }
         inline std::tuple<std::optional<Entry>, bool> setEntry(
             const std::string_view& key, Entry&& entry)
-        {  // TODO: do not exist entry optimization: insert a empty entry to cache, then
+        {  // do not exist entry optimization: insert a empty entry to cache, then
             // entry status none should return null optional
             bool pageInfoChanged = false;
             std::optional<Entry> ret;
@@ -666,7 +690,7 @@ public:
                 ret = std::move(it->second);
                 it->second = std::move(entry);
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("setEntry update")
                 //         << LOG_KV("pageKey", toHex(entries.rbegin()->first))
@@ -700,7 +724,7 @@ public:
                 }
                 entries.insert(it, std::make_pair(std::string(key), std::move(entry)));
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
                 //                        << LOG_KV("pageKey", toHex(entries.rbegin()->first))
                 //                        << LOG_KV("key", toHex(key)) << LOG_KV("valid",
@@ -1070,6 +1094,22 @@ public:
             {  // sys table entry
             }
         };
+        KeyPageStorage::Page* getPage()
+        {
+            if (type == Type::Page)
+            {
+                return &std::get<0>(data);
+            }
+            return nullptr;
+        }
+        KeyPageStorage::TableMeta* getTableMeta()
+        {
+            if (type == Type::TableMeta)
+            {
+                return &std::get<1>(data);
+            }
+            return nullptr;
+        }
         Data(const Data& d) = default;
         Data& operator=(const Data& d) = default;
         Data(Data&& d) = default;
@@ -1251,6 +1291,7 @@ private:
     size_t m_mergeSize;
     std::atomic_uint64_t m_readLength{0};
     std::atomic_uint64_t m_writeLength{0};
+    mutable std::atomic_uint64_t m_size{0};
     std::vector<Bucket> m_buckets;
     std::shared_ptr<const std::set<std::string, std::less<>>> m_ignoreTables;
     bool m_ignoreNotExist = false;

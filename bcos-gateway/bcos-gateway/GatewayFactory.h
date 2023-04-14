@@ -21,7 +21,7 @@ namespace bcos
 {
 namespace gateway
 {
-class GatewayFactory
+class GatewayFactory : public bcos::ObjectCounter<GatewayFactory>
 {
 public:
     using Ptr = std::shared_ptr<GatewayFactory>;
@@ -29,7 +29,8 @@ public:
         bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr)
       : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName), m_dataEncrypt(_dataEncrypt)
     {
-        // For compatibility, p2p communication between nodes still uses the old public key analysis method
+        // For compatibility, p2p communication between nodes still uses the old public key analysis
+        // method
         initSSLContextPubHexHandler();
         // the new old public key analysis method is used for black white list
         initSSLContextPubHexHandlerWithoutExtInfo();
@@ -73,6 +74,9 @@ public:
     std::shared_ptr<ratelimiter::RateLimiterManager> buildRateLimiterManager(
         const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
         std::shared_ptr<sw::redis::Redis> _redis);
+
+    // build Service
+    std::shared_ptr<Service> buildService(const GatewayConfig::Ptr& _config);
 
     /**
      * @brief construct Gateway

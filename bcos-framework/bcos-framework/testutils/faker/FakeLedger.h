@@ -178,7 +178,7 @@ public:
         ReadGuard l(x_ledger);
         if (m_ledger.size() <= (size_t)(_number))
         {
-            _callback(std::make_unique<Error>(-1, "block not found"), nullptr);
+            _callback(BCOS_ERROR_UNIQUE_PTR(-1, "block not found"), nullptr);
             return;
         }
         auto block = m_ledger[_number];
@@ -269,7 +269,7 @@ public:
             _onGetNodeList(nullptr, observerNodes);
             return;
         }
-        _onGetNodeList(std::make_unique<Error>(-1, "invalid Type"), nullptr);
+        _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), nullptr);
     }
 
     void asyncGetNonceList(BlockNumber _startNumber, int64_t _offset,
@@ -337,7 +337,7 @@ public:
         auto nonConstHeader = std::const_pointer_cast<bcos::protocol::BlockHeader>(_blockHeader);
         if (nonConstHeader->number() != m_ledgerConfig->blockNumber() + 1)
         {
-            _onCommitBlock(std::make_shared<Error>(-1, "invalid block"), nullptr);
+            _onCommitBlock(BCOS_ERROR_PTR(-1, "invalid block"), nullptr);
             return;
         }
 

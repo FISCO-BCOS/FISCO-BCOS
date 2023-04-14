@@ -51,7 +51,7 @@ public:
     void encode(bcos::bytes& txData) const override;
 
     bcos::crypto::HashType hash() const override;
-    
+
     template <bcos::crypto::hasher::Hasher Hasher>
     void calculateHash()
     {
@@ -62,7 +62,9 @@ public:
     std::string_view chainId() const override { return m_inner()->data.chainID; }
     std::string_view groupId() const override { return m_inner()->data.groupID; }
     int64_t blockLimit() const override { return m_inner()->data.blockLimit; }
-    bcos::u256 nonce() const override;
+    const std::string& nonce() const override;
+    // only for test
+    void setNonce(std::string _n) override { m_inner()->data.nonce = std::move(_n); }
     std::string_view to() const override { return m_inner()->data.to; }
     std::string_view abi() const override { return m_inner()->data.abi; }
     bcos::bytesConstRef input() const override;
@@ -77,7 +79,7 @@ public:
     {
         return {m_inner()->sender.data(), m_inner()->sender.size()};
     }
-    void forceSender(bcos::bytes _sender) const override
+    void forceSender(const bcos::bytes& _sender) const override
     {
         m_inner()->sender.assign(_sender.begin(), _sender.end());
     }
@@ -99,6 +101,5 @@ public:
 
 private:
     std::function<bcostars::Transaction*()> m_inner;
-    mutable bcos::u256 m_nonce;
 };
 }  // namespace bcostars::protocol

@@ -45,8 +45,8 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
@@ -81,7 +81,7 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
         // stringToAddr(string)
         std::string src;
         codec.decode(data, src);
-        Address ret = Address(src);
+        auto ret = Address(src);
         gasPricer->appendOperation(InterfaceOpcode::GetAddr);
         _callParameters->setExecResult(codec.encode(ret));
     }
@@ -99,7 +99,7 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
         // s256ToString(int256)
         s256 src;
         codec.decode(data, src);
-        std::string value = boost::lexical_cast<std::string>(src);
+        auto value = boost::lexical_cast<std::string>(src);
         gasPricer->appendOperation(InterfaceOpcode::GetString);
         _callParameters->setExecResult(codec.encode(value));
     }
@@ -116,7 +116,7 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
         // u256ToString(uint256)
         u256 src;
         codec.decode(data, src);
-        std::string value = boost::lexical_cast<std::string>(src);
+        auto value = boost::lexical_cast<std::string>(src);
         gasPricer->appendOperation(InterfaceOpcode::GetString);
         _callParameters->setExecResult(codec.encode(value));
     }
