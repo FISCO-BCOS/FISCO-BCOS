@@ -67,6 +67,8 @@ public:
                         if (!error)
                         {
                             bcos::concepts::serialize::decode(data, m_response);
+                            LIGHTNODE_LOG(DEBUG) << LOG_DESC("P2P client receive message success: ")
+                                                 << LOG_KV("data size",data.size());
                         }
                         else
                         {
@@ -131,12 +133,17 @@ public:
 
                                     if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
                                     {
-                                        for(auto& it : nodeInfo->second)
+                                        for (auto& it : nodeInfo->second)
                                         {
-                                            if(it.second == bcos::protocol::NodeType::CONSENSUS_NODE || it.second == bcos::protocol::NodeType::OBSERVER_NODE)
+                                            if (it.second ==
+                                                    bcos::protocol::NodeType::CONSENSUS_NODE ||
+                                                it.second ==
+                                                    bcos::protocol::NodeType::OBSERVER_NODE)
                                             {
                                                 nodeIDs.insert(it.first);
-                                                LIGHTNODE_LOG(TRACE) << LOG_KV("NodeID:",it.first) << LOG_KV("nodeType:",it.second);
+                                                LIGHTNODE_LOG(TRACE)
+                                                    << LOG_KV("NodeID:", it.first)
+                                                    << LOG_KV("nodeType:", it.second);
                                             }
                                         }
                                     }
@@ -190,6 +197,94 @@ public:
         boost::algorithm::unhex(nodeID.begin(), nodeID.end(), std::back_inserter(nodeIDBin));
         auto nodeIDPtr = m_keyFactory->createKey(nodeIDBin);
         co_return nodeIDPtr;
+    }
+
+    task::Task<bcos::crypto::NodeIDs> getAllNodeID()
+    {
+        struct Awaitable
+        {
+            Awaitable(bcos::gateway::GatewayInterface::Ptr& gateway, std::string& groupID)
+                : m_gateway(gateway), m_groupID(groupID)
+            {}
+
+            constexpr bool await_ready() const noexcept { return false; }
+            void await_suspend(CO_STD::coroutine_handle<> handle)
+            {
+                bcos::concepts::getRef(m_gateway).asyncGetPeers(
+                    [this, m_handle = handle](Error::Ptr error, const gateway::GatewayInfo::Ptr&,
+                        const gateway::GatewayInfosPtr& peerGatewayInfos) mutable {
+                      if (error)
+                      {
+                          m_error = std::move(error);
+                      }
+                      else
+                      {
+                          if (!peerGatewayInfos->empty())
+                          {
+                              std::set<std::string> nodeIDs;
+                              for (const auto& peerGatewayInfo : *peerGatewayInfos)
+                              {
+                                  auto nodeIDInfo = peerGatewayInfo->nodeIDInfo();
+                                  auto nodeInfo = nodeIDInfo.find(m_groupID);
+
+                                  if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
+                                  {
+                                      for (auto& it : nodeInfo->second)
+                                      {
+                                          if (it.second ==
+                                              bcos::protocol::NodeType::CONSENSUS_NODE ||
+                                              it.second ==
+                                              bcos::protocol::NodeType::OBSERVER_NODE)
+                                          {
+                                              nodeIDs.insert(it.first);
+                                              LIGHTNODE_LOG(TRACE)
+                                                      << LOG_KV("NodeID:", it.first)
+                                                      << LOG_KV("nodeType:", it.second);
+                                          }
+                                      }
+                                  }
+                              }
+                              if (!nodeIDs.empty())
+                              {
+                                  m_nodeIDList = std::move(nodeIDs);
+                              }
+                          }
+                      }
+                      m_handle.resume();
+                    });
+            }
+            void await_resume()
+            {
+                if (m_error)
+                {
+                    BOOST_THROW_EXCEPTION(*(m_error));
+                }
+            }
+            bcos::gateway::GatewayInterface::Ptr& m_gateway;
+            std::string& m_groupID;
+
+            Error::Ptr m_error;
+            std::set<std::string> m_nodeIDList;
+        };
+
+        auto awaitable = Awaitable(m_gateway, m_groupID);
+        co_await awaitable;
+        auto& nodeIDList = awaitable.m_nodeIDList;
+        LIGHTNODE_LOG(DEBUG) << LOG_KV("nodeIDList size", nodeIDList.size());
+        bcos::crypto::NodeIDs nodeIDs;
+        for (const auto& nodeID : nodeIDList)
+        {
+            bcos::bytes nodeIDBin;
+            boost::algorithm::unhex(nodeID.begin(), nodeID.end(), std::back_inserter(nodeIDBin));
+            LIGHTNODE_LOG(DEBUG) << LOG_KV("nodeID", nodeID);
+            auto nodeIDPtr = m_keyFactory->createKey(nodeIDBin);
+            nodeIDs.push_back(nodeIDPtr);
+        }
+        if (nodeIDs.empty())
+        {
+            BOOST_THROW_EXCEPTION(NoNodeAvailable{});
+        }
+        co_return nodeIDs;
     }
 
 private:

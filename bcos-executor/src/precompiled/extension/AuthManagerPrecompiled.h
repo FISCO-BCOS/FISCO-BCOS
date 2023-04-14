@@ -74,6 +74,9 @@ private:
     void setDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bool _isClose, PrecompiledExecResult::Ptr const& _callParameters);
 
+    void initAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+
     inline void openDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters)
     {

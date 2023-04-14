@@ -94,7 +94,7 @@ public:
             m_sysTables.emplace_back(_tableName);
         return TableFactory::createTable(_tableName, _keyField, _valueFields);
     }
-    std::pair<size_t, Error::Ptr> commit() override { return {0, std::make_shared<Error>(-1, "")}; }
+    std::pair<size_t, Error::Ptr> commit() override { return {0, BCOS_ERROR_PTR(-1, "")}; }
 
     std::vector<std::string> m_sysTables;
 };

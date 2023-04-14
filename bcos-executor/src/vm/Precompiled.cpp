@@ -21,6 +21,9 @@
 
 #include "../vm/Precompiled.h"
 #include "../Common.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/signature/codec/SignatureDataWithV.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "wedpr-crypto/WedprBn128.h"
 #include "wedpr-crypto/WedprCrypto.h"
 #include <bcos-utilities/Log.h>
@@ -34,6 +37,30 @@ namespace bcos
 namespace executor
 {
 PrecompiledRegistrar* PrecompiledRegistrar::s_this = nullptr;
+
+bcos::precompiled::Precompiled::Ptr bcos::executor::PrecompiledMap::at(
+    std::string const& _key, uint32_t version, bool isAuth) const noexcept
+{
+    if (!_key.starts_with(precompiled::SYS_ADDRESS_PREFIX) && !_key.starts_with(tool::FS_SYS_BIN))
+    {
+        return nullptr;
+    }
+    auto it = m_map.find(_key);
+    if (it == m_map.end())
+    {
+        return nullptr;
+    }
+    if (it->second.availableFunc(version, isAuth))
+    {
+        return it->second.precompiled;
+    }
+    return nullptr;
+}
+bool bcos::executor::PrecompiledMap::contains(
+    std::string const& key, uint32_t version, bool isAuth) const noexcept
+{
+    return at(key, version, isAuth) != nullptr;
+}
 
 PrecompiledExecutor const& PrecompiledRegistrar::executor(std::string const& _name)
 {
@@ -279,8 +306,9 @@ h256 sha256(bytesConstRef _in) noexcept
     h256 ret;
     CInputBuffer in{(const char*)_in.data(), _in.size()};
     COutputBuffer result{(char*)ret.data(), h256::SIZE};
-    if (wedpr_sha256_hash(&in, &result) != 0)
-    {  // TODO: add some log
+    if (wedpr_sha256_hash(&in, &result) != 0) [[unlikely]]
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("sha256 failed.") << _in.toString();
         return ret;
     }
     return ret;
@@ -291,8 +319,10 @@ h160 ripemd160(bytesConstRef _in)
     h160 ret;
     CInputBuffer in{(const char*)_in.data(), _in.size()};
     COutputBuffer result{(char*)ret.data(), h160::SIZE};
-    if (wedpr_ripemd160_hash(&in, &result) != 0)
-    {  // TODO: add some log
+    if (wedpr_ripemd160_hash(&in, &result) != 0) [[unlikely]]
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ripemd160 failed.")
+                        << _in.toString();
         return ret;
     }
     return ret;
@@ -448,20 +478,16 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     byte rawRSV[RSV_LENGTH];
     memcpy(rawRSV, _in.data() + 64, RSV_LENGTH - 1);
     rawRSV[RSV_LENGTH - 1] = (byte)((int)_in[63] - 27);
-    CInputBuffer msgHash{(const char*)_in.data(), crypto::HashType::SIZE};
-    CInputBuffer rsv{(const char*)rawRSV, RSV_LENGTH};
+    crypto::HashType mHash;
+    memcpy(mHash.data(), _in.data(), crypto::HashType::SIZE);
+
+    auto pk = crypto::secp256k1Recover(mHash, bytesConstRef(rawRSV, RSV_LENGTH));
 
     pair<bool, bytes> ret{true, bytes(crypto::HashType::SIZE, 0)};
-    bytes publicKeyBytes(64, 0);
-    COutputBuffer publicKey{(char*)publicKeyBytes.data(), PUBLIC_KEY_LENGTH};
-
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("wedpr_secp256k1_recover_public_key")
-                    << LOG_KV("hash", *toHexString(msgHash.data, msgHash.data + msgHash.len))
-                    << LOG_KV("rsv", *toHexString(rsv.data, rsv.data + rsv.len))
-                    << LOG_KV("publicKey",
-                           *toHexString(publicKey.data, publicKey.data + publicKey.len));
-    auto retCode = wedpr_secp256k1_recover_public_key(&msgHash, &rsv, &publicKey);
-    if (retCode != 0)
+                    << LOG_KV("hash", toHexStringWithPrefix(mHash))
+                    << LOG_KV("rsv", *toHexString(rawRSV, rawRSV + RSV_LENGTH));
+    if (pk == nullptr)
     {
         BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover publicKey failed");
         return {true, {}};
@@ -469,9 +495,9 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled")
                     << LOG_DESC("wedpr_secp256k1_recover_public_key success");
     // keccak256 and set first 12 byte to zero
-    CInputBuffer pubkeyBuffer{(const char*)publicKeyBytes.data(), PUBLIC_KEY_LENGTH};
+    CInputBuffer pubkeyBuffer{pk->constData(), PUBLIC_KEY_LENGTH};
     COutputBuffer pubkeyHash{(char*)ret.second.data(), crypto::HashType::SIZE};
-    retCode = wedpr_keccak256_hash(&pubkeyBuffer, &pubkeyHash);
+    auto retCode = wedpr_keccak256_hash(&pubkeyBuffer, &pubkeyHash);
     if (retCode != 0)
     {
         return {true, {}};

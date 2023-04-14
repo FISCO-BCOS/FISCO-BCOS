@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(transaction)
 {
     std::string to("Target");
     bcos::bytes input(bcos::asBytes("Arguments"));
-    bcos::u256 nonce(800);
+    std::string nonce("800");
 
     bcostars::protocol::TransactionFactoryImpl factory(cryptoSuite);
     auto tx = factory.createTransaction(0, to, input, nonce, 100, "testChain", "testGroup", 1000,
@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE(block)
 
     std::string to("Target");
     bcos::bytes input(bcos::asBytes("Arguments"));
-    bcos::u256 nonce(100);
+    std::string nonce("100");
 
     bcos::crypto::HashType stateRoot(bcos::asBytes("root1"));
     std::string contractAddress("contract Address!");
@@ -493,7 +493,7 @@ BOOST_AUTO_TEST_CASE(submitResult)
     protocol::TransactionSubmitResultImpl submitResult(nullptr);
     submitResult.setNonce(bcos::protocol::NonceType("1234567"));
 
-    BOOST_CHECK_EQUAL(submitResult.nonce().str(), "1234567");
+    BOOST_CHECK_EQUAL(submitResult.nonce(), "1234567");
 }
 
 BOOST_AUTO_TEST_CASE(tarsMovable)

@@ -57,6 +57,8 @@ public:
 
     virtual void fetchCompatibilityVersion();
 
+    virtual void fetchAuthCheckStatus();
+
     virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);
 
 protected:

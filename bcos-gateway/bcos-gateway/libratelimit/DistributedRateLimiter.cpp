@@ -22,7 +22,6 @@
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libratelimit/DistributedRateLimiter.h>
 #include <bcos-utilities/Common.h>
-#include <mutex>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -69,10 +68,11 @@ const std::string DistributedRateLimiter::LUA_SCRIPT = R"(
  * @param _requiredPermits
  * @return void
  */
-void DistributedRateLimiter::acquire(int64_t _requiredPermits)
+bool DistributedRateLimiter::acquire(int64_t _requiredPermits)
 {
     // Note: This operation is not supported
     std::ignore = _requiredPermits;
+    return false;
 }
 
 /**
@@ -84,6 +84,20 @@ void DistributedRateLimiter::acquire(int64_t _requiredPermits)
  */
 bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
 {
+    if (std::cmp_greater(_requiredPermits, m_maxPermitsSize))
+    {
+        if (m_allowExceedMaxPermitSize)
+        {
+            return true;
+        }
+
+        // Notice: the acquire amount exceeded the maximum, it will never succeed
+        RATELIMIT_LOG(WARNING) << LOG_DESC("try acquire amount exceeded the maximum")
+                               << LOG_KV("requiredPermits", _requiredPermits)
+                               << LOG_KV("maxPermitsSize", m_maxPermitsSize);
+        return false;
+    }
+
     // try local cache acquire first
     if (m_enableLocalCache && tryAcquireLocalCache(_requiredPermits, true))
     {
@@ -110,7 +124,7 @@ bool DistributedRateLimiter::tryAcquire(int64_t _requiredPermits)
     }
 
     // request redis to update local cache
-    int64_t permits = m_maxPermits / 100 * m_localCachePermits;
+    int64_t permits = m_maxPermitsSize / 100 * m_localCachePermits;
     if (requestRedis(permits > _requiredPermits ? permits : _requiredPermits) >= 0)
     {
         // update local cache
@@ -195,8 +209,8 @@ int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
         auto start = utcTimeUs();
 
         auto keys = {m_rateLimiterKey};
-        std::vector<std::string> args = {std::to_string(m_maxPermits),
-            std::to_string(_requiredPermits), std::to_string(m_interval)};
+        std::vector<std::string> args = {std::to_string(m_maxPermitsSize),
+            std::to_string(_requiredPermits), std::to_string(m_intervalSec)};
 
         auto result = m_redis->eval<long long>(
             LUA_SCRIPT, keys.begin(), keys.end(), args.begin(), args.end());
@@ -219,10 +233,14 @@ int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
     {
         m_stat.updateExp();
         // TODO: statistics failure information
-        GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("requestRedis")
-                           << LOG_KV("rateLimitKey", m_rateLimiterKey)
-                           << LOG_KV("enableLocalCache", m_enableLocalCache)
-                           << LOG_KV("error", e.what());
+
+        if (c_fileLogLevel <= TRACE)
+        {
+            GATEWAY_LOG(TRACE) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("requestRedis")
+                               << LOG_KV("rateLimitKey", m_rateLimiterKey)
+                               << LOG_KV("enableLocalCache", m_enableLocalCache)
+                               << LOG_KV("error", e.what());
+        }
 
         // exception throw, allow this acquire
         return _requiredPermits;

@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     string transferAddress = "usr/alice/transfer";
 
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", transferAbi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", transferAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -241,6 +241,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     blockHeader->setNumber(1);
     std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
     blockHeader->setParentInfo(parentInfos);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
@@ -346,7 +347,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
             codec->encodeWithSig("transfer(string,string,uint32)", from, to, amount);
         input.insert(input.end(), encodedParams.begin(), encodedParams.end());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, 101 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -454,7 +455,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     string helloWorldAddress = "usr/alice/hello_world";
 
     auto tx =
-        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -478,6 +479,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
     std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
     blockHeader->setParentInfo(parentInfos);
@@ -585,7 +587,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
         auto encodedParams = codec->encodeWithSig("set(string)", name);
         input.insert(input.end(), encodedParams.begin(), encodedParams.end());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, 101 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -711,7 +713,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     bytes input;
     boost::algorithm::unhex(bin, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", abi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", abi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -743,6 +745,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
     std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
     blockHeader->setParentInfo(parentInfos);
@@ -812,7 +815,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
         bcos::u256 value(10);
 
         auto input = codec->encodeWithSig("transfer(string,string,uint256)", from, to, value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, 101 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -952,7 +955,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     bytes input;
     boost::algorithm::unhex(bin, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", abi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", abi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -984,6 +987,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
     std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
     blockHeader->setParentInfo(parentInfos);

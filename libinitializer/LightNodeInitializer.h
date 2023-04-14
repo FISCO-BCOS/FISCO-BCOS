@@ -156,23 +156,24 @@ public:
                         []([[maybe_unused]] const Error::Ptr& error) {});
                 }(ledger, std::move(front), std::move(nodeID), std::string(messageID), data));
             });
-        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_ABI,
-                                               [ledger, weakFront](
-                bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
+        front->registerModuleMessageDispatcher(
+            bcos::protocol::LIGHTNODE_GET_ABI, [ledger, weakFront](bcos::crypto::NodeIDPtr nodeID,
+                                                   const std::string& id, bytesConstRef data) {
                 auto front = weakFront.lock();
                 if (!front)
                 {
                     return;
                 }
                 task::wait([](decltype(ledger) ledger, std::shared_ptr<front::FrontService> front,
-                              bcos::crypto::NodeIDPtr nodeID, std::string id,
-                              bytesConstRef data) -> task::Task<void> {
+                               bcos::crypto::NodeIDPtr nodeID, std::string id,
+                               bytesConstRef data) -> task::Task<void> {
                     bcostars::ResponseGetABI response;
                     try
                     {
                         bcostars::RequestGetABI request;
                         bcos::concepts::serialize::decode(data, request);
-                        auto abiStr = co_await concepts::getRef(ledger).getABI(request.contractAddress);
+                        auto abiStr =
+                            co_await concepts::getRef(ledger).getABI(request.contractAddress);
                         response.abiStr = abiStr;
                         LIGHTNODE_LOG(TRACE) << "client get ABI response is: " << response.abiStr;
                     }
@@ -183,9 +184,8 @@ public:
                     }
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_ABI,
-                        nodeID, bcos::ref(responseBuffer),
-                        []([[maybe_unused]] const Error::Ptr& error) {});
+                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_ABI, nodeID,
+                        bcos::ref(responseBuffer), []([[maybe_unused]] const Error::Ptr& error) {});
                 }(ledger, std::move(front), std::move(nodeID), std::string(id), data));
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_SEND_TRANSACTION,
@@ -268,6 +268,7 @@ private:
             {
                 co_await concepts::getRef(ledger).template getBlock<bcos::concepts::ledger::ALL>(
                     request.blockNumber, response.block);
+                LIGHTNODE_LOG(DEBUG) << "getAllBlock success:" << request.blockNumber;
             }
         }
         catch (std::exception& e)
@@ -278,11 +279,19 @@ private:
 
         bcos::bytes responseBuffer;
         bcos::concepts::serialize::encode(response, responseBuffer);
+        auto blockNumber = request.blockNumber;
         front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID,
-            bcos::ref(responseBuffer), [](Error::Ptr _error) {
+            bcos::ref(responseBuffer), [blockNumber](Error::Ptr _error) {
                 if (_error)
-                {}
+                {
+                    LIGHTNODE_LOG(ERROR) << "send getblockResponse failed " << LOG_KV("blockNumber", blockNumber);
+                }
             });
+        LIGHTNODE_LOG(DEBUG) << "asyncSendResponse: sendResponseMessage to dstNode:"  << nodeID->hex()
+                             << LOG_KV("blockNUmber", blockNumber)
+                             << LOG_KV("moduleID", bcos::protocol::LIGHTNODE_GET_BLOCK)
+                             << LOG_KV("responseBuffer size", responseBuffer.size());
+
     }
 
     task::Task<void> submitTransaction(std::shared_ptr<bcos::front::FrontService> front,

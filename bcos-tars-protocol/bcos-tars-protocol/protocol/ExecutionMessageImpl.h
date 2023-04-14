@@ -207,6 +207,12 @@ public:
         m_inner()->delegateCallSender = delegateCallSender;
     }
 
+    bool hasContractTableChanged() const override { return m_inner()->hasContractTableChanged; }
+    void setHasContractTableChanged(bool hasChanged) override
+    {
+        m_inner()->hasContractTableChanged = hasChanged;
+    }
+
     bcostars::ExecutionMessage inner() const { return *(m_inner()); }
 
 protected:

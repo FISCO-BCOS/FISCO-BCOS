@@ -43,7 +43,7 @@ public:
 
         auto transaction = _protocol->blockFactory()->transactionFactory()->createTransaction(3,
             _nodeConfig->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS, input,
-            u256(_number), 500, _nodeConfig->chainId(), _nodeConfig->groupId(), utcTime());
+            u256(_number).str(), 500, _nodeConfig->chainId(), _nodeConfig->groupId(), utcTime());
         _block->appendTransaction(std::move(transaction));
     }
 };

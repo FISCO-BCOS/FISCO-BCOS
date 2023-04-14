@@ -27,6 +27,7 @@
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <string.h>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
@@ -35,6 +36,7 @@ namespace bcos::rpc
 {
 // clang-format off
 struct NotFoundTransactionHash: public bcos::error::Exception {};
+struct CheckMerkleRootFailed: public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::concepts::ledger::Ledger LocalLedgerType,
@@ -72,12 +74,12 @@ public:
         try
         {
             auto& bcosError = dynamic_cast<bcos::Error&>(error);
-            toErrorResp(std::make_shared<bcos::Error>(std::move(bcosError)), std::move(respFunc));
+            toErrorResp(std::make_shared<bcos ::Error>(std::move(bcosError)), std::move(respFunc));
         }
         catch ([[maybe_unused]] std::bad_cast&)
         {
             // no bcos error
-            auto bcosError = bcos::Error(-1, boost::diagnostic_information(error));
+            auto bcosError = BCOS_ERROR(-1, boost::diagnostic_information(error));
             toErrorResp(bcosError, std::move(respFunc));
         }
     }
@@ -227,38 +229,36 @@ public:
             }(remoteLedger(), std::string(txHash), std::move(respFunc)));
     }
 
-    void getBlockByHash([[maybe_unused]] std::string_view _groupID,
-        [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view blockHash,
-        bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc) override
+    void getBlockByHash([[maybe_unused]] std::string_view groupID,
+        [[maybe_unused]] std::string_view nodeName, [[maybe_unused]] std::string_view blockHash,
+        bool onlyHeader, bool onlyTxHash, RespFunc respFunc) override
     {
-        auto blockNumber = std::make_unique<int64_t>(-1);
-        auto hash = std::make_unique<std::array<std::byte, Hasher::HASH_SIZE>>();
-        hex2Bin(blockHash, *hash);
-
-        auto& hashRef = *hash;
-        auto& blockNumberRef = *blockNumber;
-        bcos::task::wait(localLedger().getBlockNumberByHash(hashRef, blockNumberRef),
-            [this, m_hash = std::move(hash), m_blockNumber = std::move(blockNumber),
-                m_onlyHeader = _onlyHeader, m_respFunc = std::move(_respFunc),
-                m_groupID = std::string(_groupID), m_nodeName = std::string(_nodeName),
-                m_onlyTxHash = _onlyTxHash](std::exception_ptr error = {}) mutable {
-                if (error)
-                {
-                    toErrorResp(error, m_respFunc);
-                    return;
-                }
+        bcos::task::wait([](decltype(this) self, std::string groupID, std::string nodeName,
+                             std::string blockHash, bool onlyHeader, bool onlyTxHash,
+                             RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                auto blockNumber = int64_t(-1);
+                auto hash = std::array<std::byte, Hasher::HASH_SIZE>();
+                hex2Bin(blockHash, hash);
+                co_await self->localLedger().getBlockNumberByHash(hash, blockNumber);
 
                 LIGHTNODE_LOG(INFO)
-                    << "RPC get block by hash request: 0x" << *m_blockNumber << " " << m_onlyHeader;
-                if (*m_blockNumber < 0)
+                    << "RPC get block by hash request: 0x" << blockNumber << " " << onlyHeader;
+                if (blockNumber < 0)
                 {
                     BOOST_THROW_EXCEPTION(std::runtime_error{"Unable to find block hash!"});
                 }
 
-                getBlockByNumber(m_groupID, m_nodeName, *m_blockNumber, m_onlyHeader, m_onlyTxHash,
-                    std::move(m_respFunc));
-            });
-        ;
+                self->getBlockByNumber(
+                    groupID, nodeName, blockNumber, onlyHeader, onlyTxHash, std::move(respFunc));
+            }
+            catch (bcos::Error& error)
+            {
+                self->toErrorResp(error, respFunc);
+            }
+        }(this, std::string(groupID), std::string(nodeName), std::string(blockHash), onlyHeader,
+                                                    onlyTxHash, std::move(respFunc)));
     }
 
     void getBlockByNumber([[maybe_unused]] std::string_view groupID,
@@ -271,74 +271,108 @@ public:
         bcos::task::wait([](decltype(this) self, bool onlyHeader, int64_t blockNumber,
                              RespFunc respFunc) -> task::Task<void> {
             bcostars::Block block;
-            if (onlyHeader)
+            try
             {
-                co_await self->localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
-                    blockNumber, block);
-            }
-            else
-            {
-                co_await self->remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
-                    blockNumber, block);
-
-                if (!RANGES::empty(block.transactionsMetaData))
+                if (onlyHeader)
                 {
-                    // Check transaction merkle
-                    crypto::merkle::Merkle<Hasher> merkle;
-                    auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
-                    ](const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
-                        return transactionMetaData.hash;
-                    });
-                    std::vector<std::array<std::byte, Hasher::HASH_SIZE>> merkles;
-                    merkle.generateMerkle(hashesRange, merkles);
-
-                    if (RANGES::empty(merkles))
-                    {
-                        BOOST_THROW_EXCEPTION(
-                            std::runtime_error{"Unable to generate transaction merkle root!"});
-                    }
-
-                    if (!bcos::concepts::bytebuffer::equalTo(
-                            block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
-                    {
-                        BOOST_THROW_EXCEPTION(std::runtime_error{"No match transaction root!"});
-                    }
-                }
-
-                // Check parentBlock
-                if (blockNumber > 0)
-                {
-                    decltype(block) parentBlock;
                     co_await self->localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
-                        blockNumber - 1, parentBlock);
-
-                    std::array<std::byte, Hasher::HASH_SIZE> parentHash;
-                    bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
-
-                    if (RANGES::empty(block.blockHeader.data.parentInfo) ||
-                        (block.blockHeader.data.parentInfo[0].blockNumber !=
-                            parentBlock.blockHeader.data.blockNumber) ||
-                        !bcos::concepts::bytebuffer::equalTo(
-                            block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                            blockNumber, block);
+                }
+                else
+                {
+                    co_await self->remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
+                            blockNumber, block);
+                    if (RANGES::empty(block.transactionsMetaData) && blockNumber != 0)
                     {
-                        LIGHTNODE_LOG(ERROR) << "No match parentHash!";
-                        BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
+                        LIGHTNODE_LOG(ERROR) << LOG_DESC("getBlockByNumber")
+                                             << LOG_KV("block has no transaction, blockNumber", blockNumber);
+                        auto error = bcos::Error();
+                        self->toErrorResp(error, respFunc);
+                        co_return;
+                    }
+                    if (!RANGES::empty(block.transactionsMetaData))
+                    {
+                        // Check transaction merkle
+                        crypto::merkle::Merkle<Hasher> merkle;
+                        auto hashesRange = block.transactionsMetaData | RANGES::views::transform([]
+                                (const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
+                            return transactionMetaData.hash;
+                        });
+                        std::vector<std::array<std::byte, Hasher::HASH_SIZE>> merkles;
+                        merkle.generateMerkle(hashesRange, merkles);
+
+                        if (RANGES::empty(merkles))
+                        {
+                            BOOST_THROW_EXCEPTION(
+                                    std::runtime_error{"Unable to generate transaction merkle root!"});
+                        }
+                        LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
+                                             << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
+                                             << LOG_KV("transaction number", block.transactions.size());
+
+                        if (!bcos::concepts::bytebuffer::equalTo(
+                                block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
+                        {
+                            if (c_fileLogLevel <= bcos::LogLevel::TRACE) {
+                                for(size_t i = 0; i < hashesRange.size(); ++i) {
+                                    LIGHTNODE_LOG(TRACE) << LOG_KV("hashesRange txHash", toHexStringWithPrefix(hashesRange[i]));
+                                }
+                            }
+                            auto merkleRoot = *RANGES::rbegin(merkles);
+                            std::ostringstream strHex;
+                            strHex << "0x" << std::hex << std::setfill('0');
+                            for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
+                                strHex << std::setw(2) << static_cast<unsigned int>(merkleRoot[i]);
+                            }
+                            LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
+                                                 << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
+                                                 << LOG_KV("transaction number", block.transactions.size())
+                                                 << LOG_KV("merkleRoot", strHex.str());
+                            auto error = bcos::Error::buildError("TxsRoot check failed", -1, "CheckMerkleRootFailed");
+                            self->toErrorResp(error, respFunc);
+                            co_return;
+                            BOOST_THROW_EXCEPTION(
+                                    CheckMerkleRootFailed{} << bcos::error::ErrorMessage{"Check block transactionMerkle failed!"});
+                        }
+                    }
+
+                    // Check parentBlock
+                    if (blockNumber > 0)
+                    {
+                        decltype(block) parentBlock;
+                        co_await self->localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
+                                blockNumber - 1, parentBlock);
+
+                        std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+                        bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
+
+                        if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+                            (block.blockHeader.data.parentInfo[0].blockNumber !=
+                             parentBlock.blockHeader.data.blockNumber) ||
+                            !bcos::concepts::bytebuffer::equalTo(
+                                    block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                        {
+                            std::ostringstream parentHashHex;
+                            parentHashHex << "0x" << std::hex << std::setfill('0');
+                            for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
+                                parentHashHex << std::setw(2) << static_cast<unsigned int>(parentHash[i]);
+                            }
+                            LIGHTNODE_LOG(DEBUG) << LOG_KV("blockParentNumber", block.blockHeader.data.parentInfo[0].blockNumber)
+                                                 << LOG_KV("parentBlockNumber", parentBlock.blockHeader.data.blockNumber)
+                                                 << LOG_KV("calculate parentHash", parentHashHex.str())
+                                                 << LOG_KV("parentHash", toHexStringWithPrefix(block.blockHeader.data.parentInfo[0].blockHash));
+                            LIGHTNODE_LOG(ERROR) << "No match parentHash!";
+                            BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
+                        }
                     }
                 }
-            }
-
-            using ResultType = std::remove_cvref_t<decltype(block)>;
-            if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-            {
-                self->toErrorResp(block, respFunc);
-                co_return;
-            }
-            else
-            {
                 Json::Value resp;
                 toJsonResp<Hasher>(block, resp, onlyHeader);
-
                 respFunc(nullptr, resp);
+            }
+            catch (bcos::Error& error)
+            {
+                self->toErrorResp(error, respFunc);
             }
         }(this, onlyHeader, blockNumber, std::move(respFunc)));
     }
@@ -349,43 +383,41 @@ public:
     {
         LIGHTNODE_LOG(INFO) << "RPC get block hash by number request: " << blockNumber;
 
-        auto hash = std::make_unique<bcos::h256>();
-        auto& hashRef = *hash;
-        bcos::task::wait(localLedger().getBlockHashByNumber(blockNumber, hashRef),
-            [this, m_hash = std::move(hash), m_respFunc = std::move(respFunc)](
-                std::exception_ptr error = {}) mutable {
-                if (error)
+        task::wait(
+            [](decltype(this) self, int64_t blockNumber, RespFunc respFunc) -> task::Task<void> {
+                try
                 {
-                    this->toErrorResp(error, m_respFunc);
-                    return;
+                    auto hash = bcos::h256();
+                    co_await self->localLedger().getBlockHashByNumber(blockNumber, hash);
+                    Json::Value resp = bcos::toHexStringWithPrefix(hash);
+                    respFunc(nullptr, resp);
                 }
-                Json::Value resp = bcos::toHexStringWithPrefix(*m_hash);
-
-                m_respFunc(nullptr, resp);
-            });
+                catch (bcos::Error& error)
+                {
+                    self->toErrorResp(error, respFunc);
+                }
+            }(this, blockNumber, std::move(respFunc)));
     }
 
     void getBlockNumber(
-        std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override
+        std::string_view groupID, std::string_view nodeName, RespFunc respFunc) override
     {
         LIGHTNODE_LOG(INFO) << "RPC get block number request";
 
-        bcos::task::wait(localLedger().getStatus(),
-            [this, m_respFunc = std::move(_respFunc)](auto&& result) mutable {
-                using ResultType = std::remove_cvref_t<decltype(result)>;
-                if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-                {
-                    this->toErrorResp(result, m_respFunc);
-                    return;
-                }
-                else
-                {
-                    Json::Value resp = result.blockNumber;
+        task::wait([](decltype(this) self, RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                auto status = co_await self->localLedger().getStatus();
+                LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << status.blockNumber;
 
-                    LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << result.blockNumber;
-                    m_respFunc(nullptr, resp);
-                }
-            });
+                Json::Value resp = status.blockNumber;
+                respFunc(nullptr, resp);
+            }
+            catch (bcos::Error& error)
+            {
+                self->toErrorResp(error, respFunc);
+            }
+        }(this, std::move(respFunc)));
     }
 
     void getCode(std::string_view _groupID, std::string_view _nodeName,
@@ -395,24 +427,25 @@ public:
         _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
 
-    void getABI([[maybe_unused]]std::string_view _groupID, [[maybe_unused]]std::string_view _nodeName,
-                std::string_view _contractAddress, RespFunc _respFunc) override
+    void getABI([[maybe_unused]] std::string_view _groupID,
+        [[maybe_unused]] std::string_view _nodeName, std::string_view _contractAddress,
+        RespFunc _respFunc) override
     {
-        bcos::task::wait(
-            [this](auto remoteLedger, std::string _contractAddress, RespFunc _respFunc) -> task::Task<void>{
-              try
-              {
-                  LIGHTNODE_LOG(TRACE) << "RPC get contract " <<_contractAddress << " ABI request";
-                  auto abiStr = co_await remoteLedger.getABI(_contractAddress);
-                  LIGHTNODE_LOG(TRACE) <<  " lightNode RPC get ABI is: " << abiStr;
-                  Json::Value resp = abiStr;
-                  _respFunc(nullptr, resp);
-              }
-              catch (std::exception& error)
-              {
-                  toErrorResp(error, std::move(_respFunc));
-              }
-            }(remoteLedger(), std::string(_contractAddress), std::move(_respFunc)));
+        bcos::task::wait([this](auto remoteLedger, std::string _contractAddress,
+                             RespFunc _respFunc) -> task::Task<void> {
+            try
+            {
+                LIGHTNODE_LOG(TRACE) << "RPC get contract " << _contractAddress << " ABI request";
+                auto abiStr = co_await remoteLedger.getABI(_contractAddress);
+                LIGHTNODE_LOG(TRACE) << " lightNode RPC get ABI is: " << abiStr;
+                Json::Value resp = abiStr;
+                _respFunc(nullptr, resp);
+            }
+            catch (std::exception& error)
+            {
+                toErrorResp(error, std::move(_respFunc));
+            }
+        }(remoteLedger(), std::string(_contractAddress), std::move(_respFunc)));
     }
 
     void getSealerList(
@@ -504,26 +537,24 @@ public:
         _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
 
-    void getGroupBlockNumber(RespFunc _respFunc) override
+    void getGroupBlockNumber(RespFunc respFunc) override
     {
         LIGHTNODE_LOG(INFO) << "RPC get group block number request";
 
-        bcos::task::wait(localLedger().getStatus(),
-            [this, m_respFunc = std::move(_respFunc)](auto&& result) mutable {
-                using ResultType = std::remove_cvref_t<decltype(result)>;
-                if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-                {
-                    this->toErrorResp(result, m_respFunc);
-                    return;
-                }
-                else
-                {
-                    Json::Value resp = result.blockNumber;
+        task::wait([](decltype(this) self, RespFunc respFunc) -> task::Task<void> {
+            try
+            {
+                auto status = co_await self->localLedger().getStatus();
+                Json::Value resp = status.blockNumber;
 
-                    LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << result.blockNumber;
-                    m_respFunc(nullptr, resp);
-                }
-            });
+                LIGHTNODE_LOG(INFO) << "RPC get block number finished: " << status.blockNumber;
+                respFunc(nullptr, resp);
+            }
+            catch (bcos::Error& error)
+            {
+                self->toErrorResp(error, respFunc);
+            }
+        }(this, std::move(respFunc)));
     }
 
 private:

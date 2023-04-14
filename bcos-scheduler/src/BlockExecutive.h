@@ -11,6 +11,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/TransactionMetaData.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/BlockFactory.h>
@@ -80,9 +81,10 @@ public:
     virtual void saveMessage(
         std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG);
 
-    inline bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
+    inline bcos::protocol::BlockNumber number() { return m_blockHeader->number(); }
 
     inline bcos::protocol::Block::Ptr block() { return m_block; }
+    inline auto blockHeader() const noexcept { return m_blockHeader; }
     inline bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
     bool isCall() { return m_staticCall; }
@@ -106,6 +108,12 @@ public:
 
     bool isSysBlock() { return m_isSysBlock; }
 
+    virtual size_t getExecutorSize();
+
+    virtual void forEachExecutor(
+        std::function<void(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr)>
+            handleExecutor);
+
 protected:
     struct CommitStatus
     {
@@ -120,6 +128,8 @@ protected:
     void batchGetHashes(std::function<void(Error::UniquePtr, crypto::HashType)> callback);
     void batchBlockCommit(uint64_t rollbackVersion, std::function<void(Error::UniquePtr)> callback);
     void batchBlockRollback(uint64_t version, std::function<void(Error::UniquePtr)> callback);
+
+    virtual bool needPrepareExecutor() { return !m_hasDAG; }
 
     struct BatchStatus  // Batch state per batch
     {
@@ -141,6 +151,9 @@ protected:
     void DMCExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
     virtual std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
+    virtual std::shared_ptr<DmcExecutor> buildDmcExecutor(const std::string& name,
+        const std::string& contractAddress,
+        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor);
     void scheduleExecutive(ExecutiveState::Ptr executiveState);
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(
@@ -153,7 +166,10 @@ protected:
     void buildExecutivesFromMetaData();
     void buildExecutivesFromNormalTransaction();
 
+    bcos::storage::TransactionalStorageInterface::Ptr getStorage();
+
     virtual void serialPrepareExecutor();
+
     bcos::protocol::TransactionsPtr fetchBlockTxsFromTxPool(
         bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool);
     std::string preprocessAddress(const std::string_view& address);
@@ -163,7 +179,7 @@ protected:
 
     std::vector<ExecutiveResult> m_executiveResults;
 
-    size_t m_gasUsed = 0;
+    std::atomic<size_t> m_gasUsed = 0;
 
     GraphKeyLocks::Ptr m_keyLocks = std::make_shared<GraphKeyLocks>();
 
@@ -174,6 +190,7 @@ protected:
     std::chrono::milliseconds m_commitElapsed;
 
     bcos::protocol::Block::Ptr m_block;
+    bcos::protocol::BlockHeader::ConstPtr m_blockHeader;
     bcos::protocol::TransactionsPtr m_blockTxs;
 
     bcos::protocol::BlockHeader::Ptr m_result;

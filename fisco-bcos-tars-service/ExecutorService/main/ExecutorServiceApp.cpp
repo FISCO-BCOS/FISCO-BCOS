@@ -43,10 +43,7 @@ void ExecutorServiceApp::initialize()
 {
     try
     {
-        // m_timer = std::make_shared<bcos::Timer>(3000, "registerExecutor");
         createAndInitExecutor();
-        // m_timer->registerTimeoutHandler(boost::bind(&ExecutorServiceApp::registerExecutor,
-        // this)); m_timer->start();
     }
     catch (std::exception const& e)
     {
@@ -149,15 +146,16 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
-    auto stateStorageFactory = std::make_shared<bcos::storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
+    auto stateStorageFactory =
+        std::make_shared<bcos::storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
 
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, storage);
 
     auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
         m_txpool, cacheFactory, storage, executionMessageFactory, stateStorageFactory,
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),m_nodeConfig->vmCacheSize(),
-        m_nodeConfig->isAuthCheck(), "executor");
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
+        m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), "executor");
 
     m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
 
@@ -184,30 +182,5 @@ void ExecutorServiceApp::createAndInitExecutor()
         throw std::runtime_error("load endpoint information failed");
     }
     m_executorName = ret.second;
-    // registerExecutor();
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("createAndInitExecutor success");
-}
-
-void ExecutorServiceApp::registerExecutor()
-{
-    if (m_registerExecutorSuccess)
-    {
-        m_timer->stop();
-        return;
-    }
-    m_timer->restart();
-    EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("registerExecutor")
-                               << LOG_KV("executorName", m_executorName);
-    m_scheduler->registerExecutor(m_executorName, nullptr, [this](bcos::Error::Ptr&& _error) {
-        if (_error)
-        {
-            EXECUTOR_SERVICE_LOG(ERROR)
-                << LOG_DESC("registerExecutor error") << LOG_KV("name", m_executorName)
-                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-            return;
-        }
-        m_registerExecutorSuccess = true;
-        EXECUTOR_SERVICE_LOG(INFO)
-            << LOG_DESC("registerExecutor success") << LOG_KV("name", m_executorName);
-    });
 }

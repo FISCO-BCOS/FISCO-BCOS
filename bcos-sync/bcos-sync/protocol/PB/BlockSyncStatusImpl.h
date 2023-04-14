@@ -22,9 +22,7 @@
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/protocol/PB/BlockSyncMsgImpl.h"
 
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockSyncStatusImpl : public BlockSyncStatusInterface, public BlockSyncMsgImpl
 {
@@ -43,7 +41,7 @@ public:
 
     explicit BlockSyncStatusImpl(bytesConstRef _data) : BlockSyncStatusImpl() { decode(_data); }
 
-    ~BlockSyncStatusImpl() override {}
+    ~BlockSyncStatusImpl() override = default;
 
     void decode(bytesConstRef _data) override;
     bcos::crypto::HashType const& hash() const override { return m_hash; }
@@ -62,5 +60,4 @@ private:
     bcos::crypto::HashType m_genesisHash;
     std::int64_t m_time;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

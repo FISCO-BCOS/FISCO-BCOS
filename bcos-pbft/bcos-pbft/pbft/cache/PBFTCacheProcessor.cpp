@@ -144,13 +144,13 @@ void PBFTCacheProcessor::notifyMaxProposalIndex(bcos::protocol::BlockNumber _pro
     }
 }
 
-bool PBFTCacheProcessor::existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg)
+bool PBFTCacheProcessor::existPrePrepare(PBFTMessageInterface::Ptr const& _prePrepareMsg) const
 {
     if (!m_caches.contains(_prePrepareMsg->index()))
     {
         return false;
     }
-    auto pbftCache = m_caches[_prePrepareMsg->index()];
+    auto pbftCache = m_caches.at(_prePrepareMsg->index());
     return pbftCache->existPrePrepare(_prePrepareMsg);
 }
 
@@ -177,23 +177,24 @@ bool PBFTCacheProcessor::tryToFillProposal(PBFTMessageInterface::Ptr _prePrepare
     return true;
 }
 
-bool PBFTCacheProcessor::conflictWithProcessedReq(PBFTMessageInterface::Ptr _msg)
+bool PBFTCacheProcessor::conflictWithProcessedReq(PBFTMessageInterface::Ptr const& _msg) const
 {
     if (!m_caches.contains(_msg->index()))
     {
         return false;
     }
-    auto pbftCache = m_caches[_msg->index()];
+    auto pbftCache = m_caches.at(_msg->index());
     return pbftCache->conflictWithProcessedReq(_msg);
 }
 
-bool PBFTCacheProcessor::conflictWithPrecommitReq(PBFTMessageInterface::Ptr _prePrepareMsg)
+bool PBFTCacheProcessor::conflictWithPrecommitReq(
+    PBFTMessageInterface::Ptr const& _prePrepareMsg) const
 {
     if (!m_caches.contains(_prePrepareMsg->index()))
     {
         return false;
     }
-    auto pbftCache = m_caches[_prePrepareMsg->index()];
+    auto pbftCache = m_caches.at(_prePrepareMsg->index());
     return pbftCache->conflictWithPrecommitReq(_prePrepareMsg);
 }
 
@@ -596,7 +597,7 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
                     precommitProposal->hash() != proposal->hash())
                 {
                     // fatal case: two proposals in the same view with different hash
-                    if (precommitProposal->view() == proposal->view())
+                    if (precommitProposal->view() == proposal->view()) [[unlikely]]
                     {
                         PBFT_LOG(FATAL)
                             << LOG_DESC(
@@ -662,7 +663,7 @@ NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
         return nullptr;
     }
     auto toView = m_config->toView();
-    if (!m_viewChangeWeight.count(toView))
+    if (!m_viewChangeWeight.contains(toView))
     {
         return nullptr;
     }
@@ -775,7 +776,7 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
     }
     // avoid the failure to verify proposalWeight due to the modification of consensus node list and
     // consensus weight
-    if (!m_caches.count(_precommitMsg->index()))
+    if (!m_caches.contains(_precommitMsg->index()))
     {
         return ret;
     }
@@ -841,7 +842,8 @@ ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(
     return pbftMessage;
 }
 
-void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _consensusedNumber)
+void PBFTCacheProcessor::removeConsensusedCache(
+    ViewType _view, bcos::protocol::BlockNumber _consensusedNumber)
 {
     m_proposalsToStableConsensus.erase(_consensusedNumber);
     for (auto pcache = m_caches.begin(); pcache != m_caches.end();)
@@ -862,7 +864,7 @@ void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _con
 
 
 void PBFTCacheProcessor::resetCacheAfterViewChange(
-    ViewType _view, BlockNumber _latestCommittedProposal)
+    ViewType _view, bcos::protocol::BlockNumber _latestCommittedProposal)
 {
     for (auto const& it : m_caches)
     {
@@ -891,7 +893,7 @@ void PBFTCacheProcessor::removeInvalidRecoverCache(ViewType _view)
 }
 
 void PBFTCacheProcessor::removeInvalidViewChange(
-    ViewType _view, BlockNumber _latestCommittedProposal)
+    ViewType _view, bcos::protocol::BlockNumber _latestCommittedProposal)
 {
     for (auto it = m_viewChangeCache.begin(); it != m_viewChangeCache.end();)
     {
@@ -1068,7 +1070,7 @@ bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _chec
 
 void PBFTCacheProcessor::eraseCommittedProposalList(bcos::protocol::BlockNumber _index)
 {
-    if (!m_committedProposalList.count(_index))
+    if (!m_committedProposalList.contains(_index))
     {
         return;
     }

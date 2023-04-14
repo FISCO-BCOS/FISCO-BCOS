@@ -17,6 +17,7 @@
  * @author: octopus
  * @date 2021-07-28
  */
+#include "bcos-boostssl/websocket/WsStream.h"
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -88,6 +89,7 @@ void WsService::start()
         reconnect();
     }
 
+    // start connect to server
     reportConnectedNodes();
 
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("start")
@@ -124,7 +126,6 @@ void WsService::stop()
         m_heartbeat->cancel();
     }
 
-
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("stop") << LOG_DESC("stop websocket service successfully");
 }
 
@@ -133,6 +134,23 @@ void WsService::reportConnectedNodes()
 {
     auto ss = sessions();
     WEBSOCKET_SERVICE(INFO) << LOG_DESC("connected nodes") << LOG_KV("count", ss.size());
+
+    for (auto const& session : ss)
+    {
+        auto queueSize = session->writeQueueSize();
+        if (queueSize > 0)
+        {
+            WEBSOCKET_SERVICE(INFO)
+                << LOG_DESC("session write queue status") << LOG_KV("endpoint", session->endPoint())
+                << LOG_KV("writeQueueSize", queueSize);
+        }
+        else
+        {
+            WEBSOCKET_SERVICE(DEBUG)
+                << LOG_DESC("session write queue status") << LOG_KV("endpoint", session->endPoint())
+                << LOG_KV("writeQueueSize", queueSize);
+        }
+    }
 
     m_heartbeat = std::make_shared<boost::asio::deadline_timer>(
         *(m_timerIoc), boost::posix_time::milliseconds(m_config->heartbeatPeriod()));
@@ -338,11 +356,17 @@ void WsService::reconnect()
 
 bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
 {
-    UpgradableGuard l(x_msgTypeHandlers);
-    if (m_msgType2Method.count(_msgType) || !_msgHandler)
+    if (!_msgHandler)
     {
         return false;
     }
+    UpgradableGuard l(x_msgTypeHandlers);
+    auto it = m_msgType2Method.find(_msgType);
+    if (it != m_msgType2Method.end())
+    {
+        return false;
+    }
+
     UpgradeGuard ul(l);
     m_msgType2Method[_msgType] = _msgHandler;
     return true;
@@ -351,9 +375,10 @@ bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
 MsgHandler WsService::getMsgHandler(uint16_t _type)
 {
     ReadGuard l(x_msgTypeHandlers);
-    if (m_msgType2Method.count(_type))
+    auto it = m_msgType2Method.find(_type);
+    if (it != m_msgType2Method.end())
     {
-        return m_msgType2Method[_type];
+        return it->second;
     }
     return nullptr;
 }
@@ -361,12 +386,13 @@ MsgHandler WsService::getMsgHandler(uint16_t _type)
 bool WsService::eraseMsgHandler(uint16_t _type)
 {
     UpgradableGuard l(x_msgTypeHandlers);
-    if (!m_msgType2Method.count(_type))
+    auto it = m_msgType2Method.find(_type);
+    if (it == m_msgType2Method.end())
     {
         return false;
     }
     UpgradeGuard ul(l);
-    m_msgType2Method.erase(_type);
+    m_msgType2Method.erase(it);
     return true;
 }
 
@@ -571,7 +597,7 @@ void WsService::asyncSendMessageByEndPoint(const std::string& _endPoint,
     {
         if (_respFunc)
         {
-            auto error = std::make_shared<Error>(
+            auto error = BCOS_ERROR_PTR(
                 WsError::EndPointNotExist, "there has no connection of the endpoint exist");
             _respFunc(error, nullptr, nullptr);
         }
@@ -623,7 +649,7 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
         {
             if (ss.empty())
             {
-                auto error = std::make_shared<Error>(
+                auto error = BCOS_ERROR_PTR(
                     WsError::NoActiveCons, "there has no active connection available");
                 respFunc(error, nullptr, nullptr);
                 return;

@@ -37,6 +37,8 @@ constexpr static const std::string_view FS_USER_TABLE{"/tables"};
 constexpr static const uint8_t FS_ROOT_SUB_COUNT = 5;
 constexpr static const std::array<std::string_view, FS_ROOT_SUB_COUNT> FS_ROOT_SUBS = {
     FS_ROOT, FS_APPS, FS_USER, FS_USER_TABLE, FS_SYS_BIN};
+constexpr static const std::array<std::string_view, FS_ROOT_SUB_COUNT - 1> FS_ROOT_SUBS_NAME = {
+    "apps", "usr", "tables", "sys"};
 
 // not use in version > 3.1.0
 constexpr static const std::string_view FS_KEY_SUB{"sub"};

@@ -61,7 +61,7 @@ bool P2PMessageV2::encodeHeader(bytes& _buffer)
     return true;
 }
 
-int32_t P2PMessageV2::decodeHeader(bytesConstRef _buffer)
+int32_t P2PMessageV2::decodeHeader(const bytesConstRef& _buffer)
 {
     int32_t offset = P2PMessage::decodeHeader(_buffer);
     if (m_version <= bcos::protocol::ProtocolVersion::V0)

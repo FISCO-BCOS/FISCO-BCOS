@@ -20,6 +20,7 @@
 
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/libratelimit/RateLimiterStat.h>
 #include <boost/lexical_cast.hpp>
@@ -32,34 +33,30 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::gateway::ratelimiter;
 
-const std::string RateLimiterStat::TOTAL_INCOMING = " total    ";
-const std::string RateLimiterStat::TOTAL_OUTGOING = " total    ";
+const std::string RateLimiterStat::TOTAL_INCOMING = "total  ";
+const std::string RateLimiterStat::TOTAL_OUTGOING = "total  ";
 
-double Stat::calcAvgRate(uint64_t _data, uint32_t _periodMS)
+std::optional<std::string> Stat::toString(const std::string& _prefix, uint32_t _periodMS) const
 {
-    auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _periodMS;
-    return avgRate;
-}
-
-std::optional<std::string> Stat::toString(const std::string& _prefix, uint32_t _periodMS)
-{
-    if (lastDataSize.load() == 0)
+    // Notice: no data interaction, ignore, no display
+    if ((lastTimes == 0) && (lastFailedTimes == 0))
     {
         return std::nullopt;
     }
 
-    auto avgRate = calcAvgRate(lastDataSize.load(), _periodMS);
+    auto avgRate = calcAvgRate(lastDataSize, _periodMS);
+    auto avgQPS = calcAvgQPS(lastTimes, _periodMS);
 
     std::stringstream ss;
 
     ss << " \t[" << _prefix << "] "
-       << " \t"
-       << " |total data: " << totalDataSize.load() << " |last data: " << lastDataSize.load()
-       << " |total times: " << totalTimes.load() << " |last times: " << lastTimes.load()
-       << " |total failed times: " << totalFailedTimes.load()
-       << " |last failed times: " << lastFailedTimes.load() << " |avg rate(Mb/s): ";
+       << " |total data: " << totalDataSize << " |last data: " << lastDataSize
+       << " |total times: " << totalTimes << " |last times: " << lastTimes
+       << " |total failed times: " << totalFailedTimes << " |last failed times: " << lastFailedTimes
+       << " |avg rate(Mb/s): ";
 
     ss << std::fixed << std::setprecision(2) << avgRate;
+    ss << " |avg qps(p/s): " << avgQPS;
 
     return ss.str();
 }
@@ -87,8 +84,8 @@ void RateLimiterStat::start()
         }
 
         auto io = rateLimiterStat->inAndOutStat(statInterval);
-        GATEWAY_LOG(INFO) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.first);
-        GATEWAY_LOG(INFO) << LOG_DESC("\n [ratelimiter stat]") << LOG_DESC(io.second);
+        GATEWAY_LOG(INFO) << LOG_DESC(" [ratelimiter stat] ") << LOG_DESC(io.first);
+        GATEWAY_LOG(INFO) << LOG_DESC(" [ratelimiter stat] ") << LOG_DESC(io.second);
         rateLimiterStat->flushStat();
         statTimer->restart();
     });
@@ -96,7 +93,8 @@ void RateLimiterStat::start()
     m_statTimer->start();
 
     RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat start ok")
-                        << LOG_KV("statInterval", statInterval);
+                        << LOG_KV("statInterval", statInterval)
+                        << LOG_KV("enableConnectDebugInfo", m_enableConnectDebugInfo);
 }
 
 void RateLimiterStat::stop()
@@ -117,45 +115,69 @@ void RateLimiterStat::stop()
     RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat stop end");
 }
 
-
-std::string RateLimiterStat::toGroupKey(const std::string& _groupID)
+// ---------------- statistics on inbound and outbound begin -------------------
+void RateLimiterStat::updateInComing0(
+    const std::string& _endpoint, uint16_t _pgkType, uint64_t _dataSize, bool _suc)
 {
-    return " group :  " + _groupID;
-}
+    if (!working())
+    {
+        return;
+    }
 
-std::string RateLimiterStat::toModuleKey(uint16_t _moduleID)
-{
-    return " module : " + protocol::moduleIDToString((protocol::ModuleID)_moduleID);
-}
-
-std::string RateLimiterStat::toEndPointKey(const std::string& _ep)
-{
-    return " endpoint:  " + _ep;
-}
-
-void RateLimiterStat::updateInComing(const std::string& _endpoint, uint64_t _dataSize)
-{
-    std::string epKey = toEndPointKey(_endpoint);
+    std::string epKey = toEndpointKey(_endpoint);
     std::string totalKey = TOTAL_OUTGOING;
 
     // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("endpoint", _endpoint)
     //                     << LOG_KV("dataSize", _dataSize);
 
-    std::lock_guard<std::mutex> lock(m_inLock);
+    {
+        std::lock_guard<std::mutex> lock(m_inLock);
 
-    auto& totalInStat = m_inStat[totalKey];
-    auto& epInStat = m_inStat[epKey];
+        auto& totalInStat = m_inStat[totalKey];
+        auto& epInStat = m_inStat[epKey];
+        if (_suc)
+        {
+            // update total incoming
+            totalInStat.update(_dataSize);
+            // update connection incoming
+            epInStat.update(_dataSize);
+        }
+        else
+        {
+            // update total incoming
+            totalInStat.updateFailed();
+            // update connection incoming
+            epInStat.updateFailed();
+        }
+    }
 
-    // update total incoming
-    totalInStat.update(_dataSize);
+    if (m_enableConnectDebugInfo)
+    {
+        std::string epPkgKey = toEndpointPkgTypeKey(_endpoint, _pgkType);
 
-    // update connection incoming
-    epInStat.update(_dataSize);
+        std::lock_guard<std::mutex> lock(m_inLock);
+        auto& epPkgInStat = m_inStat[epPkgKey];
+
+        if (_suc)
+        {
+            epPkgInStat.update(_dataSize);
+        }
+        else
+
+        {
+            epPkgInStat.updateFailed();
+        }
+    }
 }
 
 void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dataSize, bool suc)
 {
-    std::string epKey = toEndPointKey(_endpoint);
+    if (!working())
+    {
+        return;
+    }
+
+    std::string epKey = toEndpointKey(_endpoint);
     std::string totalKey = TOTAL_OUTGOING;
 
     std::lock_guard<std::mutex> lock(m_outLock);
@@ -179,39 +201,67 @@ void RateLimiterStat::updateOutGoing(const std::string& _endpoint, uint64_t _dat
 }
 
 void RateLimiterStat::updateInComing(
-    const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize)
+    const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool _suc)
 {
-    if (_groupID.empty())
-    {  // amop
-        if (_moduleID != 0)
-        {
-            std::string moduleKey = toModuleKey(_moduleID);
-            std::lock_guard<std::mutex> lock(m_inLock);
+    if (!working())
+    {
+        return;
+    }
 
-            auto& moduleInStat = m_inStat[moduleKey];
+    if (_groupID.empty() && (_moduleID != 0))
+    {  // amop
+        std::string moduleKey = toModuleKey(_moduleID);
+        std::lock_guard<std::mutex> lock(m_inLock);
+
+        auto& moduleInStat = m_inStat[moduleKey];
+
+        if (_suc)
+        {
             moduleInStat.update(_dataSize);
+        }
+        else
+        {
+            moduleInStat.updateFailed();
         }
 
         return;
     }
 
-    // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("_groupID", _groupID)
-    //                     << LOG_KV("moduleID", _moduleID) << LOG_KV("dataSize", _dataSize);
-
     std::string groupKey = toGroupKey(_groupID);
-    std::lock_guard<std::mutex> lock(m_inLock);
 
+    std::lock_guard<std::mutex> lock(m_inLock);
     auto& groupInStat = m_inStat[groupKey];
     groupInStat.update(_dataSize);
+
+    if (m_enableConnectDebugInfo && (_moduleID != 0))
+    {
+        std::string key = toModuleKey(_groupID, _moduleID);
+
+        auto& inStat = m_inStat[key];
+
+        if (_suc)
+        {
+            inStat.update(_dataSize);
+        }
+        else
+        {
+            inStat.updateFailed();
+        }
+    }
 }
 
 void RateLimiterStat::updateOutGoing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _dataSize, bool suc)
 {
+    if (!working())
+    {
+        return;
+    }
+
     if (_groupID.empty())
     {
         if (_moduleID != 0)
-        {
+        {  // AMOP
             std::string moduleKey = toModuleKey(_moduleID);
             std::lock_guard<std::mutex> lock(m_outLock);
 
@@ -228,6 +278,11 @@ void RateLimiterStat::updateOutGoing(
                 moduleOutStat.updateFailed();
             }
         }
+        else
+        {
+            // Notice: p2p basic message, do nothing
+        }
+
         return;
     }
 
@@ -244,7 +299,24 @@ void RateLimiterStat::updateOutGoing(
     {
         groupOutStat.updateFailed();
     }
+
+    if (m_enableConnectDebugInfo && (_moduleID != 0))
+    {
+        std::string key = toModuleKey(_groupID, _moduleID);
+
+        auto& outStat = m_outStat[key];
+        if (suc)
+        {
+            // update total outgoing
+            outStat.update(_dataSize);
+        }
+        else
+        {
+            outStat.updateFailed();
+        }
+    }
 }
+// ---------------- statistics on inbound and outbound end -------------------
 
 void RateLimiterStat::flushStat()
 {
@@ -267,31 +339,43 @@ void RateLimiterStat::flushStat()
 
 std::pair<std::string, std::string> RateLimiterStat::inAndOutStat(uint32_t _intervalMS)
 {
-    std::string in = " <incoming bandwidth> :";
+    std::unordered_map<std::string, Stat> inStat;
+    std::unordered_map<std::string, Stat> outStat;
+
     {
         std::lock_guard<std::mutex> lock(m_inLock);
-        for (auto& [k, s] : m_inStat)
-        {
-            in += "\t\n";
+        inStat = m_inStat;
+    }
 
+    {
+        std::lock_guard<std::mutex> lock(m_outLock);
+        outStat = m_outStat;
+    }
+
+    std::map<std::string, Stat> inStatMap{inStat.begin(), inStat.end()};
+    std::map<std::string, Stat> outStatMap{outStat.begin(), outStat.end()};
+
+    std::string in = " <incoming>:";
+    std::string out = " <outgoing>:";
+    {
+        for (auto& [k, s] : inStatMap)
+        {
             auto opt = s.toString(k, _intervalMS);
             if (opt.has_value())
             {
+                in += "\t\n";
                 in += opt.value();
             }
         }
     }
 
-    std::string out = " <outgoing bandwidth> :";
     {
-        std::lock_guard<std::mutex> lock(m_outLock);
-        for (auto& [k, s] : m_outStat)
+        for (auto& [k, s] : outStatMap)
         {
-            out += "\t\n";
-
             auto opt = s.toString(k, _intervalMS);
             if (opt.has_value())
             {
+                out += "\t\n";
                 out += opt.value();
             }
         }

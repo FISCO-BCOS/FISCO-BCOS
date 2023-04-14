@@ -39,9 +39,10 @@ public:
 
     ~FileSystemPrecompiledFixture() override = default;
 
-    void init(bool _isWasm, protocol::BlockVersion version = BlockVersion::V3_1_VERSION)
+    void init(bool _isWasm, protocol::BlockVersion version = BlockVersion::V3_1_VERSION,
+        std::shared_ptr<std::set<std::string, std::less<>>> _ignoreTables = nullptr)
     {
-        setIsWasm(_isWasm, false, true, version);
+        setIsWasm(_isWasm, false, true, version, _ignoreTables);
         bfsAddress = _isWasm ? precompiled::BFS_NAME : BFS_ADDRESS;
         tableAddress = _isWasm ? precompiled::KV_TABLE_NAME : KV_TABLE_ADDRESS;
         tableTestAddress1 = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
@@ -105,7 +106,8 @@ public:
             "6bd9750029";
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -160,7 +162,8 @@ public:
         nextBlock(_number, m_blockVersion);
         bytes in =
             codec->encodeWithSig("createKVTable(string,string,string)", tableName, key, value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -253,7 +256,8 @@ public:
         int _errorCode = 0, bool errorInPrecompiled = false)
     {
         bytes in = codec->encodeWithSig("mkdir(string)", path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -332,7 +336,8 @@ public:
             in = codec->encodeWithSig(
                 "link(string,string,string,string)", name, version, address, abi);
         }
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -404,7 +409,8 @@ public:
         protocol::BlockNumber _number, std::string const& _path, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("readlink(string)", _path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -442,7 +448,8 @@ public:
         protocol::BlockNumber _number, uint32_t from, uint32_t to, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("rebuildBfs(uint256,uint256)", from, to);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         Address newSender = Address(isWasm ? std::string(precompiled::SYS_CONFIG_NAME) :
                                              std::string(precompiled::SYS_CONFIG_ADDRESS));
         tx->forceSender(newSender.asBytes());
@@ -479,12 +486,13 @@ public:
         return result2;
     };
 
-    ExecutionMessage::UniquePtr rebuildBfsBySysConfig(
-        protocol::BlockNumber _number, std::string version, int _errorCode = 0)
+    ExecutionMessage::UniquePtr rebuildBfsBySysConfig(protocol::BlockNumber _number,
+        std::string version, int _errorCode = 0, std::function<void()> funcBeforeCommit = nullptr)
     {
         bytes in = codec->encodeWithSig("setValueByKey(string,string)",
             std::string(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), version);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         Address newSender = Address(std::string(precompiled::AUTH_COMMITTEE_ADDRESS));
         tx->forceSender(newSender.asBytes());
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -539,6 +547,10 @@ public:
             BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
+        if (funcBeforeCommit != nullptr)
+        {
+            funcBeforeCommit();
+        }
         commitBlock(_number);
         return result4;
     };
@@ -548,7 +560,8 @@ public:
     {
         bytes in =
             codec->encodeWithSig("list(string,uint256,uint256)", path, u256(offset), u256(count));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -595,7 +608,7 @@ BOOST_FIXTURE_TEST_SUITE(precompiledFileSystemTest, FileSystemPrecompiledFixture
 BOOST_AUTO_TEST_CASE(lsTest)
 {
     init(false);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -671,6 +684,10 @@ BOOST_AUTO_TEST_CASE(lsTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }
         else
@@ -688,6 +705,12 @@ BOOST_AUTO_TEST_CASE(lsTest)
         auto take = precompiled::BFS_SYS_SUBS_COUNT;
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            // remove cast
+            take--;
+        }
+        if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            // remove shard
             take--;
         }
         for (auto const& sysSub :
@@ -701,7 +724,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
 BOOST_AUTO_TEST_CASE(lsPageTest)
 {
     init(false);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -785,6 +808,10 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }
         else
@@ -802,6 +829,12 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
         auto take = precompiled::BFS_SYS_SUBS_COUNT;
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            // remove cast
+            take--;
+        }
+        if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            // remove shard
             take--;
         }
         for (auto const& sysSub :
@@ -815,7 +848,7 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
 BOOST_AUTO_TEST_CASE(lsPagWasmTest)
 {
     init(true);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -899,6 +932,10 @@ BOOST_AUTO_TEST_CASE(lsPagWasmTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }
         else
@@ -916,6 +953,12 @@ BOOST_AUTO_TEST_CASE(lsPagWasmTest)
         auto take = precompiled::BFS_SYS_SUBS_COUNT;
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            // remove cast
+            take--;
+        }
+        if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
+            // remove shard
             take--;
         }
         for (auto const& sysSub :
@@ -930,7 +973,7 @@ BOOST_AUTO_TEST_CASE(lsTest_3_0)
 {
     init(false, BlockVersion::V3_0_VERSION);
     m_blockVersion = BlockVersion::V3_0_VERSION;
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -989,7 +1032,7 @@ BOOST_AUTO_TEST_CASE(lsTest_3_0)
 BOOST_AUTO_TEST_CASE(lsTestWasm)
 {
     init(true);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // ls dir
     {
         auto result = list(_number++, "/tables");
@@ -1047,7 +1090,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm)
 BOOST_AUTO_TEST_CASE(lsTestWasm_3_0)
 {
     init(true, BlockVersion::V3_0_VERSION);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // ls dir
     {
         auto result = list(_number++, "/tables");
@@ -1105,7 +1148,7 @@ BOOST_AUTO_TEST_CASE(lsTestWasm_3_0)
 BOOST_AUTO_TEST_CASE(mkdirTest)
 {
     init(false);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // simple mkdir
     {
         auto result = mkdir(_number++, "/tables/temp/test");
@@ -1165,7 +1208,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
 BOOST_AUTO_TEST_CASE(mkdirWasmTest)
 {
     init(true);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // simple mkdir
     {
         auto result = mkdir(_number++, "/tables/temp/test");
@@ -1225,7 +1268,7 @@ BOOST_AUTO_TEST_CASE(mkdirWasmTest)
 BOOST_AUTO_TEST_CASE(mkdirTest_3_0)
 {
     init(false, protocol::BlockVersion::V3_0_VERSION);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
     // simple mkdir
     {
         auto result = mkdir(_number++, "/tables/temp/test");
@@ -1285,7 +1328,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest_3_0)
 BOOST_AUTO_TEST_CASE(linkTest)
 {
     init(false);
-    BlockNumber number = 3;
+    bcos::protocol::BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
     std::string contractName = "Hello";
@@ -1422,7 +1465,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
 BOOST_AUTO_TEST_CASE(linkTest_3_0)
 {
     init(false, protocol::BlockVersion::V3_0_VERSION);
-    BlockNumber number = 3;
+    bcos::protocol::BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
     std::string contractName = "Hello";
@@ -1539,7 +1582,7 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
 BOOST_AUTO_TEST_CASE(rebuildBfsTest)
 {
     init(false, protocol::BlockVersion::V3_0_VERSION);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -1669,6 +1712,10 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
         {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
+        {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }
         else
@@ -1704,8 +1751,11 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
 
 BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
 {
+    //    auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+    //        IGNORED_ARRAY.begin(), IGNORED_ARRAY.end());
+    //    init(false, protocol::BlockVersion::V3_0_VERSION, keyPageIgnoreTables);
     init(false, protocol::BlockVersion::V3_0_VERSION);
-    BlockNumber _number = 3;
+    bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
     {
@@ -1745,6 +1795,37 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
     mkdir(_number++, "/apps/temp/temp2/temp3/temp4");
 
     boost::log::core::get()->set_logging_enabled(false);
+    //    auto stateStorageFactory = storage::StateStorageFactory(10240);
+    //    auto stateStorage = stateStorageFactory.createStateStorage(
+    //        storage, (uint32_t)m_blockVersion, false, keyPageIgnoreTables);
+    //    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> temp4p;
+    //    stateStorage->asyncOpenTable(
+    //        "/apps/temp/temp2/temp3/temp4", [&](Error::UniquePtr _e, std::optional<Table> _t) {
+    //            temp4p.set_value({std::move(_e), std::move(_t)});
+    //        });
+    //    auto [error, temp4T] = temp4p.get_future().get();
+    //    auto subEntry = temp4T->getRow(tool::FS_KEY_SUB);
+    //    std::map<std::string, std::string> bfsInfo;
+    //    auto&& out = asBytes(std::string(subEntry->get()));
+    //    codec::scale::decode(bfsInfo, gsl::make_span(out));
+    //    for (int i = 0; i < mkdirCount; ++i)
+    //    {
+    //        bfsInfo.insert({"test" + std::to_string(i), std::string(tool::FS_TYPE_DIR)});
+    //    }
+    //    subEntry->importFields({asString(codec::scale::encode(bfsInfo))});
+    //    temp4T->setRow(tool::FS_KEY_SUB, std::move(subEntry.value()));
+    //    stateStorage->parallelTraverse(
+    //        false, [this](auto const& table, auto const& key, auto const& entry) -> bool {
+    //            auto keyHex = boost::algorithm::hex_lower(std::string(key));
+    //            std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> tempPromise;
+    //            storage->asyncOpenTable(table, [&](auto&& err, auto&& table) {
+    //                tempPromise.set_value(
+    //                    {std::forward<decltype(err)>(err), std::forward<decltype(table)>(table)});
+    //            });
+    //            auto [err, myTable] = tempPromise.get_future().get();
+    //            myTable->setRow(key, entry);
+    //            return true;
+    //        });
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> temp4p;
     storage->asyncOpenTable(
         "/apps/temp/temp2/temp3/temp4", [&](Error::UniquePtr _e, std::optional<Table> _t) {
@@ -1774,22 +1855,21 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
     }
 
     // upgrade to v3.1.0
-    //    boost::log::core::get()->set_logging_enabled(false);
+    boost::log::core::get()->set_logging_enabled(false);
     auto updateNumber = _number++;
-    rebuildBfsBySysConfig(_number++, V3_1_VERSION_STR);
-    //    boost::log::core::get()->set_logging_enabled(true);
-
-    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> p;
-    storage->asyncOpenTable(tool::FS_ROOT, [&](Error::UniquePtr _e, std::optional<Table> _t) {
-        p.set_value({std::move(_e), std::move(_t)});
+    rebuildBfsBySysConfig(_number++, V3_1_VERSION_STR, 0, [&]() {
+        for (const auto& item : tool::FS_ROOT_SUBS)
+        {
+            //            keyPageIgnoreTables->erase(std::string(item));
+        }
     });
-    auto [e, t] = p.get_future().get();
-    BOOST_CHECK(t->getRow(tool::FS_APPS.substr(1)).has_value());
-    BOOST_CHECK(t->getRow(tool::FS_USER_TABLE.substr(1)).has_value());
-    BOOST_CHECK(t->getRow(tool::FS_SYS_BIN.substr(1)).has_value());
-    BOOST_CHECK(!t->getRow(tool::FS_KEY_SUB).has_value());
+    boost::log::core::get()->set_logging_enabled(true);
 
     m_blockVersion = BlockVersion::V3_1_VERSION;
+    for (const auto& item : tool::FS_ROOT_SUBS)
+    {
+        //        keyPageIgnoreTables->erase(std::string(item));
+    }
 
     // ls dir
     {
@@ -1833,6 +1913,10 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
         codec->decode(result->data(), code, ls);
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         if (m_blockVersion < BlockVersion::V3_2_VERSION)
+        {
+            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
+        }
+        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
         {
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
         }

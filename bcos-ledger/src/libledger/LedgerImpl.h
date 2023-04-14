@@ -12,9 +12,9 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-executor/src/Common.h>
-#include <bcos-tool/bcos-tool/VersionConverter.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-table/src/StateStorageFactory.h>
+#include <bcos-tool/bcos-tool/VersionConverter.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
@@ -29,6 +29,7 @@
 
 namespace bcos::ledger
 {
+static constexpr const int LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT = 50;
 
 // clang-format off
 struct NotFoundTransaction : public bcos::error::Exception {};
@@ -37,6 +38,7 @@ struct MismatchTransactionCount : public bcos::error::Exception {};
 struct MismatchParentHash: public bcos::error::Exception {};
 struct NotFoundBlockHeader: public bcos::error::Exception {};
 struct GetABIError : public bcos::error::Exception {};
+struct GetBlockDataError : public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
@@ -48,10 +50,50 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
 public:
     LedgerImpl(Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storageInterface)
-      : Ledger(std::move(blockFactory), storageInterface), m_backupStorage(storageInterface), m_storage{std::move(storage)}
+      : Ledger(std::move(blockFactory), storageInterface),
+        m_backupStorage(storageInterface),
+        m_storage{std::move(storage)}
     {}
+    using statusInfoType = std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber>;
 
-    void setKeyPageSize(size_t keyPageSize){m_keyPageSize = keyPageSize;}
+    void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
+
+    template <bcos::concepts::block::Block BlockType>
+    void checkParentBlock(BlockType parentBlock,
+        BlockType block)
+    {
+        std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+        bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
+
+        if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+            (block.blockHeader.data.parentInfo[0].blockNumber !=
+             parentBlock.blockHeader.data.blockNumber) ||
+            !bcos::concepts::bytebuffer::equalTo(
+                block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+        {
+            LEDGER_LOG(ERROR) << "ParentHash mismatch!";
+            BOOST_THROW_EXCEPTION(
+                MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
+        }
+    }
+
+    crypto::NodeIDs filterSyncNodeList(statusInfoType const& peersStatusInfo,
+        bcos::protocol::BlockNumber needBlockNumber)
+    {
+        crypto::NodeIDs requestNodeIDList;
+        for(const auto &nodeStatus : peersStatusInfo)
+        {
+            LEDGER_LOG(INFO) << LOG_KV("nodeID", nodeStatus.first->hex())
+                             << LOG_KV("blockNumber: ", nodeStatus.second)
+                             << LOG_KV("，needBlockNumber: ", needBlockNumber);
+            if(nodeStatus.second >= needBlockNumber)
+            {
+                requestNodeIDList.push_back(nodeStatus.first);
+            }
+        }
+        LEDGER_LOG(DEBUG) << LOG_KV( "requestNodeIDList size",requestNodeIDList.size());
+        return requestNodeIDList;
+    }
 
 private:
     template <bcos::concepts::ledger::DataFlag... Flags>
@@ -62,6 +104,23 @@ private:
 
         auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
         (co_await getBlockData<Flags>(blockNumberStr, block), ...);
+    }
+    template <bcos::concepts::ledger::DataFlag... Flags>
+    task::Task<void> impl_getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block, bcos::crypto::NodeIDs const& nodeList)
+    {
+        try
+        {
+            LEDGER_LOG(INFO) << "getBlockByNodeList: " << blockNumber;
+            auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
+            (co_await getBlockData<Flags>(blockNumberStr, block), ...);
+        }
+        catch (NotFoundBlockHeader& e)
+        {
+            LEDGER_LOG(ERROR) << "Not found block";
+            block = {};
+        }
+        co_return;
     }
 
     template <bcos::concepts::ledger::DataFlag... Flags>
@@ -117,47 +176,54 @@ private:
         bcos::concepts::bytebuffer::assignTo(hashStr, hash);
     }
 
-    task::Task<std::string> impl_getABI(std::string _contractAddress){
-        //try to get compatibilityVersion
-        std::string  contractTableName = getContractTableName(_contractAddress);
-        auto versionEntry = storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
-        auto [compatibilityVersionStr, number] = versionEntry->template getObject<SystemConfigEntry>();
+    task::Task<std::string> impl_getABI(std::string _contractAddress)
+    {
+        // try to get compatibilityVersion
+        std::string contractTableName = getContractTableName("/apps/", _contractAddress);
+        auto versionEntry =
+            storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
+        auto [compatibilityVersionStr, number] =
+            versionEntry->template getObject<SystemConfigEntry>();
         if (!versionEntry)
         {
             LEDGER_LOG(WARNING) << "Not found compatibilityVersion: ";
-            BOOST_THROW_EXCEPTION(GetABIError{}
-                                  << bcos::error::ErrorMessage{"get compatibilityVersion not found"});
+            BOOST_THROW_EXCEPTION(
+                GetABIError{} << bcos::error::ErrorMessage{"get compatibilityVersion not found"});
         }
         m_compatibilityVersion = bcos::tool::toVersionNumber(compatibilityVersionStr);
-        LEDGER_LOG(TRACE) << "getABI contractAddress is: " << _contractAddress << ", contractTableName is: "
-                         << contractTableName <<", m_compatibilityVersion is " << m_compatibilityVersion;
+        LEDGER_LOG(TRACE) << "getABI contractAddress is: " << _contractAddress
+                          << ", contractTableName is: " << contractTableName
+                          << ", m_compatibilityVersion is " << m_compatibilityVersion;
 
-        //create keyPageStorage
+        // create keyPageStorage
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(m_keyPageSize);
-        auto stateStorage =  stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion);
+        // getABI function begin in version 320
+        auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+                storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+        auto stateStorage =
+            stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion, true, keyPageIgnoreTables);
 
-        //try to get codeHash
+        // try to get codeHash
         auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");
-        if(!codeHashEntry.second)[[unlikely]]
+        if (!codeHashEntry.second) [[unlikely]]
         {
             LEDGER_LOG(WARNING) << "Not found codeHash contractAddress:" << _contractAddress;
-            BOOST_THROW_EXCEPTION(GetABIError{}
-                                  << bcos::error::ErrorMessage{"Get CodeHash not found"});
+            BOOST_THROW_EXCEPTION(
+                GetABIError{} << bcos::error::ErrorMessage{"Get CodeHash not found"});
         }
         auto codeHash = codeHashEntry.second->getField(0);
 
-        //according to codeHash get abi
+        // according to codeHash get abi
         auto entry = stateStorage->getRow(SYS_CONTRACT_ABI, codeHash);
-        if(!entry.second)[[unlikely]]
+        if (!entry.second) [[unlikely]]
         {
             LEDGER_LOG(WARNING) << "Not found contractAddress abi:" << _contractAddress;
-            BOOST_THROW_EXCEPTION(
-                GetABIError{}
-                    << bcos::error::ErrorMessage{"Get Abi not found"});
+            BOOST_THROW_EXCEPTION(GetABIError{} << bcos::error::ErrorMessage{"Get Abi not found"});
         }
 
         std::string abiStr = std::string(entry.second->getField(0));
-        LEDGER_LOG(TRACE) << "contractAddress is " << _contractAddress << "ledger impl get abi is: " << abiStr;
+        LEDGER_LOG(TRACE) << "contractAddress is " << _contractAddress
+                          << "ledger impl get abi is: " << abiStr;
         co_return abiStr;
     }
 
@@ -234,6 +300,13 @@ private:
         co_return status;
     }
 
+    task::Task<std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber>> impl_getAllPeersStatus()
+    {
+        std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber> allPeersStatus;
+        // assert(false); //never reach here
+        co_return allPeersStatus;
+    }
+
     template <bool isTransaction>
     task::Task<void> impl_setTransactions(RANGES::range auto hashes, RANGES::range auto buffers)
     {
@@ -264,30 +337,49 @@ private:
     task::Task<size_t> impl_sync(LedgerType& source, bool onlyHeader)
     {
         auto& sourceLedger = bcos::concepts::getRef(source);
-
         auto status = co_await impl_getStatus();
-        auto sourceStatus = co_await sourceLedger.getStatus();
-
+        auto allPeersStatus = co_await sourceLedger.getAllPeersStatus();
+        bcos::protocol::BlockNumber currentMaxBlockNumber = 0;
+        for(const auto &nodeStatus : allPeersStatus)
+        {
+            if(nodeStatus.second > currentMaxBlockNumber)
+            {
+                currentMaxBlockNumber = nodeStatus.second;
+            }
+        }
+        LEDGER_LOG(DEBUG) << LOG_KV("allPeersStatus", allPeersStatus.size())
+                          << LOG_KV("currentMaxBlockNumber", currentMaxBlockNumber);
         std::optional<BlockType> parentBlock;
         size_t syncedBlock = 0;
-        for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
+        auto syncBlockNumber = status.blockNumber + LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT;
+        if(allPeersStatus.size() != 0 && currentMaxBlockNumber < syncBlockNumber)
+        {
+            syncBlockNumber = currentMaxBlockNumber;
+        }
+        // sync block
+        for (auto blockNumber = status.blockNumber + 1 ; blockNumber <= syncBlockNumber;
              ++blockNumber)
         {
             LEDGER_LOG(INFO) << "Syncing block from remote: " << blockNumber << " | "
-                             << sourceStatus.blockNumber << " | " << onlyHeader;
+                             << syncBlockNumber << " | " << onlyHeader;
             BlockType block;
+            auto syncNodeList = filterSyncNodeList(allPeersStatus, blockNumber);
             if (onlyHeader)
             {
-                co_await sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(
-                    blockNumber, block);
+                co_await sourceLedger.template getBlockByNodeList<bcos::concepts::ledger::HEADER>(
+                    blockNumber, block, syncNodeList);
             }
             else
             {
-                co_await sourceLedger.template getBlock<bcos::concepts::ledger::ALL>(
-                    blockNumber, block);
+                co_await sourceLedger.template getBlockByNodeList<bcos::concepts::ledger::ALL>(
+                    blockNumber, block, syncNodeList);
             }
-
-            if (blockNumber > 0)  // Ignore verify genesis block
+            // if getBlockByNodeList return empty block, break
+            if(RANGES::empty(block.blockHeader.data.parentInfo)){
+                LEDGER_LOG(WARNING) << LOG_DESC("No blockHeader in block") << LOG_KV("blockNumber", blockNumber);
+                break;
+            }
+            if(blockNumber > 0)
             {
                 if (!parentBlock)
                 {
@@ -295,22 +387,8 @@ private:
                     co_await impl_getBlock<bcos::concepts::ledger::HEADER>(
                         blockNumber - 1, *parentBlock);
                 }
-
-                std::array<std::byte, Hasher::HASH_SIZE> parentHash;
-                bcos::concepts::hash::calculate<Hasher>(*parentBlock, parentHash);
-
-                if (RANGES::empty(block.blockHeader.data.parentInfo) ||
-                    (block.blockHeader.data.parentInfo[0].blockNumber !=
-                        parentBlock->blockHeader.data.blockNumber) ||
-                    !bcos::concepts::bytebuffer::equalTo(
-                        block.blockHeader.data.parentInfo[0].blockHash, parentHash))
-                {
-                    LEDGER_LOG(ERROR) << "ParentHash mismatch!";
-                    BOOST_THROW_EXCEPTION(
-                        MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
-                }
+                checkParentBlock(*parentBlock, block);
             }
-
             if (onlyHeader)
             {
                 co_await impl_setBlock<bcos::concepts::ledger::HEADER>(block);
@@ -319,11 +397,9 @@ private:
             {
                 co_await impl_setBlock<bcos::concepts::ledger::ALL>(block);
             }
-
             parentBlock = std::move(block);
             ++syncedBlock;
         }
-
         co_return syncedBlock;
     }
 
@@ -424,11 +500,19 @@ private:
     {
         LEDGER_LOG(DEBUG) << "getBlockData all: " << blockNumberKey;
 
-        co_await getBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+        try
+        {
+            co_await getBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+        }
+        catch (std::exception const& e){
+            LEDGER_LOG(ERROR) << "getBlockData all failed";
+            BOOST_THROW_EXCEPTION(
+                GetBlockDataError{} << bcos::error::ErrorMessage{"getBlockData all failed!"});
+        }
     }
 
     template <std::same_as<bcos::concepts::ledger::HEADER>>

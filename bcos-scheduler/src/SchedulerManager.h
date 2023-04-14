@@ -37,11 +37,6 @@ public:
         std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback) override;
     void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback) override;
-    void registerExecutor(std::string name,
-        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        std::function<void(Error::Ptr&&)> callback) override;
-    void unregisterExecutor(
-        const std::string& name, std::function<void(Error::Ptr&&)> callback) override;
     void reset(std::function<void(Error::Ptr&&)> callback) override;
     void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override;
@@ -126,12 +121,15 @@ public:
         }
 
         // waiting for stopped
-        while (m_scheduler.use_count() > 1)
+        int32_t waitCount = 20;
+        while (m_scheduler.use_count() > 1 && waitCount-- > 0)
         {
             SCHEDULER_LOG(DEBUG) << "Scheduler is stopping.. "
                                  << LOG_KV("unfinishedTaskNum", m_scheduler.use_count() - 1);
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
+
+        m_factory->stop();
         SCHEDULER_LOG(INFO) << "scheduler has stopped.";
         m_scheduler = nullptr;
     }

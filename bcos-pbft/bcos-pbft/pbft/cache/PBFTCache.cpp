@@ -25,7 +25,7 @@ using namespace bcos::consensus;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
-PBFTCache::PBFTCache(PBFTConfig::Ptr _config, BlockNumber _index)
+PBFTCache::PBFTCache(PBFTConfig::Ptr _config, bcos::protocol::BlockNumber _index)
   : m_config(std::move(_config)), m_index(_index)
 {}
 

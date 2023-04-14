@@ -52,6 +52,10 @@ constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY{
     bcos::storage::StorageInterface::SYS_TABLES,
 };
 
+constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY_310{bcos::ledger::SYS_CONFIG,
+    bcos::ledger::SYS_CONSENSUS, bcos::storage::StorageInterface::SYS_TABLES,
+    bcos::ledger::SYS_CODE_BINARY, bcos::ledger::SYS_CONTRACT_ABI};
+
 class StateStorageFactory
 {
 public:
@@ -94,7 +98,7 @@ public:
             return std::make_shared<bcos::storage::KeyPageStorage>(
                 storage, m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
         }
-        return std::make_shared<bcos::storage::StateStorage>(storage);
+        return std::make_shared<bcos::storage::StateStorage>(storage, compatibilityVersion);
     }
 
 private:

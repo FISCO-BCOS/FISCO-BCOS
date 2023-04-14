@@ -16,10 +16,11 @@
 #include <iterator>
 #include <stdexcept>
 #include <type_traits>
+#include <random>
 
 namespace bcos::ledger
 {
-
+struct GetBlockFailed: public bcos::error::Exception {};
 class LedgerClientImpl : public bcos::concepts::ledger::LedgerBase<LedgerClientImpl>
 {
     friend bcos::concepts::ledger::LedgerBase<LedgerClientImpl>;
@@ -50,13 +51,72 @@ private:
         (processGetBlockFlags<Flags>(request.onlyHeader), ...);
 
         bcostars::ResponseBlock response;
-        auto nodeID = co_await p2p().randomSelectNode();
-        co_await p2p().sendMessageByNodeID(
-            bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
+        auto nodeIDs = co_await p2p().getAllNodeID();
+        size_t failedNodeCount = 0;
+        for(auto& nodeID : nodeIDs)
+        {
+            co_await p2p().sendMessageByNodeID(
+                bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
+            if(response.error.errorCode)
+            {
+                LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
+                                       << "response errorCode: " << response.error.errorCode
+                                       << " " << response.error.errorMessage;
+                continue;
+            }
+            else
+            {
+               std::swap(response.block, block);
+               LIGHTNODE_LOG(DEBUG) << LOG_DESC("lightNodeGetBlock")
+                                    << LOG_KV("BlockNumber", blockNumber);
+               co_return;
+            }
+        }
 
-        if (response.error.errorCode)
-            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+        response.block = {};
+        LIGHTNODE_LOG(ERROR) << "lightNode getBlock to allNode failed!"
+                                   <<  LOG_KV("response errorCode",response.error.errorCode);
 
+        std::swap(response.block, block);
+    }
+
+    template <bcos::concepts::ledger::DataFlag... Flags>
+    task::Task<void> impl_getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block, crypto::NodeIDs const& nodeList)
+    {
+        bcostars::RequestBlock request;
+        bcostars::ResponseBlock response;
+        request.blockNumber = blockNumber;
+        request.onlyHeader = false;
+
+        (processGetBlockFlags<Flags>(request.onlyHeader), ...);
+        // if nodeList is empty, return
+        if(nodeList.size() == 0){
+            response.block = {};
+            std::swap(response.block, block);
+            co_return;
+        }
+        // random select nodeID from nodeList
+        std::mt19937 rng;
+        rng = std::mt19937(std::random_device{}());
+        std::uniform_int_distribution<size_t> distribution{0U, nodeList.size() - 1};
+        auto nodeIDIt = nodeList.begin();
+        auto step = distribution(rng);
+        for (size_t i = 0; i < step; ++i)
+        {
+            ++nodeIDIt;
+        }
+        auto nodeID = *nodeIDIt;
+        LIGHTNODE_LOG(TRACE) << LOG_DESC("lightNode getBlockByNodeList")
+                             << LOG_KV("step", step) << LOG_KV("nodeID", nodeID->hex());
+        co_await p2p().sendMessageByNodeID(bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
+        if(response.error.errorCode)
+        {
+            LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
+                                   << "response errorCode: " << response.error.errorCode
+                                   << " " << response.error.errorMessage;
+            response.block = {};
+        }
         std::swap(response.block, block);
     }
 
@@ -107,8 +167,9 @@ private:
         request.contractAddress = contractAddress;
         auto nodeID = co_await p2p().randomSelectNode();
 
-        LIGHTNODE_LOG(TRACE) << LOG_KV("nodeID", nodeID) << LOG_KV("request.contractAddress", request.contractAddress);
-            co_await p2p().sendMessageByNodeID(
+        LIGHTNODE_LOG(TRACE) << LOG_KV("nodeID", nodeID)
+                             << LOG_KV("request.contractAddress", request.contractAddress);
+        co_await p2p().sendMessageByNodeID(
             protocol::LIGHTNODE_GET_ABI, std::move(nodeID), request, response);
         if (response.error.errorCode)
         {
@@ -116,8 +177,8 @@ private:
                                    << " " << response.error.errorMessage;
             BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
         }
-        LIGHTNODE_LOG(TRACE) << "get contractAddress " << request.contractAddress << "ABI from remote, the ABI is"
-                            << response.abiStr;
+        LIGHTNODE_LOG(TRACE) << "get contractAddress " << request.contractAddress
+                             << "ABI from remote, the ABI is" << response.abiStr;
         auto abiStr = response.abiStr;
         co_return abiStr;
     }
@@ -149,6 +210,35 @@ private:
 
         co_return status;
     }
+
+    task::Task<std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber>> impl_getAllPeersStatus()
+    {
+        bcostars::RequestGetStatus request;
+        bcostars::ResponseGetStatus response;
+        std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber> allPeersStatus;
+
+        auto nodeIDs = co_await p2p().getAllNodeID();
+        LIGHTNODE_LOG(DEBUG) << "Got all peers status from remote, nodeIDs size: " << nodeIDs.size();
+        for(auto& nodeID : nodeIDs){
+            co_await p2p().sendMessageByNodeID(
+                protocol::LIGHTNODE_GET_STATUS, nodeID, request, response);
+
+            if (response.error.errorCode)
+            {
+                LIGHTNODE_LOG(WARNING) << "Get status failed, errorCode: " << response.error.errorCode
+                                       << " " << response.error.errorMessage;
+                BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+            }
+            allPeersStatus[nodeID] = response.blockNumber;
+
+            LIGHTNODE_LOG(DEBUG) << "Got status from remote, nodeID: " << nodeID->hex()
+                                 << "blockNumber :"
+                                 << response.blockNumber;
+        }
+
+        co_return allPeersStatus;
+    }
+
 
     std::shared_ptr<p2p::P2PClientImpl> m_p2p;
 };

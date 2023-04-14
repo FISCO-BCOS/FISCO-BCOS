@@ -32,9 +32,7 @@
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <bcos-utilities/CallbackCollectionHandler.h>
 
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockSyncConfig : public SyncConfig
 {
@@ -47,18 +45,18 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::consensus::ConsensusInterface::Ptr _consensus, BlockSyncMsgFactory::Ptr _msgFactory,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
-      : SyncConfig(_nodeId),
-        m_ledger(_ledger),
-        m_txpool(_txpool),
-        m_blockFactory(_blockFactory),
-        m_txResultFactory(_txResultFactory),
-        m_frontService(_frontService),
-        m_scheduler(_scheduler),
-        m_consensus(_consensus),
-        m_msgFactory(_msgFactory),
-        m_nodeTimeMaintenance(_nodeTimeMaintenance)
+      : SyncConfig(std::move(_nodeId)),
+        m_ledger(std::move(_ledger)),
+        m_txpool(std::move(_txpool)),
+        m_blockFactory(std::move(_blockFactory)),
+        m_txResultFactory(std::move(_txResultFactory)),
+        m_frontService(std::move(_frontService)),
+        m_scheduler(std::move(_scheduler)),
+        m_consensus(std::move(_consensus)),
+        m_msgFactory(std::move(_msgFactory)),
+        m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
     {}
-    ~BlockSyncConfig() override {}
+    ~BlockSyncConfig() override = default;
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     bcos::protocol::BlockFactory::Ptr blockFactory() { return m_blockFactory; }
@@ -77,6 +75,8 @@ public:
     bcos::crypto::HashType const& hash() const;
 
     bcos::protocol::BlockNumber nextBlock() const { return m_nextBlock; }
+    bcos::protocol::BlockNumber applyingBlock() const { return m_applyingBlock; }
+    void setApplyingBlock(bcos::protocol::BlockNumber _number);
     void resetBlockInfo(
         bcos::protocol::BlockNumber _blockNumber, bcos::crypto::HashType const& _hash);
 
@@ -122,12 +122,12 @@ public:
 
     void registerOnNodeTypeChanged(std::function<void(bcos::protocol::NodeType)> _onNodeTypeChanged)
     {
-        m_nodeTypeChanged = _onNodeTypeChanged;
+        m_nodeTypeChanged = std::move(_onNodeTypeChanged);
     }
 
     void setMasterNode(bool _masterNode)
     {
-        Guard l(m_mutex);
+        Guard lock(m_mutex);
         m_masterNode = _masterNode;
         // notify nodeType to the gateway
         if (m_nodeTypeChanged)
@@ -139,6 +139,15 @@ public:
     bool masterNode() const { return m_masterNode; }
 
     bcos::protocol::BlockNumber archiveBlockNumber() const;
+
+    std::string printBlockSyncState() const noexcept
+    {
+        std::stringstream stringstream;
+        stringstream << LOG_KV("number", m_blockNumber) << LOG_KV("applyingBlock", m_applyingBlock)
+                     << LOG_KV("nextBlock", m_nextBlock) << LOG_KV("executedBlock", m_executedBlock)
+                     << LOG_KV("highestNumber", m_knownHighestNumber);
+        return stringstream.str();
+    }
 
 protected:
     void setHash(bcos::crypto::HashType const& _hash);
@@ -161,6 +170,7 @@ private:
 
     bcos::crypto::HashType m_genesisHash;
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
+    std::atomic<bcos::protocol::BlockNumber> m_applyingBlock = {0};
     std::atomic<bcos::protocol::BlockNumber> m_nextBlock = {0};
     std::atomic<bcos::protocol::BlockNumber> m_executedBlock = {0};
     bcos::crypto::HashType m_hash;
@@ -171,16 +181,15 @@ private:
     mutable SharedMutex x_knownLatestHash;
     mutable Mutex m_mutex;
 
-    std::atomic<size_t> m_maxDownloadingBlockQueueSize = 256;
-    std::atomic<size_t> m_maxDownloadRequestQueueSize = 1000;
-    // the max number of blocks this node can requested to
-    std::atomic<size_t> m_maxRequestBlocks = {8};
-    std::atomic<size_t> m_downloadTimeout = (200 * m_maxRequestBlocks);
+    std::atomic<size_t> m_maxDownloadingBlockQueueSize = MAX_DOWNLOAD_BLOCK_QUEUE_SIZE;
+    std::atomic<size_t> m_maxDownloadRequestQueueSize = MAX_DOWNLOAD_REQUEST_QUEUE_SIZE;
+    // the max number of blocks this node can request to
+    std::atomic<size_t> m_maxRequestBlocks = MAX_REQUEST_BLOCKS_COUNT;
+    std::atomic<size_t> m_downloadTimeout = (DOWNLOAD_TIMEOUT_TTL * m_maxRequestBlocks);
 
     std::atomic<size_t> m_maxShardPerPeer = {2};
     std::atomic<bcos::protocol::BlockNumber> m_committedProposalNumber = {0};
 
-    // TODO: ensure thread-safe
     bcos::protocol::NodeType m_nodeType = bcos::protocol::NodeType::None;
     bcos::protocol::NodeType m_notifiedNodeType = bcos::protocol::NodeType::None;
 
@@ -188,5 +197,4 @@ private:
 
     std::atomic_bool m_masterNode = {false};
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

@@ -20,6 +20,12 @@
 
 namespace bcos::storage
 {
+
+template <class Input>
+concept EntryBufferInput =
+    std::same_as<Input, std::string_view> || std::same_as<Input, std::string> ||
+    std::same_as<Input, std::vector<char>> || std::same_as<Input, std::vector<unsigned char>>;
+
 class Entry
 {
 public:
@@ -45,15 +51,10 @@ public:
         std::shared_ptr<std::vector<unsigned char>>, std::shared_ptr<std::vector<char>>>;
 
     Entry() = default;
-
-    explicit Entry(TableInfo::ConstPtr) {}
-
     Entry(const Entry&) = default;
     Entry(Entry&&) noexcept = default;
     bcos::storage::Entry& operator=(const Entry&) = default;
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
-    // auto operator<=>(const Entry&) const = default;
-
     ~Entry() noexcept = default;
 
     template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
@@ -120,29 +121,13 @@ public:
         set(std::forward<T>(input));
     }
 
-    void set(const char* p)
+    void set(const char* pointer)
     {
-        auto view = std::string_view(p, strlen(p));
-        m_size = view.size();
-        if (view.size() <= SMALL_SIZE)
-        {
-            if (m_value.index() != 0)
-            {
-                m_value = SBOBuffer();
-            }
-
-            std::copy_n(view.data(), view.size(), std::get<0>(m_value).data());
-            m_status = MODIFIED;
-            // m_dirty = true;
-        }
-        else
-        {
-            set(std::string(view));
-        }
+        auto view = std::string_view(pointer, strlen(pointer));
+        set(view);
     }
 
-    template <typename Input>
-    void set(Input value)
+    void set(EntryBufferInput auto value)
     {
         auto view = inputValueView(value);
         m_size = view.size();
@@ -155,16 +140,27 @@ public:
 
             std::copy_n(view.data(), view.size(), std::get<0>(m_value).data());
         }
-        else if (m_size <= MEDIUM_SIZE)
-        {
-            m_value = std::move(value);
-        }
         else
         {
-            m_value = std::make_shared<Input>(std::move(value));
+            using ValueType = std::remove_cvref_t<decltype(value)>;
+            if constexpr (std::same_as<ValueType, std::string_view>)
+            {
+                set(std::string(view));
+            }
+            else
+            {
+                if (m_size <= MEDIUM_SIZE)
+                {
+                    m_value = std::move(value);
+                }
+                else
+                {
+                    m_value = std::make_shared<ValueType>(std::move(value));
+                }
+            }
         }
+
         m_status = MODIFIED;
-        // m_dirty = true;
     }
 
     template <typename T>
@@ -184,26 +180,9 @@ public:
             m_size = 0;
             m_value = std::string();
         }
-        // m_dirty = true;
     }
 
-    bool dirty() const
-    {
-        return (m_status == MODIFIED || m_status == DELETED);
-        // return m_dirty;
-    }
-    // void setDirty(bool dirty)
-    // {
-    //     if(dirty)
-    //     {
-    //         m_status = MODIFIED;
-    //     }
-    //     else
-    //     {
-    //         m_status = NORMAL;
-    //     }
-    //     // m_dirty = dirty;
-    // }
+    bool dirty() const { return (m_status == MODIFIED || m_status == DELETED); }
 
     int32_t size() const { return m_size; }
 
@@ -338,7 +317,6 @@ private:
     ValueType m_value;                // should serialization
     int32_t m_size = 0;               // no need to serialization
     Status m_status = Status::EMPTY;  // should serialization
-    // bool m_dirty = false;              // no need to serialization
 };
 
 }  // namespace bcos::storage

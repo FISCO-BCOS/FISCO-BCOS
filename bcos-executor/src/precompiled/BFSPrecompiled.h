@@ -54,6 +54,9 @@ private:
     void rebuildBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
     void rebuildBfs310(const std::shared_ptr<executor::TransactionExecutive>& _executive);
+    void fixBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void fixBfs330(const std::shared_ptr<executor::TransactionExecutive>& _executive);
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);
@@ -62,5 +65,24 @@ private:
     std::set<std::string> BfsTypeSet;
     void buildSysSubs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         std::variant<uint32_t, protocol::BlockVersion> toVersion) const;
+
+protected:
+    void makeDirImpl(const std::string& _absolutePath,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void linkImpl(const std::string& _absolutePath, const std::string& _contractAddress,
+        const std::string& _contractAbi,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+
+    virtual const char* getThisAddress(bool _isWasm) { return _isWasm ? BFS_NAME : BFS_ADDRESS; }
+    virtual std::string_view getLinkRootDir() { return executor::USER_APPS_PREFIX; }
+    virtual bool checkPathPrefixValid(
+        const std::string_view& path, uint32_t blockVersion, const std::string_view& type);
+
+    inline bool isShardPath(const std::string& _path)
+    {
+        return _path.starts_with(executor::USER_SHARD_PREFIX);
+    }
 };
 }  // namespace bcos::precompiled

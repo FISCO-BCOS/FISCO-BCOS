@@ -23,7 +23,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-ledger/src/libledger/LedgerImpl.h>
-#include <bcos-storage/bcos-storage/StorageImpl.h>
+#include <bcos-storage/bcos-storage/StorageWrapperImpl.h>
 #include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer
@@ -52,7 +52,8 @@ public:
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             std::move(storageWrapper), blockFactory, storage);
         ledger->buildGenesisBlock(nodeConfig->ledgerConfig(), nodeConfig->txGasLimit(),
-            nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr());
+            nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr(),
+            nodeConfig->isAuthCheck());
 
         return ledger;
     }

@@ -44,6 +44,8 @@ public:
     virtual void setPacketType(int32_t packetType) = 0;
     virtual void setVersion(int32_t _version) = 0;
     virtual void setArchivedNumber(bcos::protocol::BlockNumber _number) = 0;
+    virtual size_t blockInterval() const = 0;
+    virtual void setBlockInterval(size_t interval) = 0;
 };
 }  // namespace sync
 }  // namespace bcos

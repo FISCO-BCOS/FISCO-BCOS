@@ -116,6 +116,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             /// return early when the certificate is invalid
             if (!preverified)
             {
+                HOST_LOG(DEBUG) << LOG_DESC("ssl handshake certificate verify failed")
+                                << LOG_KV("preverified", preverified);
                 return false;
             }
             /// get the object points to certificate
@@ -126,7 +128,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 return preverified;
             }
 
-            // For compatibility, p2p communication between nodes still uses the old public key analysis method
+            // For compatibility, p2p communication between nodes still uses the old public key
+            // analysis method
             if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
                 return preverified;
@@ -425,7 +428,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
         Guard l(x_pendingConns);
-        if (m_pendingConns.count(_nodeIPEndpoint))
+        auto it = m_pendingConns.find(_nodeIPEndpoint);
+        if (it != m_pendingConns.end())
         {
             BCOS_LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list")
                             << LOG_KV("endpoint", _nodeIPEndpoint);

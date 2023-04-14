@@ -21,12 +21,12 @@
 #pragma once
 
 #include "PrecompiledAbi.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/Entry.h"
-#include "bcos-executor/src/Common.h"
 #include <memory>
 #include <string>
 
@@ -47,7 +47,7 @@ using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
 struct TableInfo
 {
-    TableInfoTuple     info;
+    TableInfoTuple info;
     TableInfoTupleV320 info_v320;
 };
 /// Precompiled reserved code field
@@ -63,6 +63,7 @@ static const std::string V320_TABLE_INFO_PREFIX = "__v320_table_info__";
 
 /// FileSystem path limit
 static const size_t FS_PATH_MAX_LENGTH = 56;
+static const size_t FS_PATH_MAX_LENGTH_330 = 128;
 static const size_t FS_PATH_MAX_LEVEL = 6;
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
@@ -74,7 +75,7 @@ const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
 const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
 const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 const int USER_TABLE_MAX_LIMIT_COUNT = 500;
-const int USER_TABLE_MIN_LIMIT_COUNT = 50;  
+const int USER_TABLE_MIN_LIMIT_COUNT = 50;
 
 const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
@@ -155,6 +156,7 @@ enum PrecompiledErrorCode : int
     CODE_TABLE_AGENT_ROW_NOT_EXIST = -51000,
 
     // Common error code among all precompiled contracts -50199 ~ -50100
+    CODE_SENDER_ERROR = -50106,
     CODE_TABLE_OPEN_ERROR = -50105,
     CODE_TABLE_CREATE_ERROR = -50104,
     CODE_TABLE_SET_ROW_ERROR = -50103,

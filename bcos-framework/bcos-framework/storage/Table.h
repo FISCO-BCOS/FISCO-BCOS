@@ -65,7 +65,7 @@ public:
         std::string_view key, Entry entry, std::function<void(Error::UniquePtr)> callback) noexcept;
 
     TableInfo::ConstPtr tableInfo() const { return m_tableInfo; }
-    Entry newEntry() { return Entry(m_tableInfo); }
+    Entry newEntry() { return {}; }
     Entry newDeletedEntry()
     {
         auto deletedEntry = newEntry();

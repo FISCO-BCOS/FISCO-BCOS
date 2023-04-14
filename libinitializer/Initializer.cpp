@@ -153,8 +153,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
-        storage = StorageInitializer::build(
-            storagePath, m_protocolInitializer->dataEncryption(), m_nodeConfig->keyPageSize());
+        storage = StorageInitializer::build(storagePath, m_protocolInitializer->dataEncryption(),
+            m_nodeConfig->keyPageSize(), m_nodeConfig->maxWriteBufferNumber(),
+            m_nodeConfig->enableStatistics(), m_nodeConfig->maxBackgroundJobs());
         schedulerStorage = storage;
         consensusStorage = StorageInitializer::build(
             consensusStoragePath, m_protocolInitializer->dataEncryption());
@@ -221,7 +222,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute());
+        m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize());
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
                                // to a leader during startup
@@ -441,7 +442,8 @@ void Initializer::initSysContract()
             SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, block);
     }
 
-    if (!m_nodeConfig->isWasm() && m_nodeConfig->isAuthCheck())
+    if ((!m_nodeConfig->isWasm() && m_nodeConfig->isAuthCheck()) ||
+        versionCompareTo(m_nodeConfig->compatibilityVersion(), BlockVersion::V3_3_VERSION) >= 0)
     {
         // add auth deploy func here
         AuthInitializer::init(
@@ -449,22 +451,36 @@ void Initializer::initSysContract()
     }
 
 
-    if (block->transactionsSize() > 0)
+    if (block->transactionsSize() > 0) [[likely]]
     {
-        std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
+        std::promise<std::tuple<bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr>> executedHeader;
         m_scheduler->executeBlock(block, false,
             [&](bcos::Error::Ptr&& _error, bcos::protocol::BlockHeader::Ptr&& _header, bool) {
                 if (_error)
                 {
-                    BOOST_THROW_EXCEPTION(
-                        BCOS_ERROR(-1, "SysInitializer: scheduler executeBlock error"));
+                    executedHeader.set_value({std::move(_error), nullptr});
+                    return;
                 }
                 INITIALIZER_LOG(INFO)
                     << LOG_BADGE("SysInitializer") << LOG_DESC("scheduler execute block success!")
                     << LOG_KV("blockHash", block->blockHeader()->hash().hex());
-                executedHeader.set_value(std::move(_header));
+                executedHeader.set_value({nullptr, std::move(_header)});
             });
-        auto header = executedHeader.get_future().get();
+        auto [executeError, header] = executedHeader.get_future().get();
+        if (executeError || header == nullptr) [[unlikely]]
+        {
+            std::stringstream errorMessage("SysInitializer: scheduler executeBlock error");
+            int64_t errorCode = -1;
+            if (executeError) [[likely]]
+            {
+                errorMessage << executeError->errorMessage();
+                errorCode = executeError->errorCode();
+            }
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("SysInitializer") << LOG_DESC("scheduler execute block failed")
+                << LOG_KV("msg", errorMessage.str());
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(errorCode, errorMessage.str()));
+        }
 
         std::promise<std::tuple<Error::Ptr, bcos::ledger::LedgerConfig::Ptr>> committedConfig;
         m_scheduler->commitBlock(
@@ -479,7 +495,7 @@ void Initializer::initSysContract()
                 committedConfig.set_value(std::make_tuple(nullptr, std::move(_config)));
             });
         auto [error, newConfig] = committedConfig.get_future().get();
-        if (error != nullptr && newConfig->blockNumber() != SYS_CONTRACT_DEPLOY_NUMBER)
+        if (error != nullptr || newConfig->blockNumber() != SYS_CONTRACT_DEPLOY_NUMBER)
         {
             INITIALIZER_LOG(ERROR)
                 << LOG_BADGE("SysInitializer") << LOG_DESC("Error in commitBlock")

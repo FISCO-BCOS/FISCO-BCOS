@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsTools.h>
@@ -51,7 +52,7 @@ using WsStreamRWHandler = std::function<void(boost::system::error_code, std::siz
 using WsStreamHandshakeHandler = std::function<void(boost::system::error_code)>;
 
 template <typename STREAM>
-class WsStream
+class WsStream : public bcos::ObjectCounter<WsStream<STREAM>>
 {
 public:
     using Ptr = std::shared_ptr<WsStream>;
@@ -73,8 +74,9 @@ public:
 
     void initDefaultOpt()
     {
-        /* //TODO: close compress temp
-        // default open compress option
+        /*
+        // default close compress option because the loss of network compression is relatively large
+        with boost websocket
         {
             boost::beast::websocket::permessage_deflate opt;
             opt.client_enable = true;  // for clients
@@ -207,7 +209,7 @@ private:
 using RawWsStream = WsStream<boost::beast::tcp_stream>;
 using SslWsStream = WsStream<boost::beast::ssl_stream<boost::beast::tcp_stream>>;
 
-class WsStreamDelegate
+class WsStreamDelegate : public bcos::ObjectCounter<WsStreamDelegate>
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegate>;
@@ -293,7 +295,7 @@ private:
     SslWsStream::Ptr m_sslStream;
 };
 
-class WsStreamDelegateBuilder
+class WsStreamDelegateBuilder : public bcos::ObjectCounter<WsStreamDelegate>
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegateBuilder>;

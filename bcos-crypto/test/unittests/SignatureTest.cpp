@@ -115,18 +115,33 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     // sign
     auto signData = secp256k1Sign(*keyPair, hashData);
     std::cout << "### signData:" << *toHexString(*signData) << std::endl;
+    std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
+    std::cout << "#### publicKey:" << keyPair->publicKey()->hex() << std::endl;
+
     // verify
     bool result = secp256k1Verify(
         keyPair->publicKey(), hashData, bytesConstRef(signData->data(), signData->size()));
     BOOST_CHECK(result == true);
     std::cout << "### verify result:" << result << std::endl;
+    std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
+    std::cout << "#### publicKey:" << keyPair->publicKey()->hex() << std::endl;
 
     // recover
     auto pub = secp256k1Recover(hashData, bytesConstRef(signData->data(), signData->size()));
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto address = calculateAddress(hashImpl, pub);
+    Secp256k1Crypto k1Crypto;
+    auto ret = k1Crypto.recoverAddress(
+        *hashImpl, hashData, bytesConstRef(signData->data(), signData->size()));
+    std::cout << "### right   address:" << address.hex() << std::endl;
+    std::cout << "### recover address:" << toHex(ret.second) << std::endl;
+
+    BOOST_CHECK(address.asBytes() == ret.second);
     std::cout << "### secp256k1Recover begin, publicKey:"
               << *toHexString(keyPair->publicKey()->data()) << std::endl;
     std::cout << "#### recoverd publicKey:" << *toHexString(pub->data()) << std::endl;
     BOOST_CHECK(pub->data() == keyPair->publicKey()->data());
+    BOOST_TEST(toHex(pub->data()) == toHex(keyPair->publicKey()->data()));
     /// exception check:
     // check1: invalid payload(hash)
     h256 invalidHash = keccak256Hash((std::string)("abce"));

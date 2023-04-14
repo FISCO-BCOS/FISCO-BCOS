@@ -140,6 +140,49 @@ inline bool isalNumStr(std::string const& _stringData)
     return true;
 }
 
+inline bool isNumStr(std::string const& _stringData)
+{
+    if (_stringData.empty())
+    {
+        return false;
+    }
+    for (const auto& ch : _stringData)
+    {
+        if (isdigit(ch))
+        {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+inline constexpr double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
+{
+    if (_intervalMS > 0)
+    {
+        auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _intervalMS;
+        return avgRate;
+    }
+    return 0;
+}
+
+inline constexpr uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
+{
+    if (_intervalMS > 0)
+    {
+        auto qps = _requestCount * 1000 / _intervalMS;
+        return qps;
+    }
+    return 0;
+}
+
+// convert second to milliseconds
+inline constexpr int32_t toMillisecond(int32_t _seconds)
+{
+    return _seconds * 1000;
+}
+
 /// Get the current time in seconds since the epoch in UTC(ms)
 uint64_t utcTime();
 uint64_t utcSteadyTime();
@@ -148,7 +191,7 @@ uint64_t utcSteadyTime();
 uint64_t utcTimeUs();
 uint64_t utcSteadyTimeUs();
 
-// get the current datatime
+// get the current data time
 std::string getCurrentDateTime();
 
 struct Exception;
@@ -156,16 +199,5 @@ struct Exception;
 void errorExit(std::stringstream& _exitInfo, Exception const& exception);
 
 void pthread_setThreadName(std::string const& _n);
-
-/*
-template <class... Ts>
-struct overloaded : Ts...
-{
-    using Ts::operator()...;
-};
-// explicit deduction guide (not needed as of C++20)
-template <class... Ts>
-overloaded(Ts...) -> overloaded<Ts...>;
-*/
 
 }  // namespace bcos

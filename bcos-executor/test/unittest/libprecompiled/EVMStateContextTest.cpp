@@ -54,7 +54,7 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(testBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -110,7 +110,7 @@ public:
     {
         nextBlock(_number);
         auto tx =
-            fakeTransaction(cryptoSuite, keyPair, "", encodedData.toBytes(), 101, 100001, "1", "1");
+            fakeTransaction(cryptoSuite, keyPair, "", encodedData.toBytes(), std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         if (!_origin.empty())
         {
@@ -156,7 +156,7 @@ BOOST_FIXTURE_TEST_SUITE(EVMStateContextTest, EVMStateContextFixture)
 BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
 {
     deployTest();
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
     // sha256
     {
         std::string stringData = "abcd";

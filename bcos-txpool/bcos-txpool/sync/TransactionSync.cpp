@@ -225,7 +225,7 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
                     << LOG_DESC("requestMissedTxs failed from the ledger for Transaction missing")
                     << LOG_KV("missedTxs", missedTxsSize);
                 _onVerifyFinished(
-                    std::make_shared<Error>(CommonError::TransactionsMissing,
+                    BCOS_ERROR_PTR(CommonError::TransactionsMissing,
                         "requestMissedTxs failed from the ledger for Transaction missing"),
                     false);
                 return;
@@ -270,7 +270,8 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
     // fetch missed transactions from the local ledger
     for (auto tx : *_fetchedTxs)
     {
-        if (!_missedTxs.count(tx->hash()))
+        auto it = _missedTxs.find(tx->hash());
+        if (it == _missedTxs.end())
         {
             SYNC_LOG(WARNING) << LOG_DESC(
                                      "onGetMissedTxsFromLedger: Encounter transaction that was "
@@ -279,7 +280,7 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
             continue;
         }
         // update the missedTxs
-        _missedTxs.erase(tx->hash());
+        _missedTxs.erase(it);
     }
     if (_missedTxs.size() == 0 && _onVerifyFinished)
     {
@@ -390,9 +391,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                           << LOG_KV("peer", _nodeID->shortHex())
                           << LOG_KV("expectedType", TxsSyncPacketType::TxsResponsePacket)
                           << LOG_KV("recvType", txsResponse->type());
-        _onVerifyFinished(std::make_shared<Error>(
-                              CommonError::FetchTransactionsFailed, "FetchTransactionsFailed"),
-            false);
+        _onVerifyFinished(
+            BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed, "FetchTransactionsFailed"), false);
         return;
     }
     // verify missedTxs
@@ -415,15 +415,14 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1);
         // response to verify result
         _onVerifyFinished(
-            std::make_shared<Error>(CommonError::TransactionsMissing, "TransactionsMissing"),
-            false);
+            BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
         // try to import the transactions even when verify failed
         importDownloadedTxs(_nodeID, transactions);
         return;
     }
     if (!importDownloadedTxs(_nodeID, transactions, _verifiedProposal))
     {
-        _onVerifyFinished(std::make_shared<Error>(CommonError::TxsSignatureVerifyFailed,
+        _onVerifyFinished(BCOS_ERROR_PTR(CommonError::TxsSignatureVerifyFailed,
                               "invalid transaction for invalid signature or nonce or blockLimit"),
             false);
         return;
@@ -433,8 +432,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     {
         if ((*_missedTxs)[i] != transactions->transaction(i)->hash())
         {
-            _onVerifyFinished(std::make_shared<Error>(CommonError::InconsistentTransactions,
-                                  "InconsistentTransactions"),
+            _onVerifyFinished(
+                BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
                 false);
             return;
         }
@@ -622,11 +621,15 @@ void TransactionSync::forwardTxsFromP2P(bcos::crypto::NodeIDSet const& _connecte
         auto selectedPeers = selectPeers(tx, _connectedPeers, _consensusNodeList, expectedPeers);
         for (const auto& peer : *selectedPeers)
         {
-            if (!peerToForwardedTxs.count(peer))
+            auto it = peerToForwardedTxs.find(peer);
+            if (it != peerToForwardedTxs.end())
             {
-                peerToForwardedTxs[peer] = std::make_shared<HashList>();
+                it->second->emplace_back(tx->hash());
             }
-            peerToForwardedTxs[peer]->emplace_back(tx->hash());
+            else
+            {
+                peerToForwardedTxs[peer] = std::make_shared<HashList>(1, tx->hash());
+            }
         }
     }
     // broadcast the txsStatus

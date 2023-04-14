@@ -20,6 +20,9 @@
     ; min block generation time(ms)
     min_seal_time=500
 
+[executor]
+    enable_dag=true
+
 [storage]
     data_path=data
     enable_cache=true
@@ -54,4 +57,5 @@
     level=info
     ; MB
     max_log_file_size=200
+    enable_rate_collector=false
 

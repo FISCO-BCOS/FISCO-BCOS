@@ -47,7 +47,7 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(_bin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -225,10 +225,11 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     auto simpleSetFunc = [&](protocol::BlockNumber _number, int _contextId, const std::string& _key,
                              const std::string& _v,
                              bcos::protocol::TransactionStatus _errorCode =
-                                 bcos::protocol::TransactionStatus::None) {
-        nextBlock(_number);
+                                 bcos::protocol::TransactionStatus::None,
+                             BlockVersion version = protocol::BlockVersion::MAX_VERSION) {
+        nextBlock(_number, version);
         bytes in = codec->encodeWithSig("setValueByKeyTest(string,string)", _key, _v);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -267,17 +268,19 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         BOOST_CHECK(result3->status() == (int32_t)_errorCode);
         commitBlock(_number);
     };
+    bcos::protocol::BlockNumber number = 2;
     // simple set SYSTEM_KEY_TX_GAS_LIMIT
     {
-        simpleSetFunc(2, 100, std::string{ledger::SYSTEM_KEY_TX_GAS_LIMIT}, std::string("1000000"));
+        simpleSetFunc(
+            number++, 100, std::string{ledger::SYSTEM_KEY_TX_GAS_LIMIT}, std::string("1000000"));
     }
 
     // simple get SYSTEM_KEY_TX_GAS_LIMIT
     {
-        nextBlock(3);
+        nextBlock(number++);
         bytes in = codec->encodeWithSig(
             "getValueByKeyTest(string)", std::string(ledger::SYSTEM_KEY_TX_GAS_LIMIT));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -318,25 +321,26 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
 
     // simple set SYSTEM_KEY_TX_COUNT_LIMIT
     {
-        simpleSetFunc(4, 102, std::string{ledger::SYSTEM_KEY_TX_COUNT_LIMIT}, std::string("1000"));
+        simpleSetFunc(
+            number++, 102, std::string{ledger::SYSTEM_KEY_TX_COUNT_LIMIT}, std::string("1000"));
     }
 
     // set SYSTEM_KEY_TX_COUNT_LIMIT error
     {
-        simpleSetFunc(5, 103, std::string{ledger::SYSTEM_KEY_TX_COUNT_LIMIT}, std::string("error"),
-            bcos::protocol::TransactionStatus::PrecompiledError);
+        simpleSetFunc(number++, 103, std::string{ledger::SYSTEM_KEY_TX_COUNT_LIMIT},
+            std::string("error"), bcos::protocol::TransactionStatus::PrecompiledError);
     }
     // set error key
     {
-        simpleSetFunc(8, 106, std::string("errorKey"), std::string("1000"),
+        simpleSetFunc(number++, 106, std::string("errorKey"), std::string("1000"),
             bcos::protocol::TransactionStatus::PrecompiledError);
     }
 
     // get error key
     {
-        nextBlock(9);
+        nextBlock(number++);
         bytes in = codec->encodeWithSig("getValueByKeyTest(string)", std::string("error"));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -374,6 +378,17 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         BOOST_CHECK(result3->data().toBytes() == codec->encode(std::string(""), s256(-1)));
         commitBlock(9);
     }
+
+    // auth_check_status
+    {
+        // set auth check status, but version is not 3.3
+        simpleSetFunc(number++, 106, std::string(ledger::SYSTEM_KEY_AUTH_CHECK_STATUS),
+            std::string("1000"), bcos::protocol::TransactionStatus::PrecompiledError,
+            BlockVersion::V3_2_VERSION);
+        // success
+        simpleSetFunc(
+            number++, 106, std::string(ledger::SYSTEM_KEY_AUTH_CHECK_STATUS), std::string("1"));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(consensus_test)
@@ -405,7 +420,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         nextBlock(_number);
         bytes in = _w < 0 ? codec->encodeWithSig(method, _nodeId) :
                             codec->encodeWithSig(method, _nodeId, u256(_w));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);

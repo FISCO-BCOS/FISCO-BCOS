@@ -139,6 +139,7 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
     SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHash", block)
                          << LOG_KV("BlockHeaderNumber", block->blockHeader()->number());
 
+    std::promise<bcos::protocol::BlockHeader::Ptr> future;
     scheduler->executeBlock(
         block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
             if (error)
@@ -151,9 +152,10 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
             {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(header);
-                blockHeader = std::move(header);
             }
+            future.set_value(std::move(header));
         });
+    blockHeader = future.get_future().get();
     BOOST_CHECK(executeBlockError);
     executeBlockError = false;
 
@@ -174,7 +176,7 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
         bcos::protocol::BlockHeader::Ptr blockHeader;
         SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHash", block)
                              << LOG_KV("BlockHeaderNumber", block->blockHeader()->number());
-
+        std::promise<bcos::protocol::BlockHeader::Ptr> future1;
         scheduler->executeBlock(block, false,
             [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
                 SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHeader", header);
@@ -188,9 +190,10 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
                 {
                     BOOST_CHECK(!error);
                     BOOST_CHECK(header);
-                    blockHeader = std::move(header);
                 }
+                future1.set_value(std::move(header));
             });
+        blockHeader = future1.get_future().get();
         if (!executeBlockError)
         {
             BOOST_CHECK(blockHeader);
@@ -213,6 +216,7 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
         block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
         bcos::protocol::BlockHeader::Ptr executeHeader1;
         // execute olderBlock whenQueueFront whenInQueue
+        std::promise<bcos::protocol::BlockHeader::Ptr> future1;
         scheduler->executeBlock(block, false,
             [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
                 if (error)
@@ -225,9 +229,10 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
                 {
                     BOOST_CHECK(!error);
                     BOOST_CHECK(header);
-                    executeHeader1 = std::move(header);
                 }
+                future1.set_value(std::move(header));
             });
+        executeHeader1 = future1.get_future().get();
         if (!executeBlockError)
         {
             BOOST_CHECK(executeHeader1);
@@ -247,6 +252,7 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     bcos::protocol::BlockHeader::Ptr executeHeader11;
     // requestBlock = backNumber + 1
+    std::promise<bcos::protocol::BlockHeader::Ptr> future1;
     scheduler->executeBlock(block11, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
             SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHeader", header);
@@ -260,9 +266,10 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
             {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(header);
-                executeHeader11 = std::move(header);
             }
+            future1.set_value(std::move(header));
         });
+    executeHeader11 = future1.get_future().get();
     BOOST_CHECK(executeBlockError);
 }
 BOOST_AUTO_TEST_CASE(commitBlock)
@@ -288,6 +295,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
         block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
         // executeBlock
         bcos::protocol::BlockHeader::Ptr blockHeader;
+        std::promise<bcos::protocol::BlockHeader::Ptr> future;
         scheduler->executeBlock(block, false,
             [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
                 SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHeader", header);
@@ -301,9 +309,10 @@ BOOST_AUTO_TEST_CASE(commitBlock)
                 {
                     BOOST_CHECK(!error);
                     BOOST_CHECK(header);
-                    blockHeader = std::move(header);
                 }
+                future.set_value(std::move(header));
             });
+        blockHeader = future.get_future().get();
         if (!executeBlockError)
         {
             BOOST_CHECK(blockHeader);
@@ -316,7 +325,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     size_t errorNumber = 0;
     size_t queueFrontNumber = 0;
     ledger->commitSuccess(true);
-    ledger->commitSuccess(true); // the committed block number is 7
+    ledger->commitSuccess(true);  // the committed block number is 7
     for (size_t i = 7; i < 11; ++i)
     {
         auto blockHeader = blockHeaderFactory->createBlockHeader();
@@ -423,7 +432,8 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
 
     // executeBlock
     bool executeBlockError = false;
-    bcos::protocol::BlockHeader::Ptr blockHeader;
+
+    std::promise<bcos::protocol::BlockHeader::Ptr> future;
     scheduler->executeBlock(
         block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr header, bool) {
             if (error)
@@ -436,10 +446,10 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
             {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(header);
-                blockHeader = std::move(header);
             }
+            future.set_value(std::move(header));
         });
-
+    bcos::protocol::BlockHeader::Ptr blockHeader = future.get_future().get();
     BOOST_CHECK(blockHeader);
 
 
@@ -500,10 +510,12 @@ BOOST_AUTO_TEST_CASE(call)
     bcos::crypto::KeyPairInterface::Ptr keyPair =
         blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
     auto tx = blockFactory->transactionFactory()->createTransaction(0, "address_to",
-        bytes(inputStr.begin(), inputStr.end()), 200, 300, "chain", "group", 500, keyPair);
+        bytes(inputStr.begin(), inputStr.end()), std::to_string(200), 300, "chain", "group", 500,
+        keyPair);
 
-    auto empty_to = blockFactory->transactionFactory()->createTransaction(
-        0, "", bytes(inputStr.begin(), inputStr.end()), 200, 300, "chain", "group", 500, keyPair);
+    auto empty_to = blockFactory->transactionFactory()->createTransaction(0, "",
+        bytes(inputStr.begin(), inputStr.end()), std::to_string(200), 300, "chain", "group", 500,
+        keyPair);
 
     // call
     {
@@ -540,19 +552,6 @@ BOOST_AUTO_TEST_CASE(call)
     }
 }
 
-BOOST_AUTO_TEST_CASE(registerExecutor)
-{
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0);
-    auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
-    auto executor2 = std::make_shared<MockDmcExecutor>("executor2");
-    scheduler->registerExecutor(
-        "executor1", executor1, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
-    scheduler->registerExecutor(
-        "executor2", executor2, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
-}
-
 
 BOOST_AUTO_TEST_CASE(testDeploySysContract)
 {
@@ -568,8 +567,9 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
     block->blockHeader()->setNumber(0);
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
-    auto tx = blockFactory->transactionFactory()->createTransaction(
-        3, precompiled::AUTH_COMMITTEE_ADDRESS, {}, u256(1), 500, "chainId", "groupId", utcTime());
+    auto tx = blockFactory->transactionFactory()->createTransaction(3,
+        precompiled::AUTH_COMMITTEE_ADDRESS, {}, std::to_string(1), 500, "chainId", "groupId",
+        utcTime());
     block->appendTransaction(std::move(tx));
 
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
@@ -580,6 +580,7 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
             executedHeader.set_value(std::move(header));
         });
     auto header = executedHeader.get_future().get();
+
 
     BOOST_CHECK(header);
     BOOST_CHECK_NE(header->stateRoot(), h256());
@@ -594,8 +595,9 @@ BOOST_AUTO_TEST_CASE(testCallSysContract)
     auto executor1 = std::make_shared<MockParallelExecutorForCall>("executor1");
     executorManager->addExecutor("executor1", executor1);
 
-    auto tx = blockFactory->transactionFactory()->createTransaction(
-        3, precompiled::AUTH_COMMITTEE_ADDRESS, {}, u256(1), 500, "chainId", "groupId", utcTime());
+    auto tx = blockFactory->transactionFactory()->createTransaction(3,
+        precompiled::AUTH_COMMITTEE_ADDRESS, {}, std::to_string(1), 500, "chainId", "groupId",
+        utcTime());
 
     bcos::protocol::TransactionReceipt::Ptr receipt;
 

@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "ShardingTransactionExecutor.h"
 #include "TransactionExecutor.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
@@ -72,7 +73,7 @@ public:
         // copy constructor
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             storage::IGNORED_ARRAY.begin(), storage::IGNORED_ARRAY.end());
-        auto executor = std::make_shared<TransactionExecutor>(m_ledger, m_txpool,
+        auto executor = std::make_shared<ShardingTransactionExecutor>(m_ledger, m_txpool,
             m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
             m_executionMessageFactory, m_stateStorageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,
             m_vmFactory, std::move(keyPageIgnoreTables), m_name + "-" + std::to_string(utcTime()));

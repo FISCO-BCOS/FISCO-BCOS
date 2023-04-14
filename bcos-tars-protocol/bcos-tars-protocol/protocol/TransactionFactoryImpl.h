@@ -85,7 +85,7 @@ public:
     }
 
     bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
-        bcos::bytes const& _input, bcos::u256 const& _nonce, int64_t _blockLimit,
+        bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
         std::string _chainId, std::string _groupId, int64_t _importTime) override
     {
         auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
@@ -112,7 +112,7 @@ public:
     }
 
     bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
-        bcos::bytes const& _input, bcos::u256 const& _nonce, int64_t _blockLimit,
+        bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
         std::string _chainId, std::string _groupId, int64_t _importTime,
         bcos::crypto::KeyPairInterface::Ptr keyPair) override
     {

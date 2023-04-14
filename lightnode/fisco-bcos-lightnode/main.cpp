@@ -26,7 +26,7 @@
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-storage/StorageImpl.h>
+#include <bcos-storage/StorageWrapperImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>

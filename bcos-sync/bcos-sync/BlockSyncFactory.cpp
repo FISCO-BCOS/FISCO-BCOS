@@ -32,15 +32,15 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::consensus::ConsensusInterface::Ptr _consensus,
     bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
-  : m_nodeId(_nodeId),
-    m_blockFactory(_blockFactory),
-    m_txResultFactory(_txResultFactory),
-    m_ledger(_ledger),
-    m_txpool(_txpool),
-    m_frontService(_frontService),
-    m_scheduler(_scheduler),
-    m_consensus(_consensus),
-    m_nodeTimeMaintenance(_nodeTimeMaintenance)
+  : m_nodeId(std::move(_nodeId)),
+    m_blockFactory(std::move(_blockFactory)),
+    m_txResultFactory(std::move(_txResultFactory)),
+    m_ledger(std::move(_ledger)),
+    m_txpool(std::move(_txpool)),
+    m_frontService(std::move(_frontService)),
+    m_scheduler(std::move(_scheduler)),
+    m_consensus(std::move(_consensus)),
+    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
 {}
 
 BlockSync::Ptr BlockSyncFactory::createBlockSync()

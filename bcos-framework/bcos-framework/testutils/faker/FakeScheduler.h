@@ -69,14 +69,6 @@ public:
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) noexcept override
     {}
 
-    // by executor
-    void registerExecutor(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr,
-        std::function<void(Error::Ptr&&)>) noexcept override
-    {}
-
-    void unregisterExecutor(const std::string&, std::function<void(Error::Ptr&&)>) noexcept override
-    {}
-
     // clear all status
     void reset(std::function<void(Error::Ptr&&)>) noexcept override {}
     void getCode(std::string_view, std::function<void(Error::Ptr, bcos::bytes)>) override {}

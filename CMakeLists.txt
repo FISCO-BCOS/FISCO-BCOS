@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum OS X deployment version")
 
 if(NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
@@ -7,7 +7,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(VERSION "3.2.1")
+set(VERSION "3.3.0")
 set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
@@ -44,7 +44,7 @@ if(FULLNODE)
     endif()
     include(ProjectGroupSig)
     include(ProjectSDF)
-
+    include(ProjectITTAPI)
 
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)
@@ -68,6 +68,8 @@ if(FULLNODE)
     add_subdirectory(fisco-bcos-air)
     add_subdirectory(concepts)
     add_subdirectory(libtask)
+
+    add_subdirectory(transaction-executor)
 
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)

@@ -102,22 +102,6 @@ void SchedulerManager::call(protocol::Transaction::Ptr tx,
     m_scheduler->call(tx, std::move(_holdSchedulerCallback));
 }
 
-// by executor
-void SchedulerManager::registerExecutor(std::string name,
-    bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-    std::function<void(Error::Ptr&&)> callback)
-{
-    initSchedulerIfNotExist();
-    m_scheduler->registerExecutor(name, executor, std::move(callback));
-}
-
-void SchedulerManager::unregisterExecutor(
-    const std::string& name, std::function<void(Error::Ptr&&)> callback)
-{
-    initSchedulerIfNotExist();
-    m_scheduler->unregisterExecutor(name, std::move(callback));
-}
-
 // clear all status
 void SchedulerManager::reset(std::function<void(Error::Ptr&&)> callback)
 {

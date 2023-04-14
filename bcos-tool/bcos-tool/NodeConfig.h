@@ -109,9 +109,10 @@ public:
     size_t blockLimit() const { return m_blockLimit; }
 
     std::string const& privateKeyPath() const { return m_privateKeyPath; }
-    bool const& hsmEnable() const { return m_hsmEnable; }
+    bool const& enableHsm() const { return m_enableHsm; }
     std::string const& hsmLibPath() const { return m_hsmLibPath; }
     int const& keyIndex() const { return m_keyIndex; }
+    int const& encKeyIndex() const { return m_encKeyIndex; }
     std::string const& password() const { return m_password; }
 
     size_t minSealTime() const { return m_minSealTime; }
@@ -120,6 +121,9 @@ public:
     std::string const& storagePath() const { return m_storagePath; }
     std::string const& storageType() const { return m_storageType; }
     size_t keyPageSize() const { return m_keyPageSize; }
+    int maxWriteBufferNumber() const { return m_maxWriteBufferNumber; }
+    bool enableStatistics() const { return m_enableDBStatistics; }
+    int maxBackgroundJobs() const { return m_maxBackgroundJobs; }
     std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
     std::string const& pdCaPath() const { return m_pdCaPath; }
     std::string const& pdCertPath() const { return m_pdCertPath; }
@@ -239,13 +243,18 @@ protected:
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
+
     virtual void loadFailOverConfig(
         boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
     virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
 
+    // load config.genesis
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
+
+    // load config.ini
+    void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);
 
     std::string getServiceName(boost::property_tree::ptree const& _pt,
         std::string const& _configSection, std::string const& _objName,
@@ -284,9 +293,10 @@ private:
 
     // for security
     std::string m_privateKeyPath;
-    bool m_hsmEnable;
+    bool m_enableHsm;
     std::string m_hsmLibPath;
     int m_keyIndex;
+    int m_encKeyIndex;
     std::string m_password;
 
     // storage security configuration
@@ -309,6 +319,9 @@ private:
     std::string m_pdCaPath;
     std::string m_pdCertPath;
     std::string m_pdKeyPath;
+    int m_maxWriteBufferNumber = 3;
+    bool m_enableDBStatistics = false;
+    int m_maxBackgroundJobs = 3;
     bool m_enableArchive = false;
     std::string m_archiveListenIP;
     uint16_t m_archiveListenPort = 0;

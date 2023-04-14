@@ -45,12 +45,13 @@ public:
 
     ~AccountPrecompiledFixture() override = default;
 
-    ExecutionMessage::UniquePtr deployHelloInAuthCheck(std::string newAddress, BlockNumber _number,
-        Address _address = Address(), bool _errorInFrozen = false)
+    ExecutionMessage::UniquePtr deployHelloInAuthCheck(std::string newAddress,
+        bcos::protocol::BlockNumber _number, Address _address = Address(),
+        bool _errorInFrozen = false)
     {
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -147,7 +148,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("get()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -191,7 +192,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("set(string)", _value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -237,7 +238,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("setAccountStatus(address,uint8)", account, status);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address(_sender);
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -454,7 +455,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("getAccountStatus(address)", account);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -530,7 +531,7 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("getAccountStatus()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto hash = tx->hash();
         txpool->hash2Transaction[hash] = tx;
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -580,7 +581,7 @@ BOOST_AUTO_TEST_CASE(createAccountTest)
 {
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
     Address errorAccount = Address("17505f128bd4d00c2698441b1f54ef843b837211");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
     {
         auto response = setAccountStatus(number++, newAccount, 0);
         BOOST_CHECK(response->status() == 0);
@@ -648,7 +649,7 @@ BOOST_AUTO_TEST_CASE(setAccountStatusTest)
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
     Address errorAccount = Address("17505f128bd4d00c2698441b1f54ef843b837211");
     Address h1 = Address("12305f128bd4d00c2698441b1f54ef843b837123");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
 
     // setAccountStatus account not exist
     {
@@ -711,7 +712,7 @@ BOOST_AUTO_TEST_CASE(setAccountStatusErrorTest)
 {
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
     Address errorAccount = Address("17505f128bd4d00c2698441b1f54ef843b837211");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
 
     // setAccountStatus account not exist
     {
@@ -741,7 +742,7 @@ BOOST_AUTO_TEST_CASE(abolishTest)
 {
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
     Address h1 = Address("12305f128bd4d00c2698441b1f54ef843b837123");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
 
     // setAccountStatus account not exist
     {
@@ -815,7 +816,7 @@ BOOST_AUTO_TEST_CASE(abolishTest)
 BOOST_AUTO_TEST_CASE(parallelSetTest)
 {
     Address newAccount = Address("27505f128bd4d00c2698441b1f54ef843b837215");
-    BlockNumber number = 2;
+    bcos::protocol::BlockNumber number = 2;
 
     // setAccountStatus account not exist
     {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
-
+#include <bcos-rpc/jsonrpc/Common.h>
 #include "P2PClientImpl.h"
 #include <bcos-concepts/transaction-pool/TransactionPool.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
@@ -36,7 +36,11 @@ private:
             bcos::protocol::LIGHTNODE_SEND_TRANSACTION, nodeID, request, response);
 
         if (response.error.errorCode)
-            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+        {
+            LIGHTNODE_LOG(WARNING) << "light node submitTransaction failed, errorCode: " << response.error.errorCode
+                                   << " " << response.error.errorMessage;
+            BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(response.error.errorCode, response.error.errorMessage));
+        }
 
         std::swap(response.receipt, receipt);
     }

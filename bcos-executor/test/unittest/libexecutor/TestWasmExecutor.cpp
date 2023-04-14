@@ -89,8 +89,8 @@ struct WasmExecutorFixture
         ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
-        executor = bcos::executor::TransactionExecutorFactory::build(
-            ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
+        executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
+            backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -241,8 +241,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     string selfAddress = "usr/alice/hello_world";
 
-    auto tx =
-        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+    auto tx = fakeTransaction(
+        cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -269,6 +269,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     std::vector<protocol::ParentInfo> parentInfos{
         {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
     blockHeader->setParentInfo(parentInfos);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     ledger->setBlockNumber(blockHeader->number() - 1);
     std::promise<void> nextPromise;
@@ -353,6 +354,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader2->setNumber(2);
+    blockHeader2->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
     parentInfos = {{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}};
     blockHeader2->setParentInfo(parentInfos);
@@ -447,8 +449,8 @@ BOOST_AUTO_TEST_CASE(deployError)
 
     string selfAddress = "usr/alice/hello_world";
 
-    auto tx =
-        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+    auto tx = fakeTransaction(
+        cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -471,6 +473,7 @@ BOOST_AUTO_TEST_CASE(deployError)
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(1);
+        blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
         std::vector<protocol::ParentInfo> parentInfos{
             {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
@@ -579,6 +582,7 @@ BOOST_AUTO_TEST_CASE(deployError)
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(2);
+        blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
         std::vector<protocol::ParentInfo> parentInfos{
             {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
@@ -648,8 +652,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
     string selfAddress = "usr/alice/hello_world";
 
-    auto tx =
-        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+    auto tx = fakeTransaction(
+        cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -672,6 +676,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
     auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
     std::vector<protocol::ParentInfo> parentInfos{
         {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
@@ -761,6 +766,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
     auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader2->setNumber(2);
+    blockHeader2->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
     parentInfos = {{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}};
     blockHeader2->setParentInfo(parentInfos);
@@ -889,8 +895,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
         constructorParam = codec->encode(constructorParam);
         input.insert(input.end(), constructorParam.begin(), constructorParam.end());
 
-        auto tx =
-            fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+        auto tx = fakeTransaction(
+            cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -912,6 +918,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(1);
+        blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
         std::vector<protocol::ParentInfo> parentInfos{
             {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
@@ -976,8 +983,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
         constructorParam = codec->encode(constructorParam);
         input.insert(input.end(), constructorParam.begin(), constructorParam.end());
 
-        auto tx = fakeTransaction(
-            cryptoSuite, keyPair, "", input, 102, 100001, "1", "1", helloWorldCallerAbi);
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(102), 100001, "1",
+            "1", helloWorldCallerAbi);
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -999,6 +1006,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(2);
+        blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
         std::vector<protocol::ParentInfo> parentInfos{
             {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
@@ -1076,6 +1084,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(3);
+        blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
         std::vector<protocol::ParentInfo> parentInfos{
             {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
@@ -1148,7 +1157,8 @@ BOOST_AUTO_TEST_CASE(performance)
 
     string transferAddress = "usr/alice/transfer";
 
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", transferAbi);
+    auto tx = fakeTransaction(
+        cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", transferAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -1170,6 +1180,7 @@ BOOST_AUTO_TEST_CASE(performance)
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(1);
+        blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
         std::vector<protocol::ParentInfo> parentInfos{
             {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};

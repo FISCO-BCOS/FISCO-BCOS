@@ -20,6 +20,8 @@
  */
 #include "BlockSyncConfig.h"
 #include "bcos-sync/utilities/Common.h"
+#include <future>
+
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::crypto;
@@ -47,7 +49,7 @@ void BlockSyncConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig)
     });
 
     // Note: can't add lock before asyncNotifyNewBlock in case of deadlock
-    Guard l(m_mutex);
+    Guard lock(m_mutex);
     if (_ledgerConfig->blockNumber() <= m_blockNumber && m_blockNumber > 0)
     {
         return;
@@ -81,6 +83,13 @@ void BlockSyncConfig::setGenesisHash(HashType const& _hash)
     }
 }
 
+void BlockSyncConfig::setApplyingBlock(bcos::protocol::BlockNumber _number)
+{
+    // update in case applying block already apply finished
+    auto blockNumber = std::max(_number, m_executedBlock.load());
+    m_applyingBlock.store(blockNumber);
+}
+
 void BlockSyncConfig::resetBlockInfo(BlockNumber _blockNumber, bcos::crypto::HashType const& _hash)
 {
     m_blockNumber = _blockNumber;
@@ -99,13 +108,13 @@ void BlockSyncConfig::resetBlockInfo(BlockNumber _blockNumber, bcos::crypto::Has
 
 HashType const& BlockSyncConfig::hash() const
 {
-    ReadGuard l(x_hash);
+    ReadGuard lock(x_hash);
     return m_hash;
 }
 
 void BlockSyncConfig::setHash(HashType const& _hash)
 {
-    WriteGuard l(x_hash);
+    WriteGuard lock(x_hash);
     m_hash = _hash;
 }
 
@@ -116,13 +125,13 @@ void BlockSyncConfig::setKnownHighestNumber(BlockNumber _highestNumber)
 
 void BlockSyncConfig::setKnownLatestHash(HashType const& _hash)
 {
-    WriteGuard l(x_knownLatestHash);
+    WriteGuard lock(x_knownLatestHash);
     m_knownLatestHash = _hash;
 }
 
 HashType const& BlockSyncConfig::knownLatestHash()
 {
-    ReadGuard l(x_knownLatestHash);
+    ReadGuard lock(x_knownLatestHash);
     return m_knownLatestHash;
 }
 
@@ -141,9 +150,11 @@ void BlockSyncConfig::setExecutedBlock(BlockNumber _executedBlock)
     if (m_blockNumber <= _executedBlock)
     {
         m_executedBlock = _executedBlock;
+        m_applyingBlock = _executedBlock;
         return;
     }
     m_executedBlock.store(m_blockNumber);
+    m_applyingBlock.store(m_blockNumber);
 }
 
 bcos::protocol::NodeType BlockSyncConfig::determineNodeType()
@@ -162,7 +173,7 @@ bcos::protocol::NodeType BlockSyncConfig::determineNodeType()
 bool BlockSyncConfig::existNode(bcos::consensus::ConsensusNodeListPtr const& _nodeList,
     SharedMutex& _lock, bcos::crypto::NodeIDPtr _nodeID)
 {
-    ReadGuard l(_lock);
+    ReadGuard lock(_lock);
     for (auto const& it : *_nodeList)
     {
         if (it->nodeID()->data() == _nodeID->data())

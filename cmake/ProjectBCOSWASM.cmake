@@ -46,7 +46,7 @@ ExternalProject_Add(bcos_wasm_project
         PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
         # DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-wasm.git
-        GIT_TAG 5c05f91d55c7bd4e7d88d2461bbded57539c8127
+        GIT_TAG a6a59870c166498910e2dfd1af1fe59c0619d667
         GIT_SHALLOW false
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ""
@@ -64,6 +64,6 @@ set(HERA_INCLUDE_DIRS ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${HERA_INCLUDE_DIRS})  # Must exist.
 
 add_library(fbwasm STATIC IMPORTED)
-set_property(TARGET fbwasm PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/target/release/libbcos_wasm.a)
+set_property(TARGET fbwasm PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/target/${BCOS_WASM_BUILD_MODE}/libbcos_wasm.a)
 set_property(TARGET fbwasm PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SOURCE_DIR}/include)
 add_dependencies(fbwasm bcos_wasm_project evmc::instructions)

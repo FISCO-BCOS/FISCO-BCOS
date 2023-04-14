@@ -1,0 +1,79 @@
+name: Mac CI Check
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+    branches:
+      - release-3.*
+      - feature-3.*
+      - master
+  release:
+    types: [push]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_mac:
+    name: mac ci check
+    runs-on: self-hosted-mac
+    strategy:
+      fail-fast: false
+    env:
+      DEPS_ROOT: ~/cache/deps
+      VCPKG_ROOT: ~/cache/vcpkg
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 8
+          java-package: jdk
+
+      - name: Reuse build cache
+        run: |
+          mkdir -p ./build
+          rm -rf deps
+          ln -s ${{ env.DEPS_ROOT }} deps
+
+      - name: Remove cache if correspond dir change
+        run: ./tools/.ci/clear_build_cache.sh
+
+      - name: Build for mac
+        run: |
+          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          cmake --build . --parallel 8
+
+      - name: Test && Generate Coverage
+        run: |
+          cd build
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          make cov
+
+
+      - name: upload coverage report
+        uses: codecov/codecov-action@v2
+        with:
+          files: ./build/coverage.info
+          version: "v0.1.15"
+          flags: unittests
+          name: FISCO BCOS coverage
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Integration test - Air
+        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+
+      - name: Integration test - Pro
+        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}

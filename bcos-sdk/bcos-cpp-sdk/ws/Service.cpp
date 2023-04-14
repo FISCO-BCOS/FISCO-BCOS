@@ -159,7 +159,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
 
         if (endPoints.empty())
         {
-            auto error = std::make_shared<Error>(WsError::EndPointNotExist,
+            auto error = BCOS_ERROR_PTR(WsError::EndPointNotExist,
                 "there has no connection available, maybe all connections disconnected");
             _respFunc(error, nullptr, nullptr);
             return;
@@ -171,7 +171,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
         getEndPointsByGroup(_group, endPoints);
         if (endPoints.empty())
         {
-            auto error = std::make_shared<Error>(WsError::EndPointNotExist,
+            auto error = BCOS_ERROR_PTR(WsError::EndPointNotExist,
                 "there has no connection available for the group, maybe all connections "
                 "disconnected or "
                 "the group does not exist, group: " +
@@ -186,7 +186,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
         getEndPointsByGroupAndNode(_group, _node, endPoints);
         if (endPoints.empty())
         {
-            auto error = std::make_shared<Error>(WsError::EndPointNotExist,
+            auto error = BCOS_ERROR_PTR(WsError::EndPointNotExist,
                 "there has no connection available for the node of the group, maybe all "
                 "connections "
                 "disconnected or the node does not exist, group: " +

@@ -35,8 +35,8 @@ public:
     TablePrecompiled(crypto::Hash::Ptr _hashImpl);
     ~TablePrecompiled() override = default;
 
-    std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr call(
+        executor::TransactionExecutive::Ptr _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
@@ -84,7 +84,7 @@ private:
         const std::vector<precompiled::ConditionTuple>& conditions,
         const precompiled::LimitTuple& limit) const;
     bool buildConditions(std::optional<precompiled::Condition>& valueCondition,
-        const std::vector<precompiled::ConditionTupleV320>& conditions, 
+        const std::vector<precompiled::ConditionTupleV320>& conditions,
         const precompiled::LimitTuple& limit, precompiled::TableInfoTupleV320& tableInfo) const;
     void desc(precompiled::TableInfo& _tableInfo, const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,

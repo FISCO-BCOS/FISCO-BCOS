@@ -8,6 +8,7 @@
 #pragma once
 #include "bcos-gateway/libnetwork/Common.h"
 #include <bcos-gateway/libnetwork/Message.h>
+#include <bcos-utilities/ObjectCounter.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <array>
 #include <mutex>
@@ -18,11 +19,12 @@ namespace bcos::gateway
 
 using SessionCallbackFunc = std::function<void(NetworkException, Message::Ptr)>;
 
-struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
+struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>,
+                          public bcos::ObjectCounter<ResponseCallback>
 {
     using Ptr = std::shared_ptr<ResponseCallback>;
 
-    uint64_t m_startTime;
+    uint64_t startTime;
     SessionCallbackFunc callback;
     std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
 };

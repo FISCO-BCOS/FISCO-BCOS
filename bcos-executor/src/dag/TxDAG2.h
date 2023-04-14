@@ -40,8 +40,9 @@ public:
 
     virtual ~TxDAG2() {}
 
-    void init(
-        critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTxFunc const& _f) override;
+    void setExecuteTxFunc(ExecuteTxFunc const& _f) override { f_executeTx = _f; };
+
+    void init(critical::CriticalFieldsInterface::Ptr _txsCriticals) override;
 
     void run(unsigned int threadNum) override;
 

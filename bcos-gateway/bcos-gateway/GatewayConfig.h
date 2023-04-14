@@ -5,24 +5,23 @@
 
 #pragma once
 
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <array>
 
 namespace bcos
 {
 namespace gateway
 {
-class GatewayConfig
+class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
 {
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;
-
-    GatewayConfig() = default;
-    ~GatewayConfig() = default;
 
 public:
     // cert for ssl connection
@@ -31,6 +30,7 @@ public:
         std::string caCert;
         std::string nodeKey;
         std::string nodeCert;
+        std::string multiCaPath;
     };
 
     // cert for sm ssl connection
@@ -41,6 +41,7 @@ public:
         std::string nodeKey;
         std::string enNodeCert;
         std::string enNodeKey;
+        std::string multiCaPath;
     };
 
     // config for redis
@@ -63,18 +64,24 @@ public:
     // config for rate limit
     struct RateLimiterConfig
     {
-        bool enableGroupRateLimit = false;
-        bool enableConRateLimit = false;
+        // time window for rate limiter
+        int32_t timeWindowSec = 1;
+        // allow outgoing msg exceed max permit size
+        bool allowExceedMaxPermitSize = false;
 
-        // if turn on distributed ratelimit
-        bool enableDistributedRatelimit = false;
-        //
-        bool enableDistributedRateLimitCache = true;
-        //
-        int32_t distributedRateLimitCachePercent = 20;
+        bool enableConnectDebugInfo = false;
+
         // stat reporter interval, unit: ms
         int32_t statInterval = 60000;
 
+        // distributed ratelimit switch
+        bool enableDistributedRatelimit = false;
+        // distributed ratelimit local cache switch
+        bool enableDistributedRateLimitCache = true;
+        // distributed ratelimit local cache percent
+        int32_t distributedRateLimitCachePercent = 20;
+
+        //-------------- output bandwidth ratelimit begin------------------
         // total outgoing bandwidth limit
         int64_t totalOutgoingBwLimit = -1;
 
@@ -90,9 +97,20 @@ public:
 
         // the message of modules that do not limit bandwidth
         std::set<uint16_t> modulesWithoutLimit;
+        //-------------- output bandwidth ratelimit end-------------------
+
+        //-------------- incoming qps ratelimit begin---------------------
+
+        int32_t p2pBasicMsgQPS = -1;
+        std::set<uint16_t> p2pBasicMsgTypes;
+        int32_t p2pModuleMsgQPS = -1;
+        int32_t moduleMsg2QPSSize = 0;
+        std::array<int32_t, std::numeric_limits<uint16_t>::max()> moduleMsg2QPS{};
+
+        //-------------- incoming qps ratelimit end-----------------------
 
         // whether any configuration takes effect
-        bool enableRateLimit() const
+        bool enableOutRateLimit() const
         {
             if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
             {
@@ -105,6 +123,44 @@ public:
             }
 
             return false;
+        }
+
+        bool enableOutGroupRateLimit() const
+        {
+            return groupOutgoingBwLimit > 0 || !group2BwLimit.empty();
+        }
+
+        bool enableOutConnRateLimit() const
+        {
+            return connOutgoingBwLimit > 0 || !ip2BwLimit.empty();
+        }
+
+        bool enableInRateLimit() const
+        {
+            if (p2pBasicMsgQPS > 0 || p2pModuleMsgQPS > 0)
+            {
+                return true;
+            }
+
+            if (moduleMsg2QPSSize > 0)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+
+        bool enableInP2pBasicMsgLimit() const { return p2pBasicMsgQPS > 0; }
+
+        bool enableInP2pModuleMsgLimit(uint16_t _moduleID) const
+        {
+            if ((p2pModuleMsgQPS <= 0) && (moduleMsg2QPSSize <= 0))
+            {
+                return false;
+            }
+
+            return p2pModuleMsgQPS > 0 || (moduleMsg2QPS.at(_moduleID) != 0);
         }
     };
 
@@ -138,7 +194,7 @@ public:
     // loads sm ca configuration items from the configuration file
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
     // loads ratelimit config
-    void initRateLimitConfig(const boost::property_tree::ptree& _pt);
+    void initFlowControlConfig(const boost::property_tree::ptree& _pt);
     // loads redis config
     void initRedisConfig(const boost::property_tree::ptree& _pt);
     // loads peer blacklist config
@@ -165,14 +221,37 @@ public:
     bool enableBlacklist() const { return m_enableBlacklist; }
     const std::set<std::string>& peerBlacklist() const { return m_certBlacklist; }
     bool enableWhitelist() const { return m_enableWhitelist; }
-    const std::set<std::string>& peerWhitelist() const { return m_certWhitelist;}
+    const std::set<std::string>& peerWhitelist() const { return m_certWhitelist; }
 
     std::string const& uuid() const { return m_uuid; }
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 
-    //NodeIDType: 
-    //h512(true == m_smSSL)
-    //h2048(false == m_smSSL)
+    void setEnableRIPProtocol(bool _enableRIPProtocol) { m_enableRIPProtocol = _enableRIPProtocol; }
+    bool enableRIPProtocol() const { return m_enableRIPProtocol; }
+
+    void setEnableCompress(bool _enableCompress) { m_enableCompress = _enableCompress; }
+    bool enableCompress() const { return m_enableCompress; }
+
+    uint32_t allowMaxMsgSize() const { return m_allowMaxMsgSize; }
+    void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize) { m_allowMaxMsgSize = _allowMaxMsgSize; }
+
+    uint32_t sessionRecvBufferSize() const { return m_sessionRecvBufferSize; }
+    void setSessionRecvBufferSize(uint32_t _sessionRecvBufferSize)
+    {
+        m_sessionRecvBufferSize = _sessionRecvBufferSize;
+    }
+
+    uint32_t maxReadDataSize() const { return m_maxReadDataSize; }
+    void setMaxReadDataSize(uint32_t _maxReadDataSize) { m_maxReadDataSize = _maxReadDataSize; }
+
+    uint32_t maxSendDataSize() const { return m_maxSendDataSize; }
+    void setMaxSendDataSize(uint32_t _maxSendDataSize) { m_maxSendDataSize = _maxSendDataSize; }
+
+    uint32_t maxMsgCountSendOneTime() const { return m_maxSendMsgCount; }
+    void setMaxSendMsgCount(uint32_t _maxSendMsgCount) { m_maxSendMsgCount = _maxSendMsgCount; }
+    // NodeIDType:
+    // h512(true == m_smSSL)
+    // h2048(false == m_smSSL)
     template <typename NodeIDType>
     bool isNodeIDOk(const std::string& _nodeID)
     {
@@ -202,6 +281,14 @@ public:
     }
 
 private:
+    // The maximum size of message that is allowed to send or receive
+    uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
+    // p2p session read buffer size, default: 128k
+    uint32_t m_sessionRecvBufferSize{128 * 1024};
+    uint32_t m_maxReadDataSize = 40 * 1024;
+    uint32_t m_maxSendDataSize = 1024 * 1024;
+    uint32_t m_maxSendMsgCount = 10;
+    //
     std::string m_uuid;
     // if SM SSL connection or not
     bool m_smSSL;
@@ -210,14 +297,18 @@ private:
     // p2p network listen Port
     uint16_t m_listenPort;
     // threadPool size
-    uint32_t m_threadPoolSize{16};
+    uint32_t m_threadPoolSize{8};
     // p2p connected nodes host list
     std::set<NodeIPEndpoint> m_connectedNodes;
     // peer black list
-    bool m_enableBlacklist{ false };
+    bool m_enableBlacklist{false};
     std::set<std::string> m_certBlacklist;
     // peer white list
-    bool m_enableWhitelist{ false };
+    bool m_enableWhitelist{false};
+    // enable rip protocol
+    bool m_enableRIPProtocol{true};
+    // enable compress
+    bool m_enableCompress{true};
     std::set<std::string> m_certWhitelist;
     // cert config for ssl connection
     CertConfig m_certConfig;
