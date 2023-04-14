@@ -37,6 +37,11 @@ jobs:
           java-version: 8
           java-package: jdk
 
+      - name: Set up Node.js 16.x
+          uses: actions/setup-node@v2
+          with:
+            node-version: '16.x'
+
       - name: yum install
         run: |
           sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static  glibc-static glibc-devel libzstd-devel

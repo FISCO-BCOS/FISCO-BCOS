@@ -31,6 +31,11 @@ jobs:
         with:
           clean: false
 
+      - name: Set up Node.js 16.x
+          uses: actions/setup-node@v2
+          with:
+            node-version: '16.x'
+
       - name: Prepare centos tools
         run: |
           yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel java-1.8.0-openjdk-devel.aarch64

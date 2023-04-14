@@ -50,6 +50,11 @@ jobs:
           toolchain: nightly-2022-07-28
           override: true
 
+      - name: Set up Node.js 16.x
+          uses: actions/setup-node@v2
+          with:
+            node-version: '16.x'
+
       - name: Reuse build cache
         run: |
           mkdir -p ./build
