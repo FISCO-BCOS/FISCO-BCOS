@@ -232,7 +232,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
         if (blockHeader == nullptr)
         {
             auto message = "hit block cache, but block is executing!";
-            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "ExecuteBlock error, "
+            SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(requestBlockNumber) << "ExecuteBlock error, "
                                  << message;
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr, false);
         }
@@ -471,7 +471,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     .str();
 
 
-            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock error, "
+            SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock error, "
                                  << message;
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::BlockIsCommitting, message), nullptr);
             return;

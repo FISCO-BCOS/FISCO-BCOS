@@ -27,6 +27,7 @@
 #include "bcos-storage/bcos-storage/TiKVStorage.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/convenience.h"
+#include "rocksdb/filter_policy.h"
 #include "rocksdb/write_batch.h"
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
@@ -36,8 +37,8 @@ namespace bcos::initializer
 class StorageInitializer
 {
 public:
-    static auto createRocksDB(
-        const std::string& _path, int _max_write_buffer_number = 3, int _max_background_jobs = 3)
+    static auto createRocksDB(const std::string& _path, int _max_write_buffer_number = 3,
+        bool _enableDBStatistics = false, int _max_background_jobs = 3)
     {
         boost::filesystem::create_directories(_path);
         rocksdb::DB* db;
@@ -54,13 +55,22 @@ public:
         // FIXME: enable blob support when space amplification is acceptable
         // options.enable_blob_files = keyPageSize > 1 ? true : false;
         options.compression = rocksdb::kZSTD;
+        options.bottommost_compression = rocksdb::kZSTD;  // last level compression
         options.max_open_files = 256;
+        options.write_buffer_size = 64 << 20;  // default is 64MB
         // options.min_blob_size = 1024;
 
-        // block cache 32MB
-        std::shared_ptr<rocksdb::Cache> cache = rocksdb::NewLRUCache(32 * 1024 * 1024);
+        if (_enableDBStatistics)
+        {
+            options.statistics = rocksdb::CreateDBStatistics();
+        }
+        // block cache 128MB
+        std::shared_ptr<rocksdb::Cache> cache = rocksdb::NewLRUCache(128 << 20);
         rocksdb::BlockBasedTableOptions table_options;
         table_options.block_cache = cache;
+        // use bloom filter to optimize point lookup, i.e. get
+        table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+        table_options.optimize_filters_for_memory = true;
         options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
 
         if (boost::filesystem::space(_path).available < 1024 * 1024 * 500)
@@ -86,10 +96,10 @@ public:
     static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
         const bcos::security::DataEncryptInterface::Ptr& _dataEncrypt,
         [[maybe_unused]] size_t keyPageSize = 0, int _max_write_buffer_number = 3,
-        int _max_background_jobs = 3)
+        bool _enableDBStatistics = false, int _max_background_jobs = 3)
     {
-        auto unique_db =
-            createRocksDB(_storagePath, _max_write_buffer_number, _max_background_jobs);
+        auto unique_db = createRocksDB(
+            _storagePath, _max_write_buffer_number, _enableDBStatistics, _max_background_jobs);
         return std::make_shared<bcos::storage::RocksDBStorage>(std::move(unique_db), _dataEncrypt);
     }
 
