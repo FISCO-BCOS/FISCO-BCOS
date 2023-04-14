@@ -81,7 +81,7 @@ void EventSub::doLoop()
     m_timer->restart();
     {
         boost::shared_lock<boost::shared_mutex> lock(x_tasks);
-        EVENT_SUB(INFO) << LOG_BADGE("doLoop") << LOG_DESC("event sub tasks report")
+        EVENT_SUB(INFO) << LOG_BADGE("doLoop") << LOG_DESC("event sub tasks")
                         << LOG_KV("working event sub count", m_workingTasks.size())
                         << LOG_KV("suspend event sub count", m_suspendTasks.size());
     }
@@ -416,7 +416,7 @@ std::string EventSub::subscribeEvent(
     if (!params->fromJsonString(_params))
     {
         // invalid request params string format
-        auto error = std::make_shared<Error>(-1, "invalid request JSON string");
+        auto error = BCOS_ERROR_PTR(-1, "invalid request JSON string");
         _callback(error, "");
         return "";
     }
@@ -430,7 +430,7 @@ std::string EventSub::subscribeEvent(
     // invalid request params string format
     if (!_params->verifyParams())
     {
-        auto error = std::make_shared<Error>(-1, "params verification failure");
+        auto error = BCOS_ERROR_PTR(-1, "params verification failure");
         _callback(error, "");
         return "";
     }

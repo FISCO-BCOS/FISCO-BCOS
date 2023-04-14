@@ -24,12 +24,13 @@
 
 namespace bcos::ledger
 {
-using MerkleProof = std::vector<std::pair<std::vector<std::string>, std::vector<std::string> > >;
+using MerkleProof = std::vector<crypto::HashType>;
 using MerkleProofPtr = std::shared_ptr<const MerkleProof>;
 
 // get block flag
-constexpr static int32_t FULL_BLOCK = 0xFFFF;
+constexpr static int32_t FULL_BLOCK = 0xFFFE;
 constexpr static int32_t HEADER = 0x0008;
+constexpr static int32_t TRANSACTIONS_HASH = 0x0001;
 constexpr static int32_t TRANSACTIONS = 0x0004;
 constexpr static int32_t RECEIPTS = 0x0002;
 
@@ -37,6 +38,7 @@ constexpr static int32_t RECEIPTS = 0x0002;
 constexpr static std::string_view SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
 constexpr static std::string_view SYSTEM_KEY_TX_COUNT_LIMIT = "tx_count_limit";
 constexpr static std::string_view SYSTEM_KEY_CONSENSUS_LEADER_PERIOD = "consensus_leader_period";
+constexpr static std::string_view SYSTEM_KEY_AUTH_CHECK_STATUS = "auth_check_status";
 // for compatibility
 constexpr static std::string_view SYSTEM_KEY_COMPATIBILITY_VERSION = "compatibility_version";
 
@@ -52,6 +54,7 @@ constexpr static std::string_view CONSENSUS_WORKING_SEALER = "consensus_working_
 // get current state key
 constexpr static std::string_view SYS_KEY_CURRENT_NUMBER = "current_number";
 constexpr static std::string_view SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
+constexpr static std::string_view SYS_KEY_ARCHIVED_NUMBER = "archived_block_number";
 constexpr static std::string_view SYS_KEY_TOTAL_FAILED_TRANSACTION =
     "total_failed_transaction_count";
 
@@ -68,4 +71,13 @@ constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};
+constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};
+constexpr static std::string_view SYS_CONTRACT_ABI{"s_contract_abi"};
+
+struct CurrentState {
+    bcos::protocol::BlockNumber latestBlockNumber;
+    bcos::protocol::BlockNumber archivedNumber;
+    int64_t totalTransactionCount;
+    int64_t totalFailedTransactionCount;
+};
 }  // namespace bcos::ledger

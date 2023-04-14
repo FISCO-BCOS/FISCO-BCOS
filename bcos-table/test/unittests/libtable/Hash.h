@@ -38,7 +38,7 @@ public:
         memcpy(hash_result, &h, sizeof(h));
         return HashType(hash_result, 32);
     }
-    bcos::crypto::hasher::AnyHasher hasher() override
+    bcos::crypto::hasher::AnyHasher hasher() const override
     {
         return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
     };

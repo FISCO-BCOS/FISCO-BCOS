@@ -34,11 +34,11 @@ bool GroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
     }
     bool enforceUpdate = false;
     {
-        UpgradableGuard l(x_nodeServiceList);
+        UpgradableGuard lock(x_nodeServiceList);
         auto const& groupID = _groupInfo->groupID();
-        if (!m_groupInfos.count(groupID))
+        if (!m_groupInfos.contains(groupID))
         {
-            UpgradeGuard ul(l);
+            UpgradeGuard ulock(lock);
             m_groupInfos[groupID] = _groupInfo;
             GROUP_LOG(INFO) << LOG_DESC("updateGroupInfo") << printGroupInfo(_groupInfo);
             m_groupInfoNotifier(_groupInfo);
@@ -98,7 +98,7 @@ bool GroupManager::shouldRebuildNodeService(
     std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo)
 {
     auto const& nodeAppName = _nodeInfo->nodeName();
-    if (!m_nodeServiceList.count(_groupID) || !m_nodeServiceList[_groupID].count(nodeAppName))
+    if (!m_nodeServiceList.contains(_groupID) || !m_nodeServiceList[_groupID].contains(nodeAppName))
     {
         return true;
     }
@@ -122,7 +122,7 @@ bool GroupManager::shouldRebuildNodeService(
     }
     for (auto const& it : serviceInfo)
     {
-        if (!originServiceInfo.count(it.first) || originServiceInfo.at(it.first) != it.second)
+        if (!originServiceInfo.contains(it.first) || originServiceInfo.at(it.first) != it.second)
         {
             GROUP_LOG(INFO) << LOG_DESC("shouldRebuildNodeService for serviceInfo changed")
                             << LOG_KV("orgService", originServiceInfo.at(it.first))
@@ -136,7 +136,7 @@ bool GroupManager::shouldRebuildNodeService(
 bool GroupManager::updateNodeService(
     std::string const& _groupID, ChainNodeInfo::Ptr _nodeInfo, bool _enforceUpdate)
 {
-    UpgradableGuard l(x_nodeServiceList);
+    UpgradableGuard lock(x_nodeServiceList);
     auto const& nodeAppName = _nodeInfo->nodeName();
     if (!_enforceUpdate && !shouldRebuildNodeService(_groupID, _nodeInfo))
     {
@@ -151,7 +151,7 @@ bool GroupManager::updateNodeService(
     }
     // fetch blockNumber to the node
     initNodeInfo(_groupID, _nodeInfo->nodeName(), nodeService);
-    UpgradeGuard ul(l);
+    UpgradeGuard ulock(lock);
     m_nodeServiceList[_groupID][nodeAppName] = nodeService;
     auto groupInfo = m_groupInfos[_groupID];
     // will cover the old NodeInfo
@@ -166,8 +166,8 @@ bool GroupManager::updateNodeService(
 
 bcos::protocol::BlockNumber GroupManager::getBlockNumberByGroup(const std::string& _groupID)
 {
-    ReadGuard l(x_groupBlockInfos);
-    if (!m_groupBlockInfos.count(_groupID))
+    ReadGuard lock(x_groupBlockInfos);
+    if (!m_groupBlockInfos.contains(_groupID))
     {
         return -1;
     }
@@ -178,7 +178,7 @@ bcos::protocol::BlockNumber GroupManager::getBlockNumberByGroup(const std::strin
 NodeService::Ptr GroupManager::selectNode(std::string_view _groupID) const
 {
     auto nodeName = selectNodeByBlockNumber(_groupID);
-    if (nodeName.size() == 0)
+    if (nodeName.empty())
     {
         return selectNodeRandomly(_groupID);
     }
@@ -187,10 +187,10 @@ NodeService::Ptr GroupManager::selectNode(std::string_view _groupID) const
 
 std::string GroupManager::selectNodeByBlockNumber(std::string_view _groupID) const
 {
-    ReadGuard l(x_groupBlockInfos);
+    ReadGuard lock(x_groupBlockInfos);
 
     auto it = m_nodesWithLatestBlockNumber.find(_groupID);
-    if (it == m_nodesWithLatestBlockNumber.end() || it->second.size() == 0)
+    if (it == m_nodesWithLatestBlockNumber.end() || it->second.empty())
     {
         return "";
     }
@@ -209,18 +209,18 @@ std::string GroupManager::selectNodeByBlockNumber(std::string_view _groupID) con
 
 NodeService::Ptr GroupManager::selectNodeRandomly(std::string_view _groupID) const
 {
-    ReadGuard l(x_nodeServiceList);
-    if (!m_groupInfos.count(_groupID))
+    ReadGuard lock(x_nodeServiceList);
+    if (!m_groupInfos.contains(_groupID))
     {
         return nullptr;
     }
-    if (!m_nodeServiceList.count(_groupID))
+    if (!m_nodeServiceList.contains(_groupID))
     {
         return nullptr;
     }
 
-    auto it = m_groupInfos.find(_groupID);
-    auto const& groupInfo = it->second;
+    auto iter = m_groupInfos.find(_groupID);
+    auto const& groupInfo = iter->second;
     auto const& nodeInfos = groupInfo->nodeInfos();
     for (auto const& it : nodeInfos)
     {
@@ -241,7 +241,7 @@ NodeService::Ptr GroupManager::selectNodeRandomly(std::string_view _groupID) con
 NodeService::Ptr GroupManager::queryNodeService(
     std::string_view _groupID, std::string_view _nodeName) const
 {
-    ReadGuard l(x_nodeServiceList);
+    ReadGuard lock(x_nodeServiceList);
     auto it = m_nodeServiceList.find(_groupID);
     if (it != m_nodeServiceList.end())
     {
@@ -258,7 +258,7 @@ NodeService::Ptr GroupManager::queryNodeService(
 NodeService::Ptr GroupManager::getNodeService(
     std::string_view _groupID, std::string_view _nodeName) const
 {
-    if (_nodeName.size() > 0)
+    if (!_nodeName.empty())
     {
         return queryNodeService(_groupID, _nodeName);
     }
@@ -273,7 +273,7 @@ void GroupManager::initNodeInfo(
     auto ledger = _nodeService->ledger();
     auto self = std::weak_ptr<GroupManager>(shared_from_this());
     ledger->asyncGetBlockNumber(
-        [self, _groupID, _nodeName](Error::Ptr _error, BlockNumber _blockNumber) {
+        [self, _groupID, _nodeName](auto&& _error, BlockNumber _blockNumber) {
             if (_error)
             {
                 GROUP_LOG(WARNING)
@@ -309,24 +309,24 @@ void GroupManager::initNodeInfo(
 void GroupManager::removeUnreachableNodeService(
     std::map<std::string, std::set<std::string>> const& _unreachableNodes)
 {
-    WriteGuard l(x_nodeServiceList);
+    WriteGuard lock(x_nodeServiceList);
     for (auto const& it : _unreachableNodes)
     {
         auto groupID = it.first;
         auto& groupInfo = m_groupInfos[groupID];
-        if (!m_nodeServiceList.count(groupID))
+        if (!m_nodeServiceList.contains(groupID))
         {
             continue;
         }
         auto const& nodeList = it.second;
         for (auto const& node : nodeList)
         {
-            GROUP_LOG(INFO) << LOG_DESC("GroupManager: removeUnreachablNodeService")
+            GROUP_LOG(INFO) << LOG_DESC("GroupManager: removeUnreachableNodeService")
                             << LOG_KV("group", groupID) << LOG_KV("node", node);
             m_nodeServiceList[groupID].erase(node);
             groupInfo->removeNodeInfo(node);
         }
-        if (m_nodeServiceList[groupID].size() == 0)
+        if (m_nodeServiceList[groupID].empty())
         {
             m_nodeServiceList.erase(groupID);
         }
@@ -335,16 +335,16 @@ void GroupManager::removeUnreachableNodeService(
 void GroupManager::removeGroupBlockInfo(
     std::map<std::string, std::set<std::string>> const& _unreachableNodes)
 {
-    WriteGuard l(x_groupBlockInfos);
+    WriteGuard lock(x_groupBlockInfos);
     for (auto const& it : _unreachableNodes)
     {
         auto group = it.first;
-        if (!m_nodesWithLatestBlockNumber.count(group))
+        if (!m_nodesWithLatestBlockNumber.contains(group))
         {
             m_groupBlockInfos.erase(group);
             continue;
         }
-        if (!m_groupBlockInfos.count(group))
+        if (!m_groupBlockInfos.contains(group))
         {
             m_nodesWithLatestBlockNumber.erase(group);
             continue;
@@ -354,7 +354,7 @@ void GroupManager::removeGroupBlockInfo(
         {
             m_nodesWithLatestBlockNumber[group].erase(node);
         }
-        if (m_nodesWithLatestBlockNumber[group].size() == 0)
+        if (m_nodesWithLatestBlockNumber[group].empty())
         {
             m_groupBlockInfos.erase(group);
             m_nodesWithLatestBlockNumber.erase(group);

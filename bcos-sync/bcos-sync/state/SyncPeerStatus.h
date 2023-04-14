@@ -23,9 +23,7 @@
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/state/DownloadRequestQueue.h"
 #include "bcos-sync/utilities/Common.h"
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class PeerStatus
 {
@@ -33,13 +31,13 @@ public:
     using Ptr = std::shared_ptr<PeerStatus>;
     PeerStatus(BlockSyncConfig::Ptr _config, bcos::crypto::PublicPtr _nodeId,
         bcos::protocol::BlockNumber _number, bcos::crypto::HashType const& _hash,
-        bcos::crypto::HashType const& _gensisHash);
+        bcos::crypto::HashType const& _genesisHash);
     PeerStatus(BlockSyncConfig::Ptr _config, bcos::crypto::PublicPtr _nodeId);
 
     PeerStatus(BlockSyncConfig::Ptr _config, bcos::crypto::PublicPtr _nodeId,
         BlockSyncStatusInterface::ConstPtr _status);
 
-    virtual ~PeerStatus() {}
+    virtual ~PeerStatus() = default;
 
     virtual bool update(BlockSyncStatusInterface::ConstPtr _status);
 
@@ -47,19 +45,25 @@ public:
 
     bcos::protocol::BlockNumber number() const
     {
-        ReadGuard l(x_mutex);
+        ReadGuard lock(x_mutex);
         return m_number;
+    }
+
+    bcos::protocol::BlockNumber archivedBlockNumber() const
+    {
+        ReadGuard lock(x_mutex);
+        return m_archivedNumber;
     }
 
     bcos::crypto::HashType const& hash() const
     {
-        ReadGuard l(x_mutex);
+        ReadGuard lock(x_mutex);
         return m_hash;
     }
 
     bcos::crypto::HashType const& genesisHash() const
     {
-        ReadGuard l(x_mutex);
+        ReadGuard lock(x_mutex);
         return m_genesisHash;
     }
 
@@ -68,6 +72,7 @@ public:
 private:
     bcos::crypto::PublicPtr m_nodeId;
     bcos::protocol::BlockNumber m_number;
+    bcos::protocol::BlockNumber m_archivedNumber;
     bcos::crypto::HashType m_hash;
     bcos::crypto::HashType m_genesisHash;
 
@@ -79,8 +84,8 @@ class SyncPeerStatus
 {
 public:
     using Ptr = std::shared_ptr<SyncPeerStatus>;
-    explicit SyncPeerStatus(BlockSyncConfig::Ptr _config) : m_config(_config) {}
-    virtual ~SyncPeerStatus() {}
+    explicit SyncPeerStatus(BlockSyncConfig::Ptr _config) : m_config(std::move(_config)) {}
+    virtual ~SyncPeerStatus() = default;
 
     virtual bool hasPeer(bcos::crypto::PublicPtr _peer);
     virtual PeerStatus::Ptr peerStatus(bcos::crypto::PublicPtr _peer);
@@ -88,8 +93,8 @@ public:
         bcos::crypto::PublicPtr _peer, BlockSyncStatusInterface::ConstPtr _peerStatus);
     virtual void deletePeer(bcos::crypto::PublicPtr _peer);
 
-    void foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _f) const;
-    void foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f) const;
+    void foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const&) const;
+    void foreachPeer(std::function<bool(PeerStatus::Ptr)> const&) const;
     std::shared_ptr<bcos::crypto::NodeIDs> peers();
     PeerStatus::Ptr insertEmptyPeer(bcos::crypto::PublicPtr _peer);
 
@@ -102,5 +107,4 @@ private:
 
     BlockSyncConfig::Ptr m_config;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

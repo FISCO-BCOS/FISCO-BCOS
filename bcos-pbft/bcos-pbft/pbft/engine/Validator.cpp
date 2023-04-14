@@ -28,14 +28,13 @@ void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
     PBFTProposalInterface::Ptr _proposal,
     std::function<void(Error::Ptr, bool)> _verifyFinishedHandler)
 {
-    // TODO: check the sealerList here
     auto block = m_blockFactory->createBlock(_proposal->data());
     auto blockHeader = block->blockHeader();
     if (blockHeader->number() != _proposal->index())
     {
         if (_verifyFinishedHandler)
         {
-            auto error = std::make_shared<Error>(-1, "Invalid proposal");
+            auto error = BCOS_ERROR_PTR(-1, "Invalid proposal");
             _verifyFinishedHandler(error, false);
         }
         return;
@@ -70,7 +69,7 @@ void TxsValidator::asyncResetTxsFlag(bytesConstRef _data, bool _flag, bool _empt
             {
                 txsHash->emplace_back(block->transactionHash(i));
             }
-            if (txsHash->size() == 0)
+            if (txsHash->empty())
             {
                 return;
             }
@@ -99,19 +98,27 @@ void TxsValidator::asyncResetTxsFlag(
         proposalNumber = -1;
         proposalHash = bcos::crypto::HashType();
     }
+    auto self = std::weak_ptr<TxsValidator>(shared_from_this());
+    auto startT = utcSteadyTime();
     m_txPool->asyncMarkTxs(_txsHashList, _flag, proposalNumber, proposalHash,
-        [this, _block, blockHeader, _txsHashList, _flag, _emptyTxBatchHash](Error::Ptr _error) {
+        [self, _block, blockHeader, _txsHashList, _flag, _emptyTxBatchHash, startT](
+            Error::Ptr _error) {
+            auto validator = self.lock();
+            if (!validator)
+            {
+                return;
+            }
             // must ensure asyncResetTxsFlag success before seal new next blocks
             if (_flag)
             {
-                eraseResettingProposal(blockHeader->hash());
+                validator->eraseResettingProposal(blockHeader->hash());
             }
             if (_error == nullptr)
             {
                 PBFT_LOG(INFO) << LOG_DESC("asyncMarkTxs success")
                                << LOG_KV("index", blockHeader->number())
                                << LOG_KV("hash", blockHeader->hash().abridged())
-                               << LOG_KV("flag", _flag)
+                               << LOG_KV("flag", _flag) << LOG_KV("markT", utcSteadyTime() - startT)
                                << LOG_KV("emptyTxBatchHash", _emptyTxBatchHash);
                 return;
             }
@@ -120,7 +127,7 @@ void TxsValidator::asyncResetTxsFlag(
                               << LOG_KV("msg", _error->errorMessage());
             if (_flag)
             {
-                insertResettingProposal(blockHeader->hash());
+                validator->insertResettingProposal(blockHeader->hash());
             }
         });
 }

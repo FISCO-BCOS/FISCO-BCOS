@@ -13,9 +13,8 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-lightnode/ledger/LedgerImpl.h>
+#include <bcos-ledger/src/libledger/LedgerImpl.h>
 #include <bcos-lightnode/rpc/LightNodeRPC.h>
-#include <bcos-lightnode/storage/StorageImpl.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-storage/RocksDBStorage.h>
@@ -41,12 +40,23 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     bcos::concepts::scheduler::Scheduler auto scheduler)
 {
     bcos::rpc::RpcFactory rpcFactory(nodeConfig->chainId(), gateway, keyFactory, nullptr);
+    bcos::rpc::JsonRpcInterface::Ptr jsonrpc;
     auto wsConfig = rpcFactory.initConfig(nodeConfig);
     auto wsService = rpcFactory.buildWsService(wsConfig);
-    auto jsonrpc = std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger),
-        decltype(remoteLedger), decltype(transactionPool), decltype(scheduler),
-        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(localLedger, remoteLedger,
-        transactionPool, scheduler, nodeConfig->chainId(), nodeConfig->groupId());
+    if(nodeConfig->smCryptoType())
+    {
+        jsonrpc = std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger),
+                decltype(remoteLedger), decltype(transactionPool), decltype(scheduler),
+                bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>>(
+                        localLedger, remoteLedger,transactionPool, scheduler, nodeConfig->chainId(), nodeConfig->groupId());
+    }
+    else
+    {
+        jsonrpc = std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger),
+                decltype(remoteLedger), decltype(transactionPool), decltype(scheduler),
+                bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(
+                        localLedger, remoteLedger,transactionPool, scheduler, nodeConfig->chainId(), nodeConfig->groupId());
+    }
 
     wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
         [nodeConfig, nodeID, localLedger](std::shared_ptr<bcos::boostssl::MessageFace> msg,
@@ -56,7 +66,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             auto groupInfoCodec = std::make_shared<bcos::group::JsonGroupInfoCodec>();
             bcos::cppsdk::service::HandshakeResponse handshakeResponse(std::move(groupInfoCodec));
 
-            auto status = bcos::concepts::getRef(localLedger).getStatus();
+            auto status = ~bcos::concepts::getRef(localLedger).getStatus();
 
             handshakeResponse.mutableGroupBlockNumber().insert(
                 std::make_pair(nodeConfig->groupId(), status.blockNumber));
@@ -86,6 +96,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             groupInfo->setChainID(nodeConfig->chainId());
             groupInfo->setGenesisConfig(genesisConfigStr);
             groupInfo->setGroupID(nodeConfig->groupId());
+            groupInfo->setWasm(nodeConfig->isWasm());
             groupInfo->setIniConfig("");
 
             auto nodeInfo = std::make_shared<bcos::group::ChainNodeInfo>();
@@ -103,11 +114,15 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             nodeInfo->setMicroService(false);
             nodeInfo->setNodeName(nodeConfig->nodeName());
             nodeInfo->setNodeID(nodeID);
-            nodeInfo->setNodeCryptoType((nodeConfig->smCryptoType() ? group::NodeCryptoType::SM_NODE : group::NodeCryptoType::NON_SM_NODE));
+            nodeInfo->setNodeCryptoType(
+                (nodeConfig->smCryptoType() ? group::NodeCryptoType::SM_NODE :
+                                              group::NodeCryptoType::NON_SM_NODE));
+
 
             auto protocol = bcos::protocol::ProtocolInfo();
             protocol.setMinVersion(4);
             protocol.setMaxVersion(1);
+            protocol.setVersion(nodeConfig->compatibilityVersion());
             nodeInfo->setNodeProtocol(std::move(protocol));
             nodeInfo->setNodeType(bcos::protocol::NodeType::None);
             groupInfo->appendNodeInfo(std::move(nodeInfo));
@@ -129,10 +144,10 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     wsService->registerMsgHandler(bcos::rpc::AMOPClientMessageType::AMOP_SUBTOPIC,
         [](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
-            RPC_LOG(INFO) << "LightNode amop topic request";
+            RPC_LOG(TRACE) << "LightNode amop topic request";
         });
     wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        [jsonrpc = std::move(jsonrpc)](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+        [jsonrpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) mutable {
             auto buffer = msg->payload();
             auto req = std::string_view((const char*)buffer->data(), buffer->size());
@@ -158,6 +173,16 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
                 }
             });
         });
+
+    auto httpServer = wsService->httpServer();
+    if (httpServer)
+    {
+        httpServer->setHttpReqHandler(
+            [jsonrpc](const std::string_view req, std::function<void(bcos::bytes)> sender) {
+                jsonrpc->onRPCRequest(req, std::move(sender));
+            });
+    }
+
     return wsService;
 }
 

@@ -208,13 +208,13 @@ int main(int argc, char** argv)
         std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
     bcos::bytes inputData;
     boost::algorithm::unhex(hexBin.begin(), hexBin.end(), std::back_inserter(inputData));
-    auto tx = transactionFactory->createTransaction(0, "to", inputData, bcos::u256(100), 200,
+    auto tx = transactionFactory->createTransaction(0, "to", inputData, std::to_string(100), 200,
         "chain0", group, 1112, std::shared_ptr<bcos::crypto::KeyPairInterface>(std::move(keyPair)));
     // auto r =
     //     transactionBuilderService->createSignedTransaction(*keyPair, "", *binBytes.get(), "", 0);
 
     std::cout << LOG_DESC(" [DeployHello] create signed transaction success")
-              << LOG_KV("tx hash", tx->hash(false)) << std::endl;
+              << LOG_KV("tx hash", tx->hash()) << std::endl;
 
     std::promise<bool> p;
     auto f = p.get_future();

@@ -14,10 +14,12 @@
  *  limitations under the License.
  */
 #include "bcos-executor/src/precompiled/extension/GroupSigPrecompiled.h"
+#include "../mock/MockLedger.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
+#include "vm/gas_meter/GasInjector.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-utilities/Exceptions.h>
@@ -36,18 +38,20 @@ struct GroupSigPrecompiledFixture
     {
         m_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         m_groupSigPrecompiled = std::make_shared<GroupSigPrecompiled>(m_hashImpl);
-        m_blockContext = std::make_shared<BlockContext>(
-            nullptr, m_hashImpl, 0, h256(), utcTime(), 0, FiscoBcosScheduleV4, false, false);
-        std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
-        m_executive = std::make_shared<TransactionExecutive>(
-            std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, gasInjector);
+        m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
+        m_blockContext = std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_hashImpl, 0,
+            h256(), utcTime(), 0, FiscoBcosSchedule, false, false);
+        m_executive =
+            std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
     }
 
     ~GroupSigPrecompiledFixture() {}
 
+    LedgerCache::Ptr m_ledgerCache;
     bcos::crypto::Hash::Ptr m_hashImpl;
     BlockContext::Ptr m_blockContext;
     TransactionExecutive::Ptr m_executive;
+    wasm::GasInjector m_gasInjector;
     GroupSigPrecompiled::Ptr m_groupSigPrecompiled;
 };
 

@@ -11,18 +11,15 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::start(CallParameters::U
         m_pushMessage.emplace(std::move(push));
 
         auto callParameters = std::unique_ptr<CallParameters>(inputPtr);
-        auto blockContext = m_blockContext.lock();
-        if (!blockContext)
-        {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
-        }
 
-        m_syncStorageWrapper = std::make_unique<SyncStorageWrapper>(blockContext->storage(),
+        m_syncStorageWrapper = std::make_unique<SyncStorageWrapper>(m_blockContext.storage(),
             std::bind(&CoroutineTransactionExecutive::externalAcquireKeyLocks, this,
                 std::placeholders::_1),
             m_recoder);
 
         m_storageWrapper = m_syncStorageWrapper;  // must set to base class
+        m_storageWrapper->setCodeCache(m_blockContext.getCodeCache());
+        m_storageWrapper->setCodeHashCache(m_blockContext.getCodeHashCache());
 
 
         if (!callParameters->keyLocks.empty())
@@ -85,6 +82,25 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
 
     // When resume, exchangeMessage set to output
     auto output = std::move(m_exchangeMessage);
+
+    if (output->delegateCall && output->type != CallParameters::FINISHED)
+    {
+        EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall"
+                             << LOG_KV("codeAddress", output->codeAddress);
+        output->data = bytes();
+        output->status = (int32_t)bcos::protocol::TransactionStatus::RevertInstruction;
+        output->evmStatus = EVMC_REVERT;
+    }
+
+    if (versionCompareTo(
+            m_blockContext.blockVersion(), protocol::BlockVersion::V3_3_VERSION) >= 0)
+    {
+        if (output->type == CallParameters::REVERT)
+        {
+            // fix the bug here
+            output->evmStatus = EVMC_REVERT;
+        }
+    }
 
     // After coroutine switch, set the recoder
     m_syncStorageWrapper->setRecoder(m_recoder);

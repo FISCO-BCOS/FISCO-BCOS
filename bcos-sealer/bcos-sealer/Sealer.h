@@ -23,30 +23,34 @@
 #include "bcos-framework/sealer/SealerInterface.h"
 #include <bcos-utilities/Worker.h>
 
-namespace bcos
-{
-namespace sealer
+#include <utility>
+
+namespace bcos::sealer
 {
 class Sealer : public Worker, public SealerInterface, public std::enable_shared_from_this<Sealer>
 {
 public:
     using Ptr = std::shared_ptr<Sealer>;
     explicit Sealer(SealerConfig::Ptr _sealerConfig)
-      : Worker("Sealer", 0), m_sealerConfig(_sealerConfig)
+      : Worker("Sealer", 0), m_sealerConfig(std::move(_sealerConfig))
     {
-        m_sealingManager = std::make_shared<SealingManager>(_sealerConfig);
+        m_sealingManager = std::make_shared<SealingManager>(m_sealerConfig);
         m_sealingManager->onReady([=, this]() { this->noteGenerateProposal(); });
+        m_hashImpl = m_sealerConfig->blockFactory()->cryptoSuite()->hashImpl();
     }
-    virtual ~Sealer() {}
+    ~Sealer() override = default;
 
     void start() override;
     void stop() override;
 
+    // for consensus, to seal a proposal block tx hash list
     void asyncNotifySealProposal(uint64_t _proposalStartIndex, uint64_t _proposalEndIndex,
         uint64_t _maxTxsPerBlock, std::function<void(Error::Ptr)> _onRecvResponse) override;
+    // hook for txpool, invoke when txpool storage size changed
     void asyncNoteUnSealedTxsSize(
         uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
 
+    // for sys block
     void asyncNoteLatestBlockNumber(int64_t _blockNumber) override;
     // interface for the consensus module to notify reset the sealing transactions
     void asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse) override;
@@ -67,6 +71,6 @@ protected:
     boost::condition_variable m_signalled;
     // mutex to access m_signalled
     boost::mutex x_signalled;
+    bcos::crypto::Hash::Ptr m_hashImpl;
 };
-}  // namespace sealer
-}  // namespace bcos
+}  // namespace bcos::sealer

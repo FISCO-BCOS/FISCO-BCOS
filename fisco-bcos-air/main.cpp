@@ -55,6 +55,7 @@ int main(int argc, const char* argv[])
     signal(SIGTERM, &ExitHandler::exitHandler);
     signal(SIGABRT, &ExitHandler::exitHandler);
     signal(SIGINT, &ExitHandler::exitHandler);
+
     // Note: the initializer must exist in the life time of the whole program
     auto initializer = std::make_shared<AirNodeInitializer>();
     try

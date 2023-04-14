@@ -30,40 +30,40 @@ STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" RUSTC_VERSION ${RUSTC_VERSION_INFO
 
 # same as https://github.com/WeBankBlockchain/WeDPR-Lab-Crypto/blob/main/rust-toolchain
 if(NOT RUSTC_VERSION_REQUIRED)
-    set(RUSTC_VERSION_REQUIRED "nightly-2021-06-17")
+    set(RUSTC_VERSION_REQUIRED "nightly-2022-07-28")
 endif()
 message(STATUS "set rustc to ${RUSTC_VERSION_REQUIRED} of path ${CMAKE_CURRENT_SOURCE_DIR}/deps/src/")
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/src/)
 execute_process(COMMAND rustup override set ${RUSTC_VERSION_REQUIRED} --path ${CMAKE_CURRENT_SOURCE_DIR}/deps/src/ OUTPUT_QUIET ERROR_QUIET)
 
+if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    set(BCOS_WASM_BUILD_MODE "debug")
+else()
+    set(BCOS_WASM_BUILD_MODE "release")
+endif()
+
 ExternalProject_Add(bcos_wasm_project
         PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
         # DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-wasm.git
-        GIT_TAG bd6bbf83f0168e88a67710f03b0a142b6fb60598
+        GIT_TAG a6a59870c166498910e2dfd1af1fe59c0619d667
         GIT_SHALLOW false
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND ${CARGO_COMMAND} build --release
+        BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release
         INSTALL_COMMAND ""
         LOG_DOWNLOAD 1
         LOG_CONFIGURE 1
         LOG_BUILD 0
         LOG_INSTALL 1
-        BUILD_BYPRODUCTS <SOURCE_DIR>/target/release/libbcos_wasm.a <SOURCE_DIR>/FBWASM.h
+        BUILD_BYPRODUCTS <SOURCE_DIR>/target/${BCOS_WASM_BUILD_MODE}/libbcos_wasm.a <SOURCE_DIR>/FBWASM.h
 )
 
 ExternalProject_Get_Property(bcos_wasm_project SOURCE_DIR)
 set(HERA_INCLUDE_DIRS ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${HERA_INCLUDE_DIRS})  # Must exist.
-# if(DEBUG)
-#     set(HERA_LIBRARIES ${HERA_LIBRARIES} ${EVMC_INSTRUCTIONS_LIBRARIES})
-# endif()
-# if(NOT APPLE)
-#     set(HERA_LIBRARIES ${HERA_LIBRARIES} rt)
-# endif()
 
 add_library(fbwasm STATIC IMPORTED)
-set_property(TARGET fbwasm PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/target/release/libbcos_wasm.a)
+set_property(TARGET fbwasm PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/target/${BCOS_WASM_BUILD_MODE}/libbcos_wasm.a)
 set_property(TARGET fbwasm PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SOURCE_DIR}/include)
 add_dependencies(fbwasm bcos_wasm_project evmc::instructions)

@@ -46,7 +46,7 @@ void P2PSession::stop(DisconnectReason reason)
     if (m_run)
     {
         m_run = false;
-        if (m_session && m_session->actived())
+        if (m_session && m_session->active())
         {
             m_session->disconnect(reason);
         }
@@ -56,14 +56,14 @@ void P2PSession::stop(DisconnectReason reason)
 void P2PSession::heartBeat()
 {
     auto service = m_service.lock();
-    if (service && service->actived())
+    if (service && service->active())
     {
-        if (m_session && m_session->actived())
+        if (m_session && m_session->active())
         {
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->messageFactory()->buildMessage());
             message->setPacketType(GatewayMessageType::Heartbeat);
-            P2PSESSION_LOG(DEBUG) << LOG_DESC("P2PSession onHeartBeat")
+            P2PSESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
                                   << LOG_KV("p2pid", m_p2pInfo->p2pID)
                                   << LOG_KV("endpoint", m_session->nodeIPEndpoint());
 

@@ -15,6 +15,8 @@ module bcostars {
         Error executeTransactions(string _contractAddress, vector<ExecutionMessage> _inputs, out vector<ExecutionMessage> _outputs);
         //Error call(ExecutionMessage _input, out ExecutionMessage _output);
 
+        Error preExecuteTransactions(long schedulerTermID, BlockHeader _blockHeader, string _contractAddress, vector<ExecutionMessage> _inputs);
+
         Error dmcExecuteTransactions(string _contractAddress, vector<ExecutionMessage> _inputs, out vector<ExecutionMessage> _outputs);
         Error dagExecuteTransactions(vector<ExecutionMessage> _inputs, out vector<ExecutionMessage> _outputs);
 

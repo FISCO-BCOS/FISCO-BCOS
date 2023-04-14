@@ -1,7 +1,4 @@
 cmake_minimum_required(VERSION 3.14)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
-
-include(Version)
 
 project(bcos-storage VERSION ${VERSION})
 
@@ -13,7 +10,7 @@ find_package(Boost REQUIRED serialization thread context filesystem)
 set(SRC_LIST bcos-storage/Common.cpp)
 list(APPEND SRC_LIST bcos-storage/RocksDBStorage.cpp)
 
-set(LIB_LIST ${TABLE_TARGET} bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb)
+set(LIB_LIST ${TABLE_TARGET} bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb ittapi)
 
 if(WITH_TIKV)
   include(ProjectTiKVClient)
@@ -22,17 +19,11 @@ if(WITH_TIKV)
 endif()
 
 add_library(${STORAGE_TARGET} ${SRC_LIST})
-target_include_directories(${STORAGE_TARGET} PUBLIC ${HUNTER_INSTALL_PREFIX}/include .)
+target_include_directories(${STORAGE_TARGET} PUBLIC .)
 target_link_libraries(${STORAGE_TARGET} PUBLIC ${LIB_LIST})
 
 if(TESTS)
   enable_testing()
   set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
   add_subdirectory(test)
-endif()
-
-option(TOOLS "build tools" OFF)
-
-if(TOOLS)
-  add_subdirectory(tools)
 endif()

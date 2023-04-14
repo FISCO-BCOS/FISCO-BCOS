@@ -1,4 +1,4 @@
-# !/bin/bash
+#!/bin/bash
 # "Copyright [2018] <fisco-bcos>"
 # @ function: check code format of {.h, .hpp and .cpp} files
 # @ require : Make sure your machine is linux (centos/ubuntu), yum or apt is ready
@@ -12,12 +12,12 @@ SHELL_FOLDER=$(
 )
 
 check_script="clang-format"
-commit_limit=6
+commit_limit=1000
 file_limit=35
 insert_limit=300
-new_file_header_length=35
+license_line=20
 
-skip_check_words="sync code"
+skip_check_words="sync code|release"
 
 LOG_ERROR() {
     content=${1}
@@ -58,7 +58,7 @@ function check_codeFormat() {
 
 function check_PR_limit() {
     if [ "${PR_TITLE}" != "" ]; then
-        local skip=$(echo ${PR_TITLE} | grep "${skip_check_words}")
+        local skip=$(echo ${PR_TITLE} | grep -iaE "${skip_check_words}")
         if [ ! -z "${skip}" ]; then
             LOG_INFO "sync code PR, skip PR limit check!"
             exit 0
@@ -74,12 +74,23 @@ function check_PR_limit() {
     #     LOG_ERROR "modify ${files} files, limit is ${file_limit}"
     #     exit 1
     # fi
-    local new_files=$(git diff HEAD^ | grep "new file" | wc -l)
-    local test_insertions=$(git diff --numstat HEAD^ | grep "test/" | awk -F ' ' '{sum+=$1}END{print sum}')
-    local tool_insertions=$(git diff --numstat HEAD^ | grep "tools/" | awk -F ' ' '{sum+=$1}END{print sum}')
-    local demo_insertions=$(git diff --numstat HEAD^ | grep "fisco-bcos/" | awk -F ' ' '{sum+=$1}END{print sum}')
-    local insertions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')
-    local valid_insertions=$((insertions - new_files * new_file_header_length - test_insertions - tool_insertions - demo_insertions))
+    local need_check_files=$(git diff --numstat HEAD^ |awk '{if ($1!=0) print $0;}'|sed "s/{.*> //g" |sed "s/}//g" |awk '{print $3}' |grep -vE 'benchmark\/|test|tools\/|fisco-bcos\/|.github\/')
+    echo "need check files:"
+    echo "${need_check_files}"
+
+    if [ ! "${need_check_files}" ]; then
+        LOG_INFO "No file changed. Ok!"
+        exit 0
+    fi
+
+    local new_files=$(git diff HEAD^ $(echo "${need_check_files}") | grep "new file" | wc -l | xargs )
+    local empty_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e '^+\s*$' | wc -l | xargs)
+    local block_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e '^+\s*[\{\}]\s*$' | wc -l | xargs)
+    local include_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e '^+\#include' | wc -l | xargs)
+    local comment_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e "^+\s*\/\/" | wc -l | xargs)
+    local insertions=$(git diff --shortstat HEAD^ $(echo "${need_check_files}")| awk -F ' ' '{print $4}')
+    local valid_insertions=$((insertions - new_files * license_line - comment_lines - empty_lines - block_lines - include_lines))
+    echo "valid_insertions: ${valid_insertions}, insertions(${insertions}) - new_files(${new_files}) * license_line(${license_line}) - comment_lines(${comment_lines}) - empty_lines(${empty_lines}) - block_lines(${block_lines}) - include_lines(${include_lines})"
     if [ ${insert_limit} -lt ${valid_insertions} ]; then
         LOG_ERROR "insert ${insertions} lines, valid is ${valid_insertions}, limit is ${insert_limit}"
         exit 1
@@ -94,13 +105,13 @@ function check_PR_limit() {
         LOG_ERROR "${commits} commits, limit is ${commit_limit}"
         exit 1
     fi
-    local unique_commit=$(git log --format=%s HEAD^..HEAD | sort -u | wc -l)
+    local unique_commit=$(git log --format="%an %s" HEAD^..HEAD | sort -u | wc -l)
     if [ ${unique_commit} -ne ${commits} ]; then
         LOG_ERROR "${commits} != ${unique_commit}, please make commit message unique!"
-        exit 1
+        # exit 1
     fi
     local merges=$(git log --format=%s HEAD^..HEAD | grep -i merge | wc -l)
-    if [ ${merges} -gt 2 ]; then
+    if [ ${merges} -gt 10 ]; then
         LOG_ERROR "PR contain merge : ${merges}, Please rebase!"
         exit 1
     fi

@@ -26,13 +26,13 @@
 #include "../interfaces/ViewChangeMsgInterface.h"
 #include "PBFTCacheFactory.h"
 #include <queue>
-namespace bcos
-{
-namespace consensus
+#include <utility>
+namespace bcos::consensus
 {
 struct PBFTProposalCmp
 {
-    bool operator()(PBFTProposalInterface::Ptr _first, PBFTProposalInterface::Ptr _second)
+    bool operator()(
+        const PBFTProposalInterface::Ptr& _first, const PBFTProposalInterface::Ptr& _second)
     {
         // increase order
         return _first->index() > _second->index();
@@ -44,37 +44,36 @@ class PBFTCacheProcessor : public std::enable_shared_from_this<PBFTCacheProcesso
 public:
     using Ptr = std::shared_ptr<PBFTCacheProcessor>;
     PBFTCacheProcessor(PBFTCacheFactory::Ptr _cacheFactory, PBFTConfig::Ptr _config)
-      : m_cacheFactory(_cacheFactory), m_config(_config)
+      : m_cacheFactory(std::move(_cacheFactory)), m_config(std::move(_config))
     {}
 
     virtual void tryToResendCheckPoint();
 
-    virtual ~PBFTCacheProcessor() {}
+    virtual ~PBFTCacheProcessor() = default;
+
+    virtual void addPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg);
+    virtual void addPrepareCache(PBFTMessageInterface::Ptr _prepareReq)
+    {
+        addCache(m_caches, std::move(_prepareReq),
+            [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _prepareReq) {
+                _pbftCache->addPrepareCache(std::move(_prepareReq));
+            });
+    }
+    virtual void addCommitReq(PBFTMessageInterface::Ptr _commitReq)
+    {
+        addCache(m_caches, std::move(_commitReq),
+            [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _commitReq) {
+                _pbftCache->addCommitCache(std::move(_commitReq));
+            });
+    }
+
+    virtual bool existPrePrepare(PBFTMessageInterface::Ptr const& _prePrepareMsg) const;
+    virtual bool conflictWithProcessedReq(PBFTMessageInterface::Ptr const& _msg) const;
+    virtual bool conflictWithPrecommitReq(PBFTMessageInterface::Ptr const& _prePrepareMsg) const;
     virtual void initState(
         PBFTProposalList const& _committedProposals, bcos::crypto::NodeIDPtr _fromNode);
 
-    virtual void addPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg);
-    virtual bool existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg);
-
     virtual bool tryToFillProposal(PBFTMessageInterface::Ptr _prePrepareMsg);
-
-    virtual bool conflictWithProcessedReq(PBFTMessageInterface::Ptr _msg);
-    virtual bool conflictWithPrecommitReq(PBFTMessageInterface::Ptr _prePrepareMsg);
-    virtual void addPrepareCache(PBFTMessageInterface::Ptr _prepareReq)
-    {
-        addCache(m_caches, _prepareReq,
-            [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _prepareReq) {
-                _pbftCache->addPrepareCache(_prepareReq);
-            });
-    }
-
-    virtual void addCommitReq(PBFTMessageInterface::Ptr _commitReq)
-    {
-        addCache(m_caches, _commitReq,
-            [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _commitReq) {
-                _pbftCache->addCommitCache(_commitReq);
-            });
-    }
 
     PBFTMessageList preCommitCachesWithData()
     {
@@ -126,14 +125,14 @@ public:
         std::function<void(int64_t, PBFTProposalInterface::Ptr, PBFTProposalInterface::Ptr)>
             _callback)
     {
-        m_proposalAppliedHandler = _callback;
+        m_proposalAppliedHandler = std::move(_callback);
     }
 
     void registerCommittedProposalNotifier(
         std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
             _committedProposalNotifier)
     {
-        m_committedProposalNotifier = _committedProposalNotifier;
+        m_committedProposalNotifier = std::move(_committedProposalNotifier);
     }
 
     bool tryToPreApplyProposal(ProposalInterface::Ptr _proposal);
@@ -149,7 +148,7 @@ public:
 
     virtual void eraseExecutedProposal(bcos::crypto::HashType const& _hash)
     {
-        if (!m_executingProposals.count(_hash))
+        if (!m_executingProposals.contains(_hash))
         {
             return;
         }
@@ -162,20 +161,21 @@ public:
         std::function<void(bool, Error::Ptr _error, PBFTProposalInterface::Ptr)>
             _onLoadAndVerifyProposalFinish)
     {
-        m_onLoadAndVerifyProposalFinish = _onLoadAndVerifyProposalFinish;
+        m_onLoadAndVerifyProposalFinish = std::move(_onLoadAndVerifyProposalFinish);
     }
 
     virtual void addRecoverReqCache(PBFTMessageInterface::Ptr _recoverResponse);
     virtual bool checkAndTryToRecover();
 
     std::map<bcos::crypto::HashType, bcos::protocol::BlockNumber> const& executingProposals()
+        const noexcept
     {
         return m_executingProposals;
     }
 
     bool proposalCommitted(bcos::protocol::BlockNumber _index)
     {
-        return m_committedProposalList.count(_index);
+        return m_committedProposalList.contains(_index);
     }
 
     void clearCacheAfterRecoverStateFailed()
@@ -228,7 +228,6 @@ protected:
         std::function<void(PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _pbftMessage)>;
     void addCache(PBFTCachesType& _pbftCache, PBFTMessageInterface::Ptr _pbftReq,
         UpdateCacheHandler _handler);
-
     PBFTMessageList generatePrePrepareMsg(
         std::map<IndexType, ViewChangeMsgInterface::Ptr> _viewChangeCache);
     void reCalculateViewChangeWeight();
@@ -238,6 +237,7 @@ protected:
 protected:
     PBFTCacheFactory::Ptr m_cacheFactory;
     PBFTConfig::Ptr m_config;
+    /// map: number => PBFTCache
     PBFTCachesType m_caches;
 
     // viewchange caches
@@ -256,12 +256,10 @@ protected:
         m_committedQueue;
     std::map<bcos::crypto::HashType, bcos::protocol::BlockNumber> m_executingProposals;
 
-    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
-        m_committedProposalList;
+    std::set<bcos::protocol::BlockNumber, std::less<>> m_committedProposalList;
 
     // ordered by the index
-    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
-        m_proposalsToStableConsensus;
+    std::set<bcos::protocol::BlockNumber, std::less<>> m_proposalsToStableConsensus;
 
     std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
         PBFTProposalCmp>
@@ -280,5 +278,4 @@ protected:
 
     bcos::protocol::BlockNumber m_maxNotifyIndex = 0;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

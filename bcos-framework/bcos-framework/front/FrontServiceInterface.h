@@ -76,7 +76,7 @@ public:
      * @param _data: received message data
      * @return void
      */
-    virtual void onReceiveMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+    virtual void onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
         bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) = 0;
 
     /**

@@ -12,10 +12,10 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
 #include <future>
 #include <list>
-
 
 namespace bcos::scheduler
 {
@@ -29,10 +29,11 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId,
+        size_t keyPageSize)
       : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory,
             txPool, transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false,
-            schedulerTermId)
+            schedulerTermId, keyPageSize)
     {}
 
 
@@ -42,13 +43,13 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
-        int64_t schedulerTermId)
+        int64_t schedulerTermId, size_t keyPageSize)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
         m_blockExecutiveFactory(
-            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute)),
+            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute, keyPageSize)),
         m_blockFactory(std::move(blockFactory)),
         m_txPool(txPool),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
@@ -56,7 +57,9 @@ public:
         m_isAuthCheck(isAuthCheck),
         m_isWasm(isWasm),
         m_isSerialExecute(isSerialExecute),
-        m_schedulerTermId(schedulerTermId)
+        m_schedulerTermId(schedulerTermId),
+        m_preExeWorker("preExeScheduler", 2),  // assume that preExe is no slower than exe speed/2
+        m_exeWorker("exeScheduler", 1)
     {
         start();
     }
@@ -80,13 +83,6 @@ public:
     void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) override;
 
-    void registerExecutor(std::string name,
-        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        std::function<void(Error::Ptr&&)> callback) override;
-
-    void unregisterExecutor(
-        const std::string& name, std::function<void(Error::Ptr&&)> callback) override;
-
     void reset(std::function<void(Error::Ptr&&)> callback) override;
     // register a block number receiver
     virtual void registerBlockNumberReceiver(
@@ -107,44 +103,7 @@ public:
 
     ExecutorManager::Ptr executorManager() { return m_executorManager; }
 
-    inline void fetchGasLimit(protocol::BlockNumber _number = -1)
-    {
-        SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
-                            << LOG_KV("requestBlockNumber", _number);
-        if (_number == -1)
-        {
-            std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> numberPromise;
-            m_ledger->asyncGetBlockNumber(
-                [&numberPromise](Error::Ptr _error, protocol::BlockNumber _number) {
-                    numberPromise.set_value(std::make_tuple(std::move(_error), _number));
-                });
-            Error::Ptr error;
-            std::tie(error, _number) = numberPromise.get_future().get();
-            if (error)
-            {
-                return;
-            }
-        }
-
-        std::promise<std::tuple<Error::Ptr, std::string>> p;
-        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
-                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
-                return;
-            });
-        auto [e, value] = p.get_future().get();
-        if (e)
-        {
-            SCHEDULER_LOG(WARNING)
-                << BLOCK_NUMBER(_number) << LOG_DESC("fetchGasLimit failed")
-                << LOG_KV("code", e->errorCode()) << LOG_KV("message", e->errorMessage());
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
-        }
-
-        // cast must be success
-        m_gasLimit = boost::lexical_cast<uint64_t>(value);
-    }
+    void fetchConfig(protocol::BlockNumber _number = -1);
 
     int64_t getSchedulerTermId() { return m_schedulerTermId; }
 
@@ -199,7 +158,14 @@ private:
         std::function<void(bcos::protocol::BlockNumber)> whenNewer,  // whenNewer(backNumber)
         std::function<void(std::exception const&)> whenException);
 
+    void executeBlockInternal(bcos::protocol::Block::Ptr block, bool verify,
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+            callback);
+
     bcos::protocol::BlockNumber getCurrentBlockNumber();
+
+    BlockExecutive::Ptr getLatestPreparedBlock(bcos::protocol::BlockNumber blockNumber);
+    void tryExecuteBlock(bcos::protocol::BlockNumber number, bcos::crypto::HashType parentHash);
 
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
@@ -232,10 +198,12 @@ private:
 
     std::atomic_int64_t m_calledContextID = 1;
 
-    uint64_t m_gasLimit = TRANSACTION_GAS;
+    uint64_t m_gasLimit = 0;
+    uint32_t m_blockVersion = 0;
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
+    // BlockExecutive will use the storage of scheduler
     bcos::storage::TransactionalStorageInterface::Ptr m_storage;
     bcos::protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::scheduler::BlockExecutiveFactory::Ptr m_blockExecutiveFactory;
@@ -258,5 +226,8 @@ private:
     bool m_isRunning = false;
 
     std::function<void(int64_t)> f_onNeedSwitchEvent;
+
+    bcos::ThreadPool m_preExeWorker;
+    bcos::ThreadPool m_exeWorker;
 };
 }  // namespace bcos::scheduler

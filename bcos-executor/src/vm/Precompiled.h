@@ -21,15 +21,18 @@
 
 #pragma once
 #include "../executive/TransactionExecutive.h"
+#include "../precompiled/common/Utilities.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledGas.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <functional>
 #include <unordered_map>
+#include <utility>
 
 namespace bcos
 {
@@ -82,7 +85,6 @@ private:
     static PrecompiledRegistrar* s_this;
 };
 
-// TODO: unregister on unload with a static object.
 #define ETH_REGISTER_PRECOMPILED(Name)                                                        \
     static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name(bytesConstRef _in); \
     static bcos::executor::PrecompiledExecutor __eth_registerPrecompiledFactory##Name =       \
@@ -138,30 +140,55 @@ class Precompiled : public std::enable_shared_from_this<Precompiled>
 {
 public:
     using Ptr = std::shared_ptr<Precompiled>;
+    using PrecompiledParams =
+        std::function<void(const std::shared_ptr<executor::TransactionExecutive>& executive,
+            PrecompiledExecResult::Ptr const& callParameters)>;
 
-    Precompiled(crypto::Hash::Ptr _hashImpl) : m_hashImpl(_hashImpl)
+    Precompiled(crypto::Hash::Ptr _hashImpl) : m_hashImpl(std::move(_hashImpl))
     {
         assert(m_hashImpl);
         m_precompiledGasFactory = std::make_shared<PrecompiledGasFactory>();
         assert(m_precompiledGasFactory);
     }
     virtual ~Precompiled() = default;
+
     virtual std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) = 0;
-
     virtual bool isParallelPrecompiled() { return false; }
+
     virtual std::vector<std::string> getParallelTag(bytesConstRef, bool) { return {}; }
 
 protected:
     std::map<std::string, uint32_t> name2Selector;
+    std::unordered_map<uint32_t, std::pair<protocol::BlockVersion, PrecompiledParams>>
+        selector2Func;
     crypto::Hash::Ptr m_hashImpl;
 
-protected:
-    std::optional<bcos::storage::Table> createTable(
-        storage::StateStorageInterface::Ptr _tableFactory, const std::string& _tableName,
-        const std::string& _valueField);
+    void registerFunc(uint32_t _selector, PrecompiledParams _func,
+        protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
+    {
+        selector2Func.insert({_selector, {_minVersion, std::move(_func)}});
+    }
 
+    void registerFunc(std::string const& _funcName, PrecompiledParams _func,
+        protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
+    {
+        selector2Func.insert({getFuncSelector(_funcName), {_minVersion, std::move(_func)}});
+    }
+
+    template <class F>
+    void registerFuncF(uint32_t _selector, F _func,
+        protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
+    {
+        selector2Func.insert(
+            {_selector, {_minVersion, [this](auto&& _executive, auto&& _callParameters) {
+                             F(std::forward<decltype(_executive)>(_executive),
+                                 std::forward<decltype(_callParameters)>(_callParameters));
+                         }}});
+    }
+
+protected:
     std::shared_ptr<PrecompiledGasFactory> m_precompiledGasFactory;
 };
 
@@ -187,4 +214,52 @@ bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesCons
 
 std::pair<bool, bytes> ecRecover(bytesConstRef _in);
 }  // namespace crypto
+
+namespace executor
+{
+struct PrecompiledAvailable
+{
+    precompiled::Precompiled::Ptr precompiled;
+    std::function<bool(uint32_t, bool)> availableFunc;
+};
+class PrecompiledMap
+{
+public:
+    using Ptr = std::shared_ptr<PrecompiledMap>;
+    PrecompiledMap() = default;
+    PrecompiledMap(PrecompiledMap const&) = default;
+    PrecompiledMap(PrecompiledMap&&) = default;
+    PrecompiledMap& operator=(PrecompiledMap const&) = delete;
+    PrecompiledMap& operator=(PrecompiledMap&&) = default;
+    ~PrecompiledMap() = default;
+
+    auto insert(std::string const& _key, precompiled::Precompiled::Ptr _precompiled,
+        protocol::BlockVersion minVersion = protocol::BlockVersion::RC4_VERSION,
+        bool needAuth = false)
+    {
+        auto func = [minVersion, needAuth](uint32_t version, bool isAuth) -> bool {
+            bool flag = true;
+            if (needAuth)
+            {
+                flag = isAuth;
+            }
+            return version >= minVersion && flag;
+        };
+        return m_map.insert({_key, {std::move(_precompiled), std::move(func)}});
+    }
+
+    auto insert(std::string const& _key, precompiled::Precompiled::Ptr _precompiled,
+        std::function<bool(uint32_t, bool)> func)
+    {
+        return m_map.insert({_key, {std::move(_precompiled), std::move(func)}});
+    }
+    precompiled::Precompiled::Ptr at(
+        std::string const&, uint32_t version, bool isAuth) const noexcept;
+    bool contains(std::string const& key, uint32_t version, bool isAuth) const noexcept;
+    size_t size() const noexcept { return m_map.size(); }
+
+private:
+    std::unordered_map<std::string, PrecompiledAvailable> m_map;
+};
+}  // namespace executor
 }  // namespace bcos

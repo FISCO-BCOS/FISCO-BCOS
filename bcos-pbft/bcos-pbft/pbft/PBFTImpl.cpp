@@ -27,7 +27,7 @@ void PBFTImpl::start()
 {
     if (m_running)
     {
-        PBFT_LOG(WARNING) << LOG_DESC("The PBFT module has already been started!");
+        PBFT_LOG(INFO) << LOG_DESC("The PBFT module has already been started!");
         return;
     }
     m_running = true;
@@ -39,7 +39,7 @@ void PBFTImpl::stop()
 {
     if (!m_running)
     {
-        PBFT_LOG(WARNING) << LOG_DESC("The PBFT module has already been stopped!");
+        PBFT_LOG(INFO) << LOG_DESC("The PBFT module has already been stopped!");
         return;
     }
     m_blockValidator->stop();

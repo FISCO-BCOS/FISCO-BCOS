@@ -31,7 +31,7 @@ endif()
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 
-target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
+target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
 find_package(Boost REQUIRED unit_test_framework)
 

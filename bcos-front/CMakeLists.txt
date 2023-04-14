@@ -17,7 +17,7 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "Minimum OS X deployment version")
 
 aux_source_directory(bcos-front SRCS)
 

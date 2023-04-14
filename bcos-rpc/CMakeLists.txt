@@ -17,9 +17,9 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
+
 project(bcos-rpc VERSION ${VERSION})
 
 find_package(jsoncpp CONFIG REQUIRED)
@@ -31,7 +31,6 @@ file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
 find_package(tarscpp REQUIRED)
 
 add_library(${RPC_TARGET} ${SRCS} ${HEADERS})
-# target_compile_options(${RPC_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(${RPC_TARGET} PUBLIC bcos-boostssl ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} jsoncpp_static ${CRYPTO_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
 
 # if (TESTS)

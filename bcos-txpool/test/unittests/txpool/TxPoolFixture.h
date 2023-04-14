@@ -19,7 +19,9 @@
  * @date 2021-05-25
  */
 #pragma once
-#include "bcos-protocol/protobuf/PBTransactionMetaData.h"
+#include <bcos-tars-protocol/testutil/FakeBlock.h>
+#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/TxPoolFactory.h"
 #include "bcos-txpool/sync/TransactionSync.h"
@@ -30,10 +32,12 @@
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-protocol/protobuf/PBBlockFactory.h>
-#include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-task/Wait.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -85,9 +89,7 @@ class FakeMemoryStorage : public MemoryStorage
 public:
     FakeMemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2)
       : MemoryStorage(_config, _notifyWorkerNum)
-    {
-        m_preStoreTxs = true;
-    }
+    {}
 };
 
 class TxPoolFixture
@@ -103,11 +105,13 @@ public:
         m_blockLimit(_blockLimit),
         m_fakeGateWay(_fakeGateWay)
     {
-        auto blockHeaderFactory = std::make_shared<PBBlockHeaderFactory>(_cryptoSuite);
-        auto txFactory = std::make_shared<PBTransactionFactory>(_cryptoSuite);
-        auto receiptFactory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
-        m_blockFactory =
-            std::make_shared<PBBlockFactory>(blockHeaderFactory, txFactory, receiptFactory);
+        auto blockHeaderFactory =
+            std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
+        auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
+        auto receiptFactory =
+            std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
+        m_blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+            _cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
         m_txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
 
@@ -214,32 +218,69 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
     size_t expectedTxSize, bool _needWaitResult = true, bool _waitNothing = false,
     bool _maybeExpired = false)
 {
-    std::shared_ptr<bool> verifyFinish = std::make_shared<bool>(false);
-    bcos::bytes encodedData;
-    _tx->encode(encodedData);
-    auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
-    _txpool->asyncSubmit(txData, [verifyFinish, _expectedTxHash, _expectedStatus, _maybeExpired](
-                                     Error::Ptr, TransactionSubmitResult::Ptr _result) {
-        std::cout << "#### expectedTxHash:" << _expectedTxHash.abridged() << std::endl;
-        std::cout << "##### receipt txHash:" << _result->txHash().abridged() << std::endl;
-        BOOST_CHECK(_result->txHash() == _expectedTxHash);
-        std::cout << "##### _expectedStatus: " << std::to_string(_expectedStatus) << std::endl;
-        std::cout << "##### receiptStatus:" << std::to_string(_result->status()) << std::endl;
-        if (_maybeExpired)
+    struct Defer
+    {
+        ~Defer()
         {
-            BOOST_CHECK((_result->status() == _expectedStatus) ||
-                        (_result->status() == (int32_t)TransactionStatus::BlockLimitCheckFail));
+            for (auto& it : m_futures)
+            {
+                it.get();
+            }
         }
-        *verifyFinish = true;
-    });
+
+        void addFuture(std::future<void> future)
+        {
+            std::unique_lock lock(m_mutex);
+            m_futures.emplace_back(std::move(future));
+        }
+
+        std::mutex m_mutex;
+        std::list<std::future<void>> m_futures;
+    };
+
+    static Defer defer;
+
+    auto promise = std::make_unique<std::promise<void>>();
+    auto future = promise->get_future();
+
+    bcos::task::wait([](decltype(_txpool) txpool, decltype(_tx) transaction,
+                         decltype(promise) promise, bool _maybeExpired, HashType _expectedTxHash,
+                         uint32_t _expectedStatus) -> bcos::task::Task<void> {
+        try
+        {
+            auto submitResult = co_await txpool->submitTransaction(std::move(transaction));
+            if (submitResult->txHash() != _expectedTxHash)
+            {
+                // do something
+                std::cout << "Mismatch!" << std::endl;
+            }
+            BOOST_CHECK_EQUAL(submitResult->txHash(), _expectedTxHash);
+            std::cout << "##### _expectedStatus: " << std::to_string(_expectedStatus) << std::endl;
+            std::cout << "##### receiptStatus:" << std::to_string(submitResult->status())
+                      << std::endl;
+            if (_maybeExpired)
+            {
+                BOOST_CHECK(
+                    (submitResult->status() == _expectedStatus) ||
+                    (submitResult->status() == (int32_t)TransactionStatus::TransactionPoolTimeout));
+            }
+        }
+        catch (std::exception& e)
+        {
+            std::cout << "Submit transaction exception! " << boost::diagnostic_information(e);
+        }
+
+        promise->set_value();
+    }(_txpool, _tx, std::move(promise), _maybeExpired, _expectedTxHash, _expectedStatus));
+
     if (_waitNothing)
     {
+        defer.addFuture(std::move(future));
         return;
     }
-    while (!*verifyFinish && _needWaitResult)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
+
+    future.get();
+
     if (!_needWaitResult)
     {
         while (_storage->size() != expectedTxSize)

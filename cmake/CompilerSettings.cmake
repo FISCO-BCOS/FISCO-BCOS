@@ -30,17 +30,24 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
     endif()
 
-    set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-    # add_compile_options(-Werror)
+    add_compile_options(-Werror)
     add_compile_options(-Wall)
     add_compile_options(-pedantic)
     add_compile_options(-Wextra)
-    add_compile_options(-Wno-unknown-pragmas)
-    add_compile_options(-fno-omit-frame-pointer)
-    add_compile_options(-fvisibility=hidden)
-    add_compile_options(-fvisibility-inlines-hidden)
+
+    # Ignore warnings
+    add_compile_options(-Wno-unused-parameter)
     add_compile_options(-Wno-unused-variable)
-    add_compile_options(-fexceptions)
+    add_compile_options(-Wno-error=unknown-pragmas)
+    add_compile_options(-Wno-error=deprecated-declarations)
+
+    add_compile_options(-fno-omit-frame-pointer)
+
+    if(NOT APPLE)
+        set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+        add_compile_options(-fvisibility=hidden)
+        add_compile_options(-fvisibility-inlines-hidden)
+    endif()
 
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
@@ -68,17 +75,11 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-DBOOST_TEST_THREAD_SAFE)
     endif()
 
-    if(PROF)
-        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
-        SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
-        SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg")
-    endif()
-
     # Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 
     if(USE_LD_GOLD)
         execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
@@ -99,8 +100,13 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
         add_compile_options(-fstack-protector-strong)
         add_compile_options(-fstack-protector)
+
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11.0)
+            add_compile_options(-fcoroutines)
+        endif()
+
         add_compile_options(-fPIC)
-        add_definitions(-DUSE_STD_RANGES)
+        add_compile_options(-Wno-error=restrict)
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG "-O -g")
@@ -119,8 +125,12 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
     endif()
 
-    if(SANITIZE)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fsanitize-address-use-after-scope -fsanitize-recover=all")
+    if(SANITIZE_ADDRESS)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize-address-use-after-scope -fsanitize-recover=all")
+    endif()
+
+    if(SANITIZE_THREAD)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=thread")
     endif()
 
     if(COVERAGE)
@@ -157,8 +167,8 @@ if(ALLOCATOR STREQUAL "tcmalloc")
     # pkg_check_modules(tcmalloc REQUIRED libtcmalloc)
     # link_libraries(${tcmalloc_LINK_LIBRARIES})
 elseif(ALLOCATOR STREQUAL "jemalloc")
-    find_package(jemalloc REQUIRED)
-    link_libraries(jemalloc)
+    find_library(JEMalloc_LIB jemalloc ${VCPKG_INSTALLED_DIR} REQUIRED)
+    link_libraries(${JEMalloc_LIB})
 elseif(ALLOCATOR STREQUAL "mimalloc")
     find_package(mimalloc REQUIRED)
     link_libraries(mimalloc)

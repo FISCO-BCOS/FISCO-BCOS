@@ -26,16 +26,14 @@
 #include <bcos-framework/consensus/ConsensusTypeDef.h>
 #include <stdint.h>
 #include <memory>
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTBaseMessageInterface
 {
 public:
     using Ptr = std::shared_ptr<PBFTBaseMessageInterface>;
     PBFTBaseMessageInterface() = default;
-    virtual ~PBFTBaseMessageInterface() {}
+    virtual ~PBFTBaseMessageInterface() = default;
 
     virtual int64_t timestamp() const = 0;
     virtual int32_t version() const = 0;
@@ -79,5 +77,4 @@ inline std::string printPBFTMsgInfo(PBFTBaseMessageInterface::Ptr _pbftMsg)
                  << LOG_KV("fromIdx", _pbftMsg->generatedFrom());
     return stringstream.str();
 }
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

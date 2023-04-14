@@ -1,0 +1,59 @@
+name: Arm Static Buld
+on:
+  pull_request:
+    branches:
+      - release-3.*
+      - feature-3.*
+      - master
+    types: [closed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+
+jobs:
+  if_merged:
+    name: arm static build
+    if: github.event.pull_request.merged == true
+    runs-on: self-hosted-static-arm
+    strategy:
+      fail-fast: false
+    env:
+      VCPKG_ROOT: ~/cache/vcpkg
+      DEPS_ROOT: ~/cache/deps
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+
+      - name: Prepare centos tools
+        run: |
+          yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel
+          yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel automake
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-07-28
+          override: true
+
+      - name: Reuse build cache
+        run: |
+          mkdir -p ./build
+          rm -rf deps
+          ln -s ${{ env.DEPS_ROOT }} deps
+
+      - name: Remove cache if correspond dir change
+        run: ./tools/.ci/clear_build_cache.sh
+
+      - name: Config vcpkg registry proxy
+        run: sed -i "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
+
+      - name: Build for linux
+        run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          . /opt/rh/devtoolset-10/enable
+          . /opt/rh/rh-perl530/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
+          . /opt/rh/llvm-toolset-7.0/enable
+          alias cmake='cmake3'
+          mkdir -p build && cd build
+          cmake3 -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Debug  -DWITH_LIGHTNODE=ON  -DWITH_TIKV=Off -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          make -j3

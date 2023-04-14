@@ -58,7 +58,7 @@ public:
     PeersRouterTable::Ptr peersRouterTable() { return m_peersRouterTable; }
     std::shared_ptr<bcos::crypto::KeyFactory> keyFactory() { return m_keyFactory; }
 
-    std::map<std::string, std::set<std::string>, std::less<>> peersNodeIDList(
+    std::map<std::string, std::map<std::string, uint32_t>> peersNodeIDList(
         std::string const& _p2pNodeID);
 
 protected:

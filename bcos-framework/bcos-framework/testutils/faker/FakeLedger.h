@@ -22,8 +22,6 @@
 #include "../../ledger/LedgerConfig.h"
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
-#include "bcos-protocol/testutils/protocol/FakeBlock.h"
-#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include <bcos-utilities/ThreadPool.h>
 
 using namespace bcos;
@@ -117,6 +115,7 @@ public:
             rootHash, rootHash, rootHash, _blockNumber, gasUsed, _timestamp, 0, m_sealerList,
             bytes(), signatureList, false);
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
+        blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         signatureList = fakeSignatureList(sigImpl, m_keyPairVec, blockHeader->hash());
         blockHeader->setSignatureList(signatureList);
         block->setBlockHeader(blockHeader);
@@ -126,6 +125,7 @@ public:
     Block::Ptr populateFromHeader(BlockHeader::Ptr _blockHeader)
     {
         auto block = m_blockFactory->createBlock();
+        block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         block->setBlockHeader(_blockHeader);
         return block;
     }
@@ -138,7 +138,7 @@ public:
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback) override
+        std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
     {
         (void)storage;
         (void)block;
@@ -156,17 +156,19 @@ public:
     }
 
     // the txpool module use this interface to store txs
-    void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
-        crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) override
+    bcos::Error::Ptr storeTransactionsAndReceipts(
+        bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) override
     {
         WriteGuard l(x_txsHashToData);
-        size_t i = 0;
-        for (auto const& hash : *_txHashList)
+        for (size_t i = 0; i < block->transactionsSize(); i++)
         {
-            auto txData = (*_txToStore)[i];
-            m_txsHashToData[hash] = txData;
+            auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
+            auto txHash = tx->hash();
+            std::shared_ptr<bcos::bytes> txData;
+            tx->encode(*txData);
+            m_txsHashToData[txHash] = txData;
         }
-        _onTxStored(nullptr);
+        return nullptr;
     }
 
     // maybe sync module or rpc module need this interface to return header/txs/receipts
@@ -176,7 +178,7 @@ public:
         ReadGuard l(x_ledger);
         if (m_ledger.size() <= (size_t)(_number))
         {
-            _callback(std::make_unique<Error>(-1, "block not found"), nullptr);
+            _callback(BCOS_ERROR_UNIQUE_PTR(-1, "block not found"), nullptr);
             return;
         }
         auto block = m_ledger[_number];
@@ -233,6 +235,12 @@ public:
         _callback(nullptr, m_totalTxCount, 0, m_ledgerConfig->blockNumber());
     }
 
+    void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) override
+    {
+        _callback(nullptr, {});
+    }
+
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, BlockNumber)> _onGetConfig) override
     {
@@ -261,7 +269,7 @@ public:
             _onGetNodeList(nullptr, observerNodes);
             return;
         }
-        _onGetNodeList(std::make_unique<Error>(-1, "invalid Type"), nullptr);
+        _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), nullptr);
     }
 
     void asyncGetNonceList(BlockNumber _startNumber, int64_t _offset,
@@ -278,6 +286,7 @@ public:
         for (auto index = _startNumber; index <= endNumber; index++)
         {
             auto nonces = m_ledger[index]->nonces();
+            std::cout << "Block nonces: " << nonces->size() << std::endl;
             nonceList->insert(std::make_pair(index, nonces));
         }
         _onGetList(nullptr, nonceList);
@@ -328,7 +337,7 @@ public:
         auto nonConstHeader = std::const_pointer_cast<bcos::protocol::BlockHeader>(_blockHeader);
         if (nonConstHeader->number() != m_ledgerConfig->blockNumber() + 1)
         {
-            _onCommitBlock(std::make_shared<Error>(-1, "invalid block"), nullptr);
+            _onCommitBlock(BCOS_ERROR_PTR(-1, "invalid block"), nullptr);
             return;
         }
 

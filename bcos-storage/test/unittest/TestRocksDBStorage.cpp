@@ -42,7 +42,7 @@ public:
         return bcos::crypto::HashType(
             hash(std::string_view((const char*)_data.data(), _data.size())));
     }
-    bcos::crypto::hasher::AnyHasher hasher() override
+    bcos::crypto::hasher::AnyHasher hasher() const override
     {
         return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
     }
@@ -100,7 +100,7 @@ struct TestRocksDBStorageFixture
         for (size_t i = 0; i < 1000; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            Entry entry(testTableInfo);
+            Entry entry;
             entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
             rocksDBStorage->asyncSetRow(testTableName, key, entry,
                 [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
@@ -112,7 +112,7 @@ struct TestRocksDBStorageFixture
         for (size_t i = 0; i < 1000; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            Entry entry(testTableInfo);
+            Entry entry;
             entry.setStatus(Entry::DELETED);
 
             rocksDBStorage->asyncSetRow(testTableName, key, entry,
@@ -131,22 +131,22 @@ struct TestRocksDBStorageFixture
         for (size_t i = 0; i < tableEntries; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            Entry entry(testTableInfo);
+            Entry entry;
             entry.importFields({"value_delete"});
             testTable->setRow(key, std::move(entry));
         }
 
         auto params1 = bcos::protocol::TwoPCParams();
         params1.number = 100;
-        params1.primaryTableName = testTableName;
-        params1.primaryTableKey = "key0";
+        params1.primaryKey = testTableName + ":key0";
         auto start = std::chrono::system_clock::now();
         // prewrite
-        storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
-            BOOST_CHECK_EQUAL(error.get(), nullptr);
-            BOOST_CHECK_EQUAL(ts, 0);
-            params1.timestamp = ts;
-        });
+        storage->asyncPrepare(
+            params1, *stateStorage, [&](Error::Ptr error, uint64_t ts, const std::string&) {
+                BOOST_CHECK_EQUAL(error.get(), nullptr);
+                BOOST_CHECK_EQUAL(ts, 0);
+                params1.timestamp = ts;
+            });
 
         // commit
         storage->asyncCommit(bcos::protocol::TwoPCParams(),
@@ -177,11 +177,12 @@ struct TestRocksDBStorageFixture
             testTable->setRow(key, std::move(entry));
         }
         params1.timestamp = 0;
-        storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
-            BOOST_CHECK_EQUAL(error.get(), nullptr);
-            BOOST_CHECK_EQUAL(ts, 0);
-            params1.timestamp = ts;
-        });
+        storage->asyncPrepare(
+            params1, *stateStorage, [&](Error::Ptr error, uint64_t ts, const std::string&) {
+                BOOST_CHECK_EQUAL(error.get(), nullptr);
+                BOOST_CHECK_EQUAL(ts, 0);
+                params1.timestamp = ts;
+            });
         // commit
         storage->asyncCommit(bcos::protocol::TwoPCParams(),
             [&](Error::Ptr error, uint64_t) { BOOST_CHECK_EQUAL(error, nullptr); });
@@ -223,8 +224,6 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
 {
     prepareTestTableData();
 
-
-    // #pragma omp parallel for
     for (size_t i = 0; i < 1050; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
@@ -277,7 +276,7 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     for (size_t i = 1000; i < 2000; ++i)
     {
         std::string key = "newkey" + boost::lexical_cast<std::string>(i);
-        auto entry = Entry(tableInfo);
+        auto entry = Entry();
         entry.importFields({"value12345"});
 
         rocksDBStorage->asyncSetRow(tableInfo->name(), key, entry,
@@ -436,8 +435,8 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
         table2Keys.push_back(key2);
     }
 
-    rocksDBStorage->asyncPrepare(
-        bcos::protocol::TwoPCParams(), *storage, [&](Error::Ptr error, uint64_t ts) {
+    rocksDBStorage->asyncPrepare(bcos::protocol::TwoPCParams(), *storage,
+        [&](Error::Ptr error, uint64_t ts, const std::string&) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
@@ -629,8 +628,8 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
 
     bcos::protocol::TwoPCParams params;
     params.number = 1;
-    rocksDBStorage->asyncPrepare(
-        params, *initState, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
+    rocksDBStorage->asyncPrepare(params, *initState,
+        [](Error::Ptr error, uint64_t, const std::string&) { BOOST_CHECK(!error); });
     rocksDBStorage->asyncCommit(params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
 
     STORAGE_LOG(INFO) << "Init state finished";
@@ -686,8 +685,8 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
 
         bcos::protocol::TwoPCParams params;
         params.number = i;
-        rocksDBStorage->asyncPrepare(
-            params, *state, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
+        rocksDBStorage->asyncPrepare(params, *state,
+            [](Error::Ptr error, uint64_t, const std::string&) { BOOST_CHECK(!error); });
         rocksDBStorage->asyncCommit(
             params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
     }

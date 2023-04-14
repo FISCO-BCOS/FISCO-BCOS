@@ -20,6 +20,7 @@
  */
 #include "FrontServiceInitializer.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-task/Wait.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
@@ -42,7 +43,7 @@ FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _no
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(m_gateWay);
 
-    // make the threadpool configurable
+    // tx verify is use the frontService thread so config the size to cpu core number
     auto threadPool =
         std::make_shared<ThreadPool>("frontService", std::thread::hardware_concurrency());
     frontServiceFactory->setThreadPool(threadPool);
@@ -54,7 +55,7 @@ void FrontServiceInitializer::start()
 {
     if (m_running)
     {
-        FRONTSERVICE_LOG(WARNING) << LOG_DESC("The front service has already been started");
+        FRONTSERVICE_LOG(INFO) << LOG_DESC("The front service has already been started");
         return;
     }
     FRONTSERVICE_LOG(INFO) << LOG_DESC("Start the front service");
@@ -65,7 +66,7 @@ void FrontServiceInitializer::stop()
 {
     if (!m_running)
     {
-        FRONTSERVICE_LOG(WARNING) << LOG_DESC("The front service has already been stopped");
+        FRONTSERVICE_LOG(INFO) << LOG_DESC("The front service has already been stopped");
         return;
     }
     FRONTSERVICE_LOG(INFO) << LOG_DESC("Stop the front service");
@@ -173,10 +174,17 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
             _txpool->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _blockSync->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _pbft->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
-            FRONTSERVICE_LOG(DEBUG)
+            FRONTSERVICE_LOG(INFO)
                 << LOG_DESC("notifyGroupNodeInfo") << LOG_KV("connectedNodeSize", nodeIdSet.size());
         });
     FRONTSERVICE_LOG(INFO) << LOG_DESC("registerGroupNodeInfoNotification success");
+
+    // TXPOOL onPushTransaction
+    m_front->registerModuleMessageDispatcher(
+        protocol::SYNC_PUSH_TRANSACTION, [txpool = _txpool](bcos::crypto::NodeIDPtr nodeID,
+                                             const std::string& messageID, bytesConstRef data) {
+            task::wait(txpool->onReceivePushTransaction(std::move(nodeID), messageID, data));
+        });
 }
 
 

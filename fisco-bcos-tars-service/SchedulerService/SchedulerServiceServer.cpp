@@ -34,7 +34,7 @@ bcostars::Error SchedulerServiceServer::call(
 {
     current->setResponse(false);
     auto bcosTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
-        m_cryptoSuite, [m_tx = _tx]() mutable { return &m_tx; });
+        [m_tx = _tx]() mutable { return &m_tx; });
     m_scheduler->call(bcosTransaction,
         [current](bcos::Error::Ptr&& _error, bcos::protocol::TransactionReceipt::Ptr&& _receipt) {
             bcostars::TransactionReceipt tarsReceipt;
@@ -77,8 +77,7 @@ bcostars::Error SchedulerServiceServer::executeBlock(bcostars::Block const& _blo
     tars::Bool _verify, bcostars::BlockHeader&, tars::Bool&, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
-    auto bcosBlock = std::make_shared<bcostars::protocol::BlockImpl>(
-        m_blockFactory->transactionFactory(), m_blockFactory->receiptFactory(), _block);
+    auto bcosBlock = std::make_shared<bcostars::protocol::BlockImpl>(_block);
     m_scheduler->executeBlock(bcosBlock, _verify,
         [_current](
             bcos::Error::Ptr&& _error, bcos::protocol::BlockHeader::Ptr&& _header, bool _sysBlock) {
@@ -96,7 +95,7 @@ bcostars::Error SchedulerServiceServer::commitBlock(
 {
     _current->setResponse(false);
     auto bcosHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        m_cryptoSuite, [m_header = _header]() mutable { return &m_header; });
+        [m_header = _header]() mutable { return &m_header; });
     m_scheduler->commitBlock(bcosHeader,
         [_current](bcos::Error::Ptr&& _error, bcos::ledger::LedgerConfig::Ptr&& _bcosLedgerConfig) {
             async_response_commitBlock(
@@ -105,26 +104,11 @@ bcostars::Error SchedulerServiceServer::commitBlock(
     return bcostars::Error();
 }
 
-bcostars::Error SchedulerServiceServer::registerExecutor(
-    std::string const& _name, tars::TarsCurrentPtr _current)
-{
-    _current->setResponse(false);
-
-    auto executorServicePrx = bcostars::createServantProxy<bcostars::ExecutorServicePrx>(_name);
-
-    auto executor = std::make_shared<bcostars::ExecutorServiceClient>(executorServicePrx);
-    m_scheduler->registerExecutor(_name, executor, [_current](bcos::Error::Ptr&& _error) {
-        async_response_registerExecutor(_current, toTarsError(_error));
-    });
-    return bcostars::Error();
-}
-
 bcostars::Error SchedulerServiceServer::preExecuteBlock(
     const bcostars::Block& _block, tars::Bool _verify, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
-    auto bcosBlock = std::make_shared<bcostars::protocol::BlockImpl>(
-        m_blockFactory->transactionFactory(), m_blockFactory->receiptFactory(), _block);
+    auto bcosBlock = std::make_shared<bcostars::protocol::BlockImpl>(_block);
     m_scheduler->preExecuteBlock(bcosBlock, _verify, [_current](bcos::Error::Ptr&& _error) {
         async_response_preExecuteBlock(_current, toTarsError(_error));
     });

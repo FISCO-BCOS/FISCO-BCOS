@@ -101,6 +101,11 @@ public:
         return table;
     }
 
+    virtual std::pair<size_t, Error::Ptr> count(const std::string_view& _table [[maybe_unused]])
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Called interface count method"));
+    }
+
     virtual crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const = 0;
     virtual void setPrev(std::shared_ptr<StorageInterface> prev)
     {
@@ -116,6 +121,7 @@ protected:
     tbb::enumerable_thread_specific<typename Recoder::Ptr> m_recoder;
     std::shared_ptr<StorageInterface> m_prev;
     std::shared_mutex m_prevMutex;
+    mutable std::mutex x_cacheMutex;
 };
 
 

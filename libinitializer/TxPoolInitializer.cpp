@@ -23,6 +23,8 @@
 #include <bcos-txpool/TxPoolFactory.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
+#include <utility>
+
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::initializer;
@@ -30,23 +32,21 @@ using namespace bcos::initializer;
 TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     ProtocolInitializer::Ptr _protocolInitializer,
     bcos::front::FrontServiceInterface::Ptr _frontService,
-    bcos::ledger::LedgerInterface::Ptr _ledger, bool _preStoreTxs)
-  : m_nodeConfig(_nodeConfig),
-    m_protocolInitializer(_protocolInitializer),
-    m_frontService(_frontService),
-    m_ledger(_ledger)
+    bcos::ledger::LedgerInterface::Ptr _ledger)
+  : m_nodeConfig(std::move(_nodeConfig)),
+    m_protocolInitializer(std::move(_protocolInitializer)),
+    m_frontService(std::move(_frontService)),
+    m_ledger(std::move(_ledger))
 {
     auto keyPair = m_protocolInitializer->keyPair();
     auto cryptoSuite = m_protocolInitializer->cryptoSuite();
     auto txpoolFactory = std::make_shared<TxPoolFactory>(keyPair->publicKey(), cryptoSuite,
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->blockFactory(),
         m_frontService, m_ledger, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
-        m_nodeConfig->blockLimit());
-    // init the txpool
+        m_nodeConfig->blockLimit(), m_nodeConfig->txpoolLimit());
+
     m_txpool = txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
-        m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime(), _preStoreTxs);
-    auto txpoolConfig = m_txpool->txpoolConfig();
-    txpoolConfig->setPoolLimit(m_nodeConfig->txpoolLimit());
+        m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
 }
 
 void TxPoolInitializer::init(bcos::sealer::SealerInterface::Ptr _sealer)
@@ -71,7 +71,7 @@ void TxPoolInitializer::start()
 {
     if (m_running)
     {
-        INITIALIZER_LOG(WARNING) << LOG_DESC("The txpool has already been started");
+        INITIALIZER_LOG(INFO) << LOG_DESC("The txpool has already been started");
         return;
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("Start the txpool");
@@ -83,7 +83,7 @@ void TxPoolInitializer::stop()
 {
     if (!m_running)
     {
-        INITIALIZER_LOG(WARNING) << LOG_DESC("The txpool has already been stopped");
+        INITIALIZER_LOG(INFO) << LOG_DESC("The txpool has already been stopped");
         return;
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("Stop the txpool");

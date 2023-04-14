@@ -80,8 +80,6 @@ void FrontService::checkParams()
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment(" FrontService ioService is uninitialized"));
     }
-
-    return;
 }
 
 void FrontService::start()
@@ -124,6 +122,7 @@ void FrontService::start()
         {
             try
             {
+                boost::asio::io_service::work work(*m_ioService);
                 m_ioService->run();
             }
             catch (std::exception& e)
@@ -131,8 +130,6 @@ void FrontService::start()
                 FRONT_LOG(WARNING)
                     << LOG_DESC("IOService") << LOG_KV("error", boost::diagnostic_information(e));
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
             if (m_run && m_ioService->stopped())
             {
@@ -150,8 +147,6 @@ void FrontService::start()
     {
         FRONT_LOG(INFO) << LOG_DESC("register module") << LOG_KV("moduleID", module.first);
     }
-
-    return;
 }
 void FrontService::stop()
 {
@@ -165,7 +160,7 @@ void FrontService::stop()
     try
     {
         {
-            RecursiveGuard l(x_callback);
+            Guard guard(x_callback);
             for (auto& callback : m_callback)
             {
                 FRONT_LOG(INFO) << LOG_DESC("FrontService stopped, erase the callback")
@@ -204,8 +199,6 @@ void FrontService::stop()
     FRONT_LOG(INFO) << LOG_DESC("FrontService stop")
                     << LOG_KV("nodeID", (m_nodeID ? m_nodeID->hex() : ""))
                     << LOG_KV("groupID", m_groupID);
-
-    return;
 }
 
 /**
@@ -217,7 +210,7 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
 {
     bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo;
     {
-        Guard l(x_groupNodeInfo);
+        Guard guard(x_groupNodeInfo);
         groupNodeInfo = m_groupNodeInfo;
     }
 
@@ -238,8 +231,6 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
     FRONT_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
                     << LOG_KV("nodeIDs.size()",
                            (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
-
-    return;
 }
 
 /**
@@ -291,8 +282,14 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
                              << LOG_KV("data.size()", _data.size()) << LOG_KV("timeout", _timeout);
         }  // if (_callback)
 
+        auto self = weak_from_this();
         sendMessage(_moduleID, _nodeID, uuid, _data, false,
-            [this, _moduleID, _nodeID, uuid](Error::Ptr _error) {
+            [self, _moduleID, _nodeID, uuid](Error::Ptr _error) {
+                auto front = self.lock();
+                if (!front)
+                {
+                    return;
+                }
                 if (_error && (_error->errorCode() != CommonError::SUCCESS))
                 {
                     /*
@@ -300,7 +297,7 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
                                      << LOG_KV("errorCode", _error->errorCode())
                                      << LOG_KV("errorMessage", _error->errorMessage());
                 */
-                    handleCallback(_error, bytesConstRef(), uuid, _moduleID, _nodeID);
+                    front->handleCallback(_error, bytesConstRef(), uuid, _moduleID, _nodeID);
                 }
             });
     }
@@ -352,7 +349,7 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
     message->setPayload(_data);
 
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
 
     m_gatewayInterface->asyncSendBroadcastMessage(
         _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
@@ -370,7 +367,7 @@ void FrontService::onReceiveGroupNodeInfo(const std::string& _groupID,
 {
     {
         protocolNegotiate(_groupNodeInfo);
-        Guard l(x_groupNodeInfo);
+        Guard guard(x_groupNodeInfo);
         m_groupNodeInfo = _groupNodeInfo;
     }
     // To be considered: How to ensure orderly notifications in the pro/max mode
@@ -511,7 +508,7 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
  * @param _receiveMsgCallback: response callback
  * @return void
  */
-void FrontService::onReceiveMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+void FrontService::onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
     bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback)
 {
     try
@@ -653,7 +650,7 @@ void FrontService::onMessageTimeout(const boost::system::error_code& _error,
         Callback::Ptr callback = getAndRemoveCallback(_uuid);
         if (callback)
         {
-            auto errorPtr = std::make_shared<Error>(CommonError::TIMEOUT, "timeout");
+            auto errorPtr = BCOS_ERROR_PTR(CommonError::TIMEOUT, "timeout");
             if (m_threadPool)
             {
                 m_threadPool->enqueue([_uuid, _nodeID, callback, errorPtr]() {

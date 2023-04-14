@@ -22,7 +22,8 @@
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/StorageInterface.h>
-#include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-ledger/src/libledger/LedgerImpl.h>
+#include <bcos-storage/bcos-storage/StorageWrapperImpl.h>
 #include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer
@@ -31,13 +32,29 @@ class LedgerInitializer
 {
 public:
     static std::shared_ptr<bcos::ledger::Ledger> build(
-        bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::storage::StorageInterface::Ptr _storage, bcos::tool::NodeConfig::Ptr _nodeConfig)
+        bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::storage::StorageInterface::Ptr storage, bcos::tool::NodeConfig::Ptr nodeConfig)
     {
-        auto ledger = std::make_shared<bcos::ledger::Ledger>(_blockFactory, _storage);
-        // build genesis block
-        ledger->buildGenesisBlock(_nodeConfig->ledgerConfig(), _nodeConfig->txGasLimit(),
-            _nodeConfig->genesisData(), _nodeConfig->compatibilityVersionStr());
+        bcos::storage::StorageImpl storageWrapper(storage);
+
+        if (nodeConfig->smCryptoType())
+        {
+            auto ledger = std::make_shared<bcos::ledger::LedgerImpl<
+                bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
+                std::move(storageWrapper), blockFactory, storage);
+            ledger->buildGenesisBlock(nodeConfig->ledgerConfig(), nodeConfig->txGasLimit(),
+                nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr());
+
+            return ledger;
+        }
+
+        auto ledger = std::make_shared<bcos::ledger::LedgerImpl<
+            bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
+            std::move(storageWrapper), blockFactory, storage);
+        ledger->buildGenesisBlock(nodeConfig->ledgerConfig(), nodeConfig->txGasLimit(),
+            nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr(),
+            nodeConfig->isAuthCheck());
+
         return ledger;
     }
 };

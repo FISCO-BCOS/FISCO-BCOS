@@ -11,7 +11,7 @@ on:
       - "Changelog.md"
       - "README.md"
   release:
-    types: [published, created, edited]
+    types: [push]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -20,21 +20,21 @@ concurrency:
 jobs:
   build_arm:
     name: arm ci check
-    runs-on: self-hosted-arm
+    runs-on: self-hosted-arm3.3
     strategy:
       fail-fast: false
-    env: 
+    env:
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           clean: false
 
       - name: Prepare centos tools
         run: |
-          yum install -y epel-release centos-release-scl flex bison patch gmp-static java
-          yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel
+          yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel java-1.8.0-openjdk-devel.aarch64
+          yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28
@@ -49,6 +49,9 @@ jobs:
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
+      - name: Config vcpkg registry proxy
+        run: sed -i "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
+
       - name: Build for linux
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
@@ -58,11 +61,13 @@ jobs:
           . /opt/rh/llvm-toolset-7.0/enable
           alias cmake='cmake3'
           mkdir -p build && cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=ON -DWITH_TIKV=Off -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
           make -j3
       - name: Test
-        run: 
+        run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
 
       - name: Integration test - Air
-        run: cd tools && bash .ci/ci_check_air.sh
+        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+      - name: Integration test - Pro
+        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}

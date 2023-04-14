@@ -14,7 +14,6 @@ set(CODEC_TARGET "codec")
 
 # bcos-protocol
 set(PROTOCOL_TARGET "protocol")
-set(PBPROTOCOL_TARGET "protocol-pb")
 
 # bcos-tars-protocol
 set(TARS_PROTOCOL_TARGET "protocol-tars")

@@ -1,6 +1,7 @@
 #include "../../Common/TarsUtils.h"
 #include "../GatewayInitializer.h"
 #include "../GatewayServiceServer.h"
+#include "bcos-tool/NodeConfig.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -40,7 +41,7 @@ public:
         {
             std::cout << "init GatewayService failed, error: " << boost::diagnostic_information(e)
                       << std::endl;
-            throw e;
+            exit(-1);
         }
     }
 
@@ -50,15 +51,23 @@ protected:
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(_configPath, pt);
 
+        tool::NodeConfig nodeConfig;
+
+        nodeConfig.loadWithoutTarsFrameworkConfig(pt);
+
         // init the log
         m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-        m_logInitializer->setLogPath(getLogPath());
-        m_logInitializer->initLog(pt);
+        if (!nodeConfig.withoutTarsFramework())
+        {
+            m_logInitializer->setLogPath(getLogPath());
+        }
+
+        m_logInitializer->initLog(_configPath);
 
         // init gateway config
         auto gatewayConfig = std::make_shared<bcos::gateway::GatewayConfig>();
         gatewayConfig->initP2PConfig(pt, true);
-        gatewayConfig->initRatelimitConfig(pt);
+        gatewayConfig->initFlowControlConfig(pt);
         gatewayConfig->setCertPath(tars::ServerConfig::BasePath);
         gatewayConfig->setNodePath(tars::ServerConfig::BasePath);
         if (gatewayConfig->smSSL())

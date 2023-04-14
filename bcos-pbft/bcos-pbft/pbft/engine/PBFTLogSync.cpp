@@ -20,6 +20,7 @@
  */
 #include "PBFTLogSync.h"
 #include <bcos-framework/protocol/Protocol.h>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::front;
@@ -28,24 +29,31 @@ using namespace bcos::crypto;
 using namespace bcos::consensus;
 
 PBFTLogSync::PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftCache)
-  : m_config(_config),
-    m_pbftCache(_pbftCache),
+  : m_config(std::move(_config)),
+    m_pbftCache(std::move(_pbftCache)),
     m_requestThread(std::make_shared<ThreadPool>("pbftLogSync", 1))
 {}
 
 void PBFTLogSync::requestCommittedProposals(
-    PublicPtr _from, BlockNumber _startIndex, size_t _offset)
+    PublicPtr _from, bcos::protocol::BlockNumber _startIndex, size_t _offset)
 {
     auto pbftRequest = m_config->pbftMessageFactory()->populateFrom(
         PacketType::CommittedProposalRequest, _startIndex, _offset);
-    requestPBFTData(_from, pbftRequest,
-        [this, _startIndex, _offset](Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,
+    auto self = weak_from_this();
+    requestPBFTData(std::move(_from), pbftRequest,
+        [self, _startIndex, _offset](Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,
             std::string const&, SendResponseCallback _sendResponse) {
-            return this->onRecvCommittedProposalsResponse(
-                _error, _nodeID, _data, _startIndex, _offset, _sendResponse);
+            auto logSync = self.lock();
+            if (!logSync)
+            {
+                return;
+            }
+            return logSync->onRecvCommittedProposalsResponse(std::move(_error), std::move(_nodeID),
+                _data, _startIndex, _offset, std::move(_sendResponse));
         });
 }
 
+// new view
 void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
     PBFTMessageInterface::Ptr _prePrepareMsg, HandlePrePrepareCallback _prePrepareCallback)
 {
@@ -54,18 +62,26 @@ void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
     PBFT_LOG(INFO) << LOG_DESC("request the missed precommit proposal")
                    << LOG_KV("index", _prePrepareMsg->index())
                    << LOG_KV("hash", _prePrepareMsg->hash().abridged());
-    requestPBFTData(_from, pbftRequest,
-        [this, _prePrepareMsg, _prePrepareCallback](Error::Ptr _error, NodeIDPtr _nodeID,
-            bytesConstRef _data, std::string const&, SendResponseCallback _sendResponse) {
-            return this->onRecvPrecommitResponse(
-                _error, _nodeID, _data, _prePrepareMsg, _prePrepareCallback, _sendResponse);
+    auto self = weak_from_this();
+    requestPBFTData(std::move(_from), pbftRequest,
+        [self, _prePrepareMsg = std::move(_prePrepareMsg),
+            _prePrepareCallback = std::move(_prePrepareCallback)](Error::Ptr _error,
+            NodeIDPtr _nodeID, bytesConstRef _data, std::string const&,
+            SendResponseCallback _sendResponse) {
+            auto logSync = self.lock();
+            if (!logSync)
+            {
+                return;
+            }
+            return logSync->onRecvPrecommitResponse(std::move(_error), std::move(_nodeID), _data,
+                _prePrepareMsg, _prePrepareCallback, std::move(_sendResponse));
         });
 }
 
 void PBFTLogSync::requestPBFTData(
     PublicPtr _from, PBFTRequestInterface::Ptr _pbftRequest, CallbackFunc _callback)
 {
-    auto self = std::weak_ptr<PBFTLogSync>(shared_from_this());
+    auto self = weak_from_this();
     m_requestThread->enqueue([self, _from, _pbftRequest, _callback]() {
         try
         {

@@ -22,6 +22,7 @@
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/algorithm/string/join.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -115,7 +116,7 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 3);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 16);
+        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 
     {
@@ -124,7 +125,7 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 0);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 16);
+        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 
     {
@@ -136,7 +137,7 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 2);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 16);
+        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 }
 
@@ -159,73 +160,6 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
         BOOST_CHECK(!certConfig.caCert.empty());
         BOOST_CHECK(!certConfig.nodeCert.empty());
         BOOST_CHECK(!certConfig.nodeKey.empty());
-    }
-}
-
-BOOST_AUTO_TEST_CASE(test_initRateLimitConfig)
-{
-    {
-        bcos::gateway::GatewayConfig::RateLimitConfig rateLimitConfig;
-        BOOST_CHECK(!rateLimitConfig.isConfigEffect());
-    }
-
-    {
-        std::string configIni("data/config/config_ipv4.ini");
-
-        boost::property_tree::ptree pt;
-        boost::property_tree::ini_parser::read_ini(configIni, pt);
-
-        auto config = std::make_shared<GatewayConfig>();
-        config->initRatelimitConfig(pt);
-
-        auto rateLimitConfig = config->rateLimitConfig();
-
-        BOOST_CHECK(rateLimitConfig.isConfigEffect());
-
-        BOOST_CHECK_EQUAL(rateLimitConfig.totalOutgoingBwLimit, 10 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimitConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimitConfig.groupOutgoingBwLimit, 5 * 1024 * 1024 / 8);
-
-        BOOST_CHECK_EQUAL(rateLimitConfig.modulesWithNoBwLimit.size(), 3);
-
-        BOOST_CHECK_EQUAL(rateLimitConfig.ip2BwLimit.size(), 3);
-        BOOST_CHECK_EQUAL(
-            rateLimitConfig.ip2BwLimit.find("192.108.0.1")->second, 1 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(
-            rateLimitConfig.ip2BwLimit.find("192.108.0.2")->second, 2 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(
-            rateLimitConfig.ip2BwLimit.find("192.108.0.3")->second, 3 * 1024 * 1024 / 8);
-
-        BOOST_CHECK_EQUAL(rateLimitConfig.group2BwLimit.size(), 3);
-        BOOST_CHECK_EQUAL(
-            rateLimitConfig.group2BwLimit.find("group0")->second, 2 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(
-            rateLimitConfig.group2BwLimit.find("group1")->second, 2 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(
-            rateLimitConfig.group2BwLimit.find("group2")->second, 2 * 1024 * 1024 / 8);
-    }
-
-    {
-        std::string configIni("data/config/config_ipv6.ini");
-
-        boost::property_tree::ptree pt;
-        boost::property_tree::ini_parser::read_ini(configIni, pt);
-
-        auto config = std::make_shared<GatewayConfig>();
-        config->initRatelimitConfig(pt);
-
-        auto rateLimitConfig = config->rateLimitConfig();
-
-        BOOST_CHECK(rateLimitConfig.isConfigEffect());
-
-        BOOST_CHECK_EQUAL(rateLimitConfig.totalOutgoingBwLimit, 3 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimitConfig.connOutgoingBwLimit, 2 * 1024 * 1024 / 8);
-        BOOST_CHECK_EQUAL(rateLimitConfig.groupOutgoingBwLimit, 1 * 1024 * 1024 / 8);
-
-        BOOST_CHECK_EQUAL(rateLimitConfig.modulesWithNoBwLimit.size(), 3);
-
-        BOOST_CHECK_EQUAL(rateLimitConfig.ip2BwLimit.size(), 0);
-        BOOST_CHECK_EQUAL(rateLimitConfig.group2BwLimit.size(), 0);
     }
 }
 
@@ -254,6 +188,156 @@ BOOST_AUTO_TEST_CASE(test_initSMConfig)
     }
 }
 
+BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
+{
+    {
+        bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
+        BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
+        BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
+        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInP2pBasicMsgLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+    }
+
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        config->initFlowControlConfig(pt);
+        auto rateLimiterConfig = config->rateLimiterConfig();
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
+        BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
+        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInP2pBasicMsgLimit());
+        BOOST_CHECK(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+    }
+
+    {
+        std::string configIni("data/config/config_ipv4.ini");
+
+        boost::property_tree::ptree pt;
+        boost::property_tree::ini_parser::read_ini(configIni, pt);
+
+        auto config = std::make_shared<GatewayConfig>();
+        config->initFlowControlConfig(pt);
+
+        auto rateLimiterConfig = config->rateLimiterConfig();
+        auto timeWindowSec = rateLimiterConfig.timeWindowSec;
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 3);
+        BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 13);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 12345);
+
+        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableInRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableInP2pBasicMsgLimit());
+        BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_CHECK(rateLimiterConfig.allowExceedMaxPermitSize);
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, config->doubleMBToBit(10));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(5));
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 6);
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::TxsSync) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::AMOP) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5001) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5002) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5003) ==
+                    rateLimiterConfig.modulesWithoutLimit.end());
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(
+            rateLimiterConfig.ip2BwLimit.find("192.108.0.1")->second, config->doubleMBToBit(1));
+        BOOST_CHECK_EQUAL(
+            rateLimiterConfig.ip2BwLimit.find("192.108.0.2")->second, config->doubleMBToBit(2));
+        BOOST_CHECK_EQUAL(
+            rateLimiterConfig.ip2BwLimit.find("192.108.0.3")->second, config->doubleMBToBit(3));
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.group2BwLimit.size(), 3);
+        BOOST_CHECK_EQUAL(
+            rateLimiterConfig.group2BwLimit.find("group0")->second, config->doubleMBToBit(2));
+        BOOST_CHECK_EQUAL(
+            rateLimiterConfig.group2BwLimit.find("group1")->second, config->doubleMBToBit(2));
+        BOOST_CHECK_EQUAL(
+            rateLimiterConfig.group2BwLimit.find("group2")->second, config->doubleMBToBit(2));
+
+        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(5));
+        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(7));
+        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(8));
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.p2pBasicMsgTypes.size(), 5);  // 1,2,3,6,9
+        BOOST_CHECK(rateLimiterConfig.p2pBasicMsgTypes.contains(1));
+        BOOST_CHECK(!rateLimiterConfig.p2pBasicMsgTypes.contains(4));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.p2pBasicMsgQPS, 123);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.p2pModuleMsgQPS, 555);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPSSize, 3);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS.size(), uint16_t(-1));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[1], 123);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[5], 456);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPS[7], 789);
+    }
+
+    {
+        std::string configIni("data/config/config_ipv6.ini");
+
+        boost::property_tree::ptree pt;
+        boost::property_tree::ini_parser::read_ini(configIni, pt);
+
+        auto config = std::make_shared<GatewayConfig>();
+        config->initFlowControlConfig(pt);
+
+        auto rateLimiterConfig = config->rateLimiterConfig();
+
+        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
+
+        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 20);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 60000);
+
+        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, config->doubleMBToBit(3));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
+        BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(1));
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 4);
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
+                    rateLimiterConfig.modulesWithoutLimit.end());
+        BOOST_CHECK(
+            rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::ConsTxsSync) !=
+            rateLimiterConfig.modulesWithoutLimit.end());
+
+        BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 0);
+        BOOST_CHECK_EQUAL(rateLimiterConfig.group2BwLimit.size(), 0);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(test_doubleMBToBit)
 {
     auto config = std::make_shared<GatewayConfig>();
@@ -266,6 +350,24 @@ BOOST_AUTO_TEST_CASE(test_doubleMBToBit)
     BOOST_CHECK_EQUAL(config->doubleMBToBit(25.5), 255 * 1024 * 1024 / 8 / 10);
 
     BOOST_CHECK_EQUAL(config->doubleMBToBit(100), 100 * 1024 * 1024 / 8);
+}
+
+BOOST_AUTO_TEST_CASE(test_RedisConfig)
+{
+    auto config = std::make_shared<GatewayConfig>();
+    std::string configIni("data/config/config_ipv6.ini");
+
+    boost::property_tree::ptree pt;
+    boost::property_tree::ini_parser::read_ini(configIni, pt);
+
+    config->initRedisConfig(pt);
+
+    BOOST_CHECK_EQUAL(config->redisConfig().host, "127.127.127.127");
+    BOOST_CHECK_EQUAL(config->redisConfig().port, 12345);
+    BOOST_CHECK_EQUAL(config->redisConfig().connectionPoolSize, 111);
+    BOOST_CHECK_EQUAL(config->redisConfig().timeout, 54321);
+    BOOST_CHECK_EQUAL(config->redisConfig().password, "abc");
+    BOOST_CHECK_EQUAL(config->redisConfig().db, 12);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

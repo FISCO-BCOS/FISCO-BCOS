@@ -30,7 +30,7 @@ using namespace bcostars;
 
 bcostars::Error LedgerServiceServer::asyncGetBatchTxsByHashList(
     const vector<vector<tars::Char>>& _txsHashList, tars::Bool _withProof,
-    vector<bcostars::Transaction>&, map<std::string, vector<bcostars::MerkleProofItem>>&,
+    vector<bcostars::Transaction>&, map<std::string, vector<std::string>>&,
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
@@ -59,19 +59,16 @@ bcostars::Error LedgerServiceServer::asyncGetBatchTxsByHashList(
                 }
             }
             // to tars proof
-            std::map<std::string, std::vector<bcostars::MerkleProofItem>> tarsMerkleProofs;
+            std::map<std::string, std::vector<std::string>> tarsMerkleProofs;
             if (_proofList)
             {
                 for (auto const& it : *_proofList)
                 {
-                    std::vector<bcostars::MerkleProofItem> tarsMerkleItem;
+                    std::vector<std::string> tarsMerkleItem;
                     auto const& proofs = it.second;
                     for (auto const& proof : *proofs)
                     {
-                        MerkleProofItem tarsProof;
-                        tarsProof.left = proof.first;
-                        tarsProof.right = proof.second;
-                        tarsMerkleItem.emplace_back(tarsProof);
+                        tarsMerkleItem.emplace_back(proof.hex());
                     }
                     tarsMerkleProofs[it.first] = tarsMerkleItem;
                 }
@@ -150,8 +147,14 @@ bcostars::Error LedgerServiceServer::asyncGetNodeListByType(
     current->setResponse(false);
     m_ledger->asyncGetNodeListByType(
         _type, [current](bcos::Error::Ptr _error, bcos::consensus::ConsensusNodeListPtr _nodeList) {
+            if (_nodeList)
+            {
+                async_response_asyncGetNodeListByType(
+                    current, toTarsError(_error), toTarsConsensusNodeList(*_nodeList));
+                return;
+            }
             async_response_asyncGetNodeListByType(
-                current, toTarsError(_error), toTarsConsensusNodeList(*_nodeList));
+                current, toTarsError(_error), std::vector<bcostars::ConsensusNode>());
         });
     return bcostars::Error();
 }
@@ -182,7 +185,7 @@ bcostars::Error LedgerServiceServer::asyncGetTotalTransactionCount(
 
 bcostars::Error LedgerServiceServer::asyncGetTransactionReceiptByHash(
     const vector<tars::Char>& _txHash, tars::Bool _withProof, bcostars::TransactionReceipt&,
-    vector<bcostars::MerkleProofItem>&, tars::TarsCurrentPtr current)
+    vector<std::string>&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     bcos::crypto::HashType txHash;
@@ -206,15 +209,12 @@ bcostars::Error LedgerServiceServer::asyncGetTransactionReceiptByHash(
                                   ->inner();
             }
             // get tars merkle
-            vector<bcostars::MerkleProofItem> tarsMerkleItemList;
+            vector<std::string> tarsMerkleItemList;
             if (_merkleProofList)
             {
                 for (auto const& merkle : *_merkleProofList)
                 {
-                    MerkleProofItem item;
-                    item.left = merkle.first;
-                    item.right = merkle.second;
-                    tarsMerkleItemList.emplace_back(item);
+                    tarsMerkleItemList.emplace_back(merkle.hex());
                 }
             }
             async_response_asyncGetTransactionReceiptByHash(

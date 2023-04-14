@@ -68,7 +68,7 @@ private:
     bcos::crypto::HashType m_txHash;
     bcos::crypto::HashType m_blockHash;
     int64_t m_transactionIndex;
-    NonceType m_nonce = -1;
+    NonceType m_nonce;
     TransactionReceipt::Ptr m_receipt;
     std::string m_sender;
     std::string m_to;

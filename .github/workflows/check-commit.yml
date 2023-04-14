@@ -12,9 +12,6 @@ on:
       - "README.md"
   release:
     types: [published, created, edited]
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -25,9 +22,9 @@ jobs:
     env:
       PR_TITLE: ${{ github.event.pull_request.title }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
-          fetch-depth: 5
+          fetch-depth: 50
 
       - name: Check
         run: |

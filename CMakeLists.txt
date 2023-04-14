@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum OS X deployment version")
 
 if(NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
@@ -6,7 +7,8 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-include(cmake/Version.cmake)
+set(VERSION "3.3.0")
+set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
 
@@ -31,16 +33,24 @@ add_subdirectory(bcos-framework)
 add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-utilities)
 
+if(WITH_LIGHTNODE)
+    add_subdirectory(lightnode)
+endif()
+
 if(FULLNODE)
-    include(ProjectWABT)
-    include(ProjectBCOSWASM)
+    if(WITH_WASM)
+        include(ProjectWABT)
+        include(ProjectBCOSWASM)
+    endif()
     include(ProjectGroupSig)
+    include(ProjectSDF)
+    include(ProjectITTAPI)
 
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)
-    add_subdirectory(bcos-tool)
     add_subdirectory(bcos-table)
+    add_subdirectory(bcos-tool)
     add_subdirectory(bcos-scheduler)
     add_subdirectory(bcos-executor)
     add_subdirectory(bcos-storage)
@@ -57,6 +67,9 @@ if(FULLNODE)
     add_subdirectory(libinitializer)
     add_subdirectory(fisco-bcos-air)
     add_subdirectory(concepts)
+    add_subdirectory(libtask)
+
+    add_subdirectory(transaction-executor)
 
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
@@ -65,6 +78,7 @@ if(FULLNODE)
     if(TESTS)
         enable_testing()
         add_subdirectory(tests)
+        add_subdirectory(benchmark)
     endif()
 endif()
 
@@ -72,12 +86,8 @@ if(WITH_CPPSDK)
     add_subdirectory(bcos-sdk)
 endif()
 
-if(WITH_LIGHTNODE)
-    add_subdirectory(lightnode)
-endif()
-
-if(WITH_BENCHMARK)
-    add_subdirectory(benchmark)
+if(TOOLS)
+  add_subdirectory(tools)
 endif()
 
 # for code coverage

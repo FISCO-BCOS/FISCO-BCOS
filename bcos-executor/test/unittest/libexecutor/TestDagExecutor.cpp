@@ -18,19 +18,23 @@
  * @author: catli
  * @date: 2021-10-27
  */
-#ifndef __aarch64__
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
+#include "bcos-tars-protocol/tars/Block.h"
+
+// if wasm ut crash on aarch64 linux check https://github.com/bytecodealliance/wasmtime/issues/4972
+// #if !defined(__aarch64__) && !defined(__linux__)
+
 #include "../liquid/hello_world.h"
 #include "../liquid/transfer.h"
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-// #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StateStorageFactory.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -40,8 +44,8 @@
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
-#include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
-#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
+#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <unistd.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
@@ -190,12 +194,13 @@ struct DagExecutorFixture
 };
 BOOST_FIXTURE_TEST_SUITE(TestDagExecutor, DagExecutorFixture)
 
+#ifdef WITH_WASM
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-
-        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
@@ -210,7 +215,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     string transferAddress = "usr/alice/transfer";
 
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", transferAbi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", transferAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -231,8 +236,13 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -337,7 +347,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
             codec->encodeWithSig("transfer(string,string,uint32)", from, to, amount);
         input.insert(input.end(), encodedParams.begin(), encodedParams.end());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, 101 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -424,8 +434,9 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, true, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
@@ -444,7 +455,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     string helloWorldAddress = "usr/alice/hello_world";
 
     auto tx =
-        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -465,8 +476,14 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -570,7 +587,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
         auto encodedParams = codec->encodeWithSig("set(string)", name);
         input.insert(input.end(), encodedParams.begin(), encodedParams.end());
 
-        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, 101 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -642,13 +659,15 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
             BOOST_CHECK_EQUAL(name, "alice");
         });
 }
+#endif
 
 BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, false, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
@@ -694,7 +713,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     bytes input;
     boost::algorithm::unhex(bin, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", abi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", abi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -723,8 +742,15 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::cout << "Block hash is: " << blockHeader->hash() << std::endl;
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -789,7 +815,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
         bcos::u256 value(10);
 
         auto input = codec->encodeWithSig("transfer(string,string,uint256)", from, to, value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, 101 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, address, input, std::to_string(101 + i), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -887,9 +913,9 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, hashImpl, false, false, false);
+        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
@@ -929,7 +955,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     bytes input;
     boost::algorithm::unhex(bin, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", abi);
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", abi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -958,8 +984,14 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
+    blockHeader->setParentInfo(parentInfos);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -1117,4 +1149,4 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
-#endif
+// #endif

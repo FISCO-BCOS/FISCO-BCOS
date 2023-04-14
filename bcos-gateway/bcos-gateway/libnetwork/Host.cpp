@@ -116,6 +116,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             /// return early when the certificate is invalid
             if (!preverified)
             {
+                HOST_LOG(DEBUG) << LOG_DESC("ssl handshake certificate verify failed")
+                                << LOG_KV("preverified", preverified);
                 return false;
             }
             /// get the object points to certificate
@@ -126,7 +128,9 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 return preverified;
             }
 
-            if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut.get()))
+            // For compatibility, p2p communication between nodes still uses the old public key
+            // analysis method
+            if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
                 return preverified;
             }
@@ -150,9 +154,32 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             }
 
             BASIC_CONSTRAINTS_free(basic);
-            // if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut.get())) {
-            //   return preverified;
-            // }
+
+            // The new public key analysis method is used for black and white lists
+            std::string nodeIDOutWithoutExtInfo;
+            if (!hostPtr->sslContextPubHandlerWithoutExtInfo()(cert, nodeIDOutWithoutExtInfo))
+            {
+                return preverified;
+            }
+            nodeIDOutWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
+
+            // If the node ID exists in the black and white lists at the same time, the black list
+            // takes precedence
+            if (nullptr != hostPtr->peerBlacklist() &&
+                true == hostPtr->peerBlacklist()->has(nodeIDOutWithoutExtInfo))
+            {
+                HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
+                               << LOG_KV("nodeID", NodeID(nodeIDOutWithoutExtInfo).abridged());
+                return false;
+            }
+
+            if (nullptr != hostPtr->peerWhitelist() &&
+                false == hostPtr->peerWhitelist()->has(nodeIDOutWithoutExtInfo))
+            {
+                HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
+                               << LOG_KV("nodeID", NodeID(nodeIDOutWithoutExtInfo).abridged());
+                return false;
+            }
 
             /// append cert-name and issuer name after node ID
             /// get subject name
@@ -161,11 +188,14 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             const char* issuerName = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
             /// format: {nodeID}#{issuer-name}#{cert-name}
             nodeIDOut->append("#");
+            nodeIDOut->append(nodeIDOutWithoutExtInfo);
+            nodeIDOut->append("#");
             nodeIDOut->append(issuerName);
             nodeIDOut->append("#");
             nodeIDOut->append(certName);
             OPENSSL_free((void*)certName);
             OPENSSL_free((void*)issuerName);
+
             return preverified;
         }
         catch (std::exception& e)
@@ -201,6 +231,14 @@ P2PInfo Host::p2pInfo()
                 m_p2pInfo.p2pID = boost::to_upper_copy(nodeIDOut);
                 HOST_LOG(INFO) << LOG_DESC("Get node information from cert")
                                << LOG_KV("p2pid", m_p2pInfo.p2pID);
+            }
+
+            std::string nodeIDOutWithoutExtInfo;
+            if (m_sslContextPubHandlerWithoutExtInfo(cert, nodeIDOutWithoutExtInfo))
+            {
+                m_p2pInfo.p2pIDWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
+                HOST_LOG(INFO) << LOG_DESC("Get node information without ext info from cert")
+                               << LOG_KV("p2pid without ext info", m_p2pInfo.p2pIDWithoutExtInfo);
             }
 
             /// fill in the node informations
@@ -262,11 +300,15 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
     }
     if (node_info_vec.size() > 1)
     {
-        info.agencyName = obtainCommonNameFromSubject(node_info_vec[1]);
+        info.p2pIDWithoutExtInfo = node_info_vec[1];
     }
     if (node_info_vec.size() > 2)
     {
-        info.nodeName = obtainCommonNameFromSubject(node_info_vec[2]);
+        info.agencyName = obtainCommonNameFromSubject(node_info_vec[2]);
+    }
+    if (node_info_vec.size() > 3)
+    {
+        info.nodeName = obtainCommonNameFromSubject(node_info_vec[3]);
     }
 
     HOST_LOG(INFO) << "obtainP2pInfo " << LOG_KV("node_info", node_info)
@@ -333,8 +375,8 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
 {
     auto weakHost = std::weak_ptr<Host>(shared_from_this());
-    std::shared_ptr<SessionFace> ps =
-        m_sessionFactory->create_session(weakHost, socket, m_messageFactory);
+    std::shared_ptr<SessionFace> ps = m_sessionFactory->create_session(
+        weakHost, socket, m_messageFactory, m_sessionCallbackManager);
 
     auto connectionHandler = m_connectionHandler;
     m_threadPool->enqueue([ps, connectionHandler, p2pInfo]() {
@@ -386,7 +428,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
         Guard l(x_pendingConns);
-        if (m_pendingConns.count(_nodeIPEndpoint))
+        auto it = m_pendingConns.find(_nodeIPEndpoint);
+        if (it != m_pendingConns.end())
         {
             BCOS_LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list")
                             << LOG_KV("endpoint", _nodeIPEndpoint);

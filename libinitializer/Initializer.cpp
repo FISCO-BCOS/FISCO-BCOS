@@ -26,6 +26,7 @@
 
 #include "Initializer.h"
 #include "AuthInitializer.h"
+#include "BfsInitializer.h"
 #include "ExecutorInitializer.h"
 #include "LedgerInitializer.h"
 #include "SchedulerInitializer.h"
@@ -33,6 +34,9 @@
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-scheduler/src/TarsExecutorManager.h"
+#include "bcos-tool/BfsFileFactory.h"
+#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -46,12 +50,14 @@
 #include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
-#include <bcos-scheduler/src/TarsRemoteExecutorManager.h>
 #include <bcos-sync/BlockSync.h>
+#include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-tool/NodeTimeMaintenance.h>
 #include <util/tc_clientsocket.h>
 #include <vector>
 
@@ -93,8 +99,8 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     std::string const& _privateKeyPath, bool _airVersion)
 {
     m_nodeConfig = std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    m_nodeConfig->loadConfig(_configFilePath);
     m_nodeConfig->loadGenesisConfig(_genesisFile);
+    m_nodeConfig->loadConfig(_configFilePath);
 
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();
@@ -142,21 +148,42 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
+    bcos::storage::TransactionalStorageInterface::Ptr airExecutorStorage = nullptr;
+
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
-        storage = StorageInitializer::build(
-            storagePath, m_protocolInitializer->dataEncryption(), m_nodeConfig->keyPageSize());
+        storage = StorageInitializer::build(storagePath, m_protocolInitializer->dataEncryption(),
+            m_nodeConfig->keyPageSize(), m_nodeConfig->maxWriteBufferNumber(),
+            m_nodeConfig->enableStatistics(), m_nodeConfig->maxBackgroundJobs());
         schedulerStorage = storage;
         consensusStorage = StorageInitializer::build(
             consensusStoragePath, m_protocolInitializer->dataEncryption());
+        airExecutorStorage = storage;
     }
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
 #ifdef WITH_TIKV
-        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
-        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
-        consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath);
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
+        {  // TODO: in max node, scheduler will use storage to commit but the ledger only use
+           // storage to read, the storage which ledger use should not trigger the switch when the
+           // scheduler is committing block
+            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+            consensusStorage = storage;
+            airExecutorStorage = storage;
+        }
+        else
+        {  // in AIR/PRO node, scheduler and executor in one process so need different storage
+            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+            consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+            airExecutorStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        }
 #endif
     }
     else
@@ -170,46 +197,63 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
-    bool preStoreTxs = true;
     // Note: since tikv-storage store txs with transaction, batch writing is more efficient than
-    // writing one by one, disable preStoreTxs in max-node mode
+    // writing one by one
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
         executionMessageFactory =
             std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
-        preStoreTxs = false;
     }
     else
     {
         executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
     }
-    auto executorManager = std::make_shared<bcos::scheduler::TarsRemoteExecutorManager>(
-        m_nodeConfig->executorServiceName());
+    auto executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
+        m_nodeConfig->executorServiceName(), m_nodeConfig);
 
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
     // init the txpool
-    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
-        m_frontServiceInitializer->front(), ledger, preStoreTxs);
+    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
+        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute());
+        m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize());
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module switch
                                // to a leader during startup
     m_scheduler =
         std::make_shared<bcos::scheduler::SchedulerManager>(schedulerSeq, factory, executorManager);
 
+    if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
+    {
+#ifdef WITH_TIKV
+        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr = m_scheduler;
+        auto switchHandler = [scheduler = schedulerWeakPtr]() {
+            if (scheduler.lock())
+            {
+                scheduler.lock()->triggerSwitch();
+            }
+        };
+        if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
+        {
+            dynamic_pointer_cast<bcos::storage::TiKVStorage>(airExecutorStorage)
+                ->setSwitchHandler(switchHandler);
+        }
+        dynamic_pointer_cast<bcos::storage::TiKVStorage>(schedulerStorage)
+            ->setSwitchHandler(switchHandler);
+#endif
+    }
 
-    std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
+    bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
     {
-        cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
-        cache->setMaxCapacity(m_nodeConfig->cacheSize());
+        cacheFactory = std::make_shared<bcos::storage::CacheStorageFactory>(
+            storage, m_nodeConfig->cacheSize());
         INITIALIZER_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
                               << m_nodeConfig->cacheSize();
     }
@@ -234,22 +278,29 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         // Note: ensure that there has at least one executor before pbft/sync execute block
 
+        auto storageFactory =
+            std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
         std::string executorName = "executor-local";
         auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
-            m_ledger, m_txpoolInitializer->txpool(), cache, storage, executionMessageFactory,
+            m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
+            executionMessageFactory, storageFactory,
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
-            m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), executorName);
-        auto parallelExecutor =
+            m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName);
+        auto switchExecutorManager =
             std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
-        executorManager->addExecutor(executorName, parallelExecutor);
+        executorManager->addExecutor(executorName, switchExecutorManager);
+        m_switchExecutorManager = switchExecutorManager;
     }
+
+    // build node time synchronization tool
+    auto nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
 
     // build and init the pbft related modules
     if (_nodeArchType == protocol::NodeArchitectureType::AIR)
     {
         m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front());
+            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance);
         auto nodeID = m_protocolInitializer->keyPair()->publicKey();
         auto frontService = m_frontServiceInitializer->front();
         auto groupID = m_nodeConfig->groupId();
@@ -275,7 +326,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front());
+            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance);
     }
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
@@ -304,6 +355,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
 
+    if (m_nodeConfig->enableArchive())
+    {
+        INITIALIZER_LOG(INFO) << LOG_BADGE("create archive service");
+        m_archiveService = std::make_shared<bcos::archive::ArchiveService>(
+            storage, ledger, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
+    }
 #ifdef WITH_LIGHTNODE
     bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
 
@@ -311,17 +368,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::visit(
         [&](auto& hasher) {
             using Hasher = std::remove_cvref_t<decltype(hasher)>;
-            auto ledger = std::make_shared<bcos::initializer::AnyLedger>(
-                bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>(
-                    std::move(storageWrapper)));
+            auto ledger =
+                std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(
+                    std::move(storageWrapper), m_protocolInitializer->blockFactory(), storage);
+            ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
 
             auto txpool = m_txpoolInitializer->txpool();
             auto transactionPool =
                 std::make_shared<bcos::transaction_pool::TransactionPoolImpl<decltype(txpool)>>(
-                    txpool);
-            auto scheduler =
-                std::make_shared<bcos::scheduler::SchedulerWrapperImpl<decltype(m_scheduler)>>(
-                    m_scheduler, m_protocolInitializer->cryptoSuite());
+                    m_protocolInitializer->cryptoSuite(), txpool);
+            auto scheduler = std::make_shared<bcos::scheduler::SchedulerWrapperImpl<
+                std::shared_ptr<bcos::scheduler::SchedulerInterface>>>(
+                m_scheduler, m_protocolInitializer->cryptoSuite());
 
             m_lightNodeInitializer = std::make_shared<LightNodeInitializer>();
             m_lightNodeInitializer->initLedgerServer(
@@ -343,7 +401,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     // notify blockNumber
     schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
-            INITIALIZER_LOG(INFO) << "Notify blocknumber: " << number;
+            INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
             // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
@@ -361,23 +419,90 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
 
 void Initializer::initSysContract()
 {
-    if (!m_nodeConfig->isWasm() && m_nodeConfig->isAuthCheck())
+    // check is it deploy first time
+    std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> getNumberPromise;
+    m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {
+        getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
+    });
+    auto getNumberTuple = getNumberPromise.get_future().get();
+    if (std::get<0>(getNumberTuple) != nullptr ||
+        std::get<1>(getNumberTuple) > SYS_CONTRACT_DEPLOY_NUMBER)
     {
-        // check is it deploy first time
-        std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> getNumberPromise;
-        m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {
-            getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
-        });
-        auto getNumberTuple = getNumberPromise.get_future().get();
-        if (std::get<0>(getNumberTuple) != nullptr ||
-            std::get<1>(getNumberTuple) > SYS_CONTRACT_DEPLOY_NUMBER)
-        {
-            return;
-        }
+        return;
+    }
+    auto block = m_protocolInitializer->blockFactory()->createBlock();
+    block->blockHeader()->setNumber(SYS_CONTRACT_DEPLOY_NUMBER);
+    block->blockHeader()->setVersion(m_nodeConfig->compatibilityVersion());
+    block->blockHeader()->calculateHash(
+        *m_protocolInitializer->blockFactory()->cryptoSuite()->hashImpl());
 
+    if (m_nodeConfig->compatibilityVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    {
+        BfsInitializer::init(
+            SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, block);
+    }
+
+    if ((!m_nodeConfig->isWasm() && m_nodeConfig->isAuthCheck()) ||
+        versionCompareTo(m_nodeConfig->compatibilityVersion(), BlockVersion::V3_3_VERSION) >= 0)
+    {
         // add auth deploy func here
         AuthInitializer::init(
-            SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, m_scheduler);
+            SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, block);
+    }
+
+
+    if (block->transactionsSize() > 0) [[likely]]
+    {
+        std::promise<std::tuple<bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr>> executedHeader;
+        m_scheduler->executeBlock(block, false,
+            [&](bcos::Error::Ptr&& _error, bcos::protocol::BlockHeader::Ptr&& _header, bool) {
+                if (_error)
+                {
+                    executedHeader.set_value({std::move(_error), nullptr});
+                    return;
+                }
+                INITIALIZER_LOG(INFO)
+                    << LOG_BADGE("SysInitializer") << LOG_DESC("scheduler execute block success!")
+                    << LOG_KV("blockHash", block->blockHeader()->hash().hex());
+                executedHeader.set_value({nullptr, std::move(_header)});
+            });
+        auto [executeError, header] = executedHeader.get_future().get();
+        if (executeError || header == nullptr) [[unlikely]]
+        {
+            std::stringstream errorMessage("SysInitializer: scheduler executeBlock error");
+            int64_t errorCode = -1;
+            if (executeError) [[likely]]
+            {
+                errorMessage << executeError->errorMessage();
+                errorCode = executeError->errorCode();
+            }
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("SysInitializer") << LOG_DESC("scheduler execute block failed")
+                << LOG_KV("msg", errorMessage.str());
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(errorCode, errorMessage.str()));
+        }
+
+        std::promise<std::tuple<Error::Ptr, bcos::ledger::LedgerConfig::Ptr>> committedConfig;
+        m_scheduler->commitBlock(
+            header, [&](Error::Ptr&& _error, bcos::ledger::LedgerConfig::Ptr&& _config) {
+                if (_error)
+                {
+                    INITIALIZER_LOG(ERROR) << LOG_BADGE("SysInitializer")
+                                           << LOG_KV("errorMsg", _error->errorMessage());
+                    committedConfig.set_value(std::make_tuple(std::move(_error), nullptr));
+                    return;
+                }
+                committedConfig.set_value(std::make_tuple(nullptr, std::move(_config)));
+            });
+        auto [error, newConfig] = committedConfig.get_future().get();
+        if (error != nullptr || newConfig->blockNumber() != SYS_CONTRACT_DEPLOY_NUMBER)
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("SysInitializer") << LOG_DESC("Error in commitBlock")
+                << (error ? "errorMsg" + error->errorMessage() : "")
+                << LOG_KV("configNumber", newConfig->blockNumber());
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "SysInitializer commitBlock error"));
+        }
     }
 }
 
@@ -395,6 +520,10 @@ void Initializer::start()
     if (m_frontServiceInitializer)
     {
         m_frontServiceInitializer->start();
+    }
+    if (m_archiveService)
+    {
+        m_archiveService->start();
     }
 }
 
@@ -417,6 +546,10 @@ void Initializer::stop()
         if (m_scheduler)
         {
             m_scheduler->stop();
+        }
+        if (m_archiveService)
+        {
+            m_archiveService->stop();
         }
     }
     catch (std::exception const& e)

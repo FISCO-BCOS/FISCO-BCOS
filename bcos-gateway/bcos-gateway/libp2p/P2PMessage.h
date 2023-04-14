@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
@@ -29,10 +30,12 @@
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
     do                                                                                       \
     {                                                                                        \
-        if ((offset) > (length))                                                             \
+        if (std::cmp_greater((offset), (length)))                                            \
         {                                                                                    \
             throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) + \
-                                    " ,length: " + std::to_string(length));                  \
+                                    " ,length: " + std::to_string(length) +                  \
+                                    " ,file: " + __FILE__ + " ,func: " + __func__ +          \
+                                    " ,line: " + std::to_string(__LINE__));                  \
         }                                                                                    \
     } while (0);
 
@@ -49,17 +52,20 @@ namespace gateway
 ///       src nodeID count  :1 bytes
 ///       dst nodeIDs       : bytes
 ///       moduleID          : 2 bytes
-class P2PMessageOptions
+class P2PMessageOptions : public bcos::ObjectCounter<P2PMessageOptions>
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageOptions>;
     /// groupID length(2) + nodeID length(2) + dst nodeID count(1) + moduleID(2)
     const static size_t OPTIONS_MIN_LENGTH = 7;
 
-public:
     P2PMessageOptions() { m_srcNodeID = std::make_shared<bytes>(); }
+    P2PMessageOptions(const P2PMessageOptions&) = delete;
+    P2PMessageOptions(P2PMessageOptions&&) = delete;
+    P2PMessageOptions& operator=(const P2PMessageOptions&) = delete;
+    P2PMessageOptions& operator=(P2PMessageOptions&&) = delete;
 
-    virtual ~P2PMessageOptions() {}
+    virtual ~P2PMessageOptions() = default;
 
     /// The maximum gateway transport protocol supported groupID length  65535
     const static size_t MAX_GROUPID_LENGTH = 65535;
@@ -69,7 +75,7 @@ public:
     const static size_t MAX_DST_NODEID_COUNT = 255;
 
     bool encode(bytes& _buffer);
-    ssize_t decode(bytesConstRef _buffer);
+    int32_t decode(const bytesConstRef& _buffer);
 
 public:
     uint16_t moduleID() const { return m_moduleID; }
@@ -91,7 +97,7 @@ protected:
     std::string m_groupID;
     std::shared_ptr<bytes> m_srcNodeID;
     std::vector<std::shared_ptr<bytes>> m_dstNodeIDs;
-    uint16_t m_moduleID;
+    uint16_t m_moduleID = 0;
 };
 
 /// Message format definition of gateway P2P network
@@ -111,7 +117,7 @@ protected:
 ///       dst nodeIDs       : bytes
 ///       moduleID          : 2 bytes
 ///   payload           :X bytes
-class P2PMessage : public Message
+class P2PMessage : public Message, public bcos::ObjectCounter<P2PMessage>
 {
 public:
     using Ptr = std::shared_ptr<P2PMessage>;
@@ -125,11 +131,14 @@ public:
     {
         m_payload = std::make_shared<bytes>();
         m_options = std::make_shared<P2PMessageOptions>();
+        m_srcP2PNodeID.reserve(512);
+        m_dstP2PNodeID.reserve(512);
     }
 
-    ~P2PMessage() override {}
+    // ~P2PMessage() override = default;
 
 public:
+    uint32_t lengthDirect() const override { return m_length; }
     uint32_t length() const override
     {
         // The length value has been set
@@ -148,7 +157,7 @@ public:
         }
         return length;
     }
-    virtual void setLength(uint32_t length) { m_length = length; }
+    // virtual void setLength(uint32_t length) { m_length = length; }
 
     uint16_t version() const override { return m_version; }
     virtual void setVersion(uint16_t version) { m_version = version; }
@@ -160,7 +169,7 @@ public:
     virtual void setSeq(uint32_t seq) { m_seq = seq; }
 
     uint16_t ext() const override { return m_ext; }
-    virtual void setExt(uint16_t _ext) { m_ext = _ext; }
+    virtual void setExt(uint16_t _ext) { m_ext |= _ext; }
 
     P2PMessageOptions::Ptr options() const { return m_options; }
     void setOptions(P2PMessageOptions::Ptr _options) { m_options = _options; }
@@ -170,11 +179,16 @@ public:
 
     void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
     bool encode(bytes& _buffer) override;
-    ssize_t decode(bytesConstRef _buffer) override;
+    bool encode(EncodedMessage& _buffer) override;
+    int32_t decode(const bytesConstRef& _buffer) override;
     bool isRespPacket() const override
     {
         return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
     }
+
+    // compress payload if payload need to be compressed
+    bool tryToCompressPayload(bytes& compressData);
+
     bool hasOptions() const
     {
         return (m_packetType == GatewayMessageType::PeerToPeerMessage) ||
@@ -190,15 +204,17 @@ public:
         m_dstP2PNodeID = _dstP2PNodeID;
     }
 
-
     std::string const& srcP2PNodeID() const override { return m_srcP2PNodeID; }
     std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }
 
-    virtual void setExtAttributes(MessageExtAttributes::Ptr _extAttr) { m_extAttr = _extAttr; }
+    virtual void setExtAttributes(MessageExtAttributes::Ptr _extAttr)
+    {
+        m_extAttr = std::move(_extAttr);
+    }
     MessageExtAttributes::Ptr extAttributes() override { return m_extAttr; }
 
 protected:
-    virtual ssize_t decodeHeader(bytesConstRef _buffer);
+    virtual int32_t decodeHeader(const bytesConstRef& _buffer);
     virtual bool encodeHeader(bytes& _buffer);
 
 protected:
@@ -220,21 +236,21 @@ protected:
     MessageExtAttributes::Ptr m_extAttr = nullptr;  ///< message additional attributes
 };
 
-class P2PMessageFactory : public MessageFactory
+class P2PMessageFactory : public MessageFactory, public bcos::ObjectCounter<P2PMessageFactory>
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageFactory>;
-    virtual ~P2PMessageFactory() {}
+    // virtual ~P2PMessageFactory() = default;
 
 public:
-    virtual Message::Ptr buildMessage()
+    Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessage>();
         return message;
     }
 };
 
-inline std::ostream& operator<<(std::ostream& _out, const P2PMessage _p2pMessage)
+inline std::ostream& operator<<(std::ostream& _out, const P2PMessage& _p2pMessage)
 {
     _out << "P2PMessage {"
          << " length: " << _p2pMessage.length() << " version: " << _p2pMessage.version()
@@ -243,7 +259,7 @@ inline std::ostream& operator<<(std::ostream& _out, const P2PMessage _p2pMessage
     return _out;
 }
 
-inline std::ostream& operator<<(std::ostream& _out, P2PMessage::Ptr _p2pMessage)
+inline std::ostream& operator<<(std::ostream& _out, P2PMessage::Ptr& _p2pMessage)
 {
     _out << (*_p2pMessage.get());
     return _out;

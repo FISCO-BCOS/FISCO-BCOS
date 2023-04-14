@@ -13,13 +13,17 @@ namespace bcos::executor
 class SwitchExecutorManager : public executor::ParallelTransactionExecutorInterface
 {
 public:
+    using Ptr = std::shared_ptr<SwitchExecutorManager>;
+
     const int64_t INIT_SCHEDULER_TERM_ID = 0;
     const int64_t STOPPED_TERM_ID = -1;
 
     SwitchExecutorManager(bcos::executor::TransactionExecutorFactory::Ptr factory)
       : m_pool("exec", std::thread::hardware_concurrency()), m_factory(factory)
     {
-        refreshExecutor(INIT_SCHEDULER_TERM_ID);
+        factory->registerNeedSwitchEvent([this]() { selfAsyncRefreshExecutor(); });
+
+        // refreshExecutor(INIT_SCHEDULER_TERM_ID + 1);
     }
 
     ~SwitchExecutorManager() noexcept override {}
@@ -36,13 +40,13 @@ public:
                 {
                     oldExecutor = m_executor;
 
-                    // TODO: check cycle reference in executor to avoid memory leak
+                    m_executor = m_factory->build();  // may throw exception
+
+                    m_schedulerTermId = schedulerTermId;
+
                     EXECUTOR_LOG(DEBUG) << LOG_BADGE("Switch")
                                         << "ExecutorSwitch: Build new executor instance with "
                                         << LOG_KV("schedulerTermId", schedulerTermId);
-                    m_executor = m_factory->build();
-
-                    m_schedulerTermId = schedulerTermId;
                 }
             }
             if (oldExecutor)
@@ -52,17 +56,49 @@ public:
         }
     }
 
-    bool hasStopped()
+    void selfAsyncRefreshExecutor()
     {
-        ReadGuard l(m_mutex);
-        return m_schedulerTermId == STOPPED_TERM_ID;
+        auto toTermId = m_schedulerTermId + 1;
+        auto toSeq = m_seq + 1;
+        m_pool.enqueue([toTermId, toSeq, this]() {
+            if (toTermId == m_schedulerTermId)
+            {
+                // already switch
+                return;
+            }
+
+            try
+            {
+                refreshExecutor(toTermId);
+            }
+            catch (Exception const& _e)
+            {
+                EXECUTOR_LOG(ERROR)
+                    << LOG_DESC("selfAsyncRefreshExecutor exception. Re-push to task pool")
+                    << LOG_KV("toTermId", toTermId) << LOG_KV("currentTermId", m_schedulerTermId)
+                    << diagnostic_information(_e);
+
+                selfAsyncRefreshExecutor();
+                return;
+            }
+
+
+            if (toTermId == m_schedulerTermId)
+            {
+                // if switch success, set seq to trigger scheduler switch
+                m_seq = toSeq;
+                EXECUTOR_LOG(DEBUG)
+                    << LOG_BADGE("Switch") << "ExecutorSwitch: selfAsyncRefreshExecutor success"
+                    << LOG_KV("schedulerTermId", m_schedulerTermId) << LOG_KV("seq", m_seq);
+            }
+        });
     }
 
-    bool hasNextBlockHeaderDone()
-    {
-        ReadGuard l(m_mutex);
-        return m_schedulerTermId != INIT_SCHEDULER_TERM_ID;
-    }
+    void triggerSwitch() { selfAsyncRefreshExecutor(); }
+
+    bool hasStopped() { return m_schedulerTermId == STOPPED_TERM_ID; }
+
+    bool hasNextBlockHeaderDone() { return m_schedulerTermId != INIT_SCHEDULER_TERM_ID; }
 
     void nextBlockHeader(int64_t schedulerTermId,
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
@@ -84,12 +120,25 @@ public:
             EXECUTOR_LOG(INFO)
                 << LOG_DESC("nextBlockHeader: not refreshExecutor for invalid schedulerTermId")
                 << LOG_KV("termId", schedulerTermId) << LOG_KV("currentTermId", m_schedulerTermId);
-            callback(BCOS_ERROR_UNIQUE_PTR(
-                bcos::executor::ExecuteError::STOPPED, "old executor has been stopped"));
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                "old executor has been stopped"));
             return;
         }
 
-        refreshExecutor(schedulerTermId);
+        try
+        {
+            refreshExecutor(schedulerTermId);
+        }
+        catch (Exception const& _e)
+        {
+            EXECUTOR_LOG(ERROR) << LOG_DESC("nextBlockHeader: not refreshExecutor for exception")
+                                << LOG_KV("toTermId", schedulerTermId)
+                                << LOG_KV("currentTermId", m_schedulerTermId)
+                                << diagnostic_information(_e);
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                bcos::executor::ExecuteError::INTERNAL_ERROR, "refreshExecutor exception"));
+            return;
+        }
 
         m_pool.enqueue([executor = m_executor, schedulerTermId,
                            blockHeader = std::move(blockHeader), callback = std::move(callback)]() {
@@ -205,15 +254,19 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([executor = m_executor, contractAddress = std::move(contractAddress),
+        auto queryTime = utcTime();
+        m_pool.enqueue([queryTime, executor = m_executor, contractAddress = std::move(contractAddress),
                            inputsVec, callback = std::move(callback)] {
+            auto waitInPoolCost = utcTime() - queryTime;
             // create a holder
             auto _holdExecutorCallback =
-                [executorHolder = executor, callback = std::move(callback)](
+                [queryTime, waitInPoolCost ,executorHolder = executor, callback = std::move(callback)](
                     bcos::Error::UniquePtr error,
                     std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
-                    EXECUTOR_LOG(TRACE) << "Release executor holder"
-                                        << LOG_KV("ptr count", executorHolder.use_count());
+                    EXECUTOR_LOG(TRACE) << "Release executor holder executeTransactions"
+                                        << LOG_KV("ptr count", executorHolder.use_count())
+                            << LOG_KV("waitInPoolCost", waitInPoolCost)
+                            << LOG_KV("costFromQuery", utcTime() - queryTime);
                     callback(std::move(error), std::move(outputs));
                 };
 
@@ -221,6 +274,74 @@ public:
             executor->executeTransactions(
                 contractAddress, *inputsVec, std::move(_holdExecutorCallback));
         });
+    }
+
+    void preExecuteTransactions(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(bcos::Error::UniquePtr)> callback) override
+    {
+        if (hasStopped())
+        {
+            std::string message = "preExecuteTransactions: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::STOPPED, message));
+            return;
+        }
+
+        if (schedulerTermId < m_schedulerTermId)
+        {
+            // Call from an outdated scheduler instance
+            // Just return without callback, because run callback may trigger a new switch, thus
+            // some message will be outdated and trigger switch again and again.
+            EXECUTOR_LOG(INFO)
+                << LOG_DESC(
+                       "preExecuteTransactions: not refreshExecutor for invalid schedulerTermId")
+                << LOG_KV("termId", schedulerTermId) << LOG_KV("currentTermId", m_schedulerTermId);
+            callback(BCOS_ERROR_UNIQUE_PTR(bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR,
+                "old executor has been stopped"));
+            return;
+        }
+
+        try
+        {
+            refreshExecutor(schedulerTermId);
+        }
+        catch (Exception const& _e)
+        {
+            EXECUTOR_LOG(ERROR) << LOG_DESC(
+                                       "preExecuteTransactions: not refreshExecutor for exception")
+                                << LOG_KV("toTermId", schedulerTermId)
+                                << LOG_KV("currentTermId", m_schedulerTermId)
+                                << diagnostic_information(_e);
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                bcos::executor::ExecuteError::INTERNAL_ERROR, "refreshExecutor exception"));
+            return;
+        }
+
+        auto inputsVec =
+            std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
+        for (auto i = 0u; i < inputs.size(); i++)
+        {
+            inputsVec->emplace_back(std::move(inputs[i]));
+        }
+        m_pool.enqueue(
+            [executor = m_executor, schedulerTermId, blockHeader = std::move(blockHeader),
+                contractAddress = std::move(contractAddress), inputsVec,
+                callback = std::move(callback)] {
+                // create a holder
+                auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                             std::move(callback)](
+                                                 bcos::Error::UniquePtr error) {
+                    EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                        << LOG_KV("ptr count", executorHolder.use_count());
+                    callback(std::move(error));
+                };
+
+                // execute the function
+                executor->preExecuteTransactions(schedulerTermId, blockHeader, contractAddress,
+                    *inputsVec, std::move(_holdExecutorCallback));
+            });
     }
 
     void dmcExecuteTransactions(std::string contractAddress,
@@ -567,20 +688,21 @@ public:
     void stop() override
     {
         EXECUTOR_LOG(INFO) << "Try to stop SwitchExecutorManager";
+        m_schedulerTermId = STOPPED_TERM_ID;
+
         auto executorUseCount = 0;
+        bcos::executor::TransactionExecutor::Ptr executor = getCurrentExecutor();
+        m_executor = nullptr;
+
+        if (executor)
         {
-            WriteGuard l(m_mutex);
-            if (m_executor)
-            {
-                m_executor->stop();
-            }
-            executorUseCount = m_executor.use_count();
+            executor->stop();
         }
+        executorUseCount = executor.use_count();
 
         // waiting for stopped
         while (executorUseCount > 1)
         {
-            auto executor = getCurrentExecutor();
             if (executor != nullptr)
             {
                 executorUseCount = executor.use_count();
@@ -590,26 +712,17 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         EXECUTOR_LOG(INFO) << "Executor has stopped.";
-
-        m_executor = nullptr;
-
-        m_schedulerTermId = STOPPED_TERM_ID;
     }
 
-    bcos::executor::TransactionExecutor::Ptr getCurrentExecutor()
-    {
-        ReadGuard l(m_mutex);
-        auto executor = m_executor;
-        return executor;
-    }
+    bcos::executor::TransactionExecutor::Ptr getCurrentExecutor() { return m_executor; }
 
     bcos::executor::TransactionExecutor::Ptr getAndNewExecutorIfNotExists()
     {
-        WriteGuard l(m_mutex);
         if (!m_executor)
         {
-            m_executor = m_factory->build();
+            refreshExecutor(INIT_SCHEDULER_TERM_ID + 1);
         }
+
         auto executor = m_executor;
         return executor;
     }
@@ -617,7 +730,7 @@ public:
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;
-    int64_t m_schedulerTermId = STOPPED_TERM_ID;
+    int64_t m_schedulerTermId = INIT_SCHEDULER_TERM_ID;
 
     mutable bcos::SharedMutex m_mutex;
 

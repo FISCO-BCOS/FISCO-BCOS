@@ -23,6 +23,7 @@
 
 #include "BlockImpl.h"
 #include <bcos-concepts/Serialize.h>
+#include <range/v3/view/transform.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -41,29 +42,25 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
 {
     bcos::ReadGuard l(x_blockHeader);
     return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        m_transactionFactory->cryptoSuite(),
         [inner = this->m_inner]() mutable { return &inner->blockHeader; });
 }
 
 bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
 {
-    bcos::ReadGuard l(x_blockHeader);
+    // bcos::ReadGuard l(x_blockHeader);
     return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
-        m_transactionFactory->cryptoSuite(),
         [inner = this->m_inner]() { return &inner->blockHeader; });
 }
 
 bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const
 {
     return std::make_shared<const bcostars::protocol::TransactionImpl>(
-        m_transactionFactory->cryptoSuite(),
         [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
 }
 
 bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
 {
     return std::make_shared<const bcostars::protocol::TransactionReceiptImpl>(
-        m_transactionFactory->cryptoSuite(),
         [inner = m_inner, _index]() { return &(inner->receipts[_index]); });
 }
 
@@ -94,49 +91,18 @@ void BlockImpl::appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt)
         std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(_receipt)->inner());
 }
 
-void BlockImpl::setNonceList(bcos::protocol::NonceList const& _nonceList)
+void BlockImpl::setNonceList(RANGES::any_view<std::string> nonces)
 {
     m_inner->nonceList.clear();
-    m_inner->nonceList.reserve(_nonceList.size());
-    for (auto const& it : _nonceList)
+    for (auto it : nonces)
     {
         m_inner->nonceList.emplace_back(boost::lexical_cast<std::string>(it));
     }
-
-    m_nonceList.clear();
 }
 
-void BlockImpl::setNonceList(bcos::protocol::NonceList&& _nonceList)
+RANGES::any_view<std::string> BlockImpl::nonceList() const
 {
-    m_inner->nonceList.clear();
-    m_inner->nonceList.reserve(_nonceList.size());
-    for (auto const& it : _nonceList)
-    {
-        m_inner->nonceList.emplace_back(boost::lexical_cast<std::string>(it));
-    }
-
-    m_nonceList.clear();
-}
-bcos::protocol::NonceList const& BlockImpl::nonceList() const
-{
-    if (m_nonceList.empty())
-    {
-        m_nonceList.reserve(m_inner->nonceList.size());
-
-        for (auto const& it : m_inner->nonceList)
-        {
-            if (it.empty())
-            {
-                m_nonceList.push_back(bcos::protocol::NonceType(0));
-            }
-            else
-            {
-                m_nonceList.push_back(boost::lexical_cast<bcos::u256>(it));
-            }
-        }
-    }
-
-    return m_nonceList;
+    return m_inner->nonceList;
 }
 
 bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const

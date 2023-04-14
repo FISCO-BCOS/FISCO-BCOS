@@ -17,21 +17,20 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
 project(bcos-gateway VERSION ${VERSION})
 
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS filesystem)
+find_package(redis++ CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 
 find_package(tarscpp REQUIRED)
 
 add_library(${GATEWAY_TARGET} ${SRCS})
-target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_static Boost::filesystem bcos-boostssl ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
-# target_compile_options(${GATEWAY_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_static redis++::redis++_static Boost::filesystem bcos-boostssl ${FRONT_TARGET} ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
 
 if (APPLE)
 # target_compile_options(${GATEWAY_TARGET} PRIVATE -faligned-allocation)

@@ -1,3 +1,243 @@
+### 3.3.0
+
+(2023-04-14)
+
+**新增**
+
+* [块内分片](https://fisco-bcos-doc.readthedocs.io/zh_CN/release-3.3.0/docs/design/parallel/sharding.html)：将合约分组，不同组的交易调度到不同执行器执行，片内DAG调度，片间DMC调度
+
+* [权限动态可配]()：可在运行时动态关闭/开启权限功能
+* [SDK支持硬件加密机](https://fisco-bcos-doc.readthedocs.io/zh_CN/release-3.3.0/docs/design/hsm.html)：SDK支持通过加密机运行密码学算法
+* 网关入限速：通过配置文件 (config.ini) 控制入流量大小
+* [Merkle树缓存](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3430)：提升取交易证明的性能
+* 网关模块支持多CA：不同的链可共用同一个网关模块转发消息
+
+**修改**
+
+* 优化各种细节，提升节点性能
+* rpc的交易接口返回input字段：可在配置文件中控制是否需要返回
+
+**修复**
+
+* 修复使用`3.2.0`版本二进制将链版本号从`3.0.0`到`3.1.0`及以上的版本触发的BFS不可用、链执行不一致的问题
+* 修复`P2P`消息解析异常，导致网络断连的问题
+* 修复`StateStorage`读操作时提交，导致迭代器失效的问题
+* 修复`Pro`版本扩容操作没有生成节点私钥文件`node.pem`，扩容失败的问题
+* 修复交易回执返回时，回执hash偶现不正确的问题
+
+**兼容性**
+
+* 历史版本升级
+
+  需要升级的链的“数据兼容版本号（[compatibility_version](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_2_0.html#id5)）”为如下版本时：
+
+  * 3.3.x：数据完全兼容，直接替换二进制即可完成升级
+  * 3.2.x、3.1.x、3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需升级数据兼容版本号，操作见[文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_2_0.html#id5)
+  * 3.0-rc x：数据不兼容，无法升级，可考虑逐步将业务迁移至3.x正式版
+  * 2.x：数据不兼容，2.x版本仍持续维护，可考虑升级为2.x的最新版本
+
+* 组件兼容性
+
+|            | 推荐版本  | 最低版本                 | 说明                               |
+| ---------- | --------- | ------------------------ | ---------------------------------- |
+| Console    | 3.3.0     | 3.0.0                    |                                    |
+| Java SDK   | 3.3.0     | 3.0.0                    |                                    |
+| CPP SDK    | 3.3.0     | 3.0.0                    |                                    |
+| Solidity   | 0.8.11    | 最低 0.4.25，最高 0.8.11 | 需根据合约版本下载编译器（控制台） |
+| WBC-Liquid | 1.0.0-rc3 | 1.0.0-rc3                |                                    |
+
+### 3.2.1
+
+(2023-03-17)
+**修复**
+
+* 修复在使用`3.2.0`版本二进制将链版本号从3.0.0到3.1.0及以上的版本触发的BFS不可用、链执行不一致的问题
+* 修复`P2P`消息解析异常，导致网络断连的问题
+* 修复`StateStorage`读操作时提交，导致迭代器失效的问题
+* 修复`Pro`版本扩容操作没有生成节点私钥文件`node.pem`，扩容失败的问题
+
+**兼容性**
+
+* 历史版本升级
+
+  需要升级的链的“数据兼容版本号（[compatibility_version](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_2_0.html#id5)）”为如下版本时：
+
+  * 3.2.0：数据完全兼容当前版本，直接替换二进制即可完成升级
+  * 3.1.x/3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需升级数据兼容版本号，操作见[文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_2_0.html#id5)
+  * 3.0-rc x：数据不兼容，无法升级，可考虑逐步将业务迁移至3.x正式版
+  * 2.x：数据不兼容，2.x版本仍持续维护，可考虑升级为2.x的最新版本
+
+* 组件兼容性
+
+|            | 推荐版本  | 最低版本                 | 说明                               |
+| ---------- | --------- | ------------------------ | ---------------------------------- |
+| Console    | 3.2.0     | 3.0.0                    |                                    |
+| Java SDK   | 3.2.0     | 3.0.0                    |                                    |
+| CPP SDK    | 3.2.0     | 3.0.0                    |                                    |
+| Solidity   | 0.8.11    | 最低 0.4.25，最高 0.8.11 | 需根据合约版本下载编译器（控制台） |
+| WBC-Liquid | 1.0.0-rc3 | 1.0.0-rc3                |                                    |
+
+
+### 3.2.0
+
+(2023-01-17)
+
+**新增**
+
+* CRUD 新增更多接口
+* 网关内白名单
+* 适配硬件加密机
+* 适配麒麟操作系统
+* 新增EVM的analysis缓存，降低大合约的执行开销
+* 出块时间可配置上限
+* 数据归档工具
+* tikv 读写工具
+* max支持手动部署
+
+**更改**
+
+* 配置文件中重要字段去除默认值，必须在配置文件中进行配置
+* INFO 日志优化日志大小
+
+**修复**
+
+* 超过3级跳转的消息路由问题
+* rpc sendTransaction接口的交易哈希校验问题
+
+**兼容性**
+
+* 历史版本升级
+
+  需要升级的链的“数据兼容版本号（[compatibility_version](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_2_0.html#id5)）”为如下版本时：
+
+  * 3.2.0：数据完全兼容当前版本，直接替换二进制即可完成升级
+  * 3.1.x/3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需升级数据兼容版本号，操作见[文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_2_0.html#id5)
+  * 3.0-rc x：数据不兼容，无法升级，可考虑逐步将业务迁移至3.x正式版
+  * 2.x：数据不兼容，2.x版本仍持续维护，可考虑升级为2.x的最新版本
+
+* 组件兼容性
+
+|            | 推荐版本  | 最低版本                 | 说明                               |
+| ---------- | --------- | ------------------------ | ---------------------------------- |
+| Console    | 3.2.0     | 3.0.0                    |                                    |
+| Java SDK   | 3.2.0     | 3.0.0                    |                                    |
+| CPP SDK    | 3.2.0     | 3.0.0                    |                                    |
+| Solidity   | 0.8.11    | 最低 0.4.25，最高 0.8.11 | 需根据合约版本下载编译器（控制台） |
+| WBC-Liquid | 1.0.0-rc3 | 1.0.0-rc3                |                                    |
+
+### 3.1.2
+
+(2022-01-03)
+
+**新增**
+
+* 交易结构新增extraData字段，以方便业务对交易进行标识，该字段不纳入交易hash的计算
+
+**兼容性**
+
+* 历史版本升级
+
+  需要升级的链的“数据兼容版本号（[compatibility_version](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_1_2.html#id5)）”为如下版本时：
+
+  * 3.1.0：数据完全兼容当前版本，直接替换二进制即可完成升级
+  * 3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需升级数据兼容版本号，操作见[文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_1_2.html#id5)
+  * 3.0-rc x：数据不兼容，无法升级，可考虑逐步将业务迁移至3.x正式版
+  * 2.x：数据不兼容，2.x版本仍持续维护，可考虑升级为2.x的最新版本
+
+* 组件兼容性
+
+|            | 推荐版本  | 最低版本                 | 说明                               |
+| ---------- | --------- | ------------------------ | ---------------------------------- |
+| Console    | 3.1.2     | 3.0.0                    |                                    |
+| Java SDK   | 3.1.2     | 3.0.0                    |                                    |
+| CPP SDK    | 3.1.0     | 3.0.0                    |                                    |
+| Solidity   | 0.8.11    | 最低 0.4.25，最高 0.8.11 | 需根据合约版本下载编译器（控制台） |
+| WBC-Liquid | 1.0.0-rc3 | 1.0.0-rc3                |                                    |
+
+### 3.1.1
+
+(2022-12-07)
+
+**新增**
+
+* 支持在MacOS上通过搭链脚本（[`build_chain.sh`](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/tutorial/air/build_chain.html)）直接下载二进制搭链，无需手动编译节点二进制（[#3179](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3179)）
+
+**修复**
+
+* 共识模块快速视图切换的问题（[#3168](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3168)）
+* 测试合约初始化逻辑修复（[#3182](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3182)）
+* gateway回包问题修复（[#3197](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3197)）
+* DMC执行时消息包类型错误修复（[#3198](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3198)）
+
+**兼容性**
+
+* 历史版本升级
+
+  需要升级的链的“数据兼容版本号（[compatibility_version](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_1_1.html#id5)）”为如下版本时：
+
+  * 3.1.0：数据完全兼容当前版本，直接替换二进制即可完成升级
+  * 3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需升级数据兼容版本号，操作见[文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/3_1_1.html#id5)
+  * 3.0-rc x：数据不兼容，无法升级，可考虑逐步将业务迁移至3.x正式版
+  * 2.x：数据不兼容，2.x版本仍持续维护，可考虑升级为2.x的最新版本
+
+* 组件兼容性
+
+|            | 推荐版本  | 最低版本                 | 说明                               |
+| ---------- | --------- | ------------------------ | ---------------------------------- |
+| Console    | 3.1.0     | 3.0.0                    |                                    |
+| Java SDK   | 3.1.1     | 3.0.0                    |                                    |
+| CPP SDK    | 3.0.0     | 3.0.0                    |                                    |
+| Solidity   | 0.8.11    | 最低 0.4.25，最高 0.8.11 | 需根据合约版本下载编译器（控制台） |
+| WBC-Liquid | 1.0.0-rc3 | 1.0.0-rc3                |                                    |
+
+### 3.1.0
+
+(2022-11-22)
+
+**新增**
+
+* 账户冻结、解冻、废止功能
+* 网关分布式限流功能
+* 网络压缩功能
+* 共识对时功能
+* 合约二进制与ABI存储优化
+* 适配EVM的delegatecall，extcodeHash，blockHash等接口
+* BFS新增查询分页功能
+
+**更改**
+
+* DBHash 计算逻辑更新，提升校验稳定性
+* chain配置项从config.ini中挪出，修改为在config.genesis创世块中配置
+* BFS 目录表结构性能优化
+
+**修复**
+
+* 虚拟机接口功能问题： [#2598](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2598), [#3118](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3118)
+* tikv client 问题：[#2600](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2598)
+* 依赖库使用：[#2625](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2625)
+* CRUD接口问题：[#2910](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2910)
+* docker 镜像：[#3051](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3051)
+
+**兼容性**
+
+* 历史链数据
+
+  当前链已有数据为如下版本时，是否可替换节点二进制完成升级
+
+  * 3.0.x：支持通过替换二进制进行灰度升级，若需使用当前版本的新特性，需在所有节点二进制替换完成后用[控制台将链版本升级为当前版本](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/develop/console/console_commands.html#setsystemconfigbykey)
+  * 3.0-rc x：数据不兼容，无法升级，可考虑逐步将业务迁移至3.x正式版
+  * 2.x：数据不兼容，2.x版本仍持续维护，可考虑升级为2.x的最新版本
+
+* 组件兼容性
+
+|            | 推荐版本  | 最低版本                 | 说明                               |
+| ---------- | --------- | ------------------------ | ---------------------------------- |
+| Console    | 3.1.0     | 3.0.0                    |                                    |
+| Java SDK   | 3.1.0     | 3.0.0                    |                                    |
+| CPP SDK    | 3.0.0     | 3.0.0                    |                                    |
+| Solidity   | 0.8.11    | 最低 0.4.25，最高 0.8.11 | 需根据合约版本下载编译器（控制台） |
+| WBC-Liquid | 1.0.0-rc3 | 1.0.0-rc3                |                                    |
+
 ### 3.0.1 
 
 (2022-09-23)

@@ -1,4 +1,5 @@
 #pragma once
+#include "Exception.h"
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -8,6 +9,10 @@
 namespace bcos::concepts
 {
 
+// clang-format off
+struct NoEnoughSpace : public bcos::error::Exception {};
+// clang-format on
+
 template <class ByteBufferType>
 concept ByteBuffer = RANGES::contiguous_range<ByteBufferType> &&
     std::is_trivial_v<RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>> &&
@@ -15,10 +20,10 @@ concept ByteBuffer = RANGES::contiguous_range<ByteBufferType> &&
     (sizeof(RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>) == 1);
 
 template <class Pointer>
-concept PointerLike = requires(Pointer p)
+concept PointerLike = requires(Pointer pointer)
 {
-    *p;
-    p.operator->();
+    *pointer;
+    pointer.operator->();
 };
 
 template <class Input>
@@ -37,7 +42,7 @@ auto& getRef(Input& input)
 template <class Range>
 concept DynamicRange = requires(Range range, size_t newSize)
 {
-    RANGES::range<Range>;
+    requires RANGES::range<Range>;
     range.resize(newSize);
     range.reserve(newSize);
 };
@@ -51,8 +56,7 @@ void resizeTo(RANGES::range auto& out, std::integral auto size)
             out.resize(size);
             return;
         }
-        BOOST_THROW_EXCEPTION(std::runtime_error{"No enough output space!"});
+        BOOST_THROW_EXCEPTION(NoEnoughSpace{});
     }
 }
-
 }  // namespace bcos::concepts

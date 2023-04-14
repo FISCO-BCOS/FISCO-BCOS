@@ -40,10 +40,15 @@ void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)
 {
     try
     {
-        asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
+        auto self = std::weak_ptr<ExecutiveSerialFlow>(shared_from_this());
+        asyncTo([self, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
             try
             {
-                run(onTxReturn, onFinished);
+                auto flow = self.lock();
+                if (flow)
+                {
+                    flow->run(onTxReturn, onFinished);
+                }
             }
             catch (std::exception& e)
             {
@@ -57,6 +62,12 @@ void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)
         onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
             "ExecutiveSerialFlow asyncTo exception:" + std::string(e.what())));
     }
+}
+
+std::shared_ptr<TransactionExecutive> ExecutiveSerialFlow::buildExecutive(
+    CallParameters::UniquePtr& input)
+{
+    return m_executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
 }
 
 void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
@@ -89,11 +100,11 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
                 continue;
             }
 
+            EXECUTOR_LOG(DEBUG) << "Serial execute tx start" << txInput->toString();
+
             auto seq = txInput->seq;
             // build executive
-            auto executive = m_executiveFactory->build(
-                txInput->codeAddress, txInput->contextID, txInput->seq, false);
-
+            auto executive = buildExecutive(txInput);
 
             // run evm
             CallParameters::UniquePtr output = executive->start(std::move(txInput));
@@ -103,6 +114,7 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
             output->seq = seq;
 
             // call back
+            EXECUTOR_LOG(DEBUG) << "Serial execute tx finish" << output->toString();
             onTxReturn(std::move(output));
         }
 

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 
-include(Version)
+
 project(bcos-scheduler VERSION ${VERSION})
 
 aux_source_directory(src SRCS)

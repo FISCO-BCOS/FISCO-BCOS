@@ -51,7 +51,7 @@ public:
         nextBlock(_number);
         bytes in =
             codec->encodeWithSig("createKVTable(string,string,string)", tableName, key, value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -144,7 +144,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("desc(string)", tableName);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -179,7 +179,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("get(string)", key);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -213,7 +213,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("set(string,string)", key, value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);

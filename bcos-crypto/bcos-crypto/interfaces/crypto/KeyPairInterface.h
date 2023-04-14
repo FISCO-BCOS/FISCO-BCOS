@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <cstddef>
 #include <memory>
 namespace bcos
 {
@@ -30,7 +31,8 @@ enum class KeyPairType : int
 {
     Secp256K1 = 0,
     SM2 = 1,
-    Ed25519 = 2
+    Ed25519 = 2,
+    HsmSM2 = 3
 };
 class KeyPairInterface
 {
@@ -46,5 +48,22 @@ public:
     virtual Address address(Hash::Ptr _hashImpl) = 0;
     virtual KeyPairType keyPairType() const = 0;
 };
+
+Address inline calculateAddress(Hash::Ptr _hashImpl, PublicPtr _publicKey)
+{
+    return right160(_hashImpl->hash(_publicKey));
+}
+
+Address inline calculateAddress(crypto::Hash& _hashImpl, PublicPtr _publicKey)
+{
+    return right160(_hashImpl.hash(_publicKey));
+}
+
+bytes inline calculateAddress(crypto::Hash& _hashImpl, uint8_t* _publicKey, size_t _len)
+{
+    auto address = _hashImpl.hash(bytesConstRef(_publicKey, _len));
+    return {address.begin() + 12, address.end()};
+}
+
 }  // namespace crypto
 }  // namespace bcos

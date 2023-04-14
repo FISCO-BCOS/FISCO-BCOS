@@ -26,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/asio.hpp>
+#include <utility>
 
 namespace bcos
 {
@@ -39,7 +40,7 @@ public:
     FrontService();
     FrontService(const FrontService&) = delete;
     FrontService(FrontService&&) = delete;
-    virtual ~FrontService();
+    ~FrontService() override;
 
     FrontService& operator=(const FrontService&) = delete;
     FrontService& operator=(FrontService&&) = delete;
@@ -119,7 +120,7 @@ public:
      * @param _receiveMsgCallback: response callback
      * @return void
      */
-    void onReceiveMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+    void onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
         bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) override;
 
     /**
@@ -160,7 +161,7 @@ public:
 
     void setMessageFactory(FrontMessageFactory::Ptr _messageFactory)
     {
-        m_messageFactory = _messageFactory;
+        m_messageFactory = std::move(_messageFactory);
     }
 
     bcos::crypto::NodeIDPtr nodeID() const { return m_nodeID; }
@@ -225,7 +226,7 @@ public:
         std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
     };
     // lock m_callback
-    mutable bcos::RecursiveMutex x_callback;
+    mutable bcos::Mutex x_callback;
     // uuid to callback
     std::unordered_map<std::string, Callback::Ptr> m_callback;
 
@@ -237,7 +238,7 @@ public:
         Callback::Ptr callback = nullptr;
 
         {
-            RecursiveGuard l(x_callback);
+            Guard guard(x_callback);
             auto it = m_callback.find(_uuid);
             if (it != m_callback.end())
             {
@@ -251,7 +252,7 @@ public:
 
     void addCallback(const std::string& _uuid, Callback::Ptr _callback)
     {
-        RecursiveGuard l(x_callback);
+        Guard guard(x_callback);
         m_callback[_uuid] = _callback;
     }
 

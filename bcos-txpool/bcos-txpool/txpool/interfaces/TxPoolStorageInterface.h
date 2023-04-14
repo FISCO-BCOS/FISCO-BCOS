@@ -23,27 +23,28 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/txpool/TxPoolTypeDef.h>
 #include <bcos-protocol/TransactionStatus.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/CallbackCollectionHandler.h>
 
-namespace bcos
-{
-namespace txpool
+#include <utility>
+
+namespace bcos::txpool
 {
 class TxPoolStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<TxPoolStorageInterface>;
     TxPoolStorageInterface() = default;
-    virtual ~TxPoolStorageInterface() {}
+    virtual ~TxPoolStorageInterface() = default;
 
-    virtual bcos::protocol::TransactionStatus submitTransaction(
-        bytesPointer _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) = 0;
+    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) = 0;
 
-    virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) = 0;
+    virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
     virtual void batchInsert(bcos::protocol::Transactions const& _txs) = 0;
 
-    virtual bcos::protocol::Transaction::ConstPtr remove(bcos::crypto::HashType const& _txHash) = 0;
-    virtual bcos::protocol::Transaction::ConstPtr removeSubmittedTx(
+    virtual bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) = 0;
+    virtual bcos::protocol::Transaction::Ptr removeSubmittedTx(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) = 0;
     virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
@@ -93,7 +94,7 @@ public:
     virtual void registerUnsealedTxsNotifier(
         std::function<void(size_t, std::function<void(Error::Ptr)>)> _unsealedTxsNotifier)
     {
-        m_unsealedTxsNotifier = _unsealedTxsNotifier;
+        m_unsealedTxsNotifier = std::move(_unsealedTxsNotifier);
     }
 
     virtual void stop() = 0;
@@ -104,14 +105,12 @@ public:
         bcos::protocol::Block::Ptr _block) = 0;
 
     virtual bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) = 0;
-    virtual bcos::crypto::HashListPtr getAllTxsHash() = 0;
+    virtual bcos::crypto::HashListPtr getTxsHash(int _limit) = 0;
 
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch)
     {
-        m_txsCleanUpSwitch = _txsCleanUpSwitch;
+        m_txsCleanUpSwitch = std::move(_txsCleanUpSwitch);
     }
-
-    virtual bool preStoreTxs() const { return true; }
 
 protected:
     bcos::CallbackCollectionHandler<> m_onReady;
@@ -120,5 +119,4 @@ protected:
     // Determine to periodically clean up expired transactions or not
     std::function<bool()> m_txsCleanUpSwitch;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

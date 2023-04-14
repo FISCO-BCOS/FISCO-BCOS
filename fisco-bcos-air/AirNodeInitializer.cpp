@@ -19,6 +19,10 @@
  * @date 2021-10-28
  */
 #include "AirNodeInitializer.h"
+#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/Socket.h"
+#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -28,6 +32,7 @@
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+
 using namespace bcos::node;
 using namespace bcos::initializer;
 using namespace bcos::gateway;
@@ -42,15 +47,15 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     boost::property_tree::read_ini(_configFilePath, pt);
 
     m_logInitializer = std::make_shared<BoostLogInitializer>();
-    m_logInitializer->initLog(pt);
+    m_logInitializer->initLog(_configFilePath);
     INITIALIZER_LOG(INFO) << LOG_DESC("initGlobalConfig");
 
     // load nodeConfig
     // Note: this NodeConfig is used to create Gateway which not init the nodeName
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
-    nodeConfig->loadConfig(_configFilePath);
     nodeConfig->loadGenesisConfig(_genesisFile);
+    nodeConfig->loadConfig(_configFilePath);
 
     m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
     m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
@@ -84,6 +89,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     topicManager->setLocalClient(m_rpc);
     m_nodeInitializer->initNotificationHandlers(m_rpc);
 
+    m_objMonitor = std::make_shared<bcos::ObjectAllocatorMonitor>();
+
     // NOTE: this should be last called
     m_nodeInitializer->initSysContract();
 }
@@ -104,6 +111,23 @@ void AirNodeInitializer::start()
     {
         m_rpc->start();
     }
+
+    if (m_objMonitor)
+    {
+        // start monitor object alloc
+        m_objMonitor->startMonitor</*boostssl start*/ bcos::boostssl::ws::WsMessage,
+            bcos::boostssl::ws::WsSession, bcos::boostssl::ws::RawWsStream,
+            bcos::boostssl::ws::SslWsStream, bcos::boostssl::ws::WsSession::CallBack,
+            bcos::boostssl::ws::WsSession::Message,
+            bcos::boostssl::ws::WsStreamDelegate /*boostssl end*/,
+            /*gateway start*/ bcos::gateway::Session, bcos::gateway::Socket,
+            bcos::gateway::EncodedMessage, bcos::gateway::SessionRecvBuffer,
+            bcos::gateway::P2PMessage, bcos::gateway::P2PSession, bcos::gateway::P2PMessageV2,
+            bcos::gateway::FrontServiceInfo, bcos::gateway::GatewayNodeStatus,
+            bcos::gateway::GatewayStatus, bcos::gateway::ResponseCallback, bcos::gateway::Retry,
+            bcos::gateway::ratelimiter::TimeWindowRateLimiter,
+            bcos::gateway::ratelimiter::DistributedRateLimiter /*gateway end*/>(4);
+    }
 }
 
 void AirNodeInitializer::stop()
@@ -121,6 +145,11 @@ void AirNodeInitializer::stop()
         if (m_nodeInitializer)
         {
             m_nodeInitializer->stop();
+        }
+
+        if (m_objMonitor)
+        {
+            m_objMonitor->stopMonitor();
         }
     }
     catch (std::exception const& e)
