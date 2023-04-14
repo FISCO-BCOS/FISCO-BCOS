@@ -162,3 +162,121 @@ void BlockHeaderImpl::setSignatureList(
         m_inner()->signatureList.emplace_back(signature);
     }
 }
+gsl::span<const bcos::bytes> bcostars::protocol::BlockHeaderImpl::sealerList() const
+{
+    return gsl::span(reinterpret_cast<const bcos::bytes*>(m_inner()->data.sealerList.data()),
+        m_inner()->data.sealerList.size());
+}
+bcos::bytesConstRef bcostars::protocol::BlockHeaderImpl::extraData() const
+{
+    return bcos::bytesConstRef(
+        reinterpret_cast<const bcos::byte*>(m_inner()->data.extraData.data()),
+        m_inner()->data.extraData.size());
+}
+gsl::span<const bcos::protocol::Signature> bcostars::protocol::BlockHeaderImpl::signatureList()
+    const
+{
+    bcos::ReadGuard l(x_inner);
+    return gsl::span(
+        reinterpret_cast<const bcos::protocol::Signature*>(m_inner()->signatureList.data()),
+        m_inner()->signatureList.size());
+}
+gsl::span<const uint64_t> bcostars::protocol::BlockHeaderImpl::consensusWeights() const
+{
+    return gsl::span(reinterpret_cast<const uint64_t*>(m_inner()->data.consensusWeights.data()),
+        m_inner()->data.consensusWeights.size());
+}
+void bcostars::protocol::BlockHeaderImpl::setVersion(uint32_t _version)
+{
+    m_inner()->data.version = _version;
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setTxsRoot(bcos::crypto::HashType _txsRoot)
+{
+    m_inner()->data.txsRoot.assign(_txsRoot.begin(), _txsRoot.end());
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setReceiptsRoot(bcos::crypto::HashType _receiptsRoot)
+{
+    m_inner()->data.receiptRoot.assign(_receiptsRoot.begin(), _receiptsRoot.end());
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setStateRoot(bcos::crypto::HashType _stateRoot)
+{
+    m_inner()->data.stateRoot.assign(_stateRoot.begin(), _stateRoot.end());
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setNumber(bcos::protocol::BlockNumber _blockNumber)
+{
+    m_inner()->data.blockNumber = _blockNumber;
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setGasUsed(bcos::u256 _gasUsed)
+{
+    m_inner()->data.gasUsed = boost::lexical_cast<std::string>(_gasUsed);
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setTimestamp(int64_t _timestamp)
+{
+    m_inner()->data.timestamp = _timestamp;
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setSealer(int64_t _sealerId)
+{
+    m_inner()->data.sealer = _sealerId;
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setSealerList(std::vector<bcos::bytes>&& _sealerList)
+{
+    setSealerList(gsl::span(_sealerList.data(), _sealerList.size()));
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setConsensusWeights(
+    gsl::span<const uint64_t> const& _weightList)
+{
+    m_inner()->data.consensusWeights.assign(_weightList.begin(), _weightList.end());
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setConsensusWeights(std::vector<uint64_t>&& _weightList)
+{
+    setConsensusWeights(gsl::span(_weightList.data(), _weightList.size()));
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setExtraData(bcos::bytes const& _extraData)
+{
+    m_inner()->data.extraData.assign(_extraData.begin(), _extraData.end());
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setExtraData(bcos::bytes&& _extraData)
+{
+    m_inner()->data.extraData.assign(_extraData.begin(), _extraData.end());
+    clearDataHash();
+}
+void bcostars::protocol::BlockHeaderImpl::setSignatureList(
+    bcos::protocol::SignatureList&& _signatureList)
+{
+    setSignatureList(gsl::span(_signatureList.data(), _signatureList.size()));
+}
+const bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::inner() const
+{
+    bcos::ReadGuard l(x_inner);
+    return *m_inner();
+}
+bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::mutableInner()
+{
+    return *m_inner();
+}
+void bcostars::protocol::BlockHeaderImpl::setInner(const bcostars::BlockHeader& blockHeader)
+{
+    bcos::WriteGuard l(x_inner);
+    *m_inner() = blockHeader;
+}
+void bcostars::protocol::BlockHeaderImpl::setInner(bcostars::BlockHeader&& blockHeader)
+{
+    bcos::WriteGuard l(x_inner);
+    *m_inner() = std::move(blockHeader);
+}
+void bcostars::protocol::BlockHeaderImpl::clearDataHash()
+{
+    m_inner()->dataHash.clear();
+}

@@ -17,7 +17,7 @@ namespace bcos::ledger
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
 
-template <bcos::crypto::hasher::Hasher Hasher, bcos::transaction_executor::StateStorage Storage>
+template <bcos::transaction_executor::StateStorage Storage>
 class LedgerImpl2
 {
 private:
