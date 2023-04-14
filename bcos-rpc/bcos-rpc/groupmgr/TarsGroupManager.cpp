@@ -40,7 +40,7 @@ void TarsGroupManager::updateGroupStatus()
 {
     m_groupStatusUpdater->restart();
     auto unreachableNodes = checkNodeStatus();
-    if (unreachableNodes.size() == 0)
+    if (unreachableNodes.empty())
     {
         return;
     }
@@ -50,7 +50,7 @@ void TarsGroupManager::updateGroupStatus()
 
 std::map<std::string, std::set<std::string>> TarsGroupManager::checkNodeStatus()
 {
-    ReadGuard l(x_nodeServiceList);
+    ReadGuard lock(x_nodeServiceList);
     // groupID => {unreachableNodes}
     std::map<std::string, std::set<std::string>> unreachableNodes;
     for (auto const& it : m_groupInfos)
@@ -61,8 +61,8 @@ std::map<std::string, std::set<std::string>> TarsGroupManager::checkNodeStatus()
         auto const& groupNodeList = groupInfo->nodeInfos();
         for (auto const& nodeInfo : groupNodeList)
         {
-            if (!m_nodeServiceList.count(groupID) ||
-                !m_nodeServiceList[groupID].count(nodeInfo.first) ||
+            if (!m_nodeServiceList.contains(groupID) ||
+                !m_nodeServiceList[groupID].contains(nodeInfo.first) ||
                 m_nodeServiceList[groupID][nodeInfo.first]->unreachable())
             {
                 unreachableNodes[groupID].insert(nodeInfo.first);
