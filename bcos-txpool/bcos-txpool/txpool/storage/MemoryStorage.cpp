@@ -217,9 +217,12 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
             return TransactionStatus::AlreadyInTxPool;
         }
     }
+
+    _tx->setSealed(true);  // must set seal before insert
     auto status = insertWithoutLock(_tx);
     if (status != TransactionStatus::None)
     {
+        _tx->setSealed(false);
         Transaction::Ptr tx;
         {
             TxsMap::ReadAccessor::Ptr accessor;
@@ -239,7 +242,6 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     else
     {
         // avoid the sealed txs be sealed again
-        _tx->setSealed(true);
         m_sealedTxsSize++;
     }
     return TransactionStatus::None;
