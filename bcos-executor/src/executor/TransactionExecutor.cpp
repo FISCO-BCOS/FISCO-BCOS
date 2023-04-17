@@ -2779,8 +2779,4 @@ void TransactionExecutor::stop()
     {
         m_blockContext->stop();
     }
-    if (m_backendStorage)
-    {
-        m_backendStorage->stop();
-    }
 }
