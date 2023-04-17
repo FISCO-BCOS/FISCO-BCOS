@@ -248,8 +248,8 @@ private:
     void CallFunc(F func, T* pObj, const std::shared_ptr<executor::TransactionExecutive>& executive,
         PrecompiledExecResult::Ptr const& res, Tuple& tup, std::index_sequence<I...>)
     {
-        auto blockContext = executive->blockContext().lock();
-        CodecWrapper codec(blockContext->hashHandler(), blockContext->isWasm());
+        auto const& blockContext = executive->blockContext();
+        CodecWrapper codec(blockContext.hashHandler(), blockContext.isWasm());
         try
         {
             if constexpr (std::is_same_v<R, void>)

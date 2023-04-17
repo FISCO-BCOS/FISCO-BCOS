@@ -43,7 +43,7 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
     {
         return;
     }
-    auto parentHash = _executive->blockContext().lock()->parentHash();
+    auto parentHash = _executive->blockContext().parentHash();
     try
     {
         getConsensusNodeListFromStorage(_executive);
@@ -145,7 +145,7 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
 
 bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive::Ptr& _executive)
 {
-    auto blockContext = _executive->blockContext().lock();
+    auto const& blockContext = _executive->blockContext();
     auto entry = _executive->storage().getRow(
         ledger::SYS_CONSENSUS, ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE);
     m_notifyNextLeaderRotateSet = false;
@@ -163,7 +163,7 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
                                << LOG_KV("value", std::get<0>(epochInfo))
                                << LOG_KV("enableBlk", std::get<1>(epochInfo));
         m_configuredEpochSealersSize = boost::lexical_cast<uint32_t>(std::get<0>(epochInfo));
-        if (std::get<1>(epochInfo) == blockContext->number())
+        if (std::get<1>(epochInfo) == blockContext.number())
         {
             return true;
         }
@@ -179,13 +179,13 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
 
     auto epochBlockNumEntry = epochBlockInfo->getObject<ledger::SystemConfigEntry>();
     auto epochBlockNum = boost::lexical_cast<uint32_t>(std::get<0>(epochBlockNumEntry));
-    if (blockContext->number() - std::get<1>(epochBlockNumEntry) % epochBlockNum == 0)
+    if (blockContext.number() - std::get<1>(epochBlockNumEntry) % epochBlockNum == 0)
     {
         return true;
     }
     PRECOMPILED_LOG(WARNING)
         << LOG_DESC("should not rotate working sealers for not meet the requirements")
-        << LOG_KV("epochBlockNum", epochBlockNum) << LOG_KV("curNum", blockContext->number())
+        << LOG_KV("epochBlockNum", epochBlockNum) << LOG_KV("curNum", blockContext.number())
         << LOG_KV("enableNum", std::get<1>(epochBlockNumEntry)) << LOG_KV("sealerNum", sealerNum)
         << LOG_KV("epochSealersNum", m_configuredEpochSealersSize);
 
@@ -195,12 +195,12 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
 void WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
     const executor::TransactionExecutive::Ptr& _executive)
 {
-    auto blockContext = _executive->blockContext().lock();
+    auto const& blockContext = _executive->blockContext();
     auto entry = _executive->storage().getRow(ledger::SYS_CONSENSUS, "key");
     auto consensusNodeList = entry->getObject<ledger::ConsensusNodeList>();
     for (const auto& node : consensusNodeList)
     {
-        if (boost::lexical_cast<BlockNumber>(node.enableNumber) > blockContext->number())
+        if (boost::lexical_cast<BlockNumber>(node.enableNumber) > blockContext.number())
             [[unlikely]]
         {
             continue;
@@ -220,10 +220,10 @@ void WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
 void WorkingSealerManagerImpl::setNotifyRotateFlag(
     const executor::TransactionExecutive::Ptr& executive, unsigned flag)
 {
-    auto blockContext = executive->blockContext().lock();
+    auto const& blockContext = executive->blockContext();
     storage::Entry rotateEntry;
     rotateEntry.setObject(
-        SystemConfigEntry{boost::lexical_cast<std::string>(flag), blockContext->number() + 1});
+        SystemConfigEntry{boost::lexical_cast<std::string>(flag), blockContext.number() + 1});
     executive->storage().setRow(
         SYS_CONSENSUS, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(rotateEntry));
 }
@@ -231,12 +231,12 @@ void WorkingSealerManagerImpl::setNotifyRotateFlag(
 bool WorkingSealerManagerImpl::getNotifyRotateFlag(
     const executor::TransactionExecutive::Ptr& executive)
 {
-    auto blockContext = executive->blockContext().lock();
+    auto const& blockContext = executive->blockContext();
     auto entry = executive->storage().getRow(SYS_CONSENSUS, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE);
     if (entry) [[likely]]
     {
         auto config = entry->getObject<ledger::SystemConfigEntry>();
-        if (!std::get<0>(config).empty() && blockContext->number() >= std::get<1>(config))
+        if (!std::get<0>(config).empty() && blockContext.number() >= std::get<1>(config))
         {
             return boost::lexical_cast<bool>(std::get<0>(config));
         }
@@ -306,7 +306,7 @@ void WorkingSealerManagerImpl::updateNodeListType(
     std::unique_ptr<std::vector<std::string>> _nodeList, std::string const& _type,
     const executor::TransactionExecutive::Ptr& executive)
 {
-    auto blockContext = executive->blockContext().lock();
+    auto const& blockContext = executive->blockContext();
 
     m_consensusChangeFlag = !_nodeList->empty();
     for (const auto& node : (*_nodeList))
@@ -316,7 +316,7 @@ void WorkingSealerManagerImpl::updateNodeListType(
         if (it != m_consensusNodes.end()) [[likely]]
         {
             it->type = _type;
-            it->enableNumber = boost::lexical_cast<std::string>(blockContext->number() + 1);
+            it->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
         }
     }
 }

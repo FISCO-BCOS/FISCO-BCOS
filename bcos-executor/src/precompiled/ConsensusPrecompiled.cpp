@@ -371,8 +371,8 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr _callParameters, const CodecWrapper& codec)
 {
-    auto blockContext = _executive->blockContext().lock();
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+    auto const& blockContext = _executive->blockContext();
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_DESC("rotateWorkingSealer");
     std::string vrfPublicKey;
     std::string vrfInput;

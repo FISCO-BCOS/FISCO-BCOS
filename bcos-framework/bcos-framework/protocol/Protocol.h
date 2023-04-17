@@ -114,7 +114,7 @@ enum ConsensusType : uint32_t
 static constexpr const std::string_view PBFT_STR = "pbft";
 static constexpr const std::string_view RPBFT_STR = "rpbft";
 
-inline uint32_t consensusTypeFromString(std::string const& consensus)
+inline uint32_t consensusTypeFromString(std::string_view consensus)
 {
     if (consensus == PBFT_STR)
     {
@@ -134,6 +134,7 @@ inline uint32_t consensusTypeFromString(std::string const& consensus)
 
 enum class BlockVersion : uint32_t
 {
+    V3_5_VERSION = 0x03050000,
     V3_4_VERSION = 0x03040000,
     V3_3_VERSION = 0x03030000,
     V3_2_VERSION = 0x03020000,
@@ -141,7 +142,7 @@ enum class BlockVersion : uint32_t
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_3_VERSION,
+    MAX_VERSION = V3_5_VERSION,
 };
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string V3_0_VERSION_STR = "3.0.0";
@@ -149,10 +150,11 @@ const std::string V3_1_VERSION_STR = "3.1.0";
 const std::string V3_2_VERSION_STR = "3.2.0";
 const std::string V3_3_VERSION_STR = "3.3.0";
 const std::string V3_4_VERSION_STR = "3.4.0";
+const std::string V3_5_VERSION_STR = "3.5.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
-const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_4_VERSION;
+const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_5_VERSION;
 const std::string DEFAULT_VERSION_STR = V3_4_VERSION_STR;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
@@ -219,6 +221,9 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion
         break;
     case bcos::protocol::BlockVersion::V3_4_VERSION:
         _out << V3_4_VERSION_STR;
+        break;
+    case bcos::protocol::BlockVersion::V3_5_VERSION:
+        _out << V3_5_VERSION_STR;
         break;
     default:
         _out << "Unknown";

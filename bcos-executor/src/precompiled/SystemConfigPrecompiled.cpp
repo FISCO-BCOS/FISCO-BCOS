@@ -83,17 +83,17 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
     m_sysValueCmp.insert(std::make_pair(
         SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, _value, RPBFT_EPOCH_BLOCK_NUM_MIN, version,
-                BlockVersion::V3_4_VERSION);
+                BlockVersion::V3_5_VERSION);
         }));
     m_sysValueCmp.insert(std::make_pair(
         SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, _value, RPBFT_EPOCH_SEALER_NUM_MIN,
-                version, BlockVersion::V3_4_VERSION);
+                version, BlockVersion::V3_5_VERSION);
         }));
     m_sysValueCmp.insert(
         std::make_pair(SYSTEM_KEY_CONSENSUS_TYPE, [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(SYSTEM_KEY_CONSENSUS_TYPE, _value, ConsensusType::RPBFT_TYPE, version,
-                BlockVersion::V3_4_VERSION);
+                BlockVersion::V3_5_VERSION);
         }));
     // for compatibility
     // Note: the compatibility_version is not compatibility
