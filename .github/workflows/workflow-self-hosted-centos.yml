@@ -37,10 +37,16 @@ jobs:
           java-version: 8
           java-package: jdk
 
+      - name: Set up Node.js 16.x
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16.x'
+
       - name: yum install
         run: |
           sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static  glibc-static glibc-devel libzstd-devel
-          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel python3-pip automake
+          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel python3-pip automake nodejs npm
+          sudo npm install -g newman
           sudo yum reinstall -y -q https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           sudo yum install -y -q git
 
@@ -81,3 +87,5 @@ jobs:
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+      - name: Integration test - RPCAPI Test
+        run: cd tools && bash .ci/rpcapi_ci_check.sh

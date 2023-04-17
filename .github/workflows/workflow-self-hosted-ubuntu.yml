@@ -39,15 +39,20 @@ jobs:
       - name: apt install
         run: |
           sudo apt update
-          sudo apt install -y  lcov ccache wget python3-dev python3-pip git curl zip unzip tar
+          sudo apt install -y  lcov ccache wget python3-dev python3-pip git curl zip unzip tar npm nodejs
           sudo apt install -y --no-install-recommends \
               clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
               libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache uuid-runtime automake
+          sudo npm install -g newman
 
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28
           override: true
+      - name: Set up Node.js 16.x
+          uses: actions/setup-node@v2
+          with:
+            node-version: '16.x'
 
       - name: Reuse build cache
         run: |
@@ -83,6 +88,8 @@ jobs:
           sleep 30 && cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+      - name: Integration test - RPCAPI Test
+        run: cd tools && bash .ci/rpcapi_ci_check.sh
       - name: Integration test - Pro
         run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
 
