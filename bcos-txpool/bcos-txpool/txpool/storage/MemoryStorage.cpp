@@ -218,11 +218,12 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         }
     }
 
+    auto txHasSeal = _tx->sealed();
     _tx->setSealed(true);  // must set seal before insert
     auto status = insertWithoutLock(_tx);
     if (status != TransactionStatus::None)
     {
-        _tx->setSealed(false);
+        _tx->setSealed(txHasSeal);
         Transaction::Ptr tx;
         {
             TxsMap::ReadAccessor::Ptr accessor;
