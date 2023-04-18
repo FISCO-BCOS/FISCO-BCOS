@@ -37,7 +37,7 @@ jobs:
         id: set_docker_tag
         run: |
           [[ ${{github.ref}} == */tags/* ]] && DOCKER_TAG="${GIT_TAG_NAME}" || DOCKER_TAG="${BRANCH_NAME}"
-          DOCKER_TAG="loststars/${DOCKER_REPOSITORY}:${DOCKER_TAG}"
+          DOCKER_TAG="fiscoorg/${DOCKER_REPOSITORY}:${DOCKER_TAG}"
 
           echo "New docker tag is ${DOCKER_TAG}"
           echo "::set-output name=docker_tag::$(echo ${DOCKER_TAG})"
