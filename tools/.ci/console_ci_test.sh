@@ -21,6 +21,7 @@ download_console()
     if [ -d ${console_file} ] && [ -d "${console_file}/.git" ]; then
         LOG_INFO "Use download cache"
         cd ${console_file}
+        git fetch --unshallow
         rm -rf build log dist
         git reset --hard
         git checkout ${console_branch}
