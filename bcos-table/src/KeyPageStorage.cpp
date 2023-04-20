@@ -331,6 +331,13 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                                         << LOG_KV("table", it.first.first)
                                         << LOG_KV("key", toHex(k));
                                 }
+                                auto* meta = page->myTableMeta();
+                                if (meta && meta->pageExist(k))
+                                {
+                                    KeyPage_LOG(DEBUG)
+                                        << LOG_DESC("Traverse Page invalid key become valid");
+                                    continue;
+                                }
                                 Entry e;
                                 e.setStatus(Entry::Status::DELETED);
                                 callback(it.first.first, k, e);
@@ -828,6 +835,7 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     }
     // if new entry is too big, it will trigger split
     auto* page = pageData->getPage();
+    page->setTableMeta(meta);
     // NOTE: add this condition to adapt the old data without keyPage info
     // rewrite to new data with keyPage.
     if (page == nullptr && pageData->type == Data::NormalEntry &&
@@ -925,6 +933,7 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
                     << LOG_KV("key", toHex(key)) << LOG_KV("pageKey", toHex(pageKey));
             }
             auto* nextPage = nextPageData.value()->getPage();
+            nextPage->setTableMeta(meta);
             if (nextPage->size() < m_splitSize && nextPage != page)
             {
                 auto endKey = page->endKey();
