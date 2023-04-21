@@ -131,6 +131,11 @@ void KVTablePrecompiled::set(const std::string& tableName,
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
                            << LOG_KV("key", key) << LOG_KV("value", value);
 
+    if (key.empty() && blockContext.blockVersion() >= BlockVersion::V3_3_VERSION) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(PrecompiledError("Table insert entry key is empty"));
+    }
+
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
 
     checkLengthValidate(
