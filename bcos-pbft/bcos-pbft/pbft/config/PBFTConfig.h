@@ -177,7 +177,7 @@ public:
     {
         m_toView.store(m_view);
         m_timer->resetChangeCycle();
-        m_timeoutState.store(false);
+        setTimeoutState(false);
     }
 
     uint64_t maxFaultyQuorum() const { return m_maxFaultyQuorum; }
@@ -194,12 +194,12 @@ public:
         return m_committedProposal->index() < _index;
     }
 
-    virtual void setTimeoutState(bool _timeoutState) { m_timeoutState = _timeoutState; }
+    virtual void setTimeoutState(bool _timeoutState) { m_timeoutState.store(_timeoutState); }
     virtual bool timeout() { return m_timeoutState; }
 
     virtual void resetTimeoutState(bool _incTimeout = true)
     {
-        m_timeoutState.store(true);
+        setTimeoutState(true);
         // update toView
         incToView(1);
         if (_incTimeout)
@@ -230,7 +230,7 @@ public:
             m_startRecovered.store(true);
         }
         // reset the timer when reach a new-view
-        m_timeoutState.store(false);
+        setTimeoutState(false);
         // reach new view, consensus time recovery to normal
         // NOTE: should not recover when reach new view
         // if all nodes reach new view, and set consensusTimeout to 3000
@@ -241,7 +241,7 @@ public:
         timer()->resetChangeCycle();
         setView(_view);
         setToView(_view);
-        m_timeoutState.store(false);
+        setTimeoutState(false);
     }
     virtual void setUnSealedTxsSize(size_t _unsealedTxsSize)
     {

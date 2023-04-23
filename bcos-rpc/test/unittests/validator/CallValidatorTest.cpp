@@ -18,4 +18,109 @@
  * @date 2023/4/18
  */
 
-#include "CallValidatorTest.h"
+#include "bcos-crypto/encrypt/AESCrypto.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h"
+#include "bcos-crypto/signature/sm2/SM2Crypto.h"
+#include "bcos-crypto/signature/sm2/SM2KeyPair.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-rpc/validator/CallValidator.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <json/json.h>
+
+using namespace bcos;
+using namespace bcos::rpc;
+using namespace bcos::crypto;
+namespace bcos::test
+{
+
+class ValidatorFixture
+{
+public:
+    ValidatorFixture() = default;
+};
+
+BOOST_FIXTURE_TEST_SUITE(testValidator, ValidatorFixture)
+
+BOOST_AUTO_TEST_CASE(verifyTest)
+{
+    h256 fixedSec1("bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd");
+    auto sec1 = std::make_shared<KeyImpl>(fixedSec1.asBytes());
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    crypto::Secp256k1KeyPair keyPair(sec1);
+
+    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
+    auto encryptImpl = std::make_shared<bcos::crypto::AESCrypto>();
+    auto address = keyPair.address(hashImpl);
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
+    CallValidator callValidator(cryptoSuite);
+    std::string data;
+    data.append(precompiled::SYS_CONFIG_ADDRESS);
+    data.append("bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd");
+    bcos::bytes bytes = bcos::fromHex(data);
+
+    auto hash = hashImpl->hash(bcos::ref(bytes));
+    auto sign = signatureImpl->sign(keyPair, hash, true);
+    std::string signStr = bcos::toHex(*sign);
+    // success
+    {
+        auto [result, recoverAdd] = callValidator.verify(precompiled::SYS_CONFIG_ADDRESS,
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+        BOOST_CHECK(result);
+        BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
+    }
+
+    // error
+    {
+        auto [result, recoverAdd] = callValidator.verify(precompiled::CONSENSUS_ADDRESS,
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+        BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(smVerifyTest)
+{
+    h256 fixedSec1("bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd");
+    auto sec1 = std::make_shared<KeyImpl>(fixedSec1.asBytes());
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    crypto::SM2KeyPair keyPair(sec1);
+
+    auto hashImpl = std::make_shared<bcos::crypto::SM3>();
+    auto signatureImpl = std::make_shared<bcos::crypto::SM2Crypto>();
+    auto address = keyPair.address(hashImpl);
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    CallValidator callValidator(cryptoSuite);
+    std::string data;
+    data.append(precompiled::SYS_CONFIG_ADDRESS);
+    data.append("bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd");
+    bcos::bytes bytes = bcos::fromHex(data);
+
+    auto hash = hashImpl->hash(bcos::ref(bytes));
+    auto sign = signatureImpl->sign(keyPair, hash, true);
+    std::string signStr = bcos::toHex(*sign);
+
+    // success
+    {
+        auto [result, recoverAdd] = callValidator.verify(precompiled::SYS_CONFIG_ADDRESS,
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+        BOOST_CHECK(result);
+        BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
+    }
+
+    // error
+    {
+        auto [result, recoverAdd] = callValidator.verify(precompiled::CONSENSUS_ADDRESS,
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+        BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
+    }
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+}  // namespace bcos::test

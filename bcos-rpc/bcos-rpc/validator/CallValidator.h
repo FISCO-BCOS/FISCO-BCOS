@@ -35,7 +35,8 @@ public:
     CallValidator& operator=(const CallValidator&) = delete;
     CallValidator& operator=(CallValidator&&) = default;
 
-    std::pair<bool, bytes> verify(std::string_view _to, std::string_view _data, std::string_view _sign);
+    std::pair<bool, bytes> verify(
+        std::string_view _to, std::string_view _data, std::string_view _sign);
 
 private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

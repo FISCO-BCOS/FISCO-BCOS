@@ -1371,9 +1371,9 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
 void JsonRpcImpl_2_0::execCall(
     NodeService::Ptr nodeService, protocol::Transaction::Ptr _tx, bcos::rpc::RespFunc _respFunc)
 {
-    nodeService->scheduler()->call(std::move(_tx),
-        [m_to = std::string(_tx->to()), m_respFunc = std::move(_respFunc)](
-            Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
+    nodeService->scheduler()->call(
+        _tx, [m_to = std::string(_tx->to()), m_respFunc = std::move(_respFunc)](
+                 Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
             Json::Value jResp;
             if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
             {

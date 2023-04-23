@@ -23,11 +23,33 @@ using namespace bcos;
 std::pair<bool, bytes> bcos::rpc::CallValidator::verify(
     std::string_view _to, std::string_view _data, std::string_view _sign)
 {
+    // trim hex prefix
+    auto trimHex = [](std::string_view str, std::string_view prefix = "0x") {
+        if (str.starts_with(prefix)) [[unlikely]]
+        {
+            str.remove_prefix(prefix.size());
+        }
+        return str;
+    };
+    auto to = trimHex(_to);
+    auto data = trimHex(_data);
+    auto sign = trimHex(_sign);
+
     auto hashImpl = m_cryptoSuite->hashImpl();
     crypto::HashType hash;
-    hashImpl->hasher().update(_to);
-    hashImpl->hasher().update(_data);
-    hashImpl->hasher().final(hash);
-    bytesConstRef signRef((byte*)_sign.data(), _sign.size());
-    return m_cryptoSuite->signatureImpl()->recoverAddress(*hashImpl, hash, signRef);
+    auto hasher = hashImpl->hasher();
+    // Note: use fromHex because java sdk hash the raw data
+    hasher.update(bcos::fromHex(to));
+    hasher.update(bcos::fromHex(data));
+    hasher.final(hash);
+    bcos::bytes signBytes = bcos::fromHex(sign);
+    try
+    {
+        return m_cryptoSuite->signatureImpl()->recoverAddress(
+            *hashImpl, hash, bcos::ref(signBytes));
+    }
+    catch (...)
+    {
+        return {false, {}};
+    }
 }
