@@ -1422,6 +1422,10 @@ generate_sm_config_ini() {
     sm_ssl=true
     nodes_path=${file_dir}
     nodes_file=${p2p_connected_conf_name}
+    ; enable rip protocol, default: true
+    ; enable_rip_protocol=false
+    ; enable compression for p2p message, default: true
+    ; enable_compression=false
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 128
@@ -1434,11 +1438,13 @@ generate_sm_config_ini() {
 [rpc]
     listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
-    thread_count=16
+    thread_count=4
     ; ssl or sm ssl
     sm_ssl=true
     ;ssl connection switch, if disable the ssl connection, default: false
     ${disable_ssl_content}
+    ; return input params in sendTransaction() return, default: true
+    ; return_input_params=false
 
 [cert]
     ; directory the certificates located in
