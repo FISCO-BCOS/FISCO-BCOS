@@ -63,9 +63,8 @@ inline bool isResumeInputs(std::shared_ptr<std::vector<CallParameters::UniquePtr
 
     for (auto& input : *txInputs)
     {
-        if ((*txInputs)[0]->seq > 0 ||
-            (*txInputs)[0]->type != CallParameters::MESSAGE)  // FINISH/REVERT is also resume
-                                                              // message
+        if (input->seq > 0 || input->type != CallParameters::MESSAGE)  // FINISH/REVERT is also
+                                                                       // resume message
         {
             return true;
         }
