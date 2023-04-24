@@ -382,6 +382,7 @@ public:
     bcos::protocol::BlockNumber waitSealUntil() { return m_waitSealUntil; }
 
     void setMinSealTime(int64_t _minSealTime) noexcept { this->m_minSealTime = _minSealTime; }
+    void setPipeLineSize(int64_t _pipeSize) noexcept { this->m_waterMarkLimit = _pipeSize; }
 
     void registerTxsStatusSyncHandler(std::function<void()> const& _txsStatusSyncHandler)
     {
