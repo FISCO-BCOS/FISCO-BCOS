@@ -636,7 +636,9 @@ parse_params() {
                 LOG_FATAL "Not support docker mode for macOS now"
            fi
         ;;
-        w) wasm_mode="true";;
+        w) wasm_mode="true"
+          auth_mode="false"
+          ;;
         R) serial_mode="${OPTARG}";;
         a)
           auth_admin_account="${OPTARG}"
