@@ -43,7 +43,7 @@ Air 、Pro、Max：可部署为三种架构形态
 - 区块链监控：实现区块链状态的实时监控与数据上报
 
 ## 技术文档
-[FISCO BCOS官方技术文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/index.html)提供建链开发指引、工具介绍以及设计原理解析，用户可通过阅读官方技术文档快速了解FISCO BCOS。
+[FISCO BCOS官方技术文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/index.html)提供建链开发指引、工具介绍以及设计原理解析，用户可通过阅读官方技术文档快速了解、使用FISCO BCOS。
 1. [快速开始](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/quick_start/hardware_requirements.html)
 2. [合约开发](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/contract_develop/solidity_develop.html)
 3. [SDK教程](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/sdk/index.html)
@@ -141,7 +141,8 @@ FISCO BCOS已落地300+产业数字化标杆应用，场景覆盖文化版权、
   - 人民链数字福虎
   - 第一反应互助急救链
   - 长安大学城梦想小镇居民公益积分项目
-FISCO BCOS已在诸多领域经过了长时间的应用落地检验，创建了诸多标杆应用示范，涵盖16类场景的169个典型应用案例，产业应用具体信息可参考[2022 FISCO BCOS产业白皮书](https://mp.weixin.qq.com/s/hERIQbnkd_-uAMVRx7Q6WQ)。
+  
+FISCO BCOS已在领域创建了诸多标杆应用示范，涵盖16类场景的169个典型应用案例，产业应用具体信息可参考[2022 FISCO BCOS产业白皮书](https://mp.weixin.qq.com/s/hERIQbnkd_-uAMVRx7Q6WQ)。
 
 ## 贡献代码
 
@@ -158,7 +159,6 @@ FISCO BCOS已在诸多领域经过了长时间的应用落地检验，创建了�
 - [2022年度贡献者](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/community/contributor_list_new.html)
 - [2022新增合作伙伴](https://mp.weixin.qq.com/s/ES8ZpkfywKELv0DZZrG6eQ)
 - [2022 FISCO BCOS产业应用白皮书](https://mp.weixin.qq.com/s/hERIQbnkd_-uAMVRx7Q6WQ)
-- [数实相生 链筑未来 | FISCO BCOS开源五周年](https://mp.weixin.qq.com/s/LjkpIucm6gfSp-UdEJW1mw)
 - [社区历史文章资源](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/articles/index.html)
 
 
