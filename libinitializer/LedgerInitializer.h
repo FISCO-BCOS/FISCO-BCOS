@@ -40,14 +40,16 @@ public:
         std::shared_ptr<bcos::ledger::Ledger> ledger;
         if (nodeConfig->smCryptoType())
         {
-            ledger = std::make_shared<bcos::ledger::LedgerImpl<
+            ledger = ledger = std::make_shared<bcos::ledger::LedgerImpl<
                 bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
-                std::move(storageWrapper), blockFactory, storage);
+                bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
+                blockFactory, storage);
         }
         else
         {
             ledger = std::make_shared<bcos::ledger::LedgerImpl<
                 bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
+                bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{},
                 std::move(storageWrapper), blockFactory, storage);
         }
 
