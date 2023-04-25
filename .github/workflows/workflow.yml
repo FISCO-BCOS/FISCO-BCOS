@@ -36,7 +36,7 @@ jobs:
       - name: Prepare vcpkg
         if: runner.os != 'Windows'
         uses: friendlyanon/setup-vcpkg@v1
-        with: { committish: 82e03905f54fc49d11346e5148e3860747604d86 }
+        with: { committish: 4116148a7f5c09d39da34ffb75f33283796d687b }
       - uses: actions/cache@v2
         id: deps_cache
         with:
