@@ -12,8 +12,6 @@ In a single-chain configuration, the performance can reach more than 100k TPS. F
 
 After a long period of practical testing in the production environment by industry partners, it has financial-grade high performance, high availability and high security. Currently, it has been adopted by over 4,000 enterprises and institutions, with more than 300 industry digital benchmark applications, covering fields such as cultural copyright, judicial services, government services, the Internet of Things, finance, smart communities, real estate construction, community governance, and rural revitalization.
 
-![](./docs/Technical-Architecture.png)
-
 ## Documentation
 
 [《The FISCO BCOS Official Technical Documentation》](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/index.html) provides chain development guidelines, tool introductions, and design principle explanations. Users can quickly learn and use FISCO BCOS by reading the official technical documentation.
