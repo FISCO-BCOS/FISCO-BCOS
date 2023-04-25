@@ -646,7 +646,7 @@ parse_params() {
         N)
             modify_node_path=$OPTARG
             dir_must_exists "${modify_node_path}"
-            ;; 
+            ;;
         u)
             multi_ca_path="$OPTARG"
             local last_char=${multi_ca_path: -1}
@@ -763,6 +763,8 @@ node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 ulimit -n 1024
 if [ ! -z \${node_pid} ];then
+    kill -USR1 \${node_pid}
+    kill -USR2 \${node_pid}
     echo " \${node} is running, pid is \$node_pid."
     exit 0
 else
