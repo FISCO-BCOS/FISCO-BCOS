@@ -38,14 +38,11 @@
 
 namespace bcos
 {
-namespace boostssl
-{
-namespace ws
+namespace boostssl::ws
 {
 class WsService;
 class WsSession;
-}  // namespace ws
-}  // namespace boostssl
+}  // namespace boostssl::ws
 
 namespace rpc
 {
@@ -54,9 +51,9 @@ class RpcFactory : public std::enable_shared_from_this<RpcFactory>
 public:
     using Ptr = std::shared_ptr<RpcFactory>;
     RpcFactory(std::string const& _chainID, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        bcos::crypto::KeyFactory::Ptr _keyFactory,
+        bcos::crypto::KeyFactory::Ptr _keyFactory, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr);
-    virtual ~RpcFactory() {}
+    virtual ~RpcFactory() = default;
 
     std::shared_ptr<boostssl::ws::WsConfig> initConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
@@ -94,6 +91,7 @@ private:
     std::string m_chainID;
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
+    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     bcos::security::DataEncryptInterface::Ptr m_dataEncrypt;
 };

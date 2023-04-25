@@ -706,14 +706,23 @@ void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
 {
     m_checkPointTimeoutInterval = checkAndGetValue(
         _pt, "consensus.checkpoint_timeout", std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS));
+    m_pipelineSize =
+        checkAndGetValue(_pt, "consensus.pipeline_size", std::to_string(DEFAULT_PIPELINE_SIZE));
     if (m_checkPointTimeoutInterval < DEFAULT_MIN_CONSENSUS_TIME_MS)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set consensus.checkpoint_timeout to no less than " +
                                   std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS) + "ms!"));
     }
+    if (m_pipelineSize < DEFAULT_PIPELINE_SIZE)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "Please set consensus.pipeline_size to no less than " +
+                                  std::to_string(DEFAULT_PIPELINE_SIZE)));
+    }
     NodeConfig_LOG(INFO) << LOG_DESC("loadConsensusConfig")
-                         << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval);
+                         << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval)
+                         << LOG_KV("pipeline_size", m_pipelineSize);
 }
 
 void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig)
