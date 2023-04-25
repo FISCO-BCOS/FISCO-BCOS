@@ -47,8 +47,6 @@ public:
 
     virtual void notifyTransactionsResult(
         bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
-    virtual void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
-        bcos::consensus::ConsensusNodeList const& _observerNodeList) = 0;
 
     virtual void stop() = 0;
     virtual void init() = 0;
@@ -146,32 +144,6 @@ public:
                                << LOG_KV("code", _error->errorCode())
                                << LOG_KV("msg", _error->errorMessage());
             });
-    }
-
-    void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
-        bcos::consensus::ConsensusNodeList const& _observerNodeList) override
-    {
-        m_txPool->notifyConsensusNodeList(_consensusNodeList, [](Error::Ptr _error) {
-            if (_error == nullptr)
-            {
-                PBFT_LOG(DEBUG) << LOG_DESC("notify to update consensusNodeList config success");
-                return;
-            }
-            PBFT_LOG(WARNING) << LOG_DESC("notify to update consensusNodeList config failed")
-                              << LOG_KV("code", _error->errorCode())
-                              << LOG_KV("msg", _error->errorMessage());
-        });
-
-        m_txPool->notifyObserverNodeList(_observerNodeList, [](Error::Ptr _error) {
-            if (_error == nullptr)
-            {
-                PBFT_LOG(DEBUG) << LOG_DESC("notify to update observerNodeList config success");
-                return;
-            }
-            PBFT_LOG(WARNING) << LOG_DESC("notify to update observerNodeList config failed")
-                              << LOG_KV("code", _error->errorCode())
-                              << LOG_KV("msg", _error->errorMessage());
-        });
     }
 
     void setVerifyCompletedHook(std::function<void()> _hook) override

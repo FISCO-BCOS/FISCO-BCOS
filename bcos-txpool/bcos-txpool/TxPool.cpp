@@ -417,8 +417,7 @@ void TxPool::init()
     auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_config->ledger());
     TXPOOL_LOG(INFO) << LOG_DESC("fetch LedgerConfig information");
     ledgerConfigFetcher->fetchBlockNumberAndHash();
-    ledgerConfigFetcher->fetchConsensusNodeList();
-    ledgerConfigFetcher->fetchObserverNodeList();
+    ledgerConfigFetcher->fetchBlockTxCountLimit();
     TXPOOL_LOG(INFO) << LOG_DESC("fetch LedgerConfig success");
 
     auto blockLimit = m_config->blockLimit();
@@ -449,8 +448,8 @@ void TxPool::init()
     // init syncConfig
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config");
     auto txsSyncConfig = m_transactionSync->config();
-    txsSyncConfig->setConsensusNodeList(ledgerConfig->consensusNodeList());
-    txsSyncConfig->setObserverList(ledgerConfig->observerNodeList());
+    m_transactionSync->config()->setMaxResponseTxsToNodesWithEmptyTxs(
+        ledgerConfig->blockTxCountLimit());
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config success");
 }
 

@@ -131,18 +131,6 @@ public:
     bool invalid() const { return m_invalid; }
     void setInvalid(bool _invalid) const { m_invalid = _invalid; }
 
-    void appendKnownNode(bcos::crypto::NodeIDPtr _node) const
-    {
-        std::unique_lock<std::shared_mutex> l(x_knownNodeList);
-        m_knownNodeList.insert(_node);
-    }
-
-    bool isKnownBy(bcos::crypto::NodeIDPtr _node) const
-    {
-        std::shared_lock<std::shared_mutex> l(x_knownNodeList);
-        return m_knownNodeList.count(_node);
-    }
-
     void setSystemTx(bool _systemTx) const { m_systemTx = _systemTx; }
     bool systemTx() const { return m_systemTx; }
 
@@ -162,10 +150,6 @@ protected:
     // the hash of the proposal that the tx batched into
     mutable bcos::crypto::HashType m_batchHash;
 
-    // Record the list of nodes containing the transaction and provide related query interfaces.
-    mutable std::shared_mutex x_knownNodeList;
-    // Record the node where the transaction exists
-    mutable bcos::crypto::NodeIDSet m_knownNodeList;
     // the number of proposal that the tx batched into
     mutable bcos::protocol::BlockNumber m_batchId = {-1};
 
