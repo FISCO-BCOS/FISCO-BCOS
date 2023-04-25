@@ -42,6 +42,7 @@ public:
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
     constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
     constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
+    constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
 
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
@@ -117,6 +118,7 @@ public:
 
     size_t minSealTime() const { return m_minSealTime; }
     size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
+    size_t pipelineSize() const { return m_pipelineSize; }
 
     std::string const& storagePath() const { return m_storagePath; }
     std::string const& storageType() const { return m_storageType; }
@@ -299,6 +301,7 @@ private:
     // sealer configuration
     size_t m_minSealTime = 0;
     size_t m_checkPointTimeoutInterval;
+    size_t m_pipelineSize = 50;
 
     // for security
     std::string m_privateKeyPath;

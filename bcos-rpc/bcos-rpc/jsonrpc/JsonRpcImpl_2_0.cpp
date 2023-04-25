@@ -59,8 +59,12 @@ using namespace boost::archive::iterators;
 
 JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-    std::shared_ptr<boostssl::ws::WsService> _wsService)
-  : m_groupManager(_groupManager), m_gatewayInterface(_gatewayInterface), m_wsService(_wsService)
+    std::shared_ptr<boostssl::ws::WsService> _wsService,
+    bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
+  : m_groupManager(std::move(_groupManager)),
+    m_gatewayInterface(std::move(_gatewayInterface)),
+    m_wsService(std::move(_wsService)),
+    m_callValidator(CallValidator(std::move(_cryptoSuite)))
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
         boost::bind(&JsonRpcImpl_2_0::handleRpcRequest, this, boost::placeholders::_1,
@@ -130,7 +134,7 @@ bcos::bytes JsonRpcImpl_2_0::decodeData(std::string_view _data)
         BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect hex string"});
     }
 
-    if (*begin == '0' && *(begin + 1) == 'x')
+    if (_data.starts_with("0x"))
     {
         begin += 2;
         length -= 2;
@@ -371,33 +375,47 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, boo
 void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName,
     std::string_view _to, std::string_view _data, RespFunc _respFunc)
 {
-    RPC_IMPL_LOG(TRACE) << LOG_DESC("call") << LOG_KV("to", _to) << LOG_KV("group", _groupID)
-                        << LOG_KV("node", _nodeName) << LOG_KV("data", _data);
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        RPC_IMPL_LOG(TRACE) << LOG_DESC("call") << LOG_KV("to", _to) << LOG_KV("group", _groupID)
+                            << LOG_KV("node", _nodeName) << LOG_KV("data", _data);
+    }
 
     auto nodeService = getNodeService(_groupID, _nodeName, "call");
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
     auto transaction = transactionFactory->createTransaction(
         0, std::string(_to), decodeData(_data), "", 0, std::string(), std::string(), 0);
-    nodeService->scheduler()->call(std::move(transaction),
-        [m_to = std::string(_to), m_respFunc = std::move(_respFunc)](
-            Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
-            Json::Value jResp;
-            if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
-            {
-                jResp["blockNumber"] = _transactionReceiptPtr->blockNumber();
-                jResp["status"] = _transactionReceiptPtr->status();
-                jResp["output"] = toHexStringWithPrefix(_transactionReceiptPtr->output());
-            }
-            else
-            {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("call") << LOG_KV("to", m_to)
-                    << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
-                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success");
-            }
+    execCall(std::move(nodeService), std::move(transaction), std::move(_respFunc));
+}
 
-            m_respFunc(_error, jResp);
-        });
+void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName,
+    std::string_view _to, std::string_view _data, std::string_view _sign,
+    bcos::rpc::RespFunc _respFunc)
+{
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        RPC_IMPL_LOG(TRACE) << LOG_DESC("call") << LOG_KV("to", _to) << LOG_KV("group", _groupID)
+                            << LOG_KV("node", _nodeName) << LOG_KV("data", _data)
+                            << LOG_KV("sign", _sign);
+    }
+
+    auto nodeService = getNodeService(_groupID, _nodeName, "call");
+    auto transactionFactory = nodeService->blockFactory()->transactionFactory();
+    auto transaction = transactionFactory->createTransaction(
+        0, std::string(_to), decodeData(_data), "", 0, std::string(), std::string(), 0);
+    auto [result, sender] = m_callValidator.verify(_to, _data, _sign);
+    if (!result) [[unlikely]]
+    {
+        RPC_IMPL_LOG(TRACE) << LOG_DESC("call with sign verify failed") << LOG_KV("to", _to)
+                            << LOG_KV("data", _data) << LOG_KV("sign", _sign);
+        Json::Value jResp;
+        _respFunc(BCOS_ERROR_PTR(
+                      (int32_t)protocol::TransactionStatus::InvalidSignature, "Invalid signature"),
+            jResp);
+        return;
+    }
+    transaction->forceSender(sender);
+    execCall(std::move(nodeService), std::move(transaction), std::move(_respFunc));
 }
 
 void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view nodeName,
@@ -1348,4 +1366,28 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
         rpc->getGroupPeers(jResp, std::string_view(group), _localP2pInfo, _peersInfo);
         _respFunc(_error, jResp);
     });
+}
+
+void JsonRpcImpl_2_0::execCall(
+    NodeService::Ptr nodeService, protocol::Transaction::Ptr _tx, bcos::rpc::RespFunc _respFunc)
+{
+    nodeService->scheduler()->call(
+        _tx, [m_to = std::string(_tx->to()), m_respFunc = std::move(_respFunc)](
+                 Error::Ptr&& _error, protocol::TransactionReceipt::Ptr&& _transactionReceiptPtr) {
+            Json::Value jResp;
+            if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
+            {
+                jResp["blockNumber"] = _transactionReceiptPtr->blockNumber();
+                jResp["status"] = _transactionReceiptPtr->status();
+                jResp["output"] = toHexStringWithPrefix(_transactionReceiptPtr->output());
+            }
+            else
+            {
+                RPC_IMPL_LOG(ERROR)
+                    << LOG_BADGE("call") << LOG_KV("to", m_to)
+                    << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
+                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success");
+            }
+            m_respFunc(_error, jResp);
+        });
 }

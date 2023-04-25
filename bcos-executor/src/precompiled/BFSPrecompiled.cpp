@@ -873,7 +873,7 @@ void BFSPrecompiled::fixBfs(const std::shared_ptr<executor::TransactionExecutive
 {
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    uint32_t fixVersion = 0;
+    u256 fixVersion = 0;
     codec.decode(_callParameters->params(), fixVersion);
     PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("fixBfs")
                           << LOG_KV("fixVersion", fixVersion);
