@@ -10,20 +10,11 @@ FISCO BCOS (pronounced /ˈfɪskl bi:ˈkɒz/) is an enterprise-level financial bl
 
 In a single-chain configuration, the performance can reach more than 100k TPS. FISCO BCOS provides rich features including group architecture, parallel computing, distributed storage, pluggable consensus mechanism, privacy protection algorithms, and OSCCA-approved cryptography modules.
 
-After a long period of practical testing in the production environment by industry partners, it has financial-grade high performance, high availability and high security. Currently, it has been adopted by over 4,000 enterprises and institutions, with more than 300 industry digital benchmark applications, covering fields such as cultural copyright, judicial services, government services, the Internet of Things, finance, smart communities, real estate construction, community governance, and rural revitalization.
+FISCO BCOS is a stable, efficient, and secure blockchain underlying platform. Its usability has been widely verified by practical applications, and many benchmark applications have been implemented in various industries.
 
-# Table of Contents
-- [Table of Contents](#table-of-contents)
-- [Documentation](#documentation)
-- [System Overview](#system-overview)
-    - [Architecture](#architecture)
-    - [Function](#function)
-    - [Features](#features)
-    - [Inheritance And Upgrade](#inheritance-and-upgrade)
-- [Featured applications](#featured-applications)
-- [Contributing code](#contributing-code)
-- [Join our community](#join-our-community)
-- [License](#license)
+## System Overview
+The architecture of FISCO BCOS system consists of the basic layer, core layer, service layer, user layer, and access layer on the left-hand side, providing stable and secure blockchain underlying services. The middleware layer simplifies the process of managing the blockchain system through a visual interface. On the right-hand side, there are supporting components for development, operation, and security control, meeting the needs of different roles during the application implementation process. Meanwhile, privacy protection and cross-chain-related technology components are also provided to satisfy the application requirements in different scenarios.
+![](./Technical-Architecture-en.png)
 
 ## Documentation
 
@@ -39,43 +30,10 @@ The documentation covers the following topics:
 7. [Advanced Feature Usage](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/advanced_function/safety.html)
 8. [Design Principles](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/design/architecture.html)
 
-## System Overview
-
-### Architecture
-
-Air, Pro, Max: Can be deployed in three different architecture forms.
-
-- **Lightweight Air version**: Has the same form as v2.0, with all functions in one blockchain node (all-in-one). This architecture is simple and can be quickly deployed in any environment. It can be used for blockchain entry, development, testing, POC verification, and other work.
-- **Professional Pro version**: This architecture separates the access layer module of the blockchain node into a process, while achieving separate deployment of the access layer and core modules, and allowing the core blockchain module to expand in multiple groups. This architecture implements partition isolation and is suitable for production environments with continuous business expansion.
-- **High-capacity Max version**: This architecture provides the ability to switch the primary and backup modules of the core blockchain module, and can parallelly expand computing and storage by deploying multiple machines for transaction executors and accessing distributed storage TiKV. A node in this architecture consists of a series of microservices, but it requires higher operational capabilities and is suitable for scenarios that require massive computing and storage.
-
-### Function
-
-- **Blockchain file system**: WYSIWYG contract data management.
-- **SDK basic library**: More convenient national secret access on all platforms.
-- **Transaction parallel conflict analysis tool**: Automatically generates transaction conflict variables.
-- **WBC-Liquid**: Writing contracts in Rust.
-- **Permission governance framework**: Multi-party voting governance blockchain.
-
-### Features
-
-- **Pipeline**: Block pipeline, continuously and compactly generating blocks.
-- **Intra-block sharding**: Parallel execution of transactions among applications using DMC+DAG.
-- **PBFT**: Immediate consensus algorithm, achieving transaction confirmation in seconds.
-- **+TiKV**: Distributed transactional submission, supporting massive storage.
+If you need to refer to the relevant information of FISCO BCOS 2.x version, you can refer to the [FISCO BCOS 2.x Technical Documentation](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)
 
 
-### Inheritance And Upgrade
-
-- **Solidity**: Supports up to version 0.8.11.
-- **CRUD**: Stores data in table structure, with more user-friendly interfaces encapsulated in this version for business development.
-- **AMOP**: On-chain messenger protocol, using the P2P network of blockchain to achieve information transmission and data communication between applications accessing the blockchain.
-- **Disk encryption**: Private keys and data of blockchain nodes are stored in encrypted form on physical hard drives, and cannot be decrypted even if the physical hardware is lost.
-- **Cryptographic algorithm**: Built-in group ring signature and other cryptographic algorithms, supporting various secure multi-party computing scenarios.
-- **Blockchain monitoring**: Real-time monitoring and data reporting of blockchain status.
-
-
-## Featured applications
+## Featured application
 
 **FISCO BCOS** has been adopted in over hundreds of applications in areas like government affairs, finances, charity, health care, education, transport, copyright, product tracing, supply chain, recruitment, agriculture, social communication, and entertainment.
 
@@ -86,10 +44,6 @@ Air, Pro, Max: Can be deployed in three different architecture forms.
 - **Rural Revitalization**: Construction of smart agriculture and animal husbandry big data cloud platforms, digital platforms, etc.
 - **Smart Governance**: City brain, provident fund blockchain platform, digital certification projects, etc.
 
-## Contributing code
-
-- Your contributions are most welcome and appreciated. Please read the [contribution instructions](https://mp.weixin.qq.com/s/_w_auH8X4SQQWO3lhfNrbQ).
-- If this project is useful to you, please star us on GitHub project page!
 
 ## Join our community
 
@@ -98,6 +52,11 @@ The FISCO BCOS open source community is a thriving and expansive community in Ch
 If you have an interest in FISCO BCOS open source technology and applications, we invite you to join the community and take advantage of the support and resources available.
 
 ![](https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/images/QR_image_en.png)
+
+## Contributing code
+
+- Your contributions are most welcome and appreciated. Please read the [contribution instructions](https://mp.weixin.qq.com/s/_w_auH8X4SQQWO3lhfNrbQ).
+- If this project is useful to you, please star us on GitHub project page!
 
 ## License
 
