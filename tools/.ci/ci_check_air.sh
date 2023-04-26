@@ -67,7 +67,7 @@ init()
     cd ${current_path}
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
-    rm -rf nodes
+    clear_node
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
     cd nodes/127.0.0.1 && wait_and_start
 }
@@ -137,8 +137,10 @@ check_consensus()
 clear_node()
 {
     cd ${current_path}
-    bash nodes/127.0.0.1/stop_all.sh
-    rm -rf nodes
+    if [ -d "nodes" ]; then
+        bash nodes/127.0.0.1/stop_all.sh
+        rm -rf nodes
+    fi
 }
 
 if [[ -n "${1}" ]]; then
@@ -190,3 +192,5 @@ if [[ ${?} == "0" ]]; then
 fi
 stop_node
 LOG_INFO "======== check sm case success ========"
+clear_node
+LOG_INFO "======== clear node after sm test success ========"

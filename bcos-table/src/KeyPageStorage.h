@@ -293,7 +293,7 @@ public:
             }
             return *this;
         }
-        auto lower_bound(std::string_view key)
+        auto lower_bound(const std::string_view& key) const
         {
             return std::lower_bound(pages->begin(), pages->end(), key,
                 [](const PageInfo& lhs, const std::string_view& rhs) {
@@ -418,10 +418,10 @@ public:
                 }
                 else
                 {
-                    KeyPage_LOG(FATAL)
-                        << LOG_DESC("updatePageInfo not found")
-                        << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
-                        << LOG_KV("valid", count) << LOG_KV("size", size);
+                    KeyPage_LOG(FATAL) << LOG_DESC("updatePageInfo not found")
+                                       << LOG_KV("oldEndKey", toHex(oldEndKey))
+                                       << LOG_KV("pageKey", toHex(pageKey))
+                                       << LOG_KV("valid", count) << LOG_KV("size", size);
                 }
             }
             return oldPageKey;
@@ -489,6 +489,12 @@ public:
         }
         double hitRate() const { return hit / (double)getPageInfoCount; }
         uint64_t rowCount() const { return m_rows; }
+
+        bool pageExist(const std::string_view& pageKey) const
+        {
+            auto it = lower_bound(pageKey);
+            return it != pages->end() && it->getPageKey() == pageKey;
+        }
 
     private:
         uint32_t getPageInfoCount = 0;
@@ -673,6 +679,7 @@ public:
                     {
                         ++m_validCount;
                         pageInfoChanged = true;
+                        m_size += it->first.size();
                     }
                 }
                 else
@@ -681,6 +688,8 @@ public:
                     {
                         --m_validCount;
                         pageInfoChanged = true;
+                        m_size -= entry.size();
+                        m_size -= it->first.size();
                     }
                 }
                 if (m_invalidPageKeys.size() == 1)
@@ -703,10 +712,15 @@ public:
             else
             {
                 pageInfoChanged = true;
-                m_size += key.size();
+
                 if (entry.status() != Entry::Status::DELETED)
                 {
                     ++m_validCount;
+                    m_size += key.size();
+                }
+                else
+                {
+                    m_size -= entry.size();
                 }
                 if (entries.empty() || key > entries.rbegin()->first)
                 {
@@ -995,6 +1009,8 @@ public:
         }
         auto lock() -> std::unique_lock<std::shared_mutex> { return std::unique_lock(mutex); }
         auto rLock() -> std::shared_lock<std::shared_mutex> { return std::shared_lock(mutex); }
+        void setTableMeta(TableMeta* _meta) { m_meta = _meta; }
+        TableMeta* myTableMeta() { return m_meta; }
 
     private:
         //   PageInfo* pageInfo;
@@ -1005,12 +1021,13 @@ public:
         friend class boost::serialization::access;
         // if startKey changed the old startKey need keep to delete old page
         std::set<std::string> m_invalidPageKeys;
+        TableMeta* m_meta = nullptr;
         template <class Archive>
         void save(Archive& ar, const unsigned int version) const
         {
             std::ignore = version;
             ar&(uint32_t)m_validCount;
-            size_t count = 0;
+            [[maybe_unused]] size_t count = 0;
             for (const auto& i : entries)
             {
                 if (i.second.status() == Entry::Status::DELETED)

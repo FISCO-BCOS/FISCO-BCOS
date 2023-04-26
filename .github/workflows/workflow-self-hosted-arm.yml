@@ -20,7 +20,7 @@ concurrency:
 jobs:
   build_arm:
     name: arm ci check
-    runs-on: self-hosted-arm3.3
+    runs-on: self-hosted-arm
     strategy:
       fail-fast: false
     env:
@@ -36,6 +36,7 @@ jobs:
           yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel java-1.8.0-openjdk-devel.aarch64
           yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake nodejs npm
           sudo npm install -g newman
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28

@@ -737,6 +737,10 @@ void TablePrecompiled::insert(const std::string& tableName,
                                << LOG_KV("fieldSize", columns.size());
         BOOST_THROW_EXCEPTION(PrecompiledError("Table insert entry fields number mismatch"));
     }
+    if (key.empty() && blockContext.blockVersion() >= BlockVersion::V3_3_VERSION) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(PrecompiledError("Table insert entry key is empty"));
+    }
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
     std::for_each(values.begin(), values.end(), [](std::string_view _v) {
         checkLengthValidate(

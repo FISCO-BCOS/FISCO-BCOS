@@ -1734,7 +1734,8 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
                      << LOG_KV("blockTxCountLimit", _ledgerConfig->blockTxCountLimit())
                      << LOG_KV("compatibilityVersion", _compatibilityVersion)
                      << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
-                     << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
+                     << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
+                     << LOG_KV("isAuthCheck", _isAuthCheck);
 
     // build a block
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();

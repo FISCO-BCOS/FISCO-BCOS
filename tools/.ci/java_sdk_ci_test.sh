@@ -21,6 +21,7 @@ download_java_sdk()
     if [ -d ${java_sdk_file} ] && [ -d "${java_sdk_file}/.git" ]; then
         LOG_INFO "Use download cache"
         cd ${java_sdk_file}
+        git fetch --unshallow
         rm -rf build log
         git reset --hard
         git checkout ${java_sdk_branch}

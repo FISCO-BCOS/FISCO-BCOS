@@ -73,10 +73,10 @@ public:
         table_options.optimize_filters_for_memory = true;
         options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
 
-        if (boost::filesystem::space(_path).available < 1024 * 1024 * 500)
+        if (boost::filesystem::space(_path).available < 1 << 30)
         {
-            BCOS_LOG(INFO) << "available disk space is less than 500MB";
-            throw std::runtime_error("available disk space is less than 500MB");
+            BCOS_LOG(INFO) << "available disk space is less than 1GB";
+            throw std::runtime_error("available disk space is less than 1GB");
         }
 
         // open DB
