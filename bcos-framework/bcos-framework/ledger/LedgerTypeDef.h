@@ -41,11 +41,20 @@ constexpr static std::string_view SYSTEM_KEY_CONSENSUS_LEADER_PERIOD = "consensu
 constexpr static std::string_view SYSTEM_KEY_AUTH_CHECK_STATUS = "auth_check_status";
 // for compatibility
 constexpr static std::string_view SYSTEM_KEY_COMPATIBILITY_VERSION = "compatibility_version";
+// system configuration for RPBFT
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = "rpbft_epoch_sealer_num";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = "rpbft_epoch_block_num";
+constexpr static std::string_view SYSTEM_KEY_CONSENSUS_TYPE = "consensus_type";
+
+// notify rotate key for rpbft
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "notify_rotate";
 
 // system config struct
 using SystemConfigEntry = std::tuple<std::string, bcos::protocol::BlockNumber>;
 
 const unsigned TX_GAS_LIMIT_MIN = 100000;
+const unsigned RPBFT_EPOCH_SEALER_NUM_MIN = 1;
+const unsigned RPBFT_EPOCH_BLOCK_NUM_MIN = 1;
 // get consensus node list type
 constexpr static std::string_view CONSENSUS_SEALER = "consensus_sealer";
 constexpr static std::string_view CONSENSUS_OBSERVER = "consensus_observer";
@@ -74,7 +83,8 @@ constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer
 constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};
 constexpr static std::string_view SYS_CONTRACT_ABI{"s_contract_abi"};
 
-struct CurrentState {
+struct CurrentState
+{
     bcos::protocol::BlockNumber latestBlockNumber;
     bcos::protocol::BlockNumber archivedNumber;
     int64_t totalTransactionCount;
