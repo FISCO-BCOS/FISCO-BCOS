@@ -16,6 +16,28 @@ FISCO BCOS is a stable, efficient, and secure blockchain underlying platform. It
 The architecture of FISCO BCOS system consists of the basic layer, core layer, service layer, user layer, and access layer on the left-hand side, providing stable and secure blockchain underlying services. The middleware layer simplifies the process of managing the blockchain system through a visual interface. On the right-hand side, there are supporting components for development, operation, and security control, meeting the needs of different roles during the application implementation process. Meanwhile, privacy protection and cross-chain-related technology components are also provided to satisfy the application requirements in different scenarios.
 ![](./Technical-Architecture-en.png)
 
+### Underlying Features
+
+- Blockchain File System: WYSIWYG contract data management
+- Distributed Storage TiKV: Distributed transactional submission, supporting massive storage
+- Pipelined: Block pipeline, generating blocks continuously and compactly
+- Pluggable Consensus Mechanism: Designed a pluggable consensus framework, flexible and optional
+- Permission Governance Framework: Built-in permission governance framework, multi-party voting to govern the blockchain
+- SDK Basic Library: Multi-language SDK, more convenient access to national cryptographic algorithms on all platforms
+
+### Component Services
+
+- Privacy Protection: WeDPR, a scenario-based privacy protection solution that is even available
+- Cross-chain Collaboration: WeCross, a cross-chain collaboration platform that supports multi-chain interoperability
+- Blockchain Management: WeBASE, a visual blockchain management platform
+
+### Development and Operation Tools
+
+- Deployment Tool: One-click chain-building script, automated deployment of blockchain
+- Visualization Tool: Provides visualization management tools to reduce operational procedures
+- Monitoring and Alarm Tool: Monitors the running status of the blockchain system and alarms in real-time
+- Data Archiving Tool: Cold data archiving, supporting RocksDB and TiKV, releasing storage pressure.
+
 ## Documentation
 
 [《The FISCO BCOS Official Technical Documentation》](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/index.html) provides chain development guidelines, tool introductions, and design principle explanations. Users can quickly learn and use FISCO BCOS by reading the official technical documentation.
