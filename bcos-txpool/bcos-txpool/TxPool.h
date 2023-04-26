@@ -69,8 +69,7 @@ public:
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override;
 
     // hook for tx/consensus sync message receive
-    // FIXME: deprecated, since use broadcastPushTransaction
-    [[deprecated]] void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _uuid,
+    void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _uuid,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         std::function<void(Error::Ptr)> _onRecv) override;
 

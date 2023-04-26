@@ -829,19 +829,18 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
 {
     auto missList = std::make_shared<HashList>();
     m_txsTable.batchFind<TxsMap::ReadAccessor>(
-        _txsHashList, [&_peer, &missList](auto const& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+        _txsHashList, [&missList](auto const& txHash, TxsMap::ReadAccessor::Ptr accessor) {
             if (!accessor)
             {
                 missList->push_back(txHash);
             }
             else
             {
-                auto& tx = accessor->value();
+                const auto& tx = accessor->value();
                 if (!tx)
                 {
                     return true;
                 }
-                tx->appendKnownNode(_peer);
             }
             return true;
         });
@@ -1067,26 +1066,27 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
 {
     auto txsHash = std::make_shared<HashList>();
 
-    m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
-        auto tx = accessor->value();
-        if (!tx)
-        {
+    m_txsTable.forEach<TxsMap::ReadAccessor>(
+        [this, &txsHash, &_limit](TxsMap::ReadAccessor::Ptr accessor) {
+            auto tx = accessor->value();
+            if (!tx)
+            {
+                return true;
+            }
+            auto result = m_config->txValidator()->submittedToChain(tx);
+            if (result != TransactionStatus::None)
+            {
+                TxsMap::WriteAccessor::Ptr writeAccessor;
+                m_invalidTxs.insert(writeAccessor, {tx->hash(), tx});
+                return true;
+            }
+            if ((int)txsHash->size() >= _limit)
+            {
+                return false;
+            }
+            txsHash->emplace_back(accessor->key());
             return true;
-        }
-        auto result = m_config->txValidator()->submittedToChain(tx);
-        if (result != TransactionStatus::None)
-        {
-            TxsMap::WriteAccessor::Ptr accessor;
-            m_invalidTxs.insert(accessor, {tx->hash(), tx});
-            return true;
-        }
-        if ((int)txsHash->size() >= _limit)
-        {
-            return false;
-        }
-        txsHash->emplace_back(accessor->key());
-        return true;
-    });
+        });
     removeInvalidTxs(true);
     return txsHash;
 }
@@ -1112,61 +1112,62 @@ void MemoryStorage::cleanUpExpiredTransactions()
     size_t erasedTxs = 0;
     uint64_t currentTime = utcTime();
 
-    m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
-        if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
-        {
-            return false;
-        }
+    m_txsTable.forEach<TxsMap::ReadAccessor>(
+        [&traversedTxsNum, this, &currentTime, &erasedTxs](TxsMap::ReadAccessor::Ptr accessor) {
+            if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
+            {
+                return false;
+            }
 
-        auto tx = accessor->value();
-        if (tx->sealed() && tx->batchId() >= m_blockNumber)
-        {
+            auto tx = accessor->value();
+            if (tx->sealed() && tx->batchId() >= m_blockNumber)
+            {
+                return true;
+            }
+
+            // the txs expired or not
+            if (currentTime > (tx->importTime() + m_txsExpirationTime))
+            {
+                TxsMap::WriteAccessor::Ptr accessor1;
+                if (m_invalidTxs.insert(accessor1, {tx->hash(), tx}))
+                {
+                    erasedTxs++;
+                }
+                else
+                {
+                    // already exist
+                    return true;
+                }
+            }
+            else
+            {
+                if (m_invalidTxs.contains(tx->hash()))
+                {
+                    // already exist
+                    return true;
+                }
+            }
+            auto result = m_config->txValidator()->submittedToChain(tx);
+            // blockLimit expired
+            if (result != TransactionStatus::None)
+            {
+                TxsMap::WriteAccessor::Ptr writeAccessor;
+                if (m_invalidTxs.insert(writeAccessor, {tx->hash(), tx}))
+                {
+                    erasedTxs++;
+                }
+                else
+                {  // already exist
+                    return true;
+                }
+            }
+
+            if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
+            {
+                return false;
+            }
             return true;
-        }
-
-        // the txs expired or not
-        if (currentTime > (tx->importTime() + m_txsExpirationTime))
-        {
-            TxsMap::WriteAccessor::Ptr accessor1;
-            if (m_invalidTxs.insert(accessor1, {tx->hash(), tx}))
-            {
-                erasedTxs++;
-            }
-            else
-            {
-                // already exist
-                return true;
-            }
-        }
-        else
-        {
-            if (m_invalidTxs.contains(tx->hash()))
-            {
-                // already exist
-                return true;
-            }
-        }
-        auto result = m_config->txValidator()->submittedToChain(tx);
-        // blockLimit expired
-        if (result != TransactionStatus::None)
-        {
-            TxsMap::WriteAccessor::Ptr accessor;
-            if (m_invalidTxs.insert(accessor, {tx->hash(), tx}))
-            {
-                erasedTxs++;
-            }
-            else
-            {  // already exist
-                return true;
-            }
-        }
-
-        if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
-        {
-            return false;
-        }
-        return true;
-    });
+        });
 
     TXPOOL_LOG(INFO) << LOG_DESC("cleanUpExpiredTransactions")
                      << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs);

@@ -29,7 +29,6 @@
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/write_batch.h"
-#include "rocksdb/filter_policy.h"
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
 
@@ -74,7 +73,7 @@ public:
         table_options.optimize_filters_for_memory = true;
         options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
 
-        if (boost::filesystem::space(_path).available <  1 << 30)
+        if (boost::filesystem::space(_path).available < 1 << 30)
         {
             BCOS_LOG(INFO) << "available disk space is less than 1GB";
             throw std::runtime_error("available disk space is less than 1GB");
