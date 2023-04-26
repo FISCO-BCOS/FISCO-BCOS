@@ -141,7 +141,6 @@ public:
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
-            accessor = nullptr;
             return false;
         }
         else
@@ -293,8 +292,8 @@ public:
         forEach<AccessorType>(keys, [handler = std::move(handler)](const KeyType& key,
                                         typename Bucket<KeyType, ValueType>::Ptr bucket,
                                         typename AccessorType::Ptr accessor) {
-            bucket->template find<AccessorType>(accessor, key);
-            return handler(key, accessor);
+            bool has = bucket->template find<AccessorType>(accessor, key);
+            return handler(key, has ? accessor : nullptr);
         });
     }
 

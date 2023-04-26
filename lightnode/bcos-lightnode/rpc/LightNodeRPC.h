@@ -133,6 +133,13 @@ public:
         }(this, hexTransaction, to, std::move(respFunc)));
     }
 
+    void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
+        std::string_view _data, [[maybe_unused]] std::string_view _sign,
+        RespFunc _respFunc) override
+    {
+        call(_groupID, _nodeName, _to, _data, _respFunc);
+    }
+
     void sendTransaction([[maybe_unused]] std::string_view _groupID,
         [[maybe_unused]] std::string_view _nodeName, std::string_view hexTransaction,
         [[maybe_unused]] bool requireProof, RespFunc respFunc) override

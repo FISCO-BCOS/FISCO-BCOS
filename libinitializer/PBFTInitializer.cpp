@@ -408,6 +408,7 @@ void PBFTInitializer::createPBFT()
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();
     pbftConfig->setCheckPointTimeoutInterval(m_nodeConfig->checkPointTimeoutInterval());
     pbftConfig->setMinSealTime(m_nodeConfig->minSealTime());
+    pbftConfig->setPipeLineSize(m_nodeConfig->pipelineSize());
 }
 
 void PBFTInitializer::createSync()
@@ -418,6 +419,7 @@ void PBFTInitializer::createSync()
         m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(), m_ledger,
         m_txpool, m_frontService, m_scheduler, m_pbft, m_nodeTimeMaintenance);
     m_blockSync = blockSyncFactory->createBlockSync();
+    m_blockSync->setFaultyNodeBlockDelta(m_nodeConfig->pipelineSize());
 }
 
 std::shared_ptr<bcos::txpool::TxPoolInterface> PBFTInitializer::txpool()
