@@ -26,15 +26,6 @@ module bcostars
         Error asyncSendBroadcastMessageByTopic(string _topic, vector<byte> _data);
 
         Error asyncSubscribeTopic(string _clientID, string _topicInfo);
-
         Error asyncRemoveTopic(string _clientID, vector<string> _topicList);
-
-        Error asyncGetPeerBlacklist(out vector<string> _strList, out bool _enable);
-
-        Error asyncSetPeerBlacklist(vector<string> _strList, bool _enable);
-
-        Error asyncGetPeerWhitelist(out vector<string> _strList, out bool _enable);
-
-        Error asyncSetPeerWhitelist(vector<string> _strList, bool _enable);
     };
 };

@@ -116,11 +116,6 @@ public:
 
     virtual void getGroupBlockNumber(RespFunc _respFunc) = 0;
 
-    virtual void getPeerBlacklist(RespFunc _respFunc) = 0;
-    virtual void setPeerBlacklist(const std::set<std::string>& _strList, const bool _enable, RespFunc _respFunc) = 0;
-    virtual void getPeerWhitelist(RespFunc _respFunc) = 0;
-    virtual void setPeerWhitelist(const std::set<std::string>& _strList, const bool _enable, RespFunc _respFunc) = 0;
-
 public:
     void onRPCRequest(std::string_view _requestBody, Sender _sender);
 
@@ -283,32 +278,6 @@ private:
     void getGroupNodeInfoI(const Json::Value& _req, RespFunc _respFunc)
     {
         getGroupNodeInfo(toView(_req[0u]), toView(_req[1u]), std::move(_respFunc));
-    }
-    // get the black list
-    void getPeerBlacklistI([[maybe_unused]] const Json::Value& _req, RespFunc _respFunc)
-    {
-        getPeerBlacklist(std::move(_respFunc));
-    }
-    // set the black list
-    void setPeerBlacklistI(const Json::Value& _req, RespFunc _respFunc)
-    {
-        std::set<std::string> _strList;
-        for(auto iter = _req[0u].begin(); iter != _req[0u].end(); ++iter)
-            _strList.emplace(std::move(iter->asString()));
-        setPeerBlacklist(_strList, _req[1u].asBool(), std::move(_respFunc));
-    }
-    // get the white list
-    void getPeerWhitelistI([[maybe_unused]] const Json::Value& _req, RespFunc _respFunc)
-    {
-        getPeerWhitelist(std::move(_respFunc));
-    }
-    // set the white list
-    void setPeerWhitelistI(const Json::Value& _req, RespFunc _respFunc)
-    {
-        std::set<std::string> _strList;
-        for(auto iter = _req[0u].begin(); iter != _req[0u].end(); ++iter)
-            _strList.emplace(std::move(iter->asString()));
-        setPeerWhitelist(_strList, _req[1u].asBool(), std::move(_respFunc));
     }
 };
 void parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest);

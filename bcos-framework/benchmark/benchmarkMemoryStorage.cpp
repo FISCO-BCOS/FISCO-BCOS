@@ -82,7 +82,6 @@ static void read(benchmark::State& state)
         fixture.prepareData(state.range(0));
         allStorage.emplace<Storage>();
 
-
         task::syncWait([&]() -> task::Task<void> {
             co_await std::visit(
                 [&](auto& storage) -> task::Task<void> {

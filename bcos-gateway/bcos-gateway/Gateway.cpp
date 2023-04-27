@@ -40,7 +40,6 @@
 #include <bcos-utilities/Exceptions.h>
 #include <json/json.h>
 #include <algorithm>
-#include <fstream>
 #include <random>
 #include <string>
 #include <vector>
@@ -106,7 +105,6 @@ void Gateway::asyncGetPeers(
     {
         return;
     }
-
     auto sessionInfos = m_p2pInterface->sessionInfos();
     auto peersNodeIDList = m_gatewayNodeManager->peersRouterTable()->getAllPeers();
     GatewayInfosPtr peerGatewayInfos = std::make_shared<GatewayInfos>();
@@ -505,98 +503,4 @@ void Gateway::onReceiveBroadcastMessage(
     auto type = _msg->ext();
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
         srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
-}
-
-void Gateway::asyncGetPeerBlacklist(
-    std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback)
-{
-    if (nullptr != _callback)
-    {
-        _callback(nullptr, m_gatewayConfig->peerBlacklist(), m_gatewayConfig->enableBlacklist());
-    }
-}
-
-void Gateway::asyncSetPeerBlacklist(const std::set<std::string>& _strList, bool _enable,
-    std::function<void(Error::Ptr)> _callback)
-{
-    try
-    {
-        m_gatewayConfig->updatePeerBlacklistAndConfigFile(_strList, _enable);
-    }
-    catch (bcos::NodeIdFormatError const& e)
-    {
-        if (nullptr != _callback)
-        {
-            _callback(BCOS_ERROR_PTR(CommonError::NodeIdFormatError, "Node id format error"));
-        }
-    }
-    catch (bcos::FileReadError const& e)
-    {
-        if (nullptr != _callback)
-        {
-            _callback(BCOS_ERROR_PTR(
-                CommonError::GatewayConfigFileReadWriteFailed, "File read or write error"));
-        }
-    }
-    catch (std::exception const& e)
-    {
-        if (nullptr != _callback)
-        {
-            _callback(BCOS_ERROR_PTR(-1, e.what()));
-        }
-    }
-
-    m_p2pInterface->updatePeerBlacklist(
-        m_gatewayConfig->peerBlacklist(), m_gatewayConfig->enableBlacklist());
-    if (nullptr != _callback)
-    {
-        _callback(nullptr);
-    }
-}
-
-void Gateway::asyncGetPeerWhitelist(
-    std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback)
-{
-    if (nullptr != _callback)
-    {
-        _callback(nullptr, m_gatewayConfig->peerWhitelist(), m_gatewayConfig->enableWhitelist());
-    }
-}
-
-void Gateway::asyncSetPeerWhitelist(const std::set<std::string>& _strList, bool _enable,
-    std::function<void(Error::Ptr)> _callback)
-{
-    try
-    {
-        m_gatewayConfig->updatePeerWhitelistAndConfigFile(_strList, _enable);
-    }
-    catch (bcos::NodeIdFormatError const& e)
-    {
-        if (nullptr != _callback)
-        {
-            _callback(BCOS_ERROR_PTR(CommonError::NodeIdFormatError, "Node id format error"));
-        }
-    }
-    catch (bcos::FileReadError const& e)
-    {
-        if (nullptr != _callback)
-        {
-            _callback(BCOS_ERROR_PTR(
-                CommonError::GatewayConfigFileReadWriteFailed, "File read or write error"));
-        }
-    }
-    catch (std::exception const& e)
-    {
-        if (nullptr != _callback)
-        {
-            _callback(BCOS_ERROR_PTR(-1, e.what()));
-        }
-    }
-
-    m_p2pInterface->updatePeerWhitelist(
-        m_gatewayConfig->peerWhitelist(), m_gatewayConfig->enableWhitelist());
-    if (nullptr != _callback)
-    {
-        _callback(nullptr);
-    }
 }

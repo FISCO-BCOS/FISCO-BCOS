@@ -303,28 +303,6 @@ public:
                                     executeChunks[index].localStorage().mutableStorage(),
                                     lastStorage));
                             }
-                            auto& [chunkStorage, chunkReadWriteStorage, chunkReceipts] =
-                                *chunkResult;
-
-                            if (!executedChunk.empty())
-                            {
-                                auto& [_1, prevReadWriteSetStorage, _2] = executedChunk.back();
-                                if (prevReadWriteSetStorage.hasRAWIntersection(
-                                        chunkReadWriteStorage))
-                                {
-                                    // Abort the pipeline
-                                    PARALLEL_SCHEDULER_LOG(DEBUG)
-                                        << "Detected RAW intersection, abort";
-                                    abortToken = true;
-                                    return;
-                                }
-                            }
-
-                            PARALLEL_SCHEDULER_LOG(DEBUG)
-                                << "Inserting receipts... " << chunkReceipts.size();
-                            RANGES::move(chunkReceipts, std::back_inserter(receipts));
-                            executedChunk.emplace_back(std::move(*chunkResult));
-                            ++chunkIt;
                         }));
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,

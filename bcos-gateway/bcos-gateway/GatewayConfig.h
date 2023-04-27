@@ -245,9 +245,6 @@ public:
     void loadPeerBlacklist();
     void loadPeerWhitelist();
 
-    void updatePeerBlacklistAndConfigFile(const std::set<std::string>& _strList, const bool _enable);
-    void updatePeerWhitelistAndConfigFile(const std::set<std::string>& _strList, const bool _enable);
-
     std::string const& uuid() const { return m_uuid; }
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 

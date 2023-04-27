@@ -129,6 +129,7 @@ static void write1(benchmark::State& state)
     }(state));
 }
 
+
 BENCHMARK(read1)->Arg(10000)->Arg(100000)->Arg(1000000);
 BENCHMARK(read10)->Arg(10000)->Arg(100000)->Arg(1000000);
 BENCHMARK(write1);

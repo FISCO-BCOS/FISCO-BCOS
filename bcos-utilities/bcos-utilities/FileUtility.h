@@ -42,46 +42,4 @@ std::shared_ptr<bytes> readContents(boost::filesystem::path const& _file);
  */
 std::shared_ptr<std::string> readContentsToString(boost::filesystem::path const& _file);
 
-/**
- * @brief : read all lines of the specified file, and return the content as vector<string>
- *
- * @param _file : the file
- * @return std::shared_ptr<std::vector<std::string>> : all lines of the specified file
- *         If the file doesn't exist or isn't readable,
- *         returns an empty vector
- */
-std::shared_ptr<std::vector<std::string>> readAllLinesFromFile(std::string const& _file);
-
-/**
- * @brief : write the content to the specified file, and return the result
- *
- * @param _file : the file
- * @return bool
- *         If the file write failed,
- *         returns false
- */
-bool writeContents(boost::filesystem::path const& _file, std::shared_ptr<bytes> _contents);
-
-/**
- * @brief : write the content to the specified file, and return the result
- *
- * @param _file : the file
- * @return bool
- *         If the file write failed,
- *         returns false
- */
-bool writeContentsByString(
-    boost::filesystem::path const& _file, std::shared_ptr<std::string> _contents);
-
-/**
- * @brief : write all lines to the specified file, and return the result
- *
- * @param _file : the file
- * @return bool
- *         If the file write failed,
- *         returns false
- */
-bool writeAllLinesToFile(
-    std::string const& _file, std::shared_ptr<std::vector<std::string>> _lines);
-
 }  // namespace bcos

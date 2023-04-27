@@ -259,9 +259,6 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     }
 
     RecursiveGuard l(x_sessions);
-
-    std::cout << "Service::onDisconnect, m_sessions.size(): " << m_sessions.size() << std::endl;
-
     auto it = m_sessions.find(p2pSession->p2pID());
     if (it != m_sessions.end() && it->second == p2pSession)
     {

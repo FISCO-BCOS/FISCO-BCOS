@@ -121,22 +121,6 @@ public:
     void asyncRemoveTopic(std::string const&, std::vector<std::string> const&,
         std::function<void(Error::Ptr&&)>) override
     {}
-
-    void asyncGetPeerBlacklist(
-        std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback) override
-    {}
-
-    void asyncSetPeerBlacklist(const std::set<std::string>& _strList, bool _enable,
-        std::function<void(Error::Ptr)> _callback) override
-    {}
-
-    void asyncGetPeerWhitelist(
-        std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback) override
-    {}
-
-    void asyncSetPeerWhitelist(const std::set<std::string>& _strList, bool _enable,
-        std::function<void(Error::Ptr)> _callback) override
-    {}
 };
 
 }  // namespace test

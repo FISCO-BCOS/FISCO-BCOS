@@ -118,12 +118,6 @@ public:
 
     void getGroupBlockNumber(RespFunc _respFunc) override;
 
-    // black white list
-    void getPeerBlacklist(RespFunc _respFunc) override;
-    void setPeerBlacklist(const std::set<std::string>& _strList, const bool _enable, RespFunc _respFunc) override;
-    void getPeerWhitelist(RespFunc _respFunc) override;
-    void setPeerWhitelist(const std::set<std::string>& _strList, const bool _enable, RespFunc _respFunc) override;
-
     void setNodeInfo(const NodeInfo& _nodeInfo) { m_nodeInfo = _nodeInfo; }
     NodeInfo nodeInfo() const { return m_nodeInfo; }
     GroupManager::Ptr groupManager() { return m_groupManager; }

@@ -47,11 +47,6 @@ struct STORAGE_BEGIN_TYPE
 };
 inline constexpr STORAGE_BEGIN_TYPE STORAGE_BEGIN{};
 
-struct STORAGE_BEGIN_TYPE
-{
-};
-inline constexpr STORAGE_BEGIN_TYPE STORAGE_BEGIN{};
-
 template <class StorageType>
 concept SeekableStorage =
     requires(StorageType&& impl) {

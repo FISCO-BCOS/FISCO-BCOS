@@ -271,46 +271,6 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         bytesConstRef _payload, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
-    /**
-     * @brief get blacklist
-     * @param _strList: the blacklist node list
-     * @param _enable: whether to enable blacklist
-     * @param _callback
-     * @return void
-     */
-    void asyncGetPeerBlacklist(
-        std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback);
-
-    /**
-     * @brief set blacklist
-     * @param _strList: the blacklist node list
-     * @param _enable: whether to enable blacklist
-     * @param _callback
-     * @return void
-     */
-    void asyncSetPeerBlacklist(const std::set<std::string>& _strList, bool _enable,
-        std::function<void(Error::Ptr)> _callback);
-
-    /**
-     * @brief get whitelist
-     * @param _strList: the whitelist node list
-     * @param _enable: whether to enable whitelist
-     * @param _callback
-     * @return void
-     */
-    void asyncGetPeerWhitelist(
-        std::function<void(Error::Ptr, const std::set<std::string>&, bool)> _callback);
-
-    /**
-     * @brief set whitelist
-     * @param _strList: the whitelist node list
-     * @param _enable: whether to enable whitelist
-     * @param _callback
-     * @return void
-     */
-    void asyncSetPeerWhitelist(const std::set<std::string>& _strList, bool _enable,
-        std::function<void(Error::Ptr)> _callback);
-
     P2PInterface::Ptr p2pInterface() const { return m_p2pInterface; }
     GatewayNodeManager::Ptr gatewayNodeManager() { return m_gatewayNodeManager; }
     /**

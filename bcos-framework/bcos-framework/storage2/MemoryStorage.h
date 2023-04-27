@@ -508,6 +508,7 @@ public:
 
             auto& index = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
+
             while (!fromIndex.empty())
             {
                 auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
