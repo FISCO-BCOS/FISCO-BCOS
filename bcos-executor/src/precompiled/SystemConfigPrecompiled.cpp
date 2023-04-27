@@ -51,7 +51,7 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
         {
             BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + std::string(_key)));
         }
-        if (_value >= _minValue)
+        if (_value >= _minValue) [[likely]]
         {
             return;
         }
@@ -74,12 +74,27 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_AUTH_CHECK_STATUS, [defaultCmp](int64_t _value,
                                                                           uint32_t version) {
         defaultCmp(SYSTEM_KEY_AUTH_CHECK_STATUS, _value, 0, version, BlockVersion::V3_3_VERSION);
-        if (_value > (decltype(_value))UINT8_MAX)[[unlikely]]
+        if (_value > (decltype(_value))UINT8_MAX) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(PrecompiledError(
                 "Invalid status value, must less than " + std::to_string(UINT8_MAX)));
         }
     }));
+    m_sysValueCmp.insert(std::make_pair(
+        SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, [defaultCmp](int64_t _value, uint32_t version) {
+            defaultCmp(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, _value, RPBFT_EPOCH_BLOCK_NUM_MIN, version,
+                BlockVersion::V3_5_VERSION);
+        }));
+    m_sysValueCmp.insert(std::make_pair(
+        SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, [defaultCmp](int64_t _value, uint32_t version) {
+            defaultCmp(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, _value, RPBFT_EPOCH_SEALER_NUM_MIN,
+                version, BlockVersion::V3_5_VERSION);
+        }));
+    m_sysValueCmp.insert(
+        std::make_pair(SYSTEM_KEY_CONSENSUS_TYPE, [defaultCmp](int64_t _value, uint32_t version) {
+            defaultCmp(SYSTEM_KEY_CONSENSUS_TYPE, _value, ConsensusType::RPBFT_TYPE, version,
+                BlockVersion::V3_5_VERSION);
+        }));
     // for compatibility
     // Note: the compatibility_version is not compatibility
     m_sysValueCmp.insert(
@@ -106,6 +121,10 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
                 }
             }
             return version;
+        }));
+    m_valueConverter.insert(std::make_pair(SYSTEM_KEY_CONSENSUS_TYPE,
+        [](const std::string& _value, uint32_t blockVersion) -> uint32_t {
+            return consensusTypeFromString(_value);
         }));
 }
 
@@ -244,10 +263,18 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
     {
         auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
         auto entry = table->getRow(_key);
-        if (entry)
+        if (entry) [[likely]]
         {
             auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
             return {value, enableNumber};
+        }
+
+        // entry not exist
+        auto const& blockContext = _executive->blockContext();
+        if (_key == ledger::SYSTEM_KEY_AUTH_CHECK_STATUS &&
+            blockContext.blockVersion() >= BlockVersion::V3_3_VERSION) [[unlikely]]
+        {
+            return {blockContext.isAuthCheck() ? "1" : "0", 0};
         }
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
@@ -270,19 +297,6 @@ void SystemConfigPrecompiled::upgradeChain(
 {
     const auto& blockContext = _executive->blockContext();
     auto version = blockContext.blockVersion();
-
-    if (versionCompareTo(toVersion, BlockVersion::V3_3_VERSION) >= 0)
-    {
-        auto entry = _executive->storage().getRow(SYS_CONFIG, SYSTEM_KEY_AUTH_CHECK_STATUS);
-        if (!entry)
-        {
-            Entry newAuthEntry;
-            newAuthEntry.setObject(SystemConfigEntry{
-                blockContext.isAuthCheck() ? "1" : "0", blockContext.number() + 1});
-            _executive->storage().setRow(
-                SYS_CONFIG, SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(newAuthEntry));
-        }
-    }
     if (versionCompareTo(version, BlockVersion::V3_0_VERSION) <= 0 &&
         versionCompareTo(toVersion, BlockVersion::V3_1_VERSION) >= 0)
     {

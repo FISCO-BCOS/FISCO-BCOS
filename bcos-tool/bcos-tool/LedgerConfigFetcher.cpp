@@ -209,7 +209,15 @@ void LedgerConfigFetcher::fetchAuthCheckStatus()
     {
         return;
     }
-    auto ret = fetchSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS);
-    TOOL_LOG(INFO) << LOG_DESC("fetchAuthCheckStatus success") << LOG_KV("value", ret);
-    m_ledgerConfig->setAuthCheckStatus(boost::lexical_cast<uint32_t>(ret));
+    try
+    {
+        auto ret = fetchSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS);
+        TOOL_LOG(INFO) << LOG_DESC("fetchAuthCheckStatus success") << LOG_KV("value", ret);
+        m_ledgerConfig->setAuthCheckStatus(boost::lexical_cast<uint32_t>(ret));
+    }
+    catch (...)
+    {
+        TOOL_LOG(INFO) << LOG_DESC("fetchAuthCheckStatus failed, set default value UINT32_MAX.");
+        m_ledgerConfig->setAuthCheckStatus(UINT32_MAX);
+    }
 }

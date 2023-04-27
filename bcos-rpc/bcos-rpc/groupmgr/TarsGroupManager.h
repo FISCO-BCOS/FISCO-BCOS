@@ -22,9 +22,7 @@
 #include "GroupManager.h"
 #include "NodeService.h"
 #include <bcos-utilities/Timer.h>
-namespace bcos
-{
-namespace rpc
+namespace bcos::rpc
 {
 class TarsGroupManager : public GroupManager
 {
@@ -32,14 +30,14 @@ public:
     using Ptr = std::shared_ptr<TarsGroupManager>;
     TarsGroupManager(std::string _rpcServiceName, std::string const& _chainID,
         NodeServiceFactory::Ptr _nodeServiceFactory, bcos::tool::NodeConfig::Ptr _nodeConfig)
-      : GroupManager(_rpcServiceName, _chainID, _nodeServiceFactory, _nodeConfig)
+      : GroupManager(std::move(_rpcServiceName), _chainID, std::move(_nodeServiceFactory),
+            std::move(_nodeConfig))
     {
         m_groupStatusUpdater = std::make_shared<Timer>(c_tarsAdminRefreshTime, "gmrTimer");
         m_groupStatusUpdater->start();
-        m_groupStatusUpdater->registerTimeoutHandler(
-            boost::bind(&TarsGroupManager::updateGroupStatus, this));
+        m_groupStatusUpdater->registerTimeoutHandler([this] { updateGroupStatus(); });
     }
-    virtual ~TarsGroupManager()
+    ~TarsGroupManager() override
     {
         if (m_groupStatusUpdater)
         {
@@ -59,5 +57,4 @@ protected:
     // updateGroupStatus every 1min
     uint64_t c_tarsAdminRefreshTime = 60 * 1000;
 };
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc

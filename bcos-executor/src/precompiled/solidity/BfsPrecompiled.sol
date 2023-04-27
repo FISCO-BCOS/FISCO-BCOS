@@ -16,9 +16,9 @@ abstract contract BfsPrecompiled {
 
     function mkdir(string memory absolutePath) virtual public returns (int32);
 
-    function link(string memory absolutePath, address _address, string memory _abi) virtual public returns (int);
+    function link(string memory absolutePath, string memory _address, string memory _abi) virtual public returns (int);
     // for cns compatibility
-    function link(string memory name, string memory version, address _address, string memory _abi) virtual public returns (int32);
+    function link(string memory name, string memory version, string memory _address, string memory _abi) virtual public returns (int32);
 
     function readlink(string memory absolutePath) virtual public view returns (address);
 
