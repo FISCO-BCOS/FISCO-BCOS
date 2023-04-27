@@ -19,7 +19,7 @@ FISCO BCOS系统架构包括基础层、核心层、服务层、用户层和接�
 
 ![](https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/document/latest/zh_CN/_images/Technical-Architecture.png)
 
-### 底层特性
+### 关键特性
 
 - Pipelined：区块流水线，连续且紧凑地生成区块
 - 可插拔的共识机制： 设计可插拔共识框架，灵活可选
