@@ -32,6 +32,7 @@ add_subdirectory(bcos-boostssl)
 add_subdirectory(bcos-framework)
 add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-utilities)
+add_subdirectory(SWIG)
 
 if(WITH_LIGHTNODE)
     add_subdirectory(lightnode)

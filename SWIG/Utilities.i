@@ -11,6 +11,8 @@ inline bcos::bytes newBytes(char* str, size_t length) {
 %include <std_shared_ptr.i>
 %include <std_string.i>
 %include <std_vector.i>
-#include "../bcos-utilities/bcos-utilities/FixedBytes.h"
+// %include "../bcos-utilities/bcos-utilities/FixedBytes.h"
 
 inline bcos::bytes newBytes(char* str, size_t length);
+using byte = uint8_t;
+using bytes = std::vector<byte>;

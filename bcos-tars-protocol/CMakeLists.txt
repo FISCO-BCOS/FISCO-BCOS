@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(bcos-tars-protocol VERSION ${VERSION})
-
 # for tars generator
 set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol/tars)
 find_program(TARS_TARS2CPP tars2cpp REQUIRED)
