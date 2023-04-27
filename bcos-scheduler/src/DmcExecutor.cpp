@@ -115,7 +115,7 @@ bool DmcExecutor::detectLockAndRevert()
                                << " REVERT";
                 found = true;
                 return false;  // break at once found a tx can be revert
-                // just detect one TODO: detect and unlock more deadlock
+                // just detect one
             }
             else
             {
@@ -332,13 +332,11 @@ void DmcExecutor::handleCreateMessage(
             auto newSeq = currentSeq;
             if (message->createSalt())
             {
-                // TODO: Add sender in this process(consider compat with ethereum)
                 message->setTo(
                     newEVMAddress(message->from(), message->data(), *(message->createSalt())));
             }
             else
             {
-                // TODO: Add sender in this process(consider compat with ethereum)
                 message->setTo(
                     newEVMAddress(m_block->blockHeaderConst()->number(), contextID, newSeq));
             }
@@ -358,7 +356,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     // handle normal message
     auto& message = executiveState->message;
 
-    if (!f_isSameAddr(message->to(), m_contractAddress))
+    if (f_getAddr(message->to()) != m_contractAddress)
     {
         return MessageHint::NEED_SCHEDULE_OUT;
     }
@@ -461,6 +459,11 @@ void DmcExecutor::handleExecutiveOutputs(
 
     for (auto& output : outputs)
     {
+        if (output->hasContractTableChanged()) [[unlikely]]
+        {
+            m_hasContractTableChanged = true;
+        }
+
         std::string to = {output->to().data(), output->to().size()};
         auto contextID = output->contextID();
 
@@ -469,7 +472,7 @@ void DmcExecutor::handleExecutiveOutputs(
         executiveState->message = std::move(output);
         DMC_LOG(TRACE) << " 5.RecvFromExecutor: <<<< [" << m_name << "]:" << m_contractAddress
                        << " <<<< " << executiveState->toString();
-        if (f_isSameAddr(to, m_contractAddress))
+        if (f_getAddr(to) == m_contractAddress)
         {
             // bcos::ReadGuard lock(x_concurrentLock);
             // is my output

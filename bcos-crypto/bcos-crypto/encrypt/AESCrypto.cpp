@@ -40,13 +40,14 @@ bytesPointer bcos::crypto::AESEncrypt(const unsigned char* _plainData, size_t _p
     auto encryptedData = std::make_shared<bytes>();
     size_t ciperDataSize = _plainDataSize + AES_MAX_PADDING_SIZE;
     encryptedData->resize(ciperDataSize);
-    COutputBuffer encryptResult{(char*)encryptedData->data(), ciperDataSize};
+    COutputBuffer encryptResult{(char*)(encryptedData->data()), ciperDataSize};
 
     if (wedpr_aes256_encrypt(&plainText, &key, &ivData, &encryptResult) == WEDPR_ERROR)
     {
         BOOST_THROW_EXCEPTION(EncryptException() << errinfo_comment("AES encrypt exception"));
     }
     encryptedData->resize(encryptResult.len);
+
     return encryptedData;
 }
 

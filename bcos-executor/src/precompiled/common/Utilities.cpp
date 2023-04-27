@@ -201,9 +201,10 @@ uint32_t bcos::precompiled::getFuncSelector(
     std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl)
 {
     // global function selector cache
-    if (s_name2SelectCache.count(_functionName))
+    auto it = s_name2SelectCache.find(_functionName);
+    if (it != s_name2SelectCache.end())
     {
-        return s_name2SelectCache[_functionName];
+        return it->second;
     }
     auto selector = getFuncSelectorByFunctionName(_functionName, _hashImpl);
     s_name2SelectCache.insert(std::make_pair(_functionName, selector));
@@ -263,17 +264,7 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     {
         return ContractStatus::NotContractAddress;
     }
-
-    // FIXME: frozen in BFS
-    auto frozenEntry = table->getRow(executor::ACCOUNT_FROZEN);
-    if (frozenEntry != std::nullopt && "true" == frozenEntry->getField(0))
-    {
-        return ContractStatus::Frozen;
-    }
-    else
-    {
-        return ContractStatus::Available;
-    }
+    return ContractStatus::Available;
 }
 
 bool precompiled::checkPathValid(
@@ -281,11 +272,24 @@ bool precompiled::checkPathValid(
 {
     if (_path.empty()) [[unlikely]]
         return false;
-    if (_path.length() > FS_PATH_MAX_LENGTH) [[unlikely]]
+
+    if (versionCompareTo(version, BlockVersion::V3_3_VERSION) >= 0) [[unlikely]]
+    {
+        if (_path.length() > FS_PATH_MAX_LENGTH_330)
+        {
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("checkPathValid")
+                                   << LOG_DESC("path too long, over flow FS_PATH_MAX_LENGTH_330")
+                                   << LOG_KV("limit", FS_PATH_MAX_LENGTH_330)
+                                   << LOG_KV("len", _path.length()) << LOG_KV("path", _path);
+            return false;
+        }
+    }
+    else if (_path.length() > FS_PATH_MAX_LENGTH) [[unlikely]]
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("checkPathValid")
                                << LOG_DESC("path too long, over flow FS_PATH_MAX_LENGTH")
-                               << LOG_KV("path", _path);
+                               << LOG_KV("limit", FS_PATH_MAX_LENGTH)
+                               << LOG_KV("len", _path.length()) << LOG_KV("path", _path);
         return false;
     }
     if (_path == "/")
@@ -311,7 +315,6 @@ bool precompiled::checkPathValid(
             << LOG_KV("path", _path);
         return false;
     }
-    // TODO: adapt Chinese, should use wstring
     std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']*$)");
     if (versionCompareTo(version, BlockVersion::V3_2_VERSION) >= 0)
     {
@@ -387,8 +390,8 @@ s256 precompiled::externalTouchNewFile(
     std::string_view _sender, std::string_view _to, std::string_view _filePath,
     std::string_view _fileType, int64_t gasLeft)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto codecResult =
         codec.encodeWithSig("touch(string,string)", std::string(_filePath), std::string(_fileType));
     auto response =
@@ -403,4 +406,43 @@ s256 precompiled::externalTouchNewFile(
         result = (int)CODE_FILE_BUILD_DIR_FAILED;
     }
     return result;
+}
+
+
+std::vector<Address> precompiled::getGovernorList(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec)
+{
+    const auto& blockContext = _executive->blockContext();
+    const auto* sender = blockContext.isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
+    auto getCommittee = codec.encodeWithSig("_committee()");
+    auto getCommitteeResponse = externalRequest(_executive, ref(getCommittee),
+        _callParameters->m_origin, sender, AUTH_COMMITTEE_ADDRESS, _callParameters->m_staticCall,
+        false, _callParameters->m_gasLeft);
+    if (getCommitteeResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("Precompiled") << LOG_DESC("get committee failed")
+                               << LOG_KV("status", getCommitteeResponse->status);
+        BOOST_THROW_EXCEPTION(PrecompiledError("Get committee failed."));
+    }
+
+    Address committee;
+    codec.decode(ref(getCommitteeResponse->data), committee);
+
+    auto getInfo = codec.encodeWithSig("getCommitteeInfo()");
+    auto getInfoResponse = externalRequest(_executive, ref(getInfo), _callParameters->m_origin,
+        sender, committee.hex(), _callParameters->m_staticCall, false, _callParameters->m_gasLeft);
+
+    if (getInfoResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("Precompiled") << LOG_DESC("get committee info failed")
+                               << LOG_KV("committee", committee.hex());
+        BOOST_THROW_EXCEPTION(PrecompiledError("Get committee info failed."));
+    }
+    uint8_t participatesRate = 0;
+    uint8_t winRate = 0;
+    std::vector<Address> governors;
+    std::vector<uint32_t> weights;
+    codec.decode(ref(getInfoResponse->data), participatesRate, winRate, governors, weights);
+    return governors;
 }

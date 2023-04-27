@@ -14,7 +14,7 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-template <class Storage, class ReceiptFactory>
+template <class Storage>
 struct MockExecutor
 {
     MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
@@ -52,8 +52,7 @@ public:
 
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
 
-    SchedulerSerialImpl<decltype(multiLayerStorage), decltype(receiptFactory), MockExecutor>
-        scheduler;
+    SchedulerSerialImpl<decltype(multiLayerStorage), MockExecutor> scheduler;
 
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 };

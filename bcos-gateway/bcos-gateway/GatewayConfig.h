@@ -12,6 +12,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <array>
 
 namespace bcos
 {
@@ -21,9 +22,6 @@ class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
 {
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;
-
-    GatewayConfig() = default;
-    ~GatewayConfig() = default;
 
 public:
     // cert for ssl connection
@@ -66,10 +64,13 @@ public:
     // config for rate limit
     struct RateLimiterConfig
     {
+        bool enable = false;
         // time window for rate limiter
         int32_t timeWindowSec = 1;
         // allow outgoing msg exceed max permit size
         bool allowExceedMaxPermitSize = false;
+
+        bool enableConnectDebugInfo = false;
 
         // stat reporter interval, unit: ms
         int32_t statInterval = 60000;
@@ -104,7 +105,8 @@ public:
         int32_t p2pBasicMsgQPS = -1;
         std::set<uint16_t> p2pBasicMsgTypes;
         int32_t p2pModuleMsgQPS = -1;
-        std::unordered_map<uint16_t, int32_t> moduleMsg2QPS;
+        int32_t moduleMsg2QPSSize = 0;
+        std::array<int32_t, std::numeric_limits<uint16_t>::max()> moduleMsg2QPS{};
 
         //-------------- incoming qps ratelimit end-----------------------
 
@@ -141,7 +143,7 @@ public:
                 return true;
             }
 
-            if (!moduleMsg2QPS.empty())
+            if (moduleMsg2QPSSize > 0)
             {
                 return true;
             }
@@ -154,13 +156,12 @@ public:
 
         bool enableInP2pModuleMsgLimit(uint16_t _moduleID) const
         {
-            if (p2pModuleMsgQPS <= 0 && moduleMsg2QPS.empty())
+            if ((p2pModuleMsgQPS <= 0) && (moduleMsg2QPSSize <= 0))
             {
                 return false;
             }
 
-            // TODO: should optimized set lookup ??
-            return p2pModuleMsgQPS > 0 || moduleMsg2QPS.contains(_moduleID);
+            return p2pModuleMsgQPS > 0 || (moduleMsg2QPS.at(_moduleID) != 0);
         }
     };
 
@@ -196,7 +197,7 @@ public:
     // loads sm ca configuration items from the configuration file
     void initSMCertConfig(const boost::property_tree::ptree& _pt);
     // loads ratelimit config
-    void initRateLimitConfig(const boost::property_tree::ptree& _pt);
+    void initFlowControlConfig(const boost::property_tree::ptree& _pt);
     // loads redis config
     void initRedisConfig(const boost::property_tree::ptree& _pt);
     // loads peer blacklist config
@@ -250,6 +251,29 @@ public:
     std::string const& uuid() const { return m_uuid; }
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 
+    void setEnableRIPProtocol(bool _enableRIPProtocol) { m_enableRIPProtocol = _enableRIPProtocol; }
+    bool enableRIPProtocol() const { return m_enableRIPProtocol; }
+
+    void setEnableCompress(bool _enableCompress) { m_enableCompress = _enableCompress; }
+    bool enableCompress() const { return m_enableCompress; }
+
+    uint32_t allowMaxMsgSize() const { return m_allowMaxMsgSize; }
+    void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize) { m_allowMaxMsgSize = _allowMaxMsgSize; }
+
+    uint32_t sessionRecvBufferSize() const { return m_sessionRecvBufferSize; }
+    void setSessionRecvBufferSize(uint32_t _sessionRecvBufferSize)
+    {
+        m_sessionRecvBufferSize = _sessionRecvBufferSize;
+    }
+
+    uint32_t maxReadDataSize() const { return m_maxReadDataSize; }
+    void setMaxReadDataSize(uint32_t _maxReadDataSize) { m_maxReadDataSize = _maxReadDataSize; }
+
+    uint32_t maxSendDataSize() const { return m_maxSendDataSize; }
+    void setMaxSendDataSize(uint32_t _maxSendDataSize) { m_maxSendDataSize = _maxSendDataSize; }
+
+    uint32_t maxMsgCountSendOneTime() const { return m_maxSendMsgCount; }
+    void setMaxSendMsgCount(uint32_t _maxSendMsgCount) { m_maxSendMsgCount = _maxSendMsgCount; }
     // NodeIDType:
     // h512(true == m_smSSL)
     // h2048(false == m_smSSL)
@@ -281,6 +305,14 @@ public:
     }
 
 private:
+    // The maximum size of message that is allowed to send or receive
+    uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
+    // p2p session read buffer size, default: 128k
+    uint32_t m_sessionRecvBufferSize{128 * 1024};
+    uint32_t m_maxReadDataSize = 40 * 1024;
+    uint32_t m_maxSendDataSize = 1024 * 1024;
+    uint32_t m_maxSendMsgCount = 10;
+    //
     std::string m_uuid;
     // if SM SSL connection or not
     bool m_smSSL;
@@ -289,7 +321,7 @@ private:
     // p2p network listen Port
     uint16_t m_listenPort;
     // threadPool size
-    uint32_t m_threadPoolSize{16};
+    uint32_t m_threadPoolSize{8};
     // p2p connected nodes host list
     std::set<NodeIPEndpoint> m_connectedNodes;
     // peer black list
@@ -299,6 +331,10 @@ private:
     // peer white list
     mutable bcos::Mutex x_certWhitelist;
     bool m_enableWhitelist{false};
+    // enable rip protocol
+    bool m_enableRIPProtocol{true};
+    // enable compress
+    bool m_enableCompress{true};
     std::set<std::string> m_certWhitelist;
     // cert config for ssl connection
     CertConfig m_certConfig;

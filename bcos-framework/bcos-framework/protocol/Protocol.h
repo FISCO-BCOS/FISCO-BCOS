@@ -19,6 +19,7 @@
  * @date 2021-04-21
  */
 #pragma once
+#include "bcos-utilities/BoostLog.h"
 #include <boost/algorithm/string.hpp>
 #include <limits>
 #include <memory>
@@ -27,9 +28,7 @@
 #include <string>
 #include <variant>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 // Note: both MessageExtFieldFlag and NodeType occupy the ext fields
 enum MessageExtFieldFlag : uint32_t
@@ -113,29 +112,31 @@ enum ProtocolVersion : uint32_t
 
 enum class BlockVersion : uint32_t
 {
+    V3_4_VERSION = 0x03040000,
     V3_3_VERSION = 0x03030000,
     V3_2_VERSION = 0x03020000,
     V3_1_VERSION = 0x03010000,
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_3_VERSION,
+    MAX_VERSION = V3_4_VERSION,
 };
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string V3_0_VERSION_STR = "3.0.0";
 const std::string V3_1_VERSION_STR = "3.1.0";
 const std::string V3_2_VERSION_STR = "3.2.0";
 const std::string V3_3_VERSION_STR = "3.3.0";
+const std::string V3_4_VERSION_STR = "3.4.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
-const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_3_VERSION;
-const std::string DEFAULT_VERSION_STR = V3_3_VERSION_STR;
+const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_4_VERSION;
+const std::string DEFAULT_VERSION_STR = V3_4_VERSION_STR;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
 [[nodiscard]] inline int versionCompareTo(
-    std::variant<uint32_t, BlockVersion> _v1, BlockVersion const& _v2)
+    std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
 {
     int flag = 0;
     std::visit(
@@ -148,6 +149,33 @@ const uint8_t MIN_MAJOR_VERSION = 3;
         _v1);
     return flag;
 }
+
+constexpr auto operator<=>(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+{
+    auto flag = std::strong_ordering::equal;
+    std::visit(
+        [&_v2, &flag](auto&& arg) {
+            auto ver1 = static_cast<uint32_t>(arg);
+            auto ver2 = static_cast<uint32_t>(_v2);
+            flag = (ver1 <=> ver2);
+        },
+        _v1);
+    return flag;
+}
+
+constexpr bool operator>=(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+{
+    auto flag = false;
+    std::visit(
+        [&_v2, &flag](auto&& arg) {
+            auto ver1 = static_cast<uint32_t>(arg);
+            auto ver2 = static_cast<uint32_t>(_v2);
+            flag = (ver1 >= ver2);
+        },
+        _v1);
+    return flag;
+}
+
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion const& _version)
 {
     switch (_version)
@@ -166,6 +194,9 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion
         break;
     case bcos::protocol::BlockVersion::V3_3_VERSION:
         _out << V3_3_VERSION_STR;
+        break;
+    case bcos::protocol::BlockVersion::V3_4_VERSION:
+        _out << V3_4_VERSION_STR;
         break;
     default:
         _out << "Unknown";
@@ -252,12 +283,21 @@ inline std::string moduleIDToString(ModuleID _moduleID)
     case ModuleID::AMOP:
         return "amop";
     case ModuleID::LIGHTNODE_GET_BLOCK:
+    case ModuleID::LIGHTNODE_GET_TRANSACTIONS:
+    case ModuleID::LIGHTNODE_GET_RECEIPTS:
+    case ModuleID::LIGHTNODE_GET_STATUS:
+    case ModuleID::LIGHTNODE_SEND_TRANSACTION:
+    case ModuleID::LIGHTNODE_CALL:
+    case ModuleID::LIGHTNODE_GET_ABI:
         return "light_node";
+    case ModuleID::SYNC_GET_TRANSACTIONS:
+        return "sync_get";
+    case ModuleID::SYNC_PUSH_TRANSACTION:
+        return "sync_push";
     default:
+        BCOS_LOG(DEBUG) << LOG_BADGE("unrecognized module") << LOG_KV("moduleID", _moduleID);
         return "unrecognized module";
     };
 }
 
-
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

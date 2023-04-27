@@ -67,6 +67,8 @@ public:
                         if (!error)
                         {
                             bcos::concepts::serialize::decode(data, m_response);
+                            LIGHTNODE_LOG(DEBUG) << LOG_DESC("P2P client receive message success: ")
+                                                 << LOG_KV("data size",data.size());
                         }
                         else
                         {

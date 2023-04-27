@@ -32,7 +32,6 @@
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <evmc/instructions.h>
-#include <boost/algorithm/string/case_conv.hpp>
 
 namespace bcos::transaction_executor
 {
@@ -175,9 +174,6 @@ static const VMSchedule DefaultSchedule = FiscoBcosScheduleV320;
 
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
-bool hasWasmPreamble(const std::string_view& _input);
-bool hasWasmPreamble(const bcos::bytesConstRef& _input);
-bool hasWasmPreamble(const bcos::bytes& _input);
 bool hasPrecompiledPrefix(const std::string_view& _code);
 /**
  * @brief : trans string addess to evm address
@@ -185,7 +181,7 @@ bool hasPrecompiledPrefix(const std::string_view& _code);
  * @return evmc_address : the transformed evm address
  */
 inline evmc_address toEvmC(const std::string_view& addr)
-{  // TODO: add another interfaces for wasm
+{
     evmc_address ret;
     constexpr static auto evmAddressLength = sizeof(ret);
 

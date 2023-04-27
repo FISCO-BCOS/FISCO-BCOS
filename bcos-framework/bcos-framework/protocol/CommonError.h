@@ -31,9 +31,8 @@ enum CommonError : int32_t
     NotFoundFrontServiceSendMsg = 1001,
     NotFoundFrontServiceDispatchMsg = 1002,
     GatewaySendMsgFailed = 1003,
-    NetworkBandwidthOverFlow = 1004,
-    NodeIdFormatError = 1005,
-    GatewayConfigFileReadWriteFailed = 1006,
+    GatewayBandwidthOverFlow = 1004,
+    GatewayQPSOverFlow = 1005,
     TransactionsMissing = 2000,  // for transaction sync
     InconsistentTransactions = 2001,
     TxsSignatureVerifyFailed = 2002,

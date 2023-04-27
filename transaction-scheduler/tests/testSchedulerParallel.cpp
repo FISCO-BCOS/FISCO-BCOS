@@ -14,7 +14,7 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-template <class Storage, class ReceiptFactory>
+template <class Storage>
 struct MockExecutor
 {
     MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
@@ -57,8 +57,8 @@ BOOST_FIXTURE_TEST_SUITE(TestSchedulerParallel, TestSchedulerParallelFixture)
 BOOST_AUTO_TEST_CASE(simple)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        SchedulerParallelImpl<decltype(multiLayerStorage), decltype(receiptFactory), MockExecutor>
-            scheduler(multiLayerStorage, receiptFactory, tableNamePool);
+        SchedulerParallelImpl<decltype(multiLayerStorage), MockExecutor> scheduler(
+            multiLayerStorage, receiptFactory, tableNamePool);
 
         scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(simple)
     // Wait for tbb
 }
 
-template <StateStorage Storage, class ReceiptFactory>
+template <StateStorage Storage>
 struct MockConflictExecutor
 {
     MockConflictExecutor(
@@ -146,26 +146,23 @@ struct MockConflictExecutor
 BOOST_AUTO_TEST_CASE(conflict)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        SchedulerParallelImpl<decltype(multiLayerStorage), decltype(receiptFactory),
-            MockConflictExecutor>
-            scheduler(multiLayerStorage, receiptFactory, tableNamePool);
+        SchedulerParallelImpl<decltype(multiLayerStorage), MockConflictExecutor> scheduler(
+            multiLayerStorage, receiptFactory, tableNamePool);
         scheduler.setChunkSize(1);
-        scheduler.setMaxThreads(4);
+        scheduler.setMaxToken(4);
         scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
 
-        auto count = 64;
-        auto transactions =
-            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int index) {
-                auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
-                    [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
-                auto num = boost::lexical_cast<std::string>(index);
-                transaction->mutableInner().data.input.assign(num.begin(), num.end());
+        constexpr static auto count = 128;
+        auto transactions = RANGES::views::iota(0, count) | RANGES::views::transform([](int index) {
+            auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
+                [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+            auto num = boost::lexical_cast<std::string>(index);
+            transaction->mutableInner().data.input.assign(num.begin(), num.end());
 
-                return transaction;
-            }) |
-            RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+            return transaction;
+        }) | RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         auto receipts = co_await scheduler.execute(blockHeader,
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));

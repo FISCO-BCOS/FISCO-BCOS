@@ -41,19 +41,17 @@ KeyPairInterface::UniquePtr SM2Crypto::createKeyPair(SecretPtr _secretKey) const
 std::shared_ptr<bytes> SM2Crypto::sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {
-    FixedBytes<SM2_SIGNATURE_LEN> signatureDataArray;
+    std::shared_ptr<bytes> signatureData = std::make_shared<bytes>(SM2_SIGNATURE_LEN, 0);
     CInputBuffer rawPrivateKey{_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()};
     CInputBuffer rawPublicKey{_keyPair.publicKey()->constData(), _keyPair.publicKey()->size()};
     CInputBuffer rawMsgHash{(const char*)_hash.data(), HashType::SIZE};
-    COutputBuffer sm2SignatureResult{(char*)signatureDataArray.data(), SM2_SIGNATURE_LEN};
+    COutputBuffer sm2SignatureResult{(char*)signatureData->data(), SM2_SIGNATURE_LEN};
     auto retCode = m_signer(&rawPrivateKey, &rawPublicKey, &rawMsgHash, &sm2SignatureResult);
     if (retCode != WEDPR_SUCCESS)
     {
         BOOST_THROW_EXCEPTION(
             SignException() << errinfo_comment("sm2Sign failed, raw data: " + _hash.hex()));
     }
-    std::shared_ptr<bytes> signatureData = std::make_shared<bytes>();
-    *signatureData = signatureDataArray.asBytes();
     // append the public key
     if (_signatureWithPub)
     {

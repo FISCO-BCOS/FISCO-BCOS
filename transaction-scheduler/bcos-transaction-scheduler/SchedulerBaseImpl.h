@@ -1,6 +1,6 @@
 #pragma once
 #include "MultiLayerStorage.h"
-#include "bcos-table/src/StateStorage.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
@@ -8,29 +8,23 @@
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-task/Task.h>
-#include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/combinable.h>
-#include <oneapi/tbb/concurrent_unordered_map.h>
-#include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_pipeline.h>
-#include <oneapi/tbb/parallel_reduce.h>
-#include <range/v3/view/transform.hpp>
 
 namespace bcos::transaction_scheduler
 {
 
-template <transaction_executor::StateStorage MultiLayerStorage,
-    protocol::IsTransactionReceiptFactory ReceiptFactory,
-    template <typename, typename> class Executor>
+template <class MultiLayerStorage, template <typename> class Executor>
 class SchedulerBaseImpl
 {
 private:
     MultiLayerStorage& m_multiLayerStorage;
-    ReceiptFactory& m_receiptFactory;
+    protocol::TransactionReceiptFactory& m_receiptFactory;
     transaction_executor::TableNamePool& m_tableNamePool;
 
 public:
-    SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage, ReceiptFactory& receiptFactory,
+    SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage,
+        protocol::TransactionReceiptFactory& receiptFactory,
         transaction_executor::TableNamePool& tableNamePool)
       : m_multiLayerStorage(multiLayerStorage),
         m_receiptFactory(receiptFactory),
@@ -44,63 +38,39 @@ public:
         auto& mutableStorage = m_multiLayerStorage.mutableStorage();
         auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
 
-        auto range = it.range();
+        static constexpr int HASH_CHUNK_SIZE = 32;
+        auto range = it.range() | RANGES::views::chunk(HASH_CHUNK_SIZE);
         tbb::combinable<bcos::h256> combinableHash;
 
-        auto currentRangeIt = RANGES::begin(range);
-        tbb::parallel_pipeline(std::thread::hardware_concurrency(),
-            tbb::make_filter<void,
-                std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
-                    RANGES::begin(range), RANGES::end(range)))>>(tbb::filter_mode::serial_in_order,
-                [&](tbb::flow_control& control)
-                    -> std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(range))>(
-                        RANGES::begin(range), RANGES::end(range)))> {
-                    if (currentRangeIt == RANGES::end(range))
-                    {
-                        control.stop();
-                        return {};
-                    }
+        tbb::task_group taskGroup;
+        for (auto&& subrange : range)
+        {
+            taskGroup.run([subrange = std::forward<decltype(subrange)>(subrange), &combinableHash,
+                              &blockHeader, &hashImpl]() {
+                auto& entryHash = combinableHash.local();
 
-                    auto start = currentRangeIt;
-                    constexpr static int HASH_CHUNK_SIZE = 100;
-                    for (auto num = 0;
-                         num < HASH_CHUNK_SIZE && currentRangeIt != RANGES::end(range); ++num)
+                for (auto const& keyValue : subrange)
+                {
+                    auto& [key, entry] = keyValue;
+                    auto& [tableName, keyName] = *key;
+                    auto tableNameView = *tableName;
+                    auto keyView = keyName.toStringView();
+                    if (entry)
                     {
-                        ++currentRangeIt;
+                        entryHash ^=
+                            entry->hash(tableNameView, keyView, hashImpl, blockHeader.version());
                     }
-                    return std::make_optional(
-                        RANGES::subrange<decltype(start)>(start, currentRangeIt));
-                }) &
-                tbb::make_filter<std::optional<decltype(RANGES::subrange<decltype(RANGES::begin(
-                                         range))>(RANGES::begin(range), RANGES::end(range)))>,
-                    void>(tbb::filter_mode::parallel,
-                    [&combinableHash, &hashImpl, &blockHeader](auto const& entryRange) {
-                        if (!entryRange)
-                        {
-                            return;
-                        }
-
-                        auto& entryHash = combinableHash.local();
-                        for (auto const& keyValuePair : *entryRange)
-                        {
-                            auto& [key, entry] = keyValuePair;
-                            auto& [tableName, keyName] = *key;
-                            auto tableNameView = *tableName;
-                            auto keyView = keyName.toStringView();
-                            if (entry)
-                            {
-                                entryHash ^= entry->hash(
-                                    tableNameView, keyView, hashImpl, blockHeader.version());
-                            }
-                            else
-                            {
-                                storage::Entry deleteEntry;
-                                deleteEntry.setStatus(storage::Entry::DELETED);
-                                entryHash ^= deleteEntry.hash(
-                                    tableNameView, keyView, hashImpl, blockHeader.version());
-                            }
-                        }
-                    }));
+                    else
+                    {
+                        storage::Entry deleteEntry;
+                        deleteEntry.setStatus(storage::Entry::DELETED);
+                        entryHash ^= deleteEntry.hash(
+                            tableNameView, keyView, hashImpl, blockHeader.version());
+                    }
+                }
+            });
+        }
+        taskGroup.wait();
         m_multiLayerStorage.pushMutableToImmutableFront();
 
         co_return combinableHash.combine(
@@ -108,15 +78,13 @@ public:
     }
     task::Task<void> commit() { co_await m_multiLayerStorage.mergeAndPopImmutableBack(); }
 
-    task::Task<protocol::ReceiptFactoryReturnType<ReceiptFactory>> call(
-        protocol::IsBlockHeader auto const& blockHeader,
-        protocol::IsTransaction auto const& transaction)
+    task::Task<protocol::TransactionReceipt::Ptr> call(
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction)
     {
-        auto storage = m_multiLayerStorage.fork();
-        storage->newMutable();
+        auto view = m_multiLayerStorage.fork(false);
+        view.newTemporaryMutable();
 
-        Executor<MultiLayerStorage, ReceiptFactory> executor(
-            *storage, m_receiptFactory, m_tableNamePool);
+        Executor<decltype(view)> executor(view, m_receiptFactory, m_tableNamePool);
         co_return co_await executor.execute(blockHeader, transaction, 0);
     }
 

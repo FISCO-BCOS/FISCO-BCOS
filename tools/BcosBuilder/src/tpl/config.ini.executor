@@ -17,6 +17,9 @@
     pd_addrs=
     key_page_size=10240
 
+[executor]
+    enable_dag=true
+
 [log]
     enable=true
     log_path=./log
@@ -24,4 +27,5 @@
     level=info
     ; MB
     max_log_file_size=200
+    enable_rate_collector=false
 

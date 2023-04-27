@@ -22,6 +22,7 @@
 #pragma once
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
+#include "bcos-rpc/validator/CallValidator.h"
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
@@ -39,13 +40,17 @@ public:
     using Ptr = std::shared_ptr<JsonRpcImpl_2_0>;
     JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        std::shared_ptr<boostssl::ws::WsService> _wsService);
+        std::shared_ptr<boostssl::ws::WsService> _wsService,
+        bcos::crypto::CryptoSuite::Ptr _cryptoSuite);
     ~JsonRpcImpl_2_0() override = default;
 
     void setClientID(std::string_view _clientID) { m_clientID = _clientID; }
 
     void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
         std::string_view _data, RespFunc _respFunc) override;
+
+    void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
+        std::string_view _data, std::string_view sign, RespFunc _respFunc) override;
 
     void sendTransaction(std::string_view _groupID, std::string_view _nodeName,
         std::string_view _data, bool _requireProof, RespFunc _respFunc) override;
@@ -160,12 +165,16 @@ private:
         bcos::gateway::GatewayInfo::Ptr _localP2pInfo, bcos::gateway::GatewayInfosPtr _peersInfo);
     void getGroupPeers(std::string_view _groupID, RespFunc _respFunc) override;
 
+    static void execCall(NodeService::Ptr nodeService, protocol::Transaction::Ptr _tx,
+        bcos::rpc::RespFunc _respFunc);
+
     // ms
     int m_sendTxTimeout = -1;
 
     GroupManager::Ptr m_groupManager;
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
+    rpc::CallValidator m_callValidator;
 
     NodeInfo m_nodeInfo;
     // Note: here clientID must non-empty for the rpc will set clientID as source for the tx for
@@ -185,7 +194,7 @@ private:
     };
 };
 
-void toJsonResp(Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr);
+void toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const& transactionPtr);
 void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
 void toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, bool _onlyTxHash);
 void toJsonResp(Json::Value& jResp, std::string_view _txHash, protocol::TransactionStatus status,

@@ -29,6 +29,7 @@
 
 namespace bcos::ledger
 {
+static constexpr const int LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT = 50;
 
 // clang-format off
 struct NotFoundTransaction : public bcos::error::Exception {};
@@ -37,6 +38,7 @@ struct MismatchTransactionCount : public bcos::error::Exception {};
 struct MismatchParentHash: public bcos::error::Exception {};
 struct NotFoundBlockHeader: public bcos::error::Exception {};
 struct GetABIError : public bcos::error::Exception {};
+struct GetBlockDataError : public bcos::error::Exception {};
 // clang-format on
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
@@ -46,14 +48,53 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
     friend bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>;
 
 public:
-    LedgerImpl(Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
+    LedgerImpl(Hasher hasher, Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storageInterface)
       : Ledger(std::move(blockFactory), storageInterface),
+        m_hasher(std::move(hasher)),
         m_backupStorage(storageInterface),
-        m_storage{std::move(storage)}
+        m_storage{std::move(storage)},
+        m_merkle{m_hasher.clone()}
     {}
+    using statusInfoType = std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber>;
 
     void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
+
+    template <bcos::concepts::block::Block BlockType>
+    void checkParentBlock(BlockType parentBlock, BlockType block)
+    {
+        std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+        bcos::concepts::hash::calculate(m_hasher.clone(), parentBlock, parentHash);
+
+        if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+            (block.blockHeader.data.parentInfo[0].blockNumber !=
+                parentBlock.blockHeader.data.blockNumber) ||
+            !bcos::concepts::bytebuffer::equalTo(
+                block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+        {
+            LEDGER_LOG(ERROR) << "ParentHash mismatch!";
+            BOOST_THROW_EXCEPTION(
+                MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
+        }
+    }
+
+    crypto::NodeIDs filterSyncNodeList(
+        statusInfoType const& peersStatusInfo, bcos::protocol::BlockNumber needBlockNumber)
+    {
+        crypto::NodeIDs requestNodeIDList;
+        for (const auto& nodeStatus : peersStatusInfo)
+        {
+            LEDGER_LOG(INFO) << LOG_KV("nodeID", nodeStatus.first->hex())
+                             << LOG_KV("blockNumber: ", nodeStatus.second)
+                             << LOG_KV("，needBlockNumber: ", needBlockNumber);
+            if (nodeStatus.second >= needBlockNumber)
+            {
+                requestNodeIDList.push_back(nodeStatus.first);
+            }
+        }
+        LEDGER_LOG(DEBUG) << LOG_KV("requestNodeIDList size", requestNodeIDList.size());
+        return requestNodeIDList;
+    }
 
 private:
     template <bcos::concepts::ledger::DataFlag... Flags>
@@ -64,6 +105,23 @@ private:
 
         auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
         (co_await getBlockData<Flags>(blockNumberStr, block), ...);
+    }
+    template <bcos::concepts::ledger::DataFlag... Flags>
+    task::Task<void> impl_getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block, bcos::crypto::NodeIDs const& nodeList)
+    {
+        try
+        {
+            LEDGER_LOG(INFO) << "getBlockByNodeList: " << blockNumber;
+            auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
+            (co_await getBlockData<Flags>(blockNumberStr, block), ...);
+        }
+        catch (NotFoundBlockHeader& e)
+        {
+            LEDGER_LOG(ERROR) << "Not found block";
+            block = {};
+        }
+        co_return;
     }
 
     template <bcos::concepts::ledger::DataFlag... Flags>
@@ -140,8 +198,11 @@ private:
 
         // create keyPageStorage
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(m_keyPageSize);
-        auto stateStorage =
-            stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion);
+        // getABI function begin in version 320
+        auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+        auto stateStorage = stateStorageFactory->createStateStorage(
+            m_backupStorage, m_compatibilityVersion, true, keyPageIgnoreTables);
 
         // try to get codeHash
         auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");
@@ -242,6 +303,13 @@ private:
         co_return status;
     }
 
+    task::Task<std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber>> impl_getAllPeersStatus()
+    {
+        std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber> allPeersStatus;
+        // assert(false); //never reach here
+        co_return allPeersStatus;
+    }
+
     template <bool isTransaction>
     task::Task<void> impl_setTransactions(RANGES::range auto hashes, RANGES::range auto buffers)
     {
@@ -261,8 +329,8 @@ private:
             entry.importFields({std::move(buffers[i])});
 
             auto const& hash = hashes[i];
-            storage().setRow(
-                tableName, std::string_view(std::data(hash), RANGES::size(hash)), std::move(entry));
+            storage().setRow(tableName,
+                std::string_view((const char*)hash.data(), RANGES::size(hash)), std::move(entry));
         }
 
         co_return;
@@ -272,30 +340,51 @@ private:
     task::Task<size_t> impl_sync(LedgerType& source, bool onlyHeader)
     {
         auto& sourceLedger = bcos::concepts::getRef(source);
-
         auto status = co_await impl_getStatus();
-        auto sourceStatus = co_await sourceLedger.getStatus();
-
+        auto allPeersStatus = co_await sourceLedger.getAllPeersStatus();
+        bcos::protocol::BlockNumber currentMaxBlockNumber = 0;
+        for (const auto& nodeStatus : allPeersStatus)
+        {
+            if (nodeStatus.second > currentMaxBlockNumber)
+            {
+                currentMaxBlockNumber = nodeStatus.second;
+            }
+        }
+        LEDGER_LOG(DEBUG) << LOG_KV("allPeersStatus", allPeersStatus.size())
+                          << LOG_KV("currentMaxBlockNumber", currentMaxBlockNumber);
         std::optional<BlockType> parentBlock;
         size_t syncedBlock = 0;
-        for (auto blockNumber = status.blockNumber + 1; blockNumber <= sourceStatus.blockNumber;
+        auto syncBlockNumber = status.blockNumber + LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT;
+        if (allPeersStatus.size() != 0 && currentMaxBlockNumber < syncBlockNumber)
+        {
+            syncBlockNumber = currentMaxBlockNumber;
+        }
+        // sync block
+        for (auto blockNumber = status.blockNumber + 1; blockNumber <= syncBlockNumber;
              ++blockNumber)
         {
             LEDGER_LOG(INFO) << "Syncing block from remote: " << blockNumber << " | "
-                             << sourceStatus.blockNumber << " | " << onlyHeader;
+                             << syncBlockNumber << " | " << onlyHeader;
             BlockType block;
+            auto syncNodeList = filterSyncNodeList(allPeersStatus, blockNumber);
             if (onlyHeader)
             {
-                co_await sourceLedger.template getBlock<bcos::concepts::ledger::HEADER>(
-                    blockNumber, block);
+                co_await sourceLedger.template getBlockByNodeList<bcos::concepts::ledger::HEADER>(
+                    blockNumber, block, syncNodeList);
             }
             else
             {
-                co_await sourceLedger.template getBlock<bcos::concepts::ledger::ALL>(
-                    blockNumber, block);
+                co_await sourceLedger.template getBlockByNodeList<bcos::concepts::ledger::ALL>(
+                    blockNumber, block, syncNodeList);
             }
-
-            if (blockNumber > 0)  // Ignore verify genesis block
+            // if getBlockByNodeList return empty block, break
+            if (RANGES::empty(block.blockHeader.data.parentInfo))
+            {
+                LEDGER_LOG(WARNING)
+                    << LOG_DESC("No blockHeader in block") << LOG_KV("blockNumber", blockNumber);
+                break;
+            }
+            if (blockNumber > 0)
             {
                 if (!parentBlock)
                 {
@@ -303,22 +392,8 @@ private:
                     co_await impl_getBlock<bcos::concepts::ledger::HEADER>(
                         blockNumber - 1, *parentBlock);
                 }
-
-                std::array<std::byte, Hasher::HASH_SIZE> parentHash;
-                bcos::concepts::hash::calculate<Hasher>(*parentBlock, parentHash);
-
-                if (RANGES::empty(block.blockHeader.data.parentInfo) ||
-                    (block.blockHeader.data.parentInfo[0].blockNumber !=
-                        parentBlock->blockHeader.data.blockNumber) ||
-                    !bcos::concepts::bytebuffer::equalTo(
-                        block.blockHeader.data.parentInfo[0].blockHash, parentHash))
-                {
-                    LEDGER_LOG(ERROR) << "ParentHash mismatch!";
-                    BOOST_THROW_EXCEPTION(
-                        MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
-                }
+                checkParentBlock(*parentBlock, block);
             }
-
             if (onlyHeader)
             {
                 co_await impl_setBlock<bcos::concepts::ledger::HEADER>(block);
@@ -327,11 +402,9 @@ private:
             {
                 co_await impl_setBlock<bcos::concepts::ledger::ALL>(block);
             }
-
             parentBlock = std::move(block);
             ++syncedBlock;
         }
-
         co_return syncedBlock;
     }
 
@@ -376,10 +449,10 @@ private:
     }
 
     template <class Type>
-    requires std::same_as<Type, concepts::ledger::TRANSACTIONS> ||
-        std::same_as<Type, concepts::ledger::RECEIPTS>
-            task::Task<void> getBlockData(
-                std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+        requires std::same_as<Type, concepts::ledger::TRANSACTIONS> ||
+                 std::same_as<Type, concepts::ledger::RECEIPTS>
+    task::Task<void> getBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
         LEDGER_LOG(DEBUG) << "getBlockData transactions or receipts: " << blockNumberKey;
 
@@ -432,11 +505,20 @@ private:
     {
         LEDGER_LOG(DEBUG) << "getBlockData all: " << blockNumberKey;
 
-        co_await getBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
-        co_await getBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+        try
+        {
+            co_await getBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+        }
+        catch (std::exception const& e)
+        {
+            LEDGER_LOG(ERROR) << "getBlockData all failed";
+            BOOST_THROW_EXCEPTION(
+                GetBlockDataError{} << bcos::error::ErrorMessage{"getBlockData all failed!"});
+        }
     }
 
     template <std::same_as<bcos::concepts::ledger::HEADER>>
@@ -499,11 +581,11 @@ private:
         {
             block.transactionsMetaData.resize(block.transactions.size());
             tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
-                [&block](const tbb::blocked_range<size_t>& range) {
+                [&block, this](const tbb::blocked_range<size_t>& range) {
                     for (auto i = range.begin(); i < range.end(); ++i)
                     {
-                        bcos::concepts::hash::calculate<Hasher>(
-                            block.transactions[i], block.transactionsMetaData[i].hash);
+                        bcos::concepts::hash::calculate(m_hasher.clone(), block.transactions[i],
+                            block.transactionsMetaData[i].hash);
                     }
                 });
         }
@@ -651,6 +733,7 @@ private:
 
     auto& storage() { return bcos::concepts::getRef(m_storage); }
 
+    Hasher m_hasher;
     bcos::storage::StorageInterface::Ptr m_backupStorage;
     Storage m_storage;
     crypto::merkle::Merkle<Hasher> m_merkle;  // Use the default width 2

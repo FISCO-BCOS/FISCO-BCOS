@@ -398,7 +398,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 STORAGE_TIKV_LOG(INFO)
                     << "asyncPrepare secondary finished" << LOG_KV("blockNumber", params.number)
                     << LOG_KV("put", putCount) << LOG_KV("delete", deleteCount)
-                    << LOG_KV("dataSize(B)", dataSize) << LOG_KV("primaryLock", primaryLock)
+                    << LOG_KV("dataSize(B)", dataSize) << LOG_KV("primaryLock", toHex(primaryLock))
                     << LOG_KV("startTS", params.timestamp)
                     << LOG_KV("encodeTime(ms)", encode - start)
                     << LOG_KV("prepareTime(ms)", write - encode);

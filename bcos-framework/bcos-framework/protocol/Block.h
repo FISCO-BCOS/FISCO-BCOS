@@ -25,16 +25,12 @@
 #include "TransactionMetaData.h"
 #include "TransactionReceipt.h"
 #include "TransactionReceiptFactory.h"
-#include <range/v3/view/transform.hpp>
 
 namespace bcos::protocol
 {
 using HashList = std::vector<bcos::crypto::HashType>;
 using HashListPtr = std::shared_ptr<HashList>;
 using HashListConstPtr = std::shared_ptr<const HashList>;
-
-using NonceList = std::vector<u256>;
-using NonceListPtr = std::shared_ptr<NonceList>;
 
 enum BlockType : int32_t
 {
@@ -106,13 +102,13 @@ public:
     virtual uint64_t receiptsSize() const = 0;
 
     // for nonceList
-    virtual void setNonceList(RANGES::any_view<u256> nonces) = 0;
-    virtual RANGES::any_view<u256> nonceList() const = 0;
+    virtual void setNonceList(RANGES::any_view<std::string> nonces) = 0;
+    virtual RANGES::any_view<std::string> nonceList() const = 0;
 
     virtual NonceListPtr nonces() const
     {
         return std::make_shared<NonceList>(
-            RANGES::iota_view<uint64_t, uint64_t>(0LU, transactionsSize()) |
+            RANGES::iota_view<size_t, size_t>(0LU, transactionsSize()) |
             RANGES::views::transform([this](uint64_t index) {
                 auto transaction = this->transaction(index);
                 return transaction->nonce();

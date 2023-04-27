@@ -54,13 +54,17 @@ private:
     void rebuildBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
     void rebuildBfs310(const std::shared_ptr<executor::TransactionExecutive>& _executive);
+    void fixBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void fixBfs330(const std::shared_ptr<executor::TransactionExecutive>& _executive);
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);
     bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _absoluteDir);
     std::set<std::string> BfsTypeSet;
-    void buildSysSubs(const std::shared_ptr<executor::TransactionExecutive>& _executive) const;
+    void buildSysSubs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        std::variant<uint32_t, protocol::BlockVersion> toVersion) const;
 
 protected:
     void makeDirImpl(const std::string& _absolutePath,

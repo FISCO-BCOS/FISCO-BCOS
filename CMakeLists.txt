@@ -6,7 +6,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(VERSION "3.3.0")
+set(VERSION "3.4.0")
 set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
@@ -26,6 +26,7 @@ include(BuildInfoGenerator)
 
 include(IncludeDirectories)
 include(TargetSettings)
+include(PrecompiledHeaders)
 
 add_subdirectory(bcos-boostssl)
 add_subdirectory(bcos-framework)
@@ -43,6 +44,7 @@ if(FULLNODE)
     endif()
     include(ProjectGroupSig)
     include(ProjectSDF)
+    include(ProjectITTAPI)
 
     add_subdirectory(bcos-codec)
     add_subdirectory(bcos-sealer)

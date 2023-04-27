@@ -26,7 +26,6 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
 #include <boost/throw_exception.hpp>
-#include <range/v3/view/any_view.hpp>
 #include <stdexcept>
 
 namespace bcos::txpool
@@ -51,31 +50,19 @@ public:
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         [[maybe_unused]] protocol::Transaction::Ptr transaction)
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
     virtual task::Task<void> broadcastPushTransaction(
         [[maybe_unused]] const protocol::Transaction& transaction)
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual task::Task<void> onReceivePushTransaction(
-        bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data)
+    virtual task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
+        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
-    }
-
-    virtual task::Task<std::vector<protocol::Transaction::Ptr>> getMissedTransactions(
-        std::vector<crypto::HashType> transactionHashes, bcos::crypto::NodeIDPtr fromNodeID)
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
-    }
-
-    virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error("No implement!"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
     /**
@@ -130,10 +117,11 @@ public:
     virtual void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _id,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         std::function<void(Error::Ptr _error)> _onRecv) = 0;
-    virtual void notifyConsensusNodeList(
+    [[deprecated]] virtual void notifyConsensusNodeList(
         bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
-    virtual void notifyObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList,
+    [[deprecated]] virtual void notifyObserverNodeList(
+        bcos::consensus::ConsensusNodeList const& _observerNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
     // for RPC to get pending transactions
@@ -143,7 +131,7 @@ public:
     // notify to reset the txpool when the consensus module startup
     virtual void asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
-    virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
+    [[deprecated]] virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) = 0;
 
     // determine to clean up txs periodically or not

@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(transaction)
 {
     std::string to("Target");
     bcos::bytes input(bcos::asBytes("Arguments"));
-    bcos::u256 nonce(800);
+    std::string nonce("800");
 
     bcostars::protocol::TransactionFactoryImpl factory(cryptoSuite);
     auto tx = factory.createTransaction(0, to, input, nonce, 100, "testChain", "testGroup", 1000,
@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE(block)
 
     std::string to("Target");
     bcos::bytes input(bcos::asBytes("Arguments"));
-    bcos::u256 nonce(100);
+    std::string nonce("100");
 
     bcos::crypto::HashType stateRoot(bcos::asBytes("root1"));
     std::string contractAddress("contract Address!");
@@ -440,17 +440,28 @@ BOOST_AUTO_TEST_CASE(blockHeader)
 
     header->setParentInfo(parentInfoList);
 
+    auto headerImpl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+
+    BOOST_CHECK(headerImpl->inner().dataHash.empty());
+
     bcos::bytes buffer;
     header->encode(buffer);
 
+    // BOOST_CHECK_EQUAL(header->, decodedHeader->number());
+
     auto decodedHeader = blockHeaderFactory->createBlockHeader(buffer);
+
+    auto decodedBlockHeaderImpl =
+        std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(decodedHeader);
+
+    BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
 
     BOOST_CHECK_EQUAL(header->number(), decodedHeader->number());
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
     BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
     for (auto [originParentInfo, decodeParentInfo] :
-        RANGES::zip_view(header->parentInfo(), decodedHeader->parentInfo()))
+        RANGES::views::zip(header->parentInfo(), decodedHeader->parentInfo()))
     {
         BOOST_CHECK_EQUAL(
             bcos::toString(originParentInfo.blockHash), bcos::toString(decodeParentInfo.blockHash));
@@ -459,6 +470,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
 
     BOOST_CHECK_NO_THROW(header->setExtraData(header->extraData().toBytes()));
 }
+
 
 BOOST_AUTO_TEST_CASE(emptyBlockHeader)
 {
@@ -478,10 +490,10 @@ BOOST_AUTO_TEST_CASE(emptyBlockHeader)
 
 BOOST_AUTO_TEST_CASE(submitResult)
 {
-    protocol::TransactionSubmitResultImpl submitResult(nullptr);
+    protocol::TransactionSubmitResultImpl submitResult;
     submitResult.setNonce(bcos::protocol::NonceType("1234567"));
 
-    BOOST_CHECK_EQUAL(submitResult.nonce().str(), "1234567");
+    BOOST_CHECK_EQUAL(submitResult.nonce(), "1234567");
 }
 
 BOOST_AUTO_TEST_CASE(tarsMovable)

@@ -33,8 +33,9 @@ namespace bcos
 namespace test
 {
 inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr _keyPair,
-    const std::string_view& _to, bytes const& _input, u256 const& _nonce, int64_t _blockLimit,
-    std::string const& _chainId, std::string const& _groupId, std::string const& _abi = "")
+    const std::string_view& _to, bytes const& _input, std::string const& _nonce,
+    int64_t _blockLimit, std::string const& _chainId, std::string const& _groupId,
+    std::string const& _abi = "")
 {
     bcostars::Transaction transaction;
     transaction.data.to = _to;
@@ -46,11 +47,7 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     transaction.data.abi = _abi;
     auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
-    std::visit(
-        [&pbTransaction](
-            auto&& hasher) { pbTransaction->calculateHash<std::decay_t<decltype(hasher)>>(); },
-        _cryptoSuite->hashImpl()->hasher());
-
+    pbTransaction->calculateHash(_cryptoSuite->hashImpl()->hasher());
 
     auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->setSignatureData(*signData);
@@ -76,7 +73,7 @@ inline void checkTransaction(
 
 inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     KeyPairInterface::Ptr _keyPair, const std::string_view& _to, bytes const& _input,
-    u256 const& _nonce, int64_t _blockLimit, std::string const& _chainId,
+    std::string const& _nonce, int64_t _blockLimit, std::string const& _chainId,
     std::string const& _groupId)
 {
     auto factory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
@@ -109,9 +106,9 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     return decodedTransaction;
 }
 
-inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, u256 nonce = 120012323,
-    int64_t blockLimit = 1000023, std::string chainId = "chainId", std::string groupId = "groupId",
-    bytes _to = bytes())
+inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite,
+    const std::string& nonce = "120012323", int64_t blockLimit = 1000023,
+    std::string chainId = "chainId", std::string groupId = "groupId", bytes _to = bytes())
 {
     KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = keyPair->address(_cryptoSuite->hashImpl()).asBytes();

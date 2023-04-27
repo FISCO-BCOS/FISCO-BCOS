@@ -35,23 +35,22 @@ using StateKey = std::tuple<TableNameID, SmallKey>;
 using StateValue = storage::Entry;
 
 template <class StorageType>
-concept StateStorage = requires()
-{
-    requires storage2::ReadableStorage<StorageType>;
-    requires storage2::WriteableStorage<StorageType>;
-};
+concept StateStorage = requires() {
+                           requires storage2::ReadableStorage<StorageType>;
+                           requires storage2::WriteableStorage<StorageType>;
+                       };
 
 template <class TransactionExecutorType, class Storage, class ReceiptFactory>
-concept TransactionExecutor = requires(TransactionExecutorType executor,
-    const protocol::BlockHeader& blockHeader, Storage& storage, ReceiptFactory& receiptFactory)
-{
-    requires StateStorage<Storage>;
-    requires protocol::IsTransactionReceiptFactory<ReceiptFactory>;
+concept TransactionExecutor =
+    requires(TransactionExecutorType executor, const protocol::BlockHeader& blockHeader,
+        Storage& storage, ReceiptFactory& receiptFactory) {
+        requires StateStorage<Storage>;
+        requires protocol::IsTransactionReceiptFactory<ReceiptFactory>;
 
-    requires std::same_as<task::AwaitableReturnType<decltype(executor.execute(
-                              blockHeader, std::declval<protocol::Transaction>(), 0))>,
-        protocol::ReceiptFactoryReturnType<ReceiptFactory>>;
-};
+        requires std::same_as<task::AwaitableReturnType<decltype(executor.execute(
+                                  blockHeader, std::declval<protocol::Transaction>(), 0))>,
+            protocol::ReceiptFactoryReturnType<ReceiptFactory>>;
+    };
 }  // namespace bcos::transaction_executor
 
 template <>

@@ -76,9 +76,9 @@ std::shared_ptr<evmoneCodeAnalysis> VMFactory::get(
 {
     if (revision == m_revision)
     {
-        std::unique_lock lock(m_cacheMutex);
+        m_cacheMutex.lock();
         auto analysis = m_cache.get(key);
-        lock.unlock();
+        m_cacheMutex.unlock();
         if (analysis)
         {
             return analysis.value();
@@ -92,12 +92,12 @@ void VMFactory::put(const crypto::HashType& key,
 {
     if (revision != m_revision)
     {
-        std::unique_lock l(m_cacheMutex);
+        std::unique_lock lock(m_cacheMutex);
         m_cache.clear();
     }
     m_revision = revision;
     {
-        std::unique_lock l(m_cacheMutex);
+        std::unique_lock lock(m_cacheMutex);
         m_cache.insert(key, analysis);
     }
 }

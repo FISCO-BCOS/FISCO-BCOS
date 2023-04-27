@@ -20,14 +20,16 @@ struct TableNameHash
 
 struct Fixture
 {
-    Fixture() : levelStorage(m_backendStorage) {}
+    Fixture() : multiLayerStorage(m_backendStorage) {}
 
     void prepareData(int64_t count, int layer = 0)
     {
-        levelStorage.newMutable();
+        multiLayerStorage.newMutable();
+
         // Write count data
         task::syncWait([this](int64_t count) -> task::Task<void> {
-            allKeys = RANGES::iota_view<int, int>(0, count) |
+            auto view = multiLayerStorage.fork(true);
+            allKeys = RANGES::views::iota(0, count) |
                       RANGES::views::transform([tableNamePool = &m_tableNamePool](int num) {
                           return transaction_executor::StateKey{
                               storage2::string_pool::makeStringID(*tableNamePool, "test_table"),
@@ -35,21 +37,20 @@ struct Fixture
                       }) |
                       RANGES::to<decltype(allKeys)>();
 
-            auto allValues =
-                RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](int num) {
-                    storage::Entry entry;
-                    entry.set(fmt::format("value: {}", num));
+            auto allValues = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
+                storage::Entry entry;
+                entry.set(fmt::format("value: {}", num));
 
-                    return entry;
-                });
+                return entry;
+            });
 
-            co_await levelStorage.write(allKeys, allValues);
+            co_await view.write(allKeys, allValues);
         }(count));
 
         for (auto i = 0; i < layer; ++i)
         {
-            levelStorage.pushMutableToImmutableFront();
-            levelStorage.newMutable();
+            multiLayerStorage.pushMutableToImmutableFront();
+            multiLayerStorage.newMutable();
         }
     }
 
@@ -60,7 +61,7 @@ struct Fixture
 
     transaction_executor::TableNamePool m_tableNamePool;
     BackendStorage m_backendStorage;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> levelStorage;
+    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
     std::vector<bcos::transaction_executor::StateKey> allKeys;
 };
 
@@ -72,10 +73,12 @@ static void read1(benchmark::State& state)
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        auto view = fixture.multiLayerStorage.fork(false);
         for (auto const& it : state)
         {
-            [[maybe_unused]] auto data = co_await storage2::readOne(
-                fixture.levelStorage, fixture.allKeys[((i++) + dataCount) % dataCount]);
+            [[maybe_unused]] auto data =
+                co_await storage2::readOne(view, fixture.allKeys[(i + dataCount) % dataCount]);
+            ++i;
         }
 
         co_return;
@@ -90,10 +93,12 @@ static void read10(benchmark::State& state)
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        auto view = fixture.multiLayerStorage.fork(false);
         for (auto const& it : state)
         {
-            [[maybe_unused]] auto data = co_await storage2::readOne(
-                fixture.levelStorage, fixture.allKeys[((i++) + dataCount) % dataCount]);
+            [[maybe_unused]] auto data =
+                co_await storage2::readOne(view, fixture.allKeys[(i + dataCount) % dataCount]);
+            ++i;
         }
 
         co_return;
@@ -103,15 +108,16 @@ static void read10(benchmark::State& state)
 static void write1(benchmark::State& state)
 {
     Fixture fixture;
-    fixture.levelStorage.newMutable();
+    fixture.multiLayerStorage.newMutable();
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+        auto view = fixture.multiLayerStorage.fork(true);
         for (auto const& it : state)
         {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", i));
-            co_await storage2::writeOne(fixture.levelStorage,
+            co_await storage2::writeOne(view,
                 transaction_executor::StateKey{
                     storage2::string_pool::makeStringID(fixture.m_tableNamePool, "test_table"),
                     fmt::format("key: {}", i)},

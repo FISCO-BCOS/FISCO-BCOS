@@ -18,6 +18,7 @@
  * @date 2022.01.17
  * @author yujiechen
  */
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -44,27 +45,40 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     const CInputBuffer* raw_public_key, const CInputBuffer* raw_message_hash,
     COutputBuffer* output_signature)
 {
-    auto hexPubKey =
-        toHexString(raw_public_key->data, raw_public_key->data + raw_public_key->len, "04");
     int len = 0;
     // create EC_GROUP
-    EC_KEY* sm2Key = NULL;
-    ECDSA_SIG* sig = NULL;
-    EC_POINT* publicKey = NULL;
-    BIGNUM* privateKey = NULL;
+    EC_KEY* sm2Key = nullptr;
+    ECDSA_SIG* sig = nullptr;
+    EC_POINT* publicKey = nullptr;
+    BIGNUM* privateKey = nullptr;
+    BIGNUM* bn = nullptr;
     int8_t ret = WEDPR_ERROR;
+    uint8_t publicKeyData[65] = {4};
+    memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
+    bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
+    if (bn == nullptr)
+    {
+        CRYPTO_LOG(ERROR) << LOG_DESC("fast_sm2_sign: error of BN_bin2bn for publicKey");
+        goto done;
+    }
 
     // load privateKey
     privateKey = BN_bin2bn((const unsigned char*)raw_private_key->data, raw_private_key->len, NULL);
-    if (privateKey == NULL)
+    if (privateKey == nullptr)
     {
         CRYPTO_LOG(ERROR) << LOG_DESC("sm2: fast_sm2_sign: error of BN_bin2bn for privateKey");
         goto done;
     }
-    publicKey = EC_POINT_hex2point(sm2Group, hexPubKey->data(), NULL, NULL);
+
+    publicKey = EC_POINT_bn2point(sm2Group, bn, NULL, NULL);
     if (publicKey == NULL)
     {
-        CRYPTO_LOG(ERROR) << LOG_DESC("sm2: fast_sm2_sign: error of BN_bin2bn for publicKey");
+        CRYPTO_LOG(ERROR) << LOG_DESC(
+                                 "sm2: fast_sm2_sign: error of EC_POINT_bn2point for publicKey")
+                          << LOG_KV("len", raw_public_key->len)
+                          << LOG_KV(
+                                 "pubHex", *toHexString(raw_public_key->data,
+                                               raw_public_key->data + raw_public_key->len, "0x"));
         goto done;
     }
     sm2Key = EC_KEY_new();
@@ -133,27 +147,33 @@ done:
     {
         EC_POINT_free(publicKey);
     }
+    if (bn)
+    {
+        BN_free(bn);
+    }
     return ret;
 }
 
 int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
     const CInputBuffer* raw_message_hash, const CInputBuffer* raw_signature)
 {
-    auto hexPubKey =
-        toHexString(raw_public_key->data, raw_public_key->data + raw_public_key->len, "04");
     EC_KEY* sm2Key = NULL;
     EC_POINT* point = NULL;
     BIGNUM* r = NULL;
     BIGNUM* s = NULL;
     ECDSA_SIG* signData = NULL;
     int8_t ret = WEDPR_ERROR;
+    uint8_t publicKeyData[65] = {4};
+    memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
+    BIGNUM* bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
     point = EC_POINT_new(sm2Group);
     if (point == NULL)
     {
         CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of EC_POINT_new";
         goto done;
     }
-    if (!EC_POINT_hex2point(sm2Group, hexPubKey->data(), point, NULL))
+
+    if (!EC_POINT_bn2point(sm2Group, bn, point, NULL))
     {
         CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of EC_POINT_bin2point";
         goto done;

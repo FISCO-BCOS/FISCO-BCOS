@@ -5,7 +5,6 @@
 #include <bcos-utilities/ThreeWay4StringView.h>
 #include <oneapi/tbb/concurrent_unordered_set.h>
 #include <boost/container/static_vector.hpp>
-#include <boost/container_hash/hash_fwd.hpp>
 #include <boost/functional/hash.hpp>
 #include <boost/static_string.hpp>
 #include <boost/throw_exception.hpp>
@@ -24,7 +23,7 @@ class StringPool
 public:
     using ID = const void*;
 
-    virtual ~StringPool() = default;
+    virtual ~StringPool() noexcept = default;
     virtual ID add(std::string_view str) = 0;
     virtual std::string_view query(ID id) const = 0;
 };
@@ -43,10 +42,10 @@ public:
       : m_pool(std::addressof(pool)), m_stringPoolID(stringPoolID)
     {}
     StringID(const StringID&) = default;
-    StringID(StringID&&) = default;
+    StringID(StringID&&) noexcept = default;
     StringID& operator=(const StringID&) = default;
-    StringID& operator=(StringID&&) = default;
-    ~StringID() = default;
+    StringID& operator=(StringID&&) noexcept = default;
+    ~StringID() noexcept = default;
 
     std::string_view operator*() const
     {
@@ -63,7 +62,6 @@ public:
         {
             return m_pool <=> rhs.m_pool;
         }
-
         if (m_pool == rhs.m_pool)
         {
             return m_stringPoolID <=> rhs.m_stringPoolID;
@@ -132,10 +130,6 @@ private:
     tbb::concurrent_unordered_set<StringType, Hash, EqualTo> m_storage;
 
 public:
-    struct UnexceptStringID : public bcos::Error
-    {
-    };
-
     FixedStringPool() noexcept = default;
     FixedStringPool(const FixedStringPool&) = delete;
     FixedStringPool(FixedStringPool&&) = delete;

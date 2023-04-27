@@ -86,6 +86,34 @@ TransactionStatus toTransactionStatus(Exception const& _e)
         return TransactionStatus::AccountFrozen;
     return TransactionStatus::Unknown;
 }
+
 }  // namespace executor
 
+bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
+{
+    // the string length will never exceed uint64_t, so we use uint64_t to store the length
+    constexpr int32_t slotSize = 32;
+    constexpr int32_t offsetBegin = 24;
+    size_t indexOffset = index * slotSize;
+    if (data.size() < indexOffset + slotSize)
+    {  // the input is invalid(not match the abi)
+        return {};
+    }
+    if (typeName == "string" || typeName == "bytes")
+    {
+        uint64_t offset = 0;
+        const uint8_t* dynamicArrayLenData = data.data() + indexOffset + offsetBegin;
+        std::reverse_copy(
+            dynamicArrayLenData, dynamicArrayLenData + sizeof(uint64_t), (uint8_t*)&offset);
+        const uint8_t* dynamicArray = data.data() + offset;
+        uint64_t dataLength = 0;
+        // dataLength is the length of the string or bytes
+        // dynamicArray = [32 bytes length, dataLength bytes data]
+        std::reverse_copy(
+            dynamicArray + offsetBegin, dynamicArray + slotSize, (uint8_t*)&dataLength);
+        const uint8_t* rawData = dynamicArray + slotSize;
+        return {rawData, rawData + dataLength};
+    }
+    return {data.begin() + indexOffset, data.begin() + indexOffset + slotSize};
+}
 }  // namespace bcos

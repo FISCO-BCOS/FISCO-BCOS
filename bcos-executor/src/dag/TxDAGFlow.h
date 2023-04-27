@@ -24,7 +24,7 @@
 #include "tbb/flow_graph.h"
 #include <vector>
 
-#define DAGFLOW_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("DAGFlow")
+#define DAGFLOW_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR") << LOG_BADGE("DAGFlow")
 
 namespace bcos
 {

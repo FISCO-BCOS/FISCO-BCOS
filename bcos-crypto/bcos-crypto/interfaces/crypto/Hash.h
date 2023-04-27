@@ -64,7 +64,7 @@ public:
         return hash(_input.ref());
     }
 
-    inline HashType hash(PublicPtr _public) { return hash(_public->data()); }
+    inline HashType hash(const PublicPtr& _public) { return hash(_public->data()); }
 
     inline void setHashImplType(HashImplType _type) { m_type = _type; }
 

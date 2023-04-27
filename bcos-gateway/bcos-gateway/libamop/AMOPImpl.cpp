@@ -18,6 +18,7 @@
  * @date 2021-10-26
  */
 #include "AMOPImpl.h"
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libnetwork/Common.h>
@@ -79,8 +80,8 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
         {
             return;
         }
-        AMOP_LOG(INFO) << LOG_BADGE(
-                              "onReceiveTopicSeqMessage: try to request latest AMOP information")
+        AMOP_LOG(INFO) << LOG_BADGE("onReceiveTopicSeqMessage")
+                       << LOG_BADGE("try to request latest AMOP information")
                        << LOG_KV("nodeID", _nodeID) << LOG_KV("topicSeq", topicSeq);
 
         auto buffer = buildAndEncodeMessage(AMOPMessage::Type::RequestTopic, bytesConstRef());
@@ -118,7 +119,7 @@ std::shared_ptr<bytes> AMOPImpl::buildAndEncodeMessage(uint32_t _type, bcos::byt
     message->setType(_type);
     message->setData(_data);
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
     return buffer;
 }
 
@@ -288,7 +289,7 @@ bool AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic,
 {
     std::vector<std::string> clients;
     m_topicManager->queryClientsByTopic(_topic, clients);
-    if (clients.size() == 0)
+    if (clients.empty())
     {
         AMOP_LOG(INFO) << LOG_DESC("trySendTopicMessageToLocalClient failed for empty client")
                        << LOG_KV("topic", _topic);
@@ -531,8 +532,8 @@ void AMOPImpl::dispatcherAMOPMessage(
             [this, _session, _message](bytesPointer _responseData, int16_t _type) {
                 auto responseP2PMsg = std::dynamic_pointer_cast<P2PMessage>(
                     m_network->messageFactory()->buildMessage());
-                AMOP_LOG(INFO) << LOG_DESC("onReceiveAMOPMessage: sendResponse")
-                               << LOG_KV("type", _type) << LOG_KV("data", _responseData->size());
+                AMOP_LOG(DEBUG) << LOG_BADGE("onReceiveAMOPMessage") << LOG_DESC("send response")
+                                << LOG_KV("type", _type) << LOG_KV("data", _responseData->size());
                 responseP2PMsg->setDstP2PNodeID(_message->srcP2PNodeID());
                 responseP2PMsg->setSrcP2PNodeID(_message->dstP2PNodeID());
                 responseP2PMsg->setSeq(_message->seq());

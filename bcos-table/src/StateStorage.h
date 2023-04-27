@@ -39,7 +39,6 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <mutex>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcos::storage
 {
@@ -160,7 +159,7 @@ public:
     void asyncGetRow(std::string_view tableView, std::string_view keyView,
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override
     {
-        auto [bucket, lock] = getBucket(tableView);
+        auto [bucket, lock] = getBucket(tableView, keyView);
         boost::ignore_unused(lock);
 
         auto it = bucket->container.template get<0>().find(std::make_tuple(tableView, keyView));
@@ -237,7 +236,7 @@ public:
 
         for (auto i = 0U; i < keys.size(); ++i)
         {
-            auto [bucket, lock] = getBucket(tableView);
+            auto [bucket, lock] = getBucket(tableView, keys[i]);
             boost::ignore_unused(lock);
 
             auto it = bucket->container.find(std::make_tuple(tableView, std::string_view(keys[i])));
@@ -316,7 +315,7 @@ public:
         ssize_t updatedCapacity = entry.size();
         std::optional<Entry> entryOld;
 
-        auto [bucket, lock] = getBucket(tableView);
+        auto [bucket, lock] = getBucket(tableView, keyView);
         boost::ignore_unused(lock);
 
         auto it = bucket->container.find(std::make_tuple(tableView, keyView));
@@ -356,6 +355,7 @@ public:
                                               const std::string_view& key, const Entry& entry)>
                                               callback) const override
     {
+        std::lock_guard<std::mutex> lock(x_cacheMutex);
         tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size()),
             [this, &onlyDirty, &callback](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
@@ -411,9 +411,17 @@ public:
                         auto& entry = it.entry;
                         if (entry.dirty())
                         {
-                            auto entryHash =
-                                hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
-                                entry.hash(it.table, it.key, *hashImpl, m_blockVersion);
+                            bcos::crypto::HashType entryHash;
+                            if (m_blockVersion >=
+                                (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+                            {
+                                entryHash = entry.hash(it.table, it.key, *hashImpl, m_blockVersion);
+                            }
+                            else
+                            {  // v3.0.0
+                                entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
+                                            entry.hash(it.table, it.key, *hashImpl, m_blockVersion);
+                            }
                             bucketHash ^= entryHash;
                         }
                     }
@@ -442,7 +450,7 @@ public:
         for (const auto& change : recoder)
         {
             ssize_t updateCapacity = 0;
-            auto [bucket, lock] = getBucket(change.table);
+            auto [bucket, lock] = getBucket(change.table, std::string_view(change.key));
             boost::ignore_unused(lock);
 
             auto it = bucket->container.find(
@@ -514,27 +522,31 @@ private:
         {
             return entry;
         }
-
-        entry.setStatus(Entry::NORMAL);
-        auto updateCapacity = entry.size();
-
-        auto [bucket, lock] = getBucket(table);
-        auto it = bucket->container.find(std::make_tuple(table, key));
-
-        if (it == bucket->container.end())
+        if (x_cacheMutex.try_lock())
         {
-            it = bucket->container
-                     .emplace(Data{std::string(table), std::string(key), std::move(entry)})
-                     .first;
+            entry.setStatus(Entry::NORMAL);
+            auto updateCapacity = entry.size();
 
-            bucket->capacity += updateCapacity;
-        }
-        else
-        {
-            STORAGE_LOG(DEBUG) << "Fail import existsing entry, " << table << " | " << toHex(key);
-        }
+            auto [bucket, lock] = getBucket(table, key);
+            auto it = bucket->container.find(std::make_tuple(table, key));
 
-        return it->entry;
+            if (it == bucket->container.end())
+            {
+                it = bucket->container
+                         .emplace(Data{std::string(table), std::string(key), std::move(entry)})
+                         .first;
+
+                bucket->capacity += updateCapacity;
+            }
+            else
+            {
+                STORAGE_LOG(DEBUG)
+                    << "Fail import existsing entry, " << table << " | " << toHex(key);
+            }
+            x_cacheMutex.unlock();
+            return it->entry;
+        }
+        return entry;
     }
 
     std::shared_ptr<StorageInterface> getPrev()
@@ -580,9 +592,11 @@ private:
     uint32_t m_blockVersion = 0;
     std::vector<Bucket> m_buckets;
 
-    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(std::string_view table)
+    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(
+        const std::string_view& table, const std::string_view& key)
     {
         auto hash = std::hash<std::string_view>{}(table);
+        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
         auto index = hash % m_buckets.size();
 
         auto& bucket = m_buckets[index];

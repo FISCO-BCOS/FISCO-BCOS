@@ -37,6 +37,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
@@ -149,11 +150,10 @@ TransactionalStorageInterface::Ptr createBackendStorage(
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
     {
-        bcos::security::DataEncryption::Ptr dataEncryption = nullptr;
+        bcos::security::DataEncryptInterface::Ptr dataEncryption = nullptr;
         if (nodeConfig->storageSecurityEnable())
         {
             dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
-            dataEncryption->init();
         }
         if (write)
         {
@@ -300,7 +300,7 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                     keys[j] = std::string((char*)transactionHash.data(), transactionHash.size());
                     // write transactions and receipts to archive database
                     Json::Value transactionJson;
-                    bcos::rpc::toJsonResp(transactionJson, transaction);
+                    bcos::rpc::toJsonResp(transactionJson, *transaction);
                     transactionValues[j] = transactionJson.toStyledString();
                     // read the receipt and store to archive database use json format
                     Json::Value receiptJson;
@@ -400,7 +400,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                     }
                     // convert json to transaction
                     int32_t version = jsonValue["version"].asInt();
-                    auto nonce = u256(jsonValue["nonce"].asString());
+                    auto nonce = jsonValue["nonce"].asString();
                     auto input = fromHexWithPrefix(jsonValue["input"].asString());
                     auto signature = fromHexWithPrefix(jsonValue["signature"].asString());
                     auto tx = transactionFactory->createTransaction(version,

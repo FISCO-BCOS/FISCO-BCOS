@@ -129,6 +129,12 @@ public:
         m_delegateCallSender = std::move(delegateCallSender);
     }
 
+    bool hasContractTableChanged() const override { return m_hasContractTableChanged; }
+    void setHasContractTableChanged(bool hasChanged) override
+    {
+        m_hasContractTableChanged = hasChanged;
+    }
+
     bcos::crypto::HashType m_transactionHash;
     int64_t m_contextID = 0;
     int64_t m_seq = 0;
@@ -164,6 +170,8 @@ public:
     std::string m_delegateCallAddress;
     bcos::bytes m_delegateCallCode;
     std::string m_delegateCallSender;
+
+    bool m_hasContractTableChanged = false;
 };
 
 class NativeExecutionMessageFactory : public protocol::ExecutionMessageFactory

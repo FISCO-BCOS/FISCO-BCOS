@@ -19,7 +19,7 @@ class SocketFace
 public:
     SocketFace() = default;
 
-    virtual ~SocketFace(){};
+    virtual ~SocketFace() = default;
     virtual bool isConnected() const = 0;
     virtual void close() = 0;
     virtual bi::tcp::endpoint remoteEndpoint(

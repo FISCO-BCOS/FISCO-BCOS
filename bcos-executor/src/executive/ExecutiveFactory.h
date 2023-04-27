@@ -23,13 +23,13 @@
 
 #include "../executor/TransactionExecutor.h"
 //#include "PromiseTransactionExecutive.h"
+#include <bcos-framework/protocol/GlobalConfig.h>
 #include <tbb/concurrent_unordered_map.h>
+#include <boost/algorithm/string.hpp>
 #include <atomic>
 #include <stack>
 
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 class BlockContext;
 class TransactionExecutive;
@@ -39,51 +39,45 @@ class ExecutiveFactory
 public:
     using Ptr = std::shared_ptr<ExecutiveFactory>;
 
-    ExecutiveFactory(std::weak_ptr<BlockContext> blockContext,
-        std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
-            precompiledContract,
-        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-            constantPrecompiled,
-        std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
-        std::shared_ptr<wasm::GasInjector> gasInjector)
-      : m_precompiledContract(precompiledContract),
-        m_constantPrecompiled(constantPrecompiled),
-        m_builtInPrecompiled(builtInPrecompiled),
+    ExecutiveFactory(const BlockContext& blockContext,
+        std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled,
+        std::shared_ptr<PrecompiledMap> precompiled,
+        std::shared_ptr<const std::set<std::string>> staticPrecompiled,
+        const wasm::GasInjector& gasInjector)
+      : m_evmPrecompiled(std::move(evmPrecompiled)),
+        m_precompiled(std::move(precompiled)),
+        m_staticPrecompiled(std::move(staticPrecompiled)),
         m_blockContext(blockContext),
         m_gasInjector(gasInjector),
-        m_pool(std::make_shared<bcos::ThreadPool>("executive", 128))
-
-    {}
+        m_isTiKVStorage(boost::iequals("tikv", g_BCOSConfig.storageType()))
+    {
+        if (m_isTiKVStorage)
+        {
+            m_poolForPromiseWait = std::make_shared<bcos::ThreadPool>(
+                "promiseWait", 128);  // should max enough for promise wait
+        }
+    }
 
     virtual ~ExecutiveFactory() = default;
     virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, bool useCoroutine = true);
-    std::weak_ptr<BlockContext> getBlockContext() { return m_blockContext; };
+    const BlockContext& getBlockContext() { return m_blockContext; };
 
-    std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& address) const
-    {
-        auto constantPrecompiled = m_constantPrecompiled->find(address);
-
-        if (constantPrecompiled != m_constantPrecompiled->end())
-        {
-            return constantPrecompiled->second;
-        }
-        return {};
-    }
+    std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& address) const;
 
 protected:
     void setParams(std::shared_ptr<TransactionExecutive> executive);
 
     void registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive);
 
-    std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
-        m_precompiledContract;
-    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-        m_constantPrecompiled;
-    std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
-    std::weak_ptr<BlockContext> m_blockContext;
-    std::shared_ptr<wasm::GasInjector> m_gasInjector;
-    bcos::ThreadPool::Ptr m_pool;
+
+    std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> m_evmPrecompiled;
+    std::shared_ptr<PrecompiledMap> m_precompiled;
+    std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
+    const BlockContext& m_blockContext;
+    const wasm::GasInjector& m_gasInjector;
+    bool m_isTiKVStorage;
+    bcos::ThreadPool::Ptr m_poolForPromiseWait;
 };
 
 class ShardingExecutiveFactory : public ExecutiveFactory
@@ -91,21 +85,18 @@ class ShardingExecutiveFactory : public ExecutiveFactory
 public:
     using Ptr = std::shared_ptr<ShardingExecutiveFactory>;
 
-    ShardingExecutiveFactory(std::weak_ptr<BlockContext> blockContext,
-        std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
-            precompiledContract,
-        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-            constantPrecompiled,
-        std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
-        std::shared_ptr<wasm::GasInjector> gasInjector)
-      : ExecutiveFactory(
-            blockContext, precompiledContract, constantPrecompiled, builtInPrecompiled, gasInjector)
+    ShardingExecutiveFactory(const BlockContext& blockContext,
+        std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled,
+        std::shared_ptr<PrecompiledMap> precompiled,
+        std::shared_ptr<const std::set<std::string>> staticPrecompiled,
+        const wasm::GasInjector& gasInjector)
+      : ExecutiveFactory(blockContext, std::move(evmPrecompiled), std::move(precompiled),
+            std::move(staticPrecompiled), gasInjector)
     {}
-    virtual ~ShardingExecutiveFactory() = default;
+    ~ShardingExecutiveFactory() override = default;
 
     std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, bool useCoroutine = true) override;
 };
 
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

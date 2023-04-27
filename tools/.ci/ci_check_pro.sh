@@ -1,10 +1,11 @@
 #!/bin/bash
-console_branch="3.0.0"
+console_branch="master"
 fisco_bcos_service_path="../build/fisco-bcos-tars-service/"
 build_chain_path="BcosBuilder/pro/build_chain.py"
 current_path=`pwd` # tools
-node_list="group0_node_40402 group0_node_40412"
+node_list="group0_node_40402 group0_node_40412 group0_node_40422 group0_node_40432"
 output_dir="pro_nodes"
+auth_admin_account=""
 LOG_ERROR() {
     local content=${1}
     echo -e "\033[31m ${content}\033[0m"
@@ -65,12 +66,32 @@ wait_and_start()
     fi
 }
 
+generate_auth_account()
+{
+  local account_script="get_account.sh"
+#  if ${sm_mode}; then
+#      account_script="get_gm_account.sh"
+#  fi
+
+  if [ ! -f ${account_script} ]; then
+        local get_account_link="https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/${account_script}"
+        LOG_INFO "Downloading ${account_script} from ${get_account_link}..."
+        curl -#LO "${get_account_link}"
+  fi
+  auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  LOG_INFO "Admin account: ${auth_admin_account}"
+}
+
 init() 
 {
     sm_option="${1}"
     cd ${current_path}
-
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
     echo "===>> ${current_path}"
+    generate_auth_account
 
     rm -rf BcosBuilder/pro/binary/
 
@@ -90,6 +111,7 @@ init()
     pip3 install -r BcosBuilder/requirements.txt
 
     cd BcosBuilder/pro/
+    ${sed_cmd} "s/init_auth_address=\"\"/init_auth_address=\"${auth_admin_account}\"/g" conf/config-build-example.toml
     python3  build_chain.py build -c conf/config-build-example.toml -O ${current_path}/${output_dir}
     cd ${current_path}
 
@@ -113,82 +135,43 @@ check_consensus()
             LOG_ERROR "checkView failed ******* print log info for ${node} finish *******"
             exit_node "check_consensus for ${node} failed for not reachNewView"
         else
-            LOG_INFO "check_consensus for ${node} success"  
-        fi 
+            LOG_INFO "check_consensus for ${node} success"
+        fi
     done
 }
 
-download_console()
+expand_node()
 {
-    cd ${current_path}
-
-    LOG_INFO "Download console ..."
-    tar_file=console-${console_branch}.tar.gz
-    if [ -f "${tar_file}" ]; then
-        LOG_INFO "Use download cache"
-    else
-        curl -#LO https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/console/releases/v${console_branch}/console.tar.gz
-        LOG_INFO "Download console success, branch: ${console_branch}"
-        mv console.tar.gz ${tar_file}
-    fi
-    LOG_INFO "Build and Config console ..."
-    rm -rf console
-    tar -zxvf ${tar_file}
-    cd console
-}
-
-config_console()
-{
-    cd ${current_path}/console/
-    use_sm="${1}"
-    cp -r ${current_path}/${output_dir}/127.0.0.1/rpc_20200/conf/sdk/* conf/
-    cp conf/config-example.toml conf/config.toml
+    cd ${current_path}/BcosBuilder/pro
+    rm -rf config-expand.toml
+    LOG_INFO "expand node..."
+    cp conf/config-build-example.toml config-expand.toml
     local sed_cmd="sed -i"
+    local sed_cmd1="sed -i"
     if [ "$(uname)" == "Darwin" ];then
-        sed_cmd="sed -i .bkp"
+        sed_cmd="sed -i ''"
+        sed_cmd1="sed -i .bkp"
     fi
-    use_sm_str="useSMCrypto = \"${use_sm}\""
-    ${sed_cmd} "s/useSMCrypto = \"false\"/${use_sm_str}/g" conf/config.toml
-    LOG_INFO "Build and Config console success ..."
-}
-
-send_transactions()
-{
-    txs_num="${1}"
-    cd ${current_path}/console/
-
-    bash console.sh getPeers
-
-    LOG_INFO "Deploy HelloWorld..."
-    for((i=1;i<=${txs_num};i++));
-    do
-        bash console.sh deploy HelloWorld
-        sleep 1
-    done  
-    blockNumber=`bash console.sh getBlockNumber`
-    if [ "${blockNumber}" == "${txs_num}" ]; then
-        LOG_INFO "send transaction success, current blockNumber: ${blockNumber}"
-    else
-        exit_node "send transaction failed, current blockNumber: ${blockNumber}"
-    fi
-}
-
-check_sync()
-{
-    LOG_INFO "check sync..."
-    expected_block_number="${1}"
-    cd ${current_path}/${output_dir}/127.0.0.1
-    bash group0_node_40402/stop.sh && rm -rf group0_node_40402/log && rm -rf group0_node_40402/group0
-    bash group0_node_40402/start.sh
-    # wait for sync
-    sleep 10
-    block_number=$(cat group0_node_40402/log/*log |grep Report | tail -n 1| awk -F',' '{print $4}' | awk -F'=' '{print $2}')
-    if [ "${block_number}" == "${expected_block_number}" ]; then
-        LOG_INFO "check_sync success, current blockNumber: ${block_number}"
-    else
-        exit_node "check_sync error, current blockNumber: ${block_number}, expected_block_number: ${expected_block_number}"
-    fi
-    LOG_INFO "check sync success..."
+    ${sed_cmd} 91,248d config-expand.toml
+    ${sed_cmd1} 's/name = "agencyA"/name = "agencyE"/' config-expand.toml
+    ${sed_cmd1} 's/peers=\[/peers=\["127.0.0.1:30304",/' config-expand.toml
+    ${sed_cmd1} 's/listen_port=20200/listen_port=20204/' config-expand.toml
+    ${sed_cmd1} 's/tars_listen_port=40400/tars_listen_port=40440/' config-expand.toml
+    ${sed_cmd1} 's/listen_port=30300/listen_port=30304/' config-expand.toml
+    ${sed_cmd1} 's/tars_listen_port=40401/tars_listen_port=40441/' config-expand.toml
+    ${sed_cmd1} 's/tars_listen_port=40402/tars_listen_port=40442/' config-expand.toml
+    python3  build_chain.py build -c config-expand.toml -O ${current_path}/${output_dir}
+    LOG_INFO "start expandNode gateway..."
+    bash ${current_path}/${output_dir}/127.0.0.1/gateway_30304/start.sh
+    LOG_INFO "start expandNode rpc..."
+    bash ${current_path}/${output_dir}/127.0.0.1/rpc_20204/start.sh
+    LOG_INFO "start expandNode..."
+    bash ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/start.sh
+    LOG_INFO "expand node success"
+    # sleep 10
+    # LOG_INFO "get new node nodeid..."
+    # nodeid=$(cat ${current_path}/${output_dir}/127.0.0.1/group0_node_40442/conf/node.nodeid)
+    # bash ${current_path}/console/console.sh addObserver ${nodeid}
 }
 
 clear_node()
@@ -198,15 +181,29 @@ clear_node()
     rm -rf ${output_dir}
 }
 
-txs_num=10
+if [[ -n "${1}" ]]; then
+     console_branch=${1}
+fi
+
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
-check_consensus
-download_console
-config_console "false"
-send_transactions ${txs_num}
-check_sync ${txs_num}
+expand_node
+pwd
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/${output_dir}/127.0.0.1/rpc_20200/conf"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "console_integrationTest success"
+    else
+        echo "console_integrationTest error"
+        exit 1
+fi
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/${output_dir}/127.0.0.1/rpc_20200/conf"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "java_sdk_integrationTest success"
+    else
+        echo "java_sdk_integrationTest error"
+        exit 1
+fi
 stop_node
 clear_node
 # LOG_INFO "======== check non-sm success ========"

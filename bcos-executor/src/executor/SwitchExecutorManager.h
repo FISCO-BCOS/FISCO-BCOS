@@ -254,15 +254,19 @@ public:
         {
             inputsVec->emplace_back(std::move(inputs[i]));
         }
-        m_pool.enqueue([executor = m_executor, contractAddress = std::move(contractAddress),
+        auto queryTime = utcTime();
+        m_pool.enqueue([queryTime, executor = m_executor, contractAddress = std::move(contractAddress),
                            inputsVec, callback = std::move(callback)] {
+            auto waitInPoolCost = utcTime() - queryTime;
             // create a holder
             auto _holdExecutorCallback =
-                [executorHolder = executor, callback = std::move(callback)](
+                [queryTime, waitInPoolCost ,executorHolder = executor, callback = std::move(callback)](
                     bcos::Error::UniquePtr error,
                     std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
-                    EXECUTOR_LOG(TRACE) << "Release executor holder"
-                                        << LOG_KV("ptr count", executorHolder.use_count());
+                    EXECUTOR_LOG(TRACE) << "Release executor holder executeTransactions"
+                                        << LOG_KV("ptr count", executorHolder.use_count())
+                            << LOG_KV("waitInPoolCost", waitInPoolCost)
+                            << LOG_KV("costFromQuery", utcTime() - queryTime);
                     callback(std::move(error), std::move(outputs));
                 };
 

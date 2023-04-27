@@ -59,17 +59,94 @@ bcos::crypto::HashType TransactionImpl::hash() const
     return hashResult;
 }
 
-bcos::u256 TransactionImpl::nonce() const
+const std::string& TransactionImpl::nonce() const
 {
-    if (!m_inner()->data.nonce.empty())
-    {
-        m_nonce = boost::lexical_cast<bcos::u256>(m_inner()->data.nonce);
-    }
-    return m_nonce;
+    return m_inner()->data.nonce;
 }
 
 bcos::bytesConstRef TransactionImpl::input() const
 {
-    return bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(m_inner()->data.input.data()),
-        m_inner()->data.input.size());
+    return {reinterpret_cast<const bcos::byte*>(m_inner()->data.input.data()),
+        m_inner()->data.input.size()};
+}
+int32_t bcostars::protocol::TransactionImpl::version() const
+{
+    return m_inner()->data.version;
+}
+std::string_view bcostars::protocol::TransactionImpl::chainId() const
+{
+    return m_inner()->data.chainID;
+}
+std::string_view bcostars::protocol::TransactionImpl::groupId() const
+{
+    return m_inner()->data.groupID;
+}
+int64_t bcostars::protocol::TransactionImpl::blockLimit() const
+{
+    return m_inner()->data.blockLimit;
+}
+void bcostars::protocol::TransactionImpl::setNonce(std::string _n)
+{
+    m_inner()->data.nonce = std::move(_n);
+}
+std::string_view bcostars::protocol::TransactionImpl::to() const
+{
+    return m_inner()->data.to;
+}
+std::string_view bcostars::protocol::TransactionImpl::abi() const
+{
+    return m_inner()->data.abi;
+}
+int64_t bcostars::protocol::TransactionImpl::importTime() const
+{
+    return m_inner()->importTime;
+}
+void bcostars::protocol::TransactionImpl::setImportTime(int64_t _importTime)
+{
+    m_inner()->importTime = _importTime;
+}
+bcos::bytesConstRef bcostars::protocol::TransactionImpl::signatureData() const
+{
+    return {reinterpret_cast<const bcos::byte*>(m_inner()->signature.data()),
+        m_inner()->signature.size()};
+}
+std::string_view bcostars::protocol::TransactionImpl::sender() const
+{
+    return {m_inner()->sender.data(), m_inner()->sender.size()};
+}
+void bcostars::protocol::TransactionImpl::forceSender(const bcos::bytes& _sender) const
+{
+    m_inner()->sender.assign(_sender.begin(), _sender.end());
+}
+void bcostars::protocol::TransactionImpl::setSignatureData(bcos::bytes& signature)
+{
+    m_inner()->signature.assign(signature.begin(), signature.end());
+}
+int32_t bcostars::protocol::TransactionImpl::attribute() const
+{
+    return m_inner()->attribute;
+}
+void bcostars::protocol::TransactionImpl::setAttribute(int32_t attribute)
+{
+    m_inner()->attribute = attribute;
+}
+std::string_view bcostars::protocol::TransactionImpl::extraData() const
+{
+    return m_inner()->extraData;
+}
+void bcostars::protocol::TransactionImpl::setExtraData(std::string const& _extraData)
+{
+    m_inner()->extraData = _extraData;
+}
+const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const
+{
+    return *m_inner();
+}
+bcostars::Transaction& bcostars::protocol::TransactionImpl::mutableInner()
+{
+    return *m_inner();
+}
+void bcostars::protocol::TransactionImpl::setInner(bcostars::Transaction inner)
+{
+    *m_inner() = std::move(inner);
 }

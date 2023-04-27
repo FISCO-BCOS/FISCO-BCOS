@@ -85,7 +85,6 @@ private:
     static PrecompiledRegistrar* s_this;
 };
 
-// TODO: unregister on unload with a static object.
 #define ETH_REGISTER_PRECOMPILED(Name)                                                        \
     static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name(bytesConstRef _in); \
     static bcos::executor::PrecompiledExecutor __eth_registerPrecompiledFactory##Name =       \
@@ -215,4 +214,52 @@ bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesCons
 
 std::pair<bool, bytes> ecRecover(bytesConstRef _in);
 }  // namespace crypto
+
+namespace executor
+{
+struct PrecompiledAvailable
+{
+    precompiled::Precompiled::Ptr precompiled;
+    std::function<bool(uint32_t, bool)> availableFunc;
+};
+class PrecompiledMap
+{
+public:
+    using Ptr = std::shared_ptr<PrecompiledMap>;
+    PrecompiledMap() = default;
+    PrecompiledMap(PrecompiledMap const&) = default;
+    PrecompiledMap(PrecompiledMap&&) = default;
+    PrecompiledMap& operator=(PrecompiledMap const&) = delete;
+    PrecompiledMap& operator=(PrecompiledMap&&) = default;
+    ~PrecompiledMap() = default;
+
+    auto insert(std::string const& _key, precompiled::Precompiled::Ptr _precompiled,
+        protocol::BlockVersion minVersion = protocol::BlockVersion::RC4_VERSION,
+        bool needAuth = false)
+    {
+        auto func = [minVersion, needAuth](uint32_t version, bool isAuth) -> bool {
+            bool flag = true;
+            if (needAuth)
+            {
+                flag = isAuth;
+            }
+            return version >= minVersion && flag;
+        };
+        return m_map.insert({_key, {std::move(_precompiled), std::move(func)}});
+    }
+
+    auto insert(std::string const& _key, precompiled::Precompiled::Ptr _precompiled,
+        std::function<bool(uint32_t, bool)> func)
+    {
+        return m_map.insert({_key, {std::move(_precompiled), std::move(func)}});
+    }
+    precompiled::Precompiled::Ptr at(
+        std::string const&, uint32_t version, bool isAuth) const noexcept;
+    bool contains(std::string const& key, uint32_t version, bool isAuth) const noexcept;
+    size_t size() const noexcept { return m_map.size(); }
+
+private:
+    std::unordered_map<std::string, PrecompiledAvailable> m_map;
+};
+}  // namespace executor
 }  // namespace bcos

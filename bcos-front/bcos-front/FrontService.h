@@ -25,6 +25,7 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/asio.hpp>
 #include <utility>
 
@@ -40,7 +41,7 @@ public:
     FrontService();
     FrontService(const FrontService&) = delete;
     FrontService(FrontService&&) = delete;
-    virtual ~FrontService();
+    ~FrontService() noexcept override;
 
     FrontService& operator=(const FrontService&) = delete;
     FrontService& operator=(FrontService&&) = delete;
@@ -120,7 +121,7 @@ public:
      * @param _receiveMsgCallback: response callback
      * @return void
      */
-    void onReceiveMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+    void onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
         bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) override;
 
     /**
@@ -179,11 +180,8 @@ public:
     std::shared_ptr<boost::asio::io_service> ioService() const { return m_ioService; }
     void setIoService(std::shared_ptr<boost::asio::io_service> _ioService)
     {
-        m_ioService = _ioService;
+        m_ioService = std::move(_ioService);
     }
-
-    bcos::ThreadPool::Ptr threadPool() const { return m_threadPool; }
-    void setThreadPool(bcos::ThreadPool::Ptr _threadPool) { m_threadPool = _threadPool; }
 
     // register message _dispatcher for module
     void registerModuleMessageDispatcher(int _moduleID,
@@ -265,8 +263,7 @@ protected:
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
 private:
-    // thread pool
-    bcos::ThreadPool::Ptr m_threadPool;
+    tbb::task_group m_asyncGroup;
     // timer
     std::shared_ptr<boost::asio::io_service> m_ioService;
     /// gateway interface

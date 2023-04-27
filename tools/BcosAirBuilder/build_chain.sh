@@ -42,7 +42,7 @@ default_version="v3.3.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
-auth_mode="false"
+auth_mode="true"
 monitor_mode="false"
 auth_admin_account=
 binary_path=""
@@ -425,7 +425,7 @@ download_monitor_bin()
     local mtail_postfix=""
     if [[ -n "${macOS}" ]];then
         if [[ "${platform}" == "arm64" ]];then
-            mtail_postfix ="Darwin_arm64"
+            mtail_postfix="Darwin_arm64"
         elif [[ "${platform}" == "x86_64" ]];then
             mtail_postfix="Darwin_x86_64"
         else
@@ -434,7 +434,7 @@ download_monitor_bin()
         fi
     else
         if [[ "${platform}" == "aarch64" ]];then
-            mtail_postfix ="Linux_arm64"
+            mtail_postfix="Linux_arm64"
         elif [[ "${platform}" == "x86_64" ]];then
             mtail_postfix="Linux_x86_64"
         else
@@ -544,7 +544,6 @@ Usage:
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -D, build with docker
-    -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -R <Serial_mode>                    [Optional] Whether to use serial execute,default is true
@@ -553,6 +552,7 @@ Usage:
     -i <fisco-bcos monitor ip/port>     [Optional] When expanding the node, should specify ip and port
     -M <fisco-bcos monitor>             [Optional] When expanding the node, specify the path where prometheus are located
     -z <Generate tar packet>            [Optional] Pack the data on the chain to generate tar packet
+    -n <node key path>                  [Optional] set the path of the node key file to load nodeid
     -N <node path>                      [Optional] set the path of the node modified to multi ca mode
     -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -h Help
@@ -565,6 +565,8 @@ expand node e.g
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m -i 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
+    bash $0 -C expand_lightnode -c config -d config/ca -o nodes/lightnode1
+    bash $0 -C expand_lightnode -c config -d config/ca -o nodes/lightnode1 -L ./fisco-bcos-lightnode
 modify node e.g
     bash $0 -C modify -N ./node0 -u ./ca/ca.crt
     bash $0 -C modify -N ./node0 -u ./ca/ca.crt -s
@@ -573,7 +575,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:AR:a:N:u:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -634,11 +636,9 @@ parse_params() {
                 LOG_FATAL "Not support docker mode for macOS now"
            fi
         ;;
-        A) auth_mode="true" ;;
         w) wasm_mode="true";;
         R) serial_mode="${OPTARG}";;
         a)
-          auth_mode="true"
           auth_admin_account="${OPTARG}"
         ;;
         v) compatibility_version="${OPTARG}";;
@@ -646,7 +646,7 @@ parse_params() {
         N)
             modify_node_path=$OPTARG
             dir_must_exists "${modify_node_path}"
-            ;; 
+            ;;
         u)
             multi_ca_path="$OPTARG"
             local last_char=${multi_ca_path: -1}
@@ -663,8 +663,8 @@ parse_params() {
 
 print_result() {
     echo "=============================================================="
-    LOG_INFO "GroupID               : ${default_group}"
-    LOG_INFO "ChainID               : ${default_chainid}"
+    LOG_INFO "GroupID              : ${default_group}"
+    LOG_INFO "ChainID              : ${default_chainid}"
     if [ -z "${docker_mode}" ];then
         LOG_INFO "${binary_name} path      : ${binary_path}"
     else
@@ -673,7 +673,7 @@ print_result() {
     fi
     LOG_INFO "Auth mode            : ${auth_mode}"
     if ${auth_mode} ; then
-        LOG_INFO "Auth account     : ${auth_admin_account}"
+        LOG_INFO "Admin account        : ${auth_admin_account}"
     fi
     LOG_INFO "Start port           : ${port_start[*]}"
     LOG_INFO "Server IP            : ${ip_array[*]}"
@@ -763,6 +763,8 @@ node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 ulimit -n 1024
 if [ ! -z \${node_pid} ];then
+    kill -USR1 \${node_pid}
+    kill -USR2 \${node_pid}
     echo " \${node} is running, pid is \$node_pid."
     exit 0
 else
@@ -1225,6 +1227,10 @@ generate_config_ini() {
     sm_ssl=false
     nodes_path=${file_dir}
     nodes_file=${p2p_connected_conf_name}
+    ; enable rip protocol, default: true
+    ; enable_rip_protocol=false
+    ; enable compression for p2p message, default: true
+    ; enable_compression=false
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 512
@@ -1242,6 +1248,8 @@ generate_config_ini() {
     sm_ssl=false
     ; ssl connection switch, if disable the ssl connection, default: false
     ${disable_ssl_content}
+    ; return input params in sendTransaction() return, default: true
+    ; return_input_params=false
 
 [cert]
     ; directory the certificates located in
@@ -1285,6 +1293,9 @@ generate_common_ini() {
     ; min block generation time(ms)
     min_seal_time=500
 
+[executor]
+    enable_dag=true
+
 [storage]
     data_path=data
     enable_cache=true
@@ -1322,16 +1333,26 @@ generate_common_ini() {
     ;db=0
 
 [flow_control]
-    ; the switch for distributed rate limit
-    ; enable_distributed_ratelimit=false
-
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000
+
+    ; time window for rate limiter, default: 3s
+    ; time_window_sec=3
+
+    ; enable distributed rate limiter, redis required, default: false
+    ; enable_distributed_ratelimit=false
+    ; enable local cache for distributed rate limiter, work with enable_distributed_ratelimit, default: true
+    ; enable_distributed_ratelimit_cache=true
+    ; distributed rate limiter local cache percent, work with enable_distributed_ratelimit_cache, default: 20
+    ; distributed_ratelimit_cache_percent=20
 
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ;
     ; modules_without_bw_limit=raft,pbft
+
+    ; allow the msg exceed max permit pass
+    ; outgoing_allow_exceed_max_permit=false
 
     ; restrict the outgoing bandwidth of the node
     ; both integer and decimal is support, unit: Mb
@@ -1356,6 +1377,17 @@ generate_common_ini() {
     ;   group_outgoing_bw_limit_group1=2
     ;   group_outgoing_bw_limit_group2=2
 
+    ; should not change incoming_p2p_basic_msg_type_list if you known what you would to do
+    ; incoming_p2p_basic_msg_type_list=
+    ; the qps limit for p2p basic msg type, the msg type has been config by incoming_p2p_basic_msg_type_list, default: -1
+    ; incoming_p2p_basic_msg_type_qps_limit=-1
+    ; default qps limit for all module message, default: -1
+    ; incoming_module_msg_type_qps_limit=-1
+    ; specify module to limit qps, incoming_module_qps_limit_moduleID=n
+    ;       incoming_module_qps_limit_xxxx=1000
+    ;       incoming_module_qps_limit_xxxx=2000
+    ;       incoming_module_qps_limit_xxxx=3000
+
 [log]
     enable=true
     ; print the log to std::cout or not, default print to the log files
@@ -1367,6 +1399,7 @@ generate_common_ini() {
     max_log_file_size=1024
     ; rotate the log every hour
     ;enable_rotate_by_hour=true
+    enable_rate_collector=false
 EOF
 }
 
@@ -1391,6 +1424,10 @@ generate_sm_config_ini() {
     sm_ssl=true
     nodes_path=${file_dir}
     nodes_file=${p2p_connected_conf_name}
+    ; enable rip protocol, default: true
+    ; enable_rip_protocol=false
+    ; enable compression for p2p message, default: true
+    ; enable_compression=false
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 128
@@ -1403,11 +1440,13 @@ generate_sm_config_ini() {
 [rpc]
     listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
-    thread_count=16
+    thread_count=4
     ; ssl or sm ssl
     sm_ssl=true
     ;ssl connection switch, if disable the ssl connection, default: false
     ${disable_ssl_content}
+    ; return input params in sendTransaction() return, default: true
+    ; return_input_params=false
 
 [cert]
     ; directory the certificates located in
@@ -2002,7 +2041,6 @@ generate_template_package()
     generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
 
     LOG_INFO "Building template intstall package"
-    # TODO: auth mode handle
     LOG_INFO "Auth mode            : ${auth_mode}"
     if ${auth_mode} ; then
         LOG_INFO "Auth account     : ${auth_admin_account}"
@@ -2067,11 +2105,9 @@ generate_genesis_config_by_nodeids()
 
 check_auth_account()
 {
-  if ${auth_mode} ; then
-      if [ -z "${auth_admin_account}" ]; then
-        # get account string to auth_admin_account
-        generate_auth_account
-      fi
+  if [ -z "${auth_admin_account}" ]; then
+    # get account string to auth_admin_account
+    generate_auth_account
   fi
 }
 
@@ -2088,7 +2124,13 @@ generate_auth_account()
         curl -#LO "${get_account_link}"
   fi
   auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  LOG_INFO "Admin account: ${auth_admin_account}"
   mv accounts* "${ca_dir}"
+
+  if [ "$?" -ne "0" ]; then
+      LOG_INFO "Admin account generate failed, please check ${account_script}."
+      exit 1
+  fi
 }
 
 modify_node_ca_setting(){

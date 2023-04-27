@@ -71,7 +71,7 @@ void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashe
         std::span<HashType const> hashes(inputHashes.data(), count);
 
         bcos::crypto::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, width>
-            trie;
+            trie(bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher{});
         std::vector<HashType> out;
         BOOST_CHECK_THROW(trie.generateMerkle(std::vector<HashType>{}, out),
             boost::wrapexcept<std::invalid_argument>);

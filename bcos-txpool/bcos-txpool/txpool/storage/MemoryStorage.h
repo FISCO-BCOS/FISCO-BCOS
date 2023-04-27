@@ -23,14 +23,33 @@
 #include "bcos-task/Task.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
+#include <bcos-utilities/BucketMap.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/RateCollector.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
-#include <tbb/concurrent_unordered_map.h>
-#include <tbb/concurrent_unordered_set.h>
+#include <tbb/concurrent_hash_map.h>
+#include <tbb/concurrent_queue.h>
 #include <boost/thread/pthread/shared_mutex.hpp>
 
 namespace bcos::txpool
 {
+
+class HashCompare
+{
+public:
+    size_t hash(const bcos::crypto::HashType& x) const
+    {
+        uint64_t const* data = reinterpret_cast<uint64_t const*>(x.data());
+        return boost::hash_range(data, data + 4);
+    }
+    // True if strings are equal
+    bool equal(const bcos::crypto::HashType& x, const bcos::crypto::HashType& y) const
+    {
+        return x == y;
+    }
+};
+
 class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
 {
@@ -45,7 +64,7 @@ public:
         protocol::Transaction::Ptr transaction) override;
 
     std::vector<protocol::Transaction::ConstPtr> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::input | RANGES::category::sized> hashes)
+        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
         override;
     // ============================
 
@@ -69,15 +88,10 @@ public:
 
     bool exist(bcos::crypto::HashType const& _txHash) override
     {
-        ReadGuard lock(x_txpoolMutex);
-        auto it = m_txsTable.find(_txHash);
-        return it != m_txsTable.end();
+        TxsMap::ReadAccessor::Ptr accessor;
+        return m_txsTable.find<TxsMap::ReadAccessor>(accessor, _txHash);
     }
-    size_t size() const override
-    {
-        ReadGuard l(x_txpoolMutex);
-        return m_txsTable.size();
-    }
+    size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 
     // FIXME: deprecated, after using txpool::broadcastPushTransaction
@@ -117,7 +131,9 @@ protected:
     bcos::protocol::TransactionStatus txpoolStorageCheck(
         const bcos::protocol::Transaction& transaction);
 
-    virtual bcos::protocol::Transaction::Ptr removeWithoutLock(
+    void onTxRemoved(const bcos::protocol::Transaction::Ptr& _tx, bool needNotifyUnsealedTxsSize);
+
+    virtual bcos::protocol::Transaction::Ptr removeWithoutNotifyUnseal(
         bcos::crypto::HashType const& _txHash);
     virtual bcos::protocol::Transaction::Ptr removeSubmittedTxWithoutLock(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult, bool _notify = true);
@@ -140,18 +156,13 @@ protected:
 
     TxPoolConfig::Ptr m_config;
 
-    tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
-        std::hash<bcos::crypto::HashType>>
-        m_txsTable;
-    mutable SharedMutex x_txpoolMutex;
+    using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
+        std::hash<bcos::crypto::HashType>>;
+    TxsMap m_txsTable, m_invalidTxs;
 
-    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
-        m_invalidTxs;
-    tbb::concurrent_unordered_set<bcos::protocol::NonceType, std::hash<bcos::crypto::HashType>>
-        m_invalidNonces;
-    tbb::concurrent_unordered_set<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>
-        m_missedTxs;
-    mutable SharedMutex x_missedTxs;
+    using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;
+    HashSet m_missedTxs;
+
     std::atomic<size_t> m_sealedTxsSize = {0};
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
@@ -165,5 +176,11 @@ protected:
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
+
+    RateCollector m_inRateCollector;
+    RateCollector m_sealRateCollector;
+    RateCollector m_removeRateCollector;
+
+    bcos::crypto::HashType m_knownLatestSealedTxHash;
 };
 }  // namespace bcos::txpool

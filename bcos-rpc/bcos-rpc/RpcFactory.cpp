@@ -55,10 +55,12 @@ using namespace bcos::protocol;
 using namespace bcos::security;
 
 RpcFactory::RpcFactory(std::string const& _chainID, GatewayInterface::Ptr _gatewayInterface,
-    KeyFactory::Ptr _keyFactory, bcos::security::DataEncryptInterface::Ptr _dataEncrypt)
+    KeyFactory::Ptr _keyFactory, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    bcos::security::DataEncryptInterface::Ptr _dataEncrypt)
   : m_chainID(_chainID),
     m_gateway(_gatewayInterface),
     m_keyFactory(_keyFactory),
+    m_cryptoSuite(std::move(_cryptoSuite)),
     m_dataEncrypt(_dataEncrypt)
 {}
 
@@ -315,6 +317,7 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
 
     initializer->setConfig(_config);
     initializer->initWsService(wsService);
+    wsService->setModuleName("RPC");
 
     return wsService;
 }
@@ -324,8 +327,8 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 {
     // JsonRpcImpl_2_0
     //*
-    auto jsonRpcInterface =
-        std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway, _wsService);
+    auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
+        _groupManager, m_gateway, _wsService, m_cryptoSuite);
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
     auto httpServer = _wsService->httpServer();
     if (httpServer)

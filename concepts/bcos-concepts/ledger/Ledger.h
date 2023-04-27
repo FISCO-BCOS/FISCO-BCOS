@@ -11,7 +11,7 @@ namespace bcos::concepts::ledger
 
 template <class ArgType>
 concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
-    bcos::concepts::receipt::TransactionReceipt<ArgType>;
+                               bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
 // clang-format off
 struct DataFlagBase {};
@@ -45,6 +45,13 @@ public:
     }
 
     template <DataFlag... Flags>
+    auto getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block, bcos::crypto::NodeIDs const& nodeList)
+    {
+        return impl().template impl_getBlockByNodeList<Flags...>(blockNumber, block, nodeList);
+    }
+
+    template <DataFlag... Flags>
     auto setBlock(bcos::concepts::block::Block auto block)
     {
         return impl().template impl_setBlock<Flags...>(std::move(block));
@@ -65,21 +72,23 @@ public:
     auto getABI(std::string contractAddress) { return impl().impl_getABI(contractAddress); }
 
 
-    auto getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out) requires
-        TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>>
+    auto getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
+        requires TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>>
     {
         return impl().impl_getTransactions(hashes, out);
     }
 
     auto getStatus() { return impl().impl_getStatus(); }
 
-    template <bcos::crypto::hasher::Hasher Hasher>
-    auto setTransactions(RANGES::range auto const& inputs) requires bcos::concepts::ledger::
-        TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
+    auto getAllPeersStatus() { return impl().impl_getAllPeersStatus(); }
+
+    auto setTransactions(bcos::crypto::hasher::Hasher auto hasher, RANGES::range auto const& inputs)
+        requires bcos::concepts::ledger::TransactionOrReceipt<
+            RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
     {
-        auto hashesRange = inputs | RANGES::views::transform([](auto const& input) {
-            std::array<char, Hasher::HASH_SIZE> hash;
-            bcos::concepts::hash::calculate<Hasher>(input, hash);
+        auto hashesRange = inputs | RANGES::views::transform([&](auto const& input) {
+            bcos::bytes hash;
+            bcos::concepts::hash::calculate(hasher.clone(), input, hash);
             return hash;
         });
         auto buffersRange = inputs | RANGES::views::transform([](auto const& input) {
@@ -102,9 +111,9 @@ public:
     }
 
     template <class LedgerType, bcos::concepts::block::Block BlockType>
-    requires std::derived_from<LedgerType, LedgerBase<LedgerType>> ||
-        std::derived_from<typename LedgerType::element_type,
-            LedgerBase<typename LedgerType::element_type>>
+        requires std::derived_from<LedgerType, LedgerBase<LedgerType>> ||
+                 std::derived_from<typename LedgerType::element_type,
+                     LedgerBase<typename LedgerType::element_type>>
     auto sync(LedgerType& source, bool onlyHeader)
     {
         return impl().template impl_sync<LedgerType, BlockType>(source, onlyHeader);
@@ -121,15 +130,16 @@ private:
 };
 
 template <class Impl>
-concept Ledger = std::derived_from<Impl, LedgerBase<Impl>> ||
+concept Ledger =
+    std::derived_from<Impl, LedgerBase<Impl>> ||
     std::derived_from<typename Impl::element_type, LedgerBase<typename Impl::element_type>>;
 
 template <class Impl>
-concept IsLedger = requires(Impl&& impl)
-{
-    requires task::IsAwaitable<decltype(impl.template setBlock<ALL>(
-        std::declval<protocol::Block>()))>;
-    requires std::same_as<task::AwaitableReturnType<decltype(impl.getStatus())>, Status>;
-};
+concept IsLedger =
+    requires(Impl&& impl) {
+        requires task::IsAwaitable<decltype(impl.template setBlock<ALL>(
+            std::declval<protocol::Block>()))>;
+        requires std::same_as<task::AwaitableReturnType<decltype(impl.getStatus())>, Status>;
+    };
 
 }  // namespace bcos::concepts::ledger

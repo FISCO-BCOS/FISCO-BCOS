@@ -23,6 +23,8 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/ITTAPI.h>
+#include <boost/throw_exception.hpp>
 #include <concepts>
 #include <shared_mutex>
 #include <span>
@@ -67,6 +69,8 @@ public:
 
     virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) const
     {
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().TRANSACTION,
+            ittapi::ITT_DOMAINS::instance().VERIFY_TRANSACTION);
         // The tx has already been verified
         if (!sender().empty())
         {
@@ -76,16 +80,17 @@ public:
         auto hashResult = hash();
         // check the signatures
         auto signature = signatureData();
-        auto publicKey = signatureImpl.recover(hashResult, signature);
-        // recover the sender
-        forceSender(bcos::right160(hashImpl.hash(publicKey)).asBytes());
+        auto ret = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
+        forceSender(ret.second);
     }
 
     virtual int32_t version() const = 0;
     virtual std::string_view chainId() const = 0;
     virtual std::string_view groupId() const = 0;
     virtual int64_t blockLimit() const = 0;
-    virtual u256 nonce() const = 0;
+    virtual const std::string& nonce() const = 0;
+    // only for test
+    virtual void setNonce(std::string) = 0;
     virtual std::string_view to() const = 0;
     virtual std::string_view abi() const = 0;
 
@@ -105,7 +110,7 @@ public:
         }
         return TransactionType::ContractCreation;
     }
-    virtual void forceSender(bytes _sender) const = 0;
+    virtual void forceSender(const bcos::bytes& _sender) const = 0;
     virtual bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;
@@ -126,18 +131,6 @@ public:
     bool invalid() const { return m_invalid; }
     void setInvalid(bool _invalid) const { m_invalid = _invalid; }
 
-    void appendKnownNode(bcos::crypto::NodeIDPtr _node) const
-    {
-        std::unique_lock<std::shared_mutex> l(x_knownNodeList);
-        m_knownNodeList.insert(_node);
-    }
-
-    bool isKnownBy(bcos::crypto::NodeIDPtr _node) const
-    {
-        std::shared_lock<std::shared_mutex> l(x_knownNodeList);
-        return m_knownNodeList.count(_node);
-    }
-
     void setSystemTx(bool _systemTx) const { m_systemTx = _systemTx; }
     bool systemTx() const { return m_systemTx; }
 
@@ -157,10 +150,6 @@ protected:
     // the hash of the proposal that the tx batched into
     mutable bcos::crypto::HashType m_batchHash;
 
-    // Record the list of nodes containing the transaction and provide related query interfaces.
-    mutable std::shared_mutex x_knownNodeList;
-    // Record the node where the transaction exists
-    mutable bcos::crypto::NodeIDSet m_knownNodeList;
     // the number of proposal that the tx batched into
     mutable bcos::protocol::BlockNumber m_batchId = {-1};
 

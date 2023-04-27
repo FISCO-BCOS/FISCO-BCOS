@@ -35,6 +35,7 @@ class BlockSync : public BlockSyncInterface,
 {
 public:
     using Ptr = std::shared_ptr<BlockSync>;
+    // FIXME: make idle configable
     BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs = 200);
     ~BlockSync() override = default;
 
@@ -78,10 +79,15 @@ public:
 
     void enableAsMaster(bool _masterNode);
 
+    void setFaultyNodeBlockDelta(bcos::protocol::BlockNumber _delta)
+    {
+        c_FaultyNodeBlockDelta = _delta;
+    }
+
 protected:
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, std::function<void(bytesConstRef _respData)> _sendResponse,
-        std::function<void(Error::Ptr _error)> _onRecv);
+        bytesConstRef _data, std::function<void(bytesConstRef)> _sendResponse,
+        std::function<void(Error::Ptr)> _onRecv);
 
     void initSendResponseHandler();
     void executeWorker() override;
@@ -115,16 +121,15 @@ protected:
 
 protected:
     void requestBlocks(bcos::protocol::BlockNumber _from, bcos::protocol::BlockNumber _to);
-    void fetchAndSendBlock(DownloadRequestQueue::Ptr _reqQueue, bcos::crypto::PublicPtr _peer,
-        bcos::protocol::BlockNumber _number);
+    void fetchAndSendBlock(
+        bcos::crypto::PublicPtr const& _peer, bcos::protocol::BlockNumber _number);
     void printSyncInfo();
 
     BlockSyncConfig::Ptr m_config;
     SyncPeerStatus::Ptr m_syncStatus;
     DownloadingQueue::Ptr m_downloadingQueue;
 
-    std::function<void(std::string const& _id, int _moduleID, bcos::crypto::NodeIDPtr _dstNode,
-        bytesConstRef _data)>
+    std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
     bcos::ThreadPool::Ptr m_downloadBlockProcessor = nullptr;

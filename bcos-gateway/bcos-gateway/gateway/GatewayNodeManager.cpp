@@ -36,7 +36,7 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
   : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)
 {
     m_uuid = _uuid;
-    if (_uuid.size() == 0)
+    if (_uuid.empty())
     {
         m_uuid = _nodeID;
     }
@@ -142,7 +142,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
     }
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
-    auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
+    auto const& from = (!_msg->srcP2PNodeID().empty()) ? _msg->srcP2PNodeID() : _session->p2pID();
 
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("from", from)
                            << LOG_KV("seq", gatewayNodeStatus->seq())
@@ -155,7 +155,7 @@ void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNode
     auto seq = _status->seq();
     {
         UpgradableGuard l(x_p2pID2Seq);
-        if (m_p2pID2Seq.count(_p2pID) && (m_p2pID2Seq.at(_p2pID) >= seq))
+        if (m_p2pID2Seq.contains(_p2pID) && (m_p2pID2Seq.at(_p2pID) >= seq))
         {
             return;
         }
@@ -189,7 +189,7 @@ void GatewayNodeManager::onRequestNodeStatus(
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
-    auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
+    auto const& from = (!_msg->srcP2PNodeID().empty()) ? _msg->srcP2PNodeID() : _session->p2pID();
     auto nodeStatusData = generateNodeStatus();
     if (!nodeStatusData)
     {

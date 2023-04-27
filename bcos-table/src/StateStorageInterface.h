@@ -121,6 +121,7 @@ protected:
     tbb::enumerable_thread_specific<typename Recoder::Ptr> m_recoder;
     std::shared_ptr<StorageInterface> m_prev;
     std::shared_mutex m_prevMutex;
+    mutable std::mutex x_cacheMutex;
 };
 
 

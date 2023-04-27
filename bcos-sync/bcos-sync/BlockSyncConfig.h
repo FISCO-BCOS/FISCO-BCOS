@@ -75,6 +75,8 @@ public:
     bcos::crypto::HashType const& hash() const;
 
     bcos::protocol::BlockNumber nextBlock() const { return m_nextBlock; }
+    bcos::protocol::BlockNumber applyingBlock() const { return m_applyingBlock; }
+    void setApplyingBlock(bcos::protocol::BlockNumber _number);
     void resetBlockInfo(
         bcos::protocol::BlockNumber _blockNumber, bcos::crypto::HashType const& _hash);
 
@@ -138,6 +140,15 @@ public:
 
     bcos::protocol::BlockNumber archiveBlockNumber() const;
 
+    std::string printBlockSyncState() const noexcept
+    {
+        std::stringstream stringstream;
+        stringstream << LOG_KV("number", m_blockNumber) << LOG_KV("applyingBlock", m_applyingBlock)
+                     << LOG_KV("nextBlock", m_nextBlock) << LOG_KV("executedBlock", m_executedBlock)
+                     << LOG_KV("highestNumber", m_knownHighestNumber);
+        return stringstream.str();
+    }
+
 protected:
     void setHash(bcos::crypto::HashType const& _hash);
 
@@ -159,6 +170,7 @@ private:
 
     bcos::crypto::HashType m_genesisHash;
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
+    std::atomic<bcos::protocol::BlockNumber> m_applyingBlock = {0};
     std::atomic<bcos::protocol::BlockNumber> m_nextBlock = {0};
     std::atomic<bcos::protocol::BlockNumber> m_executedBlock = {0};
     bcos::crypto::HashType m_hash;
@@ -178,7 +190,6 @@ private:
     std::atomic<size_t> m_maxShardPerPeer = {2};
     std::atomic<bcos::protocol::BlockNumber> m_committedProposalNumber = {0};
 
-    // TODO: ensure thread-safe
     bcos::protocol::NodeType m_nodeType = bcos::protocol::NodeType::None;
     bcos::protocol::NodeType m_notifiedNodeType = bcos::protocol::NodeType::None;
 

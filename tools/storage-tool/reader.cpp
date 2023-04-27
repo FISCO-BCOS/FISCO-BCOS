@@ -27,6 +27,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-security/bcos-security/DataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <boost/algorithm/hex.hpp>
@@ -140,9 +141,8 @@ int main(int argc, const char* argv[])
     if (true == boost::filesystem::exists(genesisFilePath))
         nodeConfig->loadGenesisConfig(genesisFilePath);
 
-    bcos::security::DataEncryption::Ptr dataEncryption =
-        std::make_shared<bcos::security::DataEncryption>(nodeConfig);
-    dataEncryption->init();
+    bcos::security::DataEncryptInterface::Ptr dataEncryption = nullptr;
+    dataEncryption = std::make_shared<bcos::security::DataEncryption>(nodeConfig);
 
     auto adapter =
         std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);

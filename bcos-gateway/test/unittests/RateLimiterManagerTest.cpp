@@ -20,6 +20,7 @@
  */
 
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterFactory.h"
 #include "bcos-gateway/libratelimit/TimeWindowRateLimiter.h"
@@ -169,7 +170,8 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager)
     BOOST_CHECK(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
     BOOST_CHECK(rateLimiterConfig.p2pBasicMsgQPS < 0);
     BOOST_CHECK(rateLimiterConfig.p2pModuleMsgQPS < 0);
-    BOOST_CHECK(rateLimiterConfig.moduleMsg2QPS.empty());
+    BOOST_CHECK(rateLimiterConfig.moduleMsg2QPS.size() == 65535);
+    BOOST_CHECK(rateLimiterConfig.moduleMsg2QPSSize == 0);
 
     BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") == nullptr);
 
@@ -208,7 +210,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
     boost::property_tree::ini_parser::read_ini(configIni, pt);
 
     auto config = std::make_shared<GatewayConfig>();
-    config->initRateLimitConfig(pt);
+    config->initFlowControlConfig(pt);
 
     BOOST_CHECK(config->rateLimiterConfig().enableOutRateLimit());
     BOOST_CHECK(config->rateLimiterConfig().enableOutConnRateLimit());
@@ -232,12 +234,12 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
 
     BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pModuleMsgQPS, 555);
     BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pBasicMsgQPS, 123);
-    BOOST_CHECK_EQUAL(config->rateLimiterConfig().moduleMsg2QPS.size(), 3);
-    BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.contains(1));
-    BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.contains(5));
-    BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.contains(7));
-    BOOST_CHECK(!config->rateLimiterConfig().moduleMsg2QPS.contains(9));
-    BOOST_CHECK(!config->rateLimiterConfig().moduleMsg2QPS.contains(10));
+    BOOST_CHECK_EQUAL(config->rateLimiterConfig().moduleMsg2QPSSize, 3);
+    BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(1));
+    BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(5));
+    BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(7));
+    BOOST_CHECK(!config->rateLimiterConfig().moduleMsg2QPS.at(9));
+    BOOST_CHECK(!config->rateLimiterConfig().moduleMsg2QPS.at(10));
 
     auto rateLimiterConfig = config->rateLimiterConfig();
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
@@ -254,6 +256,21 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
     BOOST_CHECK(rateLimiterManager->isP2pBasicMsgType(6));
     BOOST_CHECK(rateLimiterManager->isP2pBasicMsgType(9));
     BOOST_CHECK(!rateLimiterManager->isP2pBasicMsgType(10));
+    BOOST_CHECK(!rateLimiterManager->isP2pBasicMsgType(0xff));
+
+    {
+        // modules_without_bw_limit=raft,pbft,txs_sync,amop
+        BOOST_CHECK(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::PBFT));
+        BOOST_CHECK(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::Raft));
+        BOOST_CHECK(
+            rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::TxsSync));
+        BOOST_CHECK(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::AMOP));
+        BOOST_CHECK(!rateLimiterManager->modulesWithoutLimit().at(
+            bcos::protocol::ModuleID::LIGHTNODE_GET_ABI));
+        BOOST_CHECK(
+            !rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::BlockSync));
+        BOOST_CHECK(!rateLimiterManager->modulesWithoutLimit().at(0xff));
+    }
 
     {
         /*
@@ -435,16 +452,16 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
         BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pBasicMsgTypes.size(), 5);
         BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pBasicMsgQPS, 123);
         BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pModuleMsgQPS, 555);
-        BOOST_CHECK_EQUAL(config->rateLimiterConfig().moduleMsg2QPS.size(), 3);
+        BOOST_CHECK_EQUAL(config->rateLimiterConfig().moduleMsg2QPSSize, 3);
         BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(1));
         BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(2));
         BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(3));
         BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(6));
         BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(9));
         BOOST_CHECK(!config->rateLimiterConfig().p2pBasicMsgTypes.contains(10));
-        BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.contains(1));
-        BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.contains(5));
-        BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.contains(7));
+        BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(1));
+        BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(5));
+        BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(7));
 
         std::string groupID = "groupID";
         uint16_t packageType = 1;
@@ -526,7 +543,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
                 uint16_t module = 5;
                 std::string group = "group0";
 
-                BOOST_CHECK(rateLimiterConfig.moduleMsg2QPS.contains(module));
+                BOOST_CHECK(rateLimiterConfig.moduleMsg2QPS.at(module));
 
                 const std::string& inKey = group + "_" + std::to_string(module);
                 auto rateLimiter = std::dynamic_pointer_cast<ratelimiter::DistributedRateLimiter>(
@@ -545,7 +562,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
     boost::property_tree::ini_parser::read_ini(configIni, pt);
 
     auto config = std::make_shared<GatewayConfig>();
-    config->initRateLimitConfig(pt);
+    config->initFlowControlConfig(pt);
 
     auto rateLimiterConfig = config->rateLimiterConfig();
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");

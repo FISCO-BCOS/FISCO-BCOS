@@ -32,6 +32,7 @@
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-utilities/Common.h>
 #include <boost/core/ignore_unused.hpp>
+#include <cassert>
 #include <span>
 
 using namespace bcos;
@@ -168,8 +169,8 @@ void stTest(std::string_view inputData, size_t _count)
     }
 }
 
-void signaturePerf(SignatureCrypto::Ptr _signatureImpl, HashType const& _msgHash,
-    std::string const& _signatureName, size_t _count)
+void signaturePerf(SignatureCrypto::Ptr _signatureImpl, crypto::Hash& _hashImpl,
+    HashType const& _msgHash, std::string const& _signatureName, size_t _count)
 {
     std::cout << std::endl;
     std::cout << "----------- " << _signatureName << " perf test start -----------" << std::endl;
@@ -189,19 +190,43 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, HashType const& _msgHash
     startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
-        assert(_signatureImpl->verify(keyPair->publicKey(), _msgHash, ref(*signedData)));
+        if (!_signatureImpl->verify(keyPair->publicKey(), _msgHash, ref(*signedData)))
+        {
+            std::cout << "verify failed" << std::endl;
+            return;
+        }
     }
     std::cout << "TPS of " << _signatureName << " verify:" << getTPS(utcTime(), startT, _count)
               << std::endl;
-
+    auto pub = _signatureImpl->recover(_msgHash, ref(*signedData));
+    auto address = calculateAddress(_hashImpl, pub).asBytes();
     // recover
     signedData = _signatureImpl->sign(*keyPair, _msgHash, true);
     startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
-        _signatureImpl->recover(_msgHash, ref(*signedData));
+        auto pub = _signatureImpl->recover(_msgHash, ref(*signedData));
+        auto recoverAddress = calculateAddress(_hashImpl, pub).asBytes();
+        if (recoverAddress != address)
+        {
+            return;
+        }
     }
     std::cout << "TPS of " << _signatureName << " recover:" << getTPS(utcTime(), startT, _count)
+              << std::endl;
+
+    // recover address old
+    signedData = _signatureImpl->sign(*keyPair, _msgHash, true);
+    startT = utcTime();
+    for (size_t i = 0; i < _count; i++)
+    {
+        auto ret = _signatureImpl->recoverAddress(_hashImpl, _msgHash, ref(*signedData));
+        if (ret.second != address)
+        {
+            return;
+        }
+    }
+    std::cout << "TPS of " << _signatureName << " new recover:" << getTPS(utcTime(), startT, _count)
               << std::endl;
     std::cout << "----------- " << _signatureName << " perf test end -----------" << std::endl;
     std::cout << std::endl;
@@ -238,7 +263,7 @@ void derivePublicKeyPerf(size_t _count)
     keyPair = signatureImpl->generateKeyPair();
     derivePublicKeyPerf(signatureImpl, "SM2", *keyPair, _count);
 
-#if SM2_OPTIMIZE
+#if WITH_SM2_OPTIMIZE
     signatureImpl = std::make_shared<FastSM2Crypto>();
     keyPair = signatureImpl->generateKeyPair();
     derivePublicKeyPerf(signatureImpl, "FastSM2", *keyPair, _count);
@@ -252,23 +277,26 @@ void signaturePerf(size_t _count)
 {
     std::string inputData = "signature perf test";
     auto msgHash = keccak256Hash(bytesConstRef((byte const*)inputData.c_str(), inputData.size()));
+    auto hashImpl = Keccak256();
+    auto sm3HashImpl = SM3();
     // secp256k1 perf
     SignatureCrypto::Ptr signatureImpl = std::make_shared<Secp256k1Crypto>();
-    signaturePerf(signatureImpl, msgHash, "secp256k1", _count);
+    signaturePerf(signatureImpl, hashImpl, msgHash, "secp256k1", _count);
 
     // sm2 perf
     signatureImpl = std::make_shared<SM2Crypto>();
-    signaturePerf(signatureImpl, msgHash, "SM2", _count);
-
-#if SM2_OPTIMIZE
-    // fastsm2 perf
-    signatureImpl = std::make_shared<FastSM2Crypto>();
-    signaturePerf(signatureImpl, msgHash, "FastSM2", _count);
-#endif
+    signaturePerf(signatureImpl, sm3HashImpl, msgHash, "SM2", _count);
 
     // ed25519 perf
     signatureImpl = std::make_shared<Ed25519Crypto>();
-    signaturePerf(signatureImpl, msgHash, "Ed25519", _count);
+    signaturePerf(signatureImpl, sm3HashImpl, msgHash, "Ed25519", _count);
+
+
+#if WITH_SM2_OPTIMIZE
+    // fastsm2 perf
+    signatureImpl = std::make_shared<FastSM2Crypto>();
+    signaturePerf(signatureImpl, sm3HashImpl, msgHash, "FastSM2", _count);
+#endif
 }
 
 void encryptPerf(SymmetricEncryption::Ptr _encryptor, std::string const& _inputData,

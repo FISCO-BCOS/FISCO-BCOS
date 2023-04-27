@@ -82,16 +82,6 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
             m_versionNotification(m_compatibilityVersion);
         }
     }
-    // notify the txpool validator to update the consensusNodeList and the observerNodeList
-    if (m_consensusNodeListUpdated || m_observerNodeListUpdated)
-    {
-        m_validator->updateValidatorConfig(consensusList, *observerList);
-        PBFT_LOG(INFO) << LOG_DESC("updateValidatorConfig")
-                       << LOG_KV("consensusNodeListUpdated", m_consensusNodeListUpdated)
-                       << LOG_KV("observerNodeListUpdated", m_observerNodeListUpdated)
-                       << LOG_KV("consensusNodeSize", consensusList.size())
-                       << LOG_KV("observerNodeSize", observerList->size());
-    }
 
     // notify the latest block number to the sealer
     if (m_stateNotifier)
@@ -260,7 +250,9 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
 {
+    auto startT = utcSteadyTime();
     RecursiveGuard lock(m_mutex);
+    auto lockNotifyT = utcSteadyTime() - startT;
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
     {
@@ -292,6 +284,7 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     if (m_sealEndIndex.load() >= endProposalIndex)
     {
         PBFT_LOG(INFO) << LOG_DESC("notifySealer return for invalid seal range")
+                       << LOG_KV("lockNotifyT", lockNotifyT)
                        << LOG_KV("currentEndIndex", m_sealEndIndex)
                        << LOG_KV("expectedEndIndex", endProposalIndex) << printCurrentState();
         return;
@@ -300,6 +293,7 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     if (startSealIndex > endProposalIndex)
     {
         PBFT_LOG(INFO) << LOG_DESC("notifySealer return for invalid seal range")
+                       << LOG_KV("lockNotifyT", lockNotifyT)
                        << LOG_KV("expectedStartIndex", startSealIndex)
                        << LOG_KV("expectedEndIndex", endProposalIndex) << printCurrentState();
         return;
@@ -334,8 +328,8 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     m_sealStartIndex = startSealIndex;
     m_sealEndIndex = endProposalIndex;
     PBFT_LOG(INFO) << LOG_DESC("notifySealer: notify the new leader to seal block")
-                   << LOG_KV("idx", nodeIndex()) << LOG_KV("startIndex", startSealIndex)
-                   << LOG_KV("endIndex", endProposalIndex)
+                   << LOG_KV("lockNotifyT", lockNotifyT) << LOG_KV("idx", nodeIndex())
+                   << LOG_KV("startIndex", startSealIndex) << LOG_KV("endIndex", endProposalIndex)
                    << LOG_KV("notifyBeginIndex", _progressedIndex)
                    << LOG_KV("waitSealUntil", m_waitSealUntil)
                    << LOG_KV("waitResealUntil", m_waitResealUntil)

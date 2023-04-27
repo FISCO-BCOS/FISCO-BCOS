@@ -151,7 +151,7 @@ bool BlockValidator::checkSignatureList(Block::Ptr _block)
         auto nodeIndex = sign.index;
         auto nodeInfo = m_config->getConsensusNodeByIndex(nodeIndex);
         auto signatureData = ref(sign.signature);
-        if (!signatureData.data())
+        if (signatureData.data() == nullptr)
         {
             PBFT_LOG(FATAL) << LOG_DESC("BlockValidator checkSignatureList: invalid signature")
                             << LOG_KV("signatureSize", signatureList.size())

@@ -48,6 +48,7 @@ using Secret = KeyInterface;
 using PublicPtr = KeyInterface::Ptr;
 using SecretPtr = KeyInterface::Ptr;
 using NodeIDPtr = KeyInterface::Ptr;
+using NodeID = KeyInterface;
 using NodeIDs = std::vector<NodeIDPtr>;
 using NodeIDListPtr = std::shared_ptr<NodeIDs>;
 

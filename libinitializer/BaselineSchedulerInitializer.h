@@ -4,6 +4,7 @@
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-storage/bcos-storage/StateKVResolver.h"
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
@@ -42,17 +43,14 @@ private:
         transaction_executor::StateValue, storage2::rocksdb::StateKeyResolver,
         storage2::rocksdb::StateValueResolver>
         m_rocksDBStorage;
-    bcos::ledger::LedgerImpl2<Hasher, decltype(m_rocksDBStorage), decltype(*m_blockFactory)>
-        m_ledger;
+    bcos::ledger::LedgerImpl2<decltype(m_rocksDBStorage)> m_ledger;
 
     MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)> m_multiLayerStorage;
 
     std::conditional_t<enableParallel,
         SchedulerParallelImpl<decltype(m_multiLayerStorage),
-            std::remove_reference_t<decltype(*m_blockFactory->receiptFactory())>,
             transaction_executor::TransactionExecutorImpl>,
         SchedulerSerialImpl<decltype(m_multiLayerStorage),
-            std::remove_reference_t<decltype(*m_blockFactory->receiptFactory())>,
             transaction_executor::TransactionExecutorImpl>>
         m_scheduler;
 
@@ -73,11 +71,10 @@ public:
 
     auto buildScheduler()
     {
-        auto baselineScheduler = std::make_shared<BaselineScheduler<decltype(m_scheduler),
-            decltype(*m_blockFactory->blockHeaderFactory()), decltype(m_ledger),
-            decltype(*m_txpool), decltype(*m_transactionSubmitResultFactory)>>(m_scheduler,
-            *m_blockFactory->blockHeaderFactory(), m_ledger, *m_txpool,
-            *m_transactionSubmitResultFactory, *m_blockFactory->cryptoSuite()->hashImpl());
+        auto baselineScheduler =
+            std::make_shared<BaselineScheduler<decltype(m_scheduler), decltype(m_ledger)>>(
+                m_scheduler, *m_blockFactory->blockHeaderFactory(), m_ledger, *m_txpool,
+                *m_transactionSubmitResultFactory, *m_blockFactory->cryptoSuite()->hashImpl());
         return baselineScheduler;
     }
 };

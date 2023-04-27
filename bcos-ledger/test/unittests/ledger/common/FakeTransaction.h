@@ -40,8 +40,8 @@ namespace bcos
 namespace test
 {
 inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr _keyPair,
-    std::string const& _to, bytes const& _input, u256 const& _nonce, int64_t const& _blockLimit,
-    std::string const& _chainId, std::string const& _groupId)
+    std::string const& _to, bytes const& _input, std::string const& _nonce,
+    int64_t const& _blockLimit, std::string const& _chainId, std::string const& _groupId)
 {
     bcostars::Transaction transaction;
     transaction.data.to = _to;
@@ -53,10 +53,7 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
     // set signature
-    std::visit(
-        [&pbTransaction](
-            auto&& hasher) { pbTransaction->calculateHash<std::decay_t<decltype(hasher)>>(); },
-        _cryptoSuite->hashImpl()->hasher());
+    pbTransaction->calculateHash(_cryptoSuite->hashImpl()->hasher());
 
     auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->setSignatureData(*signData);
@@ -65,8 +62,9 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
 }
 
 inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
-    KeyPairInterface::Ptr _keyPair, std::string const& _to, bytes const& _input, u256 const& _nonce,
-    int64_t const& _blockLimit, std::string const& _chainId, std::string const& _groupId)
+    KeyPairInterface::Ptr _keyPair, std::string const& _to, bytes const& _input,
+    std::string const& _nonce, int64_t const& _blockLimit, std::string const& _chainId,
+    std::string const& _groupId)
 {
     auto factory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
     auto pbTransaction = fakeTransaction(
@@ -84,7 +82,8 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite)
     int64_t blockLimit = 1000023;
     std::string chainId = "chainId";
     std::string groupId = "groupId";
-    return testTransaction(_cryptoSuite, keyPair, to, input, nonce, blockLimit, chainId, groupId);
+    return testTransaction(
+        _cryptoSuite, keyPair, to, input, nonce.str(), blockLimit, chainId, groupId);
 }
 inline TransactionsPtr fakeTransactions(int _size)
 {
@@ -103,8 +102,8 @@ inline TransactionsPtr fakeTransactions(int _size)
         int64_t blockLimit = 1000 + i;
         std::string chainId = "chainId";
         std::string groupId = "groupId";
-        txs->emplace_back(
-            testTransaction(cryptoSuite, keyPair, to, input, nonce, blockLimit, chainId, groupId));
+        txs->emplace_back(testTransaction(
+            cryptoSuite, keyPair, to, input, nonce.str(), blockLimit, chainId, groupId));
     }
     return txs;
 }

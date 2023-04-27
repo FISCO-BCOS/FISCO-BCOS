@@ -1,6 +1,7 @@
 #include "storage/Entry.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-framework/storage2/Storage.h>
+#include <bcos-task/AwaitableValue.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
@@ -81,7 +82,7 @@ public:
 
     task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, entry] : RANGES::zip_view(keys, values))
+        for (auto&& [key, entry] : RANGES::views::zip(keys, values))
         {
             auto it = m_values.find(key);
             if (it == m_values.end())
@@ -177,7 +178,7 @@ BOOST_AUTO_TEST_CASE(insert)
         auto oneResult =
             co_await readOne(mock, std::tuple<std::string_view, std::string_view>("table", "key2"));
         BOOST_REQUIRE(oneResult);
-        BOOST_CHECK_EQUAL(oneResult->get().get(), "fine!");
+        BOOST_CHECK_EQUAL(oneResult->get(), "fine!");
     }());
 }
 

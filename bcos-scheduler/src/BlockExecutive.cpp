@@ -10,7 +10,6 @@
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Error.h>
-#include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for_each.h>
 #include <boost/algorithm/hex.hpp>
@@ -51,6 +50,7 @@ BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* 
     m_staticCall(staticCall)
 {
     m_hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
+    m_blockHeader = m_block->blockHeaderConst();
     start();
 }
 
@@ -90,11 +90,11 @@ void BlockExecutive::prepare()
 
     m_hasPrepared = true;
 
-    SCHEDULER_LOG(INFO) << METRIC << LOG_BADGE("BlockTrace") << "preExeBlock success"
-                        << BLOCK_NUMBER(number())
-                        << LOG_KV("blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
-                        << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
-                        << LOG_KV("timeCost", (utcTime() - startT));
+    SCHEDULER_LOG(DEBUG) << METRIC << LOG_BADGE("BlockTrace") << BLOCK_NUMBER(number())
+                         << "preExeBlock success"
+                         << LOG_KV("blockHeader.timestamp", blockHeader()->timestamp())
+                         << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
+                         << LOG_KV("timeCost", (utcTime() - startT));
 }
 
 bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
@@ -110,8 +110,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     if (!m_isSysBlock)
     {
         auto toAddress = tx->to();
-        if (bcos::precompiled::c_systemTxsAddress.count(
-                std::string(toAddress.begin(), toAddress.end())))
+        if (bcos::precompiled::c_systemTxsAddress.contains(toAddress))
         {
             m_isSysBlock.store(true);
         }
@@ -135,7 +134,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
         }
         else
         {
-            if (!m_staticCall && isSysContractDeploy(m_block->blockHeaderConst()->number()) &&
+            if (!m_staticCall && isSysContractDeploy(number()) &&
                 tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
             {
                 // if enable auth check, and first deploy auth contract
@@ -146,7 +145,8 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     }
     message->setDepth(0);
     message->setGasAvailable(m_gasLimit);
-    if (precompiled::c_systemTxsAddress.count({tx->to().data(), tx->to().size()}))
+    auto toAddress = tx->to();
+    if (precompiled::c_systemTxsAddress.contains(toAddress))
     {
         message->setGasAvailable(TRANSACTION_GAS);
     }
@@ -241,8 +241,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
                     message->setDepth(0);
                     message->setGasAvailable(m_gasLimit);
-                    if (precompiled::c_systemTxsAddress.count(
-                            {metaData->to().data(), metaData->to().size()}))
+                    auto toAddress = metaData->to();
+                    if (precompiled::c_systemTxsAddress.contains(toAddress))
                     {
                         message->setGasAvailable(TRANSACTION_GAS);
                     }
@@ -268,7 +268,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
 {
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number())
                          << "BlockExecutive prepare: buildExecutivesFromNormalTransaction"
-                         << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                         << LOG_KV("block number", number())
                          << LOG_KV("txCount", m_block->transactionsSize());
 
     m_executiveResults.resize(m_block->transactionsSize());
@@ -480,7 +480,8 @@ void BlockExecutive::asyncExecute(
 
 void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 {
-    auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
+    auto stateStorage =
+        std::make_shared<storage::StateStorage>(m_scheduler->m_storage, m_block->version());
 
     m_currentTimePoint = std::chrono::system_clock::now();
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
@@ -582,7 +583,10 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     Error::Ptr&& error, uint64_t startTimeStamp, const std::string& primaryKey) {
                     if (error)
                     {
-                        ++status->failed;
+                        {
+                            WriteGuard lock(status->x_lock);
+                            ++status->failed;
+                        }
                         SCHEDULER_LOG(ERROR)
                             << BLOCK_NUMBER(number())
                             << "scheduler asyncPrepare storage error: " << error->errorMessage();
@@ -590,7 +594,11 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             "asyncPrepare block error: " + error->errorMessage()));
                         return;
                     }
-                    ++status->success;
+                    else
+                    {
+                        WriteGuard lock(status->x_lock);
+                        ++status->success;
+                    }
 
                     SCHEDULER_LOG(DEBUG)
                         << BLOCK_NUMBER(number())
@@ -603,7 +611,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     executorParams.primaryKey = primaryKey;
                     executorParams.timestamp = startTimeStamp;
                     status->startTS = startTimeStamp;
-                    for (const auto& executorIt : m_scheduler->m_executorManager->range())
+                    for (const auto& executorIt : *(m_scheduler->m_executorManager))
                     {
                         executorIt->prepare(executorParams, [this, status](Error::Ptr&& error) {
                             {
@@ -675,8 +683,8 @@ void BlockExecutive::asyncNotify(
         return;
     }
     auto results = std::make_shared<bcos::protocol::TransactionSubmitResults>();
-    auto blockHeader = m_block->blockHeaderConst();
-    auto blockHash = blockHeader->hash();
+    auto blockHash = blockHeader()->hash();
+    auto number = blockHeader()->number();
     size_t index = 0;
     for (auto& it : m_executiveResults)
     {
@@ -695,21 +703,19 @@ void BlockExecutive::asyncNotify(
         results->emplace_back(submitResult);
     }
     auto txsSize = m_executiveResults.size();
-    notifier(blockHeader->number(), results, [_callback, blockHeader, txsSize](Error::Ptr _error) {
+    notifier(number, results, [_callback, number, blockHash, txsSize](Error::Ptr _error) {
         if (_callback)
         {
             _callback(_error);
         }
         if (_error == nullptr)
         {
-            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
-                                << LOG_DESC("notify block result success")
-                                << LOG_KV("hash", blockHeader->hash().abridged())
+            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number) << LOG_DESC("notify block result success")
+                                << LOG_KV("hash", blockHash.abridged())
                                 << LOG_KV("txsSize", txsSize);
             return;
         }
-        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
-                            << LOG_DESC("notify block result failed")
+        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number) << LOG_DESC("notify block result failed")
                             << LOG_KV("code", _error->errorCode())
                             << LOG_KV("msg", _error->errorMessage());
     });
@@ -718,7 +724,7 @@ void BlockExecutive::asyncNotify(
 void BlockExecutive::saveMessage(
     std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG)
 {
-    registerAndGetDmcExecutor(address)->submit(std::move(message), withDAG);
+    registerAndGetDmcExecutor(std::move(address))->submit(std::move(message), withDAG);
 }
 
 void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
@@ -1086,6 +1092,18 @@ void BlockExecutive::onExecuteFinish(
     }
     else
     {
+        for (auto dmcExecutor : m_dmcExecutors)
+        {
+            if (dmcExecutor.second->hasContractTableChanged())
+            {
+                // if contract table has changed in execution,
+                // we need to break block pipeline and execute/commit block one by one
+                SCHEDULER_LOG(DEBUG)
+                    << "Break block pipeline" << LOG_KV("contract", dmcExecutor.first);
+                m_isSysBlock.store(true);
+            }
+        }
+
         // All Transaction finished, get hash
         batchGetHashes([this, callback = std::move(callback)](
                            Error::UniquePtr error, crypto::HashType hash) {
@@ -1168,7 +1186,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
     // for (auto& it : *(m_scheduler->m_executorManager))
     forEachExecutor([this, status](std::string,
                         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) {
-        auto blockHeader = m_block->blockHeaderConst();
+        auto blockHeader = m_blockHeader;
         executor->nextBlockHeader(
             m_schedulerTermId, blockHeader, [this, status](bcos::Error::Ptr&& error) {
                 {
@@ -1341,8 +1359,8 @@ void BlockExecutive::batchBlockCommit(
         executorParams.number = number();
         executorParams.timestamp = commitTS;
 
-        auto range = m_scheduler->m_executorManager->range();
-        for (auto const& executorIt : range)
+        // TODO: new parallel_for_each no suite
+        for (auto const& executorIt : *m_scheduler->m_executorManager)
         {
             SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
 
@@ -1549,7 +1567,6 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
             });
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
-        // TODO: Slow wait!
         dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
             auto executor = m_scheduler->executorManager()->dispatchExecutor(address);
             if (!executor)
@@ -1597,15 +1614,14 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
 {
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
-    if (bcos::precompiled::c_systemTxsAddress.find(output->from()) !=
-        bcos::precompiled::c_systemTxsAddress.end())
+    if (bcos::precompiled::c_systemTxsAddress.contains(output->from()))
     {
         txGasUsed = 0;
     }
     m_gasUsed.fetch_add(txGasUsed);
     auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
         std::string(output->newEVMContractAddress()), output->takeLogEntries(), output->status(),
-        output->data(), m_block->blockHeaderConst()->number());
+        output->data(), number());
 
     // write receipt in results
     SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
@@ -1640,8 +1656,7 @@ void BlockExecutive::serialPrepareExecutor()
         for (const auto& address : currentExecutors)
         {
             DMC_LOG(TRACE) << " 0.Pre-DmcExecutor: \t----------------- addr:" << address
-                           << " | number:" << m_block->blockHeaderConst()->number()
-                           << " -----------------";
+                           << " | number:" << number() << " -----------------";
             hasScheduleOutMessage |=
                 m_dmcExecutors[address]->prepare();  // may generate new contract in m_dmcExecutors
         }
@@ -1663,8 +1678,7 @@ void BlockExecutive::serialPrepareExecutor()
             continue;  // must jump finished executor
         }
         DMC_LOG(TRACE) << " 3.UnlockPrepare: \t |---------------- addr:" << address
-                       << " | number:" << std::to_string(m_block->blockHeaderConst()->number())
-                       << " ----------------|";
+                       << " | number:" << std::to_string(number()) << " ----------------|";
 
         allFinished = false;
         bool need = dmcExecutor->unlockPrepare();
@@ -1675,12 +1689,12 @@ void BlockExecutive::serialPrepareExecutor()
     if (needDetectDeadlock && !allFinished)
     {
         bool needRevert = false;
-        // detect deadlock and revert the first tx TODO: revert many tx in one DMC round
+        // The code below can be optimized by reverting many tx in one DMC round
         for (auto& it : m_dmcExecutors)
         {
             const auto& address = it.first;
-            DMC_LOG(TRACE) << " --detect--revert-- " << address << " | "
-                           << m_block->blockHeaderConst()->number() << " -----------------";
+            DMC_LOG(TRACE) << " --detect--revert-- " << address << " | " << number()
+                           << " -----------------";
             if (m_dmcExecutors[address]->detectLockAndRevert())
             {
                 needRevert = true;
@@ -1690,8 +1704,8 @@ void BlockExecutive::serialPrepareExecutor()
 
         if (!needRevert)
         {
-            std::string errorMsg = "Need detect deadlock but no deadlock detected! block: " +
-                                   toString(m_block->blockHeaderConst()->number());
+            std::string errorMsg =
+                "Need detect deadlock but no deadlock detected! block: " + std::to_string(number());
             DMC_LOG(ERROR) << errorMsg;
             BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, errorMsg));
         }

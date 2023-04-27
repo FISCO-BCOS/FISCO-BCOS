@@ -171,19 +171,40 @@ public:
             prepareMyData();
             m_data->pageKey = std::move(key);
         }
-        [[nodiscard]] auto getPageKey() const -> std::string { return m_data->pageKey; }
+        [[nodiscard]] auto getPageKey() const -> std::string
+        {
+            if (m_data)
+            {
+                return m_data->pageKey;
+            }
+            return {};
+        }
         void setCount(uint16_t _count)
         {
             prepareMyData();
             m_data->count = _count;
         }
-        [[nodiscard]] auto getCount() const -> uint16_t { return m_data->count; }
+        [[nodiscard]] auto getCount() const -> uint16_t
+        {
+            if (m_data)
+            {
+                return m_data->count;
+            }
+            return 0;
+        }
         void setSize(uint16_t _size)
         {
             prepareMyData();
             m_data->size = _size;
         }
-        [[nodiscard]] auto getSize() const -> uint16_t { return m_data->size; }
+        [[nodiscard]] auto getSize() const -> uint16_t
+        {
+            if (m_data)
+            {
+                return m_data->size;
+            }
+            return 0;
+        }
 
         [[nodiscard]] auto getPageData() const -> Data* { return m_pageData; }
         void setPageData(Data* data) { m_pageData = data; }
@@ -208,7 +229,7 @@ public:
             uint16_t count = 0;
             uint16_t size = 0;
         };
-        std::shared_ptr<PageInfoData> m_data = nullptr;
+        std::shared_ptr<PageInfoData> m_data = std::make_shared<PageInfoData>();
         Data* m_pageData = nullptr;
         friend class boost::serialization::access;
 
@@ -257,20 +278,22 @@ public:
             if (this != &meta)
             {
                 pages = std::make_unique<std::vector<PageInfo>>();
+                pages->reserve(meta.pages->size());
+                auto lock = std::shared_lock(meta.mutex);
                 *pages = *meta.pages;
             }
             return *this;
         }
-        TableMeta(TableMeta&& t) { pages = std::move(t.pages); }
-        TableMeta& operator=(TableMeta&& t)
+        TableMeta(TableMeta&& meta) noexcept : pages(std::move(meta.pages)) {}
+        TableMeta& operator=(TableMeta&& meta) noexcept
         {
-            if (this != &t)
+            if (this != &meta)
             {
-                pages = std::move(t.pages);
+                pages = std::move(meta.pages);
             }
             return *this;
         }
-        auto lower_bound(std::string_view key)
+        auto lower_bound(const std::string_view& key) const
         {
             return std::lower_bound(pages->begin(), pages->end(), key,
                 [](const PageInfo& lhs, const std::string_view& rhs) {
@@ -395,10 +418,10 @@ public:
                 }
                 else
                 {
-                    KeyPage_LOG(FATAL)
-                        << LOG_DESC("updatePageInfo not found")
-                        << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
-                        << LOG_KV("valid", count) << LOG_KV("size", size);
+                    KeyPage_LOG(FATAL) << LOG_DESC("updatePageInfo not found")
+                                       << LOG_KV("oldEndKey", toHex(oldEndKey))
+                                       << LOG_KV("pageKey", toHex(pageKey))
+                                       << LOG_KV("valid", count) << LOG_KV("size", size);
                 }
             }
             return oldPageKey;
@@ -467,6 +490,12 @@ public:
         double hitRate() const { return hit / (double)getPageInfoCount; }
         uint64_t rowCount() const { return m_rows; }
 
+        bool pageExist(const std::string_view& pageKey) const
+        {
+            auto it = lower_bound(pageKey);
+            return it != pages->end() && it->getPageKey() == pageKey;
+        }
+
     private:
         uint32_t getPageInfoCount = 0;
         uint32_t hit = 0;
@@ -491,6 +520,7 @@ public:
             // }
             int invalid = 0;
             m_rows = 0;
+            auto writeLock = rLock();
             for (auto it = pages->begin(); it != pages->end();)
             {
                 if (it->getCount() == 0 || it->getPageKey().empty())
@@ -596,7 +626,7 @@ public:
             if (it != entries.end())
             {
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry") << LOG_KV("pageKey",
                 //         toHex(entries.begin()->first))
@@ -613,7 +643,7 @@ public:
             else
             {
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry not found")
                 //         << LOG_KV(
@@ -633,7 +663,7 @@ public:
         }
         inline std::tuple<std::optional<Entry>, bool> setEntry(
             const std::string_view& key, Entry&& entry)
-        {  // TODO: do not exist entry optimization: insert a empty entry to cache, then
+        {  // do not exist entry optimization: insert a empty entry to cache, then
             // entry status none should return null optional
             bool pageInfoChanged = false;
             std::optional<Entry> ret;
@@ -649,6 +679,7 @@ public:
                     {
                         ++m_validCount;
                         pageInfoChanged = true;
+                        m_size += it->first.size();
                     }
                 }
                 else
@@ -657,6 +688,8 @@ public:
                     {
                         --m_validCount;
                         pageInfoChanged = true;
+                        m_size -= entry.size();
+                        m_size -= it->first.size();
                     }
                 }
                 if (m_invalidPageKeys.size() == 1)
@@ -666,7 +699,7 @@ public:
                 ret = std::move(it->second);
                 it->second = std::move(entry);
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("setEntry update")
                 //         << LOG_KV("pageKey", toHex(entries.rbegin()->first))
@@ -679,10 +712,15 @@ public:
             else
             {
                 pageInfoChanged = true;
-                m_size += key.size();
+
                 if (entry.status() != Entry::Status::DELETED)
                 {
                     ++m_validCount;
+                    m_size += key.size();
+                }
+                else
+                {
+                    m_size -= entry.size();
                 }
                 if (entries.empty() || key > entries.rbegin()->first)
                 {
@@ -700,7 +738,7 @@ public:
                 }
                 entries.insert(it, std::make_pair(std::string(key), std::move(entry)));
                 // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
                 //                        << LOG_KV("pageKey", toHex(entries.rbegin()->first))
                 //                        << LOG_KV("key", toHex(key)) << LOG_KV("valid",
@@ -971,6 +1009,8 @@ public:
         }
         auto lock() -> std::unique_lock<std::shared_mutex> { return std::unique_lock(mutex); }
         auto rLock() -> std::shared_lock<std::shared_mutex> { return std::shared_lock(mutex); }
+        void setTableMeta(TableMeta* _meta) { m_meta = _meta; }
+        TableMeta* myTableMeta() { return m_meta; }
 
     private:
         //   PageInfo* pageInfo;
@@ -981,12 +1021,13 @@ public:
         friend class boost::serialization::access;
         // if startKey changed the old startKey need keep to delete old page
         std::set<std::string> m_invalidPageKeys;
+        TableMeta* m_meta = nullptr;
         template <class Archive>
         void save(Archive& ar, const unsigned int version) const
         {
             std::ignore = version;
             ar&(uint32_t)m_validCount;
-            size_t count = 0;
+            [[maybe_unused]] size_t count = 0;
             for (const auto& i : entries)
             {
                 if (i.second.status() == Entry::Status::DELETED)
@@ -1070,6 +1111,22 @@ public:
             {  // sys table entry
             }
         };
+        KeyPageStorage::Page* getPage()
+        {
+            if (type == Type::Page)
+            {
+                return &std::get<0>(data);
+            }
+            return nullptr;
+        }
+        KeyPageStorage::TableMeta* getTableMeta()
+        {
+            if (type == Type::TableMeta)
+            {
+                return &std::get<1>(data);
+            }
+            return nullptr;
+        }
         Data(const Data& d) = default;
         Data& operator=(const Data& d) = default;
         Data(Data&& d) = default;

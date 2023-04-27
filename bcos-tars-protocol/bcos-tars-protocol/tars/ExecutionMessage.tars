@@ -29,5 +29,6 @@ struct ExecutionMessage
     25 optional vector<byte> delegateCallCode;
     26 optional string delegateCallSender;
     27 optional int evmStatus;
+    28 optional bool hasContractTableChanged = false;
 };
 };

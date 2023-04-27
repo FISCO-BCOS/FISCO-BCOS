@@ -107,37 +107,37 @@ inline u256 exp10<0>()
 
 //------------ Type interprets and Convertions----------------
 /// Interprets @a _u as a two's complement signed number and returns the resulting s256.
-inline s256 u2s(u256 _u)
-{
-    static const bigint c_end = bigint(1) << 256;
-    /// get the +/- symbols
-    if (boost::multiprecision::bit_test(_u, 255))
-        return s256(-(c_end - _u));
-    else
-        return s256(_u);
-}
+s256 u2s(u256 _u);
 
 /// @returns the two's complement signed representation of the signed number _u.
-inline u256 s2u(s256 _u)
-{
-    static const bigint c_end = bigint(1) << 256;
-    if (_u >= 0)
-        return u256(_u);
-    else
-        return u256(c_end + _u);
-}
+u256 s2u(s256 _u);
 
-inline bool isalNumStr(std::string const& _stringData)
+bool isalNumStr(std::string const& _stringData);
+
+inline bool isNumStr(std::string const& _stringData)
 {
-    for (auto ch : _stringData)
+    if (_stringData.empty())
     {
-        if (isalnum(ch))
+        return false;
+    }
+    for (const auto& ch : _stringData)
+    {
+        if (isdigit(ch))
         {
             continue;
         }
         return false;
     }
     return true;
+}
+
+double calcAvgRate(uint64_t _data, uint32_t _intervalMS);
+uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS);
+
+// convert second to milliseconds
+inline constexpr int32_t toMillisecond(int32_t _seconds)
+{
+    return _seconds * 1000;
 }
 
 /// Get the current time in seconds since the epoch in UTC(ms)
@@ -148,7 +148,7 @@ uint64_t utcSteadyTime();
 uint64_t utcTimeUs();
 uint64_t utcSteadyTimeUs();
 
-// get the current datatime
+// get the current data time
 std::string getCurrentDateTime();
 
 struct Exception;

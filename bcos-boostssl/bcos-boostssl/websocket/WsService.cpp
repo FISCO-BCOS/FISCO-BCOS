@@ -135,6 +135,23 @@ void WsService::reportConnectedNodes()
     auto ss = sessions();
     WEBSOCKET_SERVICE(INFO) << LOG_DESC("connected nodes") << LOG_KV("count", ss.size());
 
+    for (auto const& session : ss)
+    {
+        auto queueSize = session->writeQueueSize();
+        if (queueSize > 0)
+        {
+            WEBSOCKET_SERVICE(INFO)
+                << LOG_DESC("session write queue status") << LOG_KV("endpoint", session->endPoint())
+                << LOG_KV("writeQueueSize", queueSize);
+        }
+        else
+        {
+            WEBSOCKET_SERVICE(DEBUG)
+                << LOG_DESC("session write queue status") << LOG_KV("endpoint", session->endPoint())
+                << LOG_KV("writeQueueSize", queueSize);
+        }
+    }
+
     m_heartbeat = std::make_shared<boost::asio::deadline_timer>(
         *(m_timerIoc), boost::posix_time::milliseconds(m_config->heartbeatPeriod()));
     auto self = std::weak_ptr<WsService>(shared_from_this());
@@ -339,11 +356,17 @@ void WsService::reconnect()
 
 bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
 {
-    UpgradableGuard l(x_msgTypeHandlers);
-    if (m_msgType2Method.count(_msgType) || !_msgHandler)
+    if (!_msgHandler)
     {
         return false;
     }
+    UpgradableGuard l(x_msgTypeHandlers);
+    auto it = m_msgType2Method.find(_msgType);
+    if (it != m_msgType2Method.end())
+    {
+        return false;
+    }
+
     UpgradeGuard ul(l);
     m_msgType2Method[_msgType] = _msgHandler;
     return true;
@@ -352,9 +375,10 @@ bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
 MsgHandler WsService::getMsgHandler(uint16_t _type)
 {
     ReadGuard l(x_msgTypeHandlers);
-    if (m_msgType2Method.count(_type))
+    auto it = m_msgType2Method.find(_type);
+    if (it != m_msgType2Method.end())
     {
-        return m_msgType2Method[_type];
+        return it->second;
     }
     return nullptr;
 }
@@ -362,12 +386,13 @@ MsgHandler WsService::getMsgHandler(uint16_t _type)
 bool WsService::eraseMsgHandler(uint16_t _type)
 {
     UpgradableGuard l(x_msgTypeHandlers);
-    if (!m_msgType2Method.count(_type))
+    auto it = m_msgType2Method.find(_type);
+    if (it == m_msgType2Method.end())
     {
         return false;
     }
     UpgradeGuard ul(l);
-    m_msgType2Method.erase(_type);
+    m_msgType2Method.erase(it);
     return true;
 }
 
@@ -377,11 +402,10 @@ std::shared_ptr<WsSession> WsService::newSession(
     _wsStreamDelegate->setMaxReadMsgSize(m_config->maxMsgSize());
 
     std::string endPoint = _wsStreamDelegate->remoteEndpoint();
-    auto session = m_sessionFactory->createSession(m_moduleName);
+    auto session = m_sessionFactory->createSession(m_taskGroup, m_moduleName);
 
-    session->setWsStreamDelegate(_wsStreamDelegate);
+    session->setWsStreamDelegate(std::move(_wsStreamDelegate));
     session->setIoc(m_ioservicePool->getIOService());
-    session->setThreadPool(threadPool());
     session->setMessageFactory(messageFactory());
     session->setEndPoint(endPoint);
     session->setConnectedEndPoint(endPoint);

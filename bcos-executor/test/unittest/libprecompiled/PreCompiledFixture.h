@@ -73,23 +73,28 @@ public:
         assert(cryptoSuite);
         smCryptoSuite = std::make_shared<CryptoSuite>(smHashImpl, sm2Sign, nullptr);
         txpool = std::make_shared<MockTxPool>();
-        assert(DEFAULT_PERMISSION_ADDRESS);
     }
 
-    virtual ~PrecompiledFixture() {}
+    virtual ~PrecompiledFixture() = default;
 
     /// must set isWasm
     void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true,
-        protocol::BlockVersion version = DEFAULT_VERSION)
+        protocol::BlockVersion version = DEFAULT_VERSION,
+        std::shared_ptr<std::set<std::string, std::less<>>> _ignoreTables = nullptr)
     {
         isWasm = _isWasm;
+        storage = std::make_shared<MockTransactionalStorage>(hashImpl);
         if (_isKeyPage)
         {
-            storage = std::make_shared<MockKeyPageStorage>(hashImpl);
-        }
-        else
-        {
-            storage = std::make_shared<MockTransactionalStorage>(hashImpl);
+            if (_ignoreTables != nullptr)
+            {
+                storage = std::make_shared<MockKeyPageStorage>(
+                    hashImpl, (uint32_t)m_blockVersion, _ignoreTables);
+            }
+            else
+            {
+                storage = std::make_shared<MockKeyPageStorage>(hashImpl);
+            }
         }
         blockFactory = createBlockFactory(cryptoSuite);
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader(1);
@@ -106,7 +111,12 @@ public:
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-            storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth);
+            storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth,
+            std::string("executor"));
+        if (_ignoreTables != nullptr)
+        {
+            executor->setKeyPageIgnoreTable(_ignoreTables);
+        }
 
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -234,7 +244,7 @@ public:
                 appsTable->setRow(executor::FS_KEY_EXTRA, std::move(extraEntry));
             }
 
-            // create /usr table
+            // create /sys table
             {
                 std::promise<std::optional<Table>> promise4;
                 storage->asyncCreateTable(
@@ -245,6 +255,7 @@ public:
                 auto appsTable = promise4.get_future().get();
                 storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
                 std::map<std::string, std::string> newSubMap;
+                newSubMap.insert({"auth", "contract"});
                 tEntry.importFields({executor::FS_TYPE_DIR});
                 newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
                 aclTypeEntry.importFields({"0"});
@@ -631,7 +642,8 @@ public:
         protocol::BlockNumber _number, std::string const& path, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("list(string)", path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -669,7 +681,8 @@ public:
     ExecutionMessage::UniquePtr initBfs(protocol::BlockNumber _number, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("initBfs()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -705,7 +718,7 @@ public:
 
 public:
     CodecWrapper::Ptr codec;
-    
+
 protected:
     crypto::Hash::Ptr hashImpl;
     crypto::Hash::Ptr smHashImpl;

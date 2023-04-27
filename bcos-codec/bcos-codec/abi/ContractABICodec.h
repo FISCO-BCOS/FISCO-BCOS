@@ -285,25 +285,19 @@ public:
         return bytes{};
     }
 
-    //    template <typename T, typename I = std::decay_t<T>,
-    //        std::enable_if_t<std::is_integral<I>::value> = true>
-    //    bytes serialise(const T& _in)
-    //    {
-    //        return serialise(s256(_in));
-    //    }
+    template <class T>
+    requires std::signed_integral<T> &&(!std::same_as<T, char>)
+    bytes serialise(const T& _in)
+    {
+        return serialise(s256(_in));
+    }
 
-    /// FIXME: use template
-    bytes serialise(const uint8_t& _in) { return serialise(u256(_in)); }
-    bytes serialise(const uint16_t& _in) { return serialise(u256(_in)); }
-    bytes serialise(const uint32_t& _in) { return serialise(u256(_in)); }
-    bytes serialise(const uint64_t& _in) { return serialise(u256(_in)); }
-
-    /// FIXME: use template
-    bytes serialise(const int8_t& _in) { return serialise(s256(_in)); }
-    bytes serialise(const int16_t& _in) { return serialise(s256(_in)); }
-    bytes serialise(const int32_t& _in) { return serialise(s256(_in)); }
-    bytes serialise(const int64_t& _in) { return serialise(s256(_in)); }
-
+    template <class T>
+    requires std::unsigned_integral<T> &&(!std::same_as<T, bool>)
+    bytes serialise(const T& _in)
+    {
+        return serialise(u256(_in));
+    }
 
     // unsigned integer type uint256.
     bytes serialise(const u256& _in);
@@ -353,56 +347,22 @@ public:
 
     void deserialize(bool& _out, std::size_t _offset);
 
-    /// FIXME: use template
-    void deserialize(int8_t& _out, std::size_t _offset)
+    template <class T>
+    requires std::signed_integral<T> && (!std::same_as<T, char>)
+    void deserialize(T& _out, std::size_t _offset)
     {
         s256 out;
         deserialize(out, _offset);
-        _out = out.convert_to<int8_t>();
-    }
-    void deserialize(int16_t& _out, std::size_t _offset)
-    {
-        s256 out;
-        deserialize(out, _offset);
-        _out = out.convert_to<int16_t>();
-    }
-    void deserialize(int32_t& _out, std::size_t _offset)
-    {
-        s256 out;
-        deserialize(out, _offset);
-        _out = out.convert_to<int32_t>();
-    }
-    void deserialize(int64_t& _out, std::size_t _offset)
-    {
-        s256 out;
-        deserialize(out, _offset);
-        _out = out.convert_to<int64_t>();
+        _out = out.convert_to<T>();
     }
 
-    /// FIXME: use template
-    void deserialize(uint8_t& _out, std::size_t _offset)
+    template <class T>
+    requires std::unsigned_integral<T> && (!std::same_as<T, bool>)
+    void deserialize(T& _out, std::size_t _offset)
     {
         u256 out;
         deserialize(out, _offset);
-        _out = out.convert_to<uint8_t>();
-    }
-    void deserialize(uint16_t& _out, std::size_t _offset)
-    {
-        u256 out;
-        deserialize(out, _offset);
-        _out = out.convert_to<uint16_t>();
-    }
-    void deserialize(uint32_t& _out, std::size_t _offset)
-    {
-        u256 out;
-        deserialize(out, _offset);
-        _out = out.convert_to<uint32_t>();
-    }
-    void deserialize(uint64_t& _out, std::size_t _offset)
-    {
-        u256 out;
-        deserialize(out, _offset);
-        _out = out.convert_to<uint64_t>();
+        _out = out.convert_to<T>();
     }
 
     void deserialize(Address& _out, std::size_t _offset);

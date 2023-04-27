@@ -28,12 +28,9 @@
 #include "Common.h"
 #include "Entry.h"
 #include <bcos-utilities/Error.h>
-#include <boost/range.hpp>
-#include <boost/range/iterator.hpp>
 #include <map>
 #include <memory>
 #include <optional>
-#include <range/v3/view/any_view.hpp>
 #include <string>
 
 namespace bcos::storage
@@ -101,6 +98,7 @@ public:
         });
         return result;
     };
+    virtual void stop(){};
 };
 
 class TraverseStorageInterface : public virtual StorageInterface

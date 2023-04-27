@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-utilities/Common.h"
+#include "rocksdb/convenience.h"
 #include <bcos-utilities/Error.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
@@ -65,7 +66,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(std::string_view _table,
     read_options.total_order_seek = true;
     auto iter = std::unique_ptr<rocksdb::Iterator>(m_db->NewIterator(read_options));
 
-    // FIXME: check performance and add limit of primary keys
+    // check performance
     for (iter->Seek(keyPrefix); iter->Valid() && iter->key().starts_with(keyPrefix); iter->Next())
     {
         size_t start = keyPrefix.size();
@@ -298,6 +299,8 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
 void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageInterface& storage,
     std::function<void(Error::Ptr, uint64_t startTS, const std::string&)> callback)
 {
+    __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
+        const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_PREPARE));
     std::ignore = param;
     try
     {
@@ -404,24 +407,27 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
             return;
         }
         auto end = utcSteadyTime();
-        callback(nullptr, 0, "");
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare finished")
                                   << LOG_KV("blockNumber", param.number) << LOG_KV("put", putCount)
                                   << LOG_KV("delete", deleteCount)
                                   << LOG_KV("startTS", param.timestamp)
                                   << LOG_KV("encode(ms)", encode - start)
-                                  << LOG_KV("time(ms)", end - start)
-                                  << LOG_KV("callback time(ms)", utcSteadyTime() - end);
+                                  << LOG_KV("time(ms)", end - start);
+        callback(nullptr, 0, "");
     }
     catch (const std::exception& e)
     {
         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Prepare failed! ", e), 0, "");
     }
+    __itt_task_end(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE);
 }
 
 void RocksDBStorage::asyncCommit(
     const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback)
 {
+    __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
+        const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_COMMIT));
+
     size_t count = 0;
     auto start = utcSteadyTime();
     std::ignore = params;
@@ -440,7 +446,7 @@ void RocksDBStorage::asyncCommit(
                     << LOG_DESC("asyncCommit failed") << LOG_KV("blockNumber", params.number)
                     << LOG_KV("message", err->errorMessage()) << LOG_KV("startTS", params.timestamp)
                     << LOG_KV("time(ms)", utcSteadyTime() - start);
-                lock.release();
+                lock.unlock();
                 callback(err, 0);
                 return;
             }
@@ -448,6 +454,7 @@ void RocksDBStorage::asyncCommit(
         }
     }
     auto end = utcSteadyTime();
+    __itt_task_end(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE);
     callback(nullptr, 0);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit finished")
                               << LOG_KV("blockNumber", params.number)
@@ -477,6 +484,9 @@ void RocksDBStorage::asyncCommit(
 void RocksDBStorage::asyncRollback(
     const TwoPCParams& params, std::function<void(Error::Ptr)> callback)
 {
+    __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
+        const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_COMMIT));
+
     auto start = utcSteadyTime();
 
     std::ignore = params;
@@ -485,6 +495,8 @@ void RocksDBStorage::asyncRollback(
         m_writeBatch = nullptr;
     }
     auto end = utcSteadyTime();
+    __itt_task_end(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE);
+
     callback(nullptr);
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("blockNumber", params.number)
                               << LOG_KV("startTS", params.timestamp)
@@ -497,6 +509,8 @@ bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,
         _keys,
     std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>> _values) noexcept
 {
+    __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
+        const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_SET_ROWS));
     bcos::Error::Ptr err = nullptr;
     std::visit(
         [&](auto&& keys, auto&& values) {
@@ -566,6 +580,7 @@ bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,
                 << LOG_KV("dataSize", dataSize) << LOG_KV("time(ms)", utcSteadyTime() - start);
         },
         _keys, _values);
+    __itt_task_end(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE);
     return err;
 }
 
@@ -633,4 +648,15 @@ bcos::Error::Ptr RocksDBStorage::checkStatus(rocksdb::Status const& status)
     errorInfo = errorInfo + ", please try again!";
     STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC(errorInfo);
     return BCOS_ERROR_PTR(DatabaseRetryable, errorInfo);
+}
+
+void RocksDBStorage::stop()
+{
+    if (!m_db)
+    {
+        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("rocksdb has already been stopped");
+        return;
+    }
+    CancelAllBackgroundWork(m_db.get(), true);
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("rocksdb stopped");
 }

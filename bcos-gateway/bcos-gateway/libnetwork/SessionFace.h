@@ -28,9 +28,14 @@ class SocketFace;
 class SessionFace
 {
 public:
-    virtual ~SessionFace(){};
-
     using Ptr = std::shared_ptr<SessionFace>;
+
+    SessionFace() = default;
+    SessionFace(const SessionFace&) = delete;
+    SessionFace(SessionFace&&) = delete;
+    SessionFace& operator=(SessionFace&&) = delete;
+    SessionFace& operator=(const SessionFace&) = delete;
+    virtual ~SessionFace() noexcept = default;
 
     virtual void start() = 0;
     virtual void disconnect(DisconnectReason) = 0;
@@ -48,7 +53,9 @@ public:
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 
-    virtual bool actived() const = 0;
+    virtual bool active() const = 0;
+
+    virtual std::size_t writeQueueSize() = 0;
 };
 }  // namespace gateway
 }  // namespace bcos

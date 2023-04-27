@@ -53,13 +53,7 @@ public:
 
         auto originDataHash = std::move(transaction->mutableInner().dataHash);
         transaction->mutableInner().dataHash.clear();
-
-        auto anyHasher = m_cryptoSuite->hashImpl()->hasher();
-        std::visit(
-            [&transaction](auto& hasher) {
-                transaction->calculateHash<std::remove_cvref_t<decltype(hasher)>>();
-            },
-            anyHasher);
+        transaction->calculateHash(m_cryptoSuite->hashImpl()->hasher());
 
         // check if hash matching
         if (checkHash && !originDataHash.empty() &&
@@ -85,7 +79,7 @@ public:
     }
 
     bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
-        bcos::bytes const& _input, bcos::u256 const& _nonce, int64_t _blockLimit,
+        bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
         std::string _chainId, std::string _groupId, int64_t _importTime) override
     {
         auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
@@ -101,18 +95,13 @@ public:
         inner.importTime = _importTime;
 
         // Update the hash field
-        std::visit(
-            [&inner](auto&& hasher) {
-                using HasherType = std::decay_t<decltype(hasher)>;
-                bcos::concepts::hash::calculate<HasherType>(inner, inner.dataHash);
-            },
-            m_cryptoSuite->hashImpl()->hasher());
+        bcos::concepts::hash::calculate(m_cryptoSuite->hashImpl()->hasher(), inner, inner.dataHash);
 
         return transaction;
     }
 
     bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
-        bcos::bytes const& _input, bcos::u256 const& _nonce, int64_t _blockLimit,
+        bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
         std::string _chainId, std::string _groupId, int64_t _importTime,
         bcos::crypto::KeyPairInterface::Ptr keyPair) override
     {
