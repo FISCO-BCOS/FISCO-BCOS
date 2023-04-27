@@ -6,38 +6,41 @@
 [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS)
 [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS)
 
-FISCO BCOS (pronounced /ˈfɪskl bi:ˈkɒz/) is an enterprise-level financial blockchain platform developed and open-sourced by the Financial Services Blockchain Consortium (Shenzhen) "FISCO" led by WeBank. 
+FISCO BCOS (pronounced /ˈfɪskl bi:ˈkɒz/) is an enterprise-level financial blockchain platform developed and open-sourced by the Financial Services Blockchain Consortium (Shenzhen) "FISCO" led by WeBank. Its usability has been extensively tested through practical applications. So far, more than 300 digital benchmark applications have emerged, covering fields such as finance, healthcare, education, culture, and social governance, supporting important infrastructure such as the Pearl River Delta Credit Chain, the Blockchain Service Network BSN, the People's Chain, the National Health and Medical Big Data Innovation Platform, the Guangdong-Hong Kong Health Code Cross-border Recognition System, and so on.
 
-In a single-chain configuration, the performance can reach more than 100k TPS. FISCO BCOS provides rich features including group architecture, parallel computing, distributed storage, pluggable consensus mechanism, privacy protection algorithms, and OSCCA-approved cryptography modules.
+In a single-chain configuration, the performance TPS can reach 100k. It fully supports national encryption algorithms, domestic operating systems, and domestic CPU architecture. FISCO BCOS provides rich features includingcomprehensive parallel computing, blockchain file system, governance framework, and distributed storage.
 
-FISCO BCOS is a stable, efficient, and secure blockchain underlying platform. Its usability has been widely verified by practical applications, and many benchmark applications have been implemented in various industries.
+## Version Information:
+
+- Stable Version (for production environment): v3.2.1, version details can be found in [FISCO-BCOS v3.2.1 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.2.1).
+
+- Latest Version (for experiencing new features): v3.3.0, version details can be found in [FISCO-BCOS v3.3.0 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.3.0).
 
 ## System Overview
 The architecture of FISCO BCOS system consists of the basic layer, core layer, service layer, user layer, and access layer on the left-hand side, providing stable and secure blockchain underlying services. The middleware layer simplifies the process of managing the blockchain system through a visual interface. On the right-hand side, there are supporting components for development, operation, and security control, meeting the needs of different roles during the application implementation process. Meanwhile, privacy protection and cross-chain-related technology components are also provided to satisfy the application requirements in different scenarios.
 ![](./Technical-Architecture-en.png)
 
-### Underlying Features
+### Underlying Features:
 
-- Blockchain File System: WYSIWYG contract data management
-- Distributed Storage TiKV: Distributed transactional submission, supporting massive storage
-- Pipelined: Block pipeline, generating blocks continuously and compactly
-- Pluggable Consensus Mechanism: Designed a pluggable consensus framework, flexible and optional
-- Permission Governance Framework: Built-in permission governance framework, multi-party voting to govern the blockchain
-- SDK Basic Library: Multi-language SDK, more convenient access to national cryptographic algorithms on all platforms
+- Pipelined: A block pipeline that generates blocks continuously and compactly.
+- Pluggable Consensus Mechanism: A pluggable consensus framework that is flexible and optional.
+- Comprehensive Parallel Computing: Multi-group, intra-block sharding, DMC, DAG, and other parallel mechanisms that achieve powerful processing performance.
+- Blockchain File System: A contract data management system that provides a "what you see is what you get" interface.
+- Permission Governance Framework: A built-in permission governance framework that allows for multi-party voting to govern the blockchain.
+- Distributed Storage TiKV: Distributed transactional submission that supports massive storage.
+- SDK Basic Library: Multi-language SDK that provides easier access to national encryption on all platforms.
 
-### Component Services
+### Component Services:
+- Privacy Protection: A privacy protection solution, WeDPR, that is available for scenarios.
+- Cross-Chain Collaboration: A cross-chain collaboration platform, WeCross, that supports interoperability across multiple chains.
+- Blockchain Management: A visualized blockchain management platform, WeBASE.
 
-- Privacy Protection: WeDPR, a scenario-based privacy protection solution that is even available
-- Cross-chain Collaboration: WeCross, a cross-chain collaboration platform that supports multi-chain interoperability
-- Blockchain Management: WeBASE, a visual blockchain management platform
+### Development and Operations Tools:
 
-### Development and Operation Tools
-
-- Deployment Tool: One-click chain-building script, automated deployment of blockchain
-- Visualization Tool: Provides visualization management tools to reduce operational procedures
-- Monitoring and Alarm Tool: Monitors the running status of the blockchain system and alarms in real-time
-- Data Archiving Tool: Cold data archiving, supporting RocksDB and TiKV, releasing storage pressure.
-
+- Chain Building Tool: A one-click chain building script that automates blockchain deployment.
+- Visualization Tool: A visualization management tool that reduces operational procedures.
+- Monitoring and Alerting Tool: A monitoring tool that tracks the operational status of the blockchain system in real-time and alerts users.
+- Data Archiving Tool: A cold data archiving tool that supports RocksDB and TiKV to release storage pressure.
 ## Documentation
 
 [《The FISCO BCOS Official Technical Documentation》](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/index.html) provides chain development guidelines, tool introductions, and design principle explanations. Users can quickly learn and use FISCO BCOS by reading the official technical documentation.
