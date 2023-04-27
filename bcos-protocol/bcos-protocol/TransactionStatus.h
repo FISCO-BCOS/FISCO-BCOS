@@ -62,7 +62,8 @@ enum class TransactionStatus : int32_t
     InvalidGroupId = 10007,
     InvalidSignature = 10008,
     RequestNotBelongToTheGroup = 10009,
-    TransactionPoolTimeout = 10010
+    TransactionPoolTimeout = 10010,
+    AlreadyInTxPoolAndAccept = 10011,
 };
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
