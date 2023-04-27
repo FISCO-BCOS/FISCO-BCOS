@@ -105,7 +105,8 @@ protected:
         bool checkPoolLimit, bool lock);
     size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(
-        const bcos::protocol::Transaction& transaction);
+        const bcos::protocol::Transaction& transaction,
+        protocol::TxSubmitCallback& txSubmitCallback);
 
     virtual bcos::protocol::Transaction::Ptr removeWithoutLock(
         bcos::crypto::HashType const& _txHash);
