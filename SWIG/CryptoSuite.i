@@ -32,6 +32,7 @@ inline std::shared_ptr<bcos::crypto::CryptoSuite> newCryptoSuite(bool sm) {
 %include "../bcos-crypto/bcos-crypto/signature/fastsm2/FastSM2Crypto.h"
 %include "../bcos-crypto/bcos-crypto/encrypt/AESCrypto.h"
 %include "../bcos-crypto/bcos-crypto/encrypt/SM4Crypto.h"
+%include "../bcos-crypto/bcos-crypto/interfaces/crypto/CommonType.h"
 
 class Keccak256 : public bcos::crypto::Hash
 {
@@ -47,5 +48,4 @@ public:
     ~SM3() override;
     HashType hash(bytesConstRef _data) const override;
 };
-
 inline std::shared_ptr<bcos::crypto::CryptoSuite> newCryptoSuite(bool sm);

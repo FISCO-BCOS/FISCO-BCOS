@@ -1,9 +1,15 @@
 %{
 #include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/Common.h"
 
 using namespace bcos;
-inline bcos::bytes newBytes(char* str, size_t length) {
-    return bcos::bytes((bcos::byte*)str, (bcos::byte*)str + length);
+typedef unsigned long size_t;
+
+inline bcos::bytesConstRef newBytesConstRef(std::vector<uint8_t> const& input) {
+    return {input.data(), input.size()};
+}
+inline bcos::bytes h256ToBytes(h256 const& input) {
+    return {input.data(), input.data() + input.size()};
 }
 %}
 
@@ -11,8 +17,15 @@ inline bcos::bytes newBytes(char* str, size_t length) {
 %include <std_shared_ptr.i>
 %include <std_string.i>
 %include <std_vector.i>
-// %include "../bcos-utilities/bcos-utilities/FixedBytes.h"
+%include <std_set.i>
+%include <std_unordered_set.i>
 
-inline bcos::bytes newBytes(char* str, size_t length);
-using byte = uint8_t;
-using bytes = std::vector<byte>;
+typedef unsigned long size_t;
+%template(bytes) std::vector<uint8_t>;
+
+%include "../bcos-utilities/bcos-utilities/RefDataContainer.h"
+inline bcos::bytesConstRef newBytesConstRef(std::vector<uint8_t> const& input);
+inline bcos::bytes h256ToBytes(h256 const& input);
+
+using bcos::byte = uint8_t;
+using bcos::bytes = std::vector<bcos::byte>;
