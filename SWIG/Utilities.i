@@ -14,11 +14,7 @@ inline bcos::bytes h256ToBytes(h256 const& input) {
 %}
 
 %include <stdint.i>
-%include <std_shared_ptr.i>
-%include <std_string.i>
 %include <std_vector.i>
-%include <std_set.i>
-%include <std_unordered_set.i>
 
 typedef unsigned long size_t;
 %template(bytes) std::vector<uint8_t>;
