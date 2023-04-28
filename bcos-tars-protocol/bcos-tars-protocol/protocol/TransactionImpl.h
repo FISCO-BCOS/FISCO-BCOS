@@ -70,7 +70,7 @@ public:
     int64_t blockLimit() const override;
     const std::string& nonce() const override;
     // only for test
-    void setNonce(std::string _n) override;
+    void setNonce(std::string nonce) override;
     std::string_view to() const override;
     std::string_view abi() const override;
     bcos::bytesConstRef input() const override;
