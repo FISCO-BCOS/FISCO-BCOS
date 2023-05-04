@@ -161,13 +161,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
+        RocksDBOption option;
+        option.maxWriteBufferNumber = m_nodeConfig->maxWriteBufferNumber();
+        option.maxBackgroundJobs = m_nodeConfig->maxBackgroundJobs();
+        option.writeBufferSize = m_nodeConfig->writeBufferSize();
+        option.minWriteBufferNumberToMerge = m_nodeConfig->minWriteBufferNumberToMerge();
+        option.blockCacheSize = m_nodeConfig->blockCacheSize();
+
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
-        storage = StorageInitializer::build(storagePath, m_protocolInitializer->dataEncryption(),
-            m_nodeConfig->keyPageSize(), m_nodeConfig->maxWriteBufferNumber(),
-            m_nodeConfig->enableStatistics(), m_nodeConfig->maxBackgroundJobs());
+        storage =
+            StorageInitializer::build(storagePath, option, m_protocolInitializer->dataEncryption(),
+                m_nodeConfig->keyPageSize(), m_nodeConfig->enableStatistics());
         schedulerStorage = storage;
         consensusStorage = StorageInitializer::build(
-            consensusStoragePath, m_protocolInitializer->dataEncryption());
+            consensusStoragePath, option, m_protocolInitializer->dataEncryption(), 0);
         airExecutorStorage = storage;
     }
 #ifdef WITH_TIKV
