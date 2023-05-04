@@ -190,7 +190,7 @@ void signaturePerf(SignatureCrypto::Ptr _signatureImpl, crypto::Hash& _hashImpl,
     startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
-        if(!_signatureImpl->verify(keyPair->publicKey(), _msgHash, ref(*signedData)))
+        if (!_signatureImpl->verify(keyPair->publicKey(), _msgHash, ref(*signedData)))
         {
             std::cout << "verify failed" << std::endl;
             return;

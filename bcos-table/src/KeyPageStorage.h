@@ -418,10 +418,10 @@ public:
                 }
                 else
                 {
-                    KeyPage_LOG(FATAL)
-                        << LOG_DESC("updatePageInfo not found")
-                        << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("pageKey", toHex(pageKey))
-                        << LOG_KV("valid", count) << LOG_KV("size", size);
+                    KeyPage_LOG(FATAL) << LOG_DESC("updatePageInfo not found")
+                                       << LOG_KV("oldEndKey", toHex(oldEndKey))
+                                       << LOG_KV("pageKey", toHex(pageKey))
+                                       << LOG_KV("valid", count) << LOG_KV("size", size);
                 }
             }
             return oldPageKey;
