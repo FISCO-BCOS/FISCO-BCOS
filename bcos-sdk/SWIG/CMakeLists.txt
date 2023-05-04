@@ -9,7 +9,6 @@ swig_add_library(bcos_swig_python
     LANGUAGE python
     SOURCES BCOS.i
     OUTPUT_DIR bcos_sdk_python
-
 )
 target_link_libraries(bcos_swig_python PRIVATE ${TARS_PROTOCOL_TARGET} bcos-framework Python3::Python)
 
