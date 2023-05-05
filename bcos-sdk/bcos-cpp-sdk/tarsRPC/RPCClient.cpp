@@ -1,5 +1,3 @@
-#pragma once
-
 #include "RPCClient.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
@@ -24,7 +22,8 @@ std::future<bcos::protocol::TransactionReceipt::Ptr> bcos::sdk::RPCClient::sendT
             else
             {
                 auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                    [m_inner = response]() mutable { return std::addressof(m_inner); });
+                    [m_inner = std::move(const_cast<bcostars::TransactionReceipt&>(
+                         response))]() mutable { return std::addressof(m_inner); });
                 m_promise.set_value(std::move(receipt));
             }
         }
@@ -36,7 +35,7 @@ std::future<bcos::protocol::TransactionReceipt::Ptr> bcos::sdk::RPCClient::sendT
         }
 
         std::promise<bcos::protocol::TransactionReceipt::Ptr> m_promise;
-        AsyncID m_asyncID;
+        AsyncID m_asyncID = 0;
     };
 
     auto const& tarsTransaction =
