@@ -29,7 +29,7 @@
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
-#include <bcos-rpc/tarsRPC/RPCImpl.h>
+#include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
@@ -80,14 +80,6 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory());
 
-    // tars rpc
-    if (!nodeConfig->tarsRPCConfig().configPath.empty())
-    {
-        RPCApplication rpcApplication(nodeService);
-        rpcApplication.main(nodeConfig->tarsRPCConfig().configPath);
-        rpcApplication.waitForReady();
-    }
-
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
         m_nodeInitializer->protocolInitializer()->cryptoSuite(),
@@ -103,6 +95,14 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // NOTE: this should be last called
     m_nodeInitializer->initSysContract();
+
+    // tars rpc
+    if (!nodeConfig->tarsRPCConfig().configPath.empty())
+    {
+        RPCApplication rpcApplication(nodeService);
+        rpcApplication.main(nodeConfig->tarsRPCConfig().configPath);
+        rpcApplication.waitForReady();
+    }
 }
 
 void AirNodeInitializer::start()

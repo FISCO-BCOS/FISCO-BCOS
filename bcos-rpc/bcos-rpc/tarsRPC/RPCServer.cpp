@@ -1,4 +1,4 @@
-#include "RPCImpl.h"
+#include "RPCServer.h"
 #include "../Common.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
@@ -6,16 +6,16 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <memory>
 
-void bcos::rpc::RPCImpl::initialize() {}
-void bcos::rpc::RPCImpl::destroy() {}
+void bcos::rpc::RPCServer::initialize() {}
+void bcos::rpc::RPCServer::destroy() {}
 
-bcostars::Error bcos::rpc::RPCImpl::call(const bcostars::Transaction& request,
+bcostars::Error bcos::rpc::RPCServer::call(const bcostars::Transaction& request,
     bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current)
 {
     return {};
 }
 
-bcostars::Error bcos::rpc::RPCImpl::sendTransaction(const bcostars::Transaction& request,
+bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transaction& request,
     bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
@@ -37,7 +37,7 @@ bcostars::Error bcos::rpc::RPCImpl::sendTransaction(const bcostars::Transaction&
                 std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl const>(
                     submitResult->transactionReceipt());
 
-            bcos::rpc::RPCImpl::async_response_sendTransaction(current, error, receipt->inner());
+            bcos::rpc::RPCServer::async_response_sendTransaction(current, error, receipt->inner());
             co_return;
         }
         catch (bcos::Error& e)
@@ -54,7 +54,7 @@ bcostars::Error bcos::rpc::RPCImpl::sendTransaction(const bcostars::Transaction&
             error.errorCode = -1;
             error.errorMessage = e.what();
         }
-        bcos::rpc::RPCImpl::async_response_sendTransaction(current, error, {});
+        bcos::rpc::RPCServer::async_response_sendTransaction(current, error, {});
     }(this, std::move(transaction), current));
 
     return {};
@@ -62,7 +62,7 @@ bcostars::Error bcos::rpc::RPCImpl::sendTransaction(const bcostars::Transaction&
 
 void bcos::rpc::RPCApplication::initialize()
 {
-    addServantWithParams<RPCImpl, NodeService::Ptr>(
+    addServantWithParams<RPCServer, NodeService::Ptr>(
         tars::ServerConfig::Application + "." + tars::ServerConfig::ServerName + "." + "RPC",
         m_node);
 }

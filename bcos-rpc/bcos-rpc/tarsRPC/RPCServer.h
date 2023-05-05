@@ -5,10 +5,10 @@
 
 namespace bcos::rpc
 {
-class RPCImpl : public bcostars::RPC
+class RPCServer : public bcostars::RPC
 {
 public:
-    RPCImpl(NodeService::Ptr node) : m_node(std::move(node)) {}
+    RPCServer(NodeService::Ptr node) : m_node(std::move(node)) {}
 
     void initialize() override;
     void destroy() override;
