@@ -81,8 +81,12 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory());
 
     // tars rpc
-    RPCApplication rpcApplication(nodeService);
-    rpcApplication.main(_configFilePath);
+    if (!nodeConfig->tarsRPCConfig().configPath.empty())
+    {
+        RPCApplication rpcApplication(nodeService);
+        rpcApplication.main(nodeConfig->tarsRPCConfig().configPath);
+        rpcApplication.waitForReady();
+    }
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
