@@ -896,6 +896,7 @@ void MemoryStorage::batchMarkTxsWithoutLock(
             continue;
         }
         // the tx has already been re-sealed, can not enforce unseal
+        // TODO: if tx->batchHash() is empty，should be re-sealed?
         if ((tx->batchId() != _batchId || tx->batchHash() != _batchHash) && tx->sealed() &&
             !_sealFlag)
         {
@@ -1110,6 +1111,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
     }
     size_t traversedTxsNum = 0;
     size_t erasedTxs = 0;
+    size_t sealedTxs = 0;
     uint64_t currentTime = utcTime();
 
     m_txsTable.forEach<TxsMap::ReadAccessor>(
@@ -1170,7 +1172,9 @@ void MemoryStorage::cleanUpExpiredTransactions()
         });
 
     TXPOOL_LOG(INFO) << LOG_DESC("cleanUpExpiredTransactions")
-                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs);
+                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs)
+                     << LOG_KV("sealedTxs", sealedTxs)
+                     << LOG_KV("traversedTxsNum", traversedTxsNum);
 
     removeInvalidTxs(true);
 }

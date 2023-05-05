@@ -34,14 +34,24 @@
 
 namespace bcos::initializer
 {
+
+struct RocksDBOption
+{
+    int maxWriteBufferNumber = 3;
+    int maxBackgroundJobs = 3;
+    size_t writeBufferSize = 128 << 20;  // 128MB
+    int minWriteBufferNumberToMerge = 2;
+    size_t blockCacheSize = 128 << 20;  // 128MB
+};
+
 class StorageInitializer
 {
 public:
-    static auto createRocksDB(const std::string& _path, int _max_write_buffer_number = 3,
-        bool _enableDBStatistics = false, int _max_background_jobs = 3)
+    static auto createRocksDB(
+        const std::string& _path, RocksDBOption& rocksDBOption, bool _enableDBStatistics = false)
     {
         boost::filesystem::create_directories(_path);
-        rocksdb::DB* db;
+        rocksdb::DB* db = nullptr;
         rocksdb::Options options;
         // Note: This option will increase much memory
         // options.IncreaseParallelism();
@@ -50,14 +60,18 @@ public:
         // create the DB if it's not already present
         options.create_if_missing = true;
         // to mitigate write stalls
-        options.max_background_jobs = _max_background_jobs;
-        options.max_write_buffer_number = _max_write_buffer_number;
+        options.max_background_jobs = rocksDBOption.maxBackgroundJobs;
+        options.max_write_buffer_number = rocksDBOption.maxWriteBufferNumber;
         // FIXME: enable blob support when space amplification is acceptable
         // options.enable_blob_files = keyPageSize > 1 ? true : false;
         options.compression = rocksdb::kZSTD;
         options.bottommost_compression = rocksdb::kZSTD;  // last level compression
         options.max_open_files = 256;
-        options.write_buffer_size = 64 << 20;  // default is 64MB
+        options.write_buffer_size =
+            rocksDBOption.writeBufferSize;  // default is 64MB, set 256MB here
+        options.min_write_buffer_number_to_merge =
+            rocksDBOption.minWriteBufferNumberToMerge;  // default is 1
+        options.enable_pipelined_write = true;
         // options.min_blob_size = 1024;
 
         if (_enableDBStatistics)
@@ -65,7 +79,8 @@ public:
             options.statistics = rocksdb::CreateDBStatistics();
         }
         // block cache 128MB
-        std::shared_ptr<rocksdb::Cache> cache = rocksdb::NewLRUCache(128 << 20);
+        std::shared_ptr<rocksdb::Cache> cache =
+            rocksdb::NewLRUCache(rocksDBOption.blockCacheSize);
         rocksdb::BlockBasedTableOptions table_options;
         table_options.block_cache = cache;
         // use bloom filter to optimize point lookup, i.e. get
@@ -94,12 +109,10 @@ public:
             });
     }
     static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
-        const bcos::security::DataEncryptInterface::Ptr& _dataEncrypt,
-        [[maybe_unused]] size_t keyPageSize = 0, int _max_write_buffer_number = 3,
-        bool _enableDBStatistics = false, int _max_background_jobs = 3)
+        RocksDBOption& rocksDBOption, const bcos::security::DataEncryptInterface::Ptr& _dataEncrypt,
+        [[maybe_unused]] size_t keyPageSize = 0, bool _enableDBStatistics = false)
     {
-        auto unique_db = createRocksDB(
-            _storagePath, _max_write_buffer_number, _enableDBStatistics, _max_background_jobs);
+        auto unique_db = createRocksDB(_storagePath, rocksDBOption, _enableDBStatistics);
         return std::make_shared<bcos::storage::RocksDBStorage>(std::move(unique_db), _dataEncrypt);
     }
 
