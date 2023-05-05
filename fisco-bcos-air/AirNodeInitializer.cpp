@@ -29,6 +29,7 @@
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
+#include <bcos-rpc/tarsRPC/RPCImpl.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
@@ -78,6 +79,10 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
         std::make_shared<NodeService>(m_nodeInitializer->ledger(), m_nodeInitializer->scheduler(),
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory());
+
+    // tars rpc
+    RPCApplication rpcApplication(nodeService);
+    rpcApplication.main(_configFilePath);
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
