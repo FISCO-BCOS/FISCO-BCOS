@@ -83,6 +83,17 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
         }
     }
 
+    // notify the txpool validator to update the consensusNodeList and the observerNodeList
+    if (m_consensusNodeListUpdated || m_observerNodeListUpdated)
+    {
+        m_validator->updateValidatorConfig(consensusList, *observerList);
+        PBFT_LOG(INFO) << LOG_DESC("updateValidatorConfig")
+                       << LOG_KV("consensusNodeListUpdated", m_consensusNodeListUpdated)
+                       << LOG_KV("observerNodeListUpdated", m_observerNodeListUpdated)
+                       << LOG_KV("consensusNodeSize", consensusList.size())
+                       << LOG_KV("observerNodeSize", observerList->size());
+    }
+
     // notify the latest block number to the sealer
     if (m_stateNotifier)
     {
