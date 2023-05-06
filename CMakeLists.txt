@@ -7,7 +7,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(VERSION "3.2.0")
+set(VERSION "3.2.1")
 set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
