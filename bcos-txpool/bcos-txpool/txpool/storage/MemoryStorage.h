@@ -81,7 +81,7 @@ public:
     bcos::protocol::TransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
 
-    // FIXME: deprecated, after using txpool::broadcastPushTransaction
+    // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
@@ -94,7 +94,7 @@ public:
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 
-    // FIXME: deprecated, after using txpool::broadcastPushTransaction
+    // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::crypto::HashListPtr filterUnknownTxs(
         bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 

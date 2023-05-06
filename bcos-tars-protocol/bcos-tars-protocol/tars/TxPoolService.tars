@@ -7,8 +7,9 @@
 module bcostars {
     interface TxPoolService {
         Error submit(Transaction tx, out TransactionSubmitResult result);
-        Error broadcastPushTransaction(Transaction tx);
-        
+        Error broadcastTransaction(Transaction tx);
+        Error broadcastTransactionBuffer(vector<byte> txBytes);
+
         Error asyncSealTxs(long txsLimit, vector<vector<byte>> avoidTxs, out Block txsList, out Block sysTxsList);
         Error asyncMarkTxs(vector<vector<byte>> txHashs, bool sealedFlag, long batchId, vector<byte> batchHash);
         Error asyncVerifyBlock(vector<byte> generatedNodeID, vector<byte> block, out bool result);
@@ -18,9 +19,9 @@ module bcostars {
         Error notifyConnectedNodes(vector<vector<byte>> connectedNodes);
         Error notifyConsensusNodeList(vector<ConsensusNode> consensusNodeList);
         Error notifyObserverNodeList(vector<ConsensusNode> observerNodeList);
-        
+
         Error asyncResetTxPool();
-        
+
         Error asyncGetPendingTransactionSize(out long _txsSize);
     };
 };

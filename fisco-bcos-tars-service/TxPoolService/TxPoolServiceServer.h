@@ -36,8 +36,11 @@ public:
     bcostars::Error submit(const bcostars::Transaction& tx,
         bcostars::TransactionSubmitResult& result, tars::TarsCurrentPtr current) override;
 
-    bcostars::Error broadcastPushTransaction(
+    bcostars::Error broadcastTransaction(
         const bcostars::Transaction& tx, tars::TarsCurrentPtr current) override;
+
+    bcostars::Error broadcastTransactionBuffer(
+        const vector<tars::Char>& transactionBuffer, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncFillBlock(const vector<vector<tars::Char>>& txHashs,
         vector<bcostars::Transaction>& filled, tars::TarsCurrentPtr current) override;
