@@ -63,7 +63,7 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
 void bcos::rpc::RPCApplication::initialize()
 {
     addServantWithParams<RPCServer, NodeService::Ptr>(
-        tars::ServerConfig::Application + "." + tars::ServerConfig::ServerName + "." + "RPC",
+        tars::ServerConfig::Application + "." + tars::ServerConfig::ServerName + "." + "RPCObj",
         m_node);
 }
 void bcos::rpc::RPCApplication::destroyApp() {}

@@ -33,6 +33,8 @@
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+#include <rocksdb/env.h>
+#include <iterator>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
@@ -99,9 +101,15 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // tars rpc
     if (!nodeConfig->tarsRPCConfig().configPath.empty())
     {
-        RPCApplication rpcApplication(nodeService);
-        rpcApplication.main(nodeConfig->tarsRPCConfig().configPath);
-        rpcApplication.waitForReady();
+        m_rpcThread.emplace([nodeConfig, nodeService, this]() {
+            m_rpcApplication.emplace(nodeService);
+
+            std::ifstream stream(nodeConfig->tarsRPCConfig().configPath);
+            std::string configContent(
+                (std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+            m_rpcApplication->main(configContent);
+            m_rpcApplication->waitForShutdown();
+        });
     }
 }
 
@@ -155,6 +163,11 @@ void AirNodeInitializer::stop()
         if (m_nodeInitializer)
         {
             m_nodeInitializer->stop();
+        }
+        if (m_rpcApplication && m_rpcThread)
+        {
+            m_rpcApplication->terminate();
+            m_rpcThread->join();
         }
 
         if (m_objMonitor)
