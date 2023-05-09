@@ -15,7 +15,7 @@ public:
         return impl().impl_submitTransaction(transaction, receipt);
     }
 
-    auto broadcastTransaction(concepts::transaction::Transaction auto const& transaction)
+    auto broadcastTransactionBuffer(concepts::transaction::Transaction auto const& transaction)
     {
         return impl().impl_broadcastTransaction(transaction);
     }

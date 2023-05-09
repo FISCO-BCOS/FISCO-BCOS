@@ -54,7 +54,7 @@ Transactions importTransactions(
         auto transaction = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 1000 + i),
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
         transactions.push_back(transaction);
-        task::wait(txpool->broadcastPushTransaction(*transaction));
+        task::wait(txpool->broadcastTransaction(*transaction));
         task::wait(txpool->submitTransaction(transaction));
     }
     auto startT = utcTime();
@@ -76,7 +76,7 @@ void importTransactionsNew(
     {
         auto transaction = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 1000 + i),
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
-        task::wait(txpool->broadcastPushTransaction(*transaction));
+        task::wait(txpool->broadcastTransaction(*transaction));
         transactions.push_back(transaction);
     }
 

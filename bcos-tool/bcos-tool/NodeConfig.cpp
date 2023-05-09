@@ -487,8 +487,8 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set txpool.notify_worker_num to positive !"));
     }
-    m_verifierWorkerNum = checkAndGetValue(
-        _pt, "txpool.verify_worker_num", std::to_string(std::thread::hardware_concurrency()));
+    m_verifierWorkerNum = checkAndGetValue(_pt, "txpool.verify_worker_num",
+        std::to_string(std::min(8U, std::thread::hardware_concurrency())));
     if (m_verifierWorkerNum <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -623,8 +623,11 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
     m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
-    m_maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 3);
+    m_maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 4);
     m_maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", 3);
+    m_writeBufferSize = _pt.get<size_t>("storage.write_buffer_size", 128 << 20);
+    m_minWriteBufferNumberToMerge = _pt.get<int32_t>("storage.min_write_buffer_number_to_merge", 2);
+    m_blockCacheSize = _pt.get<size_t>("storage.block_cache_size", 128 << 20);
     m_enableDBStatistics = _pt.get<bool>("storage.enable_statistics", false);
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");

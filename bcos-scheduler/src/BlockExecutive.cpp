@@ -276,7 +276,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
         m_block->transactionsSize());
 
     tbb::parallel_for(
-        tbb::blocked_range<size_t>(0U, m_block->transactionsSize()), [&](auto const& range) {
+        tbb::blocked_range<size_t>(0U, m_block->transactionsSize(), 256), [&](auto const& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {
                 auto tx = m_block->transaction(i);

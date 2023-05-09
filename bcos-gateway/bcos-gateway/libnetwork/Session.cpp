@@ -68,6 +68,11 @@ NodeIPEndpoint Session::nodeIPEndpoint() const
 bool Session::active() const
 {
     auto server = m_server.lock();
+    return active(server);
+}
+
+bool Session::active(std::shared_ptr<bcos::gateway::Host>& server) const
+{
     return m_active && server && server->haveNetwork() && m_socket && m_socket->isConnected();
 }
 
@@ -78,7 +83,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     {
         return;
     }
-    if (!active())
+    if (!active(server))
     {
         SESSION_LOG(WARNING) << "Session inactive";
         if (callback)
@@ -294,7 +299,9 @@ std::size_t Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& enc
 
 void Session::write()
 {
-    if (!active())
+    // TODO: use reference instead of weak_ptr
+    auto server = m_server.lock();
+    if (!active(server))
     {
         return;
     }
@@ -302,13 +309,11 @@ void Session::write()
     try
     {
         std::vector<EncodedMessage::Ptr> encodedMsgs;
-
         Guard lockGuard(x_writeQueue);
         if (m_writing)
         {
             return;
         }
-
         m_writing = true;
 
         if (m_writeQueue.empty())
@@ -322,7 +327,6 @@ void Session::write()
         // data
         tryPopSomeEncodedMsgs(encodedMsgs, m_maxSendDataSize, m_maxSendMsgCountS);
 
-        auto server = m_server.lock();
         if (server && server->haveNetwork())
         {
             if (m_socket->isConnected())
