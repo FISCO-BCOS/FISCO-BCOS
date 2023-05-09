@@ -25,7 +25,8 @@ rsa_key_length=2048
 sm_mode='false'
 enable_hsm='false'
 macOS=""
-x86_64_arch="true"
+x86_64_arch="false"
+arm64_arch="false"
 sm2_params="sm_sm2.param"
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
@@ -107,9 +108,12 @@ file_must_exists() {
 check_env() {
     if [ "$(uname)" == "Darwin" ];then
         macOS="macOS"
-    fi
-    if [ "$(uname -m)" != "x86_64" ];then
-        x86_64_arch="false"
+    elif [ "$(uname -m)" == "x86_64" ];then
+        x86_64_arch="true"
+    elif [ "$(uname -m)" == "arm64" ];then
+        arm64_arch="true"
+    elif [ "$(uname -m)" == "aarch64" ];then
+        arm64_arch="true"
     fi
 }
 
@@ -362,11 +366,15 @@ download_bin()
         LOG_INFO "Use binary ${binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64 or macOS. Please compile from source."; fi
+    if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64/arm64 precompiled fisco-bcos binary, your OS architecture is not x86_64/arm64. Please compile from source."; fi
     binary_path="bin/${binary_name}"
-    package_name="${binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
         package_name="${binary_name}-macOS-x86_64.tar.gz"
+    else
+        package_name="${binary_name}-linux-x86_64.tar.gz"
+        if [ "${arm64_arch}" == "true" ]; then
+            package_name="${binary_name}-linux-aarch64.tar.gz"
+        fi
     fi
 
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
@@ -390,9 +398,13 @@ download_bin()
 download_lightnode_bin()
 {
     lightnode_binary_path="bin/${lightnode_binary_name}"
-    light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
         light_package_name="${lightnode_binary_name}-macOS-x86_64.tar.gz"
+    else
+        light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
+        if [ "${arm64_arch}" == "true" ]; then
+            light_package_name="${lightnode_binary_name}-linux-aarch64.tar.gz"
+        fi
     fi
 
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${light_package_name}"
