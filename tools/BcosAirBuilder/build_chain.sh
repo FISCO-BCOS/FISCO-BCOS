@@ -366,7 +366,7 @@ download_bin()
         LOG_INFO "Use binary ${binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64/arm64 precompiled fisco-bcos binary, your OS architecture is not x86_64/arm64. Please compile from source."; fi
+    if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64/aarch64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64/aarch64 and macOS. Please compile from source."; fi
     binary_path="bin/${binary_name}"
     if [ -n "${macOS}" ];then
         package_name="${binary_name}-macOS-x86_64.tar.gz"
