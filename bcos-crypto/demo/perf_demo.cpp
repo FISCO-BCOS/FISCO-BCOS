@@ -110,7 +110,7 @@ void stTest(std::string_view inputData, size_t _count)
     // auto hashImpl = std::make_shared<Keccak256>();
     // auto keccak256Old = hashPerf(hashImpl, "Keccak256", inputData, _count);
 
-    // openssl::OPENSSL_Keccak256_Hasher hasherKeccak256;
+    // hasher::openssl::OpenSSL_Keccak256_Hasher hasherKeccak256;
     // auto keccak256New = hashingPerf(hasherKeccak256, inputData, _count);
     // if (keccak256Old[0] != keccak256New[0])
     // {
