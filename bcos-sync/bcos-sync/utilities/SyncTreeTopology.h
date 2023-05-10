@@ -65,7 +65,10 @@ protected:
         std::int64_t const _startIndex, bool const _selectAll = false) override;
 
 private:
-    bool locatedInGroup();
+    bool locatedInGroup()
+    {
+        return (m_consIndex != -1) || (m_nodeIndex != -1);
+    }
 
 protected:
     mutable Mutex m_mutex;

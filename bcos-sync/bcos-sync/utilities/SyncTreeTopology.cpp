@@ -26,7 +26,7 @@ using namespace bcos::sync;
 void SyncTreeTopology::updateNodeInfo(bcos::crypto::NodeIDs _nodeList)
 {
     Guard l(m_mutex);
-    if (true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(_nodeList, *m_nodeList))
+    if (bcos::crypto::KeyCompareTools::compareTwoNodeIDs(_nodeList, *m_nodeList))
     {
         return;
     }
@@ -46,8 +46,7 @@ void SyncTreeTopology::updateAllNodeInfo(
     bcos::crypto::NodeIDs _consensusNodes, bcos::crypto::NodeIDs _nodeList)
 {
     Guard l(m_mutex);
-    if (true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(_nodeList, *m_nodeList) &&
-        true ==
+    if (bcos::crypto::KeyCompareTools::compareTwoNodeIDs(_nodeList, *m_nodeList) &&
             bcos::crypto::KeyCompareTools::compareTwoNodeIDs(_consensusNodes, *m_consensusNodes))
     {
         return;
@@ -129,11 +128,6 @@ bool SyncTreeTopology::getNodeIDByIndex(
     return true;
 }
 
-bool SyncTreeTopology::locatedInGroup()
-{
-    return (m_consIndex != -1) || (m_nodeIndex != -1);
-}
-
 // select the child nodes by tree
 void SyncTreeTopology::recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
     std::int64_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
@@ -163,9 +157,8 @@ void SyncTreeTopology::selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNo
     {
         for (auto const& [idx, consNode] : *m_consensusNodes | RANGES::view::enumerate)
         {
-            if (true == _peers->contains(consNode) &&
-                false ==
-                    bcos::crypto::KeyCompareTools::isNodeIDExist(consNode, *_selectedNodeList) &&
+            if (_peers->contains(consNode) &&
+                bcos::crypto::KeyCompareTools::isNodeIDExist(consNode, *_selectedNodeList) &&
                 static_cast<std::uint64_t>(m_consIndex) != idx)
             {
                 _selectedNodeList->emplace_back(consNode);

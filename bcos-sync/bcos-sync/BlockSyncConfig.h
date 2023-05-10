@@ -46,7 +46,7 @@ public:
         bcos::consensus::ConsensusInterface::Ptr _consensus, BlockSyncMsgFactory::Ptr _msgFactory,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
         const bool _enableSendBlockStatusByTree = true,
-        const std::uint32_t _syncTreeWidth = 3))
+        const std::uint32_t _syncTreeWidth = 3)
       : SyncConfig(std::move(_nodeId)),
         m_ledger(std::move(_ledger)),
         m_txpool(std::move(_txpool)),

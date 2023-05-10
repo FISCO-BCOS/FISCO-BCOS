@@ -41,7 +41,7 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
     m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
     m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout(), "downloadTimer");
 
-    if (true == m_config->enableSendBlockStatusByTree())
+    if (m_config->enableSendBlockStatusByTree())
     {
         m_syncTreeTopology =
             std::make_shared<SyncTreeTopology>(m_config->nodeID(), m_config->syncTreeWidth());
@@ -87,7 +87,7 @@ void BlockSync::init()
                       << LOG_KV("genesisHash", genesisHash);
     m_config->setGenesisHash(genesisHash);
     m_config->resetConfig(fetcher->ledgerConfig());
-    if (true == m_config->enableSendBlockStatusByTree())
+    if (m_config->enableSendBlockStatusByTree())
     {
         updateTreeTopologyNodeInfo();
     }
@@ -405,11 +405,11 @@ void BlockSync::asyncNotifyNewBlock(
         onNewBlock(_ledgerConfig);
         // try to commitBlock to ledger when receive new block notification
         m_downloadingQueue->tryToCommitBlockToLedger();
-    }
-    if (true == m_config->enableSendBlockStatusByTree())
-    {
-        // update nodelist in tree topology
-        updateTreeTopologyNodeInfo();
+        if (m_config->enableSendBlockStatusByTree())
+        {
+            // update nodelist in tree topology
+            updateTreeTopologyNodeInfo();
+        }
     }
 }
 
@@ -847,7 +847,7 @@ void BlockSync::maintainPeersConnection()
     {
         m_syncStatus->deletePeer(node);
     }
-    if (true == m_config->enableSendBlockStatusByTree())
+    if (m_config->enableSendBlockStatusByTree())
     {
         // send sync status by tree
         sendSyncStatusByTree();
