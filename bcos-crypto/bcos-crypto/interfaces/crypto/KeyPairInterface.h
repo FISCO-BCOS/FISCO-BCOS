@@ -23,9 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <cstddef>
 #include <memory>
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 enum class KeyPairType : int
 {
@@ -65,5 +63,4 @@ bytes inline calculateAddress(crypto::Hash& _hashImpl, uint8_t* _publicKey, size
     return {address.begin() + 12, address.end()};
 }
 
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

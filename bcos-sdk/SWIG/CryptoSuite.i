@@ -24,7 +24,10 @@ inline std::shared_ptr<bcos::crypto::CryptoSuite> newCryptoSuite(bool sm) {
 
 %shared_ptr(bcos::crypto::CryptoSuite)
 %shared_ptr(bcos::crypto::Hash)
+%shared_ptr(bcos::crypto::KeyPairInterface)
 %unique_ptr(bcos::crypto::KeyPairInterface)
+
+%include "../bcos-crypto/bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/CryptoSuite.h"
 %include "../bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 %include "../bcos-crypto/bcos-crypto/signature/fastsm2/FastSM2Crypto.h"
@@ -47,3 +50,4 @@ public:
     HashType hash(bytesConstRef _data) const override;
 };
 inline std::shared_ptr<bcos::crypto::CryptoSuite> newCryptoSuite(bool sm);
+
