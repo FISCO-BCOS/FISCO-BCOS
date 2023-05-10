@@ -157,6 +157,8 @@ public:
 
     bool active() const override;
 
+    bool active(std::shared_ptr<bcos::gateway::Host>&) const;
+
     std::size_t writeQueueSize() override;
 
     virtual std::weak_ptr<Host> host() { return m_server; }
