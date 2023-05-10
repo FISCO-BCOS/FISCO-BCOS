@@ -19,6 +19,7 @@
  * @date 2021-05-24
  */
 #include "bcos-sync/BlockSync.h"
+#include "bcos-framework/protocol/CommonError.h"
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <json/json.h>
 #include <boost/bind/bind.hpp>
@@ -39,6 +40,13 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
     m_downloadBlockProcessor = std::make_shared<bcos::ThreadPool>("Download", 1);
     m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
     m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout(), "downloadTimer");
+
+    if (true == m_config->enableSendBlockStatusByTree())
+    {
+        m_syncTreeTopology =
+            std::make_shared<SyncTreeTopology>(m_config->nodeID(), m_config->syncTreeWidth());
+    }
+
     m_downloadingTimer->registerTimeoutHandler([this] { onDownloadTimeout(); });
     m_downloadingQueue->registerNewBlockHandler(
         [this](auto&& config) { onNewBlock(std::forward<decltype(config)>(config)); });
@@ -79,6 +87,10 @@ void BlockSync::init()
                       << LOG_KV("genesisHash", genesisHash);
     m_config->setGenesisHash(genesisHash);
     m_config->resetConfig(fetcher->ledgerConfig());
+    if (true == m_config->enableSendBlockStatusByTree())
+    {
+        updateTreeTopologyNodeInfo();
+    }
     BLKSYNC_LOG(INFO) << LOG_DESC("init block sync success");
 }
 
@@ -393,6 +405,11 @@ void BlockSync::asyncNotifyNewBlock(
         onNewBlock(_ledgerConfig);
         // try to commitBlock to ledger when receive new block notification
         m_downloadingQueue->tryToCommitBlockToLedger();
+    }
+    if (true == m_config->enableSendBlockStatusByTree())
+    {
+        // update nodelist in tree topology
+        updateTreeTopologyNodeInfo();
     }
 }
 
@@ -830,8 +847,38 @@ void BlockSync::maintainPeersConnection()
     {
         m_syncStatus->deletePeer(node);
     }
-    // create a peer
-    broadcastSyncStatus();
+    if (true == m_config->enableSendBlockStatusByTree())
+    {
+        // send sync status by tree
+        sendSyncStatusByTree();
+    }
+    else
+    {
+        // broad sync status
+        broadcastSyncStatus();
+    }
+}
+
+void BlockSync::sendSyncStatusByTree()
+{
+    auto statusMsg = m_config->msgFactory()->createBlockSyncStatusMsg(m_config->blockNumber(),
+        m_config->hash(), m_config->genesisHash(), static_cast<int32_t>(BlockSyncMsgVersion::v2),
+        m_config->archiveBlockNumber());
+    m_syncStatus->updatePeerStatus(m_config->nodeID(), statusMsg);
+    auto encodedData = statusMsg->encode();
+    BLKSYNC_LOG(TRACE) << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatus")
+                       << LOG_KV("number", statusMsg->number())
+                       << LOG_KV("genesisHash", statusMsg->genesisHash().abridged())
+                       << LOG_KV("currentHash", statusMsg->hash().abridged());
+    // Note: only send status to the observers/sealers, but the OUTSIDE_GROUP node maybe
+    // observer/sealer before sync to the highest here can't use asyncSendBroadcastMessage=
+    auto const& groupNodeList =
+        m_syncTreeTopology->selectNodesForBlockSync(m_config->connectedNodeSet());
+    for (auto const& nodeID : *groupNodeList)
+    {
+        m_config->frontService()->asyncSendMessageByNodeID(
+            ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+    }
 }
 
 void BlockSync::broadcastSyncStatus()
@@ -853,6 +900,27 @@ void BlockSync::broadcastSyncStatus()
         m_config->frontService()->asyncSendMessageByNodeID(
             ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
     }
+}
+
+void BlockSync::updateTreeTopologyNodeInfo()
+{
+    bcos::crypto::NodeIDs consensusNodeIDs;
+    bcos::crypto::NodeIDs allNodeIDs;
+
+    // extract NodeIDs
+    RANGES::for_each(m_config->consensusNodeList(), [&consensusNodeIDs, &allNodeIDs](auto& node) {
+        consensusNodeIDs.emplace_back(node->nodeID());
+        allNodeIDs.emplace_back(node->nodeID());
+    });
+    RANGES::for_each(m_config->observerNodeList(),
+        [&allNodeIDs](auto& node) { allNodeIDs.emplace_back(node->nodeID()); });
+
+    RANGES::sort(consensusNodeIDs.begin(), consensusNodeIDs.end(),
+        [](auto& a, auto& b) { return a->data() < b->data(); });
+    RANGES::sort(allNodeIDs.begin(), allNodeIDs.end(),
+        [](auto& a, auto& b) { return a->data() < b->data(); });
+
+    m_syncTreeTopology->updateAllNodeInfo(consensusNodeIDs, allNodeIDs);
 }
 
 bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)

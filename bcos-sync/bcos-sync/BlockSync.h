@@ -22,6 +22,7 @@
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-sync/state/DownloadingQueue.h"
 #include "bcos-sync/state/SyncPeerStatus.h"
+#include "bcos-sync/utilities/SyncTreeTopology.h"
 #include "bcos-tool/NodeTimeMaintenance.h"
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -112,12 +113,17 @@ protected:
     virtual void maintainPeersConnection();
     // block requests
     virtual void maintainBlockRequest();
+    // send sync status by tree
+    virtual void sendSyncStatusByTree();
     // broadcast sync status
     virtual void broadcastSyncStatus();
 
     virtual void onNewBlock(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
 
     virtual void downloadFinish();
+
+    // update SyncTreeTopology node info
+    virtual void updateTreeTopologyNodeInfo();
 
 protected:
     void requestBlocks(bcos::protocol::BlockNumber _from, bcos::protocol::BlockNumber _to);
@@ -146,5 +152,7 @@ protected:
     bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
 
     std::atomic_bool m_masterNode = {false};
+
+    SyncTreeTopology::Ptr m_syncTreeTopology{nullptr};
 };
 }  // namespace bcos::sync
