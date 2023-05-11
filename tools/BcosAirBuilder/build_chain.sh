@@ -370,11 +370,10 @@ download_bin()
     binary_path="bin/${binary_name}"
     if [ -n "${macOS}" ];then
         package_name="${binary_name}-macOS-x86_64.tar.gz"
-    else
-        package_name="${binary_name}-linux-x86_64.tar.gz"
-        if [ "${arm64_arch}" == "true" ]; then
-            package_name="${binary_name}-linux-aarch64.tar.gz"
-        fi
+    elif [ "${arm64_arch}" == "true" ];then
+        package_name="${binary_name}-linux-aarch64.tar.gz"
+    elif [ "${x86_64_arch}" == "true" ];then
+    	package_name="${binary_name}-linux-x86_64.tar.gz"
     fi
     
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
