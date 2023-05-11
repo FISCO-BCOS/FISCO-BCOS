@@ -547,6 +547,7 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
         {
             PRECOMPILED_LOG(FATAL)
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
+            return {};
         }
         auto fields = entry->getObject<std::vector<std::string>>();
         typeStr.assign(fields[2]);
@@ -555,7 +556,28 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
     {
         auto entry = _executive->storage().getRow(tool::FS_APPS, tool::FS_ACL_TYPE);
         // entry must exist
-        typeStr.assign(entry->get());
+        if (entry) [[likely]]
+        {
+            typeStr.assign(entry->get());
+        }
+        else if (_executive->blockContext().blockVersion() <=>
+                     protocol::BlockVersion::V3_0_VERSION ==
+                 0) [[unlikely]]
+        {
+            // Note: when 3.0.0 -> 3.1.0 upgrade tx concurrent with deploy contract tx,
+            // the deploy-contract tx will be failed, because the FS_APPS is not exist.
+            // Try to read in 3.1.0 format.
+            entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
+            // apps must exist
+            if (!entry) [[unlikely]]
+            {
+                PRECOMPILED_LOG(FATAL)
+                    << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
+                return {};
+            }
+            auto fields = entry->getObject<std::vector<std::string>>();
+            typeStr.assign(fields[2]);
+        }
     }
     u256 type = 0;
     try

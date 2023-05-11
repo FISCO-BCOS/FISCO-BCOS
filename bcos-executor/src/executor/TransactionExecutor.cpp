@@ -154,11 +154,14 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
     setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
-    if (versionCompareTo(
-            m_ledgerCache->ledgerConfig()->compatibilityVersion(), BlockVersion::V3_3_VERSION) >= 0)
+    if (m_ledgerCache->ledgerConfig()->compatibilityVersion() >= BlockVersion::V3_3_VERSION)
     {
         m_ledgerCache->fetchAuthCheckStatus();
-        m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+        if (m_ledgerCache->ledgerConfig()->authCheckStatus() != UINT32_MAX)
+        {
+            // cannot get auth check status, use config value
+            m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+        }
     }
     if (m_isWasm)
     {
@@ -1839,7 +1842,11 @@ void TransactionExecutor::commit(
         if (version >= BlockVersion::V3_3_VERSION)
         {
             m_ledgerCache->fetchAuthCheckStatus();
-            m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+            if (m_ledgerCache->ledgerConfig()->authCheckStatus() != UINT32_MAX)
+            {
+                // cannot get auth check status, not update value
+                m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+            }
         }
         removeCommittedState();
 
@@ -2778,9 +2785,5 @@ void TransactionExecutor::stop()
     if (m_blockContext)
     {
         m_blockContext->stop();
-    }
-    if (m_backendStorage)
-    {
-        m_backendStorage->stop();
     }
 }
