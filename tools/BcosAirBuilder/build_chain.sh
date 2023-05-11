@@ -358,15 +358,21 @@ gen_rsa_node_cert() {
 
 download_bin()
 {
+    platform=$(uname -m)
     if [ ! -z "${binary_path}" ];then
         LOG_INFO "Use binary ${binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64 or macOS. Please compile from source."; fi
+    echo ${platform}
+    if [ "${x86_64_arch}" != "true" ] && [ "${macOS}" != "macOS" ] && [ "${platform}" != "aarch64" ] ;then exit_with_clean "We only offer x86_64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64 or macOS. Please compile from source."; fi
     binary_path="bin/${binary_name}"
     package_name="${binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
         package_name="${binary_name}-macOS-x86_64.tar.gz"
+    fi
+    
+    if [ "${platform}" == "aarch64" ]; then
+        package_name="${binary_name}-linux-aarch64.tar.gz"
     fi
 
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
@@ -636,7 +642,9 @@ parse_params() {
                 LOG_FATAL "Not support docker mode for macOS now"
            fi
         ;;
-        w) wasm_mode="true";;
+        w) wasm_mode="true"
+          auth_mode="false"
+          ;;
         R) serial_mode="${OPTARG}";;
         a)
           auth_admin_account="${OPTARG}"
