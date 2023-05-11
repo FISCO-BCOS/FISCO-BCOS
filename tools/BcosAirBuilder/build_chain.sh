@@ -399,11 +399,10 @@ download_lightnode_bin()
     lightnode_binary_path="bin/${lightnode_binary_name}"
     if [ -n "${macOS}" ];then
         light_package_name="${lightnode_binary_name}-macOS-x86_64.tar.gz"
-    else
-        light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
-        if [ "${arm64_arch}" == "true" ]; then
-            light_package_name="${lightnode_binary_name}-linux-aarch64.tar.gz"
-        fi
+    elif [ "${arm64_arch}" == "true" ];then
+        light_package_name="${lightnode_binary_name}-linux-aarch64.tar.gz"
+    elif [ "${x86_64_arch}" == "true" ];then
+    	light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
     fi
 
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${light_package_name}"
