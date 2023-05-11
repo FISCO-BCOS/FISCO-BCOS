@@ -1172,14 +1172,13 @@ void MemoryStorage::cleanUpExpiredTransactions()
             return true;
         });
 
+    removeInvalidTxs(true);
+
     TXPOOL_LOG(INFO) << LOG_DESC("cleanUpExpiredTransactions")
                      << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs)
                      << LOG_KV("sealedTxs", sealedTxs)
                      << LOG_KV("traversedTxsNum", traversedTxsNum);
-
-    removeInvalidTxs(true);
 }
-
 
 void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 {
