@@ -2157,13 +2157,11 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#pragma omp parallel for
         for (int k = 0; k < 1000; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key = boost::lexical_cast<std::string>(k);
             entry->setField(0, boost::lexical_cast<std::string>(k));
-#pragma omp critical
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -2173,25 +2171,20 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#pragma omp parallel for
         for (int k = 0; k < 1000; ++k)
         {
             Condition c;
             c.limit(0, 200);
             auto keys = table->getPrimaryKeys(c);
 
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 200);
             c.limit(200, 300);
             keys = table->getPrimaryKeys(c);
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 300);
             c.limit(900, 200);
             keys = table->getPrimaryKeys(c);
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
             c.GE("900");
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
         }
     }

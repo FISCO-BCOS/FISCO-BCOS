@@ -23,11 +23,11 @@ concurrency:
 jobs:
   build_mac:
     name: mac ci check
-    runs-on: self-hosted-mac
+    runs-on: self-hosted-mac3.4
     strategy:
       fail-fast: false
     env:
-      DEPS_ROOT: ~/cache/deps
+      DEPS_ROOT: ~/cache/deps3.4
       VCPKG_ROOT: ~/cache/vcpkg
 
     steps:
@@ -60,7 +60,6 @@ jobs:
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make cov
-
 
       - name: upload coverage report
         uses: codecov/codecov-action@v2

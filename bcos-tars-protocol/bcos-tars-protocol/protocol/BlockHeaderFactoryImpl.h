@@ -27,9 +27,7 @@
 #include <utility>
 
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class BlockHeaderFactoryImpl : public bcos::protocol::BlockHeaderFactory
 {
@@ -37,7 +35,7 @@ public:
     BlockHeaderFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
       : m_cryptoSuite(std::move(cryptoSuite)), m_hashImpl(m_cryptoSuite->hashImpl())
     {}
-    ~BlockHeaderFactoryImpl() override {}
+    ~BlockHeaderFactoryImpl() override = default;
     bcos::protocol::BlockHeader::Ptr createBlockHeader() override
     {
         return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
@@ -57,12 +55,7 @@ public:
         if (inner.dataHash.empty())
         {
             // Update the hash field
-            std::visit(
-                [&inner](auto&& hasher) {
-                    using HasherType = std::decay_t<decltype(hasher)>;
-                    bcos::concepts::hash::calculate<HasherType>(inner, inner.dataHash);
-                },
-                m_hashImpl->hasher());
+            bcos::concepts::hash::calculate(m_hashImpl->hasher(), inner, inner.dataHash);
 
             BCOS_LOG(TRACE) << LOG_BADGE("createBlockHeader")
                             << LOG_DESC("recalculate blockHeader dataHash");
@@ -82,5 +75,4 @@ private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     bcos::crypto::Hash::Ptr m_hashImpl;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

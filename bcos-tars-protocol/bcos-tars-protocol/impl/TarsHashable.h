@@ -13,8 +13,7 @@
 namespace bcos::concepts::hash
 {
 
-template <bcos::crypto::hasher::Hasher Hasher>
-void impl_calculate(
+void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     bcostars::Transaction const& transaction, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!transaction.dataHash.empty())
@@ -23,7 +22,6 @@ void impl_calculate(
         return;
     }
 
-    Hasher hasher;
     auto const& hashFields = transaction.data;
 
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
@@ -40,8 +38,7 @@ void impl_calculate(
     hasher.final(out);
 }
 
-template <bcos::crypto::hasher::Hasher Hasher>
-void impl_calculate(
+void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     bcostars::TransactionReceipt const& receipt, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!receipt.dataHash.empty())
@@ -50,7 +47,6 @@ void impl_calculate(
         return;
     }
 
-    Hasher hasher;
     auto const& hashFields = receipt.data;
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
@@ -74,8 +70,7 @@ void impl_calculate(
     hasher.final(out);
 }
 
-template <bcos::crypto::hasher::Hasher Hasher>
-auto impl_calculate(
+auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     bcostars::BlockHeader const& blockHeader, bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!blockHeader.dataHash.empty())
@@ -84,7 +79,6 @@ auto impl_calculate(
         return;
     }
 
-    Hasher hasher;
     auto const& hashFields = blockHeader.data;
 
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
@@ -125,8 +119,8 @@ auto impl_calculate(
     hasher.final(out);
 }
 
-template <bcos::crypto::hasher::Hasher Hasher>
-auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher, bcostars::Block const& block,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!block.blockHeader.dataHash.empty())
     {
@@ -134,7 +128,7 @@ auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::By
         return;
     }
 
-    impl_calculate<Hasher>(block.blockHeader, out);
+    impl_calculate(std::move(hasher), block.blockHeader, out);
 }
 
 }  // namespace bcos::concepts::hash

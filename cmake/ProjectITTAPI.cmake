@@ -1,6 +1,5 @@
 include(ExternalProject)
 
-
 ExternalProject_Add(ittapi_project
     PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
     DOWNLOAD_NAME ittapi_v3.24.0.tar.gz
@@ -19,18 +18,20 @@ ExternalProject_Add(ittapi_project
 )
 
 ExternalProject_Get_Property(ittapi_project SOURCE_DIR)
-
 set(ITTAPI_INCLUDE_DIR ${SOURCE_DIR}/include)
 set(ITTAPI_LIBRARY ${SOURCE_DIR}/bin/libittnotify.a)
 file(MAKE_DIRECTORY ${ITTAPI_INCLUDE_DIR})  # Must exist.
 
 if(WITH_VTUNE_ITT)
-    add_library(ittapi STATIC IMPORTED GLOBAL)
+    add_library(ittapi IMPORTED STATIC GLOBAL)
     set_property(TARGET ittapi PROPERTY IMPORTED_LOCATION ${ITTAPI_LIBRARY})
+    add_compile_definitions(TBB_USE_PROFILING_TOOLS=1)
+    add_custom_command(TARGET ittapi_project POST_BUILD
+        COMMAND ${CMAKE_OBJCOPY} --weaken ${ITTAPI_LIBRARY})
 else()
     add_library(ittapi INTERFACE IMPORTED GLOBAL)
 endif()
+add_dependencies(ittapi ittapi_project)
 set_property(TARGET ittapi PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ITTAPI_INCLUDE_DIR})
 
-add_dependencies(ittapi ittapi_project)
 unset(SOURCE_DIR)

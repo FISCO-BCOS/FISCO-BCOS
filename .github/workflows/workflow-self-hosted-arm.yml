@@ -52,10 +52,14 @@ jobs:
       - name: Config vcpkg registry proxy
         run: sed -i "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
 
+      - name: update vcpkg
+        run: |
+          cd ${{ env.VCPKG_ROOT }} && git checkout master #&& git pull
+          cd -
+
       - name: Build for linux
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          . /opt/rh/devtoolset-10/enable
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable

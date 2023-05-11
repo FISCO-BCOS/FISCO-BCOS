@@ -18,6 +18,7 @@
  * @date 2022-1-07
  */
 #include "GatewayStatus.h"
+#include <mutex>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -30,7 +31,7 @@ void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::Con
         return;
     }
     // TODO: optimize the count below
-    UpgradableGuard l(x_groupP2PNodeList);
+    std::lock_guard<std::mutex> guard(x_groupP2PNodeList);
     auto const& groupNodeInfos = _nodeStatus->groupNodeInfos();
     for (auto const& node : groupNodeInfos)
     {
@@ -41,7 +42,6 @@ void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::Con
         {
             continue;
         }
-        UpgradeGuard ul(l);
         // remove the _p2pNodeID from the cache
         removeP2PIDWithoutLock(groupID, _p2pNodeID);
         // insert the new p2pNodeID
@@ -80,33 +80,37 @@ bool GatewayStatus::randomChooseP2PNode(
 bool GatewayStatus::randomChooseNode(
     std::string& _choosedNode, GroupType _type, std::string const& _groupID) const
 {
-    const std::set<std::string>* p2pNodeList;
+    const std::set<std::string>* p2pNodeList = nullptr;
+    std::map<std::string, std::map<bcos::gateway::GroupType, std::set<std::string>>>::const_iterator
+        it;
     {
-        ReadGuard l(x_groupP2PNodeList);
-        auto it = m_groupP2PNodeList.find(_groupID);
+        // TODO: if the lock below can be removed?
+        std::lock_guard<std::mutex> guard(x_groupP2PNodeList);
+        it = m_groupP2PNodeList.find(_groupID);
         if (it == m_groupP2PNodeList.end())
         {
             return false;
         }
-        auto it2 = it->second.find(_type);
-        if (it2 == it->second.end())
-        {
-            return false;
-        }
-        p2pNodeList = &it2->second;
     }
+    auto it2 = it->second.find(_type);
+    if (it2 == it->second.end())
+    {
+        return false;
+    }
+    p2pNodeList = &it2->second;
     if (p2pNodeList->empty())
     {
         return false;
     }
     // srand(utcTime());
+    // TODO: if rand() can be replaced by a faster random function?
     auto selectedP2PNode = rand() % p2pNodeList->size();
-    auto it = p2pNodeList->begin();
+    auto iterator = p2pNodeList->begin();
     if (selectedP2PNode > 0)
     {
-        std::advance(it, selectedP2PNode);
+        std::advance(iterator, selectedP2PNode);
     }
-    _choosedNode = *it;
+    _choosedNode = *iterator;
     return true;
 }
 
@@ -137,7 +141,7 @@ void GatewayStatus::removeP2PIDWithoutLock(
 
 void GatewayStatus::removeP2PNode(std::string const& _p2pNodeID)
 {
-    WriteGuard l(x_groupP2PNodeList);
+    std::lock_guard<std::mutex> guard(x_groupP2PNodeList);
     for (auto pGroupInfo = m_groupP2PNodeList.begin(); pGroupInfo != m_groupP2PNodeList.end();)
     {
         auto& p2pNodeList = m_groupP2PNodeList[pGroupInfo->first];

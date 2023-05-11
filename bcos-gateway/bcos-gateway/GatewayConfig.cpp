@@ -772,6 +772,7 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
         }
     }
 
+    GATEWAY_CONFIG_LOG(INFO) << "rateLimiter: " << m_rateLimiterConfig.enable;
 
     m_rateLimiterConfig.p2pBasicMsgQPS = p2pBasicMsgQPS;
     m_rateLimiterConfig.p2pModuleMsgQPS = moduleMsgQPS;

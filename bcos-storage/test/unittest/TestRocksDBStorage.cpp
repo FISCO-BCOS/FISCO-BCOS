@@ -1,3 +1,4 @@
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include "boost/filesystem.hpp"
@@ -36,7 +37,7 @@ public:
     typedef std::shared_ptr<Header256Hash> Ptr;
     Header256Hash() = default;
     virtual ~Header256Hash(){};
-    bcos::crypto::HashType hash(bytesConstRef _data) override
+    bcos::crypto::HashType hash(bytesConstRef _data) const override
     {
         std::hash<std::string_view> hash;
         return bcos::crypto::HashType(

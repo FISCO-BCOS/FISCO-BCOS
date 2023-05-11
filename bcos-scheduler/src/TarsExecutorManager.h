@@ -25,7 +25,11 @@
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Timer.h"
+
+#ifdef WITH_WASM
 #include "deps/src/wabt_project/src/result.h"
+#endif
+
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-utilities/Worker.h>

@@ -82,6 +82,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
             m_versionNotification(m_compatibilityVersion);
         }
     }
+
     // notify the txpool validator to update the consensusNodeList and the observerNodeList
     if (m_consensusNodeListUpdated || m_observerNodeListUpdated)
     {

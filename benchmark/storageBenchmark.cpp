@@ -1,11 +1,12 @@
-#include "bcos-task/SequenceScheduler.h"
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/storage2/ConcurrentStorage.h>
-#include <bcos-task/TBBScheduler.h>
+#include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Wait.h>
 #include <tbb/blocked_range.h>
+#include <tbb/concurrent_hash_map.h>
+#include <tbb/concurrent_unordered_map.h>
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/parallel_for.h>
+#include <boost/container_hash/hash_fwd.hpp>
 #include <boost/lexical_cast.hpp>
 #include <chrono>
 #include <iostream>
@@ -13,25 +14,41 @@
 #include <range/v3/view/transform.hpp>
 
 using namespace bcos;
+using namespace bcos::storage2::memory_storage;
+
+using Key = std::tuple<std::string, std::string>;
 
 template <>
-struct std::hash<std::tuple<std::string, std::string>>
+struct std::hash<Key>
 {
-    auto operator()(std::tuple<std::string, std::string> const& str) const noexcept
+    auto operator()(Key const& str) const noexcept
     {
         auto hash = std::hash<std::string>{}(std::get<0>(str));
+        boost::hash_combine(hash, std::hash<std::string>{}(std::get<1>(str)));
         return hash;
     }
 };
 
+struct TBBCompare
+{
+    static auto hash(Key const& str)
+    {
+        return std::hash<std::tuple<std::string, std::string>>{}(str);
+    }
+
+    static auto equal(Key const& lhs, Key const& rhs) noexcept { return lhs == rhs; }
+};
+
 // Total 64 tables
-using TableKey = std::tuple<std::string, std::string>;
 constexpr static size_t tableCount = 64;
 
-std::vector<std::tuple<TableKey, storage::Entry>> generatRandomData(int count)
+using TBBHashMap = tbb::concurrent_hash_map<Key, storage::Entry, TBBCompare>;
+using TBBUnorderedMap = tbb::concurrent_unordered_map<Key, storage::Entry, std::hash<Key>>;
+
+std::vector<std::tuple<Key, storage::Entry>> generatRandomData(int count)
 {
     std::cout << "Generating random data..." << std::endl;
-    std::vector<std::tuple<TableKey, storage::Entry>> dataSet(count);
+    std::vector<std::tuple<Key, storage::Entry>> dataSet(count);
 
     tbb::parallel_for(tbb::blocked_range(0, count), [&dataSet](auto const& range) {
         std::mt19937 random(std::random_device{}());
@@ -49,86 +66,134 @@ std::vector<std::tuple<TableKey, storage::Entry>> generatRandomData(int count)
     return dataSet;
 }
 
-void testStorage2BatchWrite(auto& storage, RANGES::range auto const& dataSet)
+task::Task<void> storage2BatchWrite(auto& storage, RANGES::range auto const& dataSet)
 {
-    task::syncWait([](decltype(storage)& storage, decltype(dataSet)& dataSet) -> task::Task<void> {
-        auto now = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
 
-        co_await storage.write(
-            dataSet | RANGES::views::transform([](auto& item) { return std::get<0>(item); }),
-            dataSet | RANGES::views::transform(
-                          [](auto& item) -> auto const& { return std::get<1>(item); }));
+    co_await storage.write(dataSet | RANGES::views::transform([
+    ](auto& item) -> auto const& { return std::get<0>(item); }),
+        dataSet |
+            RANGES::views::transform([](auto& item) -> auto const& { return std::get<1>(item); }));
 
-        auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - now)
-                           .count();
+    auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - now)
+                       .count();
 
-        std::cout << "Storage2 batchWrite elpased: " << elpased << "ms" << std::endl;
-        co_return;
-    }(storage, dataSet));
+    std::cout << "Storage2 batch write elpased: " << elpased << "ms" << std::endl;
+    co_return;
 }
 
-void testStorage2SingleWrite(auto& storage, RANGES::range auto const& dataSet)
+task::Task<void> storage2BatchRead(auto& storage, RANGES::range auto const& dataSet)
 {
-    task::syncWait([](decltype(storage)& storage, decltype(dataSet)& dataSet) -> task::Task<void> {
-        auto now = std::chrono::steady_clock::now();
-        for (const auto& item : dataSet)
-        {
-            co_await storage.write(
-                storage2::single(std::get<0>(item)), storage2::single(std::get<1>(item)));
-        }
-        auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - now)
-                           .count();
-        std::cout << "Storage2 singleWrite elpased: " << elpased << "ms" << std::endl;
-        co_return;
-    }(storage, dataSet));
+    auto now = std::chrono::steady_clock::now();
+
+    auto it = co_await storage.read(
+        dataSet | RANGES::views::transform([](auto& item) -> auto& { return std::get<0>(item); }));
+
+    while (co_await it.next())
+    {
+        assert(co_await it.hasValue());
+        [[maybe_unused]] auto key = co_await it.key();
+        [[maybe_unused]] auto value = co_await it.value();
+    }
+    auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - now)
+                       .count();
+    std::cout << "Storage2 batch read elpased: " << elpased << "ms" << std::endl;
+
+    co_return;
 }
 
-void testStorage2BatchRead(auto& storage, RANGES::range auto const& keySet)
+task::Task<void> storage2MultiThreadWrite(auto& storage, RANGES::range auto const& dataSet)
 {
-    task::syncWait([](decltype(storage)& storage, decltype(keySet)& keySet) -> task::Task<void> {
-        auto now = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
 
-        auto it = co_await storage.read(keySet);
-        while (co_await it.next())
-        {
-            assert(co_await it.hasValue());
-            [[maybe_unused]] auto key = co_await it.key();
-            [[maybe_unused]] auto value = co_await it.value();
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, RANGES::size(dataSet)),
+        [&storage, &dataSet](const auto& range) {
+            for (auto i = range.begin(); i != range.end(); ++i)
+            {
+                auto const& item = dataSet[i];
+                storage.write(storage2::singleView(std::get<0>(item)),
+                    storage2::singleView(std::get<1>(item)));  // Here is valid because storage returns
+                                                           // AwaitableValue
+            }
+        });
+    auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - now)
+                       .count();
+    std::cout << "Storage2 multi thread write elpased: " << elpased << "ms" << std::endl;
+    co_return;
+}
 
-            // some operator of key and value
-        }
-        auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - now)
-                           .count();
-        std::cout << "Storage2 batchRead elpased: " << elpased << "ms" << std::endl;
-        co_return;
-    }(storage, keySet));
+void tbbBatchWrite(auto& storage, RANGES::range auto const& dataSet)
+{
+    auto now = std::chrono::steady_clock::now();
+    for (auto const& [key, value] : dataSet)
+    {
+        storage.emplace(key, value);
+    }
+    auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - now)
+                       .count();
+    std::cout << "TBBHashMap batch write elpased: " << elpased << "ms" << std::endl;
+}
+
+void tbbMultiThreadWrite(auto& storage, RANGES::range auto const& dataSet)
+{
+    auto now = std::chrono::steady_clock::now();
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, RANGES::size(dataSet)),
+        [&storage, &dataSet](const auto& range) {
+            for (auto i = range.begin(); i != range.end(); ++i)
+            {
+                auto const& [key, value] = dataSet[i];
+                storage.emplace(key, value);
+            }
+        });
+
+    auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - now)
+                       .count();
+    std::cout << "TBBHashMap multi thread write elpased: " << elpased << "ms" << std::endl;
 }
 
 int main(int argc, char* argv[])
 {
-    if (argc < 3)
-    {
-        std::cout << "Usage: " << argv[0] << " type[0-batch,1-single] count" << std::endl;
-        return 1;
-    }
+    return task::syncWait([](int argc, char* argv[]) -> task::Task<int> {
+        if (argc < 2)
+        {
+            std::cout << "Usage: " << argv[0] << " count" << std::endl;
+            co_return 1;
+        }
 
-    auto type = boost::lexical_cast<int>(argv[1]);
-    auto count = boost::lexical_cast<int>(argv[2]);
-    auto dataSet = generatRandomData(count);
+        auto count = boost::lexical_cast<int>(argv[1]);
+        auto dataSet = generatRandomData(count);
 
-    storage2::concurrent_storage::ConcurrentStorage<TableKey, storage::Entry, true, true, false>
-        storage;
-    if (type == 0)
-    {
-        testStorage2BatchWrite(storage, dataSet);
-        testStorage2BatchRead(storage, dataSet | RANGES::views::transform([
-        ](auto& item) -> auto& { return std::get<0>(item); }));
-    }
-    else
-    {
-        testStorage2SingleWrite(storage, dataSet);
-    }
+        std::cout << std::endl << "Testing storage2 memory storage..." << std::endl;
+        storage2::memory_storage::MemoryStorage<Key, storage::Entry,
+            Attribute(ORDERED | CONCURRENT), std::hash<Key>>
+            newStorage1;
+        co_await storage2BatchWrite(newStorage1, dataSet);
+        // co_await storage2BatchRead(newStorage1, dataSet);
+
+        storage2::memory_storage::MemoryStorage<Key, storage::Entry,
+            Attribute(ORDERED | CONCURRENT), std::hash<Key>>
+            newStorage2;
+        co_await storage2MultiThreadWrite(newStorage2, dataSet);
+
+        std::cout << std::endl << "Testing TBB hash map..." << std::endl;
+        TBBHashMap tbbHashMap;
+        tbbBatchWrite(tbbHashMap, dataSet);
+
+        TBBHashMap tbbHashMap2;
+        tbbMultiThreadWrite(tbbHashMap2, dataSet);
+
+        std::cout << std::endl << "Testing TBB unordered map..." << std::endl;
+        TBBUnorderedMap tbbUnorderedMap;
+        tbbBatchWrite(tbbUnorderedMap, dataSet);
+
+        TBBUnorderedMap tbbUnorderedMap2;
+        tbbMultiThreadWrite(tbbUnorderedMap2, dataSet);
+
+        co_return 0;
+    }(argc, argv));
 }

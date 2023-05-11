@@ -38,6 +38,7 @@
 #include <openssl/x509.h>
 #include <chrono>
 #include <exception>
+#include <optional>
 #include <thread>
 
 using namespace bcos::rpc;
@@ -612,7 +613,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // init Host
     auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
-    host->setThreadPool(std::make_shared<ThreadPool>("P2P", _config->threadPoolSize()));
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
     host->setPeerBlacklist(peerBlacklist);
@@ -668,11 +668,6 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         auto pubHex = service->id();
         auto keyFactory = service->keyFactory();
 
-        auto gatewayRateLimiter =
-            buildGatewayRateLimiter(_config->rateLimiterConfig(), _config->redisConfig());
-        auto gatewayRateLimiterWeakPtr =
-            std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
-
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;
         AMOPImpl::Ptr amop;
@@ -697,6 +692,14 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             }
             amop = buildAMOP(service, pubHex);
         }
+
+        std::shared_ptr<ratelimiter::GatewayRateLimiter> gatewayRateLimiter;
+        if (_config->rateLimiterConfig().enable)
+        {
+            gatewayRateLimiter =
+                buildGatewayRateLimiter(_config->rateLimiterConfig(), _config->redisConfig());
+        }
+
         // init Gateway
         auto gateway = std::make_shared<Gateway>(
             m_chainID, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
@@ -722,52 +725,60 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 nodeMgr->onRemoveNodeIDs(_unreachableNode);
             });
 
-        service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
-                                             Message::Ptr _msg) -> std::optional<bcos::Error> {
-            auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
-            if (!gatewayRateLimiter)
-            {
+        if (gatewayRateLimiter)
+        {
+            auto gatewayRateLimiterWeakPtr =
+                std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
+            service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
+                                                 Message::Ptr _msg) -> std::optional<bcos::Error> {
+                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                if (!gatewayRateLimiter)
+                {
+                    return std::nullopt;
+                }
+
+                GatewayMessageExtAttributes::Ptr msgExtAttributes = nullptr;
+                if (_msg->extAttributes())
+                {
+                    msgExtAttributes = std::dynamic_pointer_cast<GatewayMessageExtAttributes>(
+                        _msg->extAttributes());
+                }
+
+                std::string groupID =
+                    msgExtAttributes ? msgExtAttributes->groupID() : std::string();
+                uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
+                std::string endpoint = _session->nodeIPEndpoint().address();
+                int64_t msgLength = _msg->length();
+                auto pkgType = _msg->packetType();
+
+                auto result = gatewayRateLimiter->checkOutGoing(
+                    endpoint, pkgType, groupID, moduleID, msgLength);
+                return result ? std::make_optional(
+                                    bcos::Error::buildError("", OutBWOverflow, result.value())) :
+                                std::nullopt;
                 return std::nullopt;
-            }
+            });
 
-            GatewayMessageExtAttributes::Ptr msgExtAttributes = nullptr;
-            if (_msg->extAttributes())
-            {
-                msgExtAttributes =
-                    std::dynamic_pointer_cast<GatewayMessageExtAttributes>(_msg->extAttributes());
-            }
+            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
+                                             Message::Ptr _message) -> std::optional<bcos::Error> {
+                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                if (!gatewayRateLimiter)
+                {
+                    return std::nullopt;
+                }
 
-            std::string groupID = msgExtAttributes ? msgExtAttributes->groupID() : std::string();
-            uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
-            std::string endpoint = _session->nodeIPEndpoint().address();
-            int64_t msgLength = _msg->length();
-            auto pkgType = _msg->packetType();
+                auto endpoint = _session->nodeIPEndpoint().address();
+                auto packetType = _message->packetType();
+                auto msgLength = _message->length();
 
-            // bandwidth limit check
-            auto result =
-                gatewayRateLimiter->checkOutGoing(endpoint, pkgType, groupID, moduleID, msgLength);
-            return result ? std::make_optional(
-                                bcos::Error::buildError("", OutBWOverflow, result.value())) :
-                            std::nullopt;
-        });
-
-        service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
-                                         Message::Ptr _message) -> std::optional<bcos::Error> {
-            auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
-            if (!gatewayRateLimiter)
-            {
+                auto result =
+                    gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
+                return result ? std::make_optional(
+                                    bcos::Error::buildError("", InQPSOverflow, result.value())) :
+                                std::nullopt;
                 return std::nullopt;
-            }
-
-            auto endpoint = _session->nodeIPEndpoint().address();
-            auto packetType = _message->packetType();
-            auto msgLength = _message->length();
-
-            auto result = gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
-            return result ? std::make_optional(
-                                bcos::Error::buildError("", InQPSOverflow, result.value())) :
-                            std::nullopt;
-        });
+            });
+        }
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");
         if (!_entryPoint)

@@ -43,7 +43,9 @@ BOOST_FIXTURE_TEST_SUITE(HasherTest, TestPromptFixture) BOOST_AUTO_TEST_CASE(tes
     hash1.update(a);
     hash1.update("abcdefg");
     hash1.update(100);
-    auto h1 = final(hash1);
+
+    std::array<std::byte, 32> h1;
+    hash1.final(h1);
 
     openssl::OpenSSL_SHA3_256_Hasher hash2;
     hash2.update(a);
@@ -51,7 +53,9 @@ BOOST_FIXTURE_TEST_SUITE(HasherTest, TestPromptFixture) BOOST_AUTO_TEST_CASE(tes
     hash2.update(s);
     auto b = 100;
     hash2.update(b);
-    auto h2 = final(hash2);
+
+    std::array<std::byte, 32> h2;
+    hash2.final(h2);
 
     BOOST_CHECK_EQUAL(h1, h2);
 }
@@ -70,7 +74,8 @@ BOOST_AUTO_TEST_CASE(opensslSHA3)
     hasher1.update(hView);
     hasher1.update("bbbc");
 
-    auto hash = final(hasher1);
+    std::array<std::byte, 32> hash;
+    hasher1.final(hash);
 
     decltype(hash) emptyHash;
     emptyHash.fill(std::byte('0'));
@@ -88,7 +93,8 @@ BOOST_AUTO_TEST_CASE(opensslSHA3)
     hasher2.update(std::span((const byte*)h.data(), h.SIZE));
     hasher2.update(by);
 
-    auto hash2 = final(hasher2);
+    std::array<std::byte, 32> hash2;
+    hasher2.final(hash2);
 
     BOOST_CHECK_EQUAL(hash, hash2);
 }

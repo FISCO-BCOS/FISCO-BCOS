@@ -69,12 +69,6 @@ public:
     std::shared_ptr<boost::asio::ssl::context> ctx() const { return m_ctx; }
     void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = _ctx; }
 
-    std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
-    void setThreadPool(std::shared_ptr<bcos::ThreadPool> _threadPool)
-    {
-        m_threadPool = _threadPool;
-    }
-
     WsUpgradeHandler wsUpgradeHandler() const { return m_wsUpgradeHandler; }
     void setWsUpgradeHandler(WsUpgradeHandler _wsUpgradeHandler)
     {
@@ -109,7 +103,6 @@ private:
     std::shared_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
     std::shared_ptr<boost::asio::ssl::context> m_ctx;
 
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
     std::shared_ptr<HttpStreamFactory> m_httpStreamFactory;
     bcos::IOServicePool::Ptr m_ioservicePool;
 };

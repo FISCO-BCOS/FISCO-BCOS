@@ -27,8 +27,7 @@ public:
         }
         else
         {
-            auto result =
-                std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(nullptr);
+            auto result = std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>();
             bcostars::TransactionReceipt receipt;
             receipt.data.status = 100;
             receipt.data.blockNumber = 10086;
@@ -48,7 +47,7 @@ public:
     {
         std::cout << "start resume at " << std::this_thread::get_id() << std::endl;
 
-        auto result = std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(nullptr);
+        auto result = std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>();
         bcostars::TransactionReceipt receipt;
         receipt.data.status = 79;
         auto receiptObj = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(

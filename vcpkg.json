@@ -1,6 +1,6 @@
 {
   "name": "fiscobcos",
-  "version-string": "3.3.0",
+  "version-string": "3.4.0",
   "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
   "description": "FISCO BCOS",
   "dependencies": [
@@ -17,6 +17,10 @@
     "boost-uuid",
     "boost-heap",
     "boost-graph",
+    {
+      "name": "boost-context",
+      "version>=": "1.79.0-m1"
+    },
     "boost-property-map",
     "boost-chrono",
     "boost-iostreams",
@@ -25,7 +29,6 @@
     "boost-compute",
     "boost-multiprecision",
     "boost-program-options",
-    "boost-static-string",
     "ms-gsl",
     "zstd",
     "tbb",
@@ -48,21 +51,18 @@
     },
     {
       "name": "tarscpp",
-      "version>=": "3.0.3-m"
+      "version>=": "3.0.3-m#1"
     },
     {
       "name": "openssl",
       "version>=": "1.1.1-tassl"
     },
-    {
-      "name": "boost-context",
-      "version>=": "1.79.0-m1"
-    },
+    "fmt",
+    "benchmark",
     {
       "name": "secp256k1",
       "version>=": "2022-12-13#1",
-      "features": [
-      ]
+      "features": []
     },
     "wedprcrypto",
     "range-v3"
@@ -103,11 +103,7 @@
     "etcd": {
       "description": "ETCD dependencies",
       "dependencies": [
-        "etcd-cpp-apiv3",
-        {
-          "name": "grpc",
-          "version>=": "1.44.0"
-        }
+        "etcd-cpp-apiv3"
       ]
     },
     "tcmalloc": {
@@ -137,5 +133,27 @@
       ]
     }
   },
-  "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139"
+  "builtin-baseline": "1c48ec7f49d69bb753e6afefba51368e18263255",
+  "overrides": [
+    {
+      "name": "rocksdb",
+      "version": "6.27.3"
+    },
+    {
+      "name": "upb",
+      "version": "2021-10-19"
+    },
+    {
+      "name": "grpc",
+      "version": "1.44.0"
+    },
+    {
+      "name": "abseil",
+      "version": "20211102.1"
+    },
+    {
+      "name": "boost-context",
+      "version": "1.79.0-m1"
+    }
+  ]
 }

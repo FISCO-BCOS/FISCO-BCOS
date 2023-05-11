@@ -35,6 +35,7 @@ class BlockSync : public BlockSyncInterface,
 {
 public:
     using Ptr = std::shared_ptr<BlockSync>;
+    // FIXME: make idle configable
     BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs = 200);
     ~BlockSync() override = default;
 
@@ -77,6 +78,11 @@ public:
     bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) override;
 
     void enableAsMaster(bool _masterNode);
+
+    void setFaultyNodeBlockDelta(bcos::protocol::BlockNumber _delta)
+    {
+        c_FaultyNodeBlockDelta = _delta;
+    }
 
 protected:
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,

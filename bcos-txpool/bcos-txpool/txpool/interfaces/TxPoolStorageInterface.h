@@ -39,6 +39,8 @@ public:
 
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) = 0;
+    virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
+        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes) = 0;
 
     virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
     virtual void batchInsert(bcos::protocol::Transactions const& _txs) = 0;
@@ -52,7 +54,6 @@ public:
     // Note: the transactions may be missing from the transaction pool
     virtual bcos::protocol::TransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) = 0;
-
 
     virtual bool batchVerifyAndSubmitTransaction(
         bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) = 0;

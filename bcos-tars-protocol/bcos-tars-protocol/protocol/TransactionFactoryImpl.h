@@ -53,13 +53,7 @@ public:
 
         auto originDataHash = std::move(transaction->mutableInner().dataHash);
         transaction->mutableInner().dataHash.clear();
-
-        auto anyHasher = m_cryptoSuite->hashImpl()->hasher();
-        std::visit(
-            [&transaction](auto& hasher) {
-                transaction->calculateHash<std::remove_cvref_t<decltype(hasher)>>();
-            },
-            anyHasher);
+        transaction->calculateHash(m_cryptoSuite->hashImpl()->hasher());
 
         // check if hash matching
         if (checkHash && !originDataHash.empty() &&
@@ -101,12 +95,7 @@ public:
         inner.importTime = _importTime;
 
         // Update the hash field
-        std::visit(
-            [&inner](auto&& hasher) {
-                using HasherType = std::decay_t<decltype(hasher)>;
-                bcos::concepts::hash::calculate<HasherType>(inner, inner.dataHash);
-            },
-            m_cryptoSuite->hashImpl()->hasher());
+        bcos::concepts::hash::calculate(m_cryptoSuite->hashImpl()->hasher(), inner, inner.dataHash);
 
         return transaction;
     }

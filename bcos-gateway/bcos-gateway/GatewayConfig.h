@@ -64,6 +64,7 @@ public:
     // config for rate limit
     struct RateLimiterConfig
     {
+        bool enable = false;
         // time window for rate limiter
         int32_t timeWindowSec = 1;
         // allow outgoing msg exceed max permit size

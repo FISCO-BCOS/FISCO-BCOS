@@ -494,8 +494,7 @@ void Service::asyncSendMessageByNodeID(
             return;
         }
 
-
-        P2PSession::Ptr session = nullptr;
+        P2PSession::Ptr session;
         {
             RecursiveGuard lock(x_sessions);
             auto it = m_sessions.find(nodeID);
@@ -504,6 +503,7 @@ void Service::asyncSendMessageByNodeID(
                 session = it->second;
             }
         }
+
         if (session)
         {
             if (message->seq() == 0)
@@ -511,7 +511,7 @@ void Service::asyncSendMessageByNodeID(
                 message->setSeq(m_messageFactory->newSeq());
             }
             // for compatibility_version consideration
-            sendMessageToSession(session, message, options, callback);
+            sendMessageToSession(std::move(session), message, options, callback);
         }
         else
         {
@@ -530,10 +530,8 @@ void Service::asyncSendMessageByNodeID(
 
         if (callback)
         {
-            m_host->threadPool()->enqueue([callback, e] {
-                callback(NetworkException(Disconnect, "Disconnect"), P2PSession::Ptr(),
-                    P2PMessage::Ptr());
-            });
+            callback(
+                NetworkException(Disconnect, "Disconnect"), P2PSession::Ptr(), P2PMessage::Ptr());
         }
     }
 }

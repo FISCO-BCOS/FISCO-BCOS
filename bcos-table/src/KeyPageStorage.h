@@ -418,10 +418,10 @@ public:
                 }
                 else
                 {
-                    KeyPage_LOG(FATAL)
-                        << LOG_DESC("updatePageInfo not found")
-                        << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
-                        << LOG_KV("valid", count) << LOG_KV("size", size);
+                    KeyPage_LOG(FATAL) << LOG_DESC("updatePageInfo not found")
+                                       << LOG_KV("oldEndKey", toHex(oldEndKey))
+                                       << LOG_KV("pageKey", toHex(pageKey))
+                                       << LOG_KV("valid", count) << LOG_KV("size", size);
                 }
             }
             return oldPageKey;
@@ -910,12 +910,12 @@ public:
                     bcos::crypto::HashType entryHash(0);
                     if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
                     {
-                        entryHash = entry.second.hash(table, entry.first, hashImpl, blockVersion);
+                        entryHash = entry.second.hash(table, entry.first, *hashImpl, blockVersion);
                     }
                     else
                     {  // 3.0.0
                         entryHash = hash ^ hashImpl->hash(entry.first) ^
-                                    entry.second.hash(table, entry.first, hashImpl, blockVersion);
+                                    entry.second.hash(table, entry.first, *hashImpl, blockVersion);
                     }
                     // if (c_fileLogLevel <= TRACE)
                     // {

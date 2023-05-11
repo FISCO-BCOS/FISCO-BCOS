@@ -31,8 +31,8 @@ class LogEntry
 public:
     using Ptr = std::shared_ptr<LogEntry>;
     LogEntry() = default;
-    LogEntry(bytes const& _address, h256s _topics, bytes _data)
-      : m_address(_address), m_topics(std::move(_topics)), m_data(std::move(_data))
+    LogEntry(bytes address, h256s topics, bytes data)
+      : m_address(std::move(address)), m_topics(std::move(topics)), m_data(std::move(data))
     {}
 
     ~LogEntry() {}

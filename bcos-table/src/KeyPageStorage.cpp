@@ -397,7 +397,7 @@ auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> cryp
                     {  // sys table
                         auto hash = hashImpl->hash(data->table);
                         hash ^= hashImpl->hash(data->key);
-                        hash ^= entry.hash(data->table, data->key, hashImpl, m_blockVersion);
+                        hash ^= entry.hash(data->table, data->key, *hashImpl, m_blockVersion);
                         localEntriesHash ^= hash;
                         ++entrycount;
                     }

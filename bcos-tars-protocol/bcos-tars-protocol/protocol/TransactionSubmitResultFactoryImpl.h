@@ -26,25 +26,14 @@
 #include "TransactionSubmitResultImpl.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class TransactionSubmitResultFactoryImpl : public bcos::protocol::TransactionSubmitResultFactory
 {
 public:
     bcos::protocol::TransactionSubmitResult::Ptr createTxSubmitResult() override
     {
-        return std::make_shared<TransactionSubmitResultImpl>(m_cryptoSuite);
+        return std::make_shared<TransactionSubmitResultImpl>();
     }
-
-    void setCryptoSuite(bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
-    {
-        m_cryptoSuite = _cryptoSuite;
-    }
-
-private:
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

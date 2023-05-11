@@ -187,48 +187,38 @@ BOOST_AUTO_TEST_CASE(entryHash)
     entry.setField(0, data);
 
     auto sm3 = std::make_shared<bcos::crypto::SM3>();
-    auto oldHash = entry.hash(table, key, sm3, 0);
+    auto oldHash = entry.hash(table, key, *sm3, 0);
     auto oldExpect = sm3->hash(bytesConstRef((bcos::byte*)data.data(), data.size()));
     BOOST_CHECK_EQUAL(oldHash, oldExpect);
 
     entry.setStatus(Entry::DELETED);
     auto deletedHash =
-        entry.hash(table, key, sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+        entry.hash(table, key, *sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-    auto anyHasher = sm3->hasher();
-    auto deletedExpect = std::visit(
-        [&](auto& hasher) {
-            hasher.update(table);
-            hasher.update(key);
+    auto hasher = sm3->hasher();
+    hasher.update(table);
+    hasher.update(key);
 
-            bcos::crypto::HashType hash;
-            hasher.final(hash);
-            return hash;
-        },
-        anyHasher);
+    bcos::crypto::HashType deletedExpect;
+    hasher.final(deletedExpect);
     BOOST_CHECK_EQUAL(deletedHash, deletedExpect);
 
     entry.setStatus(Entry::MODIFIED);
     entry.setField(0, data);
     auto modifyHash =
-        entry.hash(table, key, sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-    anyHasher = sm3->hasher();
-    auto modifyExpect = std::visit(
-        [&](auto& hasher) {
-            hasher.update(table);
-            hasher.update(key);
-            hasher.update(data);
+        entry.hash(table, key, *sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    hasher = sm3->hasher();
+    hasher.update(table);
+    hasher.update(key);
+    hasher.update(data);
 
-            bcos::crypto::HashType hash;
-            hasher.final(hash);
-            return hash;
-        },
-        anyHasher);
+    bcos::crypto::HashType modifyExpect;
+    hasher.final(modifyExpect);
     BOOST_CHECK_EQUAL(modifyHash, modifyExpect);
 
     entry.setStatus(Entry::NORMAL);
     auto normalHash =
-        entry.hash(table, key, sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+        entry.hash(table, key, *sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     BOOST_CHECK_EQUAL(normalHash, bcos::crypto::HashType{});
 }
 
