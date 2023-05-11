@@ -190,6 +190,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
     auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq, false);
 
+    m_childExecutives.push_back(executive);  // add child executive for revert() if needed
+
     auto output = executive->start(std::move(input));
 
     // update seq
@@ -1023,7 +1025,17 @@ void TransactionExecutive::setPrecompiled(std::shared_ptr<PrecompiledMap> _preco
 
 void TransactionExecutive::revert()
 {
-    EXECUTOR_BLK_LOG(INFO, m_blockContext.number()) << "Revert transaction";
+    EXECUTOR_BLK_LOG(INFO, m_blockContext.number())
+        << "Revert transaction" << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
+
+    if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_4_VERSION) >= 0)
+    {
+        // revert child beforehand from back to front
+        for (auto rit = m_childExecutives.rbegin(); rit != m_childExecutives.rend(); ++rit)
+        {
+            (*rit)->revert();
+        }
+    }
 
     m_blockContext.storage()->rollback(*m_recoder);
     m_recoder->clear();

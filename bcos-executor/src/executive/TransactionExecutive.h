@@ -234,8 +234,9 @@ protected:
     const wasm::GasInjector& m_gasInjector;
 
     bcos::storage::Recoder::Ptr m_recoder;
-    std::shared_ptr<storage::StorageWrapper> m_storageWrapper;
+    std::vector<TransactionExecutive::Ptr> m_childExecutives;
 
+    std::shared_ptr<storage::StorageWrapper> m_storageWrapper;
     bool m_hasContractTableChanged = false;
 };
 
