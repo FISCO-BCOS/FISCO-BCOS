@@ -1047,7 +1047,8 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
 
     TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal") << LOG_KV("consNum", batchId)
                      << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
-                     << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT));
+                     << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT))
+                     << LOG_KV("missedTxs", missedTxs->size());
     return missedTxs;
 }
 
