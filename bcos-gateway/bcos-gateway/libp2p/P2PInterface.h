@@ -97,6 +97,9 @@ public:
 
     virtual void sendRespMessageBySession(bytesConstRef _payload, P2PMessage::Ptr _p2pMessage,
         std::shared_ptr<P2PSession> _p2pSession) = 0;
+
+    virtual void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) = 0;
+    virtual void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) = 0;
 };
 
 }  // namespace gateway

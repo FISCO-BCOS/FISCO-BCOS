@@ -37,8 +37,10 @@ public:
     virtual bool enable() const { return m_enable; }
     virtual std::string dump(bool _isAbridged = false);
     virtual size_t size() { return m_peerList.size(); }
+    virtual void update(std::set<std::string> const& _strList, bool _enable);
 
 protected:
+    mutable bcos::Mutex x_peerList;
     bool m_enable{false};
     std::set<NodeID> m_peerList;
 };

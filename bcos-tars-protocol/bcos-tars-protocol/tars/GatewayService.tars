@@ -26,7 +26,6 @@ module bcostars
         Error asyncSendBroadcastMessageByTopic(string _topic, vector<byte> _data);
 
         Error asyncSubscribeTopic(string _clientID, string _topicInfo);
-        
         Error asyncRemoveTopic(string _clientID, vector<string> _topicList);
     };
 };
