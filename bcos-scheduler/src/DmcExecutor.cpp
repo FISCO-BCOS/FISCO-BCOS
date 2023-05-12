@@ -26,10 +26,13 @@ bool DmcExecutor::prepare()
     m_executivePool.refresh();
 
     // logging
-    m_executivePool.forEach(MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
-        DMC_LOG(TRACE) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
-        return true;
-    });
+    if (c_fileLogLevel == LogLevel::TRACE)
+    {
+        m_executivePool.forEach(MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
+            DMC_LOG(TRACE) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
+            return true;
+        });
+    }
 
     // prepare all that need to
     m_executivePool.forEachAndClear(ExecutivePool::MessageHint::NEED_PREPARE,
