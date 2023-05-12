@@ -518,12 +518,12 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
 {
     try
     {
-        m_smCryptoType = _pt.get<bool>("chain.sm_crypto",false);
+        m_smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
         if (_enforceGroupId)
         {
-            m_groupId = _pt.get<std::string>("chain.group_id","group0");
+            m_groupId = _pt.get<std::string>("chain.group_id", "group");
         }
-        m_chainId = _pt.get<std::string>("chain.chain_id","chain0");
+        m_chainId = _pt.get<std::string>("chain.chain_id", "chain");
     }
     catch (std::exception const& e)
     {
@@ -715,7 +715,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     // consensus type
     try
     {
-        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type","pbft");
+        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type", "pbft");
     }
     catch (std::exception const& e)
     {
