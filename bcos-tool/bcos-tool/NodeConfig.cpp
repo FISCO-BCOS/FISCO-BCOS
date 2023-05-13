@@ -518,12 +518,12 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
 {
     try
     {
-        m_smCryptoType = _pt.get<bool>("chain.sm_crypto");
+        m_smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
         if (_enforceGroupId)
         {
-            m_groupId = _pt.get<std::string>("chain.group_id");
+            m_groupId = _pt.get<std::string>("chain.group_id", "group");
         }
-        m_chainId = _pt.get<std::string>("chain.chain_id");
+        m_chainId = _pt.get<std::string>("chain.chain_id", "chain");
     }
     catch (std::exception const& e)
     {
@@ -715,7 +715,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     // consensus type
     try
     {
-        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type");
+        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type", "pbft");
     }
     catch (std::exception const& e)
     {
@@ -723,7 +723,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                                   "consensus.consensus_type is null， please set it!"));
     }
     // blockTxCountLimit
-    auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit");
+    auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
     if (blockTxCountLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -731,7 +731,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     }
     m_ledgerConfig->setBlockTxCountLimit(blockTxCountLimit);
     // txGasLimit
-    auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit");
+    auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit", "3000000000");
     if (txGasLimit <= TX_GAS_LIMIT_MIN)
     {
         BOOST_THROW_EXCEPTION(
@@ -741,7 +741,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>("version.compatibility_version");
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>("version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
@@ -753,7 +753,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     m_ledgerConfig->setConsensusNodeList(*consensusNodeList);
 
     // leaderSwitchPeriod
-    auto consensusLeaderPeriod = checkAndGetValue(_genesisConfig, "consensus.leader_period");
+    auto consensusLeaderPeriod = checkAndGetValue(_genesisConfig, "consensus.leader_period", "1");
     if (consensusLeaderPeriod <= 0)
     {
         BOOST_THROW_EXCEPTION(
@@ -870,9 +870,9 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
 {
     try
     {
-        m_isWasm = _genesisConfig.get<bool>("executor.is_wasm");
-        m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check");
-        m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute");
+        m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
+        m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
+        m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute", false);
     }
     catch (std::exception const& e)
     {
@@ -906,7 +906,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     try
     {
-        m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
+        m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account", "");
         if (m_authAdminAddress.empty() &&
             (m_isAuthCheck || m_compatibilityVersion >= BlockVersion::V3_3_VERSION)) [[unlikely]]
         {
