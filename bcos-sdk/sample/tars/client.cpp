@@ -2,5 +2,8 @@
 
 int main(int argc, char* argv[])
 {
+    // std::string_view connectionString = "";
+    // bcos::sdk::RPCClient rpcClient;
+
     return 0;
 }

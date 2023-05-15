@@ -31,7 +31,7 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
         try
         {
             auto& txpool = self->m_node->txpoolRef();
-            co_await txpool.broadcastPushTransaction(*transaction);
+            co_await txpool.broadcastTransaction(*transaction);
             auto submitResult = co_await txpool.submitTransaction(std::move(transaction));
             auto receipt =
                 std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl const>(
