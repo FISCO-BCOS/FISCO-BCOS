@@ -41,6 +41,8 @@
 #include <json/json.h>
 #include <algorithm>
 #include <random>
+#include <string>
+#include <vector>
 
 using namespace bcos;
 using namespace bcos::protocol;
