@@ -162,6 +162,9 @@ public:
         m_onMessageHandler = std::move(_handler);
     }
 
+    void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) override;
+    void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) override;
+
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
         Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
