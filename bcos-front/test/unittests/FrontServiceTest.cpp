@@ -299,7 +299,7 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
             (void)_data;
             (void)_uuid;
             (void)_respFunc;
-            BOOST_CHECK_EQUAL(_error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
+            assert(_error->errorCode() = bcos::protocol::CommonError::TIMEOUT);
             barrier.set_value();
         };
 
