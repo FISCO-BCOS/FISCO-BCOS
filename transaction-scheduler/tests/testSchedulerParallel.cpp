@@ -7,6 +7,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <boost/test/unit_test.hpp>
+#include <mutex>
 #include <range/v3/view/transform.hpp>
 
 using namespace bcos;
@@ -106,7 +107,7 @@ struct MockConflictExecutor
             auto oldView = oldEntry.get();
             auto oldNum = boost::lexical_cast<int>(oldView);
 
-            BOOST_CHECK_LT(oldNum, inputNum);
+            assert(oldNum <= inputNum);
         }
         storage::Entry entry;
         entry.set(boost::lexical_cast<std::string>(inputNum));

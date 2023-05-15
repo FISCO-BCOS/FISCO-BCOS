@@ -701,6 +701,8 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_baselineSchedulerConfig.parallel =
         _pt.get<bool>("executor.baseline_scheduler_parallel", false);
 
+    m_tarsRPCConfig.configPath = _pt.get<std::string>("rpc.tars_rpc_config", "");
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize);
 }

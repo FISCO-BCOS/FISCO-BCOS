@@ -243,7 +243,16 @@ public:
         int chunkSize = 0;
         int maxThread = 0;
     };
-    BaselineSchedulerConfig baselineSchedulerConfig() const { return m_baselineSchedulerConfig; }
+    BaselineSchedulerConfig const& baselineSchedulerConfig() const
+    {
+        return m_baselineSchedulerConfig;
+    }
+
+    struct TarsRPCConfig
+    {
+        std::string configPath;
+    };
+    TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
@@ -356,6 +365,7 @@ private:
     std::string m_authAdminAddress;
     bool m_enableBaselineScheduler = false;
     BaselineSchedulerConfig m_baselineSchedulerConfig;
+    TarsRPCConfig m_tarsRPCConfig;
 
     // Pro and Max versions run do not apply to tars admin site
     bool m_withoutTarsFramework = {false};

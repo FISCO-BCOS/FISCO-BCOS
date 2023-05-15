@@ -1,0 +1,13 @@
+#include "CommonProtocol.tars"
+#include "Block.tars"
+#include "Transaction.tars"
+#include "TransactionMetaData.tars"
+#include "TransactionReceipt.tars"
+
+module bcostars {
+    interface RPC
+    {
+        Error sendTransaction(Transaction request, out TransactionReceipt response);
+        Error call(Transaction request, out TransactionReceipt response);
+    };
+};
