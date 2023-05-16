@@ -42,7 +42,7 @@ default_version="v3.3.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
-auth_mode="true"
+auth_mode="false"
 monitor_mode="false"
 auth_admin_account=
 binary_path=""
@@ -642,6 +642,7 @@ parse_params() {
         R) serial_mode="${OPTARG}";;
         a)
           auth_admin_account="${OPTARG}"
+          auth_mode="true"
         ;;
         v) compatibility_version="${OPTARG}";;
         z) make_tar="true";;
