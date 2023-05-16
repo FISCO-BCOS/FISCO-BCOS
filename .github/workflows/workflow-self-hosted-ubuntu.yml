@@ -35,6 +35,10 @@ jobs:
           distribution: 'zulu'
           java-version: 8
           java-package: jdk
+      - name: Set up Node.js 16.x
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16.x'
 
       - name: apt install
         run: |
@@ -81,6 +85,15 @@ jobs:
           tiup install playground tikv:v5.4.2 pd:v5.4.2
           nohup tiup playground v5.4.2 --mode tikv-slim --without-monitor &
           sleep 30 && cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
+
+      - name: prepare RPCAPI Tests
+        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
+
+      - name: FISCO BCOS RpcApiTest
+        uses: matt-ball/newman-action@master
+        with:
+          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
+
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
       - name: Integration test - Pro
