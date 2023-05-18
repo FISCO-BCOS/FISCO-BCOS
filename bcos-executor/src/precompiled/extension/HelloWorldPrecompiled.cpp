@@ -43,13 +43,16 @@ const std::string HELLO_WORLD_KEY_FIELD_NAME = "hello_key";
 // value field
 const std::string HELLO_WORLD_VALUE_FIELD = "value";
 
+// define all contract methods' interface
 // get interface
 const char* const HELLO_WORLD_METHOD_GET = "get()";
 // set interface
 const char* const HELLO_WORLD_METHOD_SET = "set(string)";
 
+// register contract methods' interface in constructor
 HelloWorldPrecompiled::HelloWorldPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
+    // name2Selector is a member of the base class Precompiled, and keeps the mapping of interface and its implementation
     name2Selector[HELLO_WORLD_METHOD_GET] = getFuncSelector(HELLO_WORLD_METHOD_GET, _hashImpl);
     name2Selector[HELLO_WORLD_METHOD_SET] = getFuncSelector(HELLO_WORLD_METHOD_SET, _hashImpl);
 }
@@ -91,7 +94,8 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
         std::string retValue = "Hello World!";
 
         auto entry = table->getRow(HELLO_WORLD_KEY_FIELD_NAME);
-        if (!entry)
+        // if entry exists then get the value from the table
+        if (entry)
         {
             gasPricer->updateMemUsed(entry->size());
             gasPricer->appendOperation(InterfaceOpcode::Select, 1);

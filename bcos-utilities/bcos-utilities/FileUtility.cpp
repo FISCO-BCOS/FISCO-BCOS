@@ -18,10 +18,10 @@
 
 #include "FileUtility.h"
 #include <stdio.h>
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <cstdlib>
 #include <fstream>
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp> 
 using namespace std;
 
 namespace bcos
@@ -59,4 +59,5 @@ std::shared_ptr<string> readContentsToString(boost::filesystem::path const& _fil
 {
     return genericReadContents<string>(_file);
 }
+
 }  // namespace bcos

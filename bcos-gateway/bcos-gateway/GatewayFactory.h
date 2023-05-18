@@ -79,7 +79,7 @@ public:
     std::shared_ptr<Service> buildService(const GatewayConfig::Ptr& _config);
 
     /**
-     * @brief construct Gateway
+     * @brief construct Gateway for air
      *
      * @param _configPath
      * @param _airVersion
@@ -92,7 +92,7 @@ public:
         std::string const& _gatewayServiceName);
 
     /**
-     * @brief construct Gateway
+     * @brief construct Gateway for pro
      *
      * @param _config
      * @param _airVersion

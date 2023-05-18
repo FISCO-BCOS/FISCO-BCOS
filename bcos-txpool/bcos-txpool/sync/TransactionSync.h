@@ -37,12 +37,9 @@ public:
     using Ptr = std::shared_ptr<TransactionSync>;
     explicit TransactionSync(TransactionSyncConfig::Ptr config)
       : TransactionSyncInterface(std::move(config)),
-        m_downloadTxsBuffer(std::make_shared<TxsSyncMsgList>()),
         m_worker(std::make_shared<ThreadPool>("txsSyncWorker", 4)),
-        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 4)),
-        m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 1))
+        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 4))
     {
-        m_txsSubmitted = m_config->txpoolStorage()->onReady([&]() { noteNewTransactions(); });
         m_hashImpl = m_config->blockFactory()->cryptoSuite()->hashImpl();
         m_signatureImpl = m_config->blockFactory()->cryptoSuite()->signatureImpl();
     }
@@ -65,23 +62,13 @@ public:
     void onEmptyTxs() override;
 
 protected:
-    // #pragma region deprecated TODO: all interfaces here marked deprecated
     virtual void responseTxsStatus(bcos::crypto::NodeIDPtr _fromNode);
 
-    void broadcastTxsFromRpc(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
-        bcos::protocol::ConstTransactionsPtr _txs);
-    virtual void forwardTxsFromP2P(bcos::crypto::NodeIDSet const& _connectedPeers,
-        bcos::consensus::ConsensusNodeList const& _consensusNodeList,
-        bcos::protocol::ConstTransactionsPtr _txs);
-    virtual bcos::crypto::NodeIDListPtr selectPeers(bcos::protocol::Transaction::ConstPtr _tx,
-        bcos::crypto::NodeIDSet const& _connectedPeers,
-        bcos::consensus::ConsensusNodeList const& _consensusNodeList, size_t _expectedSize);
     virtual void onPeerTxsStatus(
         bcos::crypto::NodeIDPtr _fromNode, TxsSyncMsgInterface::Ptr _txsStatus);
 
     virtual void onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
         SendResponseCallback _sendResponse, bcos::crypto::PublicPtr _peer);
-    // #pragma endregion
 
     // functions called by requestMissedTxs
     virtual void verifyFetchedTxs(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
@@ -95,62 +82,17 @@ protected:
         Error::Ptr _error, bcos::protocol::TransactionsPtr _fetchedTxs,
         bcos::protocol::Block::Ptr _verifiedProposal, VerifyResponseCallback _onVerifyFinished);
 
-
-    virtual bool downloadTxsBufferEmpty()
-    {
-        ReadGuard lock(x_downloadTxsBuffer);
-        return (m_downloadTxsBuffer->empty());
-    }
-
-    virtual void appendDownloadTxsBuffer(TxsSyncMsgInterface::Ptr _txsBuffer)
-    {
-        WriteGuard lock(x_downloadTxsBuffer);
-        m_downloadTxsBuffer->emplace_back(_txsBuffer);
-    }
-
-    virtual TxsSyncMsgListPtr swapDownloadTxsBuffer()
-    {
-        UpgradableGuard lock(x_downloadTxsBuffer);
-        auto localBuffer = m_downloadTxsBuffer;
-        UpgradeGuard uLock(lock);
-        m_downloadTxsBuffer = std::make_shared<TxsSyncMsgList>();
-        return localBuffer;
-    }
-    virtual bool importDownloadedTxs(bcos::crypto::NodeIDPtr _fromNode,
-        bcos::protocol::Block::Ptr _txsBuffer,
+    virtual bool importDownloadedTxs(bcos::protocol::Block::Ptr _txsBuffer,
         bcos::protocol::Block::Ptr _verifiedProposal = nullptr);
 
-    virtual bool importDownloadedTxs(bcos::crypto::NodeIDPtr _fromNode,
-        bcos::protocol::TransactionsPtr _txs,
+    virtual bool importDownloadedTxs(bcos::protocol::TransactionsPtr _txs,
         bcos::protocol::Block::Ptr _verifiedProposal = nullptr);
-
-    void noteNewTransactions()
-    {
-        m_newTransactions = true;
-        m_signalled.notify_all();
-    }
 
 private:
-    TxsSyncMsgListPtr m_downloadTxsBuffer;
-    SharedMutex x_downloadTxsBuffer;
     ThreadPool::Ptr m_worker;
     ThreadPool::Ptr m_txsRequester;
-    ThreadPool::Ptr m_forwardWorker;
-
-    bcos::Handler<> m_txsSubmitted;
-
-    std::atomic_bool m_running = {false};
-
-    std::atomic_bool m_newTransactions = {false};
-
-    // signal to notify all thread to work
-    boost::condition_variable m_signalled;
-    // mutex to access m_signalled
-    boost::mutex x_signalled;
 
     bcos::crypto::Hash::Ptr m_hashImpl;
     bcos::crypto::SignatureCrypto::Ptr m_signatureImpl;
-
-    const int c_MaxResponsedTxsToNodesWithEmptyTxs = 1000;
 };
 }  // namespace bcos::sync

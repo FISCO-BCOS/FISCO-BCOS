@@ -13,6 +13,7 @@
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <gsl/util>
 #include <iterator>
 #include <type_traits>
 
@@ -97,11 +98,7 @@ public:
             HostContext hostContext(vmFactory, rollbackableStorage, m_tableNamePool, blockHeader,
                 evmcMessage, evmcMessage.sender, contextID, seq);
             auto evmcResult = co_await hostContext.execute();
-            struct Defer
-            {
-                ~Defer() noexcept { releaseResult(m_evmcResult); }
-                decltype(evmcResult)& m_evmcResult;
-            } defer{.m_evmcResult = evmcResult};
+            auto finallyAction = gsl::finally([&]() { releaseResult(evmcResult); });
 
             bcos::bytesConstRef output;
             std::string newContractAddress;

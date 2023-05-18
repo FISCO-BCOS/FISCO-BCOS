@@ -333,15 +333,16 @@ void FrontService::asyncSendMessageByNodeIDs(
  */
 void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data)
 {
-    auto message = messageFactory()->buildMessage();
-    message->setModuleID(_moduleID);
-    message->setPayload(_data);
+    // auto message = messageFactory()->buildMessage();
+    FrontMessage message;
+    message.setModuleID(_moduleID);
+    message.setPayload(_data);
 
-    auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer);
+    bytes buffer;
+    message.encode(buffer);
 
     m_gatewayInterface->asyncSendBroadcastMessage(
-        _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
+        _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer.data(), buffer.size()));
 }
 
 /**
