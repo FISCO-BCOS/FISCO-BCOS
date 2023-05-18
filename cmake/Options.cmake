@@ -94,7 +94,7 @@ macro(configure_project)
     endif()
 
     if(NOT ALLOCATOR)
-        set(ALLOCATOR "default")
+        set(ALLOCATOR "tcmalloc")
     endif()
 
     if(ALLOCATOR STREQUAL "tcmalloc")
