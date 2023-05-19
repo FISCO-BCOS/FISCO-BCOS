@@ -47,6 +47,7 @@ public:
 
     virtual void notifyTransactionsResult(
         bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
+
     virtual void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::consensus::ConsensusNodeList const& _observerNodeList) = 0;
 

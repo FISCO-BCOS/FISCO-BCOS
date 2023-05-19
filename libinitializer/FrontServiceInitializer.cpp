@@ -103,7 +103,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
         "registerModuleMessageDispatcher for the consensus module success");
 
     // register the message dispatcher for the txsSync module
-    // 
+    //
     m_front->registerModuleMessageDispatcher(
         bcos::protocol::ModuleID::TxsSync, [_txpool](bcos::crypto::NodeIDPtr _nodeID,
                                                std::string const& _id, bcos::bytesConstRef _data) {
@@ -171,7 +171,6 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                 }
                 nodeIdSet.insert(nodeIDPtr);
             }
-            _txpool->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _blockSync->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _pbft->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             FRONTSERVICE_LOG(INFO)

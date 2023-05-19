@@ -46,7 +46,8 @@ public:
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override;
 
-    task::Task<void> broadcastPushTransaction(const protocol::Transaction& transaction) override;
+    task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
+    task::Task<void> broadcastTransactionBuffer(const bytesConstRef& _data) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
@@ -69,20 +70,19 @@ public:
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override;
 
     // hook for tx/consensus sync message receive
-    // FIXME: deprecated, since use broadcastPushTransaction
-    [[deprecated]] void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _uuid,
+    void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _uuid,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         std::function<void(Error::Ptr)> _onRecv) override;
 
     // hook for validator, update consensus nodes info in config, for broadcast tx to consensus
     // nodes
-    // FIXME: deprecated, not used when use txpool::broadcastPushTransaction
+    // FIXME: deprecated, not used when use txpool::broadcastTransaction
     [[deprecated]] void notifyConsensusNodeList(
         bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) override;
 
     // hook for validator, update observer nodes info in config, for broadcast tx to observer nodes
-    // FIXME: deprecated, not used when use txpool::broadcastPushTransaction
+    // FIXME: deprecated, not used when use txpool::broadcastTransaction
     [[deprecated]] void notifyObserverNodeList(
         bcos::consensus::ConsensusNodeList const& _observerNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) override;

@@ -66,7 +66,17 @@ public:
     // for ut
     void setTxPoolStorage(bcos::txpool::TxPoolStorageInterface::Ptr _txpoolStorage)
     {
-        m_txpoolStorage = _txpoolStorage;
+        m_txpoolStorage = std::move(_txpoolStorage);
+    }
+
+    void setMaxResponseTxsToNodesWithEmptyTxs(size_t blockTxCount)
+    {
+        m_maxResponseTxsToNodesWithEmptyTxs = blockTxCount;
+    }
+
+    size_t getMaxResponseTxsToNodesWithEmptyTxs() const
+    {
+        return m_maxResponseTxsToNodesWithEmptyTxs;
     }
 
 private:
@@ -80,6 +90,8 @@ private:
     unsigned m_networkTimeout = 500;
 
     unsigned m_forwardPercent = 25;
+
+    size_t m_maxResponseTxsToNodesWithEmptyTxs = 1000;
 };
 }  // namespace sync
 }  // namespace bcos

@@ -99,6 +99,7 @@ public:
             _cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
         m_txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
+        m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_COUNT_LIMIT, "1000");
 
         m_frontService = std::make_shared<FakeFrontService>(_nodeId);
         auto txPoolFactory =

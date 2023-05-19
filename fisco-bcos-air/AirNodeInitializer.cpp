@@ -29,9 +29,12 @@
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
+#include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+#include <rocksdb/env.h>
+#include <iterator>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
@@ -94,6 +97,20 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // NOTE: this should be last called
     m_nodeInitializer->initSysContract();
+
+    // tars rpc
+    if (!nodeConfig->tarsRPCConfig().configPath.empty())
+    {
+        m_rpcThread.emplace([nodeConfig, nodeService, this]() {
+            m_rpcApplication.emplace(nodeService);
+
+            std::ifstream stream(nodeConfig->tarsRPCConfig().configPath);
+            std::string configContent(
+                (std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+            m_rpcApplication->main(configContent);
+            m_rpcApplication->waitForShutdown();
+        });
+    }
 }
 
 void AirNodeInitializer::start()
@@ -146,6 +163,11 @@ void AirNodeInitializer::stop()
         if (m_nodeInitializer)
         {
             m_nodeInitializer->stop();
+        }
+        if (m_rpcApplication && m_rpcThread)
+        {
+            m_rpcApplication->terminate();
+            m_rpcThread->join();
         }
 
         if (m_objMonitor)

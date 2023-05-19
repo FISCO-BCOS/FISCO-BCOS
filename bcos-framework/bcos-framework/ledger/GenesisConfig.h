@@ -36,14 +36,14 @@ class GenesisConfig
 public:
     using Ptr = std::shared_ptr<GenesisConfig>;
     GenesisConfig(bool smcrypto, std::string chainID, std::string groupID,
-        std::string consensusType, uint64_t blockLimit, uint64_t leaderSwitchPeriod,
+        std::string consensusType, uint64_t txCountLimit, uint64_t leaderSwitchPeriod,
         std::string compatibilityVersion, uint64_t txGasLimit, bool isWasm, bool isAuthCheck,
         std::string authAdminAccount, bool isSerialExecute)
       : m_smCrypto(smcrypto),
         m_chainID(chainID),
         m_groupID(groupID),
         m_consensusType(consensusType),
-        m_blockLimit(blockLimit),
+        m_txCountLimit(txCountLimit),
         m_leaderSwitchPeriod(leaderSwitchPeriod),
         m_compatibilityVersion(compatibilityVersion),
         m_txGasLimit(txGasLimit),
@@ -62,7 +62,7 @@ public:
            << "grouID: " << m_groupID << std::endl
            << "[consensys]" << std::endl
            << "consensus_type: " << m_consensusType << std::endl
-           << "block_tx_count_limit:" << m_blockLimit << std::endl
+           << "block_tx_count_limit:" << m_txCountLimit << std::endl
            << "leader_period:" << m_leaderSwitchPeriod << std::endl
            << "[version]" << std::endl
            << "compatibility_version:" << m_compatibilityVersion << std::endl
@@ -85,7 +85,7 @@ private:
 
     // consensus config
     std::string m_consensusType;
-    uint64_t m_blockLimit;
+    uint64_t m_txCountLimit;
     uint64_t m_leaderSwitchPeriod = 1;
 
     // version config

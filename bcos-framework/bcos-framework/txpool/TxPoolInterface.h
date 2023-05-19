@@ -53,8 +53,13 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual task::Task<void> broadcastPushTransaction(
+    virtual task::Task<void> broadcastTransaction(
         [[maybe_unused]] const protocol::Transaction& transaction)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
+
+    virtual task::Task<void> broadcastTransactionBuffer([[maybe_unused]] const bytesConstRef& _data)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
@@ -114,8 +119,8 @@ public:
         std::function<void(Error::Ptr)> _onNotifyFinished) = 0;
 
     // called by frontService to dispatch message
-    [[deprecated]] virtual void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error,
-        std::string const& _id, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
+    virtual void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _id,
+        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         std::function<void(Error::Ptr _error)> _onRecv) = 0;
     [[deprecated]] virtual void notifyConsensusNodeList(
         bcos::consensus::ConsensusNodeList const& _consensusNodeList,

@@ -37,7 +37,7 @@ public:
         std::string const& _chainId, int64_t _blockLimit, size_t _txpoolLimit = DEFAULT_POOL_LIMIT);
 
     virtual ~TxPoolFactory() = default;
-    TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 1,
+    TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 4,
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
 
 private:

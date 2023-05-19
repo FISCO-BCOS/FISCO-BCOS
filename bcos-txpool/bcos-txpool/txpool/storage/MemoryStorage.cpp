@@ -599,11 +599,7 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
         }
         tx->setSynced(true);
         fetchedTxs->emplace_back(tx);
-        if (fetchedTxs->size() >= _txsLimit)
-        {
-            return false;
-        }
-        return true;
+        return fetchedTxs->size() < _txsLimit;
     });
 
     return fetchedTxs;
@@ -621,6 +617,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     startT = utcTime();
     auto currentTime = utcTime();
     size_t traverseCount = 0;
+    size_t sealed = 0;
 
     auto handleTx = [&](Transaction::Ptr tx) {
         traverseCount++;
@@ -635,6 +632,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         // the transaction has already been sealed for newer proposal
         if (_avoidDuplicate && tx->sealed())
         {
+            ++sealed;
             return;
         }
 
@@ -715,44 +713,33 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         m_txsTable.forEach<TxsMap::ReadAccessor>(
             m_knownLatestSealedTxHash, [&](TxsMap::ReadAccessor::Ptr accessor) {
                 const auto& tx = accessor->value();
-
                 handleTx(tx);
-
-                if ((_txsList->transactionsMetaDataSize() +
-                        _sysTxsList->transactionsMetaDataSize()) >= _txsLimit)
-                {
-                    return false;
-                }
-                return true;
+                return (_txsList->transactionsMetaDataSize() +
+                           _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
             });
     }
     else
     {
         m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
             const auto& tx = accessor->value();
-
             handleTx(tx);
-
-            if ((_txsList->transactionsMetaDataSize() + _sysTxsList->transactionsMetaDataSize()) >=
-                _txsLimit)
-            {
-                return false;
-            }
-            return true;
+            return (_txsList->transactionsMetaDataSize() +
+                       _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
         });
     }
-
-
+    auto invalidTxsSize = m_invalidTxs.size();
     notifyUnsealedTxsSize();
     removeInvalidTxs(true);
 
     auto fetchTxsT = utcTime() - startT;
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
-                     << LOG_KV("timecost", (utcTime() - recordT))
+                     << LOG_KV("time", (utcTime() - recordT))
                      << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
                      << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
                      << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
                      << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT)
+                     << LOG_KV("invalidBefore", invalidTxsSize)
+                     << LOG_KV("invalidNow", m_invalidTxs.size()) << LOG_KV("sealed", sealed)
                      << LOG_KV("traverseCount", traverseCount);
 }
 #endif
@@ -842,19 +829,18 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
 {
     auto missList = std::make_shared<HashList>();
     m_txsTable.batchFind<TxsMap::ReadAccessor>(
-        _txsHashList, [&_peer, &missList](auto const& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+        _txsHashList, [&missList](auto const& txHash, TxsMap::ReadAccessor::Ptr accessor) {
             if (!accessor)
             {
                 missList->push_back(txHash);
             }
             else
             {
-                auto& tx = accessor->value();
+                const auto& tx = accessor->value();
                 if (!tx)
                 {
                     return true;
                 }
-                tx->appendKnownNode(_peer);
             }
             return true;
         });
@@ -887,6 +873,8 @@ void MemoryStorage::batchMarkTxsWithoutLock(
     auto recordT = utcTime();
     auto startT = utcTime();
     ssize_t successCount = 0;
+    ssize_t notFound = 0;
+    ssize_t reSealed = 0;
     for (auto const& txHash : _txsHashList)
     {
         Transaction::Ptr tx;
@@ -895,6 +883,7 @@ void MemoryStorage::batchMarkTxsWithoutLock(
             auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash);
             if (!has)
             {
+                ++notFound;
                 TXPOOL_LOG(TRACE) << LOG_DESC("batchMarkTxs: missing transaction")
                                   << LOG_KV("tx", txHash.abridged())
                                   << LOG_KV("sealFlag", _sealFlag);
@@ -907,9 +896,11 @@ void MemoryStorage::batchMarkTxsWithoutLock(
             continue;
         }
         // the tx has already been re-sealed, can not enforce unseal
+        // TODO: if tx->batchHash() is empty，should be re-sealed?
         if ((tx->batchId() != _batchId || tx->batchHash() != _batchHash) && tx->sealed() &&
             !_sealFlag)
         {
+            ++reSealed;
             continue;
         }
         if (_sealFlag && !tx->sealed())
@@ -936,10 +927,11 @@ void MemoryStorage::batchMarkTxsWithoutLock(
                           << LOG_KV("hash", tx->batchHash().abridged()) << LOG_KV("txPointer", tx);
 #endif
     }
-    TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs ") << LOG_KV("txsSize", _txsHashList.size())
+    TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs") << LOG_KV("txsSize", _txsHashList.size())
                      << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
-                     << LOG_KV("flag", _sealFlag) << LOG_KV("succ", successCount)
-                     << LOG_KV("timecost", utcTime() - recordT)
+                     << LOG_KV("sealFlag", _sealFlag) << LOG_KV("notFound", notFound)
+                     << LOG_KV("reSealed", reSealed) << LOG_KV("succ", successCount)
+                     << LOG_KV("time", utcTime() - recordT)
                      << LOG_KV("markT", (utcTime() - startT));
     notifyUnsealedTxsSize();
 }
@@ -980,12 +972,18 @@ size_t MemoryStorage::unSealedTxsSize()
 size_t MemoryStorage::unSealedTxsSizeWithoutLock()
 {
     auto txsSize = m_txsTable.size();
-    if (txsSize < m_sealedTxsSize)
-    {
-        m_sealedTxsSize = txsSize;
-        return 0;
-    }
-    return (txsSize - m_sealedTxsSize);
+    // FIXME: the below log should be debug level
+
+    // TXPOOL_LOG(INFO) << LOG_DESC("unSealedTxsSize") << LOG_KV("txsSize", txsSize)
+    //                  << LOG_KV("sealedTxsSize", m_sealedTxsSize);
+
+    // if (txsSize < m_sealedTxsSize)
+    // {
+    //     m_sealedTxsSize = txsSize;
+    //     return 0;
+    // }
+    // return (txsSize - m_sealedTxsSize);
+    return txsSize;
 }
 
 void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
@@ -1049,7 +1047,8 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
 
     TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal") << LOG_KV("consNum", batchId)
                      << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
-                     << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT));
+                     << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT))
+                     << LOG_KV("missedTxs", missedTxs->size());
     return missedTxs;
 }
 
@@ -1069,20 +1068,28 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
 {
     auto txsHash = std::make_shared<HashList>();
 
-    m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
-        auto tx = accessor->value();
-        if (!tx)
-        {
+    m_txsTable.forEach<TxsMap::ReadAccessor>(
+        [this, &txsHash, &_limit](TxsMap::ReadAccessor::Ptr accessor) {
+            auto tx = accessor->value();
+            if (!tx)
+            {
+                return true;
+            }
+            auto result = m_config->txValidator()->submittedToChain(tx);
+            if (result != TransactionStatus::None)
+            {
+                TxsMap::WriteAccessor::Ptr writeAccessor;
+                m_invalidTxs.insert(writeAccessor, {tx->hash(), tx});
+                return true;
+            }
+            if ((int)txsHash->size() >= _limit)
+            {
+                return false;
+            }
+            txsHash->emplace_back(accessor->key());
             return true;
-        }
-        if ((int)txsHash->size() >= _limit)
-        {
-            return false;
-        }
-        txsHash->emplace_back(accessor->key());
-        return true;
-    });
-
+        });
+    removeInvalidTxs(true);
     return txsHash;
 }
 
@@ -1093,6 +1100,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
     // Note: In order to minimize the impact of cleanUp on performance,
     // the normal consensus node does not clear expired txs in m_clearUpTimer, but clears
     // expired txs in the process of sealing txs
+
     if (m_txsCleanUpSwitch && !m_txsCleanUpSwitch())
     {
         return;
@@ -1104,57 +1112,73 @@ void MemoryStorage::cleanUpExpiredTransactions()
     }
     size_t traversedTxsNum = 0;
     size_t erasedTxs = 0;
+    size_t sealedTxs = 0;
     uint64_t currentTime = utcTime();
 
-    m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
-        if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
-        {
-            return false;
-        }
-
-        auto tx = accessor->value();
-        if (tx->sealed() && tx->batchId() >= m_blockNumber)
-        {
-            return true;
-        }
-
-        // the txs expired or not
-        if (currentTime > (tx->importTime() + m_txsExpirationTime))
-        {
-            TxsMap::WriteAccessor::Ptr accessor1;
-            if (m_invalidTxs.insert(accessor1, {tx->hash(), tx}))
+    m_txsTable.forEach<TxsMap::ReadAccessor>(
+        [&traversedTxsNum, this, &currentTime, &erasedTxs](TxsMap::ReadAccessor::Ptr accessor) {
+            if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
             {
-                erasedTxs++;
+                return false;
+            }
+
+            auto tx = accessor->value();
+            if (tx->sealed() && tx->batchId() >= m_blockNumber)
+            {
+                return true;
+            }
+
+            // the txs expired or not
+            if (currentTime > (tx->importTime() + m_txsExpirationTime))
+            {
+                TxsMap::WriteAccessor::Ptr accessor1;
+                if (m_invalidTxs.insert(accessor1, {tx->hash(), tx}))
+                {
+                    erasedTxs++;
+                }
+                else
+                {
+                    // already exist
+                    return true;
+                }
             }
             else
             {
-                // already exist
-                return true;
+                if (m_invalidTxs.contains(tx->hash()))
+                {
+                    // already exist
+                    return true;
+                }
             }
-        }
-        else
-        {
-            if (m_invalidTxs.contains(tx->hash()))
+            auto result = m_config->txValidator()->submittedToChain(tx);
+            // blockLimit expired
+            if (result != TransactionStatus::None)
             {
-                // already exist
-                return true;
+                TxsMap::WriteAccessor::Ptr writeAccessor;
+                if (m_invalidTxs.insert(writeAccessor, {tx->hash(), tx}))
+                {
+                    erasedTxs++;
+                }
+                else
+                {  // already exist
+                    return true;
+                }
             }
-        }
 
-        if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
-        {
-            return false;
-        }
-        return true;
-    });
-
-
-    TXPOOL_LOG(INFO) << LOG_DESC("cleanUpExpiredTransactions")
-                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs);
+            if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
+            {
+                return false;
+            }
+            return true;
+        });
 
     removeInvalidTxs(true);
-}
 
+    TXPOOL_LOG(INFO) << LOG_DESC("cleanUpExpiredTransactions")
+                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs)
+                     << LOG_KV("sealedTxs", sealedTxs)
+                     << LOG_KV("traversedTxsNum", traversedTxsNum);
+}
 
 void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 {
