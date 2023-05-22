@@ -23,24 +23,35 @@
  * @date 2021-10-14
  */
 #pragma once
+#include "bcos-storage/bcos-storage/RocksDBStorage.h"
 #include "bcos-storage/bcos-storage/TiKVStorage.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/convenience.h"
+#include "rocksdb/filter_policy.h"
 #include "rocksdb/write_batch.h"
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
-#include <bcos-storage/RocksDBStorage.h>
-#include <bcos-storage/TiKVStorage.h>
 
 namespace bcos::initializer
 {
+
+struct RocksDBOption
+{
+    int maxWriteBufferNumber = 3;
+    int maxBackgroundJobs = 3;
+    size_t writeBufferSize = 128 << 20;  // 128MB
+    int minWriteBufferNumberToMerge = 2;
+    size_t blockCacheSize = 128 << 20;  // 128MB
+};
+
 class StorageInitializer
 {
 public:
-    static auto createRocksDB(const std::string& _path)
+    static auto createRocksDB(
+        const std::string& _path, RocksDBOption& rocksDBOption, bool _enableDBStatistics = false)
     {
         boost::filesystem::create_directories(_path);
-        rocksdb::DB* db;
+        rocksdb::DB* db = nullptr;
         rocksdb::Options options;
         // Note: This option will increase much memory
         // options.IncreaseParallelism();
@@ -48,16 +59,38 @@ public:
         // options.OptimizeLevelStyleCompaction();
         // create the DB if it's not already present
         options.create_if_missing = true;
+        // to mitigate write stalls
+        options.max_background_jobs = rocksDBOption.maxBackgroundJobs;
+        options.max_write_buffer_number = rocksDBOption.maxWriteBufferNumber;
         // FIXME: enable blob support when space amplification is acceptable
         // options.enable_blob_files = keyPageSize > 1 ? true : false;
         options.compression = rocksdb::kZSTD;
-        options.max_open_files = 512;
+        options.bottommost_compression = rocksdb::kZSTD;  // last level compression
+        options.max_open_files = 256;
+        options.write_buffer_size =
+            rocksDBOption.writeBufferSize;  // default is 64MB, set 256MB here
+        options.min_write_buffer_number_to_merge =
+            rocksDBOption.minWriteBufferNumberToMerge;  // default is 1
+        options.enable_pipelined_write = true;
         // options.min_blob_size = 1024;
 
-        if (boost::filesystem::space(_path).available < 1024 * 1024 * 100)
+        if (_enableDBStatistics)
         {
-            BCOS_LOG(INFO) << "available disk space is less than 100MB";
-            throw std::runtime_error("available disk space is less than 100MB");
+            options.statistics = rocksdb::CreateDBStatistics();
+        }
+        // block cache 128MB
+        std::shared_ptr<rocksdb::Cache> cache = rocksdb::NewLRUCache(rocksDBOption.blockCacheSize);
+        rocksdb::BlockBasedTableOptions table_options;
+        table_options.block_cache = cache;
+        // use bloom filter to optimize point lookup, i.e. get
+        table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+        table_options.optimize_filters_for_memory = true;
+        options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
+
+        if (boost::filesystem::space(_path).available < 1 << 30)
+        {
+            BCOS_LOG(INFO) << "available disk space is less than 1GB";
+            throw std::runtime_error("available disk space is less than 1GB");
         }
 
         // open DB
@@ -75,10 +108,10 @@ public:
             });
     }
     static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
-        const bcos::security::DataEncryptInterface::Ptr _dataEncrypt,
-        [[maybe_unused]] size_t keyPageSize = 0)
+        RocksDBOption& rocksDBOption, const bcos::security::DataEncryptInterface::Ptr& _dataEncrypt,
+        [[maybe_unused]] size_t keyPageSize = 0, bool _enableDBStatistics = false)
     {
-        auto unique_db = createRocksDB(_storagePath);
+        auto unique_db = createRocksDB(_storagePath, rocksDBOption, _enableDBStatistics);
         return std::make_shared<bcos::storage::RocksDBStorage>(std::move(unique_db), _dataEncrypt);
     }
 

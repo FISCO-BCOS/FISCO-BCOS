@@ -120,6 +120,14 @@ public:
     std::string const& storagePath() const { return m_storagePath; }
     std::string const& storageType() const { return m_storageType; }
     size_t keyPageSize() const { return m_keyPageSize; }
+
+    int maxWriteBufferNumber() const { return m_maxWriteBufferNumber; }
+    bool enableStatistics() const { return m_enableDBStatistics; }
+    int maxBackgroundJobs() const { return m_maxBackgroundJobs; }
+    size_t writeBufferSize() const { return m_writeBufferSize; }
+    int minWriteBufferNumberToMerge() const { return m_minWriteBufferNumberToMerge; }
+    size_t blockCacheSize() const { return m_blockCacheSize; }
+
     std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
     std::string const& pdCaPath() const { return m_pdCaPath; }
     std::string const& pdCertPath() const { return m_pdCertPath; }
@@ -309,6 +317,14 @@ private:
     std::string m_pdCaPath;
     std::string m_pdCertPath;
     std::string m_pdKeyPath;
+
+    bool m_enableDBStatistics = false;
+    int m_maxWriteBufferNumber = 3;
+    int m_maxBackgroundJobs = 3;
+    size_t m_writeBufferSize = 64 << 21;
+    int m_minWriteBufferNumberToMerge = 2;
+    size_t m_blockCacheSize = 128 << 20;
+
     bool m_enableArchive = false;
     std::string m_archiveListenIP;
     uint16_t m_archiveListenPort = 0;
