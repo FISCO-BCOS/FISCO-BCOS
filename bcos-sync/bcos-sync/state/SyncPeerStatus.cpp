@@ -105,7 +105,6 @@ PeerStatus::Ptr SyncPeerStatus::insertEmptyPeer(PublicPtr _peer)
 bool SyncPeerStatus::updatePeerStatus(
     PublicPtr _peer, BlockSyncStatusInterface::ConstPtr _peerStatus)
 {
-    WriteGuard lock(x_peersStatus);
     // check the status
     if (_peerStatus->genesisHash() != m_config->genesisHash())
     {
@@ -117,26 +116,41 @@ bool SyncPeerStatus::updatePeerStatus(
                              << LOG_KV("expectedGenesisHash", m_config->genesisHash().abridged());
         return false;
     }
-    // update the existed peer status
-    if (m_peersStatus.contains(_peer))
+
+    PeerStatus::Ptr peerStatus{nullptr};
     {
-        auto status = m_peersStatus[_peer];
-        if (status->update(_peerStatus))
+        ReadGuard lock(x_peersStatus);
+        // update the existed peer status
+        auto iter = m_peersStatus.find(_peer);
+        if (m_peersStatus.end() != iter)
+        {
+            peerStatus = iter->second;
+        }
+    }
+
+    if (nullptr != peerStatus)
+    {
+        if (peerStatus->update(_peerStatus))
         {
             updateKnownMaxBlockInfo(_peerStatus);
         }
-        return true;
     }
-    // create and insert the new peer status
-    auto peerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
-    m_peersStatus.insert(std::make_pair(_peer, peerStatus));
-    BLKSYNC_LOG(DEBUG) << LOG_DESC("updatePeerStatus: new peer")
-                       << LOG_KV("peer", _peer->shortHex())
-                       << LOG_KV("number", _peerStatus->number())
-                       << LOG_KV("hash", _peerStatus->hash().abridged())
-                       << LOG_KV("genesisHash", _peerStatus->genesisHash().abridged())
-                       << LOG_KV("node", m_config->nodeID()->shortHex());
-    updateKnownMaxBlockInfo(_peerStatus);
+    else
+    {
+        // create and insert the new peer status
+        auto peerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
+        {
+            WriteGuard lock(x_peersStatus);
+            m_peersStatus.insert(std::make_pair(_peer, peerStatus));
+        }
+        BLKSYNC_LOG(DEBUG) << LOG_DESC("updatePeerStatus: new peer")
+                           << LOG_KV("peer", _peer->shortHex())
+                           << LOG_KV("number", _peerStatus->number())
+                           << LOG_KV("hash", _peerStatus->hash().abridged())
+                           << LOG_KV("genesisHash", _peerStatus->genesisHash().abridged())
+                           << LOG_KV("node", m_config->nodeID()->shortHex());
+        updateKnownMaxBlockInfo(_peerStatus);
+    }
     return true;
 }
 
@@ -166,17 +180,19 @@ void SyncPeerStatus::deletePeer(PublicPtr _peer)
 
 void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
-    ReadGuard lock(x_peersStatus);
-    if (m_peersStatus.empty())
-    {
-        return;
-    }
-
-    // Get nodeid list
     NodeIDs nodeIds;
-    for (const auto& peer : m_peersStatus)
     {
-        nodeIds.emplace_back(peer.first);
+        ReadGuard lock(x_peersStatus);
+        if (m_peersStatus.empty())
+        {
+            return;
+        }
+
+        // Get nodeid list
+        for (const auto& peer : m_peersStatus)
+        {
+            nodeIds.emplace_back(peer.first);
+        }
     }
 
     // Random nodeid list
@@ -186,15 +202,23 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
         swap(nodeIds[i], nodeIds[select]);
     }
 
-    // access _f() according to the random list
-    for (const auto& nodeId : nodeIds)
+    std::vector<PeerStatus::Ptr> peersStatusList;
     {
-        auto const& peer = m_peersStatus.find(nodeId);
-        if (peer == m_peersStatus.end())
+        ReadGuard lock(x_peersStatus);
+        for (const auto& nodeId : nodeIds)
         {
-            continue;
+            auto const& peer = m_peersStatus.find(nodeId);
+            if (peer == m_peersStatus.end())
+            {
+                continue;
+            }
+            peersStatusList.emplace_back(peer->second);
         }
-        if (peer->second && !_f(peer->second))
+    }
+    // access _f() according to the random list
+    for (auto const& peerStatus : peersStatusList)
+    {
+        if (peerStatus && !_f(peerStatus))
         {
             break;
         }
@@ -203,10 +227,17 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
 
 void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
-    ReadGuard lock(x_peersStatus);
-    for (const auto& peer : m_peersStatus)
+    std::vector<PeerStatus::Ptr> peersStatusList;
     {
-        if (peer.second && !_f(peer.second))
+        ReadGuard lock(x_peersStatus);
+        for (const auto& peer : m_peersStatus)
+        {
+            peersStatusList.emplace_back(peer.second);
+        }
+    }
+    for (auto const& peerStatus : peersStatusList)
+    {
+        if (peerStatus && !_f(peerStatus))
         {
             break;
         }

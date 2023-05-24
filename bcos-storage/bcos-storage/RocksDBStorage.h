@@ -48,9 +48,11 @@ public:
         const std::optional<Condition const>& _condition,
         std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override;
 
+    // due to the blocking of m_db->Get, this interface is actually a synchronous interface
     void asyncGetRow(std::string_view table, std::string_view _key,
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override;
 
+    // due to the blocking of m_db->MultiGet, this interface is actually a synchronous interface
     void asyncGetRows(std::string_view table,
         RANGES::any_view<std::string_view,
             RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
