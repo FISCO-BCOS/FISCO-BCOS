@@ -547,14 +547,13 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
 
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
-    if (c_fileLogLevel <= TRACE)
-        [[unlikely]]
+    if (c_fileLogLevel <= TRACE) [[unlikely]]
+    {
+        for (auto const& tx : _missedTxs)
         {
-            for (auto const& tx : _missedTxs)
-            {
-                TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
-            }
+            TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
         }
+    }
     return fetchedTxs;
 }
 
@@ -1027,7 +1026,10 @@ void MemoryStorage::cleanUpExpiredTransactions()
             continue;
         }
         // the txs expired or not
-        if (currentTime > (tx->importTime() + m_txsExpirationTime))
+        // if the tx is sealed, the tx will be removed when the block is committed, in case of
+        // sealed but not remove.
+        if (currentTime > (tx->importTime() + m_txsExpirationTime) ||
+            (tx->sealed() && tx->batchId() < m_blockNumber))
         {
             m_invalidTxs.insert(tx->hash());
             m_invalidNonces.insert(tx->nonce());
