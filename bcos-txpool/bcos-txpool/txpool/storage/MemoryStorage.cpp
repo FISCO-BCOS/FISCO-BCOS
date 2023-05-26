@@ -861,13 +861,13 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
     return unknownTxsList;
 }
 
-void MemoryStorage::batchMarkTxs(
+bool MemoryStorage::batchMarkTxs(
     HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
 {
-    batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
+    return batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
 }
 
-void MemoryStorage::batchMarkTxsWithoutLock(
+bool MemoryStorage::batchMarkTxsWithoutLock(
     HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
 {
     auto recordT = utcTime();
@@ -934,6 +934,7 @@ void MemoryStorage::batchMarkTxsWithoutLock(
                      << LOG_KV("time", utcTime() - recordT)
                      << LOG_KV("markT", (utcTime() - startT));
     notifyUnsealedTxsSize();
+    return notFound == 0;  // return true if all txs have been marked
 }
 
 void MemoryStorage::batchMarkAllTxs(bool _sealFlag)

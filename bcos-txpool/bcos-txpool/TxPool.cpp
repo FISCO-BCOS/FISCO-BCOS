@@ -393,16 +393,25 @@ void TxPool::asyncMarkTxs(HashListPtr _txsHash, bool _sealedFlag,
     bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
+    bool allMarked;
     {
         bcos::ReadGuard guard(x_markTxsMutex);
-        m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
+        allMarked = m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
     }
 
     if (!_onRecvResponse)
     {
         return;
     }
-    _onRecvResponse(nullptr);
+    if (allMarked)
+    {
+        _onRecvResponse(nullptr);
+    }
+    else
+    {
+        _onRecvResponse(BCOS_ERROR_PTR(
+            CommonError::TransactionsMissing, "TransactionsMissing during asyncMarkTxs"));
+    }
 }
 
 void TxPool::asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse)
