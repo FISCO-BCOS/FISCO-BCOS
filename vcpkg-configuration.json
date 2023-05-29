@@ -15,6 +15,7 @@
         "fiscobcos",
         "etcd-cpp-apiv3",
         "wedprcrypto",
+        "jemalloc",
         "secp256k1",
         "tbb"
       ]
