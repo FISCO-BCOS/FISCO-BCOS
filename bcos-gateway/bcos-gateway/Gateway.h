@@ -32,6 +32,7 @@
 #include <bcos-gateway/libp2p/Service.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
 #include <bcos-gateway/libratelimit/RateLimiterStat.h>
+#include <bcos-gateway/utilities/TimeoutController.h>
 #include <bcos-utilities/BoostLog.h>
 
 namespace bcos
@@ -41,6 +42,10 @@ namespace gateway
 class Retry : public std::enable_shared_from_this<Retry>, public ObjectCounter<Retry>
 {
 public:
+    Retry(TimeoutController::Ptr _timeoutController)
+        : m_timeoutController(_timeoutController)
+    {}
+
     // random choose one p2pID to send message
     P2pID chooseP2pID()
     {
@@ -111,6 +116,16 @@ public:
                     return;
                 }
 
+                if(e.errorCode() == P2PExceptionType::NetworkTimeout)
+                {
+                    self->m_timeoutController->addTimeoutPoint(p2pID, self->m_moduleID, utcSteadyTime());
+                }
+
+                if(e.errorCode() == -1)
+                {
+                    self->m_timeoutController->removeP2pID(p2pID);
+                }
+
                 GATEWAY_LOG(DEBUG)
                     << LOG_BADGE("Retry") << LOG_DESC("network callback") << LOG_KV("seq", seq)
                     << LOG_KV("dstP2P", p2pID) << LOG_KV("errorCode", e.errorCode())
@@ -165,7 +180,8 @@ public:
                 self->trySendMessage();
             }
         };
-        m_p2pInterface->asyncSendMessageByNodeID(p2pID, m_p2pMessage, callback, Options(10000));
+        auto timeout = m_timeoutController->getTimeout(p2pID, m_moduleID);
+        m_p2pInterface->asyncSendMessageByNodeID(p2pID, m_p2pMessage, callback, Options(timeout));
     }
 
 public:
@@ -176,6 +192,7 @@ public:
     std::shared_ptr<P2PInterface> m_p2pInterface;
     ErrorRespFunc m_respFunc;
     int m_moduleID;
+    TimeoutController::Ptr m_timeoutController;
 };
 
 class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gateway>
@@ -185,13 +202,15 @@ public:
     Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
+        TimeoutController::Ptr _timeoutController,
         std::string _gatewayServiceName = "localGateway")
       : m_gatewayServiceName(_gatewayServiceName),
         m_gatewayConfig(_gatewayConfig),
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop),
-        m_gatewayRateLimiter(_gatewayRateLimiter)
+        m_gatewayRateLimiter(_gatewayRateLimiter),
+        m_timeoutController(_timeoutController)
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
@@ -350,6 +369,8 @@ private:
 
     // For rate limit
     ratelimiter::GatewayRateLimiter::Ptr m_gatewayRateLimiter;
+    // For timeout controller
+    TimeoutController::Ptr m_timeoutController;
 };
 }  // namespace gateway
 }  // namespace bcos

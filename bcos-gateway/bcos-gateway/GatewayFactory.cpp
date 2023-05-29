@@ -707,18 +707,26 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 buildGatewayRateLimiter(_config->rateLimiterConfig(), _config->redisConfig());
         }
 
+        // build TimeoutController
+        auto timeoutController = std::make_shared<TimeoutController>();
         // init Gateway
         auto gateway = std::make_shared<Gateway>(
-            _config, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
+            _config, service, gatewayNodeManager, amop, gatewayRateLimiter, timeoutController, _gatewayServiceName);
         auto gatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
+        auto timeoutControllerWeakPtr = std::weak_ptr<TimeoutController>(timeoutController);
         // register disconnect handler
         service->registerDisconnectHandler(
-            [gatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
+            [gatewayNodeManagerWeakPtr, timeoutControllerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
                 (void)e;
                 auto gatewayNodeManager = gatewayNodeManagerWeakPtr.lock();
                 if (gatewayNodeManager && p2pSession)
                 {
                     gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
+                }
+                auto timeoutController = timeoutControllerWeakPtr.lock();
+                if(timeoutController && p2pSession)
+                {
+                    timeoutController->removeP2pID(p2pSession->p2pID());
                 }
             });
 

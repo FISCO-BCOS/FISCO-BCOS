@@ -27,6 +27,7 @@
 #define ROUTER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Router]"
 #define RATELIMIT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][RateLimiter]"
 #define RATELIMIT_MGR_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][RateLimiterManager]"
+#define TIMEOUT_CONTROLLER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][TimeoutController]"
 
 namespace bcos
 {

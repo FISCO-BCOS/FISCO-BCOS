@@ -53,6 +53,10 @@ using namespace bcos::crypto;
 
 void Gateway::start()
 {
+    if(m_timeoutController)
+    {
+        m_timeoutController->start();
+    }
     if (m_gatewayRateLimiter)
     {
         m_gatewayRateLimiter->start();
@@ -93,6 +97,10 @@ void Gateway::stop()
     if (m_gatewayRateLimiter)
     {
         m_gatewayRateLimiter->stop();
+    }
+    if(m_timeoutController)
+    {
+        m_timeoutController->stop();
     }
 
     GATEWAY_LOG(INFO) << LOG_DESC("stop end.");
@@ -187,7 +195,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
         return;
     }
 
-    auto retry = std::make_shared<Retry>();
+    auto retry = std::make_shared<Retry>(m_timeoutController);
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
 
