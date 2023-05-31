@@ -120,7 +120,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             {
                 TXPOOL_LOG(ERROR) << "Unexpected exception: " << boost::diagnostic_information(e);
                 m_submitResult.emplace<Error::Ptr>(
-                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malform, "Unknown exception"));
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"));
                 handle.resume();
             }
         }

@@ -86,6 +86,7 @@ public:
         // use bloom filter to optimize point lookup, i.e. get
         table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
         table_options.optimize_filters_for_memory = true;
+        // table_options.cache_index_and_filter_blocks = true; // this will increase memory and lower performance
         options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
 
         if (boost::filesystem::space(_path).available < 1 << 30)
