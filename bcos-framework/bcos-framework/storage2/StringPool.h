@@ -4,9 +4,9 @@
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/ThreeWay4StringView.h>
 #include <oneapi/tbb/concurrent_unordered_set.h>
+#include <boost/beast/core/static_string.hpp>
 #include <boost/container/static_vector.hpp>
 #include <boost/functional/hash.hpp>
-#include <boost/static_string.hpp>
 #include <boost/throw_exception.hpp>
 #include <compare>
 #include <functional>
