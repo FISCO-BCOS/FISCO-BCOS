@@ -126,6 +126,12 @@ public:
     }
     virtual PeerBlackWhitelistInterface::Ptr peerWhitelist() { return m_peerWhitelist; }
 
+    template <class F>
+    void asyncTo(F f)
+    {
+        m_asyncGroup.template run(std::move(f));
+    }
+
 private:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
