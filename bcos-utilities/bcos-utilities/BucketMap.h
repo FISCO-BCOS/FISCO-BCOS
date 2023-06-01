@@ -21,6 +21,7 @@
 
 #include "Common.h"
 #include "Ranges.h"
+#include <tbb/concurrent_vector.h>
 #include <map>
 #include <queue>
 #include <range/v3/view/group_by.hpp>
@@ -554,7 +555,7 @@ protected:
         return hash % m_buckets.size();
     }
 
-    std::vector<typename Bucket<KeyType, ValueType>::Ptr> m_buckets;
+    tbb::concurrent_vector<typename Bucket<KeyType, ValueType>::Ptr> m_buckets;
 };
 
 template <class KeyType, class BucketHasher = std::hash<KeyType>>
