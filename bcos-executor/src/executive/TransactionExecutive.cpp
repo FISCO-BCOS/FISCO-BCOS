@@ -1221,7 +1221,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress)
                             << LOG_KV("status", _result.status());
         callResults->status = (int32_t)TransactionStatus::WASMUnreachableInstruction;
-        if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0 &&
+            versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_4_VERSION) < 0)
         {
             writeErrInfoToOutput("A WebAssembly trap has been hit during execution.", *callResults);
         }
