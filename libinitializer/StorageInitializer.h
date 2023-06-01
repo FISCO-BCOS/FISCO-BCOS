@@ -38,9 +38,9 @@ namespace bcos::initializer
 struct RocksDBOption
 {
     int maxWriteBufferNumber = 3;
-    int maxBackgroundJobs = 3;
-    size_t writeBufferSize = 128 << 20;  // 128MB
-    int minWriteBufferNumberToMerge = 2;
+    int maxBackgroundJobs = 4;
+    size_t writeBufferSize = 64 << 20;  // 64MB
+    int minWriteBufferNumberToMerge = 1;
     size_t blockCacheSize = 128 << 20;  // 128MB
 };
 
