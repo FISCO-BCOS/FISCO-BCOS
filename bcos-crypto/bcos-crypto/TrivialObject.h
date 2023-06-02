@@ -29,12 +29,12 @@ namespace bcos::crypto::trivial
 {
 
 template <class Object>
-concept Value = std::is_trivial_v<std::remove_cvref_t<Object>> &&
-    !std::is_pointer_v<std::remove_cvref_t<Object>>;
+concept Value = std::is_trivial_v<std::remove_cvref_t<Object>> && !
+std::is_pointer_v<std::remove_cvref_t<Object>>;
 
 template <class Object>
 concept Range = RANGES::contiguous_range<std::remove_cvref_t<Object>> &&
-    std::is_trivial_v<std::remove_cvref_t<RANGES::range_value_t<Object>>>;
+                std::is_trivial_v<std::remove_cvref_t<RANGES::range_value_t<Object>>>;
 
 template <class Input>
 concept Object = Value<Input> || Range<Input>;
@@ -75,12 +75,11 @@ constexpr auto toView(trivial::Object auto&& object)
 }
 
 template <class Range>
-concept DynamicRange = requires(Range range, size_t newSize)
-{
-    RANGES::range<Range>;
-    range.resize(newSize);
-    range.reserve(newSize);
-};
+concept DynamicRange = requires(Range range, size_t newSize) {
+                           requires RANGES::range<Range>;
+                           range.resize(newSize);
+                           range.reserve(newSize);
+                       };
 
 void resizeTo(RANGES::range auto& out, size_t size)
 {
