@@ -1,8 +1,7 @@
 #pragma once
 
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
 #include "bcos-concepts/Exception.h"
+#include "bcos-concepts/Serialize.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
@@ -16,6 +15,7 @@
 #include <bcos-lightnode/transaction-pool/TransactionPoolImpl.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -284,14 +284,14 @@ private:
             bcos::ref(responseBuffer), [blockNumber](Error::Ptr _error) {
                 if (_error)
                 {
-                    LIGHTNODE_LOG(ERROR) << "send getblockResponse failed " << LOG_KV("blockNumber", blockNumber);
+                    LIGHTNODE_LOG(ERROR)
+                        << "send getblockResponse failed " << LOG_KV("blockNumber", blockNumber);
                 }
             });
-        LIGHTNODE_LOG(DEBUG) << "asyncSendResponse: sendResponseMessage to dstNode:"  << nodeID->hex()
-                             << LOG_KV("blockNUmber", blockNumber)
+        LIGHTNODE_LOG(DEBUG) << "asyncSendResponse: sendResponseMessage to dstNode:"
+                             << nodeID->hex() << LOG_KV("blockNUmber", blockNumber)
                              << LOG_KV("moduleID", bcos::protocol::LIGHTNODE_GET_BLOCK)
                              << LOG_KV("responseBuffer size", responseBuffer.size());
-
     }
 
     task::Task<void> submitTransaction(std::shared_ptr<bcos::front::FrontService> front,
@@ -313,13 +313,14 @@ private:
             response.error.errorMessage = boost::diagnostic_information(e);
         }
 
+
         bcos::bytes responseBuffer;
         bcos::concepts::serialize::encode(response, responseBuffer);
         LIGHTNODE_LOG(INFO) << "Response submit transaction: " << id << " | "
                             << responseBuffer.size();
 
         front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_SEND_TRANSACTION, nodeID,
-            bcos::ref(responseBuffer), [](Error::Ptr) {});
+            bcos::ref(responseBuffer), [](const Error::Ptr&) {});
     }
 
     task::Task<void> call(std::shared_ptr<bcos::front::FrontService> front,
@@ -342,7 +343,7 @@ private:
         bcos::bytes responseBuffer;
         bcos::concepts::serialize::encode(response, responseBuffer);
         front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_CALL, nodeID,
-            bcos::ref(responseBuffer), [](Error::Ptr) {});
+            bcos::ref(responseBuffer), [](const Error::Ptr&) {});
     }
 };
 }  // namespace bcos::initializer

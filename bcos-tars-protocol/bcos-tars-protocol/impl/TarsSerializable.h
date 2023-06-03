@@ -3,14 +3,9 @@
 #include "TarsStruct.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
-#include <bcos-tars-protocol/tars/Block.h>
-#include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-utilities/Ranges.h>
-#include <tup/Tars.h>
-#include <type_traits>
-#include <vector>
 
-namespace bcos::concepts::serialize
+namespace bcostars
 {
 
 void impl_encode(bcostars::protocol::impl::TarsStruct auto const& object,
@@ -25,13 +20,13 @@ void impl_encode(bcostars::protocol::impl::TarsStruct auto const& object,
     output.getByteBuffer().swap(out);
 }
 
-void impl_decode(bcos::concepts::bytebuffer::ByteBuffer auto const& in,
+void impl_decode(bcos::concepts::bytebuffer::ByteBuffer auto const& buffer,
     bcostars::protocol::impl::TarsStruct auto& out)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)RANGES::data(in), RANGES::size(in));
+    input.setBuffer((const char*)RANGES::data(buffer), RANGES::size(buffer));
 
     out.readFrom(input);
 }
 
-}  // namespace bcos::concepts::serialize
+}  // namespace bcostars
