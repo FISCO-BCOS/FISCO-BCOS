@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace bcos::concepts::serialize
+namespace bcostars
 {
 
 void impl_encode(bcostars::protocol::impl::TarsStruct auto const& object,
@@ -34,4 +34,4 @@ void impl_decode(bcos::concepts::bytebuffer::ByteBuffer auto const& in,
     out.readFrom(input);
 }
 
-}  // namespace bcos::concepts::serialize
+}  // namespace bcostars

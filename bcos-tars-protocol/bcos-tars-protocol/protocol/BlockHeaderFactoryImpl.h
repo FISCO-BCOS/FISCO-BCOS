@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "../impl/TarsHashable.h"
-
 #include "BlockHeaderImpl.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>

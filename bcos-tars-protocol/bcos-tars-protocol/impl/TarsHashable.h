@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace bcos::concepts::hash
+namespace bcostars
 {
 
 template <bcos::crypto::hasher::Hasher Hasher>
@@ -137,4 +137,4 @@ auto impl_calculate(bcostars::Block const& block, bcos::concepts::bytebuffer::By
     impl_calculate<Hasher>(block.blockHeader, out);
 }
 
-}  // namespace bcos::concepts::hash
+}  // namespace bcostars

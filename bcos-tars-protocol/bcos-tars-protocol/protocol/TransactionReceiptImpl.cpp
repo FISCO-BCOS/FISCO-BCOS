@@ -18,10 +18,9 @@
  * @author: ancelmo
  * @date 2021-04-20
  */
+#include "TransactionReceiptImpl.h"
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
-
-#include "TransactionReceiptImpl.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 

@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "../impl/TarsHashable.h"
-
 #include "TransactionReceiptImpl.h"
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-concepts/Hash.h>

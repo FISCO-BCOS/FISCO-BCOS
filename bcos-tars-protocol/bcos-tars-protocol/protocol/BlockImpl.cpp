@@ -19,9 +19,8 @@
  * @date 2021-04-20
  */
 
-#include "../impl/TarsSerializable.h"
-
 #include "BlockImpl.h"
+#include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Serialize.h>
 #include <range/v3/view/transform.hpp>
 

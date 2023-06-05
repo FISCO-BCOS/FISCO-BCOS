@@ -18,8 +18,6 @@
  * @date 2022-01-16
  */
 
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
 #include "bcos-concepts/Serialize.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairFactory.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
@@ -33,6 +31,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
