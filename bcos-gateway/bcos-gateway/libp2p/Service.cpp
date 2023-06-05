@@ -548,7 +548,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 
         for (auto& session : sessions)
         {
-            asyncSendMessageByNodeID(session.first, message, CallbackFuncWithSession(), options);
+            asyncSendMessageByNodeID(session.first, message, nullptr, options);
         }
     }
     catch (std::exception& e)
