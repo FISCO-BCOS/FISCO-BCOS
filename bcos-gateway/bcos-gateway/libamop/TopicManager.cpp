@@ -104,7 +104,10 @@ void TopicManager::subTopic(const std::string& _client, const TopicItems& _topic
     {
         std::unique_lock lock(x_clientTopics);
         m_client2TopicItems[_client] = _topicItems;  // Override the previous value
-        incTopicSeq();
+        if (!_topicItems.empty())
+        {
+            incTopicSeq();
+        }
     }
     createAndGetServiceByClient(_client);
     TOPIC_LOG(INFO) << LOG_BADGE("subTopic") << LOG_KV("client", _client)
@@ -178,7 +181,10 @@ void TopicManager::removeTopicsByClient(const std::string& _client)
         result = m_client2TopicItems.erase(_client);
     }
 
-    incTopicSeq();
+    if (result != 0)
+    {
+        incTopicSeq();
+    }
 
     TOPIC_LOG(INFO) << LOG_BADGE("removeTopicsByClient") << LOG_KV("client", _client)
                     << LOG_KV("success", result);
