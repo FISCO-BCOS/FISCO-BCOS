@@ -19,9 +19,8 @@
  * @date 2021-04-20
  */
 
-#include "../impl/TarsHashable.h"
-
 #include "BlockHeaderImpl.h"
+#include "../impl/TarsHashable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-utilities/Common.h>
 #include <boost/endian/conversion.hpp>

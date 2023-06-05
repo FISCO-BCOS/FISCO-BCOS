@@ -22,7 +22,6 @@
 #pragma once
 
 #include "../impl/TarsHashable.h"
-
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include <bcos-crypto/hasher/Hasher.h>
@@ -51,7 +50,7 @@ public:
     void encode(bcos::bytes& txData) const override;
 
     bcos::crypto::HashType hash() const override;
-    
+
     template <bcos::crypto::hasher::Hasher Hasher>
     void calculateHash()
     {

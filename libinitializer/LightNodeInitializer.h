@@ -1,7 +1,5 @@
 #pragma once
 
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
 #include "bcos-concepts/Exception.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
@@ -16,6 +14,7 @@
 #include <bcos-lightnode/transaction-pool/TransactionPoolImpl.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -156,23 +155,24 @@ public:
                         []([[maybe_unused]] const Error::Ptr& error) {});
                 }(ledger, std::move(front), std::move(nodeID), std::string(messageID), data));
             });
-        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_ABI,
-                                               [ledger, weakFront](
-                bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
+        front->registerModuleMessageDispatcher(
+            bcos::protocol::LIGHTNODE_GET_ABI, [ledger, weakFront](bcos::crypto::NodeIDPtr nodeID,
+                                                   const std::string& id, bytesConstRef data) {
                 auto front = weakFront.lock();
                 if (!front)
                 {
                     return;
                 }
                 task::wait([](decltype(ledger) ledger, std::shared_ptr<front::FrontService> front,
-                              bcos::crypto::NodeIDPtr nodeID, std::string id,
-                              bytesConstRef data) -> task::Task<void> {
+                               bcos::crypto::NodeIDPtr nodeID, std::string id,
+                               bytesConstRef data) -> task::Task<void> {
                     bcostars::ResponseGetABI response;
                     try
                     {
                         bcostars::RequestGetABI request;
                         bcos::concepts::serialize::decode(data, request);
-                        auto abiStr = co_await concepts::getRef(ledger).getABI(request.contractAddress);
+                        auto abiStr =
+                            co_await concepts::getRef(ledger).getABI(request.contractAddress);
                         response.abiStr = abiStr;
                         LIGHTNODE_LOG(TRACE) << "client get ABI response is: " << response.abiStr;
                     }
@@ -183,9 +183,8 @@ public:
                     }
                     bcos::bytes responseBuffer;
                     bcos::concepts::serialize::encode(response, responseBuffer);
-                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_ABI,
-                        nodeID, bcos::ref(responseBuffer),
-                        []([[maybe_unused]] const Error::Ptr& error) {});
+                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_ABI, nodeID,
+                        bcos::ref(responseBuffer), []([[maybe_unused]] const Error::Ptr& error) {});
                 }(ledger, std::move(front), std::move(nodeID), std::string(id), data));
             });
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_SEND_TRANSACTION,

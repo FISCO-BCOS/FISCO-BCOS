@@ -20,9 +20,8 @@
  */
 #pragma once
 
-#include "../impl/TarsHashable.h"
-
 #include "../Common.h"
+#include "../impl/TarsHashable.h"
 #include "BlockHeaderImpl.h"
 #include "TransactionImpl.h"
 #include "TransactionMetaDataImpl.h"
