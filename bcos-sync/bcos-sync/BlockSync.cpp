@@ -513,6 +513,9 @@ void BlockSync::tryToRequestBlocks()
     }
     auto currentNumber = m_config->blockNumber();
     // no need to request blocks
+    // if blockNumber in ledger >= request number
+    // or request number <= executed block
+    // or request number <= applying block
     if (currentNumber >= requestToNumber || requestToNumber <= m_config->executedBlock() ||
         requestToNumber <= m_config->applyingBlock())
     {
