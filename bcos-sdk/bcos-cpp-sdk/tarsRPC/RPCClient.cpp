@@ -79,9 +79,9 @@ std::future<bcos::protocol::TransactionReceipt::Ptr> bcos::sdk::RPCClient::sendT
     auto const& tarsTransaction =
         dynamic_cast<bcostars::protocol::TransactionImpl const&>(transaction);
 
-    auto* callback = gsl::owner<Callback*>(new Callback(completionQueue, std::move(tag)));
+    auto callback = std::make_unique<Callback>(completionQueue, std::move(tag));
     auto future = callback->m_promise.get_future();
-    m_rpcProxy->async_sendTransaction(callback, tarsTransaction.inner());
+    m_rpcProxy->async_sendTransaction(callback.release(), tarsTransaction.inner());
 
     return future;
 }
