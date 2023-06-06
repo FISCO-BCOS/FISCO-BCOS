@@ -81,8 +81,7 @@ jobs:
           make -j8
       - name: Test
         run:
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
-          make cov
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test && make cov
 
       - name: upload coverage report
         uses: codecov/codecov-action@v2
