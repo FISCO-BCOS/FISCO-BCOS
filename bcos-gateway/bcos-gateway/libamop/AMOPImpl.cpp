@@ -87,18 +87,7 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
         auto buffer = buildAndEncodeMessage(AMOPMessage::Type::RequestTopic, bytesConstRef());
         Options option(0);
         m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType, _nodeID,
-            bytesConstRef(buffer->data(), buffer->size()), option,
-            [_nodeID](Error::Ptr&& _error, int16_t, bytesPointer) {
-                if (_error && (_error->errorCode() != CommonError::SUCCESS))
-                {
-                    AMOP_LOG(WARNING)
-                        << LOG_BADGE("onReceiveTopicSeqMessage")
-                        << LOG_DESC("receive error callback") << LOG_KV("dstNode", _nodeID)
-                        << LOG_KV("errorCode", _error->errorCode())
-                        << LOG_KV("errorMessage", _error->errorMessage());
-                    return;
-                }
-            });
+            bytesConstRef(buffer->data(), buffer->size()), option, nullptr);
     }
     catch (const std::exception& e)
     {

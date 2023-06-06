@@ -548,7 +548,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 
         for (auto& session : sessions)
         {
-            asyncSendMessageByNodeID(session.first, message, CallbackFuncWithSession(), options);
+            asyncSendMessageByNodeID(session.first, message, nullptr, options);
         }
     }
     catch (std::exception& e)
@@ -614,6 +614,13 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         return;
     }
     auto p2pMessage = newP2PMessage(_type, _payload);
+
+    if (!_callback)
+    {
+        asyncSendMessageByNodeID(_dstNodeID, p2pMessage, nullptr);
+        return;
+    }
+
     asyncSendMessageByNodeID(
         _dstNodeID, p2pMessage,
         [_dstNodeID, _callback](NetworkException _e, std::shared_ptr<P2PSession>,
