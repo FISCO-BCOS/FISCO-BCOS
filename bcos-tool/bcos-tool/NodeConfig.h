@@ -271,7 +271,7 @@ private:
     size_t m_notifyWorkerNum;
     size_t m_verifierWorkerNum;
     int64_t m_txsExpirationTime;
-    bool m_enableTxSyncWorker = true;
+    bool m_enableTxSyncWorker = false;
     // TODO: the block sync module need some configurations?
 
     // chain configuration

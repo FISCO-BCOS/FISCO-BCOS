@@ -489,14 +489,7 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set txpool.verify_worker_num to positive !"));
     }
-    try
-    {
-        m_enableTxSyncWorker = _pt.get<bool>("txpool.enable_tx_sync_worker");
-    }
-    catch (...)
-    {
-        m_enableTxSyncWorker = true;
-    }
+    m_enableTxSyncWorker = _pt.get<bool>("txpool.enable_tx_sync_worker", false);
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
     if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)

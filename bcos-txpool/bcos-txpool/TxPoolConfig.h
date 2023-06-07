@@ -86,7 +86,7 @@ private:
     NonceCheckerInterface::Ptr m_txPoolNonceChecker;
     size_t m_poolLimit = 15000;
     int64_t m_blockLimit = 1000;
-    bool m_enableTxSyncWorker = true;
+    bool m_enableTxSyncWorker = false;
 };
 }  // namespace txpool
 }  // namespace bcos
