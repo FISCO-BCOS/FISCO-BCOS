@@ -42,7 +42,10 @@ void TxPool::start()
         return;
     }
 
-    // m_transactionSync->start();
+    if (txpoolConfig()->enableTxSyncWorker())
+    {
+        m_transactionSync->start();
+    }
 
     m_txpoolStorage->start();
     m_running = true;
@@ -65,7 +68,10 @@ void TxPool::stop()
         m_txpoolStorage->stop();
     }
 
-    // m_transactionSync->stop();
+    if (txpoolConfig()->enableTxSyncWorker())
+    {
+        m_transactionSync->stop();
+    }
 
     m_running = false;
     TXPOOL_LOG(INFO) << LOG_DESC("Stop the txpool.");
