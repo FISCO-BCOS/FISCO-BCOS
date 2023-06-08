@@ -274,18 +274,18 @@ void SystemConfigPrecompiled::upgradeChain(
         }
 
         // create new system tables of 3.1.0
-        std::string_view tables[] = {
-            SYS_CODE_BINARY,
-            bcos::ledger::SYS_VALUE,
-            SYS_CONTRACT_ABI,
-            bcos::ledger::SYS_VALUE,
-        };
+        // clang-format off
+        constexpr auto tables = std::to_array<std::string_view>({
+            SYS_CODE_BINARY, std::string_view(bcos::ledger::SYS_VALUE),
+            SYS_CONTRACT_ABI, std::string_view(bcos::ledger::SYS_VALUE)
+        });
         // clang-format on
         size_t total = sizeof(tables) / sizeof(std::string_view);
 
         for (size_t i = 0; i < total; i += 2)
         {
-            _executive->storage().createTable(std::string(tables[i]), std::string(tables[i + 1]));
+            _executive->storage().createTable(
+                std::string(tables.at(i)), std::string(tables.at(i + 1)));
         }
     }
 }
