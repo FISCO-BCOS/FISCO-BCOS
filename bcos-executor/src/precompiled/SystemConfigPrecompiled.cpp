@@ -280,7 +280,7 @@ void SystemConfigPrecompiled::upgradeChain(
             SYS_CONTRACT_ABI, std::string_view(bcos::ledger::SYS_VALUE)
         });
         // clang-format on
-        constexpr size_t total = sizeof(tables) / sizeof(std::string_view);
+        constexpr size_t total = tables.size();
 
         for (size_t i = 0; i < total; i += 2)
         {
