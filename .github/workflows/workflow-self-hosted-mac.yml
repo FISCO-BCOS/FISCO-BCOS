@@ -23,12 +23,11 @@ concurrency:
 jobs:
   build_mac:
     name: mac ci check
-    runs-on: self-hosted-mac
+    runs-on: self-hosted-mac3.4
     strategy:
       fail-fast: false
     env:
-      DEPS_ROOT: ~/cache/deps
-      VCPKG_ROOT: ~/cache/vcpkg
+      DEPS_ROOT: ~/cache/deps3.4
 
     steps:
       - uses: actions/checkout@v3
@@ -52,6 +51,7 @@ jobs:
 
       - name: Build for mac
         run: |
+          cd vcpkg && bash bootstrap-vcpkg.sh && cd -
           mkdir -p build && cd build && rm -rf CMakeCache.txt
           cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
           cmake --build . --parallel 8
