@@ -124,7 +124,8 @@ void KVTablePrecompiled::set(const std::string& tableName,
     const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
 {
     /// set(string,string)
-    std::string key, value;
+    std::string key;
+    std::string value;
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
     codec.decode(data, key, value);

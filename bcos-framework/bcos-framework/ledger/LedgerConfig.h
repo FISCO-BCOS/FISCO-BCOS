@@ -22,9 +22,7 @@
 #include "../consensus/ConsensusNodeInterface.h"
 #include "../protocol/ProtocolTypeDef.h"
 
-namespace bcos
-{
-namespace ledger
+namespace bcos::ledger
 {
 class LedgerConfig
 {
@@ -114,5 +112,4 @@ protected:
     int64_t m_sealerId = -1;
     int64_t m_txsSize = -1;
 };
-}  // namespace ledger
-}  // namespace bcos
+}  // namespace bcos::ledger

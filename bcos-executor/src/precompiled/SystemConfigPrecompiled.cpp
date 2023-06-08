@@ -46,13 +46,12 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
     name2Selector[SYSCONFIG_METHOD_GET_STR] =
         getFuncSelector(SYSCONFIG_METHOD_GET_STR, GlobalHashImpl::g_hashImpl);
     auto defaultCmp = [](std::string_view _key, int64_t _value, int64_t _minValue) {
-        if (_value >= _minValue)
+        if (_value < _minValue)
         {
-            return;
+            BOOST_THROW_EXCEPTION(PrecompiledError(
+                "Invalid value " + std::to_string(_value) + " ,the value for " + std::string{_key} +
+                " must be no less than " + std::to_string(_minValue)));
         }
-        BOOST_THROW_EXCEPTION(PrecompiledError(
-            "Invalid value " + std::to_string(_value) + " ,the value for " + std::string{_key} +
-            " must be no less than " + std::to_string(_minValue)));
     };
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT, [defaultCmp](int64_t _value) {
         defaultCmp(SYSTEM_KEY_TX_GAS_LIMIT, _value, TX_GAS_LIMIT_MIN);
@@ -275,11 +274,12 @@ void SystemConfigPrecompiled::upgradeChain(
         }
 
         // create new system tables of 3.1.0
-        // clang-format off
-            std::string_view tables[] = {
-                SYS_CODE_BINARY, bcos::ledger::SYS_VALUE,
-                SYS_CONTRACT_ABI, bcos::ledger::SYS_VALUE,
-            };
+        std::string_view tables[] = {
+            SYS_CODE_BINARY,
+            bcos::ledger::SYS_VALUE,
+            SYS_CONTRACT_ABI,
+            bcos::ledger::SYS_VALUE,
+        };
         // clang-format on
         size_t total = sizeof(tables) / sizeof(std::string_view);
 
