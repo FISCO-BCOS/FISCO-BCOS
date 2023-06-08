@@ -60,6 +60,27 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
     return {};
 }
 
+bcostars::Error bcos::rpc::RPCServer::blockNumber(long& number, tars::TarsCurrentPtr current)
+{
+    current->setResponse(false);
+
+    m_node->ledger()->asyncGetBlockNumber(
+        [current](const Error::Ptr& error, protocol::BlockNumber blockNumber) {
+            if (error)
+            {
+                bcostars::Error errorMessage;
+                errorMessage.errorCode = static_cast<tars::Int32>(error->errorCode());
+                errorMessage.errorMessage = error->errorMessage();
+
+                bcos::rpc::RPCServer::async_response_blockNumber(current, errorMessage, 0);
+                return;
+            }
+
+            bcos::rpc::RPCServer::async_response_blockNumber(current, {}, blockNumber);
+        });
+    return {};
+}
+
 void bcos::rpc::RPCApplication::initialize()
 {
     addServantWithParams<RPCServer, NodeService::Ptr>(

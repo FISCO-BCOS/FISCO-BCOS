@@ -275,7 +275,8 @@ struct Offset<T>
 class ContractABICodec
 {
 public:
-    explicit ContractABICodec(bcos::crypto::Hash::Ptr _hashImpl) : m_hashImpl(_hashImpl) {}
+    explicit ContractABICodec(bcos::crypto::Hash::Ptr _hashImpl) : m_hashImpl(std::move(_hashImpl))
+    {}
 
     template <class T, std::enable_if_t<!std::is_integral<T>::value>>
     bytes serialise(const T& _t)
@@ -286,14 +287,14 @@ public:
     }
 
     template <class T>
-    requires std::signed_integral<T> &&(!std::same_as<T, char>)
+        requires std::signed_integral<T> && (!std::same_as<T, char>)
     bytes serialise(const T& _in)
     {
         return serialise(s256(_in));
     }
 
     template <class T>
-    requires std::unsigned_integral<T> &&(!std::same_as<T, bool>)
+        requires std::unsigned_integral<T> && (!std::same_as<T, bool>)
     bytes serialise(const T& _in)
     {
         return serialise(u256(_in));
@@ -348,7 +349,7 @@ public:
     void deserialize(bool& _out, std::size_t _offset);
 
     template <class T>
-    requires std::signed_integral<T> && (!std::same_as<T, char>)
+        requires std::signed_integral<T> && (!std::same_as<T, char>)
     void deserialize(T& _out, std::size_t _offset)
     {
         s256 out;
@@ -357,7 +358,7 @@ public:
     }
 
     template <class T>
-    requires std::unsigned_integral<T> && (!std::same_as<T, bool>)
+        requires std::unsigned_integral<T> && (!std::same_as<T, bool>)
     void deserialize(T& _out, std::size_t _offset)
     {
         u256 out;

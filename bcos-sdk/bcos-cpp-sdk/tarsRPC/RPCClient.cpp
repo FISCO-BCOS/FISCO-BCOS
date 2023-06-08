@@ -85,3 +85,53 @@ std::future<bcos::protocol::TransactionReceipt::Ptr> bcos::sdk::RPCClient::sendT
 
     return future;
 }
+
+std::future<long> bcos::sdk::RPCClient::blockNumber(CompletionQueue* completionQueue, std::any tag)
+{
+    class Callback : public bcostars::RPCPrxCallback
+    {
+    public:
+        Callback(CompletionQueue* completionQueue, std::any tag)
+          : m_completionQueue(completionQueue), m_tag(std::move(tag))
+        {}
+
+        void callback_blockNumber(bcostars::Error const& error, long blockNumber) override
+        {
+            if (error.errorCode != 0)
+            {
+                m_promise.set_exception(
+                    std::make_exception_ptr(BCOS_ERROR(error.errorCode, error.errorMessage)));
+            }
+            else
+            {
+                m_promise.set_value(blockNumber);
+            }
+
+            if (m_completionQueue != nullptr)
+            {
+                m_completionQueue->m_asyncQueue.emplace(std::move(m_tag));
+            }
+        }
+
+        void callback_blockNumber_exception(tars::Int32 ret) override
+        {
+            m_promise.set_exception(
+                std::make_exception_ptr(BCOS_ERROR(ret, "RPCClient::blockNumber got exception")));
+
+            if (m_completionQueue != nullptr)
+            {
+                m_completionQueue->m_asyncQueue.emplace(std::move(m_tag));
+            }
+        }
+
+        CompletionQueue* m_completionQueue = nullptr;
+        std::promise<long> m_promise;
+        std::any m_tag;
+    };
+
+    auto callback = std::make_unique<Callback>(completionQueue, std::move(tag));
+    auto future = callback->m_promise.get_future();
+    m_rpcProxy->async_blockNumber(callback.release());
+
+    return future;
+}

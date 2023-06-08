@@ -2,6 +2,7 @@
 
 #include "../groupmgr/NodeService.h"
 #include <bcos-tars-protocol/tars/RPC.h>
+#include <servant/Global.h>
 
 namespace bcos::rpc
 {
@@ -15,9 +16,9 @@ public:
 
     bcostars::Error call(const bcostars::Transaction& request,
         bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current) override;
-
     bcostars::Error sendTransaction(const bcostars::Transaction& request,
         bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current) override;
+    bcostars::Error blockNumber(long& number, tars::TarsCurrentPtr current) override;
 
 private:
     NodeService::Ptr m_node;

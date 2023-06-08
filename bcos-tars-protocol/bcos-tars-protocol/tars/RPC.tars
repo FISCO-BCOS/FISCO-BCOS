@@ -9,5 +9,6 @@ module bcostars {
     {
         Error sendTransaction(Transaction request, out TransactionReceipt response);
         Error call(Transaction request, out TransactionReceipt response);
+        Error blockNumber(out long number);
     };
 };

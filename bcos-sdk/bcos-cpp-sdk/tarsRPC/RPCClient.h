@@ -37,5 +37,6 @@ public:
     std::future<bcos::protocol::TransactionReceipt::Ptr> sendTransaction(
         const bcos::protocol::Transaction& transaction, CompletionQueue* completionQueue = nullptr,
         std::any tag = {});
+    std::future<long> blockNumber(CompletionQueue* completionQueue = nullptr, std::any tag = {});
 };
 }  // namespace bcos::sdk
