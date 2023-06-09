@@ -108,7 +108,7 @@ init()
 
     python3 --version
     pip3 --version
-    pip3 install -r BcosBuilder/requirements.txt
+    sudo pip3 install -r BcosBuilder/requirements.txt
 
     cd BcosBuilder/pro/
     ${sed_cmd} "s/init_auth_address=\"\"/init_auth_address=\"${auth_admin_account}\"/g" conf/config-build-example.toml
