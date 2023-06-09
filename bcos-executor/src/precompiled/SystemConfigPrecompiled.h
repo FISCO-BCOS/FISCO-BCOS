@@ -24,6 +24,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <set>
+
 namespace bcos::precompiled
 {
 class SystemConfigPrecompiled : public bcos::precompiled::Precompiled

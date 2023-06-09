@@ -23,11 +23,11 @@ concurrency:
 jobs:
   build_mac:
     name: mac ci check
-    runs-on: self-hosted-mac3.4
+    runs-on: self-hosted-mac
     strategy:
       fail-fast: false
     env:
-      DEPS_ROOT: ~/cache/deps3.4
+      DEPS_ROOT: ~/cache/deps
       VCPKG_ROOT: ~/cache/vcpkg
 
     steps:

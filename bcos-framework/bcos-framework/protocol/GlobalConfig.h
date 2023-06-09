@@ -24,10 +24,9 @@
 #include "ProtocolInfoCodec.h"
 #include <map>
 #include <memory>
+#include <utility>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class GlobalConfig
 {
@@ -40,53 +39,51 @@ public:
     GlobalConfig()
     {
         // nodeService
-        c_supportedProtocols.insert({ProtocolModuleID::NodeService,
+        m_supportedProtocols.insert({ProtocolModuleID::NodeService,
             std::make_shared<ProtocolInfo>(
                 ProtocolModuleID::NodeService, ProtocolVersion::V0, ProtocolVersion::V1)});
         // gatewayService
-        c_supportedProtocols.insert({ProtocolModuleID::GatewayService,
+        m_supportedProtocols.insert({ProtocolModuleID::GatewayService,
             std::make_shared<ProtocolInfo>(
                 ProtocolModuleID::GatewayService, ProtocolVersion::V0, ProtocolVersion::V2)});
         // rpcService && SDK
-        c_supportedProtocols.insert({ProtocolModuleID::RpcService,
+        m_supportedProtocols.insert({ProtocolModuleID::RpcService,
             std::make_shared<ProtocolInfo>(
                 ProtocolModuleID::RpcService, ProtocolVersion::V0, ProtocolVersion::V1)});
         // executorService
-        c_supportedProtocols.insert({ProtocolModuleID::ExecutorService,
+        m_supportedProtocols.insert({ProtocolModuleID::ExecutorService,
             std::make_shared<ProtocolInfo>(
                 ProtocolModuleID::ExecutorService, ProtocolVersion::V0, ProtocolVersion::V1)});
     }
-    virtual ~GlobalConfig() {}
+    virtual ~GlobalConfig() = default;
 
-    ProtocolInfo::ConstPtr protocolInfo(ProtocolModuleID _moduleID) const
+    ProtocolInfo::ConstPtr protocolInfo(ProtocolModuleID moduleID) const
     {
-        if (!c_supportedProtocols.count(_moduleID))
+        auto it = m_supportedProtocols.find(moduleID);
+        if (it == m_supportedProtocols.end())
         {
             return nullptr;
         }
-        return c_supportedProtocols.at(_moduleID);
+        return it->second;
     }
 
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> const& supportedProtocols() const
     {
-        return c_supportedProtocols;
+        return m_supportedProtocols;
     }
     // Note: must set the protocolInfo codec when init
-    virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = _codec; }
+    virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = std::move(_codec); }
     virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
 
     BlockVersion minSupportedVersion() const { return m_minSupportedVersion; }
     BlockVersion maxSupportedVersion() const { return m_maxSupportedVersion; }
 
 private:
-    std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
+    std::map<ProtocolModuleID, ProtocolInfo::Ptr> m_supportedProtocols;
     // the minimum supported version
     BlockVersion m_minSupportedVersion = BlockVersion::MIN_VERSION;
     BlockVersion m_maxSupportedVersion = BlockVersion::MAX_VERSION;
-
     ProtocolInfoCodec::Ptr m_codec;
-    mutable bcos::SharedMutex x_version;
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol
 #define g_BCOSConfig bcos::protocol::GlobalConfig::instance()

@@ -54,6 +54,7 @@ jobs:
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
           alias cmake='cmake3'
+          cd vcpkg && git checkout master && git pull && cd ..
           mkdir -p build && cd build
           cmake3 -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Debug  -DWITH_LIGHTNODE=ON  -DWITH_TIKV=Off .. || cat *.log
           make -j3

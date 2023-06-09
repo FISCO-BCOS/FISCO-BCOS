@@ -31,8 +31,6 @@ using namespace bcos::precompiled;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
-static tbb::concurrent_unordered_map<std::string, uint32_t> s_name2SelectCache;
-
 void bcos::precompiled::checkNameValidate(std::string_view tableName, std::string_view _keyField,
     std::vector<std::string>& valueFieldList)
 {
@@ -99,7 +97,6 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
     };
 
     checkTableNameValidate(tableName);
-
     checkFieldNameValidate(tableName, _keyField);
 
     for (auto& valueField : valueFieldList)
@@ -197,19 +194,20 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
     return valueField;
 }
 
+static tbb::concurrent_unordered_map<std::string, uint32_t> s_name2SelectCache;
 uint32_t bcos::precompiled::getFuncSelector(
-    std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl)
+    std::string const& functionName, const crypto::Hash::Ptr& hashImpl)
 {
     // global function selector cache
-    if (s_name2SelectCache.count(_functionName))
+    auto it = s_name2SelectCache.find(functionName);
+    if (it != s_name2SelectCache.end())
     {
-        return s_name2SelectCache[_functionName];
+        return it->second;
     }
-    auto selector = getFuncSelectorByFunctionName(_functionName, _hashImpl);
-    s_name2SelectCache.insert(std::make_pair(_functionName, selector));
+    auto selector = getFuncSelectorByFunctionName(functionName, hashImpl);
+    s_name2SelectCache.insert(std::make_pair(functionName, selector));
     return selector;
 }
-
 // for ut
 void bcos::precompiled::clearName2SelectCache()
 {
