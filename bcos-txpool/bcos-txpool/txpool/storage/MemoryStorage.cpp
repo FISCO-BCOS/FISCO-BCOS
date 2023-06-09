@@ -317,6 +317,11 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
     auto [it, inserted] = m_txsTable.insert(std::make_pair(transaction->hash(), transaction));
     if (!inserted)
     {
+        if (transaction->submitCallback() && !it->second->submitCallback())
+        {
+            it->second->setSubmitCallback(std::move(transaction->submitCallback()));
+            return TransactionStatus::None;
+        }
         return TransactionStatus::AlreadyInTxPool;
     }
     m_onReady();
