@@ -27,7 +27,6 @@ jobs:
     strategy:
       fail-fast: false
     env:
-      DEPS_ROOT: ~/cache/deps3.4
 
     steps:
       - uses: actions/checkout@v3
@@ -44,7 +43,6 @@ jobs:
         run: |
           mkdir -p ./build
           rm -rf deps
-          ln -s ${{ env.DEPS_ROOT }} deps
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
