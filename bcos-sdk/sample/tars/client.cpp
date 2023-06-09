@@ -17,22 +17,22 @@ int main(int argc, char* argv[])
     long nonce = 0;
 
     // Deploy contract
-    bcostars::protocol::TransactionImpl createTransaction(
+    bcostars::protocol::TransactionImpl deployTransaction(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
-    createTransaction.mutableInner().data.blockLimit = blockNumber + blockLimit;
-    createTransaction.mutableInner().data.chainID = "chain0";
-    createTransaction.mutableInner().data.groupID = "group0";
-    createTransaction.mutableInner().data.nonce = boost::lexical_cast<std::string>(++nonce);
-    createTransaction.calculateHash(hash->hasher());
+    deployTransaction.mutableInner().data.blockLimit = blockNumber + blockLimit;
+    deployTransaction.mutableInner().data.chainID = "chain0";
+    deployTransaction.mutableInner().data.groupID = "group0";
+    deployTransaction.mutableInner().data.nonce = boost::lexical_cast<std::string>(++nonce);
+    deployTransaction.calculateHash(hash->hasher());
     boost::algorithm::unhex(
-        helloworldBytecode, std::back_inserter(createTransaction.mutableInner().data.input));
-    auto receipt = rpcClient.sendTransaction(createTransaction).get();
+        helloworldBytecode, std::back_inserter(deployTransaction.mutableInner().data.input));
+    auto receipt = rpcClient.sendTransaction(deployTransaction).get();
 
     if (receipt->status() != 0)
     {
         // Error!
     }
-    auto contractAddress = receipt->contractAddress();
+    // auto contractAddress = receipt->contractAddress();
 
     // Send transaction
     // bcostars::protocol::TransactionImpl transaction(
