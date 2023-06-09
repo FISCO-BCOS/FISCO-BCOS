@@ -561,7 +561,6 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
     auto it = bucket->container.find(keyPair);
     if (it != bucket->container.end())
     {
-        // assert(it->first.second == key);
         auto* data = it->second.get();
         lock.unlock();
         return std::make_tuple(std::unique_ptr<Error>(nullptr), std::make_optional(data));
@@ -808,6 +807,11 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     {
         pageKey = pageInfoOption.value()->getPageKey();
         pageData = pageInfoOption.value()->getPageData();
+    }
+    else
+    {
+        KeyPage_LOG(DEBUG) << LOG_DESC("empty table") << LOG_KV("table", table)
+                           << LOG_KV("key", toHex(key));
     }
     std::optional<Entry> entryOld;
     if (pageData == nullptr)
