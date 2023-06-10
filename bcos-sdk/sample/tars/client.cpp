@@ -19,10 +19,11 @@ int main(int argc, char* argv[])
     // Deploy contract
     bcostars::protocol::TransactionImpl deployTransaction(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
-    deployTransaction.mutableInner().data.blockLimit = blockNumber + blockLimit;
-    deployTransaction.mutableInner().data.chainID = "chain0";
-    deployTransaction.mutableInner().data.groupID = "group0";
-    deployTransaction.mutableInner().data.nonce = boost::lexical_cast<std::string>(++nonce);
+    auto& inner = deployTransaction.mutableInner();
+    inner.data.blockLimit = blockNumber + blockLimit;
+    inner.data.chainID = "chain0";
+    inner.data.groupID = "group0";
+    inner.data.nonce = boost::lexical_cast<std::string>(++nonce);
     deployTransaction.calculateHash(hash->hasher());
     boost::algorithm::unhex(
         helloworldBytecode, std::back_inserter(deployTransaction.mutableInner().data.input));
@@ -30,7 +31,8 @@ int main(int argc, char* argv[])
 
     if (receipt->status() != 0)
     {
-        // Error!
+        std::cout << "Deploy contract failed" << receipt->status() << std::endl;
+        return 1;
     }
     // auto contractAddress = receipt->contractAddress();
 

@@ -5,6 +5,7 @@
 #include "bcos-task/Wait.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <memory>
+#include <variant>
 
 void bcos::rpc::RPCServer::initialize() {}
 void bcos::rpc::RPCServer::destroy() {}
@@ -19,7 +20,6 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
     bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-
     auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [inner = std::move(const_cast<bcostars::Transaction&>(request))]() mutable {
             return &inner;
@@ -79,6 +79,18 @@ bcostars::Error bcos::rpc::RPCServer::blockNumber(long& number, tars::TarsCurren
             bcos::rpc::RPCServer::async_response_blockNumber(current, {}, blockNumber);
         });
     return {};
+}
+
+int bcos::rpc::RPCServer::onDispatch(tars::CurrentPtr current, std::vector<char>& buffer)
+{
+    m_connections.emplace(current, std::monostate{});
+    return bcostars::RPC::onDispatch(current, buffer);
+}
+
+int bcos::rpc::RPCServer::doClose(tars::CurrentPtr current)
+{
+    m_connections.erase(current);
+    return bcostars::RPC::doClose(current);
 }
 
 void bcos::rpc::RPCApplication::initialize()

@@ -3,6 +3,7 @@
 #include "../groupmgr/NodeService.h"
 #include <bcos-tars-protocol/tars/RPC.h>
 #include <servant/Global.h>
+#include <tbb/concurrent_hash_map.h>
 
 namespace bcos::rpc
 {
@@ -20,8 +21,12 @@ public:
         bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current) override;
     bcostars::Error blockNumber(long& number, tars::TarsCurrentPtr current) override;
 
+    int onDispatch(tars::CurrentPtr current, std::vector<char>& buffer) override;
+    int doClose(tars::CurrentPtr current) override;
+
 private:
     NodeService::Ptr m_node;
+    tbb::concurrent_hash_map<tars::CurrentPtr, std::monostate> m_connections;
 };
 
 class RPCApplication : public tars::Application
