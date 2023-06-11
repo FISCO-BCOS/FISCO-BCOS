@@ -2,15 +2,33 @@
 
 #include "../groupmgr/NodeService.h"
 #include <bcos-tars-protocol/tars/RPC.h>
-#include <servant/Global.h>
 #include <tbb/concurrent_hash_map.h>
 
 namespace bcos::rpc
 {
+
+struct Params
+{
+    struct PtrHash
+    {
+        static size_t hash(const tars::CurrentPtr& key)
+        {
+            return std::hash<void*>{}((void*)key.get());
+        }
+        static bool equal(const tars::CurrentPtr& lhs, const tars::CurrentPtr& rhs)
+        {
+            return lhs == rhs;
+        }
+    };
+
+    NodeService::Ptr node;
+    tbb::concurrent_hash_map<tars::CurrentPtr, std::monostate, PtrHash> sessions;
+};
+
 class RPCServer : public bcostars::RPC
 {
 public:
-    RPCServer(NodeService::Ptr node) : m_node(std::move(node)) {}
+    RPCServer(Params& params) : m_params(params) {}
 
     void initialize() override;
     void destroy() override;
@@ -25,8 +43,7 @@ public:
     int doClose(tars::CurrentPtr current) override;
 
 private:
-    NodeService::Ptr m_node;
-    tbb::concurrent_hash_map<tars::CurrentPtr, std::monostate> m_connections;
+    Params& m_params;
 };
 
 class RPCApplication : public tars::Application
@@ -43,7 +60,10 @@ public:
     void initialize() override;
     void destroyApp() override;
 
+    void pushBlockNumber(long blockNumber);
+
 private:
     NodeService::Ptr m_node;
+    Params m_params;
 };
 }  // namespace bcos::rpc

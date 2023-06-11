@@ -30,7 +30,7 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
         bcostars::Error error;
         try
         {
-            auto& txpool = self->m_node->txpoolRef();
+            auto& txpool = self->m_params.node->txpoolRef();
             co_await txpool.broadcastTransaction(*transaction);
             auto submitResult = co_await txpool.submitTransaction(std::move(transaction));
             auto receipt =
@@ -64,7 +64,7 @@ bcostars::Error bcos::rpc::RPCServer::blockNumber(long& number, tars::TarsCurren
 {
     current->setResponse(false);
 
-    m_node->ledger()->asyncGetBlockNumber(
+    m_params.node->ledger()->asyncGetBlockNumber(
         [current](const Error::Ptr& error, protocol::BlockNumber blockNumber) {
             if (error)
             {
@@ -83,20 +83,27 @@ bcostars::Error bcos::rpc::RPCServer::blockNumber(long& number, tars::TarsCurren
 
 int bcos::rpc::RPCServer::onDispatch(tars::CurrentPtr current, std::vector<char>& buffer)
 {
-    m_connections.emplace(current, std::monostate{});
+    m_params.sessions.emplace(current, std::monostate{});
     return bcostars::RPC::onDispatch(current, buffer);
 }
 
 int bcos::rpc::RPCServer::doClose(tars::CurrentPtr current)
 {
-    m_connections.erase(current);
+    m_params.sessions.erase(current);
     return bcostars::RPC::doClose(current);
 }
 
 void bcos::rpc::RPCApplication::initialize()
 {
-    addServantWithParams<RPCServer, NodeService::Ptr>(
+    addServantWithParams<RPCServer, Params>(
         tars::ServerConfig::Application + "." + tars::ServerConfig::ServerName + "." + "RPCObj",
-        m_node);
+        m_params);
 }
+
 void bcos::rpc::RPCApplication::destroyApp() {}
+
+void bcos::rpc::RPCApplication::pushBlockNumber(long blockNumber)
+{
+    for (auto& [current, _] : m_params.sessions)
+    {}
+}
