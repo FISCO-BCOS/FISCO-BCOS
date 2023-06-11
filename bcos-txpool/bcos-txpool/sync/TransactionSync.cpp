@@ -690,7 +690,7 @@ void TransactionSync::broadcastTxsFromRpc(
     // get the transactions from RPC
     for (const auto& tx : *_txs)
     {
-        if (!tx->submitCallback() || !tx->sender().empty())
+        if (!tx->submitCallback() || tx->sender().empty())
         {
             continue;
         }
