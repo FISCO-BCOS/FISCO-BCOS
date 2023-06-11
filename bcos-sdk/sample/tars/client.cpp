@@ -9,7 +9,7 @@ int main(int argc, char* argv[])
     auto hash = std::make_shared<bcos::crypto::Keccak256>();
     size_t count = 1000;
 
-    std::string_view connectionString;
+    std::string_view connectionString = "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000";
     bcos::sdk::RPCClient rpcClient(std::string{connectionString});
 
     auto blockNumber = rpcClient.blockNumber().get();
