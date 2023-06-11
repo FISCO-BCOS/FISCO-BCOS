@@ -4,6 +4,8 @@
 #include <bcos-tars-protocol/tars/RPC.h>
 #include <tbb/concurrent_hash_map.h>
 
+#include <utility>
+
 namespace bcos::rpc
 {
 
@@ -49,7 +51,7 @@ private:
 class RPCApplication : public tars::Application
 {
 public:
-    RPCApplication(NodeService::Ptr node) : m_node(std::move(node)) {}
+    RPCApplication(NodeService::Ptr node) { m_params.node = std::move(node); }
 
     RPCApplication& operator=(const RPCApplication&) = delete;
     RPCApplication(const RPCApplication&) = delete;
@@ -63,7 +65,6 @@ public:
     void pushBlockNumber(long blockNumber);
 
 private:
-    NodeService::Ptr m_node;
     Params m_params;
 };
 }  // namespace bcos::rpc

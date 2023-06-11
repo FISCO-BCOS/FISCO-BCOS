@@ -14,15 +14,12 @@ namespace bcos::sdk
 
 class CompletionQueue
 {
-    friend class RPCClient;
-
-private:
-    tbb::concurrent_bounded_queue<std::any> m_asyncQueue;
-
 public:
     // Wait for async operation complete, thread safe
     std::any wait();
     std::optional<std::any> tryWait();
+
+    tbb::concurrent_bounded_queue<std::any> m_asyncQueue;
 };
 
 class RPCClient
