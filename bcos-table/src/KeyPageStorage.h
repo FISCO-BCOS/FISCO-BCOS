@@ -459,8 +459,9 @@ public:
                 it->setPageData(nullptr);
                 if (it->getCount() == 0 || it->getPageKey().empty())
                 {
-                    KeyPage_LOG(DEBUG) << LOG_DESC("TableMeta clean empty page")
-                                       << LOG_KV("pageKey", toHex(it->getPageKey()));
+                    KeyPage_LOG(DEBUG)
+                        << LOG_DESC("TableMeta clean empty page") << LOG_KV("size", pages->size())
+                        << LOG_KV("pageKey", toHex(it->getPageKey()));
                     it = pages->erase(it);
                 }
                 else
@@ -1168,7 +1169,9 @@ public:
         auto it = bucket->container.find(std::make_pair(std::string(table), std::string(key)));
         if (it != bucket->container.end())
         {
-            return std::make_optional(std::make_shared<Data>(*it->second));
+            // copy data also need clean
+            auto data = std::make_shared<Data>(*it->second);
+            return std::make_optional(std::move(data));
         }
         auto prevKeyPage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(getPrev());
         if (prevKeyPage)
