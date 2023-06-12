@@ -41,6 +41,11 @@ jobs:
           java-version: 8
           java-package: jdk
 
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-07-28
+          override: true
+
       - name: Reuse build cache
         run: |
           mkdir -p ./build
@@ -53,10 +58,10 @@ jobs:
       - name: Build for mac
         run: |
           mkdir -p build && cd build && rm -rf CMakeCache.txt
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
           cmake --build . --parallel 8
 
-      - name: Test && Generate Coverage
+      - name: Test
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
