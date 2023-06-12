@@ -132,13 +132,22 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     co_return co_await awaitable;
 }
 
-TransactionStatus MemoryStorage::txpoolStorageCheck(const Transaction& transaction)
+TransactionStatus MemoryStorage::txpoolStorageCheck(
+    const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
     auto txHash = transaction.hash();
     auto it = m_txsTable.find(txHash);
     if (it != m_txsTable.end())
     {
-        return TransactionStatus::AlreadyInTxPool;
+        if (txSubmitCallback && !it->second->submitCallback())
+        {
+            it->second->setSubmitCallback(std::move(txSubmitCallback));
+            return TransactionStatus::AlreadyInTxPoolAndAccept;
+        }
+        else
+        {
+            return TransactionStatus::AlreadyInTxPool;
+        }
     }
     return TransactionStatus::None;
 }
@@ -232,7 +241,14 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
         txsSize = m_txsTable.size();
 
-        auto result = txpoolStorageCheck(*transaction);
+        auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
+        if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
+        {
+            // Note: if rpc is slower than p2p tx sync, we also need to accept this tx and record
+            // callback
+            return TransactionStatus::None;
+        }
+
         if (result != TransactionStatus::None)
         {
             return result;
@@ -301,6 +317,11 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
     auto [it, inserted] = m_txsTable.insert(std::make_pair(transaction->hash(), transaction));
     if (!inserted)
     {
+        if (transaction->submitCallback() && !it->second->submitCallback())
+        {
+            it->second->setSubmitCallback(std::move(transaction->submitCallback()));
+            return TransactionStatus::None;
+        }
         return TransactionStatus::AlreadyInTxPool;
     }
     m_onReady();
