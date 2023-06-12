@@ -32,7 +32,7 @@ bcostars::Error TxPoolServiceServer::submit(const bcostars::Transaction& tx,
     return {};
 }
 
-bcostars::Error TxPoolServiceServer::broadcastPushTransaction(
+bcostars::Error TxPoolServiceServer::broadcastTransaction(
     const bcostars::Transaction& tx, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
@@ -46,14 +46,40 @@ bcostars::Error TxPoolServiceServer::broadcastPushTransaction(
                          tars::TarsCurrentPtr current) -> bcos::task::Task<void> {
         try
         {
-            co_await txpool->broadcastPushTransaction(*transaction);
-            async_response_broadcastPushTransaction(current, {});
+            co_await txpool->broadcastTransaction(*transaction);
+            async_response_broadcastTransaction(current, {});
         }
         catch (bcos::Error& e)
         {
-            async_response_broadcastPushTransaction(current, toTarsError(e));
+            async_response_broadcastTransaction(current, toTarsError(e));
         }
     }(m_txpoolInitializer->txpool(), std::move(transaction), current));
+
+    return {};
+}
+
+bcostars::Error TxPoolServiceServer::broadcastTransactionBuffer(
+    const vector<tars::Char>& transactionBuffer, tars::TarsCurrentPtr current)
+{
+    current->setResponse(false);
+
+    bcos::task::wait(
+        [](std::shared_ptr<bcos::txpool::TxPoolInterface> txpool, const bcos::bytesConstRef& _data,
+            tars::TarsCurrentPtr current)
+            -> bcos::task::Task<void> {
+            try
+            {
+                co_await txpool->broadcastTransactionBuffer(_data);
+                async_response_broadcastTransactionBuffer(current, {});
+            }
+            catch (bcos::Error& e)
+            {
+                async_response_broadcastTransactionBuffer(current, toTarsError(e));
+            }
+        }(m_txpoolInitializer->txpool(),
+                bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(transactionBuffer.data()),
+                    transactionBuffer.size()),
+                current));
 
     return {};
 }
@@ -122,7 +148,6 @@ bcostars::Error TxPoolServiceServer::asyncNotifyBlockResult(tars::Int64 blockNum
     for (auto tarsResult : result)
     {
         auto bcosResult = std::make_shared<bcostars::protocol::TransactionSubmitResultImpl>(
-            m_txpoolInitializer->cryptoSuite(),
             [inner = std::move(const_cast<bcostars::TransactionSubmitResult&>(
                  tarsResult))]() mutable { return &inner; });
         bcosResultList->push_back(bcosResult);

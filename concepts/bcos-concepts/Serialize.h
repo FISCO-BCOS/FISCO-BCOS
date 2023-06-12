@@ -1,9 +1,6 @@
 #pragma once
 #include "Basic.h"
 #include "ByteBuffer.h"
-#include <boost/endian.hpp>
-#include <boost/endian/conversion.hpp>
-#include <vector>
 
 namespace bcos::concepts::serialize
 {
@@ -11,59 +8,48 @@ namespace detail
 {
 
 template <class Object, class Buffer>
-concept HasMemberFunc = requires(Object object, Buffer& output, const Buffer& input)
-{
-    object.encode(output);
-    object.decode(input);
-};
-
+concept HasMemberFuncEncode =
+    requires(Object const& object, Buffer& output) { object.encode(output); };
 template <class Object, class Buffer>
-concept HasADL = requires(Object object, Buffer& output, const Buffer& input)
-{
-    impl_encode(object, output);
-    impl_decode(input, object);
-};
+concept HasMemberFuncDecode =
+    requires(Object object, const Buffer& input) { object.decode(input); };
+template <class Object, class Buffer>
+concept HasADLEncode =
+    requires(Object const& object, Buffer& output) { impl_encode(object, output); };
+template <class Object, class Buffer>
+concept HasADLDecode = requires(Object object, const Buffer& input) { impl_decode(input, object); };
 
 struct encode
 {
-    void operator()(auto&& object, bcos::concepts::bytebuffer::ByteBuffer auto& out) const
+    template <class Object, class Buffer>
+    void operator()(const Object& object, Buffer& out) const
+        requires HasMemberFuncEncode<Object, Buffer>
     {
-        using ObjectType = std::remove_cvref_t<decltype(object)>;
-        using BufferType = std::remove_cvref_t<decltype(out)>;
-        if constexpr (HasMemberFunc<ObjectType, BufferType>)
-        {
-            object.encode(out);
-        }
-        else if constexpr (HasADL<ObjectType, BufferType>)
-        {
-            impl_encode(object, out);
-        }
-        else
-        {
-            static_assert(sizeof(ObjectType*), "Not found member function or adl!");
-        }
+        object.encode(out);
+    }
+
+    template <class Object, class Buffer>
+    void operator()(const Object& object, Buffer& out) const
+        requires HasADLEncode<Object, Buffer>
+    {
+        impl_encode(object, out);
     }
 };
 
 struct decode
 {
-    void operator()(bcos::concepts::bytebuffer::ByteBuffer auto const& input, auto&& object) const
+    template <class Buffer, class Object>
+    void operator()(Buffer const& input, Object& object) const
+        requires HasMemberFuncDecode<Object, Buffer>
     {
-        using ObjectType = std::remove_cvref_t<decltype(object)>;
-        using BufferType = std::remove_cvref_t<decltype(input)>;
+        object.decode(input);
+    }
 
-        if constexpr (HasMemberFunc<ObjectType, BufferType>)
-        {
-            object.decode(input);
-        }
-        else if constexpr (HasADL<ObjectType, BufferType>)
-        {
-            impl_decode(input, object);
-        }
-        else
-        {
-            static_assert(!sizeof(ObjectType*), "Not found member function or adl!");
-        }
+    template <class Buffer, class Object>
+    void operator()(Buffer const& input, Object& object) const
+        requires HasADLDecode<Object, Buffer>
+    {
+        impl_decode(input, object);
     }
 };
 }  // namespace detail

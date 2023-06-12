@@ -21,14 +21,19 @@ download_console()
     if [ -d ${console_file} ] && [ -d "${console_file}/.git" ]; then
         LOG_INFO "Use download cache"
         cd ${console_file}
-        git fetch --unshallow
+        git fetch --all
         rm -rf build log dist
         git reset --hard
         git checkout ${console_branch}
+        if [ $? -ne 0 ]; then
+            cd ..
+            rm -rf ${console_file}
+            git clone -b ${console_branch} https://ghproxy.com/github.com/FISCO-BCOS/console.git
+        fi
         git pull
     else
         rm -rf ${console_file}
-        git clone -b ${console_branch} --depth 5  https://ghproxy.com/github.com/FISCO-BCOS/console.git
+        git clone -b ${console_branch} https://ghproxy.com/github.com/FISCO-BCOS/console.git
     fi
 }
 

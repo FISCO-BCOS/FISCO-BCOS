@@ -55,7 +55,7 @@ enum class TransactionStatus : int32_t
     NonceCheckFail = 10000,  /// txPool related errors
     BlockLimitCheckFail = 10001,
     TxPoolIsFull = 10002,
-    Malform = 10003,
+    Malformed = 10003,
     AlreadyInTxPool = 10004,
     TxAlreadyInChain = 10005,
     InvalidChainId = 10006,
@@ -144,7 +144,7 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     case bcos::protocol::TransactionStatus::TxPoolIsFull:
         _out << "TxPoolIsFull";
         break;
-    case bcos::protocol::TransactionStatus::Malform:
+    case bcos::protocol::TransactionStatus::Malformed:
         _out << "MalformTx";
         break;
     case bcos::protocol::TransactionStatus::AlreadyInTxPool:
@@ -176,10 +176,10 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     return _out;
 }
 
-inline std::string toString(protocol::TransactionStatus const& _i)
+inline std::string toString(protocol::TransactionStatus const& _status)
 {
     std::stringstream stream;
-    stream << _i;
+    stream << _status;
     return stream.str();
 }
 

@@ -33,7 +33,7 @@ public:
     virtual BlockHeader::Ptr createBlockHeader(bytesConstRef _data) = 0;
     virtual BlockHeader::Ptr createBlockHeader(BlockNumber _number) = 0;
 
-    virtual BlockHeader::Ptr populateBlockHeader(const BlockHeader::Ptr& _blockHeader)
+    virtual BlockHeader::Ptr populateBlockHeader(const BlockHeader::ConstPtr& _blockHeader)
     {
         auto header = createBlockHeader();
         header->setVersion(_blockHeader->version());
@@ -48,9 +48,12 @@ public:
         header->setSignatureList(_blockHeader->signatureList());
         header->setConsensusWeights(_blockHeader->consensusWeights());
         header->setParentInfo(_blockHeader->parentInfo());
-        auto extraData = _blockHeader->extraData().toBytes();
-        header->setExtraData(std::move(extraData));
+        header->setExtraData(_blockHeader->extraData().toBytes());
         return header;
     }
 };
+
+template <class T>
+concept IsBlockHeaderFactory = std::derived_from<std::remove_cvref_t<T>, BlockHeaderFactory> ||
+    std::same_as<std::remove_cvref_t<T>, BlockHeaderFactory>;
 }  // namespace bcos::protocol

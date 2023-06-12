@@ -157,8 +157,14 @@ TransactionalStorageInterface::Ptr createBackendStorage(
         }
         if (write)
         {
+            RocksDBOption option;
+            option.maxWriteBufferNumber = nodeConfig->maxWriteBufferNumber();
+            option.maxBackgroundJobs = nodeConfig->maxBackgroundJobs();
+            option.writeBufferSize = nodeConfig->writeBufferSize();
+            option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
+            option.blockCacheSize = nodeConfig->blockCacheSize();
             storage = StorageInitializer::build(
-                nodeConfig->storagePath(), dataEncryption, nodeConfig->keyPageSize());
+                nodeConfig->storagePath(), option, dataEncryption, nodeConfig->keyPageSize());
         }
         else
         {
@@ -300,7 +306,7 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                     keys[j] = std::string((char*)transactionHash.data(), transactionHash.size());
                     // write transactions and receipts to archive database
                     Json::Value transactionJson;
-                    bcos::rpc::toJsonResp(transactionJson, transaction);
+                    bcos::rpc::toJsonResp(transactionJson, *transaction);
                     transactionValues[j] = transactionJson.toStyledString();
                     // read the receipt and store to archive database use json format
                     Json::Value receiptJson;
@@ -673,7 +679,14 @@ int main(int argc, const char* argv[])
     StorageInterface::Ptr archiveStorage = nullptr;
     if (boost::iequals(archiveType, "RocksDB"))
     {  // create archive rocksDB storage
-        archiveStorage = StorageInitializer::build(archivePath, nullptr, nodeConfig->keyPageSize());
+        RocksDBOption option;
+        option.maxWriteBufferNumber = nodeConfig->maxWriteBufferNumber();
+        option.maxBackgroundJobs = nodeConfig->maxBackgroundJobs();
+        option.writeBufferSize = nodeConfig->writeBufferSize();
+        option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
+        option.blockCacheSize = nodeConfig->blockCacheSize();
+        archiveStorage =
+            StorageInitializer::build(archivePath, option, nullptr, nodeConfig->keyPageSize());
     }
     else if (boost::iequals(archiveType, "TiKV"))
     {  // create archive TiKV storage

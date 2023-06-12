@@ -30,6 +30,10 @@ jobs:
       - uses: actions/checkout@v3
         with:
           clean: false
+      - name: Set up Node.js 16.x
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16.x'
 
       - name: Prepare centos tools
         run: |
@@ -52,20 +56,32 @@ jobs:
       - name: Config vcpkg registry proxy
         run: sed -i "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
 
+      - name: update vcpkg
+        run: |
+          cd ${{ env.VCPKG_ROOT }} && git checkout master && git pull
+          cd -
+
       - name: Build for linux
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          . /opt/rh/devtoolset-10/enable
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
           alias cmake='cmake3'
           mkdir -p build && cd build
-          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
-          make -j3
+          cmake3 -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          make -j8
       - name: Test
         run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+
+      - name: prepare RPCAPI Tests
+        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
+
+      - name: FISCO BCOS RpcApiTest
+        uses: matt-ball/newman-action@master
+        with:
+          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}

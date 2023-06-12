@@ -162,6 +162,9 @@ public:
         m_onMessageHandler = std::move(_handler);
     }
 
+    void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) override;
+    void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) override;
+
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
         Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
@@ -226,18 +229,14 @@ private:
 
     std::map<NodeIPEndpoint, P2pID> m_staticNodes;
     bcos::RecursiveMutex x_nodes;
-
     std::shared_ptr<Host> m_host;
 
     std::unordered_map<P2pID, P2PSession::Ptr> m_sessions;
     mutable bcos::RecursiveMutex x_sessions;
-
     std::shared_ptr<MessageFactory> m_messageFactory;
 
     P2pID m_nodeID;
-
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
-
     bool m_run = false;
 
     std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};

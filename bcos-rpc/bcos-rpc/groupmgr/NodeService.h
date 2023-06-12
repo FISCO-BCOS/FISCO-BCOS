@@ -34,9 +34,8 @@
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <servant/Application.h>
 #include <utility>
-namespace bcos
-{
-namespace rpc
+
+namespace bcos::rpc
 {
 class NodeService
 {
@@ -47,14 +46,14 @@ public:
         bcos::txpool::TxPoolInterface::Ptr _txpool,
         bcos::consensus::ConsensusInterface::Ptr _consensus,
         bcos::sync::BlockSyncInterface::Ptr _sync, bcos::protocol::BlockFactory::Ptr _blockFactory)
-      : m_ledger(_ledger),
-        m_scheduler(_scheduler),
-        m_txpool(_txpool),
-        m_consensus(_consensus),
-        m_sync(_sync),
-        m_blockFactory(_blockFactory)
+      : m_ledger(std::move(_ledger)),
+        m_scheduler(std::move(_scheduler)),
+        m_txpool(std::move(_txpool)),
+        m_consensus(std::move(_consensus)),
+        m_sync(std::move(_sync)),
+        m_blockFactory(std::move(_blockFactory))
     {}
-    virtual ~NodeService() {}
+    virtual ~NodeService() = default;
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
@@ -62,6 +61,8 @@ public:
     bcos::consensus::ConsensusInterface::Ptr consensus() { return m_consensus; }
     bcos::sync::BlockSyncInterface::Ptr sync() { return m_sync; }
     bcos::protocol::BlockFactory::Ptr blockFactory() { return m_blockFactory; }
+
+    bcos::txpool::TxPoolInterface& txpoolRef() { return *m_txpool; }
 
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
@@ -87,7 +88,7 @@ class NodeServiceFactory
 public:
     using Ptr = std::shared_ptr<NodeServiceFactory>;
     NodeServiceFactory() = default;
-    virtual ~NodeServiceFactory() {}
+    virtual ~NodeServiceFactory() = default;
     NodeService::Ptr buildNodeService(std::string const& _chainID, std::string const& _groupID,
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig);
 
@@ -100,10 +101,7 @@ public:
         auto serviceName = _nodeInfo->serviceName(_type);
         if (serviceName.size() == 0)
         {
-            if (!withoutTarsFramework)
-            {
-                return std::make_pair(nullptr, nullptr);
-            }
+            return std::make_pair(nullptr, nullptr);
         }
         auto prx = bcostars::createServantProxy<S>(serviceName);
         auto client = std::make_shared<T>(prx, _args...);
@@ -111,5 +109,4 @@ public:
         return std::make_pair(client, prx);
     }
 };
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc

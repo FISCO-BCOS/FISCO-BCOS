@@ -276,7 +276,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
         m_block->transactionsSize());
 
     tbb::parallel_for(
-        tbb::blocked_range<size_t>(0U, m_block->transactionsSize()), [&](auto const& range) {
+        tbb::blocked_range<size_t>(0U, m_block->transactionsSize(), 256), [&](auto const& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {
                 auto tx = m_block->transaction(i);
@@ -884,18 +884,18 @@ void BlockExecutive::DMCExecute(
         m_dmcRecorder->nextDmcRound();
 
         auto lastT = utcTime();
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                      << "DMCExecute.0:\t [+] Start\t\t\t"
-                      << LOG_KV("round", m_dmcRecorder->getRound())
-                      << LOG_KV("checksum", m_dmcRecorder->getChecksum());
+        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                       << "DMCExecute.0:\t [+] Start\t\t\t"
+                       << LOG_KV("round", m_dmcRecorder->getRound())
+                       << LOG_KV("checksum", m_dmcRecorder->getChecksum());
 
         // prepare all dmcExecutor
         serialPrepareExecutor();
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                      << "DMCExecute.1:\t [-] PrepareExecutor finish\t"
-                      << LOG_KV("round", m_dmcRecorder->getRound())
-                      << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                      << LOG_KV("cost", utcTime() - lastT);
+        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                       << "DMCExecute.1:\t [-] PrepareExecutor finish\t"
+                       << LOG_KV("round", m_dmcRecorder->getRound())
+                       << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                       << LOG_KV("cost", utcTime() - lastT);
         lastT = utcTime();
 
         // dump address for omp parallelization
@@ -967,13 +967,13 @@ void BlockExecutive::DMCExecute(
             }
 
             // handle batch result(only one thread can get in here)
-            DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                          << "DMCExecute.5:\t <<< Join all executor result\t"
-                          << LOG_KV("round", m_dmcRecorder->getRound())
-                          << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                          << LOG_KV("sendChecksum", m_dmcRecorder->getSendChecksum())
-                          << LOG_KV("receiveChecksum", m_dmcRecorder->getReceiveChecksum())
-                          << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
+            DMC_LOG(DEBUG) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                           << "DMCExecute.5:\t <<< Join all executor result\t"
+                           << LOG_KV("round", m_dmcRecorder->getRound())
+                           << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                           << LOG_KV("sendChecksum", m_dmcRecorder->getSendChecksum())
+                           << LOG_KV("receiveChecksum", m_dmcRecorder->getReceiveChecksum())
+                           << LOG_KV("cost(after prepare finish)", utcTime() - lastT);
 
             if (batchStatus->error != 0)
             {
@@ -999,12 +999,12 @@ void BlockExecutive::DMCExecute(
             }
         };
 
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
-                      << "DMCExecute.2:\t >>> Start send to executors\t"
-                      << LOG_KV("round", m_dmcRecorder->getRound())
-                      << LOG_KV("checksum", m_dmcRecorder->getChecksum())
-                      << LOG_KV("cost", utcTime() - lastT)
-                      << LOG_KV("contractNum", contractAddress.size());
+        DMC_LOG(DEBUG) << LOG_BADGE("Stat") << BLOCK_NUMBER(number())
+                       << "DMCExecute.2:\t >>> Start send to executors\t"
+                       << LOG_KV("round", m_dmcRecorder->getRound())
+                       << LOG_KV("checksum", m_dmcRecorder->getChecksum())
+                       << LOG_KV("cost", utcTime() - lastT)
+                       << LOG_KV("contractNum", contractAddress.size());
 
         // for each dmcExecutor
         // Use isolate task_arena to avoid error
@@ -1311,35 +1311,35 @@ void BlockExecutive::batchBlockCommit(
     bcos::protocol::TwoPCParams params;
     params.number = number();
     params.timestamp = 0;
-    m_scheduler->m_storage->asyncCommit(
-        params, [rollbackVersion, status, this, callback](Error::Ptr&& error, uint64_t commitTS) {
-            if (error)
-            {
+    m_scheduler->m_storage->asyncCommit(params, [rollbackVersion, status, this, callback](
+                                                    Error::Ptr&& error, uint64_t commitTS) {
+        if (error)
+        {
 // #define COMMIT_FAILED_NEED_ROLLBACK
 #ifdef COMMIT_FAILED_NEED_ROLLBACK
-                SCHEDULER_LOG(ERROR)
-                    << BLOCK_NUMBER(number()) << "Commit node storage error! need rollback"
-                    << error->errorMessage();
+            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number())
+                                 << "Commit node storage error! need rollback"
+                                 << error->errorMessage();
 
-                batchBlockRollback(rollbackVersion, [this, callback](Error::UniquePtr&& error) {
-                    if (error)
-                    {
-                        SCHEDULER_LOG(ERROR)
-                            << BLOCK_NUMBER(number())
-                            << "Rollback storage(for commit scheduler storage error) failed!"
-                            << LOG_KV("number", number()) << " " << error->errorMessage();
-                        // FATAL ERROR, NEED MANUAL FIX!
+            batchBlockRollback(rollbackVersion, [this, callback](Error::UniquePtr&& error) {
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR)
+                        << BLOCK_NUMBER(number())
+                        << "Rollback storage(for commit scheduler storage error) failed!"
+                        << LOG_KV("number", number()) << " " << error->errorMessage();
+                    // FATAL ERROR, NEED MANUAL FIX!
 
-                        callback(std::move(error));
-                        return;
-                    }
-                    else
-                    {
-                        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
-                            "Commit scheduler storage error, rollback"));
-                        return;
-                    }
-                });
+                    callback(std::move(error));
+                    return;
+                }
+                else
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(
+                        SchedulerError::CommitError, "Commit scheduler storage error, rollback"));
+                    return;
+                }
+            });
 #else
                 SCHEDULER_LOG(WARNING)
                         << BLOCK_NUMBER(number())
@@ -1348,57 +1348,58 @@ void BlockExecutive::batchBlockCommit(
                 callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError,
                             "Commit scheduler storage error, just return with no rollback"));
 #endif
-                return;
-            }
-            else
-            {
-                ++status->success;
-            }
+            return;
+        }
+        else
+        {
+            ++status->success;
+        }
 
-            bcos::protocol::TwoPCParams executorParams;
-            executorParams.number = number();
-            executorParams.timestamp = commitTS;
-            tbb::parallel_for_each(m_scheduler->m_executorManager->begin(),
-                m_scheduler->m_executorManager->end(), [&](auto const& executorIt) {
-                    SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
+        bcos::protocol::TwoPCParams executorParams;
+        executorParams.number = number();
+        executorParams.timestamp = commitTS;
 
-                    executorIt->commit(executorParams, [this, status](bcos::Error::Ptr&& error) {
+        // TODO: new parallel_for_each no suite
+        for (auto const& executorIt : *m_scheduler->m_executorManager)
+        {
+            SCHEDULER_LOG(TRACE) << "Commit executor for block " << executorParams.number;
+
+            executorIt->commit(executorParams, [this, status](bcos::Error::Ptr&& error) {
+                {
+                    WriteGuard lock(status->x_lock);
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << "Commit executor error!"
+                                             << error->errorMessage();
+
+                        // executor failed is also success++
+                        // because commit has been successful after ledger commit
+                        // this executorIt->commit is just for clear storage cache.
+                        ++status->success;
+
+                        if (error->errorCode() ==
+                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                         {
-                            WriteGuard lock(status->x_lock);
-                            if (error)
-                            {
-                                SCHEDULER_LOG(ERROR)
-                                    << BLOCK_NUMBER(number()) << "Commit executor error!"
-                                    << error->errorMessage();
-
-                                // executor failed is also success++
-                                // because commit has been successful after ledger commit
-                                // this executorIt->commit is just for clear storage cache.
-                                ++status->success;
-
-                                if (error->errorCode() ==
-                                    bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
-                                {
-                                    triggerSwitch();
-                                }
-                            }
-                            else
-                            {
-                                ++status->success;
-                                SCHEDULER_LOG(DEBUG)
-                                    << BLOCK_NUMBER(number())
-                                    << "Commit executor success, success: " << status->success;
-                            }
-
-                            if (status->success + status->failed < status->total)
-                            {
-                                return;
-                            }
+                            triggerSwitch();
                         }
-                        status->checkAndCommit(*status);
-                    });
-                });
-        });
+                    }
+                    else
+                    {
+                        ++status->success;
+                        SCHEDULER_LOG(DEBUG)
+                            << BLOCK_NUMBER(number())
+                            << "Commit executor success, success: " << status->success;
+                    }
+
+                    if (status->success + status->failed < status->total)
+                    {
+                        return;
+                    }
+                }
+                status->checkAndCommit(*status);
+            });
+        }
+    });
 }
 
 void BlockExecutive::batchBlockRollback(

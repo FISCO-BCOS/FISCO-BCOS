@@ -39,7 +39,6 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <mutex>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcos::storage
 {
@@ -416,12 +415,12 @@ public:
                             if (m_blockVersion >=
                                 (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
                             {
-                                entryHash = entry.hash(it.table, it.key, hashImpl, m_blockVersion);
+                                entryHash = entry.hash(it.table, it.key, *hashImpl, m_blockVersion);
                             }
                             else
                             {  // v3.0.0
                                 entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
-                                            entry.hash(it.table, it.key, hashImpl, m_blockVersion);
+                                            entry.hash(it.table, it.key, *hashImpl, m_blockVersion);
                             }
                             bucketHash ^= entryHash;
                         }

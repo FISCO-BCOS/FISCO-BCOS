@@ -2157,13 +2157,11 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#pragma omp parallel for
         for (int k = 0; k < 1000; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key = boost::lexical_cast<std::string>(k);
             entry->setField(0, boost::lexical_cast<std::string>(k));
-#pragma omp critical
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -2173,25 +2171,20 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#pragma omp parallel for
         for (int k = 0; k < 1000; ++k)
         {
             Condition c;
             c.limit(0, 200);
             auto keys = table->getPrimaryKeys(c);
 
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 200);
             c.limit(200, 300);
             keys = table->getPrimaryKeys(c);
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 300);
             c.limit(900, 200);
             keys = table->getPrimaryKeys(c);
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
             c.GE("900");
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
         }
     }
@@ -2951,6 +2944,80 @@ BOOST_AUTO_TEST_CASE(invalidPageKeyToValid)
     auto tableStorage3 = std::make_shared<KeyPageStorage>(prev, 2048);
     tableStorage3->asyncGetRow(tableName, key,
         [](Error::UniquePtr, std::optional<Entry> e) { BOOST_REQUIRE(e.has_value()); });
+}
+
+
+BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
+{
+    boost::log::core::get()->set_logging_enabled(true);
+    auto valueFields = "value1";
+
+    auto stateStorage = make_shared<StateStorage>(nullptr);
+    StateStorageInterface::Ptr prev = stateStorage;
+
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 2048);
+    auto tableName = "table_000";
+    BOOST_REQUIRE(tableStorage->createTable(tableName, valueFields));
+
+    auto table = tableStorage->openTable(tableName);
+    BOOST_REQUIRE(table);
+
+    for (size_t k = 1000002030; k < 1000002035; ++k)
+    {
+        auto entry = std::make_optional(table->newEntry());
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry->setField(0, key);
+        // 64B every entry
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    }
+    std::atomic<size_t> totalCount = 0;
+    tableStorage->parallelTraverse(false, [&](auto&& tableView, auto&& keyView, auto&& entry) {
+        ++totalCount;
+        stateStorage->asyncSetRow(tableView, keyView, entry, [](Error::UniquePtr) {});
+        return true;
+    });
+    // BOOST_REQUIRE_EQUAL(totalCount, 66);  // meta + 5page + s_table
+    auto tableStorage2 = std::make_shared<KeyPageStorage>(prev, 2048);
+    {
+        size_t keyVal = 1000002035;
+        auto entry = table->newEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+        entry.setField(0, key);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    std::cout << "==================== start delete" << std::endl;
+    auto tableStorage3 = std::make_shared<KeyPageStorage>(tableStorage2, 2048);
+    for (size_t k = 1000002035; k >= 1000002030; --k)
+    {
+        auto entry = table->newDeletedEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        // entry.setField(0, key);
+        tableStorage3->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    std::cout << "==================== start insert" << std::endl;
+    auto tableStorage4 = std::make_shared<KeyPageStorage>(tableStorage3, 2048);
+    size_t keyVal = 1000002034;
+    auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    auto entry = table->newEntry();
+    entry.setField(0, "ss");
+    tableStorage4->asyncSetRow(
+        tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    keyVal = 1000002035;
+    key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    entry = table->newEntry();
+    entry.setField(0, "ss");
+    tableStorage4->asyncSetRow(
+        tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    std::atomic<size_t> valid = 0;
+    Condition c;
+    c.limit(0, 200);
+    tableStorage4->asyncGetPrimaryKeys(
+        tableName, c, [&](Error::UniquePtr error, std::vector<std::string> keys) {
+            valid = keys.size();
+        });
+    BOOST_REQUIRE_EQUAL(valid, 2);
 }
 
 

@@ -21,14 +21,19 @@ download_java_sdk()
     if [ -d ${java_sdk_file} ] && [ -d "${java_sdk_file}/.git" ]; then
         LOG_INFO "Use download cache"
         cd ${java_sdk_file}
-        git fetch --unshallow
+        git fetch --all
         rm -rf build log
         git reset --hard
         git checkout ${java_sdk_branch}
+        if [ $? -ne 0 ]; then
+            cd ..
+            rm -rf ${java_sdk_file}
+            git clone -b ${java_sdk_branch} https://ghproxy.com/github.com/FISCO-BCOS/java-sdk.git
+        fi
         git pull
     else
         rm -rf ${java_sdk_file}
-        git clone -b ${java_sdk_branch} --depth 5  https://ghproxy.com/github.com/FISCO-BCOS/java-sdk.git
+        git clone -b ${java_sdk_branch} https://ghproxy.com/github.com/FISCO-BCOS/java-sdk.git
     fi
 }
 

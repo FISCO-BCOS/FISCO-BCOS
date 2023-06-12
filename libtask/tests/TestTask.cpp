@@ -1,5 +1,4 @@
 #include "bcos-utilities/Overloaded.h"
-#include <bcos-task/TBBScheduler.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <tbb/task_group.h>
@@ -137,17 +136,39 @@ BOOST_AUTO_TEST_CASE(asyncTask)
     std::cout << "asyncTask test over" << std::endl;
 }
 
+bcos::task::Task<int&> returnIntReference(int& num)
+{
+    co_return num;
+}
+
+BOOST_AUTO_TEST_CASE(referenceTask)
+{
+    int topNumber = 10;
+    bcos::task::syncWait([&topNumber](int& number) -> bcos::task::Task<void> {
+        auto& result = co_await returnIntReference(number);
+        static_assert(std::is_reference_v<decltype(result)>);
+
+        BOOST_CHECK_EQUAL(std::addressof(result), std::addressof(topNumber));
+    }(topNumber));
+
+    using Type = AwaitableReturnType<bcos::task::Task<int&>>;
+    static_assert(std::is_same_v<Type, int&>);
+
+    auto& result2 = bcos::task::syncWait(returnIntReference(topNumber));
+    BOOST_CHECK_EQUAL(std::addressof(result2), std::addressof(topNumber));
+}
+
 BOOST_AUTO_TEST_CASE(tbbScheduler)
 {
-    TBBScheduler tbbScheduler;
+    // TBBScheduler tbbScheduler;
 
-    bcos::task::syncWait(
-        []() -> Task<void> {
-            auto num = co_await level2();
-            co_await level3();
-            co_return;
-        }(),
-        &tbbScheduler);
+    // bcos::task::syncWait(
+    //     []() -> Task<void> {
+    //         auto num = co_await level2();
+    //         co_await level3();
+    //         co_return;
+    //     }(),
+    //     &tbbScheduler);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

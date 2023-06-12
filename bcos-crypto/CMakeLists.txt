@@ -1,4 +1,3 @@
-
 project(bcos-crypto VERSION ${VERSION})
 
 file(GLOB_RECURSE ALL_SRCS bcos-crypto/*.cpp)

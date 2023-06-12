@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "bcos-task/Task.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
 #include <bcos-utilities/BucketMap.h>
@@ -58,8 +59,14 @@ public:
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override = default;
 
+    // New interfaces =============
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override;
+
+    std::vector<protocol::Transaction::ConstPtr> getTransactions(
+        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
+        override;
+    // ============================
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
@@ -74,7 +81,7 @@ public:
     bcos::protocol::TransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
 
-    // FIXME: deprecated, after using txpool::broadcastPushTransaction
+    // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
@@ -87,7 +94,7 @@ public:
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 
-    // FIXME: deprecated, after using txpool::broadcastPushTransaction
+    // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::crypto::HashListPtr filterUnknownTxs(
         bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
@@ -108,7 +115,8 @@ public:
         bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) override;
     void batchImportTxs(bcos::protocol::TransactionsPtr _txs) override;
 
-    void batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
+    // return true if all txs have been marked
+    bool batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) override;
 
@@ -143,7 +151,8 @@ protected:
     virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
     virtual void cleanUpExpiredTransactions();
 
-    virtual void batchMarkTxsWithoutLock(bcos::crypto::HashList const& _txsHashList,
+    // return true if all txs have been marked
+    virtual bool batchMarkTxsWithoutLock(bcos::crypto::HashList const& _txsHashList,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag);
 

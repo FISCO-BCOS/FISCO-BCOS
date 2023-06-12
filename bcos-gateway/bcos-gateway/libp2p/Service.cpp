@@ -494,8 +494,7 @@ void Service::asyncSendMessageByNodeID(
             return;
         }
 
-
-        P2PSession::Ptr session = nullptr;
+        P2PSession::Ptr session;
         {
             RecursiveGuard lock(x_sessions);
             auto it = m_sessions.find(nodeID);
@@ -504,6 +503,7 @@ void Service::asyncSendMessageByNodeID(
                 session = it->second;
             }
         }
+
         if (session)
         {
             if (message->seq() == 0)
@@ -511,7 +511,7 @@ void Service::asyncSendMessageByNodeID(
                 message->setSeq(m_messageFactory->newSeq());
             }
             // for compatibility_version consideration
-            sendMessageToSession(session, message, options, callback);
+            sendMessageToSession(std::move(session), message, options, callback);
         }
         else
         {
@@ -530,10 +530,8 @@ void Service::asyncSendMessageByNodeID(
 
         if (callback)
         {
-            m_host->threadPool()->enqueue([callback, e] {
-                callback(NetworkException(Disconnect, "Disconnect"), P2PSession::Ptr(),
-                    P2PMessage::Ptr());
-            });
+            callback(
+                NetworkException(Disconnect, "Disconnect"), P2PSession::Ptr(), P2PMessage::Ptr());
         }
     }
 }
@@ -550,7 +548,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 
         for (auto& session : sessions)
         {
-            asyncSendMessageByNodeID(session.first, message, CallbackFuncWithSession(), options);
+            asyncSendMessageByNodeID(session.first, message, nullptr, options);
         }
     }
     catch (std::exception& e)
@@ -616,6 +614,13 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         return;
     }
     auto p2pMessage = newP2PMessage(_type, _payload);
+
+    if (!_callback)
+    {
+        asyncSendMessageByNodeID(_dstNodeID, p2pMessage, nullptr);
+        return;
+    }
+
     asyncSendMessageByNodeID(
         _dstNodeID, p2pMessage,
         [_dstNodeID, _callback](NetworkException _e, std::shared_ptr<P2PSession>,
@@ -734,5 +739,59 @@ void Service::onReceiveProtocol(
                              << LOG_KV("peer", _session ? _session->p2pID() : "unknown")
                              << LOG_KV("packetType", _message->packetType())
                              << LOG_KV("seq", _message->seq());
+    }
+}
+
+void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable)
+{
+    // update the config
+    m_host->peerBlacklist()->update(_strList, _enable);
+    // disconnect nodes in the blacklist
+    if (true == _enable)
+    {
+        RecursiveGuard l(x_sessions);
+        auto s = m_sessions;  // make a copy in case m_sessions changes in onMessage cause iterator
+                              // invalidation
+        for (auto session : s)
+        {
+            auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
+            if (_strList.end() == _strList.find(p2pIdWithoutExtInfo))
+            {
+                continue;
+            }
+
+            SERVICE_LOG(INFO) << LOG_DESC("updatePeerBlacklist, disconnect peer in blacklist")
+                              << LOG_KV("peer", p2pIdWithoutExtInfo);
+
+            updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
+            session.second->session()->disconnect(DisconnectReason::InBlacklistReason);
+        }
+    }
+}
+
+void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable)
+{
+    // update the config
+    m_host->peerWhitelist()->update(_strList, _enable);
+    // disconnect nodes not in the whitelist
+    if (true == _enable)
+    {
+        RecursiveGuard l(x_sessions);
+        auto s = m_sessions;  // make a copy in case m_sessions changes in onMessage cause iterator
+                              // invalidation
+        for (auto session : s)
+        {
+            auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
+            if (_strList.end() != _strList.find(p2pIdWithoutExtInfo))
+            {
+                continue;
+            }
+
+            SERVICE_LOG(INFO) << LOG_DESC("updatePeerWhitelist, disconnect peer not in whitelist")
+                              << LOG_KV("peer", p2pIdWithoutExtInfo);
+
+            updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
+            session.second->session()->disconnect(DisconnectReason::NotInWhitelistReason);
+        }
     }
 }

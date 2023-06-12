@@ -42,6 +42,7 @@ public:
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
     constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
     constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
+    constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
 
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
@@ -117,6 +118,7 @@ public:
 
     size_t minSealTime() const { return m_minSealTime; }
     size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
+    size_t pipelineSize() const { return m_pipelineSize; }
 
     std::string const& storagePath() const { return m_storagePath; }
     std::string const& storageType() const { return m_storageType; }
@@ -124,6 +126,9 @@ public:
     int maxWriteBufferNumber() const { return m_maxWriteBufferNumber; }
     bool enableStatistics() const { return m_enableDBStatistics; }
     int maxBackgroundJobs() const { return m_maxBackgroundJobs; }
+    size_t writeBufferSize() const { return m_writeBufferSize; }
+    int minWriteBufferNumberToMerge() const { return m_minWriteBufferNumberToMerge; }
+    size_t blockCacheSize() const { return m_blockCacheSize; }
     std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
     std::string const& pdCaPath() const { return m_pdCaPath; }
     std::string const& pdCertPath() const { return m_pdCertPath; }
@@ -231,6 +236,24 @@ public:
     void getTarsClientProxyEndpoints(
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
+    bool enableBaselineScheduler() const { return m_enableBaselineScheduler; }
+    struct BaselineSchedulerConfig
+    {
+        int parallel = 0;
+        int chunkSize = 0;
+        int maxThread = 0;
+    };
+    BaselineSchedulerConfig const& baselineSchedulerConfig() const
+    {
+        return m_baselineSchedulerConfig;
+    }
+
+    struct TarsRPCConfig
+    {
+        std::string configPath;
+    };
+    TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -290,6 +313,7 @@ private:
     // sealer configuration
     size_t m_minSealTime = 0;
     size_t m_checkPointTimeoutInterval;
+    size_t m_pipelineSize = 50;
 
     // for security
     std::string m_privateKeyPath;
@@ -319,9 +343,13 @@ private:
     std::string m_pdCaPath;
     std::string m_pdCertPath;
     std::string m_pdKeyPath;
-    int m_maxWriteBufferNumber = 3;
     bool m_enableDBStatistics = false;
+    int m_maxWriteBufferNumber = 3;
     int m_maxBackgroundJobs = 3;
+    size_t m_writeBufferSize = 64 << 21;
+    int m_minWriteBufferNumberToMerge = 2;
+    size_t m_blockCacheSize = 128 << 20;
+
     bool m_enableArchive = false;
     std::string m_archiveListenIP;
     uint16_t m_archiveListenPort = 0;
@@ -335,6 +363,9 @@ private:
     bool m_isSerialExecute = false;
     size_t m_vmCacheSize = 1024;
     std::string m_authAdminAddress;
+    bool m_enableBaselineScheduler = false;
+    BaselineSchedulerConfig m_baselineSchedulerConfig;
+    TarsRPCConfig m_tarsRPCConfig;
 
     // Pro and Max versions run do not apply to tars admin site
     bool m_withoutTarsFramework = {false};

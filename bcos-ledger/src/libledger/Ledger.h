@@ -36,7 +36,7 @@
 
 namespace bcos::ledger
 {
-class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledger>
+class Ledger : public LedgerInterface
 {
 public:
     using CacheType = boost::compute::detail::lru_cache<int64_t, std::shared_ptr<std::vector<h256>>>;

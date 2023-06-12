@@ -58,8 +58,7 @@ class FakeTransactionSync1 : public TransactionSync
 {
 public:
     explicit FakeTransactionSync1(TransactionSyncConfig::Ptr _config) : TransactionSync(_config) {}
-    ~FakeTransactionSync1() override {}
-    void start() override {}
+    ~FakeTransactionSync1() override = default;
 };
 
 class FakeTransactionSync : public FakeTransactionSync1
@@ -68,20 +67,6 @@ public:
     explicit FakeTransactionSync(TransactionSyncConfig::Ptr _config) : FakeTransactionSync1(_config)
     {}
     ~FakeTransactionSync() override {}
-
-    // only broadcast txsStatus
-    void maintainTransactions() override
-    {
-        auto txs = config()->txpoolStorage()->fetchNewTxs(10000);
-        if (txs->size() == 0)
-        {
-            return;
-        }
-        auto connectedNodeList = m_config->connectedNodeList();
-        auto consensusNodeList = m_config->consensusNodeList();
-
-        forwardTxsFromP2P(connectedNodeList, consensusNodeList, txs);
-    }
 };
 
 class FakeMemoryStorage : public MemoryStorage
@@ -103,7 +88,7 @@ public:
         m_groupId(_groupId),
         m_chainId(_chainId),
         m_blockLimit(_blockLimit),
-        m_fakeGateWay(_fakeGateWay)
+        m_fakeGateWay(std::move(_fakeGateWay))
     {
         auto blockHeaderFactory =
             std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
@@ -114,6 +99,7 @@ public:
             _cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
         m_txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
+        m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_COUNT_LIMIT, "1000");
 
         m_frontService = std::make_shared<FakeFrontService>(_nodeId);
         auto txPoolFactory =
@@ -138,10 +124,6 @@ public:
         if (m_txpool)
         {
             m_txpool->stop();
-        }
-        if (m_sync)
-        {
-            m_sync->stop();
         }
     }
 

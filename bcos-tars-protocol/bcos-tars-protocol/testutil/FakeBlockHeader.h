@@ -42,7 +42,8 @@ inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr deco
     auto originParent = blockHeader->parentInfo();
     auto decodedParent = decodedBlockHeader->parentInfo();
     BOOST_CHECK_EQUAL(originParent.size(), decodedParent.size());
-    for (auto [originParentInfo, decodedParentInfo] : RANGES::zip_view(originParent, decodedParent))
+    for (auto [originParentInfo, decodedParentInfo] :
+        RANGES::views::zip(originParent, decodedParent))
     {
         BOOST_CHECK_EQUAL(originParentInfo.blockHash, decodedParentInfo.blockHash);
         BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodedParentInfo.blockNumber);

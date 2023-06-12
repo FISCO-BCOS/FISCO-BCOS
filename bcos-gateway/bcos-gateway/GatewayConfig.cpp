@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <limits>
 #include <string>
+#include <vector>
 
 using namespace bcos;
 using namespace security;
@@ -772,6 +773,7 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
         }
     }
 
+    GATEWAY_CONFIG_LOG(INFO) << "rateLimiter: " << m_rateLimiterConfig.enable;
 
     m_rateLimiterConfig.p2pBasicMsgQPS = p2pBasicMsgQPS;
     m_rateLimiterConfig.p2pModuleMsgQPS = moduleMsgQPS;
@@ -894,8 +896,9 @@ void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _
         certBlacklistSection = "certificate_blacklist";
     }
 
-    bool enableBlacklist{false};
     // CRL means certificate rejected list, CRL optional in config.ini
+    bool enableBlacklist{false};
+    std::set<std::string> certBlacklist;
     if (_pt.get_child_optional(certBlacklistSection))
     {
         for (auto it : _pt.get_child(certBlacklistSection))
@@ -912,8 +915,8 @@ void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _
                         (false == m_smSSL ? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
                     if (true == isNodeIDValid)
                     {
-                        m_enableBlacklist = true;
-                        m_certBlacklist.emplace(std::move(nodeID));
+                        enableBlacklist = true;
+                        certBlacklist.emplace(std::move(nodeID));
                     }
                     else
                     {
@@ -932,6 +935,11 @@ void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _
             }
         }
     }
+
+    bcos::Guard l(x_certBlacklist);
+
+    m_enableBlacklist = enableBlacklist;
+    m_certBlacklist.swap(certBlacklist);
 }
 
 void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _pt)
@@ -942,7 +950,8 @@ void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _
         certWhitelistSection = "certificate_whitelist";
     }
 
-    bool enableWhiteList{false};
+    bool enableWhitelist{false};
+    std::set<std::string> certWhitelist;
     // CAL means certificate accepted list, CAL optional in config.ini
     if (_pt.get_child_optional(certWhitelistSection))
     {
@@ -960,8 +969,8 @@ void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _
                         (false == m_smSSL ? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
                     if (true == isNodeIDValid)
                     {
-                        m_enableWhitelist = true;
-                        m_certWhitelist.emplace(std::move(nodeID));
+                        enableWhitelist = true;
+                        certWhitelist.emplace(std::move(nodeID));
                     }
                     else
                     {
@@ -980,6 +989,11 @@ void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _
             }
         }
     }
+
+    bcos::Guard l(x_certWhitelist);
+
+    m_enableWhitelist = enableWhitelist;
+    m_certWhitelist.swap(certWhitelist);
 }
 
 void GatewayConfig::checkFileExist(const std::string& _path)
@@ -992,4 +1006,20 @@ void GatewayConfig::checkFileExist(const std::string& _path)
                                                   " maybe file not exist, path: " +
                                                   _path));
     }
+}
+
+void GatewayConfig::loadPeerBlacklist()
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::ini_parser::read_ini(m_configFile, pt);
+
+    initPeerBlacklistConfig(pt);
+}
+
+void GatewayConfig::loadPeerWhitelist()
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::ini_parser::read_ini(m_configFile, pt);
+
+    initPeerWhitelistConfig(pt);
 }

@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.14)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum OS X deployment version")
 
 if(NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
@@ -7,7 +6,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(VERSION "3.3.0")
+set(VERSION "3.4.0")
 set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
@@ -27,6 +26,7 @@ include(BuildInfoGenerator)
 
 include(IncludeDirectories)
 include(TargetSettings)
+include(PrecompiledHeaders)
 
 add_subdirectory(bcos-boostssl)
 add_subdirectory(bcos-framework)
@@ -70,6 +70,7 @@ if(FULLNODE)
     add_subdirectory(libtask)
 
     add_subdirectory(transaction-executor)
+    add_subdirectory(transaction-scheduler)
 
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)

@@ -17,7 +17,6 @@
 # ------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.12)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "Minimum OS X deployment version")
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
@@ -28,12 +27,19 @@ add_library(bcos-framework INTERFACE)
 target_include_directories(bcos-framework INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-framework>)
-target_link_libraries(bcos-framework INTERFACE bcos-crypto bcos-task Microsoft.GSL::GSL)
+
+if (PRECOMPILED_HEADER)
+    target_link_libraries(bcos-framework INTERFACE bcos-crypto bcos-task Microsoft.GSL::GSL precompiled-headers)
+    target_precompile_headers(bcos-framework REUSE_FROM precompiled-headers)
+else()
+    target_link_libraries(bcos-framework INTERFACE bcos-crypto bcos-task Microsoft.GSL::GSL)
+endif()
 
 if (TESTS)
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
+    add_subdirectory(benchmark)
 endif()
 
 # for code coverage

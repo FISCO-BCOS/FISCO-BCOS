@@ -47,7 +47,7 @@ private:
         if (submitResult && submitResult->transactionReceipt())
         {
             auto receiptImpl =
-                std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(
+                std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl const>(
                     submitResult->transactionReceipt());
             receipt = std::move(const_cast<bcostars::TransactionReceipt&>(receiptImpl->inner()));
         }

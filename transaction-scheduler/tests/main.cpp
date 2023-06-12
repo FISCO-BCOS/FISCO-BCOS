@@ -13,18 +13,12 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief itt api
- * @file ITTAPI.h
- * @author: xingqiangbai
- * @date 2023-03-06
+ * @file main.cpp
+ * @author: yujiechen, jimmyshi
+ * @date 2021-02-24
  */
+#define BOOST_TEST_MODULE FISCO_BCOS_Tests
+#define BOOST_TEST_MAIN
 
-#include "ITTAPI.h"
-
-namespace bcos
-{
-const __itt_domain* const ITT_DOMAIN_STORAGE = __itt_domain_create("storage");
-const __itt_domain* const ITT_DOMAIN_CONSENSUS = __itt_domain_create("consensus");
-const __itt_domain* const ITT_DOMAIN_SCHEDULER = __itt_domain_create("scheduler");
-const __itt_domain* const ITT_DOMAIN_EXECUTOR = __itt_domain_create("executor");
-}  // namespace bcos
+#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>

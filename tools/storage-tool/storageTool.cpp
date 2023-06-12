@@ -254,8 +254,15 @@ TransactionalStorageInterface::Ptr createBackendStorage(
         }
         if (write)
         {
+            RocksDBOption option;
+            option.maxWriteBufferNumber = nodeConfig->maxWriteBufferNumber();
+            option.maxBackgroundJobs = nodeConfig->maxBackgroundJobs();
+            option.writeBufferSize = nodeConfig->writeBufferSize();
+            option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
+            option.blockCacheSize = nodeConfig->blockCacheSize();
+
             storage = StorageInitializer::build(
-                nodeConfig->storagePath(), dataEncryption, nodeConfig->keyPageSize());
+                nodeConfig->storagePath(), option, dataEncryption, nodeConfig->keyPageSize());
         }
         else
         {

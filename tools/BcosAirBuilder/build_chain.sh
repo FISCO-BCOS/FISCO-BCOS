@@ -25,7 +25,8 @@ rsa_key_length=2048
 sm_mode='false'
 enable_hsm='false'
 macOS=""
-x86_64_arch="true"
+x86_64_arch="false"
+arm64_arch="false"
 sm2_params="sm_sm2.param"
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
@@ -38,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.3.0"
+default_version="v3.4.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -107,9 +108,12 @@ file_must_exists() {
 check_env() {
     if [ "$(uname)" == "Darwin" ];then
         macOS="macOS"
-    fi
-    if [ "$(uname -m)" != "x86_64" ];then
-        x86_64_arch="false"
+    elif [ "$(uname -m)" == "x86_64" ];then
+        x86_64_arch="true"
+    elif [ "$(uname -m)" == "arm64" ];then
+        arm64_arch="true"
+    elif [ "$(uname -m)" == "aarch64" ];then
+        arm64_arch="true"
     fi
 }
 
@@ -362,13 +366,16 @@ download_bin()
         LOG_INFO "Use binary ${binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64 or macOS. Please compile from source."; fi
+    if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64/aarch64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64/aarch64 and macOS. Please compile from source."; fi
     binary_path="bin/${binary_name}"
-    package_name="${binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
         package_name="${binary_name}-macOS-x86_64.tar.gz"
+    elif [ "${arm64_arch}" == "true" ];then
+        package_name="${binary_name}-linux-aarch64.tar.gz"
+    elif [ "${x86_64_arch}" == "true" ];then
+    	package_name="${binary_name}-linux-x86_64.tar.gz"
     fi
-
+    
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
     local github_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${compatibility_version}/${package_name}"
     # the binary can obtained from the cos
@@ -390,9 +397,12 @@ download_bin()
 download_lightnode_bin()
 {
     lightnode_binary_path="bin/${lightnode_binary_name}"
-    light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
         light_package_name="${lightnode_binary_name}-macOS-x86_64.tar.gz"
+    elif [ "${arm64_arch}" == "true" ];then
+        light_package_name="${lightnode_binary_name}-linux-aarch64.tar.gz"
+    elif [ "${x86_64_arch}" == "true" ];then
+    	light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
     fi
 
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${light_package_name}"
@@ -649,7 +659,7 @@ parse_params() {
         N)
             modify_node_path=$OPTARG
             dir_must_exists "${modify_node_path}"
-            ;; 
+            ;;
         u)
             multi_ca_path="$OPTARG"
             local last_char=${multi_ca_path: -1}
@@ -766,6 +776,8 @@ node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 ulimit -n 1024
 if [ ! -z \${node_pid} ];then
+    kill -USR1 \${node_pid}
+    kill -USR2 \${node_pid}
     echo " \${node} is running, pid is \$node_pid."
     exit 0
 else
@@ -1591,8 +1603,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.3.0
-    compatibility_version=3.3.0
+    ; the default is 3.4.0
+    compatibility_version=3.4.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000

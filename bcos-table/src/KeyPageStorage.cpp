@@ -335,7 +335,8 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                                 if (meta && meta->pageExist(k))
                                 {
                                     KeyPage_LOG(DEBUG)
-                                        << LOG_DESC("Traverse Page invalid key become valid");
+                                        << LOG_DESC("Traverse Page invalid key become valid")
+                                        << LOG_KV("key", toHex(k));
                                     continue;
                                 }
                                 Entry e;
@@ -397,7 +398,7 @@ auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> cryp
                     {  // sys table
                         auto hash = hashImpl->hash(data->table);
                         hash ^= hashImpl->hash(data->key);
-                        hash ^= entry.hash(data->table, data->key, hashImpl, m_blockVersion);
+                        hash ^= entry.hash(data->table, data->key, *hashImpl, m_blockVersion);
                         localEntriesHash ^= hash;
                         ++entrycount;
                     }
@@ -561,7 +562,6 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
     auto it = bucket->container.find(keyPair);
     if (it != bucket->container.end())
     {
-        // assert(it->first.second == key);
         auto* data = it->second.get();
         lock.unlock();
         return std::make_tuple(std::unique_ptr<Error>(nullptr), std::make_optional(data));
@@ -808,31 +808,53 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     {
         pageKey = pageInfoOption.value()->getPageKey();
         pageData = pageInfoOption.value()->getPageData();
+        if (pageData == nullptr)
+        {
+            bool shouldExist =
+                pageInfoOption.has_value() ? (pageInfoOption.value()->getCount() > 0) : false;
+            auto [e, pageDataOp] = getData(table, pageKey, shouldExist);
+            if (e)
+            {
+                return std::move(e);
+            }
+            pageData = pageDataOp.value();
+            if (pageInfoOption)
+            {
+                pageInfoOption.value()->setPageData(pageData);
+            }
+            auto* page = pageData->getPage();
+            if (shouldExist && page->validCount() != pageInfoOption.value()->getCount())
+            {
+                KeyPage_LOG(FATAL) << LOG_DESC("setEntry page valid count mismatch")
+                                   << LOG_KV("key", toHex(key)) << LOG_KV("pageKey", toHex(pageKey))
+                                   << LOG_KV("count", pageInfoOption.value()->getCount())
+                                   << LOG_KV("realCount", page->validCount());
+            }
+        }
+    }
+    else
+    {
+        // table is delete to empty, insert a new key
+        // which is an old pageKey then will read the wrong page
+        KeyPage_LOG(INFO) << LOG_DESC("empty table") << LOG_KV("table", table)
+                          << LOG_KV("key", toHex(key));
+        auto newData = std::make_shared<Data>();
+        newData->table = table;
+        newData->key = key;
+        newData->data = KeyPageStorage::Page();
+        newData->type = Data::Type::Page;
+        newData->entry.setStatus(Entry::Status::EMPTY);
+        {  // insert into cache
+            auto keyPair = std::make_pair(newData->table, newData->key);
+            auto [bucket, writeLock] = getMutBucket(newData->table, newData->key);
+            boost::ignore_unused(writeLock);
+            auto* data = bucket->container.emplace(std::make_pair(keyPair, std::move(newData)))
+                             .first->second.get();
+            pageData = data;
+        }
     }
     std::optional<Entry> entryOld;
-    if (pageData == nullptr)
-    {
-        bool shouldExist =
-            pageInfoOption.has_value() ? (pageInfoOption.value()->getCount() > 0) : false;
-        auto [e, pageDataOp] = getData(table, pageKey, shouldExist);
-        if (e)
-        {
-            return std::move(e);
-        }
-        pageData = pageDataOp.value();
-        if (pageInfoOption)
-        {
-            pageInfoOption.value()->setPageData(pageData);
-        }
-        auto* page = pageData->getPage();
-        if (shouldExist && page->validCount() != pageInfoOption.value()->getCount())
-        {
-            KeyPage_LOG(FATAL) << LOG_DESC("setEntry page valid count mismatch")
-                               << LOG_KV("key", toHex(key)) << LOG_KV("pageKey", toHex(pageKey))
-                               << LOG_KV("count", pageInfoOption.value()->getCount())
-                               << LOG_KV("realCount", page->validCount());
-        }
-    }
+
     // if new entry is too big, it will trigger split
     auto* page = pageData->getPage();
     page->setTableMeta(meta);

@@ -1,33 +1,29 @@
 #pragma once
 
 #include "../protocol/Block.h"
+#include <bcos-concepts/ByteBuffer.h>
+#include <bcos-task/Task.h>
+#include <bcos-task/Trait.h>
+#include <bcos-utilities/Ranges.h>
 
 namespace bcos::concepts::transaction_scheduler
 {
 
-template <class TransactionRangeType>
-concept TransactionRange = RANGES::range<TransactionRangeType>;
-
-// All auto interfaces is awaitable
-template <class Impl>
-class TransactionSchedulerBase
+class TransactionScheduler
 {
 public:
-    // Return awaitable block header
-    auto executeTransactions(
-        const protocol::BlockHeader& blockHeader, TransactionRange auto const& transactions)
-    {
-        return impl().impl_executeBlock(transactions);
-    }
+    TransactionScheduler() noexcept = default;
+    TransactionScheduler(TransactionScheduler const&) noexcept = default;
+    TransactionScheduler(TransactionScheduler&&) noexcept = default;
+    TransactionScheduler& operator=(TransactionScheduler const&) noexcept = default;
+    TransactionScheduler& operator=(TransactionScheduler&&) noexcept = default;
+    virtual ~TransactionScheduler() noexcept = default;
 
-    // Return awaitable string
-    auto getCode(std::string_view contractAddress) { return impl().impl_getCode(contractAddress); }
-
-    // Return awaitable string
-    auto getABI(std::string_view contractAddress) { return impl().impl_getABI(contractAddress); }
-
-private:
-    friend Impl;
-    auto& impl() { return static_cast<Impl&>(*this); }
+    virtual task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
+        protocol::Block const& blockHeader,
+        RANGES::any_view<protocol::Transaction const&,
+            RANGES::category::random_access | RANGES::category::sized>
+            transactions) = 0;
 };
+
 }  // namespace bcos::concepts::transaction_scheduler

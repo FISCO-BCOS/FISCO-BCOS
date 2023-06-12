@@ -418,10 +418,10 @@ public:
                 }
                 else
                 {
-                    KeyPage_LOG(FATAL)
-                        << LOG_DESC("updatePageInfo not found")
-                        << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
-                        << LOG_KV("valid", count) << LOG_KV("size", size);
+                    KeyPage_LOG(FATAL) << LOG_DESC("updatePageInfo not found")
+                                       << LOG_KV("oldEndKey", toHex(oldEndKey))
+                                       << LOG_KV("pageKey", toHex(pageKey))
+                                       << LOG_KV("valid", count) << LOG_KV("size", size);
                 }
             }
             return oldPageKey;
@@ -459,8 +459,9 @@ public:
                 it->setPageData(nullptr);
                 if (it->getCount() == 0 || it->getPageKey().empty())
                 {
-                    KeyPage_LOG(DEBUG) << LOG_DESC("TableMeta clean empty page")
-                                       << LOG_KV("pageKey", toHex(it->getPageKey()));
+                    KeyPage_LOG(DEBUG)
+                        << LOG_DESC("TableMeta clean empty page") << LOG_KV("size", pages->size())
+                        << LOG_KV("pageKey", toHex(it->getPageKey()));
                     it = pages->erase(it);
                 }
                 else
@@ -910,12 +911,12 @@ public:
                     bcos::crypto::HashType entryHash(0);
                     if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
                     {
-                        entryHash = entry.second.hash(table, entry.first, hashImpl, blockVersion);
+                        entryHash = entry.second.hash(table, entry.first, *hashImpl, blockVersion);
                     }
                     else
                     {  // 3.0.0
                         entryHash = hash ^ hashImpl->hash(entry.first) ^
-                                    entry.second.hash(table, entry.first, hashImpl, blockVersion);
+                                    entry.second.hash(table, entry.first, *hashImpl, blockVersion);
                     }
                     // if (c_fileLogLevel <= TRACE)
                     // {
@@ -1168,7 +1169,9 @@ public:
         auto it = bucket->container.find(std::make_pair(std::string(table), std::string(key)));
         if (it != bucket->container.end())
         {
-            return std::make_optional(std::make_shared<Data>(*it->second));
+            // copy data also need clean
+            auto data = std::make_shared<Data>(*it->second);
+            return std::make_optional(std::move(data));
         }
         auto prevKeyPage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(getPrev());
         if (prevKeyPage)

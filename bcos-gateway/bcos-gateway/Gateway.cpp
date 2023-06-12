@@ -41,6 +41,8 @@
 #include <json/json.h>
 #include <algorithm>
 #include <random>
+#include <string>
+#include <vector>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -384,6 +386,7 @@ void Gateway::onReceiveP2PMessage(
     // moduleID
     auto moduleID = options->moduleID();
 
+
     // Notice: moduleID not set the previous version, try to decode from front message
     if (moduleID == 0)
     {
@@ -398,16 +401,19 @@ void Gateway::onReceiveP2PMessage(
                            << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload.size());
     }
 
-    // The moduleID is not obtained,
-    auto result =
-        ((moduleID == 0) ? std::nullopt :
-                           m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length()));
-    if (result.has_value())
+    if (m_gatewayRateLimiter)
     {
-        auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
-        m_p2pInterface->sendRespMessageBySession(
-            bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg, _session);
-        return;
+        // The moduleID is not obtained,
+        auto result = ((moduleID == 0) ?
+                           std::nullopt :
+                           m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length()));
+        if (result.has_value())
+        {
+            auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
+            m_p2pInterface->sendRespMessageBySession(
+                bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg, _session);
+            return;
+        }
     }
 
     auto srcNodeID = options->srcNodeID();
@@ -458,6 +464,7 @@ void Gateway::onReceiveBroadcastMessage(
     // moduleID
     uint16_t moduleID = options->moduleID();
 
+
     // Notice: moduleID not set the previous version, try to decode from front message
     if (moduleID == 0)
     {
@@ -473,13 +480,21 @@ void Gateway::onReceiveBroadcastMessage(
                            << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload->size());
     }
 
-    auto result =
-        ((moduleID == 0) ? std::nullopt :
-                           m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length()));
-    if (result.has_value())
+    if (m_gatewayRateLimiter)
     {
-        // For broadcast message, ratelimit check failed, do nothing.
-        return;
+        auto result = ((moduleID == 0) ?
+                           std::nullopt :
+                           m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length()));
+        if (result.has_value())
+        {
+            auto result = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+
+            if (result)
+            {
+                // For broadcast message, ratelimit check failed, do nothing.
+                return;
+            }
+        }
     }
 
     auto srcNodeIDPtr =

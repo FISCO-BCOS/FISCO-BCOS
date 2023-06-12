@@ -23,10 +23,11 @@
 #include "libinitializer/Initializer.h"
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
+#include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-utilities/ObjectAllocatorMonitor.h>
-namespace bcos
-{
-namespace node
+
+
+namespace bcos::node
 {
 class AirNodeInitializer
 {
@@ -54,6 +55,8 @@ private:
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     bcos::rpc::RPCInterface::Ptr m_rpc;
     bcos::ObjectAllocatorMonitor::Ptr m_objMonitor;
+
+    std::optional<rpc::RPCApplication> m_rpcApplication;
+    std::optional<std::thread> m_rpcThread;
 };
-}  // namespace node
-}  // namespace bcos
+}  // namespace bcos::node
