@@ -335,7 +335,8 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                                 if (meta && meta->pageExist(k))
                                 {
                                     KeyPage_LOG(DEBUG)
-                                        << LOG_DESC("Traverse Page invalid key become valid");
+                                        << LOG_DESC("Traverse Page invalid key become valid")
+                                        << LOG_KV("key", toHex(k));
                                     continue;
                                 }
                                 Entry e;
