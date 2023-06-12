@@ -101,10 +101,7 @@ public:
         auto serviceName = _nodeInfo->serviceName(_type);
         if (serviceName.size() == 0)
         {
-            if (!withoutTarsFramework)
-            {
-                return std::make_pair(nullptr, nullptr);
-            }
+            return std::make_pair(nullptr, nullptr);
         }
         auto prx = bcostars::createServantProxy<S>(serviceName);
         auto client = std::make_shared<T>(prx, _args...);
