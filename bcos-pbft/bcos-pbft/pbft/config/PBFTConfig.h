@@ -79,6 +79,14 @@ public:
         {
             m_pullTxsTimer->destroy();
         }
+        if (m_stateMachine)
+        {
+            m_stateMachine->stop();
+        }
+        if (m_storage)
+        {
+            m_storage->stop();
+        }
     }
     virtual void resetConfig(
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock = false);
