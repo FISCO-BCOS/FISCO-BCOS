@@ -49,9 +49,8 @@ ExternalProject_Add(bcos_wasm_project
         GIT_TAG 5c05f91d55c7bd4e7d88d2461bbded57539c8127
         GIT_SHALLOW false
         BUILD_IN_SOURCE 1
-        PATCH_COMMAND "git checkout Cargo.toml"
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release
+        BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release && PATCH_COMMAND "git checkout Cargo.toml"
         INSTALL_COMMAND ""
         LOG_DOWNLOAD 1
         LOG_CONFIGURE 1
