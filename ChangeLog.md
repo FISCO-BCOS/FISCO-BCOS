@@ -1,3 +1,63 @@
+
+### v3.4.0
+
+(2023-06-14)
+
+**新增**
+
+* [RPC支持带签名的Call接口](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3611)
+* [P2P动态加载黑白名单](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3621)
+
+**修改**
+
+* [升级TBB版本到2021.8.0](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3656)
+* [优化同步场景读写锁的互斥范围](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3650)
+
+**修复**
+
+* [修复在极端场景下偶现的同步失效的bug](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3674)
+* [修复交易回滚时只回滚部分合约的bug](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3629)
+* [修复viewchange时标记交易操作中返回值处理的bug](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3654)
+* [修复pro架构下断连场景中偶现的proxy为空的bug](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3684)
+* [修复AMOP回调析构的bug](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3673)
+* [修复BucketMap极端情况下的线程安全问题](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3666)
+* [修复Session中反复创建多个task_group的问题](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3662)
+* [修复轻节点发送交易因为编码问题导致Response为空的bug](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3670)
+* [修复KeyPage在删空表中数据后可能触发的fatal](https://github.com/FISCO-BCOS/FISCO-BCOS/pull/3686)
+
+**升级描述**
+
+* 升级节点可执行程序
+
+  效果：修复bug，并带来稳定性、性能的提升
+
+  操作：停止节点服务，升级节点可执行程序为当前版本，重启节点服务
+
+  注意事项：推荐逐步替换可执行程序进行灰度升级
+
+  支持升级的版本：v3.0.0+
+
+* 升级链数据版本
+
+  效果：可使用当前版本的最新特性
+
+  操作：先完成升级所有节点可执行程序，再参考[文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/introduction/change_log/upgrade.html#id1)发送交易升级链数据版本至 v3.4.0
+
+  注意事项：务必备份原节点的所有账本数据，若操作失误造成升级失败，可通过原数据回滚到升级前的状态
+  支持升级的版本：v3.0.0+
+
+**组件兼容性**
+
+|            | 推荐版本  | 最低版本                 | 说明                               |
+| ---------- | --------- | ------------------------ | ---------------------------------- |
+| WeBASE     | 3.0.2      | 3.0.2                   |                                    |
+| WeIdentity | v3.0.0-rc.1| v3.0.0-rc.1             |                                    |
+| Console    | 3.4.0     | 3.0.0                    |                                    |
+| Java SDK   | 3.4.0     | 3.0.0                    |                                    |
+| CPP SDK    | 3.4.0     | 3.0.0                    |                                    |
+| Solidity   | 0.8.11    | 最低 0.4.25，最高 0.8.11 | 需根据合约版本下载编译器（控制台） |
+| WBC-Liquid | 1.0.0-rc3 | 1.0.0-rc3                |                                    |
+
 ### 3.3.0
 
 (2023-04-14)
@@ -238,7 +298,7 @@
 | Solidity   | 0.8.11    | 最低 0.4.25，最高 0.8.11 | 需根据合约版本下载编译器（控制台） |
 | WBC-Liquid | 1.0.0-rc3 | 1.0.0-rc3                |                                    |
 
-### 3.0.1 
+### 3.0.1
 
 (2022-09-23)
 
