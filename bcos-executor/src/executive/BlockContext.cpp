@@ -55,16 +55,25 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_hashImpl(_hashImpl),
     m_ledgerCache(ledgerCache)
 {
-    auto table = m_storage->openTable(ledger::SYS_CONFIG);
-    for (auto key : bcos::ledger::Features::featureKeys())
+    if (!m_storage)
     {
-        auto entry = table->getRow(key);
-        if (entry)
+        EXECUTOR_LOG(WARNING) << "No available storage, make sure it's testing";
+        return;
+    }
+
+    auto table = m_storage->openTable(ledger::SYS_CONFIG);
+    if (table)
+    {
+        for (auto key : bcos::ledger::Features::featureKeys())
         {
-            auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
-            if (enableNumber >= blockNumber)
+            auto entry = table->getRow(key);
+            if (entry)
             {
-                m_features.set(key);
+                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
+                if (enableNumber >= blockNumber)
+                {
+                    m_features.set(key);
+                }
             }
         }
     }
