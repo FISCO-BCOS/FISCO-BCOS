@@ -20,7 +20,7 @@ public:
     // At most 256 flag
     enum class Flag
     {
-        FEATURE_BUGFIX_REVERT,
+        bugfix_revert,
     };
 
 private:
@@ -65,7 +65,7 @@ public:
         set(*value);
     }
 
-    void setToDefault() { set(Flag::FEATURE_BUGFIX_REVERT); }
+    void setToDefault() { set(Flag::bugfix_revert); }
 
     auto flags() const
     {
@@ -73,6 +73,15 @@ public:
                RANGES::views::transform([this](size_t index) {
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return std::make_tuple(flag, magic_enum::enum_name(flag), m_flags[index]);
+               });
+    }
+
+    static auto featureKeys()
+    {
+        return RANGES::views::iota(0LU, magic_enum::enum_count<Flag>()) |
+               RANGES::views::transform([](size_t index) {
+                   auto flag = magic_enum::enum_value<Flag>(index);
+                   return magic_enum::enum_name(flag);
                });
     }
 };

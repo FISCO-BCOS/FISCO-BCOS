@@ -35,7 +35,8 @@ class CodecWrapper
 {
 public:
     using Ptr = std::shared_ptr<CodecWrapper>;
-    CodecWrapper(crypto::Hash::Ptr _hash, bool _isWasm) : m_type(_isWasm ? VMType::WASM : VMType::EVM), m_hash(std::move(_hash))
+    CodecWrapper(crypto::Hash::Ptr _hash, bool _isWasm)
+      : m_type(_isWasm ? VMType::WASM : VMType::EVM), m_hash(std::move(_hash))
     {}
     template <typename... Args>
     bytes encode(Args&&... _args) const
@@ -47,12 +48,10 @@ public:
             codec::abi::ContractABICodec abi(m_hash);
             return abi.abiIn("", _args...);
         }
-        else
-        {
-            codec::scale::ScaleEncoderStream s;
-            (s << ... << std::forward<Args>(_args));
-            return s.data();
-        }
+
+        codec::scale::ScaleEncoderStream s;
+        (s << ... << std::forward<Args>(_args));
+        return s.data();
     }
     template <typename... Args>
     bytes encodeWithSig(const std::string& _sig, Args&&... _args) const
@@ -64,12 +63,10 @@ public:
             codec::abi::ContractABICodec abi(m_hash);
             return abi.abiIn(_sig, _args...);
         }
-        else
-        {
-            codec::scale::ScaleEncoderStream s;
-            (s << ... << std::forward<Args>(_args));
-            return m_hash->hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
-        }
+
+        codec::scale::ScaleEncoderStream s;
+        (s << ... << std::forward<Args>(_args));
+        return m_hash->hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
     }
 
     bytes encodeWithSig(const std::string& _sig) const
@@ -81,11 +78,9 @@ public:
             codec::abi::ContractABICodec abi(m_hash);
             return abi.abiIn(_sig);
         }
-        else
-        {
-            codec::scale::ScaleEncoderStream s;
-            return m_hash->hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
-        }
+
+        codec::scale::ScaleEncoderStream s;
+        return m_hash->hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
     }
 
     template <typename... T>
@@ -116,7 +111,7 @@ public:
         _s >> _t;
     }
 
-    void decodeScale(codec::scale::ScaleDecoderStream&) const { return; }
+    void decodeScale(codec::scale::ScaleDecoderStream&) const {}
 
 private:
     VMType m_type = VMType::UNDEFINED;
