@@ -2946,7 +2946,6 @@ BOOST_AUTO_TEST_CASE(invalidPageKeyToValid)
         [](Error::UniquePtr, std::optional<Entry> e) { BOOST_REQUIRE(e.has_value()); });
 }
 
-
 BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
 {
     boost::log::core::get()->set_logging_enabled(true);
@@ -3013,13 +3012,50 @@ BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
     std::atomic<size_t> valid = 0;
     Condition c;
     c.limit(0, 200);
-    tableStorage4->asyncGetPrimaryKeys(
-        tableName, c, [&](Error::UniquePtr error, std::vector<std::string> keys) {
-            valid = keys.size();
-        });
+    tableStorage4->asyncGetPrimaryKeys(tableName, c,
+        [&](Error::UniquePtr error, std::vector<std::string> keys) { valid = keys.size(); });
     BOOST_REQUIRE_EQUAL(valid, 2);
 }
 
+BOOST_AUTO_TEST_CASE(TableMeta_read_write_mutex)
+{
+    // boost::log::core::get()->set_logging_enabled(true);
+    int loop = 10000;
+    auto meta = std::make_shared<storage::KeyPageStorage::TableMeta>();
+    for (int i = 0; i < loop; ++i)
+    {
+        meta->insertPageInfoNoLock(storage::KeyPageStorage::PageInfo(
+            std::to_string(i), i % 2 == 0 ? 0 : i, i, nullptr));
+    }
+    std::shared_ptr<bcos::ThreadPool> threadPool = std::make_shared<bcos::ThreadPool>("test", 2);
+    auto promise = std::make_shared<std::promise<void>>();
+    threadPool->enqueue([&]() {
+        std::cout << "==================== parallelTraverse" << std::endl;
+        Entry entry;
+        entry.setObject(*meta);
+        std::cout << meta->size() << std::endl;
+        promise->set_value();
+    });
+    auto promise2 = std::make_shared<std::promise<void>>();
+    threadPool->enqueue([&]() {
+        std::cout << "==================== meta2" << std::endl;
+
+        storage::KeyPageStorage::TableMeta meta2(*meta);
+        bool ret =
+            (meta2.size() != (size_t)loop && meta2.size() != (size_t)loop / 2) ? false : true;
+        if (!ret)
+        {
+            std::cout << "meta size=" << meta->size() << "meta2 size=" << meta2.size() << std::endl;
+        }
+        BOOST_TEST(ret);
+        std::cout << meta2.size() << "==================== meta2" << std::endl;
+        promise2->set_value();
+    });
+    promise->get_future().get();
+    promise2->get_future().get();
+    std::cout << "==================== test end" << std::endl;
+    // boost::log::core::get()->set_logging_enabled(false);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
