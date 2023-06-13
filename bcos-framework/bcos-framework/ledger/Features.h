@@ -16,7 +16,7 @@ struct NoSuchFeatureError : public bcos::error::Exception
 class Features
 {
 public:
-    // Use for storage key, do not change the enum name!
+    // Use for storage key, do not change the enum name!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // At most 256 flag
     enum class Flag
     {
@@ -86,7 +86,7 @@ public:
     }
 };
 
-std::ostream& operator<<(std::ostream& stream, Features::Flag flag)
+inline std::ostream& operator<<(std::ostream& stream, Features::Flag flag)
 {
     return stream;
 }

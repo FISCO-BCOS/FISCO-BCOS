@@ -171,16 +171,24 @@ int64_t SystemConfigPrecompiled::checkValueValid(
 {
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
-    if (!c_supportedKey.contains(key))
+    auto featureKeys = ledger::Features::featureKeys();
+    bool setFeature = (RANGES::find(featureKeys, key) != featureKeys.end());
+    if (!c_supportedKey.contains(key) && !setFeature)
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
     }
+
     if (value.empty())
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be non-empty."));
     }
     try
     {
+        if (setFeature && value != "1")
+        {
+            BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
+        }
+
         if (m_valueConverter.contains(key))
         {
             configuredValue = (m_valueConverter.at(key))(std::string(value), blockVersion);
@@ -294,28 +302,4 @@ void SystemConfigPrecompiled::upgradeChain(
                 std::string(tables.at(i)), std::string(tables.at(i + 1)));
         }
     }
-}
-
-bcos::ledger::Features bcos::precompiled::SystemConfigPrecompiled::getFeatures(
-    executor::TransactionExecutive& executive)
-{
-    auto table = executive.storage().openTable(ledger::SYS_CONFIG);
-
-    auto featureKeys = bcos::ledger::Features::featureKeys();
-    bcos::ledger::Features features;
-
-    for (auto const& key : featureKeys)
-    {
-        auto entry = table->getRow(key);
-        if (entry)
-        {
-            auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
-            if (enableNumber >= executive.blockContext().lock()->number())
-            {
-                features.set(key);
-            }
-        }
-    }
-
-    return features;
 }

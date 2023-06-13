@@ -30,6 +30,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+#include "bcos-framework/ledger/Features.h"
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -192,6 +193,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext, m_evmPrecompiled,
         m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
     auto executive = executiveFactory->build(input->codeAddress, m_contextID, newSeq, false);
+    m_childExecutives.push_back(executive);
 
     auto output = executive->start(std::move(input));
 
@@ -1040,6 +1042,14 @@ void TransactionExecutive::revert()
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null!"));
     }
     EXECUTOR_BLK_LOG(INFO, blockContext->number()) << "Revert transaction";
+
+    if (blockContext->features().get(ledger::Features::Flag::bugfix_revert))
+    {
+        for (auto& childExecutive : RANGES::views::reverse(m_childExecutives))
+        {
+            childExecutive->revert();
+        }
+    }
 
     blockContext->storage()->rollback(*m_recoder);
     m_recoder->clear();

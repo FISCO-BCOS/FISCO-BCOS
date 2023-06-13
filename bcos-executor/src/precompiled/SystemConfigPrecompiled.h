@@ -53,7 +53,6 @@ private:
     static void upgradeChain(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
         uint32_t toVersion);
-    static ledger::Features getFeatures(executor::TransactionExecutive& executive);
 
     std::map<std::string, std::function<int64_t(std::string, uint32_t)>> m_valueConverter;
     std::map<std::string, std::function<void(int64_t)>> m_sysValueCmp;
