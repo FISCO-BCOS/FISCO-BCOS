@@ -37,7 +37,7 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(value, true);
 
     auto keys = Features::featureKeys();
-    BOOST_CHECK_EQUAL(keys.size(), 0);
+    BOOST_CHECK_EQUAL(keys.size(), 1);
     BOOST_CHECK_EQUAL(keys[0], "bugfix_revert");
 }
 
