@@ -69,7 +69,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install ccache gmp lcov libomp pkg-config
-          cd vcpkg && git checkout master && git pull && bash bootstrap-vcpkg.sh && cd -
+          cd vcpkg && git checkout master && git pull  && cd -
           mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake ../
           cmake --build . --parallel 8
       - name: Test
