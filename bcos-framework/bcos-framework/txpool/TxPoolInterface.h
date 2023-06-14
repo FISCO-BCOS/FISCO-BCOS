@@ -28,9 +28,7 @@
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class TxPoolInterface
 {
@@ -38,7 +36,7 @@ public:
     using Ptr = std::shared_ptr<TxPoolInterface>;
 
     TxPoolInterface() = default;
-    virtual ~TxPoolInterface() {}
+    virtual ~TxPoolInterface() = default;
 
     virtual void start() = 0;
     virtual void stop() = 0;
@@ -147,5 +145,4 @@ public:
 
     virtual void tryToSyncTxsFromPeers() {}
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

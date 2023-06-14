@@ -16,11 +16,11 @@ struct NoSuchFeatureError : public bcos::error::Exception
 class Features
 {
 public:
-    // Use for storage key, do not change the enum name!
+    // Use for storage key, do not change the enum name!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // At most 256 flag
     enum class Flag
     {
-        FEATURE_BUGFIX_REVERT,
+        bugfix_revert,
     };
 
 private:
@@ -65,7 +65,7 @@ public:
         set(*value);
     }
 
-    void setToDefault() { set(Flag::FEATURE_BUGFIX_REVERT); }
+    void setToDefault() { set(Flag::bugfix_revert); }
 
     auto flags() const
     {
@@ -75,9 +75,18 @@ public:
                    return std::make_tuple(flag, magic_enum::enum_name(flag), m_flags[index]);
                });
     }
+
+    static auto featureKeys()
+    {
+        return RANGES::views::iota(0LU, magic_enum::enum_count<Flag>()) |
+               RANGES::views::transform([](size_t index) {
+                   auto flag = magic_enum::enum_value<Flag>(index);
+                   return magic_enum::enum_name(flag);
+               });
+    }
 };
 
-std::ostream& operator<<(std::ostream& stream, Features::Flag flag)
+inline std::ostream& operator<<(std::ostream& stream, Features::Flag flag)
 {
     return stream;
 }

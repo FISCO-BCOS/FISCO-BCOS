@@ -32,7 +32,7 @@ public:
       : m_consensusNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
         m_observerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>())
     {}
-    virtual ~LedgerConfig() {}
+    virtual ~LedgerConfig() = default;
 
     virtual void setConsensusNodeList(bcos::consensus::ConsensusNodeList const& _consensusNodeList)
     {

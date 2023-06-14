@@ -21,6 +21,7 @@
 #include "SystemConfigPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -170,16 +171,24 @@ int64_t SystemConfigPrecompiled::checkValueValid(
 {
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
-    if (!c_supportedKey.contains(key))
+    auto featureKeys = ledger::Features::featureKeys();
+    bool setFeature = (RANGES::find(featureKeys, key) != featureKeys.end());
+    if (!c_supportedKey.contains(key) && !setFeature)
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
     }
+
     if (value.empty())
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be non-empty."));
     }
     try
     {
+        if (setFeature && value != "1")
+        {
+            BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
+        }
+
         if (m_valueConverter.contains(key))
         {
             configuredValue = (m_valueConverter.at(key))(std::string(value), blockVersion);
@@ -218,9 +227,14 @@ int64_t SystemConfigPrecompiled::checkValueValid(
     return configuredValue;
 }
 
+bool bcos::precompiled::SystemConfigPrecompiled::shouldUpgradeChain(
+    std::string_view key, uint32_t fromVersion, uint32_t toVersion) noexcept
+{
+    return key == bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION && toVersion > fromVersion;
+}
+
 std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysConfigByKey(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const std::string& _key) const
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _key)
 {
     try
     {
@@ -248,7 +262,7 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
 void SystemConfigPrecompiled::upgradeChain(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
-    uint32_t toVersion) const
+    uint32_t toVersion)
 {
     auto blockContext = _executive->blockContext().lock();
 

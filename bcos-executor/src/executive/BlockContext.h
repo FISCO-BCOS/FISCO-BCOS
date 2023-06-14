@@ -26,6 +26,7 @@
 #include "ExecutiveFlowInterface.h"
 #include "LedgerCache.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -38,9 +39,7 @@
 #include <stack>
 #include <string_view>
 
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 class TransactionExecutive;
 class PrecompiledContract;
@@ -48,7 +47,7 @@ class PrecompiledContract;
 class BlockContext : public std::enable_shared_from_this<BlockContext>
 {
 public:
-    typedef std::shared_ptr<BlockContext> Ptr;
+    using Ptr = std::shared_ptr<BlockContext>;
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
@@ -62,7 +61,7 @@ public:
 
     using getTxCriticalsHandler = std::function<std::shared_ptr<std::vector<std::string>>(
         const protocol::Transaction::ConstPtr& _tx)>;
-    virtual ~BlockContext(){};
+    virtual ~BlockContext() = default;
 
     std::shared_ptr<storage::StateStorageInterface> storage() { return m_storage; }
 
@@ -130,6 +129,8 @@ public:
 
     auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
 
+    const ledger::Features& features() const;
+
 private:
     mutable bcos::SharedMutex x_executiveFlows;
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
@@ -150,8 +151,7 @@ private:
     std::set<std::string> m_suicides;  // contract address need to selfdestruct
     mutable bcos::SharedMutex x_suicides;
     std::shared_ptr<VMFactory> m_vmFactory;
+    ledger::Features m_features;
 };
 
-}  // namespace executor
-
-}  // namespace bcos
+}  // namespace bcos::executor

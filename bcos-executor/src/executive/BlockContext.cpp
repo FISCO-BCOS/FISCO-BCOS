@@ -54,7 +54,30 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_storage(std::move(storage)),
     m_hashImpl(_hashImpl),
     m_ledgerCache(ledgerCache)
-{}
+{
+    if (!m_storage)
+    {
+        EXECUTOR_LOG(WARNING) << "No available storage, make sure it's testing";
+        return;
+    }
+
+    auto table = m_storage->openTable(ledger::SYS_CONFIG);
+    if (table)
+    {
+        for (auto key : bcos::ledger::Features::featureKeys())
+        {
+            auto entry = table->getRow(key);
+            if (entry)
+            {
+                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
+                if (enableNumber >= blockNumber)
+                {
+                    m_features.set(key);
+                }
+            }
+        }
+    }
+}
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
@@ -134,4 +157,9 @@ void BlockContext::killSuicides()
                             << "Kill contract: " << LOG_KV("contract2Suicide", table2Suicide)
                             << LOG_KV("blockNumber", m_blockNumber);
     }
+}
+
+const bcos::ledger::Features& bcos::executor::BlockContext::features() const
+{
+    return m_features;
 }
