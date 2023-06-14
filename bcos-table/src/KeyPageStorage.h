@@ -271,6 +271,8 @@ public:
         TableMeta(const TableMeta& meta)
         {
             pages = std::make_unique<std::vector<PageInfo>>();
+            pages->reserve(meta.pages->size());
+            auto readLock = meta.rLock();
             *pages = *meta.pages;
         }
         TableMeta& operator=(const TableMeta& meta)
@@ -279,7 +281,7 @@ public:
             {
                 pages = std::make_unique<std::vector<PageInfo>>();
                 pages->reserve(meta.pages->size());
-                auto lock = std::shared_lock(meta.mutex);
+                auto readLock = meta.rLock();
                 *pages = *meta.pages;
             }
             return *this;
@@ -521,7 +523,7 @@ public:
             // }
             int invalid = 0;
             m_rows = 0;
-            auto writeLock = rLock();
+            auto writeLock = lock();
             for (auto it = pages->begin(); it != pages->end();)
             {
                 if (it->getCount() == 0 || it->getPageKey().empty())
