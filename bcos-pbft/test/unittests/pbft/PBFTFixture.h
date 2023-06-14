@@ -73,6 +73,8 @@ public:
 
     ~FakePBFTConfig() override {}
 
+    void stop() override { PBFTConfig::stop(); }
+
     virtual void setMinRequiredQuorum(uint64_t _quorum) { m_minRequiredQuorum = _quorum; }
 };
 class FakePBFTCache : public PBFTCache
@@ -280,9 +282,37 @@ public:
         m_pbft->registerFaultyDiscriminator([](bcos::crypto::NodeIDPtr) { return false; });
     }
 
-    virtual ~PBFTFixture() {}
+    virtual ~PBFTFixture() { stop(); }
 
     void init() { m_pbft->init(); }
+
+    void stop()
+    {
+        if (m_txpool)
+        {
+            m_txpool->stop();
+        }
+        if (m_scheduler)
+        {
+            m_scheduler->stop();
+        }
+        if (m_frontService)
+        {
+            m_frontService->stop();
+        }
+        if (m_pbftEngine)
+        {
+            m_pbftEngine->stop();
+        }
+        if (m_pbft)
+        {
+            m_pbft->stop();
+        }
+        if (m_ledger)
+        {
+            m_ledger->stop();
+        }
+    }
 
     void appendConsensusNode(ConsensusNode::Ptr _node)
     {
