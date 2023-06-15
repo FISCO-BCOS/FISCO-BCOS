@@ -48,17 +48,17 @@ int64_t GatewayConfig::doubleMBToBit(double _d)
 void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint)
 {
     std::string ip;
-    uint16_t port;
+    uint16_t port = 0;
 
-    std::vector<std::string> s;
-    boost::split(s, _host, boost::is_any_of("]"), boost::token_compress_on);
-    if (s.size() == 2)
-    {  // ipv6
-        ip = s[0].data() + 1;
-        port = boost::lexical_cast<int>(s[1].data() + 1);
+    std::vector<std::string> result;
+    boost::split(result, _host, boost::is_any_of("]"), boost::token_compress_on);
+    if (result.size() == 2)
+    { // ipv6 format is [IP]:Port
+        ip = result[0].substr(1);
+        port = boost::lexical_cast<int>(result[1].substr(1));
     }
-    else if (s.size() == 1)
-    {  // ipv4
+    else if (result.size() == 1)
+    {  // ipv4 format is IP:Port
         std::vector<std::string> v;
         boost::split(v, _host, boost::is_any_of(":"), boost::token_compress_on);
         if (v.size() < 2)

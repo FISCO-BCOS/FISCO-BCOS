@@ -23,10 +23,8 @@
 #include <bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
-#include <bcos-gateway/libp2p/Service.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
-#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
 #include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>

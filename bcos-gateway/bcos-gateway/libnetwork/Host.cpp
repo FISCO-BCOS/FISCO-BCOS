@@ -63,7 +63,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                 /// connections
                 auto endpoint = socket->remoteEndpoint();
                 HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
-                /// network acception failed
+                /// network accept failed
                 if (ec || !m_run)
                 {
                     HOST_LOG(ERROR) << "Error: " << ec;

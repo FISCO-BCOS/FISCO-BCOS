@@ -14,16 +14,13 @@
 #include <boost/property_tree/ptree.hpp>
 #include <array>
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
 {
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;
 
-public:
     // cert for ssl connection
     struct CertConfig
     {
@@ -346,5 +343,4 @@ private:
     std::string m_configFile;
 };
 
-}  // namespace gateway
 }  // namespace bcos
