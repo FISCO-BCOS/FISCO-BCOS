@@ -27,9 +27,7 @@
 #include <string>
 #include <variant>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 // Note: both MessageExtFieldFlag and NodeType occupy the ext fields
 enum MessageExtFieldFlag : uint32_t
@@ -253,5 +251,4 @@ inline std::string moduleIDToString(ModuleID _moduleID)
 }
 
 
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

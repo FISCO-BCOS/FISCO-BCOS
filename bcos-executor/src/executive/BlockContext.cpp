@@ -70,7 +70,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
             if (entry)
             {
                 auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
-                if (enableNumber >= blockNumber)
+                if (blockNumber >= enableNumber)
                 {
                     m_features.set(key);
                 }
