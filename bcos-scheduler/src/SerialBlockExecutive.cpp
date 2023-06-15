@@ -104,14 +104,14 @@ void SerialBlockExecutive::asyncExecute(
 
             if (error)
             {
-                SERIAL_EXECUTE_LOG(ERROR) << "Next block with error!" << error->errorMessage();
+                SERIAL_EXECUTE_LOG(DEBUG) << "Next block with error!" << error->errorMessage();
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                              SchedulerError::NextBlockError, "Next block error!", *error),
                     nullptr, m_isSysBlock);
 
                 if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                 {
-                    SERIAL_EXECUTE_LOG(ERROR) << "Next block with error! SCHEDULER_TERM_ID_ERROR:"
+                    SERIAL_EXECUTE_LOG(WARNING) << "Next block with error! SCHEDULER_TERM_ID_ERROR:"
                                               << error->errorMessage() << ". trigger switch";
                     triggerSwitch();
                 }
@@ -126,7 +126,7 @@ void SerialBlockExecutive::asyncExecute(
                               bool isSysBlock) {
                 if (error)
                 {
-                    SERIAL_EXECUTE_LOG(ERROR)
+                    SERIAL_EXECUTE_LOG(WARNING)
                         << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute block failed")
                         << LOG_KV("createMsgT", createMsgT)
                         << LOG_KV("executeT", (utcTime() - startT))
