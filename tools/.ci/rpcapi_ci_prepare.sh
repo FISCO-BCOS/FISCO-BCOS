@@ -23,6 +23,8 @@ wait_and_start()
     LOG_INFO "Try to start all"
     if [ -z "$(bash start_all.sh | grep 'Exceed waiting time')" ]; then
         LOG_INFO "Start all success"
+        LOG_INFO "Waiting connection established"
+        sleep 20
     else
         bash stop_all.sh
         LOG_WARN "Another testing is running. Waiting 20s and re-try to start all."

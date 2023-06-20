@@ -190,7 +190,7 @@ void ShardingBlockExecutive::shardingExecute(
             return;
         }
 
-        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("DAGExecute success")
+        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("DAGExecute success")
                             << LOG_KV("dagExecuteT", (utcTime() - startT));
 
         DMCExecute(std::move(callback));

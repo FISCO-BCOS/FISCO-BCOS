@@ -2946,6 +2946,116 @@ BOOST_AUTO_TEST_CASE(invalidPageKeyToValid)
         [](Error::UniquePtr, std::optional<Entry> e) { BOOST_REQUIRE(e.has_value()); });
 }
 
+BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
+{
+    boost::log::core::get()->set_logging_enabled(true);
+    auto valueFields = "value1";
+
+    auto stateStorage = make_shared<StateStorage>(nullptr);
+    StateStorageInterface::Ptr prev = stateStorage;
+
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 2048);
+    auto tableName = "table_000";
+    BOOST_REQUIRE(tableStorage->createTable(tableName, valueFields));
+
+    auto table = tableStorage->openTable(tableName);
+    BOOST_REQUIRE(table);
+
+    for (size_t k = 1000002030; k < 1000002035; ++k)
+    {
+        auto entry = std::make_optional(table->newEntry());
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry->setField(0, key);
+        // 64B every entry
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    }
+    std::atomic<size_t> totalCount = 0;
+    tableStorage->parallelTraverse(false, [&](auto&& tableView, auto&& keyView, auto&& entry) {
+        ++totalCount;
+        stateStorage->asyncSetRow(tableView, keyView, entry, [](Error::UniquePtr) {});
+        return true;
+    });
+    // BOOST_REQUIRE_EQUAL(totalCount, 66);  // meta + 5page + s_table
+    auto tableStorage2 = std::make_shared<KeyPageStorage>(prev, 2048);
+    {
+        size_t keyVal = 1000002035;
+        auto entry = table->newEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+        entry.setField(0, key);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    std::cout << "==================== start delete" << std::endl;
+    auto tableStorage3 = std::make_shared<KeyPageStorage>(tableStorage2, 2048);
+    for (size_t k = 1000002035; k >= 1000002030; --k)
+    {
+        auto entry = table->newDeletedEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        // entry.setField(0, key);
+        tableStorage3->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    std::cout << "==================== start insert" << std::endl;
+    auto tableStorage4 = std::make_shared<KeyPageStorage>(tableStorage3, 2048);
+    size_t keyVal = 1000002034;
+    auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    auto entry = table->newEntry();
+    entry.setField(0, "ss");
+    tableStorage4->asyncSetRow(
+        tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    keyVal = 1000002035;
+    key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    entry = table->newEntry();
+    entry.setField(0, "ss");
+    tableStorage4->asyncSetRow(
+        tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    std::atomic<size_t> valid = 0;
+    Condition c;
+    c.limit(0, 200);
+    tableStorage4->asyncGetPrimaryKeys(tableName, c,
+        [&](Error::UniquePtr error, std::vector<std::string> keys) { valid = keys.size(); });
+    BOOST_REQUIRE_EQUAL(valid, 2);
+}
+
+BOOST_AUTO_TEST_CASE(TableMeta_read_write_mutex)
+{
+    // boost::log::core::get()->set_logging_enabled(true);
+    int loop = 10000;
+    auto meta = std::make_shared<storage::KeyPageStorage::TableMeta>();
+    for (int i = 0; i < loop; ++i)
+    {
+        meta->insertPageInfoNoLock(storage::KeyPageStorage::PageInfo(
+            std::to_string(i), i % 2 == 0 ? 0 : i, i, nullptr));
+    }
+    std::shared_ptr<bcos::ThreadPool> threadPool = std::make_shared<bcos::ThreadPool>("test", 2);
+    auto promise = std::make_shared<std::promise<void>>();
+    threadPool->enqueue([&]() {
+        std::cout << "==================== parallelTraverse" << std::endl;
+        Entry entry;
+        entry.setObject(*meta);
+        std::cout << meta->size() << std::endl;
+        promise->set_value();
+    });
+    auto promise2 = std::make_shared<std::promise<void>>();
+    threadPool->enqueue([&]() {
+        std::cout << "==================== meta2" << std::endl;
+
+        storage::KeyPageStorage::TableMeta meta2(*meta);
+        bool ret =
+            (meta2.size() != (size_t)loop && meta2.size() != (size_t)loop / 2) ? false : true;
+        if (!ret)
+        {
+            std::cout << "meta size=" << meta->size() << "meta2 size=" << meta2.size() << std::endl;
+        }
+        BOOST_TEST(ret);
+        std::cout << meta2.size() << "==================== meta2" << std::endl;
+        promise2->set_value();
+    });
+    promise->get_future().get();
+    promise2->get_future().get();
+    std::cout << "==================== test end" << std::endl;
+    // boost::log::core::get()->set_logging_enabled(false);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

@@ -41,7 +41,7 @@ public:
     ~FakeTxPool() override {}
 
     void start() override {}
-    void stop() override {}
+    void stop() override { m_worker->stop(); }
 
     // useless for PBFT, maybe needed by RPC
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
