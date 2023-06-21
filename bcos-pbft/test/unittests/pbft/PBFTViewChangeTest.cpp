@@ -112,21 +112,21 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     for (size_t i = 0; i < std::min(precommitSize, fakerMap.size()); i++)
     {
         auto faker = fakerMap[i];
-        FakeCacheProcessor::Ptr cacheProcessor =
+        FakeCacheProcessor::Ptr cacheProcessor2 =
             std::dynamic_pointer_cast<FakeCacheProcessor>(faker->pbftEngine()->cacheProcessor());
-        BOOST_CHECK(cacheProcessor->caches().size() == 2);
-        auto cache =
-            std::dynamic_pointer_cast<FakePBFTCache>((cacheProcessor->caches())[expectedProposal]);
-        BOOST_CHECK(cache->prePrepare());
-        BOOST_CHECK(cache->index() == expectedProposal);
-        cache->intoPrecommit();
+        BOOST_CHECK(cacheProcessor2->caches().size() == 2);
+        auto cache2 =
+            std::dynamic_pointer_cast<FakePBFTCache>((cacheProcessor2->caches())[expectedProposal]);
+        BOOST_CHECK(cache2->prePrepare());
+        BOOST_CHECK(cache2->index() == expectedProposal);
+        cache2->intoPrecommit();
 
-        auto futureCache =
-            std::dynamic_pointer_cast<FakePBFTCache>((cacheProcessor->caches())[futureBlockIndex]);
-        BOOST_CHECK(futureCache->prePrepare());
-        BOOST_CHECK(futureCache->index() == futureBlockIndex);
-        BOOST_CHECK(futureCache->prePrepare());
-        futureCache->intoPrecommit();
+        auto futureCache2 =
+            std::dynamic_pointer_cast<FakePBFTCache>((cacheProcessor2->caches())[futureBlockIndex]);
+        BOOST_CHECK(futureCache2->prePrepare());
+        BOOST_CHECK(futureCache2->index() == futureBlockIndex);
+        BOOST_CHECK(futureCache2->prePrepare());
+        futureCache2->intoPrecommit();
     }
 
     for (size_t i = 0; i < fakerMap.size(); i++)

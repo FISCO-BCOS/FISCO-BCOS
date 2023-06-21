@@ -39,7 +39,7 @@ std::pair<bool, bytes> bcos::rpc::CallValidator::verify(
     crypto::HashType hash;
     auto hasher = hashImpl->hasher();
     // Note: use fromHex because java sdk hash the raw data
-    hasher.update(bcos::fromHex(to));
+    hasher.update(to);
     hasher.update(bcos::fromHex(data));
     hasher.final(hash);
     bcos::bytes signBytes = bcos::fromHex(sign);

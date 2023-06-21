@@ -1,10 +1,5 @@
 name: Commit Check
 on:
-  push:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
   pull_request:
     paths-ignore:
       - "docs/**"

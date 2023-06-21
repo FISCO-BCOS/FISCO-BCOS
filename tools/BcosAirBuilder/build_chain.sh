@@ -39,11 +39,11 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.3.0"
+default_version="v3.4.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
-auth_mode="true"
+auth_mode="false"
 monitor_mode="false"
 auth_admin_account=
 binary_path=""
@@ -652,6 +652,7 @@ parse_params() {
         R) serial_mode="${OPTARG}";;
         a)
           auth_admin_account="${OPTARG}"
+          auth_mode="true"
         ;;
         v) compatibility_version="${OPTARG}";;
         z) make_tar="true";;
@@ -1602,8 +1603,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.3.0
-    compatibility_version=3.3.0
+    ; the default is 3.4.0
+    compatibility_version=3.4.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000

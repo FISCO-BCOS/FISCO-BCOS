@@ -45,14 +45,11 @@ public:
         m_sealerList(_sealerList)
     {
         init(_blockNumber, _txsSize, 0);
-        m_worker = std::make_shared<ThreadPool>("worker", 1);
+        m_worker = std::make_shared<ThreadPool>("ledgerWorker", 1);
     }
     ~FakeLedger() override
     {
-        if (m_worker)
-        {
-            m_worker->stop();
-        }
+        stop();
         m_hash2Block.clear();
         std::map<HashType, BlockNumber> emptyHash2Block;
         m_hash2Block.swap(emptyHash2Block);
@@ -60,6 +57,13 @@ public:
         m_txsHashToData.clear();
         std::map<HashType, bytesConstPtr> emptyTxsData;
         m_txsHashToData.swap(emptyTxsData);
+    }
+    void stop()
+    {
+        if (m_worker)
+        {
+            m_worker->stop();
+        }
     }
 
     FakeLedger(
@@ -69,7 +73,7 @@ public:
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
         m_sealerList = fakeSealerList(m_keyPairVec, sigImpl, 4);
         init(_blockNumber, _txsSize, _receiptsSize);
-        m_worker = std::make_shared<ThreadPool>("worker", 1);
+        m_worker = std::make_shared<ThreadPool>("ledgerWorker", 1);
     }
 
     void init(size_t _blockNumber, size_t _txsSize, int64_t _timestamp = utcTime())

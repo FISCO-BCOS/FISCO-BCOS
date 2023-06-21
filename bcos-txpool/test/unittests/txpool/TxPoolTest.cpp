@@ -563,11 +563,11 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     }
     catch (bcos::Error& e)
     {
-        // TODO: Put TransactionStatus::Malform into bcos::Error
+        // TODO: Put TransactionStatus::Malformed into bcos::Error
         // BOOST_CHECK(e.errorCode() == _result->status());
         std::cout << "#### error info:" << e.errorMessage() << std::endl;
         // BOOST_CHECK(_result->txHash() == HashType());
-        // BOOST_CHECK(_result->status() == (uint32_t)(TransactionStatus::Malform));
+        // BOOST_CHECK(_result->status() == (uint32_t)(TransactionStatus::Malformed));
     }
 
     verifyFinish = true;

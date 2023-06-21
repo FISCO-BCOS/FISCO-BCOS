@@ -319,10 +319,10 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     {
         PBFT_LOG(INFO) << LOG_DESC(
                               "Not notify the sealer to sealing for txs of some proposals have not "
-                              "been resetted success")
+                              "been reset success")
                        << LOG_KV("resettingProposalSize", m_validator->resettingProposalSize())
                        << LOG_KV("startSealIndex", startSealIndex) << printCurrentState();
-        // notify the leader to seal when all txs of all proposals have been resetted
+        // notify the leader to seal when all txs of all proposals have been reset
         auto self = weak_from_this();
         m_validator->setVerifyCompletedHook([self, _progressedIndex, _enforce]() {
             auto config = self.lock();
