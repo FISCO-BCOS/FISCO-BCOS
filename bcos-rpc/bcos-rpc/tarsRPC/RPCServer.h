@@ -24,7 +24,7 @@ struct Params
     };
 
     NodeService::Ptr node;
-    tbb::concurrent_hash_map<tars::CurrentPtr, std::monostate, PtrHash> sessions;
+    tbb::concurrent_hash_map<tars::CurrentPtr, std::vector<std::string>, PtrHash> sessions;
 };
 
 class RPCServer : public bcostars::RPC
@@ -35,13 +35,14 @@ public:
     void initialize() override;
     void destroy() override;
 
+    bcostars::Error handshake(
+        const std::vector<std::string>& topics, tars::TarsCurrentPtr current) override;
     bcostars::Error call(const bcostars::Transaction& request,
         bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current) override;
     bcostars::Error sendTransaction(const bcostars::Transaction& request,
         bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current) override;
     bcostars::Error blockNumber(long& number, tars::TarsCurrentPtr current) override;
 
-    int onDispatch(tars::CurrentPtr current, std::vector<char>& buffer) override;
     int doClose(tars::CurrentPtr current) override;
 
 private:
@@ -63,6 +64,7 @@ public:
     void destroyApp() override;
 
     void pushBlockNumber(long blockNumber);
+    void pushAMOPMessage(std::string_view topic, bcos::bytesConstRef message);
 
 private:
     Params m_params;

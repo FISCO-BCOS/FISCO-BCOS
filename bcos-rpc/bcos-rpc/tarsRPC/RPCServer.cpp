@@ -10,6 +10,25 @@
 void bcos::rpc::RPCServer::initialize() {}
 void bcos::rpc::RPCServer::destroy() {}
 
+bcostars::Error bcos::rpc::RPCServer::handshake(
+    const std::vector<std::string>& topics, tars::TarsCurrentPtr current)
+{
+    decltype(m_params.sessions)::accessor accessor;
+    m_params.sessions.find(accessor, current);
+
+    if (accessor.empty())
+    {
+        m_params.sessions.emplace(
+            accessor, current, std::move(const_cast<std::vector<std::string>&>(topics)));
+    }
+    else
+    {
+        accessor->second = std::move(const_cast<std::vector<std::string>&>(topics));
+    }
+
+    return {};
+}
+
 bcostars::Error bcos::rpc::RPCServer::call(const bcostars::Transaction& request,
     bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current)
 {
@@ -79,12 +98,6 @@ bcostars::Error bcos::rpc::RPCServer::blockNumber(long& number, tars::TarsCurren
             bcos::rpc::RPCServer::async_response_blockNumber(current, {}, blockNumber);
         });
     return {};
-}
-
-int bcos::rpc::RPCServer::onDispatch(tars::CurrentPtr current, std::vector<char>& buffer)
-{
-    m_params.sessions.emplace(current, std::monostate{});
-    return bcostars::RPC::onDispatch(current, buffer);
 }
 
 int bcos::rpc::RPCServer::doClose(tars::CurrentPtr current)
