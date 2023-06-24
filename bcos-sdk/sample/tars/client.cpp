@@ -5,10 +5,13 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-task/Coroutine.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <atomic>
+#include <exception>
 #include <latch>
 #include <random>
 
@@ -16,24 +19,21 @@ class TBBCompletionQueue : public bcos::sdk::CompletionQueue
 {
 private:
     tbb::task_group m_taskGroup;
-    std::vector<bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr>>& m_futures;
-    std::latch& m_latch;
 
 public:
-    TBBCompletionQueue(
-        std::vector<bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr>>& futures,
-        std::latch& latch)
-      : m_futures(futures), m_latch(latch)
-    {}
-
     ~TBBCompletionQueue() noexcept override = default;
     void notify(std::any tag) override
     {
-        m_taskGroup.run([this, m_tag = std::move(tag)]() {
-            auto& future = m_futures[std::any_cast<size_t>(m_tag)];
-            auto receipt = future.get();
-
-            m_latch.count_down();
+        m_taskGroup.run([m_tag = std::move(tag)]() {
+            try
+            {
+                auto handle = std::any_cast<CO_STD::coroutine_handle<>>(m_tag);
+                handle.resume();
+            }
+            catch (std::exception& e)
+            {
+                std::cout << boost::diagnostic_information(e);
+            }
         });
     }
 };
@@ -71,9 +71,10 @@ int main(int argc, char* argv[])
         }
 
         std::latch latch(count);
-        std::vector<bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr>> futures(count);
-        auto queue = std::make_unique<TBBCompletionQueue>(futures, latch);
+        TBBCompletionQueue queue;
         auto const& contractAddress = receipt->contractAddress();
+
+        std::atomic_int sended = 0;
         tbb::parallel_for(tbb::blocked_range(0LU, count), [&](const auto& range) {
             for (auto it = range.begin(); it != range.end(); ++it)
             {
@@ -82,11 +83,14 @@ int main(int argc, char* argv[])
                 auto setTransaction = transactionFactory.createTransaction(0,
                     std::string(contractAddress), input, boost::lexical_cast<std::string>(rand()),
                     blockNumber + blockLimit, "chain0", "group0", 0, keyPair);
-                futures[it] =
-                    std::move(rpcClient.sendTransaction(*setTransaction, queue.get(), it));
+                futures[it] = std::move(
+                    rpcClient.sendTransaction(*setTransaction, std::addressof(queue), it));
+
+                ++sended;
             }
         });
 
+        std::cout << "Sended: " << sended << std::endl;
         latch.wait();
     }
     catch (std::exception& e)
