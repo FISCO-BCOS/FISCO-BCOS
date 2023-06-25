@@ -62,7 +62,7 @@ auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(t
         std::rethrow_exception(std::get<std::exception_ptr>(value));
     }
 
-    if constexpr (!std::is_void_v<typename Task::ReturnType>)
+    if constexpr (!std::is_void_v<ReturnType>)
     {
         return std::move(std::get<ReturnType>(value));
     }
