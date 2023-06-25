@@ -116,11 +116,11 @@ int main(int argc, char* argv[])
     }
     catch (std::exception& e)
     {
-        cerr << "GatewayService std::exception:" << e.what() << std::endl;
+        std::cerr << "GatewayService std::exception:" << e.what() << std::endl;
     }
     catch (...)
     {
-        cerr << "GatewayService unknown exception." << std::endl;
+        std::cerr << "GatewayService unknown exception." << std::endl;
     }
     return -1;
 }
