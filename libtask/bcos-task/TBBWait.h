@@ -28,7 +28,7 @@ auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(t
     auto tbbTask = [](Task&& task, decltype(value)& value, std::mutex& tagMutex,
                        std::atomic_bool& finished,
                        std::atomic<oneapi::tbb::task::suspend_point>& tbbTag) -> task::Task<void> {
-        if constexpr (std::is_void_v<typename Task::ReturnType>)
+        if constexpr (std::is_void_v<ReturnType>)
         {
             co_await task;
         }
