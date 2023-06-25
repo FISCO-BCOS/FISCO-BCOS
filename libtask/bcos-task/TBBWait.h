@@ -9,8 +9,6 @@
 #include <type_traits>
 #include <variant>
 
-#include <iostream>
-
 namespace bcos::task::tbb
 {
 
@@ -40,11 +38,12 @@ auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(t
         }
 
         std::unique_lock<std::mutex> lock(tagMutex);
+        finished = true;
         if (tbbTag)
         {
+            lock.unlock();
             oneapi::tbb::task::resume(tbbTag);
         }
-        finished = true;
     }(std::forward<Task>(task), value, tagMutex, finished, tbbTag);
 
     tbbTask.start();
