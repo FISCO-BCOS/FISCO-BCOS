@@ -26,8 +26,8 @@ jobs:
     runs-on: self-hosted-mac3.4
     strategy:
       fail-fast: false
-    env:
-      DEPS_ROOT: ~/cache/deps3.4
+    #env:
+      #DEPS_ROOT: ~/cache/deps3.4
     steps:
       - uses: actions/checkout@v3
         with:
@@ -39,19 +39,18 @@ jobs:
           java-version: 8
           java-package: jdk
 
-
-      - name: Reuse build cache
-        run: |
-          mkdir -p ./build
-          rm -rf deps
-          ln -s ${{ env.DEPS_ROOT }} deps
+#      - name: Reuse build cache
+#        run: |
+#          mkdir -p ./build
+#          rm -rf deps
+#          ln -s ${{ env.DEPS_ROOT }} deps
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
       - name: Build for mac
         run: |
-          mkdir -p build && cd build && rm -rf CMakeCache.txt
+          mkdir -p build && cd build
           cmake -DCMAKE_BUILD_TYPE=Release -DNATIVE=ON -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
           cmake --build . --parallel 8
 
