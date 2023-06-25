@@ -28,8 +28,6 @@ jobs:
       fail-fast: false
     env:
       DEPS_ROOT: ~/cache/deps3.4
-      VCPKG_ROOT: ~/cache/vcpkg
-
     steps:
       - uses: actions/checkout@v3
         with:
