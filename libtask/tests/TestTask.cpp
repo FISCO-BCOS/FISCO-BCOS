@@ -175,7 +175,7 @@ struct SleepTask
     {
         futures.emplace_back(std::async([m_handle = handle]() {
             using namespace std::chrono_literals;
-            std::this_thread::sleep_for(100s);
+            std::this_thread::sleep_for(1s);
             m_handle.resume();
         }));
     }
@@ -184,29 +184,6 @@ struct SleepTask
 
 BOOST_AUTO_TEST_CASE(tbbWait)
 {
-    // oneapi::tbb::task_group taskGroup;
-    // oneapi::tbb::task_group taskGroup1;
-
-    // std::vector<std::future<void>> futures1(50);
-    // taskGroup.run([&]() {
-    //     for (int i = 0; i < 50; ++i)
-    //     {
-    //         taskGroup1.run([i, &futures1]() {
-    //             oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
-    //                 std::cout << "Suspended! " << i << std::endl;
-    //                 futures1[i] = std::async([m_tag = tag, i]() {
-    //                     using namespace std::chrono_literals;
-    //                     std::this_thread::sleep_for(1s);
-    //                     oneapi::tbb::task::resume(m_tag);
-    //                     std::cout << "Resume! " << i << std::endl;
-    //                 });
-    //             });
-    //         });
-    //     }
-    //     taskGroup1.wait();
-    // });
-    // taskGroup.wait();
-
     oneapi::tbb::parallel_for(
         oneapi::tbb::blocked_range(0U, std::thread::hardware_concurrency() * 2),
         [](auto const& range) {
