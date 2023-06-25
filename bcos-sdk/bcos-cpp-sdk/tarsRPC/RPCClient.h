@@ -41,7 +41,7 @@ public:
     TarsCallback& operator=(TarsCallback const&) = delete;
     TarsCallback(TarsCallback&&) = default;
     TarsCallback& operator=(TarsCallback&&) = default;
-    ~TarsCallback() override = default;
+    ~TarsCallback() noexcept override = default;
 
     CompletionQueue* completionQueue();
     std::any& tag();

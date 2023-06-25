@@ -7,13 +7,14 @@
 namespace bcos::task
 {
 
-void wait(auto&& task) requires std::is_rvalue_reference_v<decltype(task)>
+void wait(auto&& task)
+    requires std::is_rvalue_reference_v<decltype(task)>
 {
     task.start();
 }
 
 auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(task)>>
-requires std::is_rvalue_reference_v<decltype(task)>
+    requires std::is_rvalue_reference_v<decltype(task)>
 {
     using Task = std::remove_cvref_t<decltype(task)>;
     std::promise<AwaitableReturnType<Task>> promise;
