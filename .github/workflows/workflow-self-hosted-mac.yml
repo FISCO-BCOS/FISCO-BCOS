@@ -27,8 +27,6 @@ jobs:
     strategy:
       fail-fast: false
     env:
-      DEPS_ROOT: ~/cache/deps3.4
-      VCPKG_ROOT: ~/cache/vcpkg
     steps:
       - uses: actions/checkout@v3
         with:
@@ -40,16 +38,10 @@ jobs:
           java-version: 8
           java-package: jdk
 
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v2
         with:
           toolchain: nightly-2022-07-28
           override: true
-
-      - name: Reuse build cache
-        run: |
-          mkdir -p ./build
-          rm -rf deps
-          ln -s ${{ env.DEPS_ROOT }} deps
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
@@ -57,7 +49,7 @@ jobs:
       - name: Build for mac
         run: |
           mkdir -p build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DNATIVE=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
           cmake --build . --parallel 8
 
       - name: Test
