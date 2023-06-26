@@ -37,18 +37,13 @@ jobs:
           java-version: 8
           java-package: jdk
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2022-07-28
-          override: true
-
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
       - name: Build for mac
         run: |
           mkdir -p build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DNATIVE=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DVCPKG_TARGET_TRIPLET=arm64-osx -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
           cmake --build . --parallel 8
 
       - name: Test
