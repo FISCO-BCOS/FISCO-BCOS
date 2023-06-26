@@ -23,10 +23,8 @@
 #include <bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/P2PMessageV2.h>
-#include <bcos-gateway/libp2p/Service.h>
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
-#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
 #include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
@@ -68,6 +66,12 @@ struct GatewayP2PReloadHandler
             config->loadP2pConnectedNodes();
             auto nodes = config->connectedNodes();
             service->setStaticNodes(nodes);
+
+            config->loadPeerBlacklist();
+            service->updatePeerBlacklist(config->peerBlacklist(), config->enableBlacklist());
+
+            config->loadPeerWhitelist();
+            service->updatePeerWhitelist(config->peerWhitelist(), config->enableWhitelist());
 
             BCOS_LOG(INFO) << LOG_BADGE("Gateway::Signal")
                            << LOG_DESC("reload p2p connected nodes successfully")
@@ -466,6 +470,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
         config->initConfig(_configPath, true);
     }
     config->loadP2pConnectedNodes();
+    config->setConfigFile(_configPath);
     return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
 }
 
@@ -702,7 +707,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
         // init Gateway
         auto gateway = std::make_shared<Gateway>(
-            m_chainID, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
+            _config, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
         auto gatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(

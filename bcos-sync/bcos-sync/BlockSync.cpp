@@ -530,6 +530,9 @@ void BlockSync::tryToRequestBlocks()
     }
     auto currentNumber = m_config->blockNumber();
     // no need to request blocks
+    // if blockNumber in ledger >= request number
+    // or request number <= executed block
+    // or request number <= applying block
     if (currentNumber >= requestToNumber || requestToNumber <= m_config->executedBlock() ||
         requestToNumber <= m_config->applyingBlock())
     {
@@ -548,7 +551,7 @@ void BlockSync::requestBlocks(BlockNumber _from, BlockNumber _to)
     auto blockSizePerShard = m_config->maxRequestBlocks();
     auto shardNumber = (_to - _from + blockSizePerShard - 1) / blockSizePerShard;
     size_t shard = 0;
-    auto interval = m_syncStatus->peers()->size() - 1;
+    auto interval = m_syncStatus->peersSize() - 1;
     interval = (interval == 0) ? 1 : interval;
     // at most request `maxShardPerPeer` shards every time
     for (size_t loop = 0; loop < m_config->maxShardPerPeer() && shard < shardNumber; loop++)
@@ -926,11 +929,11 @@ void BlockSync::updateTreeTopologyNodeInfo()
 bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)
 {
     // if the node is down, it has no peer information
-    if (!m_syncStatus->hasPeer(_nodeID))
+    auto nodeStatus = m_syncStatus->peerStatus(_nodeID);
+    if (nodeStatus == nullptr)
     {
         return true;
     }
-    auto nodeStatus = m_syncStatus->peerStatus(_nodeID);
     return (nodeStatus->number() + c_FaultyNodeBlockDelta) < m_config->blockNumber();
 }
 

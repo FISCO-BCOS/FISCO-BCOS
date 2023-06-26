@@ -158,7 +158,7 @@ void SyncTreeTopology::selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNo
         for (auto const& [idx, consNode] : *m_consensusNodes | RANGES::view::enumerate)
         {
             if (_peers->contains(consNode) &&
-                bcos::crypto::KeyCompareTools::isNodeIDExist(consNode, *_selectedNodeList) &&
+                !bcos::crypto::KeyCompareTools::isNodeIDExist(consNode, *_selectedNodeList) &&
                 static_cast<std::uint64_t>(m_consIndex) != idx)
             {
                 _selectedNodeList->emplace_back(consNode);

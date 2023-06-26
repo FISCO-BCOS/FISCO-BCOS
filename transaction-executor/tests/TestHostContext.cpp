@@ -1,12 +1,12 @@
 // #include "../bcos-transaction-executor/HostContext.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "TestBytecode.h"
+#include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/storage2/StringPool.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
 #include "transaction-executor/bcos-transaction-executor/vm/VMInstance.h"
-#include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>

@@ -46,13 +46,12 @@ bcos::txpool::TxPool::TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::P
     m_transactionFactory(m_config->blockFactory()->transactionFactory()),
     m_ledger(m_config->ledger())
 {
-    m_worker = std::make_shared<ThreadPool>("submitter", 4);
+    m_worker = std::make_shared<ThreadPool>("submitter", verifierWorkerNum);
     m_verifier = std::make_shared<ThreadPool>("verifier", 2);
     m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
     // worker to pre-store-txs
     m_txsPreStore = std::make_shared<ThreadPool>("txsPreStore", 1);
-    TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")
-                     << LOG_KV("submitterWorkerNum", verifierWorkerNum);
+    TXPOOL_LOG(INFO) << LOG_DESC("create TxPool") << LOG_KV("submitterNum", verifierWorkerNum);
 }
 
 bcos::txpool::TxPool::~TxPool() noexcept
@@ -99,7 +98,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 
-task::Task<void> TxPool::broadcastPushTransaction(const protocol::Transaction& transaction)
+task::Task<void> TxPool::broadcastTransaction(const protocol::Transaction& transaction)
 {
     bcos::bytes buffer;
     transaction.encode(buffer);
@@ -107,6 +106,13 @@ task::Task<void> TxPool::broadcastPushTransaction(const protocol::Transaction& t
     m_frontService->asyncSendBroadcastMessage(
         protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, bcos::ref(buffer));
 
+    co_return;
+}
+
+task::Task<void> TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
+{
+    m_frontService->asyncSendBroadcastMessage(
+        protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
     co_return;
 }
 
@@ -387,16 +393,25 @@ void TxPool::asyncMarkTxs(HashListPtr _txsHash, bool _sealedFlag,
     bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
+    bool allMarked;
     {
         bcos::ReadGuard guard(x_markTxsMutex);
-        m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
+        allMarked = m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
     }
 
     if (!_onRecvResponse)
     {
         return;
     }
-    _onRecvResponse(nullptr);
+    if (allMarked)
+    {
+        _onRecvResponse(nullptr);
+    }
+    else
+    {
+        _onRecvResponse(BCOS_ERROR_PTR(
+            CommonError::TransactionsMissing, "TransactionsMissing during asyncMarkTxs"));
+    }
 }
 
 void TxPool::asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse)
@@ -417,8 +432,7 @@ void TxPool::init()
     auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_config->ledger());
     TXPOOL_LOG(INFO) << LOG_DESC("fetch LedgerConfig information");
     ledgerConfigFetcher->fetchBlockNumberAndHash();
-    ledgerConfigFetcher->fetchConsensusNodeList();
-    ledgerConfigFetcher->fetchObserverNodeList();
+    ledgerConfigFetcher->fetchBlockTxCountLimit();
     TXPOOL_LOG(INFO) << LOG_DESC("fetch LedgerConfig success");
 
     auto blockLimit = m_config->blockLimit();
@@ -449,8 +463,8 @@ void TxPool::init()
     // init syncConfig
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config");
     auto txsSyncConfig = m_transactionSync->config();
-    txsSyncConfig->setConsensusNodeList(ledgerConfig->consensusNodeList());
-    txsSyncConfig->setObserverList(ledgerConfig->observerNodeList());
+    m_transactionSync->config()->setMaxResponseTxsToNodesWithEmptyTxs(
+        ledgerConfig->blockTxCountLimit());
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config success");
 }
 

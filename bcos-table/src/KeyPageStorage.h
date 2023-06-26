@@ -271,6 +271,8 @@ public:
         TableMeta(const TableMeta& meta)
         {
             pages = std::make_unique<std::vector<PageInfo>>();
+            pages->reserve(meta.pages->size());
+            auto readLock = meta.rLock();
             *pages = *meta.pages;
         }
         TableMeta& operator=(const TableMeta& meta)
@@ -279,7 +281,7 @@ public:
             {
                 pages = std::make_unique<std::vector<PageInfo>>();
                 pages->reserve(meta.pages->size());
-                auto lock = std::shared_lock(meta.mutex);
+                auto readLock = meta.rLock();
                 *pages = *meta.pages;
             }
             return *this;
@@ -418,10 +420,10 @@ public:
                 }
                 else
                 {
-                    KeyPage_LOG(FATAL)
-                        << LOG_DESC("updatePageInfo not found")
-                        << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
-                        << LOG_KV("valid", count) << LOG_KV("size", size);
+                    KeyPage_LOG(FATAL) << LOG_DESC("updatePageInfo not found")
+                                       << LOG_KV("oldEndKey", toHex(oldEndKey))
+                                       << LOG_KV("pageKey", toHex(pageKey))
+                                       << LOG_KV("valid", count) << LOG_KV("size", size);
                 }
             }
             return oldPageKey;
@@ -459,8 +461,9 @@ public:
                 it->setPageData(nullptr);
                 if (it->getCount() == 0 || it->getPageKey().empty())
                 {
-                    KeyPage_LOG(DEBUG) << LOG_DESC("TableMeta clean empty page")
-                                       << LOG_KV("pageKey", toHex(it->getPageKey()));
+                    KeyPage_LOG(DEBUG)
+                        << LOG_DESC("TableMeta clean empty page") << LOG_KV("size", pages->size())
+                        << LOG_KV("pageKey", toHex(it->getPageKey()));
                     it = pages->erase(it);
                 }
                 else
@@ -520,7 +523,7 @@ public:
             // }
             int invalid = 0;
             m_rows = 0;
-            auto writeLock = rLock();
+            auto writeLock = lock();
             for (auto it = pages->begin(); it != pages->end();)
             {
                 if (it->getCount() == 0 || it->getPageKey().empty())
@@ -1168,7 +1171,9 @@ public:
         auto it = bucket->container.find(std::make_pair(std::string(table), std::string(key)));
         if (it != bucket->container.end())
         {
-            return std::make_optional(std::make_shared<Data>(*it->second));
+            // copy data also need clean
+            auto data = std::make_shared<Data>(*it->second);
+            return std::make_optional(std::move(data));
         }
         auto prevKeyPage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(getPrev());
         if (prevKeyPage)

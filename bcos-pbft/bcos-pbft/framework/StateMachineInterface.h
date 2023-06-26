@@ -37,5 +37,7 @@ public:
     // (Not required): Just for performance, call this before "asyncApply" in the other thread.
     virtual void asyncPreApply(
         ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished) = 0;
+
+    virtual void stop() {}
 };
 }  // namespace bcos::consensus

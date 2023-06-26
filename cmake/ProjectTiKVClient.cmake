@@ -7,6 +7,11 @@ else()
     set(TIKV_BUILD_MODE "release")
 endif()
 
+if (APPLE)
+    set(CUSTOM_INSTALL_COMMAND "")
+else()
+    set(CUSTOM_INSTALL_COMMAND "${CMAKE_AR} d <SOURCE_DIR>/target/${TIKV_BUILD_MODE}/libtikv_client.a error.cc.o error_utils.cc.o memory_quota.cc.o parse_address.cc.o symbolize.cc.o tcp_client_posix.cc.o tcp_posix.cc.o unix_sockets_posix.cc.o uri_parser.cc.o")
+endif()
 find_program(CARGO_COMMAND NAMES cargo REQUIRED PATHS "${USER_HOME}\\.cargo\\bin")
 
 ExternalProject_Add(tikv_client_project2
@@ -17,7 +22,7 @@ ExternalProject_Add(tikv_client_project2
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   CONFIGURE_COMMAND ${CARGO_COMMAND} install cxxbridge-cmd@1.0.75
   BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release && make target/${TIKV_BUILD_MODE}/libtikv_client.a
-  INSTALL_COMMAND ${CMAKE_AR} d <SOURCE_DIR>/target/${TIKV_BUILD_MODE}/libtikv_client.a error.cc.o error_utils.cc.o memory_quota.cc.o parse_address.cc.o symbolize.cc.o tcp_client_posix.cc.o tcp_posix.cc.o unix_sockets_posix.cc.o uri_parser.cc.o
+  INSTALL_COMMAND ""
   BUILD_BYPRODUCTS <SOURCE_DIR>/target/${TIKV_BUILD_MODE}/libtikv_client.a
   # LOG_BUILD true
 )

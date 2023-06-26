@@ -40,7 +40,9 @@ public:
         m_worker = std::make_shared<ThreadPool>("stateMachine", 1);
     }
 
-    ~StateMachine() override
+    ~StateMachine() override { stop(); }
+
+    void stop() override
     {
         if (m_worker)
         {

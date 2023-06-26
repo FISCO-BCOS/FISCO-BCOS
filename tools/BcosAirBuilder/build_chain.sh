@@ -2,7 +2,7 @@
 set -e
 
 dirpath="$(cd "$(dirname "$0")" && pwd)"
-listen_ip="0.0.0.0"
+default_listen_ip="0.0.0.0"
 port_start=(30300 20200 3901)
 p2p_listen_port=port_start[0]
 rpc_listen_port=port_start[1]
@@ -25,7 +25,8 @@ rsa_key_length=2048
 sm_mode='false'
 enable_hsm='false'
 macOS=""
-x86_64_arch="true"
+x86_64_arch="false"
+arm64_arch="false"
 sm2_params="sm_sm2.param"
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
@@ -38,11 +39,11 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.3.0"
+default_version="v3.4.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
-auth_mode="true"
+auth_mode="false"
 monitor_mode="false"
 auth_admin_account=
 binary_path=""
@@ -59,7 +60,7 @@ download_timeout=240
 make_tar=
 default_group="group0"
 default_chainid="chain0"
-
+use_ipv6=""
 # for modifying multipy ca node
 modify_node_path=""
 multi_ca_path=""
@@ -107,9 +108,12 @@ file_must_exists() {
 check_env() {
     if [ "$(uname)" == "Darwin" ];then
         macOS="macOS"
-    fi
-    if [ "$(uname -m)" != "x86_64" ];then
-        x86_64_arch="false"
+    elif [ "$(uname -m)" == "x86_64" ];then
+        x86_64_arch="true"
+    elif [ "$(uname -m)" == "arm64" ];then
+        arm64_arch="true"
+    elif [ "$(uname -m)" == "aarch64" ];then
+        arm64_arch="true"
     fi
 }
 
@@ -349,7 +353,7 @@ gen_rsa_node_cert() {
     mv "$ndpath"/pkcs8_node.key "$ndpath"/"$type".key
 
     # extract p2p id
-    ${OPENSSL_CMD} rsa -in "$ndpath"/"$type".key -pubout -out public.pem
+    ${OPENSSL_CMD} rsa -in "$ndpath"/"$type".key -pubout -out public.pem 2> /dev/null
     ${OPENSSL_CMD} rsa -pubin -in public.pem -text -noout 2> /dev/null | sed -n '3,20p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "${ndpath}/${type}.nodeid"
     rm -f public.pem
 
@@ -362,11 +366,14 @@ download_bin()
         LOG_INFO "Use binary ${binary_path}"
         return
     fi
-    if [ "${x86_64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64 or macOS. Please compile from source."; fi
+    if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64/aarch64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64/aarch64 and macOS. Please compile from source."; fi
     binary_path="bin/${binary_name}"
-    package_name="${binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
         package_name="${binary_name}-macOS-x86_64.tar.gz"
+    elif [ "${arm64_arch}" == "true" ];then
+        package_name="${binary_name}-linux-aarch64.tar.gz"
+    elif [ "${x86_64_arch}" == "true" ];then
+    	package_name="${binary_name}-linux-x86_64.tar.gz"
     fi
 
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
@@ -390,9 +397,12 @@ download_bin()
 download_lightnode_bin()
 {
     lightnode_binary_path="bin/${lightnode_binary_name}"
-    light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
         light_package_name="${lightnode_binary_name}-macOS-x86_64.tar.gz"
+    elif [ "${arm64_arch}" == "true" ];then
+        light_package_name="${lightnode_binary_name}-linux-aarch64.tar.gz"
+    elif [ "${x86_64_arch}" == "true" ];then
+    	light_package_name="${lightnode_binary_name}-linux-x86_64.tar.gz"
     fi
 
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${light_package_name}"
@@ -555,6 +565,7 @@ Usage:
     -n <node key path>                  [Optional] set the path of the node key file to load nodeid
     -N <node path>                      [Optional] set the path of the node modified to multi ca mode
     -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
+    -6 <ipv6 mode>                      [Optional] IPv6 mode use :: as default listen ip, default is false
     -h Help
 
 deploy nodes e.g
@@ -575,8 +586,10 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:6" option; do
         case $option in
+        6) use_ipv6="true" && default_listen_ip="::"
+        ;;
         l)
             ip_param=$OPTARG
             use_ip_param="true"
@@ -636,17 +649,20 @@ parse_params() {
                 LOG_FATAL "Not support docker mode for macOS now"
            fi
         ;;
-        w) wasm_mode="true";;
+        w) wasm_mode="true"
+          auth_mode="false"
+          ;;
         R) serial_mode="${OPTARG}";;
         a)
           auth_admin_account="${OPTARG}"
+          auth_mode="true"
         ;;
         v) compatibility_version="${OPTARG}";;
         z) make_tar="true";;
         N)
             modify_node_path=$OPTARG
             dir_must_exists "${modify_node_path}"
-            ;; 
+            ;;
         u)
             multi_ca_path="$OPTARG"
             local last_char=${multi_ca_path: -1}
@@ -679,6 +695,7 @@ print_result() {
     LOG_INFO "Server IP            : ${ip_array[*]}"
     LOG_INFO "SM model             : ${sm_mode}"
     LOG_INFO "enable HSM           : ${enable_hsm}"
+    LOG_INFO "nodes.json           : ${connected_nodes}"
     LOG_INFO "Output dir           : ${output_dir}"
     LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -763,6 +780,8 @@ node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 ulimit -n 1024
 if [ ! -z \${node_pid} ];then
+    kill -USR1 \${node_pid}
+    kill -USR2 \${node_pid}
     echo " \${node} is running, pid is \$node_pid."
     exit 0
 else
@@ -1269,7 +1288,7 @@ generate_common_ini() {
     local output=${1}
     # LOG_INFO "Begin generate uuid"
     local uuid=$(uuidgen)
-    LOG_INFO "Generate uuid success: ${uuid}"
+    # LOG_INFO "Generate uuid success: ${uuid}"
     cat <<EOF >>"${output}"
 
 [security]
@@ -1477,7 +1496,6 @@ generate_p2p_connected_conf() {
     else
         local ip_array=(${ip_params//,/ })
         local ip_length=${#ip_array[@]}
-
         local i=0
         for (( ; i < ip_length; i++)); do
             local ip=${ip_array[i]}
@@ -1588,8 +1606,8 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.3.0
-    compatibility_version=3.3.0
+    ; the default is 3.4.0
+    compatibility_version=3.4.0
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
@@ -1704,7 +1722,7 @@ expand_node()
     if "${monitor_mode}" ; then
        LOG_INFO "start generate monitor scripts"
        ip=`echo $mtail_ip_param | awk '{split($0,a,":");print a[1]}'`
-       if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
+        if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
             LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
         fi
        num=`echo $mtail_ip_param | awk '{split($0,a,":");print a[2]}'`
@@ -1879,15 +1897,27 @@ deploy_nodes()
     generate_chain_cert "${sm_mode}" "${ca_dir}"
 
     for line in ${ip_array[*]}; do
-        ip=${line%:*}
-        num=${line#*:}
-        if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
-            LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
+        if [ -n "$(echo ${line} | grep "\.")" ];then
+            ip=${line%:*}
+            num=${line#*:}
+        else
+            ip=${line%\]*}
+            ip=${ip#*\[}
+            num=${line#*\]}
+            num=${num#*:}
+            use_ipv6="true"
+        fi
+        if [[ -n "${use_ipv6}" && -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]]; then
+            LOG_WARN "Please check IPv6 address: ${ip}, if you use domain name please ignore this."
+        elif [[ -z "${use_ipv6}" && -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]]; then
+            LOG_WARN "Please check IPv4 address: ${ip}, if you use domain name please ignore this."
         fi
         # echo $num
+        local ip_var_name=${ip//./_}
+        ip_var_name="${ip_var_name//:/_}_count"
         [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
-        echo "Processing IP:${ip} Total:${num}"
-        [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
+        echo "Processing IP ${ip} Total:${num}"
+        [ -z "$(get_value ${ip_var_name})" ] && set_value ${ip_var_name} 0
 
         nodes_dir="${output_dir}/${ip}"
         # start_all.sh and stop_all.sh
@@ -1905,7 +1935,7 @@ deploy_nodes()
         # generate sdk cert
         generate_sdk_cert "${sm_mode}" "${ca_dir}" "${nodes_dir}/sdk"
         for ((i = 0; i < num; ++i)); do
-            local node_count=$(get_value ${ip//./}_count)
+            local node_count=$(get_value ${ip_var_name})
             node_dir="${output_dir}/${ip}/node${node_count}"
             mkdir -p "${node_dir}"
             generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
@@ -1919,10 +1949,14 @@ deploy_nodes()
                 generate_mtail_scripts "${node_dir}" "${ip}" "${port}" "node${node_count}"
             fi
             local port=$((p2p_listen_port + node_count))
-            connected_nodes=${connected_nodes}"${ip}:${port}, "
+            if [[ -n "${use_ipv6}" ]]; then
+                connected_nodes=${connected_nodes}"[${ip}]:${port},"
+            else
+                connected_nodes=${connected_nodes}"${ip}:${port},"
+            fi
             account_dir="${node_dir}/conf"
             generate_node_account "${sm_mode}" "${account_dir}" "${count}"
-            set_value ${ip//./}_count $(($(get_value ${ip//./}_count) + 1))
+            set_value ${ip_var_name} $(($(get_value ${ip_var_name}) + 1))
             ((++count))
             ((++node_count))
         done
@@ -1936,19 +1970,31 @@ deploy_nodes()
     local i=0
     local count=0
     for line in ${ip_array[*]}; do
-        ip=${line%:*}
-        num=${line#*:}
-        if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]; then
-            LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
+        if [ -n "$(echo ${line} | grep "\.")" ];then
+            ip=${line%:*}
+            num=${line#*:}
+        else
+            ip=${line%\]*}
+            ip=${ip#*\[}
+            num=${line#*\]}
+            num=${num#*:}
+            use_ipv6="true"
         fi
+        if [[ -n "${use_ipv6}" && -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]]; then
+            LOG_WARN "Please check IPv6 address: ${ip}, if you use domain name please ignore this."
+        elif [[ -z "${use_ipv6}" && -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]]; then
+            LOG_WARN "Please check IPv4 address: ${ip}, if you use domain name please ignore this."
+        fi
+        local ip_var_name=${ip//./_}
+        ip_var_name="${ip_var_name//:/_}_count"
         [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
-        set_value ${ip//./}_count 0
+        set_value ${ip_var_name} 0
         for ((i = 0; i < num; ++i)); do
-            local node_count=$(get_value ${ip//./}_count)
+            local node_count=$(get_value ${ip_var_name})
             node_dir="${output_dir}/${ip}/node${node_count}"
             local p2p_port=$((p2p_listen_port + node_count))
             local rpc_port=$((rpc_listen_port + node_count))
-            generate_config "${sm_mode}" "${node_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
+            generate_config "${sm_mode}" "${node_dir}/config.ini" "${default_listen_ip}" "${p2p_port}" "${default_listen_ip}" "${rpc_port}"
             generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
             if [ ! -z "${node_key_dir}" ]; then
                 # generate nodeids from file
@@ -1956,12 +2002,16 @@ deploy_nodes()
             else
                 generate_genesis_config "${node_dir}/config.genesis" "${nodeid_list}"
             fi
-            set_value ${ip//./}_count $(($(get_value ${ip//./}_count) + 1))
+            set_value ${ip_var_name} $(($(get_value ${ip_var_name}) + 1))
             ((++count))
         done
-        if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
+        if [ -n "$make_tar" ];then
+            cd ${output_dir}
+            tar zcf "${ip}.tar.gz" "${ip}" &
+            cd ${current_dir}
+        fi
     done
-
+    wait
     # Generate lightnode cert
     if [ -e "${lightnode_binary_path}" ]; then
         local lightnode_dir="${output_dir}/lightnode"
@@ -1976,7 +2026,7 @@ deploy_nodes()
         local node_count=$(get_value ${ip//./}_count)
         local p2p_port=$((p2p_listen_port + node_count))
         local rpc_port=$((rpc_listen_port + node_count))
-        generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
+        generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${default_listen_ip}" "${p2p_port}" "${default_listen_ip}" "${rpc_port}"
         generate_p2p_connected_conf "${lightnode_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
 
         cp "${lightnode_binary_path}" ${lightnode_dir}/

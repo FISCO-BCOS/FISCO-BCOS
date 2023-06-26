@@ -293,6 +293,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 // execute/verify exception
                 if (_error != nullptr)
                 {
+                    config->setExecutedBlock(config->blockNumber());
                     // reset the executed number
                     BLKSYNC_LOG(WARNING)
                         << LOG_DESC("applyBlock: executing the downloaded block failed")
@@ -327,7 +328,6 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                             downloadQueue->m_blocks.push(_block);
                         }
                     }
-                    config->setExecutedBlock(config->blockNumber());
                     return;
                 }
                 if (!downloadQueue->verifyExecutedBlock(_block, _blockHeader))

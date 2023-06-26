@@ -45,7 +45,8 @@ public:
         createKVTable(m_pbftCommitDB);
         m_commitBlockWorker = std::make_shared<ThreadPool>("blockSubmit", 1);
     }
-    ~LedgerStorage() override
+    ~LedgerStorage() override { stop(); }
+    void stop() override
     {
         if (m_commitBlockWorker)
         {

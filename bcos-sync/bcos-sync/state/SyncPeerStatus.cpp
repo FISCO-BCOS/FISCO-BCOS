@@ -46,7 +46,12 @@ PeerStatus::PeerStatus(
 
 bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 {
-    UpgradableGuard lock(x_mutex);
+    std::lock_guard<std::mutex> lock(x_mutex);
+    // maybe sync status msg delay in network
+    if (m_number > _status->number())
+    {
+        return false;
+    }
     if (m_hash == _status->hash() && _status->number() == m_number &&
         m_archivedNumber == _status->archivedBlockNumber())
     {
@@ -62,7 +67,6 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
                              << LOG_KV("storedGenesisHash", m_genesisHash.abridged());
         return false;
     }
-    UpgradeGuard ulock(lock);
     m_number = _status->number();
     m_archivedNumber = _status->archivedBlockNumber();
     m_hash = _status->hash();
@@ -79,33 +83,33 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 
 bool SyncPeerStatus::hasPeer(PublicPtr _peer)
 {
-    ReadGuard lock(x_peersStatus);
+    std::lock_guard<std::mutex> lock(x_peersStatus);
     return m_peersStatus.contains(_peer);
 }
 
 PeerStatus::Ptr SyncPeerStatus::peerStatus(bcos::crypto::PublicPtr _peer)
 {
-    ReadGuard lock(x_peersStatus);
-    if (!m_peersStatus.contains(_peer))
+    std::lock_guard<std::mutex> lock(x_peersStatus);
+    auto statusIt = m_peersStatus.find(_peer);
+    if (statusIt == m_peersStatus.end())
     {
         return nullptr;
     }
-    return m_peersStatus[_peer];
+    return statusIt->second;
 }
 
 PeerStatus::Ptr SyncPeerStatus::insertEmptyPeer(PublicPtr _peer)
 {
-    WriteGuard lock(x_peersStatus);
+    std::lock_guard<std::mutex> lock(x_peersStatus);
     // create and insert the new peer status
     auto peerStatus = std::make_shared<PeerStatus>(m_config, _peer);
-    m_peersStatus.insert(std::make_pair(_peer, peerStatus));
+    m_peersStatus.insert({_peer, peerStatus});
     return peerStatus;
 }
 
 bool SyncPeerStatus::updatePeerStatus(
     PublicPtr _peer, BlockSyncStatusInterface::ConstPtr _peerStatus)
 {
-    WriteGuard lock(x_peersStatus);
     // check the status
     if (_peerStatus->genesisHash() != m_config->genesisHash())
     {
@@ -117,26 +121,41 @@ bool SyncPeerStatus::updatePeerStatus(
                              << LOG_KV("expectedGenesisHash", m_config->genesisHash().abridged());
         return false;
     }
-    // update the existed peer status
-    if (m_peersStatus.contains(_peer))
+
+    PeerStatus::Ptr peerStatus{nullptr};
     {
-        auto status = m_peersStatus[_peer];
-        if (status->update(_peerStatus))
+        std::lock_guard<std::mutex> lock(x_peersStatus);
+        // update the existed peer status
+        auto iter = m_peersStatus.find(_peer);
+        if (m_peersStatus.end() != iter)
+        {
+            peerStatus = iter->second;
+        }
+    }
+
+    if (nullptr != peerStatus)
+    {
+        if (peerStatus->update(_peerStatus))
         {
             updateKnownMaxBlockInfo(_peerStatus);
         }
-        return true;
     }
-    // create and insert the new peer status
-    auto peerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
-    m_peersStatus.insert(std::make_pair(_peer, peerStatus));
-    BLKSYNC_LOG(DEBUG) << LOG_DESC("updatePeerStatus: new peer")
-                       << LOG_KV("peer", _peer->shortHex())
-                       << LOG_KV("number", _peerStatus->number())
-                       << LOG_KV("hash", _peerStatus->hash().abridged())
-                       << LOG_KV("genesisHash", _peerStatus->genesisHash().abridged())
-                       << LOG_KV("node", m_config->nodeID()->shortHex());
-    updateKnownMaxBlockInfo(_peerStatus);
+    else
+    {
+        // create and insert the new peer status
+        peerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
+        {
+            std::lock_guard<std::mutex> lock(x_peersStatus);
+            m_peersStatus.insert(std::make_pair(_peer, peerStatus));
+        }
+        BLKSYNC_LOG(DEBUG) << LOG_DESC("updatePeerStatus: new peer")
+                           << LOG_KV("peer", _peer->shortHex())
+                           << LOG_KV("number", _peerStatus->number())
+                           << LOG_KV("hash", _peerStatus->hash().abridged())
+                           << LOG_KV("genesisHash", _peerStatus->genesisHash().abridged())
+                           << LOG_KV("node", m_config->nodeID()->shortHex());
+        updateKnownMaxBlockInfo(_peerStatus);
+    }
     return true;
 }
 
@@ -156,7 +175,7 @@ void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr 
 
 void SyncPeerStatus::deletePeer(PublicPtr _peer)
 {
-    WriteGuard lock(x_peersStatus);
+    std::lock_guard<std::mutex> lock(x_peersStatus);
     auto peer = m_peersStatus.find(_peer);
     if (peer != m_peersStatus.end())
     {
@@ -166,35 +185,32 @@ void SyncPeerStatus::deletePeer(PublicPtr _peer)
 
 void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
-    ReadGuard lock(x_peersStatus);
-    if (m_peersStatus.empty())
+    std::vector<PeerStatus::Ptr> peersStatusList;
     {
-        return;
-    }
+        std::lock_guard<std::mutex> lock(x_peersStatus);
+        if (m_peersStatus.empty())
+        {
+            return;
+        }
+        peersStatusList.reserve(m_peersStatus.size());
 
-    // Get nodeid list
-    NodeIDs nodeIds;
-    for (const auto& peer : m_peersStatus)
-    {
-        nodeIds.emplace_back(peer.first);
+        // Get nodeid list
+        for (const auto& peer : m_peersStatus)
+        {
+            peersStatusList.emplace_back(peer.second);
+        }
     }
 
     // Random nodeid list
-    for (size_t i = nodeIds.size() - 1; i > 0; --i)
+    for (size_t i = peersStatusList.size() - 1; i > 0; --i)
     {
         size_t select = rand() % (i + 1);
-        swap(nodeIds[i], nodeIds[select]);
+        swap(peersStatusList[i], peersStatusList[select]);
     }
-
     // access _f() according to the random list
-    for (const auto& nodeId : nodeIds)
+    for (auto const& peerStatus : peersStatusList)
     {
-        auto const& peer = m_peersStatus.find(nodeId);
-        if (peer == m_peersStatus.end())
-        {
-            continue;
-        }
-        if (peer->second && !_f(peer->second))
+        if (peerStatus && !_f(peerStatus))
         {
             break;
         }
@@ -203,10 +219,22 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
 
 void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
-    ReadGuard lock(x_peersStatus);
-    for (const auto& peer : m_peersStatus)
+    std::vector<PeerStatus::Ptr> peersStatusList;
     {
-        if (peer.second && !_f(peer.second))
+        std::lock_guard<std::mutex> lock(x_peersStatus);
+        if (m_peersStatus.empty()) [[unlikely]]
+        {
+            return;
+        }
+        peersStatusList.reserve(m_peersStatus.size());
+        for (const auto& peer : m_peersStatus)
+        {
+            peersStatusList.emplace_back(peer.second);
+        }
+    }
+    for (auto const& peerStatus : peersStatusList)
+    {
+        if (peerStatus && !_f(peerStatus))
         {
             break;
         }
@@ -216,7 +244,8 @@ void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f)
 std::shared_ptr<NodeIDs> SyncPeerStatus::peers()
 {
     auto nodeIds = std::make_shared<NodeIDs>();
-    ReadGuard lock(x_peersStatus);
+    std::lock_guard<std::mutex> lock(x_peersStatus);
+    nodeIds->reserve(m_peersStatus.size());
     for (auto& peer : m_peersStatus)
     {
         nodeIds->emplace_back(peer.first);

@@ -1,6 +1,6 @@
 {
   "name": "fiscobcos",
-  "version-string": "3.3.0",
+  "version-string": "3.4.0",
   "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
   "description": "FISCO BCOS",
   "dependencies": [
@@ -133,7 +133,7 @@
       ]
     }
   },
-  "builtin-baseline": "1c48ec7f49d69bb753e6afefba51368e18263255",
+  "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139",
   "overrides": [
     {
       "name": "rocksdb",

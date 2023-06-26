@@ -36,6 +36,8 @@ bool PeerBlackWhitelistInterface::has(NodeID _peer) const
         return hasValueWhenDisable();
     }
 
+    bcos::Guard guard(x_peerList);
+
     auto itr = m_peerList.find(_peer);
     return itr != m_peerList.end();
 }
@@ -47,6 +49,8 @@ bool PeerBlackWhitelistInterface::has(const std::string& _peer) const
 
 std::string PeerBlackWhitelistInterface::dump(bool _isAbridged)
 {
+    bcos::Guard guard(x_peerList);
+
     std::stringstream ret;
     ret << LOG_KV("enable", m_enable) << LOG_KV("size", m_peerList.size()) << ",list[";
     for (auto nodeID : m_peerList)
@@ -64,4 +68,16 @@ std::string PeerBlackWhitelistInterface::dump(bool _isAbridged)
     ret << "]";
 
     return ret.str();
+}
+
+void PeerBlackWhitelistInterface::update(std::set<std::string> const& _strList, bool _enable)
+{
+    bcos::Guard guard(x_peerList);
+
+    m_peerList.clear();
+    for(auto& str : _strList)
+    {
+        m_peerList.emplace(str);
+    }
+    m_enable = _enable;
 }

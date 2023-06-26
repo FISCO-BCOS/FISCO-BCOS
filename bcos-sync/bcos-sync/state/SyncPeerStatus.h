@@ -45,25 +45,25 @@ public:
 
     bcos::protocol::BlockNumber number() const
     {
-        ReadGuard lock(x_mutex);
+        std::lock_guard<std::mutex> lock(x_mutex);
         return m_number;
     }
 
     bcos::protocol::BlockNumber archivedBlockNumber() const
     {
-        ReadGuard lock(x_mutex);
+        std::lock_guard<std::mutex> lock(x_mutex);
         return m_archivedNumber;
     }
 
     bcos::crypto::HashType const& hash() const
     {
-        ReadGuard lock(x_mutex);
+        std::lock_guard<std::mutex> lock(x_mutex);
         return m_hash;
     }
 
     bcos::crypto::HashType const& genesisHash() const
     {
-        ReadGuard lock(x_mutex);
+        std::lock_guard<std::mutex> lock(x_mutex);
         return m_genesisHash;
     }
 
@@ -76,7 +76,7 @@ private:
     bcos::crypto::HashType m_hash;
     bcos::crypto::HashType m_genesisHash;
 
-    mutable SharedMutex x_mutex;
+    mutable std::mutex x_mutex;
     DownloadRequestQueue::Ptr m_downloadRequests;
 };
 
@@ -96,6 +96,11 @@ public:
     void foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const&) const;
     void foreachPeer(std::function<bool(PeerStatus::Ptr)> const&) const;
     std::shared_ptr<bcos::crypto::NodeIDs> peers();
+    size_t peersSize() const
+    {
+        std::lock_guard<std::mutex> lock(x_peersStatus);
+        return m_peersStatus.size();
+    }
     PeerStatus::Ptr insertEmptyPeer(bcos::crypto::PublicPtr _peer);
 
 protected:
@@ -103,7 +108,7 @@ protected:
 
 private:
     std::map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyCompare> m_peersStatus;
-    mutable SharedMutex x_peersStatus;
+    mutable std::mutex x_peersStatus;
 
     BlockSyncConfig::Ptr m_config;
 };

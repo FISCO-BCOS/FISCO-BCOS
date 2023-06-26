@@ -68,6 +68,11 @@ NodeIPEndpoint Session::nodeIPEndpoint() const
 bool Session::active() const
 {
     auto server = m_server.lock();
+    return active(server);
+}
+
+bool Session::active(std::shared_ptr<bcos::gateway::Host>& server) const
+{
     return m_active && server && server->haveNetwork() && m_socket && m_socket->isConnected();
 }
 
@@ -78,12 +83,12 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     {
         return;
     }
-    if (!active())
+    if (!active(server))
     {
         SESSION_LOG(WARNING) << "Session inactive";
         if (callback)
         {
-            m_asyncGroup.run([callback = std::move(callback)] {
+            server->asyncTo([callback = std::move(callback)] {
                 callback(NetworkException(-1, "Session inactive"), Message::Ptr());
             });
         }
@@ -98,7 +103,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                              << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
         if (callback)
         {
-            m_asyncGroup.run([callback = std::move(callback)] {
+            server->asyncTo([callback = std::move(callback)] {
                 callback(NetworkException(-1, "Msg size overflow"), Message::Ptr());
             });
         }
@@ -115,8 +120,8 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
             auto error = result.value();
             auto errorCode = error.errorCode();
             auto errorMessage = error.errorMessage();
-            m_asyncGroup.run([callback = std::move(callback), errorCode,
-                                 errorMessage = std::move(errorMessage)] {
+            server->asyncTo([callback = std::move(callback), errorCode,
+                                errorMessage = std::move(errorMessage)] {
                 callback(NetworkException((int64_t)errorCode, errorMessage), Message::Ptr());
             });
         }
@@ -294,7 +299,9 @@ std::size_t Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& enc
 
 void Session::write()
 {
-    if (!active())
+    // TODO: use reference instead of weak_ptr
+    auto server = m_server.lock();
+    if (!active(server))
     {
         return;
     }
@@ -302,13 +309,11 @@ void Session::write()
     try
     {
         std::vector<EncodedMessage::Ptr> encodedMsgs;
-
         Guard lockGuard(x_writeQueue);
         if (m_writing)
         {
             return;
         }
-
         m_writing = true;
 
         if (m_writeQueue.empty())
@@ -322,7 +327,6 @@ void Session::write()
         // data
         tryPopSomeEncodedMsgs(encodedMsgs, m_maxSendDataSize, m_maxSendMsgCountS);
 
-        auto server = m_server.lock();
         if (server && server->haveNetwork())
         {
             if (m_socket->isConnected())
@@ -388,7 +392,7 @@ void Session::drop(DisconnectReason _reason)
 
     if (server && m_messageHandler)
     {
-        m_asyncGroup.run([self = weak_from_this(), errorCode, errorMsg = std::move(errorMsg)]() {
+        server->asyncTo([self = weak_from_this(), errorCode, errorMsg = std::move(errorMsg)]() {
             auto session = self.lock();
             if (!session)
             {
@@ -472,7 +476,8 @@ void Session::drop(DisconnectReason _reason)
                 });
         }
         catch (...)
-        {}
+        {
+        }
     }
 }
 
@@ -666,7 +671,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
     {
         return;
     }
-    m_asyncGroup.run([self = weak_from_this(), e, message]() {
+    server->asyncTo([self = weak_from_this(), e, message]() {
         try
         {
             auto session = self.lock();
@@ -745,7 +750,7 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     {
         return;
     }
-    m_asyncGroup.run([callback = std::move(callback)]() {
+    server->asyncTo([callback = std::move(callback)]() {
         NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
         callback->callback(e, Message::Ptr());
     });

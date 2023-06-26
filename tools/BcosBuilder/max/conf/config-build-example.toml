@@ -36,7 +36,7 @@ consensus_type = "pbft"
 # transaction gas limit
 gas_limit = "3000000000"
 # compatible version, can be dynamically upgraded through setSystemConfig
-compatibility_version="3.3.0"
+compatibility_version="3.4.0"
 
 [[agency]]
 name = "agencyA"
@@ -85,7 +85,7 @@ enable_storage_security = false
         tars_listen_ip="0.0.0.0"
         # node tars server listen port
         tars_listen_port=40402
-    
+
 
 
 [[agency]]
