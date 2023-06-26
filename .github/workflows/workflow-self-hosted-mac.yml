@@ -37,7 +37,7 @@ jobs:
           java-version: 8
           java-package: jdk
 
-      - uses: actions-rs/toolchain@v2
+      - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-07-28
           override: true
