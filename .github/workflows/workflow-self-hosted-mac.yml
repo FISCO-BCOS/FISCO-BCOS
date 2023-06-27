@@ -26,9 +26,6 @@ jobs:
     runs-on: self-hosted-mac3.4
     strategy:
       fail-fast: false
-    env:
-      DEPS_ROOT: ~/cache/deps3.4
-      VCPKG_ROOT: ~/cache/vcpkg
 
     steps:
       - uses: actions/checkout@v3
@@ -41,24 +38,13 @@ jobs:
           java-version: 8
           java-package: jdk
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2022-07-28
-          override: true
-
-      - name: Reuse build cache
-        run: |
-          mkdir -p ./build
-          rm -rf deps
-          ln -s ${{ env.DEPS_ROOT }} deps
-
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
       - name: Build for mac
         run: |
-          mkdir -p build && cd build && rm -rf CMakeCache.txt
-          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          mkdir -p build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DVCPKG_HOST_TRIPLET=arm64-osx -DVCPKG_TARGET_TRIPLET=arm64-osx -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
           cmake --build . --parallel 8
 
       - name: Test
