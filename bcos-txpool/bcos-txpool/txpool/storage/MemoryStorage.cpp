@@ -973,18 +973,15 @@ size_t MemoryStorage::unSealedTxsSize()
 size_t MemoryStorage::unSealedTxsSizeWithoutLock()
 {
     auto txsSize = m_txsTable.size();
-    // FIXME: the below log should be debug level
+     TXPOOL_LOG(DEBUG) << LOG_DESC("unSealedTxsSize") << LOG_KV("txsSize", txsSize)
+                      << LOG_KV("sealedTxsSize", m_sealedTxsSize);
 
-    // TXPOOL_LOG(INFO) << LOG_DESC("unSealedTxsSize") << LOG_KV("txsSize", txsSize)
-    //                  << LOG_KV("sealedTxsSize", m_sealedTxsSize);
-
-    // if (txsSize < m_sealedTxsSize)
-    // {
-    //     m_sealedTxsSize = txsSize;
-    //     return 0;
-    // }
-    // return (txsSize - m_sealedTxsSize);
-    return txsSize;
+     if (txsSize < m_sealedTxsSize)
+     {
+         m_sealedTxsSize = txsSize;
+         return 0;
+     }
+     return (txsSize - m_sealedTxsSize);
 }
 
 void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
