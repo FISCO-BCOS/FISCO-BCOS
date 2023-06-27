@@ -30,7 +30,8 @@ public:
     using Ptr = std::shared_ptr<LedgerConfig>;
     LedgerConfig()
       : m_consensusNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
-        m_observerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>())
+        m_observerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
+        m_workingSealerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>())
     {}
     virtual ~LedgerConfig() = default;
 
@@ -41,6 +42,11 @@ public:
     virtual void setObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList)
     {
         *m_observerNodeList = _observerNodeList;
+    }
+    virtual void setWorkingSealerNodeList(
+        bcos::consensus::ConsensusNodeList const& _workingSealerNodeList)
+    {
+        *m_workingSealerNodeList = _workingSealerNodeList;
     }
     virtual void setHash(bcos::crypto::HashType const& _hash) { m_hash = _hash; }
     virtual void setBlockNumber(bcos::protocol::BlockNumber _blockNumber)
@@ -66,13 +72,24 @@ public:
     {
         return *m_observerNodeList;
     }
+    virtual bcos::consensus::ConsensusNodeList const& workingSealerNodeList() const
+    {
+        return *m_workingSealerNodeList;
+    }
     bcos::crypto::HashType const& hash() const { return m_hash; }
     bcos::protocol::BlockNumber blockNumber() const { return m_blockNumber; }
+
+    void setConsensusType(const std::string& _consensusType) { m_consensusType = _consensusType; }
+    std::string consensusType() const { return m_consensusType; }
 
     uint64_t blockTxCountLimit() const { return m_blockTxCountLimit; }
 
     bcos::consensus::ConsensusNodeListPtr mutableConsensusList() { return m_consensusNodeList; }
     bcos::consensus::ConsensusNodeListPtr mutableObserverList() { return m_observerNodeList; }
+    bcos::consensus::ConsensusNodeListPtr mutableWorkingSealerList()
+    {
+        return m_workingSealerNodeList;
+    }
 
     uint64_t leaderSwitchPeriod() const { return m_leaderSwitchPeriod; }
     void setLeaderSwitchPeriod(uint64_t _leaderSwitchPeriod)
@@ -100,14 +117,43 @@ public:
     void setAuthCheckStatus(uint32_t _authStatus) { m_authCheckStatus = _authStatus; }
     uint32_t authCheckStatus() const { return m_authCheckStatus; }
 
+    void setEpochSealerNum(std::tuple<uint64_t, protocol::BlockNumber> _epochSealerNum)
+    {
+        m_epochSealerNum = _epochSealerNum;
+    }
+    std::tuple<uint64_t, protocol::BlockNumber> const& epochSealerNum() const
+    {
+        return m_epochSealerNum;
+    }
+
+    void setEpochBlockNum(std::tuple<uint64_t, protocol::BlockNumber> _epochBlockNum)
+    {
+        m_epochBlockNum = _epochBlockNum;
+    }
+    std::tuple<uint64_t, protocol::BlockNumber> const& epochBlockNum() const
+    {
+        return m_epochBlockNum;
+    }
+
+    void setNotifyRotateFlagInfo(const uint64_t _notifyRotateFlagInfo)
+    {
+        m_notifyRotateFlagInfo = _notifyRotateFlagInfo;
+    }
+    uint64_t notifyRotateFlagInfo() const { return m_notifyRotateFlagInfo; }
+
 protected:
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
+    bcos::consensus::ConsensusNodeListPtr m_workingSealerNodeList;
     bcos::crypto::HashType m_hash;
     bcos::protocol::BlockNumber m_blockNumber = 0;
+    std::string m_consensusType;
     uint64_t m_blockTxCountLimit = 0;
     uint64_t m_leaderSwitchPeriod = 1;
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {3000000000, 0};
+    std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {4, 0};
+    std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {1000, 0};
+    uint64_t m_notifyRotateFlagInfo{0};
     // the compatibilityVersion
     // the system version, can only be upgraded manually
     uint32_t m_compatibilityVersion = 0;

@@ -1,7 +1,7 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for bcos-sealer
+# Top-level CMake file for bcos-pbft
 # ------------------------------------------------------------------------------
-# Copyright (C) 2021 bcos-sealer
+# Copyright (C) 2021 bcos-pbft
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,12 +18,8 @@
 
 cmake_minimum_required(VERSION 3.10)
 
-project(bcos-sealer VERSION ${VERSION})
+project(bcos-rpbft VERSION ${VERSION})
 
-aux_source_directory(./bcos-sealer SRC_LIST)
-include_directories(./bcos-sealer)
-add_library(${SEALER_TARGET} ${SRC_LIST})
-
-find_package(tarscpp REQUIRED)
-
-target_link_libraries(${SEALER_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework ${TARS_PROTOCOL_TARGET})
+file(GLOB_RECURSE SRCS bcos-rpbft/*.cpp)
+add_library(${RPBFT_TARGET} ${SRCS})
+target_link_libraries(${RPBFT_TARGET} PUBLIC ${PBFT_TARGET})

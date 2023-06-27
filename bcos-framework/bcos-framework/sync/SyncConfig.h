@@ -84,6 +84,18 @@ public:
         return *m_observerNodeList;
     }
 
+    virtual void setWorkingConsensusList(bcos::consensus::ConsensusNodeList const& _workingNodeList)
+    {
+        WriteGuard lock(x_workingConsensusNodeList);
+        *m_workingConsensusNodeList = _workingNodeList;
+    }
+
+    virtual bcos::consensus::ConsensusNodeList workingConsensusList()
+    {
+        ReadGuard lock(x_workingConsensusNodeList);
+        return *m_workingConsensusNodeList;
+    }
+
     // Note: copy here to remove multithreading issues
     virtual bcos::crypto::NodeIDSet connectedNodeList()
     {
@@ -157,11 +169,15 @@ private:
 
 protected:
     bcos::crypto::NodeIDPtr m_nodeId;
+
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     mutable SharedMutex x_consensusNodeList;
 
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
     SharedMutex x_observerNodeList;
+
+    bcos::consensus::ConsensusNodeListPtr m_workingConsensusNodeList;
+    mutable SharedMutex x_workingConsensusNodeList;
 
     bcos::crypto::NodeIDSetPtr m_nodeList;
     mutable SharedMutex x_nodeList;
