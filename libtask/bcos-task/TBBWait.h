@@ -9,12 +9,8 @@
 #include <type_traits>
 #include <variant>
 
-#include <iostream>
-
 namespace bcos::task::tbb
 {
-
-inline static std::atomic_int suspendCount = 0;
 
 // Better using inside tbb task
 auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(task)>>
@@ -52,7 +48,6 @@ auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(t
         finished = true;
         if (tbbTag)
         {
-            std::cout << "Resume now!" << suspendCount-- << std::endl;
             lock.unlock();
             oneapi::tbb::task::resume(tbbTag);
         }
@@ -63,7 +58,6 @@ auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(t
     if (!finished)
     {
         oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
-            std::cout << "Suspend now!" << suspendCount++ << std::endl;
             tbbTag = tag;
             lock.unlock();
         });

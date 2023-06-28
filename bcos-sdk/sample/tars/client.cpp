@@ -7,9 +7,6 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
-#include <bcos-task/Coroutine.h>
-#include <bcos-task/TBBScheduler.h>
-#include <bcos-task/TBBWait.h>
 #include <bcos-task/Task.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
@@ -20,21 +17,40 @@
 #include <latch>
 #include <random>
 
+long currentTime()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+struct Request
+{
+    bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr> m_future;
+    long m_sendTime = 0;
+    long m_receiveTime = 0;
+};
+
 struct LatchCompletionQueue : public bcos::sdk::CompletionQueue
 {
     std::latch& m_latch;
+    std::vector<Request>& m_requests;
 
-    LatchCompletionQueue(std::latch& latch) : m_latch(latch) {}
-    void notify(std::any tag) override { m_latch.count_down(); }
+    LatchCompletionQueue(std::latch& latch, std::vector<Request>& requests)
+      : m_latch(latch), m_requests(requests)
+    {}
+    void notify(std::any tag) override
+    {
+        auto index = std::any_cast<size_t>(tag);
+        m_requests[index].m_receiveTime = currentTime();
+        m_latch.count_down();
+    }
 };
 
 int performance()
 {
     try
     {
-        oneapi::tbb::task_group taskGroup;
-        bcos::task::tbb::TBBScheduler scheduler(taskGroup);
-
         auto cryptoSuite =
             std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
                 std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
@@ -65,11 +81,36 @@ int performance()
         }
 
         auto const& contractAddress = receipt->contractAddress();
-        boost::timer::progress_display sendProgess(count);
-
         std::latch latch(count);
-        std::vector<bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr>> futures(count);
-        LatchCompletionQueue completionQueue{latch};
+        std::vector<Request> requests(count);
+        LatchCompletionQueue completionQueue{latch, requests};
+
+        long elapsed = currentTime();
+        std::cout << "Sending transaction..." << std::endl;
+        boost::timer::progress_display sendProgess(count);
+        tbb::parallel_for(tbb::blocked_range(0LU, count), [&](const auto& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+                auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(it));
+                auto setTransaction = transactionFactory.createTransaction(0,
+                    std::string(contractAddress), input, boost::lexical_cast<std::string>(rand()),
+                    blockNumber + blockLimit, "chain0", "group0", 0, keyPair);
+
+                ++sendProgess;
+                auto& request = requests[it];
+                request.m_future = rpcClient.sendTransaction(*setTransaction, &completionQueue, it);
+                request.m_sendTime = currentTime();
+            }
+        });
+        long sendElapsed = currentTime() - elapsed;
+
+        std::cout << std::endl << "All transaction sended, Waiting for response..." << std::endl;
+        latch.wait();
+        std::cout << "All response received" << std::endl;
+        elapsed = currentTime() - elapsed;
+
+        std::atomic_long allTimeCost = 0;
         std::atomic_int finished = 0;
         std::atomic_int failed = 0;
         tbb::parallel_for(tbb::blocked_range(0LU, count), [&](const auto& range) {
@@ -77,15 +118,14 @@ int performance()
             {
                 try
                 {
-                    bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
-                    auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(it));
-                    auto setTransaction =
-                        transactionFactory.createTransaction(0, std::string(contractAddress), input,
-                            boost::lexical_cast<std::string>(rand()), blockNumber + blockLimit,
-                            "chain0", "group0", 0, keyPair);
-
-                    ++sendProgess;
-                    futures[it] = rpcClient.sendTransaction(*setTransaction, &completionQueue);
+                    ++finished;
+                    auto& request = requests[it];
+                    auto receipt = request.m_future.get();
+                    allTimeCost += (request.m_receiveTime - request.m_sendTime);
+                    if (receipt->status() != 0)
+                    {
+                        ++failed;
+                    }
                 }
                 catch (std::exception& e)
                 {
@@ -94,27 +134,15 @@ int performance()
             }
         });
 
-        std::cout << "Waiting for response..." << std::endl;
-        latch.wait();
-        std::cout << "All response received" << std::endl;
-        for (auto& future : futures)
-        {
-            try
-            {
-                ++finished;
-                auto receipt = future.get();
-                if (receipt->status() != 0)
-                {
-                    std::cout << "Receipt error! " << receipt->status() << std::endl;
-                    ++failed;
-                }
-            }
-            catch (std::exception& e)
-            {
-                ++failed;
-            }
-        }
-        std::cout << "Total received: " << finished << ", failed: " << failed << std::endl;
+        std::cout << std::endl << "=======================================" << std::endl;
+        std::cout << "Total received: " << finished << std::endl;
+        std::cout << "Total failed: " << failed << std::endl;
+        std::cout << "Receive elapsed: " << elapsed << "ms" << std::endl;
+        std::cout << std::endl;
+        std::cout << "Avg time cost: " << ((double)allTimeCost.load() / (double)count) << "ms"
+                  << std::endl;
+        std::cout << "Send TPS: " << ((double)count / (double)sendElapsed) * 1000.0 << std::endl;
+        std::cout << "Receive TPS: " << ((double)count / (double)elapsed) * 1000.0 << std::endl;
     }
     catch (std::exception& e)
     {
