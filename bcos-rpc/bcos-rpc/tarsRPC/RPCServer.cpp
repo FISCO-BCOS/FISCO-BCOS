@@ -82,7 +82,6 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
 bcostars::Error bcos::rpc::RPCServer::blockNumber(long& number, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-
     m_params.node->ledger()->asyncGetBlockNumber(
         [current](const Error::Ptr& error, protocol::BlockNumber blockNumber) {
             if (error)

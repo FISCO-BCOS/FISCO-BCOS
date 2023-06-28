@@ -336,8 +336,8 @@ private:
     // encode or decode offset
     std::size_t offset{0};
     // encode temp bytes
-    bytes fixed;
-    bytes dynamic;
+    bytes m_fixed;
+    bytes m_dynamic;
 
     // decode data
     bytesConstRef data;
@@ -374,13 +374,13 @@ private:
 
         if (ABIDynamicType<T>::value)
         {  // dynamic type
-            dynamic += out;
-            fixed += serialise((u256)offset);
+            m_dynamic += out;
+            m_fixed += serialise((u256)offset);
             offset += out.size();
         }
         else
         {  // static type
-            fixed += out;
+            m_fixed += out;
         }
 
         abiInAux(_u...);
@@ -450,14 +450,14 @@ public:
     bytes abiIn(const std::string& _sig, T const&... _t)
     {
         offset = Offset<T...>::value * MAX_BYTE_LENGTH;
-        fixed.clear();
-        dynamic.clear();
+        m_fixed.clear();
+        m_dynamic.clear();
 
         abiInAux(_t...);
 
         return _sig.empty() ?
-                   fixed + dynamic :
-                   m_hashImpl->hash(_sig).ref().getCroppedData(0, 4).toBytes() + fixed + dynamic;
+                   m_fixed + m_dynamic :
+                   m_hashImpl->hash(_sig).ref().getCroppedData(0, 4).toBytes() + m_fixed + m_dynamic;
     }
 
     template <class... T>

@@ -106,6 +106,7 @@ private:
     static void onMessage(tars::ReqMessagePtr message);
 
 public:
+    RPCClient(std::vector<std::string> endpoints, std::string locator = "") {}
     RPCClient(const std::string& connectionString);
 
     Future<bcos::protocol::TransactionReceipt::Ptr> sendTransaction(

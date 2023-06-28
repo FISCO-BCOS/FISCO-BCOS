@@ -17,14 +17,14 @@ auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(t
     requires std::is_rvalue_reference_v<decltype(task)>
 {
     using Task = std::remove_cvref_t<decltype(task)>;
+    using ReturnType = AwaitableReturnType<std::remove_cvref_t<decltype(task)>>;
     std::promise<AwaitableReturnType<Task>> promise;
     auto future = promise.get_future();
 
-    auto waitTask = [](Task&& task,
-                        std::promise<typename Task::ReturnType>& promise) -> task::Task<void> {
+    auto waitTask = [](Task&& task, std::promise<ReturnType>& promise) -> task::Task<void> {
         try
         {
-            if constexpr (std::is_void_v<typename Task::ReturnType>)
+            if constexpr (std::is_void_v<ReturnType>)
             {
                 co_await task;
                 promise.set_value();
@@ -43,7 +43,7 @@ auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(t
     }(std::forward<Task>(task), promise);
     waitTask.start();
 
-    if constexpr (std::is_void_v<typename Task::ReturnType>)
+    if constexpr (std::is_void_v<ReturnType>)
     {
         future.get();
     }

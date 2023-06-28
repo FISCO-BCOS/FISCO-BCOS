@@ -70,8 +70,11 @@ void bcos::sdk::RPCClient::onMessage(tars::ReqMessagePtr message)
 
 bcos::sdk::RPCClient::RPCClient(const std::string& connectionString)
 {
+    constexpr static int timeout = 60000;
+
     m_rpcProxy = m_communicator.stringToProxy<bcostars::RPCPrx>(connectionString);
     m_rpcProxy->tars_set_custom_callback(&RPCClient::onMessage);
+    m_rpcProxy->tars_async_timeout(timeout);
 }
 
 bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr> bcos::sdk::RPCClient::sendTransaction(
