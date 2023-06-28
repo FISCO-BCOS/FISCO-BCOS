@@ -5,9 +5,29 @@
 #include "bcos-task/Wait.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <memory>
+#include <variant>
 
 void bcos::rpc::RPCServer::initialize() {}
 void bcos::rpc::RPCServer::destroy() {}
+
+bcostars::Error bcos::rpc::RPCServer::handshake(
+    const std::vector<std::string>& topics, tars::TarsCurrentPtr current)
+{
+    decltype(m_params.sessions)::accessor accessor;
+    m_params.sessions.find(accessor, current);
+
+    if (accessor.empty())
+    {
+        m_params.sessions.emplace(
+            accessor, current, std::move(const_cast<std::vector<std::string>&>(topics)));
+    }
+    else
+    {
+        accessor->second = std::move(const_cast<std::vector<std::string>&>(topics));
+    }
+
+    return {};
+}
 
 bcostars::Error bcos::rpc::RPCServer::call(const bcostars::Transaction& request,
     bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current)
@@ -19,7 +39,6 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
     bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-
     auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [inner = std::move(const_cast<bcostars::Transaction&>(request))]() mutable {
             return &inner;
@@ -30,7 +49,7 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
         bcostars::Error error;
         try
         {
-            auto& txpool = self->m_node->txpoolRef();
+            auto& txpool = self->m_params.node->txpoolRef();
             co_await txpool.broadcastTransaction(*transaction);
             auto submitResult = co_await txpool.submitTransaction(std::move(transaction));
             auto receipt =
@@ -60,10 +79,43 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
     return {};
 }
 
+bcostars::Error bcos::rpc::RPCServer::blockNumber(long& number, tars::TarsCurrentPtr current)
+{
+    current->setResponse(false);
+    m_params.node->ledger()->asyncGetBlockNumber(
+        [current](const Error::Ptr& error, protocol::BlockNumber blockNumber) {
+            if (error)
+            {
+                bcostars::Error errorMessage;
+                errorMessage.errorCode = static_cast<tars::Int32>(error->errorCode());
+                errorMessage.errorMessage = error->errorMessage();
+
+                bcos::rpc::RPCServer::async_response_blockNumber(current, errorMessage, 0);
+                return;
+            }
+
+            bcos::rpc::RPCServer::async_response_blockNumber(current, {}, blockNumber);
+        });
+    return {};
+}
+
+int bcos::rpc::RPCServer::doClose(tars::CurrentPtr current)
+{
+    m_params.sessions.erase(current);
+    return bcostars::RPC::doClose(current);
+}
+
 void bcos::rpc::RPCApplication::initialize()
 {
-    addServantWithParams<RPCServer, NodeService::Ptr>(
+    addServantWithParams<RPCServer, Params>(
         tars::ServerConfig::Application + "." + tars::ServerConfig::ServerName + "." + "RPCObj",
-        m_node);
+        m_params);
 }
+
 void bcos::rpc::RPCApplication::destroyApp() {}
+
+void bcos::rpc::RPCApplication::pushBlockNumber(long blockNumber)
+{
+    for (auto& [current, _] : m_params.sessions)
+    {}
+}
