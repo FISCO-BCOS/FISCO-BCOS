@@ -72,6 +72,11 @@ public:
     }
     std::shared_ptr<bcos::ledger::LedgerInterface> ledger() { return m_ledger; }
     int64_t blockLimit() const { return m_blockLimit; }
+    void setEnableTxSyncWorker(bool _enableTxSyncWorker)
+    {
+        m_enableTxSyncWorker = _enableTxSyncWorker;
+    }
+    bool enableTxSyncWorker() const { return m_enableTxSyncWorker; }
 
 private:
     TxValidatorInterface::Ptr m_txValidator;
@@ -81,6 +86,7 @@ private:
     NonceCheckerInterface::Ptr m_txPoolNonceChecker;
     size_t m_poolLimit = 15000;
     int64_t m_blockLimit = 1000;
+    bool m_enableTxSyncWorker = false;
 };
 }  // namespace txpool
 }  // namespace bcos

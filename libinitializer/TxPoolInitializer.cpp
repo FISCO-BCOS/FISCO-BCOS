@@ -49,6 +49,7 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
     auto txpoolConfig = m_txpool->txpoolConfig();
     txpoolConfig->setPoolLimit(m_nodeConfig->txpoolLimit());
+    m_txpool->txpoolConfig()->setEnableTxSyncWorker(m_nodeConfig->enableTxSyncWorker());
 }
 
 void TxPoolInitializer::init(bcos::sealer::SealerInterface::Ptr _sealer)

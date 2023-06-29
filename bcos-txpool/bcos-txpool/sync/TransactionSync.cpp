@@ -690,7 +690,9 @@ void TransactionSync::broadcastTxsFromRpc(
     // get the transactions from RPC
     for (const auto& tx : *_txs)
     {
-        if (!tx->submitCallback())
+        // Note: This code is for compating with 3.1.2 using txsSync worker
+        // Will ignore sync if sender is null
+        if (!tx->submitCallback() || tx->sender().empty())
         {
             continue;
         }
