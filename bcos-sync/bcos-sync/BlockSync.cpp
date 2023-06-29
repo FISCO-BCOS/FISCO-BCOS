@@ -875,8 +875,11 @@ void BlockSync::sendSyncStatusByTree()
                        << LOG_KV("currentHash", statusMsg->hash().abridged());
     // Note: only send status to the observers/sealers, but the OUTSIDE_GROUP node maybe
     // observer/sealer before sync to the highest here can't use asyncSendBroadcastMessage=
+    // Note: connectedNodeSet() cannot be used directly here, because connectedNodeSet()
+    // contains light nodes, but the nodes in groupNodeList() are not necessarily connected to this node,
+    // so take the intersection of the two.
     auto const& groupNodeList =
-        m_syncTreeTopology->selectNodesForBlockSync(m_config->connectedNodeSet());
+        m_syncTreeTopology->selectNodesForBlockSync(m_config->connectedGroupNodeList());
     for (auto const& nodeID : *groupNodeList)
     {
         m_config->frontService()->asyncSendMessageByNodeID(

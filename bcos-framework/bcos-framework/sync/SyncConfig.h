@@ -138,6 +138,16 @@ public:
         return *m_nodeList;
     }
 
+    bcos::crypto::NodeIDSetPtr connectedGroupNodeList()
+    {
+        ReadGuard nlock(x_nodeList);
+        ReadGuard clock(x_connectedNodeList);
+        auto nodeList =  *m_nodeList | RANGES::views::filter([this](bcos::crypto::NodeIDPtr _nodeId) {
+            return m_connectedNodeList->contains(_nodeId);
+        });
+        return std::make_shared<bcos::crypto::NodeIDSet>(nodeList.begin(), nodeList.end());
+    }
+
     virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onRecvResponse)
     {

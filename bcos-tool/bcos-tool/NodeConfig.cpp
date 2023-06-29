@@ -620,7 +620,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
 
 void NodeConfig::loadSyncConfig(const boost::property_tree::ptree &_pt)
 {
-    m_enableSendBlockStatusByTree = _pt.get<bool>("sync.enable_send_block_status_by_tree", false);
+    m_enableSendBlockStatusByTree = _pt.get<bool>("sync.sync_block_by_tree", true);
     m_treeWidth = _pt.get<std::uint32_t>("sync.tree_width", 3);
 }
 
