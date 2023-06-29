@@ -226,6 +226,9 @@ public:
     unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
+    bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
+    std::int64_t treeWidth() const { return m_treeWidth; }
+
     int sendTxTimeout() const { return m_sendTxTimeout; }
 
     bool withoutTarsFramework() const { return m_withoutTarsFramework; }
@@ -263,6 +266,7 @@ protected:
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
     virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadSyncConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
@@ -395,6 +399,10 @@ private:
     bool m_p2pSmSsl;
     std::string m_p2pNodeDir;
     std::string m_p2pNodeFileName;
+
+    // config for sync
+    bool m_enableSendBlockStatusByTree;
+    std::uint32_t m_treeWidth;
 
     // config for cert
     std::string m_certPath;

@@ -66,7 +66,7 @@ public:
                  }
     static void extractNodeIDsBytes(NodesType nodes, OutputType& values)
     {
-        values = nodes | RANGES::view::transform([](auto& node) { return node->data(); });
+        values = nodes | RANGES::views::transform([](auto& node) { return node->data(); });
     }
 
     template <RANGES::bidirectional_range NodesType>
