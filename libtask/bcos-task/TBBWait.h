@@ -16,38 +16,45 @@ namespace bcos::task::tbb
 auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(task)>>
     requires std::is_rvalue_reference_v<decltype(task)>
 {
-    using ReturnType = AwaitableReturnType<std::remove_cvref_t<decltype(task)>>;
     using Task = std::remove_cvref_t<decltype(task)>;
+    using ReturnType = AwaitableReturnType<Task>;
     std::conditional_t<std::is_void_v<ReturnType>, std::variant<std::monostate, std::exception_ptr>,
         std::variant<std::monostate, ReturnType, std::exception_ptr>>
         value;
 
-    std::mutex tagMutex;
+    std::mutex mutex;
     std::atomic_bool finished = false;
     std::atomic<oneapi::tbb::task::suspend_point> tbbTag;
-    auto tbbTask = [](Task&& task, decltype(value)& value, std::mutex& tagMutex,
-                       std::atomic_bool& finished,
-                       std::atomic<oneapi::tbb::task::suspend_point>& tbbTag) -> task::Task<void> {
-        if constexpr (std::is_void_v<ReturnType>)
+    auto waitTask = [](Task&& task, decltype(value)& value, std::mutex& mutex,
+                        std::atomic_bool& finished,
+                        std::atomic<oneapi::tbb::task::suspend_point>& tbbTag) -> task::Task<void> {
+        try
         {
-            co_await task;
+            if constexpr (std::is_void_v<ReturnType>)
+            {
+                co_await task;
+            }
+            else
+            {
+                value.template emplace<ReturnType>(co_await task);
+            }
         }
-        else
+        catch (...)
         {
-            value.template emplace<ReturnType>(co_await task);
+            value.template emplace<std::exception_ptr>(std::current_exception());
         }
 
-        std::unique_lock<std::mutex> lock(tagMutex);
+        std::unique_lock<std::mutex> lock(mutex);
         finished = true;
         if (tbbTag)
         {
             lock.unlock();
             oneapi::tbb::task::resume(tbbTag);
         }
-    }(std::forward<Task>(task), value, tagMutex, finished, tbbTag);
+    }(std::forward<Task>(task), value, mutex, finished, tbbTag);
 
-    tbbTask.start();
-    std::unique_lock<std::mutex> lock(tagMutex);
+    waitTask.start();
+    std::unique_lock<std::mutex> lock(mutex);
     if (!finished)
     {
         oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
@@ -65,6 +72,6 @@ auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(t
     {
         return std::move(std::get<ReturnType>(value));
     }
-};
+}
 
 }  // namespace bcos::task::tbb
