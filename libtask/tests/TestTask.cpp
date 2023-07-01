@@ -1,5 +1,4 @@
 #include "bcos-utilities/Overloaded.h"
-#include <bcos-task/TBBWait.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <oneapi/tbb/blocked_range.h>
@@ -181,23 +180,5 @@ struct SleepTask
     }
     constexpr void await_resume() const {}
 };
-
-BOOST_AUTO_TEST_CASE(tbbWait)
-{
-    oneapi::tbb::parallel_for(
-        oneapi::tbb::blocked_range(0U, std::thread::hardware_concurrency() * 2),
-        [](auto const& range) {
-            for (auto it = range.begin(); it != range.end(); ++it)
-            {
-                bcos::task::tbb::syncWait([it]() -> bcos::task::Task<void> {
-                    std::cout << "TBB task started: " << it << std::endl;
-                    SleepTask sleepTask;
-                    co_await sleepTask;
-                    std::cout << "TBB task ended: " << it << std::endl;
-                }());
-            }
-        });
-    std::cout << "Parallel for end" << std::endl;
-}
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -50,11 +50,6 @@ int main(int argc, const char* argv[])
         std::cerr << "terminate handler called, print stack end" << std::endl;
         abort();
     });
-    // get datetime and output welcome info
-    ExitHandler exitHandler;
-    signal(SIGTERM, &ExitHandler::exitHandler);
-    signal(SIGABRT, &ExitHandler::exitHandler);
-    signal(SIGINT, &ExitHandler::exitHandler);
 
     // Note: the initializer must exist in the life time of the whole program
     auto initializer = std::make_shared<AirNodeInitializer>();
@@ -73,6 +68,13 @@ int main(int argc, const char* argv[])
                   << std::endl;
         return -1;
     }
+
+    // get datetime and output welcome info
+    ExitHandler exitHandler;
+    signal(SIGTERM, &ExitHandler::exitHandler);
+    signal(SIGABRT, &ExitHandler::exitHandler);
+    signal(SIGINT, &ExitHandler::exitHandler);
+    
     bcos::initializer::printVersion();
     std::cout << "[" << bcos::getCurrentDateTime() << "] ";
     std::cout << "The fisco-bcos is running..." << std::endl;
