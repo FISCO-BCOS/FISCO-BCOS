@@ -42,11 +42,7 @@
 #include <memory>
 #include <utility>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 using WsStreamRWHandler = std::function<void(boost::system::error_code, std::size_t)>;
 using WsStreamHandshakeHandler = std::function<void(boost::system::error_code)>;
@@ -60,7 +56,7 @@ public:
 
     WsStream(
         std::shared_ptr<boost::beast::websocket::stream<STREAM>> _stream, std::string _moduleName)
-      : m_stream(_stream), m_moduleName(_moduleName)
+      : m_stream(_stream), m_moduleName(std::move(_moduleName))
     {
         initDefaultOpt();
         WEBSOCKET_STREAM(INFO) << LOG_KV("[NEWOBJ][WsStream]", this);
@@ -341,6 +337,4 @@ public:
     }
 };
 
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws
