@@ -1335,6 +1335,10 @@ generate_common_ini() {
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
 
+[sync]
+    sync_block_by_tree=true
+    tree_width=3
+
 [redis]
     ; redis server ip
     ;server_ip=127.0.0.1

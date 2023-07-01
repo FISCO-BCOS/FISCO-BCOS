@@ -31,7 +31,9 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     bcos::front::FrontServiceInterface::Ptr _frontService,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::consensus::ConsensusInterface::Ptr _consensus,
-    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
+    const bool _enableSendBlockStatusByTree,
+    const std::uint32_t _syncTreeWidth)
   : m_nodeId(std::move(_nodeId)),
     m_blockFactory(std::move(_blockFactory)),
     m_txResultFactory(std::move(_txResultFactory)),
@@ -40,7 +42,9 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     m_frontService(std::move(_frontService)),
     m_scheduler(std::move(_scheduler)),
     m_consensus(std::move(_consensus)),
-    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
+    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance)),
+    m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree),
+    m_syncTreeWidth(_syncTreeWidth)
 {}
 
 BlockSync::Ptr BlockSyncFactory::createBlockSync()
