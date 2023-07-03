@@ -169,6 +169,13 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 int64_t SystemConfigPrecompiled::checkValueValid(
     std::string_view _key, std::string_view value, uint32_t blockVersion)
 {
+    constexpr static std::string_view xConfigPrefix = "x_";
+    // If starts with xConfigPrefix, approve it
+    if (_key.starts_with(xConfigPrefix))
+    {
+        return 1;
+    }
+
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
     auto featureKeys = ledger::Features::featureKeys();
