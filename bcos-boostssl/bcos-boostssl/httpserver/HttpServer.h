@@ -23,11 +23,7 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <exception>
 #include <thread>
-namespace bcos
-{
-namespace boostssl
-{
-namespace http
+namespace bcos::boostssl::http
 {
 // The http server impl
 class HttpServer : public std::enable_shared_from_this<HttpServer>
@@ -127,6 +123,4 @@ public:
         std::shared_ptr<boost::asio::ssl::context> _ctx, std::string _moduleName);
 };
 
-}  // namespace http
-}  // namespace boostssl
 }  // namespace bcos

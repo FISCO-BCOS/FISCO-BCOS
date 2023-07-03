@@ -99,7 +99,6 @@ public:
         }
     }
 
-public:
     //---------------  set opt params for websocket stream
     // begin-----------------------------
     void setMaxReadMsgSize(uint32_t _maxValue) { m_stream->read_message_max(_maxValue); }
@@ -115,7 +114,6 @@ public:
     std::string moduleName() { return m_moduleName; }
     void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
 
-public:
     bool open() { return !m_closed.load() && m_stream->is_open(); }
 
     void close()

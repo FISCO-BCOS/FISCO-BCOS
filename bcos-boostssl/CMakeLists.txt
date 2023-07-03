@@ -10,10 +10,10 @@ target_include_directories(bcos-boostssl PUBLIC
     $<INSTALL_INTERFACE:include/bcos-boostssl>)
 target_link_libraries(bcos-boostssl PUBLIC bcos-framework bcos-utilities OpenSSL::SSL)
 
-# if(TESTS)
-#     enable_testing()
-#     add_subdirectory(test)
-# endif()
+if(TESTS)
+    enable_testing()
+    add_subdirectory(test)
+endif()
 
 include(GNUInstallDirs)
 install(TARGETS bcos-boostssl EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
