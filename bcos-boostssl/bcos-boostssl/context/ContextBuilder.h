@@ -22,11 +22,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/filesystem.hpp>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace context
+namespace bcos::boostssl::context
 {
 class ContextBuilder
 {
@@ -60,6 +56,4 @@ private:
     std::string m_moduleName = "DEFAULT";
 };
 
-}  // namespace context
-}  // namespace boostssl
 }  // namespace bcos

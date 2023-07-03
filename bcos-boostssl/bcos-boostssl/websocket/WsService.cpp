@@ -318,8 +318,8 @@ void WsService::reconnect()
             auto connectPeers = std::make_shared<std::set<NodeIPEndpoint>>();
 
             // select all disconnected nodes
-            ReadGuard l(x_peers);
-            for (auto& peer : *m_reconnectedPeers)
+            ReadGuard lock(x_peers);
+            for (const auto& peer : *m_reconnectedPeers)
             {
                 std::string connectedEndPoint = peer.address() + ":" + std::to_string(peer.port());
                 auto session = getSession(connectedEndPoint);
@@ -516,8 +516,8 @@ WsSessions WsService::sessions()
 void WsService::onConnect(Error::Ptr _error, std::shared_ptr<WsSession> _session)
 {
     std::ignore = _error;
-    std::string endpoint = "";
-    std::string connectedEndPoint = "";
+    std::string endpoint;
+    std::string connectedEndPoint;
     if (_session)
     {
         endpoint = _session->endPoint();
@@ -540,8 +540,8 @@ void WsService::onConnect(Error::Ptr _error, std::shared_ptr<WsSession> _session
 void WsService::onDisconnect(Error::Ptr _error, std::shared_ptr<WsSession> _session)
 {
     std::ignore = _error;
-    std::string endpoint = "";
-    std::string connectedEndPoint = "";
+    std::string endpoint;
+    std::string connectedEndPoint;
     if (_session)
     {
         endpoint = _session->endPoint();
@@ -564,7 +564,7 @@ void WsService::onDisconnect(Error::Ptr _error, std::shared_ptr<WsSession> _sess
 void WsService::onRecvMessage(
     std::shared_ptr<boostssl::MessageFace> message, std::shared_ptr<WsSession> session)
 {
-    auto& seq = message->seq();
+    const auto& seq = message->seq();
 
     WEBSOCKET_SERVICE(TRACE) << LOG_BADGE("onRecvMessage")
                              << LOG_DESC("receive message from server")
@@ -625,7 +625,6 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
         Options options;
         RespCallBack respFunc;
 
-    public:
         void trySendMessageWithOutCB()
         {
             if (ss.empty())
@@ -744,7 +743,7 @@ void WsService::broadcastMessage(std::shared_ptr<boostssl::MessageFace> _msg)
 void WsService::broadcastMessage(
     const WsSession::Ptrs& _ss, std::shared_ptr<boostssl::MessageFace> _msg)
 {
-    for (auto& session : _ss)
+    for (const auto& session : _ss)
     {
         if (session->isConnected())
         {

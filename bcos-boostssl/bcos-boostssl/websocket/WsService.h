@@ -45,11 +45,7 @@
 #include <utility>
 #include <vector>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 using WsSessions = std::vector<std::shared_ptr<WsSession>>;
 using MsgHandler =
@@ -66,7 +62,6 @@ public:
     WsService(std::string _moduleName = "DEFAULT");
     virtual ~WsService();
 
-public:
     virtual void start();
     virtual void stop();
     virtual void reconnect();
@@ -79,7 +74,6 @@ public:
     std::string genConnectError(const std::string& _error, const std::string& endpoint, bool end);
     void syncConnectToEndpoints(EndPointsPtr _peers);
 
-public:
     std::shared_ptr<WsSession> newSession(
         std::shared_ptr<WsStreamDelegate> _wsStreamDelegate, std::string const& _nodeId);
     std::shared_ptr<WsSession> getSession(const std::string& _endPoint);
@@ -87,7 +81,6 @@ public:
     void removeSession(const std::string& _endPoint);
     WsSessions sessions();
 
-public:
     virtual void onConnect(bcos::Error::Ptr _error, std::shared_ptr<WsSession> _session);
     virtual void onDisconnect(bcos::Error::Ptr _error, std::shared_ptr<WsSession> _session);
 
@@ -111,7 +104,6 @@ public:
     virtual void broadcastMessage(
         const WsSession::Ptrs& _ss, std::shared_ptr<boostssl::MessageFace> _msg);
 
-public:
     std::shared_ptr<MessageFaceFactory> messageFactory() { return m_messageFactory; }
     void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
     {
@@ -243,6 +235,4 @@ private:
     std::shared_ptr<boost::asio::io_context> m_timerIoc;
 };
 
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws
