@@ -25,7 +25,7 @@ private:
     Value m_value;
 };
 template <>
-struct AwaitableValue<void>
+struct [[nodiscard]] AwaitableValue<void>
 {
     AwaitableValue() = default;
     static constexpr bool await_ready() noexcept { return true; }
