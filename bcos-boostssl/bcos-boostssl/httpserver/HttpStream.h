@@ -27,11 +27,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace http
+namespace bcos::boostssl::http
 {
 using HttpStreamRWHandler = std::function<void(boost::system::error_code, std::size_t)>;
 
@@ -265,6 +261,4 @@ public:
         return std::make_shared<HttpStreamSslImpl>(_stream, _moduleName);
     }
 };
-}  // namespace http
-}  // namespace boostssl
 }  // namespace bcos
