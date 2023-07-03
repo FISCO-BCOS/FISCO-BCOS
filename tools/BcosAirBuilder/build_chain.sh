@@ -1408,6 +1408,7 @@ generate_common_ini() {
     ;       incoming_module_qps_limit_xxxx=1000
     ;       incoming_module_qps_limit_xxxx=2000
     ;       incoming_module_qps_limit_xxxx=3000
+    incoming_module_qps_limit_2000=5
 
 [log]
     enable=true
