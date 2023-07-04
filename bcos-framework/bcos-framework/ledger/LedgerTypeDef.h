@@ -46,6 +46,9 @@ constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = "rpbft_epo
 constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = "rpbft_epoch_block_num";
 constexpr static std::string_view SYSTEM_KEY_CONSENSUS_TYPE = "consensus_type";
 
+constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
+constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
+
 // notify rotate key for rpbft
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "notify_rotate";
 

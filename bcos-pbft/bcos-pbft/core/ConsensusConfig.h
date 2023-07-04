@@ -132,8 +132,9 @@ public:
 
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
 
-private:
+protected:
     bool compareConsensusNode(ConsensusNodeList const& _left, ConsensusNodeList const& _right);
+    bool isNodeExist(ConsensusNodeInterface::Ptr const& _node, ConsensusNodeList const& _nodeList);
 
 protected:
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;

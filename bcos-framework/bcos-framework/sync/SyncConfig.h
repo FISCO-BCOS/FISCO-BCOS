@@ -173,6 +173,7 @@ private:
 
 protected:
     bcos::crypto::NodeIDPtr m_nodeId;
+
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     mutable SharedMutex x_consensusNodeList;
 
