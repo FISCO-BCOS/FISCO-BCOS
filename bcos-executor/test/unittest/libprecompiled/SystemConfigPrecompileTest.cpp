@@ -1,9 +1,12 @@
 #include "../mock/MockLedger.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/SystemConfigPrecompiled.h"
 #include "precompiled/TableManagerPrecompiled.h"
+#include "precompiled/common/PrecompiledResult.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
@@ -30,6 +33,8 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
         GlobalHashImpl::g_hashImpl = hashImpl;
         systemConfigPrecompiled.emplace();
         executive->setStorageWrapper();
+
+        stateStorage->createTable(std::string(SYS_CONFIG), SYS_VALUE_AND_ENABLE_BLOCK_NUMBER);
     }
 
     std::shared_ptr<bcos::crypto::Keccak256> hashImpl = std::make_shared<bcos::crypto::Keccak256>();
@@ -48,19 +53,63 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
 
 BOOST_FIXTURE_TEST_SUITE(SystemConfigPrecompiledTest, SystemConfigPrecompiledFixture)
 
-BOOST_AUTO_TEST_CASE(getXConfig)
+BOOST_AUTO_TEST_CASE(getAndSetXConfig)
 {
-    auto parameters = std::make_shared<PrecompiledExecResult>();
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
 
     CodecWrapper codec(hashImpl, false);
-    auto input = codec.encodeWithSig(
-        std::string("setValueByKey(string,string)"), std::string("x_arg1"), std::string("100"));
-    parameters->m_input = bcos::ref(input);
-    auto result = systemConfigPrecompiled->call(executive, parameters);
+    auto setInput = codec.encodeWithSig(
+        "setValueByKey(string,string)", std::string("x_arg1"), std::string("100"));
+    setParameters->m_input = bcos::ref(setInput);
+    auto result = systemConfigPrecompiled->call(executive, setParameters);
 
     s256 code = -1;
     codec.decode(bcos::ref(result->execResult()), code);
     BOOST_CHECK_EQUAL(code, 0);
+
+    auto getParameters = std::make_shared<PrecompiledExecResult>();
+    auto getInput = codec.encodeWithSig("getValueByKey(string)", std::string("x_arg1"));
+    getParameters->m_input = bcos::ref(getInput);
+    result = systemConfigPrecompiled->call(executive, getParameters);
+
+    std::string value;
+    codec.decode(bcos::ref(result->execResult()), value);
+    BOOST_CHECK_EQUAL(value, "100");
+}
+
+BOOST_AUTO_TEST_CASE(getAndSetFeature)
+{
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
+
+    CodecWrapper codec(hashImpl, false);
+    auto setInput = codec.encodeWithSig(
+        "setValueByKey(string,string)", std::string("feature_unknown"), std::string("100"));
+    setParameters->m_input = bcos::ref(setInput);
+    BOOST_CHECK_THROW(systemConfigPrecompiled->call(executive, setParameters), PrecompiledError);
+
+
+    setInput = codec.encodeWithSig(
+        "setValueByKey(string,string)", std::string("bugfix_revert"), std::string("2"));
+    setParameters->m_input = bcos::ref(setInput);
+    BOOST_CHECK_THROW(systemConfigPrecompiled->call(executive, setParameters), PrecompiledError);
+
+    setInput = codec.encodeWithSig(
+        "setValueByKey(string,string)", std::string("bugfix_revert"), std::string("1"));
+    setParameters->m_input = bcos::ref(setInput);
+    auto result = systemConfigPrecompiled->call(executive, setParameters);
+
+    bcos::s256 code = -1;
+    codec.decode(bcos::ref(result->execResult()), code);
+    BOOST_CHECK_EQUAL(code, 0);
+
+    auto getParameters = std::make_shared<PrecompiledExecResult>();
+    auto getInput = codec.encodeWithSig("getValueByKey(string)", std::string("bugfix_revert"));
+    getParameters->m_input = bcos::ref(getInput);
+    result = systemConfigPrecompiled->call(executive, getParameters);
+
+    std::string value;
+    codec.decode(bcos::ref(result->execResult()), value);
+    BOOST_CHECK_EQUAL(value, "1");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
