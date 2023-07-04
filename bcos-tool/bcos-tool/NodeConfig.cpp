@@ -26,6 +26,7 @@
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/FileUtility.h"
+#include "bcos-utilities/Common.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -745,8 +746,15 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     }
     catch (std::exception const& e)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "consensus.consensus_type is null， please set it!"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("consensus.consensus_type is null, please set it!"));
+    }
+    if (m_consensusType != bcos::ledger::PBFT_CONSENSUS_TYPE &&
+        m_consensusType != bcos::ledger::RPBFT_CONSENSUS_TYPE)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.consensus_type is illegal, it must be pbft or rpbft!"));
     }
     // blockTxCountLimit
     auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
@@ -777,6 +785,13 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment("Must set sealerList!"));
     }
     m_ledgerConfig->setConsensusNodeList(*consensusNodeList);
+
+    // rpbft
+    if (m_consensusType == RPBFT_CONSENSUS_TYPE)
+    {
+        m_epochSealerNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_sealer_num", 4);
+        m_epochBlockNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_block_num", 1000);
+    }
 
     // leaderSwitchPeriod
     auto consensusLeaderPeriod = checkAndGetValue(_genesisConfig, "consensus.leader_period", "1");
