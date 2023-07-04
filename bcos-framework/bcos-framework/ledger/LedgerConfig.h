@@ -24,6 +24,11 @@
 
 namespace bcos::ledger
 {
+
+constexpr std::uint64_t DEFAULT_EPOCH_SEALER_NUM{4};
+constexpr std::uint64_t DEFAULT_EPOCH_BLOCK_NUM{1000};
+constexpr std::uint64_t DEFAULT_INTERNAL_NOTIFY_FLAG{0};
+
 class LedgerConfig
 {
 public:

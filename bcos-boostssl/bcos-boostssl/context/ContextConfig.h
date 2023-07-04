@@ -9,11 +9,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <memory>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace context
+namespace bcos::boostssl::context
 {
 class ContextConfig
 {
@@ -85,6 +81,4 @@ private:
     std::string m_moduleName = "DEFAULT";
 };
 
-}  // namespace context
-}  // namespace boostssl
 }  // namespace bcos

@@ -14,7 +14,6 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-task/TBBWait.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <fmt/format.h>

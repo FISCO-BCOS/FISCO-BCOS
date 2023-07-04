@@ -180,7 +180,7 @@ BOOST_AUTO_TEST_CASE(merge)
             entry.set(fmt::format("Entry value is: i am a value!!!!!!! {}", num));
             return entry;
         });
-        memoryStorage.write(keys, values);
+        co_await memoryStorage.write(keys, values);
 
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
             bcos::storage2::rocksdb::StateValueResolver>

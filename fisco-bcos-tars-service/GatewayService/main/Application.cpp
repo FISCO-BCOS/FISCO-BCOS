@@ -91,7 +91,7 @@ protected:
         // nodes.json
         addConfig("nodes.json");
         gatewayConfig->loadP2pConnectedNodes();
-        // init rpc
+        // init gateway
         m_gatewayInitializer = std::make_shared<GatewayInitializer>(_configPath, gatewayConfig);
         bcos::initializer::showNodeVersionMetric();
         m_gatewayInitializer->start();

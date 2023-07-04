@@ -19,6 +19,26 @@
 
 namespace bcos::scheduler
 {
+
+enum class NodeListType
+{
+    ConsensusNodeList,
+    ObserverNodeList,
+    WorkingSealerNodeList
+};
+
+enum class ConfigType
+{
+    BlockTxCountLimit,
+    LeaderSwitchPeriod,
+    GasLimit,
+    VersionNumber,
+    ConsensusType,
+    EpochSealerNum,
+    EpochBlockNum,
+    NotifyRotateFlag
+};
+
 class SchedulerImpl : public SchedulerInterface, public std::enable_shared_from_this<SchedulerImpl>
 {
 public:

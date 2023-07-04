@@ -84,23 +84,17 @@ public:
         return *m_observerNodeList;
     }
 
-    virtual void setWorkingConsensusList(bcos::consensus::ConsensusNodeList const& _workingNodeList)
-    {
-        WriteGuard lock(x_workingConsensusNodeList);
-        *m_workingConsensusNodeList = _workingNodeList;
-    }
-
-    virtual bcos::consensus::ConsensusNodeList workingConsensusList()
-    {
-        ReadGuard lock(x_workingConsensusNodeList);
-        return *m_workingConsensusNodeList;
-    }
-
     // Note: copy here to remove multithreading issues
     virtual bcos::crypto::NodeIDSet connectedNodeList()
     {
         ReadGuard lock(x_connectedNodeList);
         return *m_connectedNodeList;
+    }
+
+    virtual bcos::crypto::NodeIDSetPtr connectedNodeSet()
+    {
+        ReadGuard lock(x_connectedNodeList);
+        return m_connectedNodeList;
     }
 
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet const& _connectedNodeList)
@@ -144,6 +138,16 @@ public:
         return *m_nodeList;
     }
 
+    bcos::crypto::NodeIDSetPtr connectedGroupNodeList()
+    {
+        ReadGuard nlock(x_nodeList);
+        ReadGuard clock(x_connectedNodeList);
+        auto nodeList =  *m_nodeList | RANGES::views::filter([this](bcos::crypto::NodeIDPtr _nodeId) {
+            return m_connectedNodeList->contains(_nodeId);
+        });
+        return std::make_shared<bcos::crypto::NodeIDSet>(nodeList.begin(), nodeList.end());
+    }
+
     virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onRecvResponse)
     {
@@ -175,9 +179,6 @@ protected:
 
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
     SharedMutex x_observerNodeList;
-
-    bcos::consensus::ConsensusNodeListPtr m_workingConsensusNodeList;
-    mutable SharedMutex x_workingConsensusNodeList;
 
     bcos::crypto::NodeIDSetPtr m_nodeList;
     mutable SharedMutex x_nodeList;

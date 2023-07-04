@@ -283,8 +283,8 @@ BOOST_AUTO_TEST_CASE(merge)
         MemoryStorage<int, int, ORDERED> storage1;
         MemoryStorage<int, int, ORDERED> storage2;
 
-        storage1.write(RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
-        storage2.write(RANGES::iota_view<int, int>(9, 19), RANGES::repeat_view<int>(200));
+        co_await storage1.write(RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
+        co_await storage2.write(RANGES::iota_view<int, int>(9, 19), RANGES::repeat_view<int>(200));
 
         co_await storage1.merge(storage2);
         auto it = co_await storage1.seek(bcos::storage2::STORAGE_BEGIN);
