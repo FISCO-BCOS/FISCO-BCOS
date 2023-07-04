@@ -859,7 +859,8 @@ void NodeConfig::generateGenesisData()
         auto genesisData = std::make_shared<bcos::ledger::GenesisConfig>(m_smCryptoType, m_chainId,
             m_groupId, m_consensusType, m_ledgerConfig->blockTxCountLimit(),
             m_ledgerConfig->leaderSwitchPeriod(), m_compatibilityVersionStr, m_txGasLimit, m_isWasm,
-            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute);
+            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute, m_ledgerConfig->epochSealerNum(),
+            m_ledgerConfig->epochBlockNum());
         genesisdata = genesisData->genesisDataOutPut();
         size_t j = 0;
         for (const auto& node : m_ledgerConfig->consensusNodeList())
