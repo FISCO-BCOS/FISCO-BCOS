@@ -64,6 +64,12 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
+    virtual task::Task<void> broadcastTransactionBufferByTree(
+        [[maybe_unused]] const bytesConstRef& _data)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
+
     virtual task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
     {
@@ -122,11 +128,10 @@ public:
     virtual void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _id,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         std::function<void(Error::Ptr _error)> _onRecv) = 0;
-    [[deprecated]] virtual void notifyConsensusNodeList(
+    virtual void notifyConsensusNodeList(
         bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
-    [[deprecated]] virtual void notifyObserverNodeList(
-        bcos::consensus::ConsensusNodeList const& _observerNodeList,
+    virtual void notifyObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
     // for RPC to get pending transactions
@@ -148,5 +153,5 @@ public:
 
 template <class T>
 concept IsTxPool = std::derived_from<std::remove_cvref_t<T>, TxPoolInterface> ||
-                   std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
+    std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
 }  // namespace bcos::txpool

@@ -230,6 +230,7 @@ public:
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
     bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
+    bool enableSendTxByTree() const { return m_enableSendTxByTree; }
     std::int64_t treeWidth() const { return m_treeWidth; }
 
     int sendTxTimeout() const { return m_sendTxTimeout; }
@@ -409,6 +410,7 @@ private:
 
     // config for sync
     bool m_enableSendBlockStatusByTree;
+    bool m_enableSendTxByTree;
     std::uint32_t m_treeWidth;
 
     // config for cert

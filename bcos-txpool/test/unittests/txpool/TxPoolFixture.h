@@ -19,9 +19,11 @@
  * @date 2021-05-25
  */
 #pragma once
+#include "bcos-framework/protocol/GlobalConfig.h"
 #include <bcos-tars-protocol/testutil/FakeBlock.h>
 #include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
 
+#include "bcos-tool/TreeTopology.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/TxPoolFactory.h"
 #include "bcos-txpool/sync/TransactionSync.h"
@@ -49,6 +51,7 @@ using namespace bcos::ledger;
 using namespace bcos::consensus;
 using namespace bcos::front;
 using namespace bcos::sync;
+using namespace bcos::tool;
 
 namespace bcos
 {
@@ -81,12 +84,19 @@ class TxPoolFixture
 {
 public:
     using Ptr = std::shared_ptr<TxPoolFixture>;
-    TxPoolFixture(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite, std::string const& _groupId,
-        std::string const& _chainId, int64_t _blockLimit, FakeGateWay::Ptr _fakeGateWay)
+    TxPoolFixture()
+      : TxPoolFixture(std::make_shared<Secp256k1Crypto>()->generateKeyPair()->publicKey(),
+            std::make_shared<CryptoSuite>(
+                std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr),
+            "groupId", "chainId", 100000000, std::make_shared<FakeGateWay>(), true)
+    {}
+    TxPoolFixture(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite, std::string _groupId,
+        std::string _chainId, int64_t _blockLimit, FakeGateWay::Ptr _fakeGateWay,
+        bool enableTree = false)
       : m_nodeId(_nodeId),
         m_cryptoSuite(_cryptoSuite),
         m_groupId(_groupId),
-        m_chainId(_chainId),
+        m_chainId(std::move(_chainId)),
         m_blockLimit(_blockLimit),
         m_fakeGateWay(std::move(_fakeGateWay))
     {
@@ -95,6 +105,7 @@ public:
         auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
         auto receiptFactory =
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
+        m_fakeGateWay->m_cryptoSuite = _cryptoSuite;
         m_blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             _cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
         m_txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
@@ -102,6 +113,14 @@ public:
         m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_COUNT_LIMIT, "1000");
 
         m_frontService = std::make_shared<FakeFrontService>(_nodeId);
+        if (enableTree)
+        {
+            auto protocol = std::make_shared<protocol::ProtocolInfo>();
+            protocol->setVersion(V2);
+            auto gInfo = std::make_shared<FakeGroupInfo>();
+            gInfo->appendProtocol(protocol);
+            m_frontService->setGroupInfo(gInfo);
+        }
         auto txPoolFactory =
             std::make_shared<TxPoolFactory>(_nodeId, _cryptoSuite, m_txResultFactory,
                 m_blockFactory, m_frontService, m_ledger, m_groupId, m_chainId, m_blockLimit);
@@ -113,10 +132,47 @@ public:
         auto syncConfig = m_sync->config();
         m_sync = std::make_shared<FakeTransactionSync1>(syncConfig);
         m_txpool->setTransactionSync(m_sync);
+
+        if (enableTree)
+        {
+            auto router = std::make_shared<TreeTopology>(_nodeId);
+            m_txpool->setTreeRouter(std::move(router));
+        }
         m_txpool->start();
 
         m_fakeGateWay->addTxPool(_nodeId, m_txpool);
         m_frontService->setGateWay(m_fakeGateWay);
+        bcos::crypto::NodeIDs allNode;
+        for (int i = 0; i < 4; ++i)
+        {
+            auto key = m_cryptoSuite->signatureImpl()->generateKeyPair();
+            auto nodeId = key->publicKey();
+            m_nodeIdList.push_back(nodeId);
+            allNode.push_back(nodeId);
+        }
+        allNode.push_back(m_nodeId);
+        for (const auto& nodeId : m_nodeIdList)
+        {
+            auto txpool = txPoolFactory->createTxPool();
+            auto txpoolStorage = std::make_shared<FakeMemoryStorage>(txpool->txpoolConfig());
+
+            auto sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
+            sync = std::make_shared<FakeTransactionSync1>(sync->config());
+            txpool->setTransactionSync(sync);
+
+            txpool->setTxPoolStorage(std::move(txpoolStorage));
+            if (enableTree)
+            {
+                auto router = std::make_shared<TreeTopology>(nodeId);
+                router->updateConsensusNodeInfo(allNode);
+                BCOS_LOG(TRACE) << LOG_DESC("updateRouter")
+                                << LOG_KV("consIndex", router->consIndex());
+                txpool->setTreeRouter(std::move(router));
+            }
+            m_fakeGateWay->addTxPool(nodeId, txpool);
+            txpool->init();
+            txpool->start();
+        }
     }
     virtual ~TxPoolFixture()
     {
@@ -179,7 +235,7 @@ private:
         m_frontService->setNodeIDList(nodeIdSet);
     }
 
-private:
+public:
     NodeIDPtr m_nodeId;
     CryptoSuite::Ptr m_cryptoSuite;
     BlockFactory::Ptr m_blockFactory;
@@ -193,6 +249,8 @@ private:
     FakeGateWay::Ptr m_fakeGateWay;
     TxPool::Ptr m_txpool;
     TransactionSync::Ptr m_sync;
+
+    NodeIDs m_nodeIdList;
 };
 
 inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::Ptr _storage,
