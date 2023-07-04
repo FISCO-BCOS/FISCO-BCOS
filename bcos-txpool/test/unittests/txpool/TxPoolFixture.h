@@ -181,6 +181,13 @@ public:
         {
             m_txpool->stop();
         }
+        if (m_fakeGateWay)
+        {
+            for (auto& txpool : m_fakeGateWay->m_nodeId2TxPool)
+            {
+                txpool.second->stop();
+            }
+        }
     }
 
     BlockFactory::Ptr blockFactory() { return m_blockFactory; }

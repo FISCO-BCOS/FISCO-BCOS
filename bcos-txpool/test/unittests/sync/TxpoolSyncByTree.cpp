@@ -64,7 +64,7 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
     BCOS_LOG(TRACE) << LOG_DESC("updateRouter")
                     << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
 
-    auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcTime()));
+    auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTime()));
     bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
         bcos::bytes data;
         tx->encode(data);
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeWithLowerVersionTreeSync)
     BCOS_LOG(TRACE) << LOG_DESC("updateRouter")
                     << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
 
-    auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcTime()));
+    auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTimeUs()));
     bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
         bcos::bytes data;
         tx->encode(data);
