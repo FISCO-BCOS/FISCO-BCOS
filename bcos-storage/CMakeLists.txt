@@ -7,7 +7,7 @@ find_package(RocksDB REQUIRED)
 
 find_package(Boost REQUIRED serialization thread context filesystem)
 
-set(SRC_LIST bcos-storage/Common.cpp ../bcos-rpbft/bcos-rpbft/rpbft/config/RPBFTConfig.h)
+set(SRC_LIST bcos-storage/Common.cpp)
 list(APPEND SRC_LIST bcos-storage/RocksDBStorage.cpp)
 
 set(LIB_LIST ${TABLE_TARGET} bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb ittapi)
