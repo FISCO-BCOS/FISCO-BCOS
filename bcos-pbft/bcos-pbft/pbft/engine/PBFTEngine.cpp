@@ -408,6 +408,8 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
     {
         // broadcast the pre-prepare packet
         auto encodedData = m_config->codec()->encode(pbftMessage);
+        PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
+                       << LOG_KV("packetSize", encodedData->size());
         // only broadcast pbft message to the consensus nodes
         m_config->frontService()->asyncSendBroadcastMessage(
             bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
@@ -926,6 +928,9 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr const& _prePrepar
     m_cacheProcessor->addPrepareCache(prepareMsg);
 
     auto encodedData = m_config->codec()->encode(prepareMsg, m_config->pbftMsgDefaultVersion());
+
+    PBFT_LOG(INFO) << LOG_DESC("broadcast prepare packet")
+                   << LOG_KV("packetSize", encodedData->size());
     // only broadcast to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
@@ -1103,7 +1108,8 @@ void PBFTEngine::broadcastViewChangeReq()
     // only broadcast to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
-    PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq);
+    PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq)
+                   << LOG_KV("packetSize", encodedData->size());
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
     auto newViewMsg = m_cacheProcessor->checkAndTryIntoNewView();
