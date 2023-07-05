@@ -476,7 +476,9 @@ void Session::drop(DisconnectReason _reason)
                 });
         }
         catch (...)
-        {}
+        {
+            SESSION_LOG(ERROR) << LOG_DESC("drop error") << LOG_KV("endpoint", nodeIPEndpoint());
+        }
     }
 }
 
