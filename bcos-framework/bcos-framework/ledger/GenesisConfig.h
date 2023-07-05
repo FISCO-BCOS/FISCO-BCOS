@@ -75,9 +75,13 @@ public:
            << "iswasm: " << m_isWasm << std::endl
            << "isAuthCheck:" << m_isAuthCheck << std::endl
            << "authAdminAccount:" << m_authAdminAccount << std::endl
-           << "isSerialExecute:" << m_isSerialExecute << std::endl
-           << "epochSealerNum:" << m_epochSealerNum << std::endl
-           << "epochBlockNum: " << m_epochBlockNum << std::endl;
+           << "isSerialExecute:" << m_isSerialExecute << std::endl;
+        if (bcos::tool::toVersionNumber(m_compatibilityVersion) >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
+        {
+            ss << "epochSealerNum:" << m_epochSealerNum << std::endl
+               << "epochBlockNum:" << m_epochBlockNum << std::endl;
+        }
         return ss.str();
     }
 
