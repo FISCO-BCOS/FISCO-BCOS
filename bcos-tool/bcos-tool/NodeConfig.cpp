@@ -25,8 +25,8 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/FileUtility.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/FileUtility.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -79,6 +79,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadFailOverConfig(_pt, _enforceMemberID);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
+    loadSyncConfig(_pt);
     loadOthersConfig(_pt);
 }
 
@@ -624,6 +625,10 @@ void NodeConfig::loadSyncConfig(const boost::property_tree::ptree& _pt)
     m_enableSendBlockStatusByTree = _pt.get<bool>("sync.sync_block_by_tree", false);
     m_enableSendTxByTree = _pt.get<bool>("sync.send_txs_by_tree", false);
     m_treeWidth = _pt.get<std::uint32_t>("sync.tree_width", 3);
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSyncConfig")
+                         << LOG_KV("sync_block_by_tree", m_enableSendBlockStatusByTree)
+                         << LOG_KV("send_txs_by_tree", m_enableSendTxByTree)
+                         << LOG_KV("tree_width", m_treeWidth);
 }
 
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)

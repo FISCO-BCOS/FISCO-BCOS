@@ -217,9 +217,9 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
         });
     }
 
-    FRONT_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
-                    << LOG_KV("nodeIDs.size()",
-                           (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
+    FRONT_LOG(DEBUG) << LOG_DESC("asyncGetGroupNodeInfo")
+                     << LOG_KV("nodeIDs.size()",
+                            (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
 }
 
 /**

@@ -409,9 +409,9 @@ private:
     std::string m_p2pNodeFileName;
 
     // config for sync
-    bool m_enableSendBlockStatusByTree;
-    bool m_enableSendTxByTree;
-    std::uint32_t m_treeWidth;
+    bool m_enableSendBlockStatusByTree = false;
+    bool m_enableSendTxByTree = false;
+    std::uint32_t m_treeWidth = 3;
 
     // config for cert
     std::string m_certPath;
