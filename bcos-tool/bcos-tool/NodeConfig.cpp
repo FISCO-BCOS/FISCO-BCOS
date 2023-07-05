@@ -619,9 +619,10 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
                          << LOG_KV("keyCenterUrl", storageSecurityKeyCenterUrl);
 }
 
-void NodeConfig::loadSyncConfig(const boost::property_tree::ptree &_pt)
+void NodeConfig::loadSyncConfig(const boost::property_tree::ptree& _pt)
 {
-    m_enableSendBlockStatusByTree = _pt.get<bool>("sync.sync_block_by_tree", true);
+    m_enableSendBlockStatusByTree = _pt.get<bool>("sync.sync_block_by_tree", false);
+    m_enableSendTxByTree = _pt.get<bool>("sync.send_txs_by_tree", false);
     m_treeWidth = _pt.get<std::uint32_t>("sync.tree_width", 3);
 }
 
@@ -757,7 +758,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                 "consensus.consensus_type is illegal, it must be pbft or rpbft!"));
     }
     // blockTxCountLimit
-    auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
+    auto blockTxCountLimit =
+        checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
     if (blockTxCountLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -775,7 +777,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>("version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
+        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList

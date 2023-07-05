@@ -1336,7 +1336,12 @@ generate_common_ini() {
     txs_expiration_time = 600
 
 [sync]
-    sync_block_by_tree=true
+    ; send transaction by tree-topology
+    ; recommend to use when deploy many consensus nodes
+    send_txs_by_tree=false
+    ; send block status by tree-topology
+    ; recommend to use when deploy many consensus nodes
+    sync_block_by_tree=false
     tree_width=3
 
 [redis]
