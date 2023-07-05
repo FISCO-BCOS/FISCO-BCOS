@@ -42,7 +42,7 @@ public:
         // nodeService
         c_supportedProtocols.insert({ProtocolModuleID::NodeService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::NodeService, ProtocolVersion::V0, ProtocolVersion::V1)});
+                ProtocolModuleID::NodeService, ProtocolVersion::V0, ProtocolVersion::V2)});
         // gatewayService
         c_supportedProtocols.insert({ProtocolModuleID::GatewayService,
             std::make_shared<ProtocolInfo>(

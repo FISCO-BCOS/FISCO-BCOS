@@ -103,16 +103,55 @@ task::Task<void> TxPool::broadcastTransaction(const protocol::Transaction& trans
     bcos::bytes buffer;
     transaction.encode(buffer);
 
-    m_frontService->asyncSendBroadcastMessage(
-        protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, bcos::ref(buffer));
+    co_await broadcastTransactionBuffer(bcos::ref(buffer));
 
     co_return;
 }
 
 task::Task<void> TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
 {
-    m_frontService->asyncSendBroadcastMessage(
-        protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
+    if (m_treeRouter != nullptr) [[unlikely]]
+    {
+        co_await broadcastTransactionBufferByTree(_data);
+    }
+    else [[likely]]
+    {
+        m_frontService->asyncSendBroadcastMessage(
+            protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
+    }
+    co_return;
+}
+
+task::Task<void> TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data)
+{
+    if (m_treeRouter != nullptr)
+    {
+        m_frontService->asyncGetGroupNodeInfo(
+            [this, _data](Error::Ptr const&, const bcos::gateway::GroupNodeInfo::Ptr& groupInfo) {
+                auto selectedNode =
+                    m_treeRouter->selectNodes(m_transactionSync->config()->connectedGroupNodeList(),
+                        m_treeRouter->consIndex());
+                auto protocolList = groupInfo->nodeProtocolList();
+                // NOTE: the protocolList is a vector which sorted by nodeID, and is NOT convenience
+                // for filter whether send new protocol or not. So one-size-fits-all approach, if
+                // protocolList have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default.
+                auto index = std::find_if(
+                    protocolList.begin(), protocolList.end(), [](auto const& protocol) {
+                        return protocol->version() < protocol::ProtocolVersion::V2;
+                    });
+                if (index != protocolList.end()) [[unlikely]]
+                {
+                    // have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default
+                    m_frontService->asyncSendBroadcastMessage(
+                        protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
+                }
+                else [[likely]]
+                {
+                    m_frontService->asyncSendMessageByNodeIDs(
+                        protocol::TREE_PUSH_TRANSACTION, *selectedNode, _data);
+                }
+            });
+    }
     co_return;
 }
 

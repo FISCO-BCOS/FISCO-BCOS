@@ -87,7 +87,9 @@ enum ModuleID
 
     SYNC_PUSH_TRANSACTION = 5000,
     SYNC_GET_TRANSACTIONS = 5001,
-    SYNC_END = 5999
+    SYNC_END = 5999,
+
+    TREE_PUSH_TRANSACTION = 6000,
 };
 
 enum ProtocolModuleID : uint32_t
@@ -321,6 +323,8 @@ inline std::string moduleIDToString(ModuleID _moduleID)
         return "sync_get";
     case ModuleID::SYNC_PUSH_TRANSACTION:
         return "sync_push";
+    case ModuleID::TREE_PUSH_TRANSACTION:
+        return "tree_push";
     default:
         BCOS_LOG(DEBUG) << LOG_BADGE("unrecognized module") << LOG_KV("moduleID", _moduleID);
         return "unrecognized module";
