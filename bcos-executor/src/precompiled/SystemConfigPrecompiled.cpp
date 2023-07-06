@@ -21,6 +21,7 @@
 #include "SystemConfigPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -207,16 +208,24 @@ int64_t SystemConfigPrecompiled::checkValueValid(
 {
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
-    if (!m_sysValueCmp.contains(key) && !m_valueConverter.contains(key))
+    auto featureKeys = ledger::Features::featureKeys();
+    bool setFeature = (RANGES::find(featureKeys, key) != featureKeys.end());
+    if (!m_sysValueCmp.contains(key) && !m_valueConverter.contains(key) && !setFeature)
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
     }
+
     if (value.empty())
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be non-empty."));
     }
     try
     {
+        if (setFeature && value != "1")
+        {
+            BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
+        }
+
         if (m_valueConverter.contains(key))
         {
             configuredValue = (m_valueConverter.at(key))(std::string(value), blockVersion);
@@ -256,8 +265,7 @@ int64_t SystemConfigPrecompiled::checkValueValid(
 }
 
 std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysConfigByKey(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const std::string& _key) const
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _key)
 {
     try
     {
@@ -290,10 +298,16 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
     }
 }
 
+bool bcos::precompiled::SystemConfigPrecompiled::shouldUpgradeChain(
+    std::string_view key, uint32_t fromVersion, uint32_t toVersion) noexcept
+{
+    return key == bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION && toVersion > fromVersion;
+}
+
 void SystemConfigPrecompiled::upgradeChain(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
-    uint32_t toVersion) const
+    uint32_t toVersion)
 {
     const auto& blockContext = _executive->blockContext();
     auto version = blockContext.blockVersion();
@@ -320,16 +334,17 @@ void SystemConfigPrecompiled::upgradeChain(
 
         // create new system tables of 3.1.0
         // clang-format off
-           constexpr std::string_view tables[] = {
-                SYS_CODE_BINARY, SYS_VALUE_FIELDS,
-                SYS_CONTRACT_ABI, SYS_VALUE_FIELDS,
-            };
+        constexpr auto tables = std::to_array<std::string_view>({
+            SYS_CODE_BINARY, std::string_view(bcos::ledger::SYS_VALUE),
+            SYS_CONTRACT_ABI, std::string_view(bcos::ledger::SYS_VALUE)
+        });
         // clang-format on
-        size_t total = sizeof(tables) / sizeof(std::string_view);
+        constexpr size_t total = tables.size();
 
         for (size_t i = 0; i < total; i += 2)
         {
-            _executive->storage().createTable(std::string(tables[i]), std::string(tables[i + 1]));
+            _executive->storage().createTable(
+                std::string(tables.at(i)), std::string(tables.at(i + 1)));
         }
     }
 }
