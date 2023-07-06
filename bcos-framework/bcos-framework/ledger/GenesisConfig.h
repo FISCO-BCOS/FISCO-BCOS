@@ -38,7 +38,7 @@ public:
     GenesisConfig(bool smcrypto, std::string chainID, std::string groupID,
         std::string consensusType, uint64_t txCountLimit, uint64_t leaderSwitchPeriod,
         std::string compatibilityVersion, uint64_t txGasLimit, bool isWasm, bool isAuthCheck,
-        std::string authAdminAccount, bool isSerialExecute)
+        std::string authAdminAccount, bool isSerialExecute, uint64_t epochSealerNum, uint64_t epochBlockNum)
       : m_smCrypto(smcrypto),
         m_chainID(chainID),
         m_groupID(groupID),
@@ -50,7 +50,10 @@ public:
         m_isWasm(isWasm),
         m_isAuthCheck(isAuthCheck),
         m_authAdminAccount(authAdminAccount),
-        m_isSerialExecute(isSerialExecute){};
+        m_isSerialExecute(isSerialExecute),
+        m_epochSealerNum(epochSealerNum),
+        m_epochBlockNum(epochBlockNum)
+    {}
     virtual ~GenesisConfig() {}
 
     std::string genesisDataOutPut()
@@ -73,6 +76,12 @@ public:
            << "isAuthCheck:" << m_isAuthCheck << std::endl
            << "authAdminAccount:" << m_authAdminAccount << std::endl
            << "isSerialExecute:" << m_isSerialExecute << std::endl;
+        if (bcos::tool::toVersionNumber(m_compatibilityVersion) >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
+        {
+            ss << "epochSealerNum:" << m_epochSealerNum << std::endl
+               << "epochBlockNum:" << m_epochBlockNum << std::endl;
+        }
         return ss.str();
     }
 
@@ -98,6 +107,10 @@ private:
     bool m_isAuthCheck;
     std::string m_authAdminAccount;
     bool m_isSerialExecute;
+
+    // rpbft config
+    uint64_t m_epochSealerNum;
+    uint64_t m_epochBlockNum;
 };  // namespace genesisConfig
 }  // namespace ledger
 }  // namespace bcos
