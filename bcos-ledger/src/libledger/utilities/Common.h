@@ -32,9 +32,9 @@ using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 // child=>parent
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 
-static const char* const SYS_VALUE = "value";
-static const char* const SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
-static const char* const SYS_VALUE_AND_ENABLE_BLOCK_NUMBER = "value,enable_number";
+constexpr static const char* const SYS_VALUE = "value";
+constexpr static const char* const SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
+constexpr static const char* const SYS_VALUE_AND_ENABLE_BLOCK_NUMBER = "value,enable_number";
 
 enum LedgerError : int32_t
 {
