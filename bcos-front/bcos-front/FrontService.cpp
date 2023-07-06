@@ -209,6 +209,9 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
         groupNodeInfo = m_groupNodeInfo;
     }
 
+    FRONT_LOG(DEBUG) << LOG_DESC("asyncGetGroupNodeInfo")
+                     << LOG_KV("nodeIDs.size()",
+                               (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
     if (_onGetGroupNodeInfo)
     {
         m_asyncGroup.run([_onGetGroupNodeInfo = std::move(_onGetGroupNodeInfo),
@@ -217,9 +220,6 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
         });
     }
 
-    FRONT_LOG(DEBUG) << LOG_DESC("asyncGetGroupNodeInfo")
-                     << LOG_KV("nodeIDs.size()",
-                            (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
 }
 
 /**
