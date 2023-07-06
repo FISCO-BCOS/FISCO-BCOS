@@ -133,5 +133,7 @@ const int CPU_HEAVY_CONTRACT_NUM = 128;
 const char* const SMALLBANK_START_ADDRESS = "0x6200";
 const int SMALLBANK_CONTRACT_NUM = 128;
 
+constexpr const char* const WSM_METHOD_ROTATE_STR = "rotateWorkingSealer(string,string,string)";
+
 }  // namespace precompiled
 }  // namespace bcos

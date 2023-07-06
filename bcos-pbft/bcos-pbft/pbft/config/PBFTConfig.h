@@ -19,8 +19,8 @@
  * @date 2021-04-12
  */
 #pragma once
+#include "bcos-framework/consensus/StateMachineInterface.h"
 #include "bcos-pbft/core/ConsensusConfig.h"
-#include "bcos-pbft/framework/StateMachineInterface.h"
 #include "bcos-pbft/pbft/engine/PBFTTimer.h"
 #include "bcos-pbft/pbft/engine/Validator.h"
 #include "bcos-pbft/pbft/interfaces/PBFTCodecInterface.h"

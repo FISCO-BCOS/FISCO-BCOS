@@ -19,8 +19,8 @@
  * @date 2021-04-22
  */
 #pragma once
-#include "../framework/ConsensusEngineInterface.h"
 #include "Common.h"
+#include "bcos-framework/consensus/ConsensusEngineInterface.h"
 #include <bcos-utilities/Worker.h>
 
 namespace bcos

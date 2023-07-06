@@ -137,7 +137,8 @@ void SealingManager::notifyResetProposal(bcos::protocol::Block::Ptr _block)
     notifyResetTxsFlag(txsHashList, false);
 }
 
-std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
+std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
+    std::function<bool(bcos::protocol::Block::Ptr)> _handleBlockHook)
 {
     if (!shouldGenerateProposal())
     {
@@ -163,6 +164,18 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
                        << LOG_KV("curNum", m_currentNumber);
     }
     bool containSysTxs = false;
+    if (_handleBlockHook)
+    {
+        // put the generated transaction into the 0th position of the block transactions
+        // Note: must set generatedTx into the first transaction for other transactions may change
+        //       the _sys_config_ and _sys_consensus_
+        //       here must use noteChange for this function will notify updating the txsCache
+        _handleBlockHook(block);
+        if (block->transactionsSize() > 0)
+        {
+            containSysTxs = true;
+        }
+    }
     for (size_t i = 0; i < systemTxsSize; i++)
     {
         block->appendTransactionMetaData(std::move(m_pendingSysTxs->front()));
