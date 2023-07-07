@@ -660,7 +660,7 @@ public:
         const std::vector<ConditionTupleV320>& keyCond, const LimitTuple& limit,
         const std::string& callAddress)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_5_VERSION);
         bytes in =
             codec->encodeWithSig("remove((uint8,string,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");

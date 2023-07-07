@@ -26,6 +26,80 @@
 
 namespace bcos::storage
 {
+// Unconditional pagination query
+std::pair<size_t, size_t> 
+    KeyPageStorage::seekPageByCount(const std::vector<KeyPageStorage::PageInfo>& pages, storage::Condition& condition)
+{
+    if (pages.empty())
+    {
+        return std::make_pair((size_t) 0, (size_t) 0);
+    }   
+    auto [limitOffset, _] = condition.getLimit();
+
+    size_t total = 0;
+    size_t i = 0;
+    for (; i < pages.size(); ++i)
+    {
+        size_t temp = total + pages[i].getCount();
+        if (limitOffset < temp)
+        {
+            break;
+        }
+        total = temp;
+    }
+    return std::make_pair(i, total);
+}
+
+std::pair<size_t, size_t> 
+    KeyPageStorage::seekPageByKey(const std::vector<KeyPageStorage::PageInfo>& pages, storage::Condition::cond& cond)
+{    
+    auto iter = std::lower_bound(pages.begin(), pages.end(), cond.value, 
+        [](const KeyPageStorage::PageInfo& lhs, const std::string& rhs) {
+            return lhs.getPageKey() < rhs;
+        });
+    size_t startPos = iter - pages.begin();
+    return std::make_pair(startPos, (size_t) 0);
+}
+
+std::pair<size_t, size_t>
+    KeyPageStorage::seekStartPage(const std::vector<KeyPageStorage::PageInfo>& pageInfos, 
+    storage::Condition& condition, storage::Condition::cond& cond)
+{
+    if (condition.empty())
+    {
+        return seekPageByCount(pageInfos, condition);
+    }
+    return seekPageByKey(pageInfos, cond);
+}
+
+template<typename _Iter>
+static bool traversePage(const _Iter& begin, const _Iter& end, 
+    size_t& validCount, const storage::Condition& cond, const storage::Condition& stopConds, std::vector<std::string>& result)
+{
+    auto [offset, total] = cond.getLimit();
+
+    for (auto iter = begin; iter != end; ++iter)
+    {
+        if (iter->second.status() != Entry::DELETED && cond.isValid(iter->first))
+        {
+            if (validCount >= offset && validCount < offset + total)
+            {
+                result.emplace_back(iter->first);
+            }
+            ++validCount;
+            if (validCount >= offset + total)
+            {
+                return true;
+            }
+        }
+        else if (iter->second.status() != Entry::DELETED && validCount > 0 && !stopConds.isValid(iter->first))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
     const std::optional<storage::Condition const>& _condition,
     std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback)
@@ -45,6 +119,8 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
             std::vector<std::string>());
         return;
     }
+
+    auto startT = utcTime();
     // page
     auto [error, data] = getData(tableView, TABLE_META_KEY);
     if (error)
@@ -54,37 +130,56 @@ void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
             std::vector<std::string>());
         return;
     }
+    
     std::vector<std::string> ret;
     auto* meta = data.value()->getTableMeta();
     auto readLock = meta->rLock();
     auto& pageInfo = meta->getAllPageInfoNoLock();
     auto [offset, total] = _condition->getLimit();
     ret.reserve(total);
-    size_t validCount = 0;
-    for (auto& info : pageInfo)
+
+    if (pageInfo.empty())
     {
+        readLock.unlock();
+        _callback(nullptr, std::move(ret));
+        return;
+    }
+    
+    // simplify condition
+    storage::Condition simplifiedCond = *_condition;
+    auto [startCond, stopConds] = simplifiedCond.simplify("", pageInfo.back().getPageKey());
+    if (!startCond.has_value() && !simplifiedCond.empty())
+    {
+        readLock.unlock();
+        _callback(nullptr, std::move(ret));
+        return;
+    }
+
+    auto [start, validCount] = seekStartPage(pageInfo, simplifiedCond, *startCond);
+    for (size_t i = start; i < pageInfo.size(); ++i)
+    {
+        auto& info = pageInfo[i];
         auto [error, data] = getData(tableView, info.getPageKey(), info.getCount() > 0);
         boost::ignore_unused(error);
         assert(!error);
         auto* page = data.value()->getPage();
         auto [entries, pageLock] = page->getEntries();
         boost::ignore_unused(pageLock);
-        for (auto& it : entries)
+        bool needBreak = traversePage(entries.begin(), entries.end(), validCount, simplifiedCond, *stopConds, ret);
+
+        if (needBreak)
         {
-            if (it.second.status() != Entry::DELETED && _condition->isValid(it.first))
-            {
-                if (validCount >= offset && validCount < offset + total)
-                {
-                    ret.emplace_back(it.first);
-                }
-                ++validCount;
-                if (validCount == offset + total)
-                {
-                    break;
-                }
-            }
+            break;
         }
     }
+
+    auto endT = utcTime();
+    
+    KeyPage_LOG(DEBUG)
+        << LOG_DESC("asyncGetPrimaryKeys") << LOG_KV("table", tableView)
+        << LOG_KV("num pages", pageInfo.size())
+        << LOG_KV("timeCost", endT - startT);
+    
     readLock.unlock();
     _callback(nullptr, std::move(ret));
 }

@@ -165,6 +165,34 @@ static void processEntryByValueCond(
     size_t singleCountByKeyMax = keyCondition->getLimit().second;
     size_t singleCountByKey = singleCountByKeyMax;
     auto [valueLimitOffset, valueLimitCount] = valueCondition->getLimit();
+    // default condition [ key > "" ]
+    keyCondition->GT("");
+    while (singleCountByKey >= singleCountByKeyMax && totalCount < valueLimitCount)
+    {
+        auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
+        auto [validCount, entrySize] = processEntry(tableKeyList, valueCondition);
+        singleCountByKey = tableKeyList.size();
+        totalCount += entrySize;
+        valueLimitOffset = std::max(int(valueLimitOffset - validCount), 0);
+        valueCondition->limit(valueLimitOffset, valueLimitCount - totalCount);
+        if (!tableKeyList.empty())
+        {
+            // update condition [ key > tableKeyList.back() ]
+            keyCondition->conditions().back().value = tableKeyList.back();
+        }
+    }
+}
+
+template <typename Functor>
+static void processEntryByValueCondForV32Remove(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& tableName,
+    std::optional<storage::Condition> keyCondition,
+    std::optional<precompiled::Condition> valueCondition, Functor&& processEntry)
+{
+    size_t totalCount = 0;
+    size_t singleCountByKeyMax = keyCondition->getLimit().second;
+    size_t singleCountByKey = singleCountByKeyMax;
+    auto [valueLimitOffset, valueLimitCount] = valueCondition->getLimit();
     while (singleCountByKey >= singleCountByKeyMax && totalCount < valueLimitCount)
     {
         auto tableKeyList = _executive->storage().getPrimaryKeys(tableName, keyCondition);
@@ -1161,6 +1189,9 @@ void TablePrecompiled::removeByConditionV32(const std::string& tableName,
         buildConditions(valueCondition, std::move(conditions), limitTuple, tableInfo.info_v320);
     auto keyCondition = valueCondition->at(0);
 
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
+                          << LOG_DESC("keyCond trace ") << keyCondition->toString();
+
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
         PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
@@ -1189,8 +1220,18 @@ void TablePrecompiled::removeByConditionV32(const std::string& tableName,
                 removedRows += entries.size();
                 return std::pair<size_t, size_t>{validCount, entries.size()};
             };
-            processEntryByValueCond(
-                _executive, tableName, *keyCondition, valueCondition, std::move(func));
+            
+            if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_5_VERSION) >= 0)
+            {
+                processEntryByValueCond(
+                    _executive, tableName, *keyCondition, valueCondition, std::move(func));
+            }
+            else
+            {
+                // preserve incorrect results when version is less than 3.5.0
+                processEntryByValueCondForV32Remove(
+                    _executive, tableName, *keyCondition, valueCondition, std::move(func));
+            }
         }
         else
         {

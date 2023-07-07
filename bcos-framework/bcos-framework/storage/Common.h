@@ -189,7 +189,7 @@ struct Condition
                 cmpStr = "GE";
                 break;
             case Comparator::LT:
-                cmpStr = "NE";
+                cmpStr = "LT";
                 break;
             case Comparator::LE:
                 cmpStr = "LE";
@@ -207,13 +207,108 @@ struct Condition
             return cmpStr + " " + value;
         }
     };
+
+    std::pair<std::optional<cond>, std::optional<Condition>> 
+        simplify(const std::string& defaultStartKey, const std::string& defaultEndKey)
+    {
+        if (m_conditions.empty())
+        {
+            return {std::nullopt, std::nullopt};
+        }
+        std::vector<cond> leftConds;
+        std::vector<cond> rightConds;
+        std::vector<cond> otherConds;
+        auto stopCond = std::make_optional<Condition>();
+        for (auto& cond_ : m_conditions)
+        {
+            if (cond_.cmp == Condition::Comparator::GT ||
+                cond_.cmp == Condition::Comparator::GE)
+            {
+                leftConds.push_back(cond_);
+            }
+            else if (cond_.cmp == Condition::Comparator::LT ||
+                     cond_.cmp == Condition::Comparator::LE)
+            {
+                rightConds.push_back(cond_);
+            }
+            else
+            {
+                otherConds.push_back(cond_);
+                // Convert STARTS_WITH to GE and put it in leftConds
+                if (cond_.cmp == Condition::Comparator::STARTS_WITH)
+                {
+                    leftConds.emplace_back(Condition::Comparator::GE, cond_.value);
+                    stopCond->startsWith(cond_.value);
+                }
+            }
+        }
+        
+        auto leftCond = simplifyLeftCond(defaultStartKey, leftConds);
+        auto rightCond = simplifyRightCond(defaultEndKey, rightConds);
+
+        // leftCond greater than rightCond
+        if (leftCond.value > rightCond.value || 
+            (leftCond.value == rightCond.value && 
+             (leftCond.cmp != Condition::Comparator::GE || rightCond.cmp != Condition::Comparator::LE)))
+        {
+            return {std::nullopt, std::nullopt};
+        }
+        
+        stopCond->conditions().emplace_back(rightCond);
+        otherConds.emplace_back(leftCond);
+        otherConds.emplace_back(std::move(rightCond));
+        std::swap(m_conditions, otherConds);
+        return {std::make_optional(std::move(leftCond)), stopCond};
+    }
+
+    cond simplifyLeftCond(const std::string& defaultStartKey, const std::vector<cond>& leftConds)
+    {
+        cond defaultCond(Comparator::GT, defaultStartKey);
+        for (auto& cond_ : leftConds)
+        {
+            // 1. x > a  && x > b  && b > a ==> x >  b
+            // 2. x >= a && x > b  && b > a ==> x >  b
+            // 3. x > a  && x >= b && b > a ==> x >= b
+            // 4. x >= a && x >= b && b > a ==> x >= b
+            // 5. a == b && x > b  && x >=a ==> x >  b
+            if (cond_.value > defaultCond.value || 
+               (cond_.value == defaultCond.value && defaultCond.cmp == Comparator::GE && cond_.cmp == Comparator::GT))
+            {
+                defaultCond = cond_;
+            }
+        }
+        return defaultCond;
+    }
+
+    cond simplifyRightCond(const std::string& defaultEndKey, const std::vector<cond>& rightConds)
+    {
+        cond defaultCond(Comparator::LE, defaultEndKey);
+        for (auto& cond_ : rightConds)
+        {
+            // 1. x < a  && x < b  && b < a ==> x <  b
+            // 2. x <= a && x < b  && b < a ==> x <  b
+            // 3. x < a  && x <= b && b < a ==> x <= b
+            // 4. x <= a && x <= b && b < a ==> x <= b
+            // 5. a == b && x < b  && x <=a ==> x < b
+            if (cond_.value < defaultCond.value || 
+               (cond_.value == defaultCond.value && defaultCond.cmp == Comparator::LE && cond_.cmp == Comparator::LT))
+            {
+                defaultCond = cond_;
+            }
+        }
+        return defaultCond;
+    } 
+
+    std::vector<cond>& conditions() { return m_conditions; } 
+    bool empty() const { return m_conditions.empty(); }
+
     std::vector<cond> m_conditions;
     std::pair<size_t, size_t> m_limit;
     // this method only for trace log
     std::string toString() const
     {
         std::stringstream ss;
-        ss << "keyCond: ";
+        ss << "Condition: ";
         for (const auto& cond : m_conditions)
         {
             ss << cond.toString() << ";";

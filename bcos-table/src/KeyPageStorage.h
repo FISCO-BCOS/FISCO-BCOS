@@ -1205,6 +1205,16 @@ public:
     virtual std::pair<size_t, Error::Ptr> count(const std::string_view& table) override;
 
 private:
+    std::pair<size_t, size_t> 
+        seekPageByCount(const std::vector<KeyPageStorage::PageInfo>& pages, storage::Condition& condition);
+
+    std::pair<size_t, size_t>
+        seekPageByKey(const std::vector<KeyPageStorage::PageInfo>& pages, storage::Condition::cond& cond);
+
+    std::pair<size_t, size_t> 
+        seekStartPage(const std::vector<KeyPageStorage::PageInfo>& pageInfos, storage::Condition& condition, 
+        storage::Condition::cond& cond);
+
     auto getPrev() -> std::shared_ptr<StorageInterface>
     {
         std::shared_lock<std::shared_mutex> lock(m_prevMutex);
