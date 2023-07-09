@@ -33,14 +33,14 @@ int performance()
                 std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
         auto keyPair = std::shared_ptr<bcos::crypto::KeyPairInterface>(
             cryptoSuite->signatureImpl()->generateKeyPair());
-        size_t count = 10 * 10000;
+        constexpr static size_t count = 10UL * 10000;
 
-        std::string_view connectionString =
+        constexpr static std::string_view connectionString =
             "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000";
         bcos::sdk::RPCClient rpcClient(std::string{connectionString});
 
         auto blockNumber = rpcClient.blockNumber().get();
-        constexpr long blockLimit = 500;
+        constexpr static long blockLimit = 500;
 
         bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
         bcos::bytes deployBin;
@@ -112,6 +112,7 @@ int performance()
         long sendElapsed = currentTime() - elapsed;
 
         latch.wait();
+        taskGroup.wait();
         elapsed = currentTime() - elapsed;
 
         std::cout << std::endl << "=======================================" << std::endl;
@@ -128,7 +129,6 @@ int performance()
     {
         std::cout << boost::diagnostic_information(e);
     }
-
 
     return 0;
 }
