@@ -42,7 +42,6 @@ int performance()
         auto blockNumber = rpcClient.blockNumber().get();
         constexpr long blockLimit = 500;
 
-        auto rand = std::mt19937(std::random_device{}());
         bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
         bcos::bytes deployBin;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(deployBin));
@@ -72,6 +71,7 @@ int performance()
 
         std::latch latch(count);
         tbb::parallel_for(tbb::blocked_range(0LU, count), [&](const auto& range) {
+            auto rand = std::mt19937(std::random_device{}());
             for (auto it = range.begin(); it != range.end(); ++it)
             {
                 bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
@@ -91,6 +91,7 @@ int performance()
                         try
                         {
                             auto future = co_await coRPCClient.sendTransaction(*transaction);
+
                             co_await tbbScheduler;
                             auto receipt = future.get();
                             if (receipt->status() != 0)
