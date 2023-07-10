@@ -67,7 +67,7 @@ protected:
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
     unsigned m_minSealTime = 500;
-    std::string m_groupId = "group0";
-    std::string m_chainId = "chain0";
+    std::string m_groupId{};
+    std::string m_chainId{};
 };
 }  // namespace bcos::sealer

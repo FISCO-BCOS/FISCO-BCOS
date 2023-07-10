@@ -33,7 +33,7 @@ bool VRFBasedSealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
 {
     const auto& consensusConfig = dynamic_cast<consensus::ConsensusConfig const&>(
         *m_sealerConfig->consensus()->consensusConfig());
-    if (consensusConfig.shouldRotateSealers())
+    if (!consensusConfig.shouldRotateSealers())
     {
         return true;
     }

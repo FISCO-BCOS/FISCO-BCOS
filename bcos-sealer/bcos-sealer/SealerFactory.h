@@ -40,8 +40,8 @@ public:
     VRFBasedSealer::Ptr createVRFBasedSealer();
 
 protected:
-    std::string m_groupId = "group0";
-    std::string m_chainId = "chain0";
+    std::string m_groupId{};
+    std::string m_chainId{};
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     unsigned m_minSealTime;
