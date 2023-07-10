@@ -61,6 +61,8 @@ public:
         m_isSerialExecute(isSerialExecute),
         m_schedulerTermId(schedulerTermId)
     {
+        start();
+
         if (!m_ledgerConfig)
         {
             std::promise<bcos::ledger::LedgerConfig::Ptr> promise;
@@ -80,8 +82,6 @@ public:
 
             m_ledgerConfig = future.get();
         }
-
-        start();
     }
 
     SchedulerImpl(const SchedulerImpl&) = delete;
