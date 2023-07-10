@@ -180,6 +180,31 @@ void BlockSync::printSyncInfo()
                        << "            --------------------------------------------";
 }
 
+void BlockSync::printBehindPeers()
+{
+    static auto lastLogUtcTime = utcTime();
+    if (utcTime() - lastLogUtcTime <= m_blockNumLogInterval)
+    {
+        return;
+    }
+
+    auto knownHighestNumber = m_config->knownHighestNumber();
+    auto blockNumThreshold = m_blockNumThreshold;
+    m_syncStatus->foreachPeer([knownHighestNumber, blockNumThreshold](PeerStatus::Ptr _p) {
+        if (std::abs(_p->number() - knownHighestNumber) > blockNumThreshold)
+        {
+            BLKSYNC_LOG(ERROR) << "The lowest blocknumber is too far behind the highest block "
+                                  "number queried by getSyncStatus, "
+                               << "[highest block number: " << knownHighestNumber
+                               << ", current nodeid: " << _p->nodeId()->shortHex()
+                               << ", current block number: " << _p->number() << "]";
+        }
+        return true;
+    });
+
+    lastLogUtcTime = utcTime();
+}
+
 void BlockSync::executeWorker()
 {
     if (!m_masterNode)
@@ -201,6 +226,9 @@ void BlockSync::executeWorker()
 
             // send block-download-request to peers if this node is behind others
             tryToRequestBlocks();
+
+            // check sync block number whether nodes behind the highest block number
+            printBehindPeers();
         }
         catch (std::exception const& e)
         {
