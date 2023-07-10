@@ -18,21 +18,19 @@ private:
         bool write = false;
     };
     std::map<typename Storage::Key, ReadWriteFlag, std::less<>> m_readWriteSet;
+
     void putSet(bool write, auto const& key)
     {
         auto it = m_readWriteSet.lower_bound(key);
         if (it == m_readWriteSet.end() || it->first != key)
         {
-            it = m_readWriteSet.emplace_hint(it, key, ReadWriteFlag{});
-        }
-
-        if (write)
-        {
-            it->second.write = true;
+            it =
+                m_readWriteSet.emplace_hint(it, key, ReadWriteFlag{.read = !write, .write = write});
         }
         else
         {
-            it->second.read = true;
+            it->second.write |= write;
+            it->second.read |= (!write);
         }
     }
 
@@ -90,12 +88,15 @@ public:
         return false;
     }
 
-    auto read(RANGES::input_range auto const& keys)
+    auto read(RANGES::input_range auto const& keys, bool direct = false)
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.read(keys))>>
     {
-        for (auto&& key : keys)
+        if (!direct)
         {
-            putSet(false, key);
+            for (auto&& key : keys)
+            {
+                putSet(false, key);
+            }
         }
         co_return co_await m_storage.read(keys);
     }
