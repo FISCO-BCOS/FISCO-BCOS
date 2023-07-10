@@ -3,7 +3,6 @@
 #include "../groupmgr/NodeService.h"
 #include <bcos-tars-protocol/tars/RPC.h>
 #include <tbb/concurrent_hash_map.h>
-
 #include <utility>
 
 namespace bcos::rpc
