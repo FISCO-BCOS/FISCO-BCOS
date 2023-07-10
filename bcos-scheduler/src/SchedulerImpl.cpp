@@ -1,6 +1,8 @@
 #include "SchedulerImpl.h"
 #include "BlockExecutive.h"
 #include "Common.h"
+#include "bcos-framework/ledger/Features.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -115,7 +117,7 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
     catch (std::exception const& e)
     {
         SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(requestBlockNumber) << "handleBlockQueue exception"
-                             << boost::diagnostic_information(e);
+                               << boost::diagnostic_information(e);
         blocksLock.unlock();
         whenException(e);
     }
@@ -155,7 +157,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     catch (std::exception& e)
     {
         SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(block->blockHeaderConst()->number())
-                             << "fetchGasLimit exception: " << boost::diagnostic_information(e);
+                               << "fetchGasLimit exception: " << boost::diagnostic_information(e);
         _callback(BCOS_ERROR_WITH_PREV_PTR(
                       SchedulerError::fetchGasLimitError, "fetchGasLimitError exception", e),
             nullptr, false);
@@ -243,7 +245,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                 requestBlockNumber % backNumber)
                 .str();
         SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(requestBlockNumber) << "ExecuteBlock error, "
-                             << message;
+                               << message;
         callback(
             BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr, false);
     };
@@ -557,7 +559,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 SCHEDULER_LOG(INFO)
                     << BLOCK_NUMBER(blockNumber) << LOG_BADGE("BlockTrace") << "CommitBlock success"
                     << LOG_KV("gas limit", m_gasLimit) << LOG_KV("timeCost", utcTime() - startTime);
-
+                m_ledgerConfig = ledgerConfig;
                 commitLock->unlock();  // just unlock here
 
 
@@ -750,10 +752,8 @@ BlockExecutive::Ptr SchedulerImpl::getPreparedBlock(
     {
         return m_preparedBlocks[blockNumber][timestamp];
     }
-    else
-    {
-        return nullptr;
-    }
+
+    return nullptr;
 }
 
 void SchedulerImpl::setPreparedBlock(
@@ -864,14 +864,14 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
     auto summary =
-        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(8, 0, 0);
+        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(9, 0, 0);
 
     auto collector = [this, summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
                          std::variant<std::tuple<bool, consensus::ConsensusNodeListPtr>,
                              std::tuple<int, std::string, bcos::protocol::BlockNumber>,
-                             bcos::protocol::BlockNumber, bcos::crypto::HashType>&&
-                             result) mutable {
+                             bcos::protocol::BlockNumber, bcos::crypto::HashType,
+                             ledger::Features>&& result) mutable {
         auto& [total, success, failed] = *summary;
 
         if (error)
@@ -930,7 +930,9 @@ void SchedulerImpl::asyncGetLedgerConfig(
                     [&ledgerConfig](bcos::protocol::BlockNumber number) {
                         ledgerConfig->setBlockNumber(number);
                     },
-                    [&ledgerConfig](bcos::crypto::HashType hash) { ledgerConfig->setHash(hash); }},
+                    [&ledgerConfig](bcos::crypto::HashType hash) { ledgerConfig->setHash(hash); },
+                    [&ledgerConfig](
+                        ledger::Features features) { ledgerConfig->setFeatures(features); }},
                 result);
 
             ++success;
@@ -981,14 +983,29 @@ void SchedulerImpl::asyncGetLedgerConfig(
         [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
             collector(std::move(error), std::tuple{2, std::move(config), _number});
         });
-    m_ledger->asyncGetBlockNumber(
-        [collector, ledger = m_ledger](Error::Ptr error, protocol::BlockNumber number) mutable {
-            ledger->asyncGetBlockHashByNumber(
-                number, [collector](Error::Ptr error, const crypto::HashType& hash) mutable {
-                    collector(std::move(error), std::move(hash));
-                });
-            collector(std::move(error), std::move(number));
-        });
+    m_ledger->asyncGetBlockNumber([self = this, collector, ledger = m_ledger](
+                                      Error::Ptr error, protocol::BlockNumber number) mutable {
+        ledger->asyncGetBlockHashByNumber(
+            number, [collector](Error::Ptr error, const crypto::HashType& hash) mutable {
+                collector(std::move(error), hash);
+            });
+
+        task::wait([](decltype(self) self, decltype(number) number,
+                       decltype(collector) collector) -> task::Task<void> {
+            try
+            {
+                auto features =
+                    co_await ledger::Features::readFeaturesFromStorage(*self->m_storage, number);
+                collector({}, features);
+            }
+            catch (Error& error)
+            {
+                collector(std::make_shared<Error>(error), ledger::Features{});
+            }
+        }(self, number, collector));
+
+        collector(std::move(error), number);
+    });
 
     // Note: The consensus module ensures serial execution and submit of system txs
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION,

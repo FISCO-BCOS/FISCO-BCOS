@@ -26,14 +26,17 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-task/Wait.h"
 #include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <string>
+#include <utility>
 
 using namespace bcos::executor;
 using namespace bcos::protocol;
@@ -61,29 +64,15 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
         return;
     }
 
-    auto table = m_storage->openTable(ledger::SYS_CONFIG);
-    if (table)
-    {
-        for (auto key : bcos::ledger::Features::featureKeys())
-        {
-            auto entry = table->getRow(key);
-            if (entry)
-            {
-                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
-                if (blockNumber >= enableNumber)
-                {
-                    m_features.set(key);
-                }
-            }
-        }
-    }
+    m_features =
+        task::syncWait(ledger::Features::readFeaturesFromStorage(*m_storage, m_blockNumber));
 }
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
     protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
     bool _isAuthCheck, std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
-  : BlockContext(storage, ledgerCache, _hashImpl, _current->number(), _current->hash(),
+  : BlockContext(std::move(storage), ledgerCache, _hashImpl, _current->number(), _current->hash(),
         _current->timestamp(), _current->version(), _schedule, _isWasm, _isAuthCheck)
 {
     m_keyPageIgnoreTables = std::move(_keyPageIgnoreTables);

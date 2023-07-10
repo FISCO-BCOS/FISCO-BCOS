@@ -1,7 +1,12 @@
 #pragma once
 #include "../protocol/Protocol.h"
+#include "../storage/Entry.h"
+#include "../storage/StorageInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-task/Task.h"
 #include <bcos-concepts/Exception.h>
 #include <bcos-utilities/Ranges.h>
+#include <boost/archive/binary_iarchive.hpp>
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <bitset>
@@ -90,6 +95,25 @@ public:
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return magic_enum::enum_name(flag);
                });
+    }
+
+    static task::Task<Features> readFeaturesFromStorage(
+        storage::StorageInterface& storage, long blockNumber)
+    {
+        Features features;
+        for (auto key : bcos::ledger::Features::featureKeys())
+        {
+            auto entry = co_await storage.coGetRow(ledger::SYS_CONFIG, key);
+            if (entry)
+            {
+                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
+                if (blockNumber >= enableNumber)
+                {
+                    features.set(key);
+                }
+            }
+        }
+        co_return features;
     }
 };
 
