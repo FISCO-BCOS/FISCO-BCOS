@@ -1,4 +1,5 @@
 #pragma once
+#include "../protocol/Protocol.h"
 #include <bcos-concepts/Exception.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
@@ -20,7 +21,7 @@ public:
     // At most 256 flag
     enum class Flag
     {
-        bugfix_revert,
+        bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
     };
 
 private:
@@ -65,7 +66,13 @@ public:
         set(*value);
     }
 
-    void setToDefault() { set(Flag::bugfix_revert); }
+    void setToDefault(protocol::BlockVersion version)
+    {
+        if (version >= protocol::BlockVersion::V3_2_VERSION)
+        {
+            set(Flag::bugfix_revert);
+        }
+    }
 
     auto flags() const
     {

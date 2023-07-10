@@ -123,7 +123,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            int64_t value = checkValueValid(configKey, configValue, blockContext->blockVersion());
+            int64_t value = valid(configKey, configValue, blockContext->blockVersion());
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
@@ -166,16 +166,9 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     return _callParameters;
 }
 
-int64_t SystemConfigPrecompiled::checkValueValid(
+int64_t SystemConfigPrecompiled::valid(
     std::string_view _key, std::string_view value, uint32_t blockVersion)
 {
-    constexpr static std::string_view xConfigPrefix = "x_";
-    // If starts with xConfigPrefix, approve it
-    if (_key.starts_with(xConfigPrefix))
-    {
-        return 1;
-    }
-
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
     auto featureKeys = ledger::Features::featureKeys();
@@ -307,6 +300,22 @@ void SystemConfigPrecompiled::upgradeChain(
         {
             _executive->storage().createTable(
                 std::string(tables.at(i)), std::string(tables.at(i + 1)));
+        }
+    }
+
+    // Write default features when data version changes
+    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_VERSION))
+    {
+        Features features;
+        features.setToDefault(protocol::BlockVersion(toVersion));
+        for (auto [flag, name, value] : features.flags())
+        {
+            if (value)
+            {
+                Entry entry;
+                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
+                _executive->storage().setRow(SYS_CONFIG, name, std::move(entry));
+            }
         }
     }
 }
