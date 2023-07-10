@@ -39,7 +39,6 @@ constexpr const char* const CSS_METHOD_ADD_SEALER = "addSealer(string,uint256)";
 constexpr const char* const CSS_METHOD_ADD_SER = "addObserver(string)";
 constexpr const char* const CSS_METHOD_REMOVE = "remove(string)";
 constexpr const char* const CSS_METHOD_SET_WEIGHT = "setWeight(string,uint256)";
-constexpr const char* const WSM_METHOD_ROTATE_STR = "rotateWorkingSealer(string,string,string)";
 const auto NODE_LENGTH = 128U;
 
 ConsensusPrecompiled::ConsensusPrecompiled(const crypto::Hash::Ptr& _hashImpl)
@@ -94,6 +93,12 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     {
         // setWeight(string,uint256)
         result = setWeight(_executive, data, codec);
+    }
+    else if (_executive->blockContext().blockVersion() >= protocol::BlockVersion::V3_5_VERSION &&
+             func == name2Selector[WSM_METHOD_ROTATE_STR])
+    {
+        // TODO: use feature
+        rotateWorkingSealer(_executive, _callParameters, codec);
     }
     else [[unlikely]]
     {
@@ -372,8 +377,7 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     PrecompiledExecResult::Ptr _callParameters, const CodecWrapper& codec)
 {
     auto const& blockContext = _executive->blockContext();
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
-                          << LOG_DESC("rotateWorkingSealer");
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_DESC("rotateWorkingSealer");
     std::string vrfPublicKey;
     std::string vrfInput;
     std::string vrfProof;
@@ -381,6 +385,9 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     try
     {
         WorkingSealerManagerImpl sealerManger;
+        // FIXME: if transaction not from sealer, should throw exception
+        // BOOST_THROW_EXCEPTION(
+        //    bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
         sealerManger.createVRFInfo(
             std::move(vrfProof), std::move(vrfPublicKey), std::move(vrfInput));
         sealerManger.rotateWorkingSealer(_executive, _callParameters);

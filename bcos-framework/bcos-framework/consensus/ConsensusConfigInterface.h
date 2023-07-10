@@ -19,15 +19,16 @@
  * @date 2021-04-09
  */
 #pragma once
+#include "ConsensusNodeInterface.h"
+#include "ConsensusTypeDef.h"
 #include "ProposalInterface.h"
-#include <bcos-framework/consensus/ConsensusNodeInterface.h>
-#include <bcos-framework/consensus/ConsensusTypeDef.h>
 namespace bcos::consensus
 {
 class ConsensusConfigInterface
 {
 public:
     using Ptr = std::shared_ptr<ConsensusConfigInterface>;
+    using ConstPtr = std::shared_ptr<const ConsensusConfigInterface>;
     ConsensusConfigInterface() = default;
     virtual ~ConsensusConfigInterface() = default;
 

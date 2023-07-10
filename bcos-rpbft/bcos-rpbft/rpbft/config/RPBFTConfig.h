@@ -23,10 +23,7 @@
 
 #include "bcos-pbft/bcos-pbft/pbft/config/PBFTConfig.h"
 
-namespace bcos
-{
-
-namespace consensus
+namespace bcos::consensus
 {
 
 class RPBFTConfig : public PBFTConfig
@@ -45,11 +42,9 @@ public:
             std::move(_stateMachine), std::move(_storage))
     {}
 
-public:
     void resetConfig(
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock = false) override;
 
-protected:
     void updateWorkingSealerNodeList(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
 
     void updateShouldRotateSealers(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
@@ -59,8 +54,8 @@ protected:
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool& isEpochSealerNumChanged);
     void updateNotifyRotateFlag(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
 
-    void setShouldRotateSealers(const bool _shouldRotateSealers);
-    bool shouldRotateSealers() const;
+    void setShouldRotateSealers(bool _shouldRotateSealers);
+    bool shouldRotateSealers() const override;
 
 private:
     // the node index in working consensus node list
@@ -86,6 +81,4 @@ private:
     std::atomic_bool m_shouldRotateWorkingSealer{false};
 };
 
-}  // namespace consensus
-
-}  // namespace bcos
+}  // namespace bcos::consensus
