@@ -7,6 +7,15 @@
 #include <memory>
 #include <variant>
 
+size_t bcos::rpc::Params::PtrHash::hash(const tars::CurrentPtr& key)
+{
+    return std::hash<void*>{}((void*)key.get());
+}
+bool bcos::rpc::Params::PtrHash::equal(const tars::CurrentPtr& lhs, const tars::CurrentPtr& rhs)
+{
+    return lhs == rhs;
+}
+
 void bcos::rpc::RPCServer::initialize() {}
 void bcos::rpc::RPCServer::destroy() {}
 

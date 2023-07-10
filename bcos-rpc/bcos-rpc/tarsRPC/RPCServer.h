@@ -12,14 +12,8 @@ struct Params
 {
     struct PtrHash
     {
-        static size_t hash(const tars::CurrentPtr& key)
-        {
-            return std::hash<void*>{}((void*)key.get());
-        }
-        static bool equal(const tars::CurrentPtr& lhs, const tars::CurrentPtr& rhs)
-        {
-            return lhs == rhs;
-        }
+        static size_t hash(const tars::CurrentPtr& key);
+        static bool equal(const tars::CurrentPtr& lhs, const tars::CurrentPtr& rhs);
     };
 
     NodeService::Ptr node;
