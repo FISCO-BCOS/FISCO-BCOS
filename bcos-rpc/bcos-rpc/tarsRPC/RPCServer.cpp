@@ -47,9 +47,9 @@ bcostars::Error bcos::rpc::RPCServer::call(const bcostars::Transaction& request,
             return &inner;
         });
 
-    m_params.node->scheduler()->call(
-        transaction, [current](Error::Ptr const& error,
-                         protocol::TransactionReceipt::Ptr const& transactionReceiptPtr) {
+    m_params.node->scheduler()->call(std::move(transaction),
+        [current](Error::Ptr const& error,
+            protocol::TransactionReceipt::Ptr const& transactionReceiptPtr) {
             bcostars::Error tarsError;
             try
             {
