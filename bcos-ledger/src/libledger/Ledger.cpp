@@ -1733,7 +1733,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
     // Write default features
     Features features;
-    features.setToDefault();
+    features.setToDefault(protocol::BlockVersion(versionNumber));
     for (auto [flag, name, value] : features.flags())
     {
         if (value)

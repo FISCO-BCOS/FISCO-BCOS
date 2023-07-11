@@ -3,6 +3,7 @@
 #include "BlockExecutive.h"
 #include "BlockExecutiveFactory.h"
 #include "ExecutorManager.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
@@ -15,6 +16,7 @@
 #include <tbb/concurrent_hash_map.h>
 #include <future>
 #include <list>
+#include <utility>
 
 
 namespace bcos::scheduler
@@ -30,9 +32,10 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
-      : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory,
-            txPool, transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false,
-            schedulerTermId)
+      : SchedulerImpl(std::move(executorManager), std::move(ledger), std::move(storage),
+            std::move(executionMessageFactory), std::move(blockFactory), std::move(txPool),
+            std::move(transactionSubmitResultFactory), std::move(hashImpl), isAuthCheck, isWasm,
+            false, schedulerTermId)
     {}
 
 
@@ -50,7 +53,7 @@ public:
         m_blockExecutiveFactory(
             std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute)),
         m_blockFactory(std::move(blockFactory)),
-        m_txPool(txPool),
+        m_txPool(std::move(txPool)),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_isAuthCheck(isAuthCheck),
@@ -59,6 +62,26 @@ public:
         m_schedulerTermId(schedulerTermId)
     {
         start();
+
+        if (!m_ledgerConfig)
+        {
+            std::promise<bcos::ledger::LedgerConfig::Ptr> promise;
+            auto future = promise.get_future();
+            asyncGetLedgerConfig(
+                [&promise](Error::Ptr const& error, bcos::ledger::LedgerConfig::Ptr ledgerConfig) {
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR) << LOG_DESC("failed to get ledger config")
+                                             << LOG_KV("error", error->errorCode())
+                                             << LOG_KV("errorMessage", error->errorMessage());
+                        promise.set_exception(std::make_exception_ptr(*error));
+                        return;
+                    }
+                    promise.set_value(std::move(ledgerConfig));
+                });
+
+            m_ledgerConfig = future.get();
+        }
     }
 
     SchedulerImpl(const SchedulerImpl&) = delete;
@@ -262,7 +285,7 @@ private:
     int64_t m_schedulerTermId;
 
     bool m_isRunning = false;
-
     std::function<void(int64_t)> f_onNeedSwitchEvent;
+    ledger::LedgerConfig::Ptr m_ledgerConfig;
 };
 }  // namespace bcos::scheduler
