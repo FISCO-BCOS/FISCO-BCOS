@@ -29,6 +29,7 @@ public:
         bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
         feature_sharding,
         feature_rpbft,
+        feature_paillier,
     };
 
 private:

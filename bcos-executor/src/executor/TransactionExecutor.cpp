@@ -46,6 +46,7 @@
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
 #include "../precompiled/extension/GroupSigPrecompiled.h"
+#include "../precompiled/extension/PaillierPrecompiled.h"
 #include "../precompiled/extension/RingSigPrecompiled.h"
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
@@ -261,6 +262,10 @@ void TransactionExecutor::initEvmEnvironment()
         DAG_TRANSFER_ADDRESS, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl));
     m_precompiled->insert(CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl));
     m_precompiled->insert(BFS_ADDRESS, std::make_shared<BFSPrecompiled>(m_hashImpl));
+    m_precompiled->insert(PAILLIER_ADDRESS, std::make_shared<PaillierPrecompiled>(m_hashImpl),
+        [](uint32_t, bool, ledger::Features const& features) {
+            return features.get(ledger::Features::Flag::feature_paillier);
+        });
     m_precompiled->insert(GROUP_SIG_ADDRESS, std::make_shared<GroupSigPrecompiled>(m_hashImpl));
     m_precompiled->insert(RING_SIG_ADDRESS, std::make_shared<RingSigPrecompiled>(m_hashImpl));
     m_precompiled->insert(DISCRETE_ZKP_ADDRESS, std::make_shared<ZkpPrecompiled>(m_hashImpl));
@@ -323,6 +328,10 @@ void TransactionExecutor::initWasmEnvironment()
         DAG_TRANSFER_NAME, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl));
     m_precompiled->insert(CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl));
     m_precompiled->insert(BFS_NAME, std::make_shared<BFSPrecompiled>(m_hashImpl));
+    m_precompiled->insert(PAILLIER_SIG_NAME, std::make_shared<PaillierPrecompiled>(m_hashImpl),
+        [](uint32_t, bool, ledger::Features const& features) {
+            return features.get(ledger::Features::Flag::feature_paillier);
+        });
     m_precompiled->insert(GROUP_SIG_NAME, std::make_shared<GroupSigPrecompiled>(m_hashImpl));
     m_precompiled->insert(RING_SIG_NAME, std::make_shared<RingSigPrecompiled>(m_hashImpl));
     m_precompiled->insert(DISCRETE_ZKP_NAME, std::make_shared<ZkpPrecompiled>(m_hashImpl));
