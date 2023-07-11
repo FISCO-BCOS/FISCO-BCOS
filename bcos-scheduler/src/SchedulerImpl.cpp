@@ -1,6 +1,8 @@
 #include "SchedulerImpl.h"
 #include "BlockExecutive.h"
 #include "Common.h"
+#include "bcos-framework/ledger/Features.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -602,7 +604,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 SCHEDULER_LOG(INFO)
                     << BLOCK_NUMBER(blockNumber) << LOG_BADGE("BlockTrace") << "CommitBlock success"
                     << LOG_KV("gas limit", m_gasLimit) << LOG_KV("timeCost", utcTime() - startTime);
-
+                m_ledgerConfig = ledgerConfig;
                 commitLock->unlock();  // just unlock here
 
 
@@ -768,10 +770,8 @@ BlockExecutive::Ptr SchedulerImpl::getPreparedBlock(
     {
         return m_preparedBlocks[blockNumber][timestamp];
     }
-    else
-    {
-        return nullptr;
-    }
+
+    return nullptr;
 }
 
 
@@ -907,14 +907,14 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
     auto summary =
-        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(13, 0, 0);
+        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(14, 0, 0);
 
     auto collector = [this, summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
                          std::variant<std::tuple<NodeListType, consensus::ConsensusNodeListPtr>,
                              std::tuple<ConfigType, std::string, bcos::protocol::BlockNumber>,
-                             bcos::protocol::BlockNumber, bcos::crypto::HashType>&&
-                             result) mutable {
+                             bcos::protocol::BlockNumber, bcos::crypto::HashType,
+                             ledger::Features>&& result) mutable {
         auto& [total, success, failed] = *summary;
 
         if (error)
@@ -1007,7 +1007,9 @@ void SchedulerImpl::asyncGetLedgerConfig(
                     [&ledgerConfig](bcos::protocol::BlockNumber number) {
                         ledgerConfig->setBlockNumber(number);
                     },
-                    [&ledgerConfig](bcos::crypto::HashType hash) { ledgerConfig->setHash(hash); }},
+                    [&ledgerConfig](bcos::crypto::HashType hash) { ledgerConfig->setHash(hash); },
+                    [&ledgerConfig](
+                        ledger::Features features) { ledgerConfig->setFeatures(features); }},
                 result);
 
             ++success;
@@ -1129,14 +1131,28 @@ void SchedulerImpl::asyncGetLedgerConfig(
                                                                                  _number) mutable {
         collector(std::move(error), std::tuple{ConfigType::GasLimit, std::move(config), _number});
     });
-    m_ledger->asyncGetBlockNumber(
-        [collector, ledger = m_ledger](Error::Ptr error, protocol::BlockNumber number) mutable {
-            ledger->asyncGetBlockHashByNumber(
-                number, [collector](Error::Ptr error, const crypto::HashType& hash) mutable {
-                    collector(std::move(error), std::move(hash));
-                });
-            collector(std::move(error), std::move(number));
-        });
+    m_ledger->asyncGetBlockNumber([self = this, collector, ledger = m_ledger](
+                                      Error::Ptr error, protocol::BlockNumber number) mutable {
+        ledger->asyncGetBlockHashByNumber(
+            number, [collector](Error::Ptr error, const crypto::HashType& hash) mutable {
+                collector(std::move(error), std::move(hash));
+            });
+
+        task::wait([](decltype(self) self, decltype(number) number,
+                       decltype(collector) collector) -> task::Task<void> {
+            try
+            {
+                auto features =
+                    co_await ledger::Features::readFeaturesFromStorage(*self->m_storage, number);
+                collector({}, features);
+            }
+            catch (Error& error)
+            {
+                collector(std::make_shared<Error>(error), ledger::Features{});
+            }
+        }(self, number, collector));
+        collector(std::move(error), number);
+    });
 
     // Note: The consensus module ensures serial execution and submit of system txs
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION,
