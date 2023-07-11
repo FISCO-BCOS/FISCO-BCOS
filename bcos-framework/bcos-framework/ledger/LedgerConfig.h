@@ -21,6 +21,7 @@
 #pragma once
 #include "../consensus/ConsensusNodeInterface.h"
 #include "../protocol/ProtocolTypeDef.h"
+#include "Features.h"
 
 namespace bcos::ledger
 {
@@ -97,19 +98,23 @@ public:
     void setCompatibilityVersion(uint32_t _version) { m_compatibilityVersion = _version; }
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
 
-protected:
+    Features const& features() const { return m_features; }
+    void setFeatures(Features features) { m_features = features; }
+
+private:
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
     bcos::crypto::HashType m_hash;
-    bcos::protocol::BlockNumber m_blockNumber;
-    uint64_t m_blockTxCountLimit;
+    bcos::protocol::BlockNumber m_blockNumber = 0;
+    uint64_t m_blockTxCountLimit = 0;
     uint64_t m_leaderSwitchPeriod = 1;
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {3000000000, 0};
     // the compatibilityVersion
     // the system version, can only be upgraded manually
-    uint32_t m_compatibilityVersion;
+    uint32_t m_compatibilityVersion = 0;
     // no need to store, in memory data
     int64_t m_sealerId = -1;
     int64_t m_txsSize = -1;
+    Features m_features;
 };
 }  // namespace bcos::ledger
