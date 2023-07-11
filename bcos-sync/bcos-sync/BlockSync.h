@@ -114,6 +114,7 @@ protected:
     void fetchAndSendBlock(DownloadRequestQueue::Ptr _reqQueue, bcos::crypto::PublicPtr _peer,
         bcos::protocol::BlockNumber _number);
     void printSyncInfo();
+    void printBehindPeers();
 
 protected:
     BlockSyncConfig::Ptr m_config;
@@ -136,6 +137,9 @@ protected:
     boost::mutex x_signalled;
     bcos::protocol::BlockNumber m_waterMark = 10;
     bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
+
+    int64_t m_blockNumThreshold = 50;
+    size_t m_blockNumLogInterval = 30000;
 
     std::atomic_bool m_masterNode = {false};
 };
