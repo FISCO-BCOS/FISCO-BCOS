@@ -123,7 +123,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            int64_t value = valid(configKey, configValue, blockContext->blockVersion());
+            int64_t value = validate(configKey, configValue, blockContext->blockVersion());
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
@@ -166,7 +166,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     return _callParameters;
 }
 
-int64_t SystemConfigPrecompiled::valid(
+int64_t SystemConfigPrecompiled::validate(
     std::string_view _key, std::string_view value, uint32_t blockVersion)
 {
     int64_t configuredValue = 0;
