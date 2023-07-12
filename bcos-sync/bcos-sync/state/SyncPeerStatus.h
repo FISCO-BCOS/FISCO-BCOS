@@ -98,14 +98,14 @@ public:
     void foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _f) const;
     void foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f) const;
     std::shared_ptr<bcos::crypto::NodeIDs> peers();
-    PeerStatus::Ptr insertEmptyPeer(bcos::crypto::PublicPtr _peer);
+    PeerStatus::Ptr insertEmptyPeer(const bcos::crypto::PublicPtr& _peer);
 
 protected:
     virtual void updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr _peerStatus);
 
 private:
     std::map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyCompare> m_peersStatus;
-    mutable SharedMutex x_peersStatus;
+    mutable Mutex x_peersStatus;
 
     BlockSyncConfig::Ptr m_config;
 };
