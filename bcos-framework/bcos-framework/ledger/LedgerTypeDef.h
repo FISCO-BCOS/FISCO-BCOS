@@ -42,12 +42,11 @@ constexpr static std::string_view SYSTEM_KEY_AUTH_CHECK_STATUS = "auth_check_sta
 // for compatibility
 constexpr static std::string_view SYSTEM_KEY_COMPATIBILITY_VERSION = "compatibility_version";
 // system configuration for RPBFT
-constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = "experimental_rpbft_epoch_sealer_num";
-constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = "experimental_rpbft_epoch_block_num";
-constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = "experimental_rpbft";
-constexpr static std::string_view SYSTEM_KEY_CONSENSUS_TYPE = "consensus_type";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = "feature_rpbft_epoch_sealer_num";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = "feature_rpbft_epoch_block_num";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = "feature_rpbft";
 // notify rotate key for rpbft
-constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "experimental_rpbft_notify_rotate";
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "feature_rpbft_notify_rotate";
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
 

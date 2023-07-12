@@ -1802,7 +1802,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         // rpbft config
         if (RPBFT_CONSENSUS_TYPE == _consensusType)
         {
-            features.set(ledger::Features::Flag::experimental_rpbft);
+            features.set(ledger::Features::Flag::feature_rpbft);
 
             Entry epochSealerNumEntry;
             epochSealerNumEntry.setObject(

@@ -79,8 +79,9 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     }
     else if (m_consensusType == ledger::RPBFT_CONSENSUS_TYPE) [[unlikely]]
     {
-        pbftConfig = std::make_shared<RPBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory,
-            pbftCodec, validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
+        // FIXME: use rpbft factory
+        // pbftConfig = std::make_shared<RPBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory,
+        //    pbftCodec, validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
     }
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFTEngine");

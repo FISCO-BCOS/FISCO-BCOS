@@ -107,19 +107,19 @@ public:
         {
             _onGetConfig(nullptr, bcos::protocol::RC4_VERSION_STR, commitBlockNumber);
         }
-        else if(_key == ledger::SYSTEM_KEY_CONSENSUS_TYPE)
+        else if (_key == ledger::SYSTEM_KEY_RPBFT_SWITCH)
         {
-            _onGetConfig(nullptr, std::string{bcos::ledger::RPBFT_CONSENSUS_TYPE}, commitBlockNumber);
+            _onGetConfig(nullptr, "1", commitBlockNumber);
         }
-        else if(_key == ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM)
+        else if (_key == ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM)
         {
             _onGetConfig(nullptr, "4", commitBlockNumber);
         }
-        else if(_key == ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM)
+        else if (_key == ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM)
         {
             _onGetConfig(nullptr, "1000", commitBlockNumber);
         }
-        else if(_key == ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE)
+        else if (_key == ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE)
         {
             _onGetConfig(nullptr, "0", commitBlockNumber);
         }
@@ -137,6 +137,10 @@ public:
             _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(1));
         }
         else if (_type == ledger::CONSENSUS_OBSERVER)
+        {
+            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
+        }
+        else if (_type == ledger::CONSENSUS_WORKING_SEALER)
         {
             _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
         }

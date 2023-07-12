@@ -95,7 +95,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
         result = setWeight(_executive, data, codec);
     }
     else if (blockContext.blockVersion() >= protocol::BlockVersion::V3_5_VERSION &&
-             blockContext.features().get(Features::Flag::experimental_rpbft) &&
+             blockContext.features().get(Features::Flag::feature_rpbft) &&
              func == name2Selector[WSM_METHOD_ROTATE_STR])
     {
         // TODO: use feature
