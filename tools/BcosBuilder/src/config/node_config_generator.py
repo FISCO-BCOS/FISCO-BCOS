@@ -211,6 +211,7 @@ class NodeConfigGenerator:
         ini_config[section]["hsm_lib_path"] = node_config.hsm_lib_path
         ini_config[section]["key_index"] = node_config.key_index
         ini_config[section]["password"] = node_config.password
+        ini_config[section]["hsm_public_key_file_path"] = node_config.hsm_public_key_file_path
 
     def __generate_pem_file(self, outputdir, node_config):
         """
@@ -277,20 +278,41 @@ class NodeConfigGenerator:
                 return False
         return True
 
+    def get_nodeid_from_pem_file(self, hsm_public_key_file_path):
+        """
+        get nodeid from node.pem that export from HSM
+        """
+        if os.path.exists(hsm_public_key_file_path) is False:
+            utilities.log_error("hsm_public_key_file_path: %s don't exist, please check!\n\t" % hsm_public_key_file_path)
+            sys.exit(-1)
+        (ret, output) = utilities.get_hsm_nodeid(hsm_public_key_file_path)
+        if ret is False:
+            return (False, "")
+        node_id = None
+        for line in output.split('\n'):
+            if line.startswith('nodeid='):
+                node_id = line[len('nodeid='):]
+        return (True, node_id)
+
     def _generate_all_node_pem(self, group_config):
         """
         generate all node.pem and return the nodeID
         """
         nodeid_list = []
         for node_config in group_config.node_list:
-            (ret, node_id, node_pem_path, node_id_path) = self.generate_node_pem(
-                node_config)
-            if ret is False:
-                return (False, nodeid_list)
-            utilities.log_info(
-                "* generate pem file for %s\n\t- pem_path: %s\n\t- node_id_path: %s\n\t- node_id: %s\n\t- sm_crypto: %d" % (
-                    node_config.node_service.service_name, node_pem_path, node_id_path, node_id,
-                    group_config.sm_crypto))
+            if node_config.enable_hsm is True:
+                (ret, node_id) = self.get_nodeid_from_pem_file(node_config.hsm_public_key_file_path)
+                if ret is False:
+                    return (False, nodeid_list)
+            else:
+                (ret, node_id, node_pem_path, node_id_path) = self.generate_node_pem(
+                    node_config)
+                if ret is False:
+                    return (False, nodeid_list)
+                utilities.log_info(
+                    "* generate pem file for %s\n\t- pem_path: %s\n\t- node_id_path: %s\n\t- node_id: %s\n\t- sm_crypto: %d" % (
+                        node_config.node_service.service_name, node_pem_path, node_id_path, node_id,
+                        group_config.sm_crypto))
             nodeid_list.append(node_id)
         return (True, nodeid_list)
 
@@ -415,7 +437,8 @@ class NodeConfigGenerator:
                 shutil.copy(config_path, os.path.join(node_dir, 'conf'))
                 shutil.copy(genesis_config_path, os.path.join(node_dir, 'conf'))
                 shutil.copy(nodeid_path, os.path.join(node_dir, 'conf'))
-                shutil.copy(node_pem_path, os.path.join(node_dir, 'conf'))
+                if node_config.enable_hsm is False:
+                    shutil.copy(node_pem_path, os.path.join(node_dir, 'conf'))
 
     def copy_tars_proxy_conf(self):
         self.__copy_service_tars_proxy_conf()

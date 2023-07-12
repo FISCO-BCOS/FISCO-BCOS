@@ -145,7 +145,8 @@ class MaxNodeConfigGenerator(NodeConfigGenerator):
                     shutil.copy(config_path, os.path.join(node_dir, 'conf'))
                     shutil.copy(genesis_config_path, os.path.join(node_dir, 'conf'))
                     shutil.copy(nodeid_path, os.path.join(node_dir, 'conf'))
-                    shutil.copy(node_pem_path, os.path.join(node_dir, 'conf'))
+                    if node_config.enable_hsm is False:
+                        shutil.copy(node_pem_path, os.path.join(node_dir, 'conf'))
             utilities.print_badge("generate max node install package success")
 
     def generate_all_executor_tars_install_package(self):

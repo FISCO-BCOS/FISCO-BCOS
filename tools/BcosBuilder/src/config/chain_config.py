@@ -176,6 +176,23 @@ class NodeConfig:
         self.node_service_base_name = node_service_base_name
         self.node_service_obj_list = node_service_obj_list
         self.sm_crypto = sm_crypto
+        # parse hsm
+        self.enable_hsm = utilities.get_item_value(
+            self.config, "enable_hsm", False, False, self.desc)
+        if self.enable_hsm is True and self.sm_crypto is False:
+            utilities.log_error("must set sm_crypto as true while using HSM")
+            sys.exit(-1)
+        self.hsm_lib_path = utilities.get_item_value(
+            self.config, "hsm_lib_path", "", False, self.desc)
+        self.key_index = utilities.get_item_value(
+            self.config, "key_index", 0, False, self.desc)
+        self.password = utilities.get_item_value(
+            self.config, "password", "", False, self.desc)
+        self.hsm_public_key_file_path = utilities.get_item_value(
+            self.config, "hsm_public_key_file_path", "", False, self.desc)
+        if self.enable_hsm is True and self.hsm_public_key_file_path == "":
+            utilities.log_error("must provide hsm_public_key_file_path while using HSM")
+            sys.exit(-1)
         self.service_list = []
         self.__parse_node_service_config(node_type)
 
@@ -192,11 +209,19 @@ class NodeConfig:
         deploy_ip_list = []
         self.node_config_file_list = None
         if node_type != "max":
-            self.node_config_file_list = [
-                "config.ini", "config.genesis", "node.pem"]
+            # HSM model don't need node.pem file
+            if self.enable_hsm is True:
+                self.node_config_file_list = ["config.ini", "config.genesis"]
+            else:
+                self.node_config_file_list = [
+                    "config.ini", "config.genesis", "node.pem"]
             deploy_ip_list.append(node_deploy_ip)
         else:
-            self.node_config_file_list = ["config.genesis", "node.pem"]
+            # HSM model don't need node.pem file
+            if self.enable_hsm is True:
+                self.node_config_file_list = ["config.genesis"]
+            else:
+                self.node_config_file_list = ["config.genesis", "node.pem"]
             deploy_ip_list = node_deploy_ip
 
         self.node_service = NodeServiceConfig(self.agency_config.chain_id, self.node_service_base_name,
