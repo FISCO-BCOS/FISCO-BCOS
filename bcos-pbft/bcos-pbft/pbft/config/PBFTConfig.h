@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "bcos-framework/consensus/StateMachineInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-pbft/core/ConsensusConfig.h"
 #include "bcos-pbft/pbft/engine/PBFTTimer.h"
 #include "bcos-pbft/pbft/engine/Validator.h"
@@ -42,7 +43,8 @@ public:
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
-        StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage)
+        StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
+        bcos::protocol::BlockFactory::Ptr _blockFactory)
       : ConsensusConfig(std::move(_keyPair)),
         m_cryptoSuite(std::move(_cryptoSuite)),
         m_pbftMessageFactory(std::move(_pbftMessageFactory)),
@@ -51,7 +53,8 @@ public:
         m_frontService(std::move(_frontService)),
         m_stateMachine(std::move(_stateMachine)),
         m_storage(std::move(_storage)),
-        m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>())
+        m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>()),
+        m_blockFactory(std::move(_blockFactory))
     {
         m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
         // Note: the pullTxsTimeout must be smaller than consensusTimeout to fetch txs before
@@ -397,6 +400,11 @@ public:
         m_txsStatusSyncHandler = _txsStatusSyncHandler;
     }
 
+    void setConsensusType(ledger::ConsensusType _type) { m_type = _type; }
+    ledger::ConsensusType consensusType() const noexcept { return m_type; }
+
+    bcos::protocol::BlockFactory::Ptr blockFactory() const noexcept { return m_blockFactory; }
+
 protected:
     void updateQuorum() override;
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
@@ -455,6 +463,8 @@ protected:
     const unsigned c_networkTimeoutInterval = 1000;
     // state variable that identifies whether it has timed out
     std::atomic_bool m_timeoutState = {false};
+    std::atomic_bool m_startRecovered = {false};
+    bcos::ledger::ConsensusType m_type = bcos::ledger::ConsensusType::PBFT_TYPE;
 
     std::atomic<size_t> m_unsealedTxsSize = {0};
     // notify the sealer to reseal new block until m_waitResealUntil stable committed
@@ -467,13 +477,13 @@ protected:
 
     std::function<void()> m_fastViewChangeHandler;
 
-    std::atomic_bool m_startRecovered = {false};
-
     std::function<bool(bcos::crypto::NodeIDPtr)> m_faultyDiscriminator;
 
     mutable RecursiveMutex m_mutex;
 
     // handler to notify txs status and try to request txs from peers
     std::function<void()> m_txsStatusSyncHandler;
+
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
 };
 }  // namespace bcos::consensus

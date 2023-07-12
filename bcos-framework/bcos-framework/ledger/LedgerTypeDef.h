@@ -42,15 +42,14 @@ constexpr static std::string_view SYSTEM_KEY_AUTH_CHECK_STATUS = "auth_check_sta
 // for compatibility
 constexpr static std::string_view SYSTEM_KEY_COMPATIBILITY_VERSION = "compatibility_version";
 // system configuration for RPBFT
-constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = "rpbft_epoch_sealer_num";
-constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = "rpbft_epoch_block_num";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = "experimental_rpbft_epoch_sealer_num";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = "experimental_rpbft_epoch_block_num";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = "experimental_rpbft";
 constexpr static std::string_view SYSTEM_KEY_CONSENSUS_TYPE = "consensus_type";
-
+// notify rotate key for rpbft
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "experimental_rpbft_notify_rotate";
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
-
-// notify rotate key for rpbft
-constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "notify_rotate";
 
 // system config struct
 using SystemConfigEntry = std::tuple<std::string, bcos::protocol::BlockNumber>;
@@ -86,6 +85,24 @@ constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer
 constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};
 constexpr static std::string_view SYS_CONTRACT_ABI{"s_contract_abi"};
 
+enum ConsensusType : uint32_t
+{
+    PBFT_TYPE = 1,
+    RPBFT_TYPE = 2,
+};
+
+inline uint32_t consensusTypeFromString(std::string_view consensus)
+{
+    if (consensus == PBFT_CONSENSUS_TYPE)
+    {
+        return ConsensusType::PBFT_TYPE;
+    }
+    if (consensus == RPBFT_CONSENSUS_TYPE)
+    {
+        return ConsensusType::RPBFT_TYPE;
+    }
+    return 0;
+}
 struct CurrentState
 {
     bcos::protocol::BlockNumber latestBlockNumber;

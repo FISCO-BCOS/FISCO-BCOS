@@ -1116,9 +1116,9 @@ void SchedulerImpl::asyncGetLedgerConfig(
                                                                          list) mutable {
         collector(std::move(error), std::tuple{NodeListType::ObserverNodeList, std::move(list)});
     });
-    m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_CONSENSUS_TYPE,
+    m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_RPBFT_SWITCH,
         [collector, ledger = m_ledger](
-            Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
+            Error::Ptr error, const std::string& config, protocol::BlockNumber _number) mutable {
             if (error)
             {
                 collector(nullptr, std::tuple{ConfigType::ConsensusType,
@@ -1134,36 +1134,65 @@ void SchedulerImpl::asyncGetLedgerConfig(
             }
             else
             {
+                std::string_view consensusType =
+                    (config == "1") ? ledger::RPBFT_CONSENSUS_TYPE : ledger::PBFT_CONSENSUS_TYPE;
                 collector(std::move(error),
-                    std::tuple{ConfigType::ConsensusType, std::move(config), _number});
-                if (config == ledger::RPBFT_CONSENSUS_TYPE)
+                    std::tuple{ConfigType::ConsensusType, std::string(consensusType), _number});
+                if (consensusType == ledger::RPBFT_CONSENSUS_TYPE)
                 {
                     ledger->asyncGetNodeListByType(ledger::CONSENSUS_WORKING_SEALER,
-                        [collector](
-                            Error::Ptr error, consensus::ConsensusNodeListPtr list) mutable {
-                            collector(std::move(error),
+                        [collector](auto&& error, consensus::ConsensusNodeListPtr list) mutable {
+                            if (error)
+                            {
+                                collector(
+                                    nullptr, std::tuple{NodeListType::WorkingSealerNodeList,
+                                                 std::make_shared<consensus::ConsensusNodeList>()});
+                                return;
+                            }
+                            collector(nullptr,
                                 std::tuple{NodeListType::WorkingSealerNodeList, std::move(list)});
                         });
 
                     ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
-                        [collector](Error::Ptr error, std::string config,
+                        [collector](auto&& error, std::string config,
                             protocol::BlockNumber _number) mutable {
-                            collector(std::move(error),
+                            if (error)
+                            {
+                                collector(nullptr,
+                                    std::tuple{ConfigType::EpochSealerNum,
+                                        std::to_string(ledger::DEFAULT_EPOCH_SEALER_NUM), 0});
+                                return;
+                            }
+                            collector(nullptr,
                                 std::tuple{ConfigType::EpochSealerNum, std::move(config), _number});
                         });
 
                     ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
-                        [collector](Error::Ptr error, std::string config,
+                        [collector](auto&& error, std::string config,
                             protocol::BlockNumber _number) mutable {
-                            collector(std::move(error),
+                            if (error)
+                            {
+                                collector(nullptr,
+                                    std::tuple{ConfigType::EpochBlockNum,
+                                        std::to_string(ledger::DEFAULT_EPOCH_BLOCK_NUM), 0});
+                                return;
+                            }
+                            collector(nullptr,
                                 std::tuple{ConfigType::EpochBlockNum, std::move(config), _number});
                         });
 
                     ledger->asyncGetSystemConfigByKey(ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE,
-                        [collector](Error::Ptr error, std::string config,
+                        [collector](auto&& error, std::string config,
                             protocol::BlockNumber _number) mutable {
-                            collector(std::move(error), std::tuple{ConfigType::NotifyRotateFlag,
-                                                            std::move(config), _number});
+                            if (error)
+                            {
+                                collector(nullptr,
+                                    std::tuple{ConfigType::NotifyRotateFlag,
+                                        std::to_string(ledger::DEFAULT_INTERNAL_NOTIFY_FLAG), 0});
+                                return;
+                            }
+                            collector(nullptr, std::tuple{ConfigType::NotifyRotateFlag,
+                                                   std::move(config), _number});
                         });
                 }
                 else

@@ -34,14 +34,15 @@ public:
     using Ptr = std::shared_ptr<WorkingSealerManagerImpl>;
     ~WorkingSealerManagerImpl() = default;
 
-    void createVRFInfo(std::string _vrfProof, std::string _vrfPublicKey, std::string _vrfInput);
+    void createVRFInfo(bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput);
     void rotateWorkingSealer(const executor::TransactionExecutive::Ptr& _executive,
         const PrecompiledExecResult::Ptr& _callParameters);
 
 private:
     void checkVRFInfos(crypto::HashType const& parentHash, std::string const& origin);
     bool shouldRotate(const executor::TransactionExecutive::Ptr& _executive);
-    void getConsensusNodeListFromStorage(const executor::TransactionExecutive::Ptr& _executive);
+    void getConsensusNodeListFromStorage(
+        const executor::TransactionExecutive::Ptr& _executive, std::string const& origin);
     void setNotifyRotateFlag(const executor::TransactionExecutive::Ptr& executive, unsigned flag);
     bool getNotifyRotateFlag(const executor::TransactionExecutive::Ptr& executive);
     // calculate the number of working sealers that need to be added and removed

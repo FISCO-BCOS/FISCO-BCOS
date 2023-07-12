@@ -399,7 +399,7 @@ void PBFTInitializer::createSealer()
     auto sealerFactory = SealerFactory(m_nodeConfig, m_protocolInitializer->blockFactory(),
         m_txpool, m_nodeTimeMaintenance, m_protocolInitializer->keyPair());
     // if rpbft sealer, register the sealer to the pbft
-    if (m_nodeConfig->consensusType() == protocol::RPBFT_STR) [[unlikely]]
+    if (m_nodeConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE) [[unlikely]]
     {
         m_sealer = sealerFactory.createVRFBasedSealer();
     }
@@ -416,7 +416,8 @@ void PBFTInitializer::createPBFT()
     // create pbft
     auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
         m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
-        m_txpool, m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory());
+        m_txpool, m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(),
+        m_nodeConfig->consensusType());
 
     m_pbft = pbftFactory->createPBFT();
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();

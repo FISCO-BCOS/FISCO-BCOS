@@ -46,6 +46,15 @@ inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _
     out = _codec.encode(s256(result));
 }
 
+inline std::string covertPublicToHexAddress(std::variant<std::string, crypto::PublicPtr> publicKey)
+{
+    bytes pkData = std::holds_alternative<std::string>(publicKey) ?
+                       fromHex(std::get<std::string>(publicKey)) :
+                       std::get<crypto::PublicPtr>(publicKey)->data();
+    auto address = right160(executor::GlobalHashImpl::g_hashImpl->hash(pkData));
+    return address.hex();
+}
+
 inline std::string getTableName(const std::string_view& _tableName)
 {
     if (_tableName.starts_with(executor::USER_TABLE_PREFIX))

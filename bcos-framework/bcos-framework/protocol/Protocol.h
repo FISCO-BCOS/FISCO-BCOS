@@ -107,28 +107,6 @@ enum ProtocolVersion : uint32_t
     V2 = 2,
 };
 
-enum ConsensusType : uint32_t
-{
-    PBFT_TYPE = 1,
-    RPBFT_TYPE = 2,
-};
-
-static constexpr const std::string_view PBFT_STR = "pbft";
-static constexpr const std::string_view RPBFT_STR = "rpbft";
-
-inline uint32_t consensusTypeFromString(std::string_view consensus)
-{
-    if (consensus == PBFT_STR)
-    {
-        return ConsensusType::PBFT_TYPE;
-    }
-    if (consensus == RPBFT_STR)
-    {
-        return ConsensusType::RPBFT_TYPE;
-    }
-    return 0;
-}
-
 // BlockVersion only present the data version with format major.minor.patch of 3 bytes, data should
 // be compatible with the same major.minor version, the patch version should always be compatible,
 // the last byte is reserved, so 3.1.0 is 0x03010000 and is compatible with 3.1.1 which is

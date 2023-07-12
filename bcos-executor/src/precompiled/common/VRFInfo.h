@@ -30,7 +30,7 @@ class VRFInfo
 {
 public:
     using Ptr = std::shared_ptr<VRFInfo>;
-    VRFInfo(std::string _vrfProof, std::string _vrfPk, std::string _vrfInput)
+    VRFInfo(bcos::bytes _vrfProof, bcos::bytes _vrfPk, bcos::bytes _vrfInput)
       : m_vrfProof(std::move(_vrfProof)),
         m_vrfPublicKey(std::move(_vrfPk)),
         m_vrfInput(std::move(_vrfInput))
@@ -41,13 +41,13 @@ public:
     bcos::crypto::HashType getHashFromProof();
     bool isValidVRFPublicKey();
 
-    std::string const& vrfProof() const { return m_vrfProof; }
-    std::string const& vrfPublicKey() const { return m_vrfPublicKey; }
-    std::string const& vrfInput() const { return m_vrfInput; }
+    bcos::bytes const& vrfProof() const { return m_vrfProof; }
+    bcos::bytes const& vrfPublicKey() const { return m_vrfPublicKey; }
+    bcos::bytes const& vrfInput() const { return m_vrfInput; }
 
 private:
-    std::string m_vrfProof;
-    std::string m_vrfPublicKey;
-    std::string m_vrfInput;
+    bcos::bytes m_vrfProof;
+    bcos::bytes m_vrfPublicKey;
+    bcos::bytes m_vrfInput;
 };
 }  // namespace bcos::precompiled
