@@ -267,18 +267,20 @@ void TransactionExecutor::initEvmEnvironment()
 
     m_precompiled->insert(AUTH_MANAGER_ADDRESS,
         std::make_shared<AuthManagerPrecompiled>(m_hashImpl, m_isWasm),
-        [](uint32_t version, bool isAuthCheck) -> bool {
+        [](uint32_t version, bool isAuthCheck, ledger::Features const& features) -> bool {
             return isAuthCheck || version >= BlockVersion::V3_3_VERSION;
         });
     m_precompiled->insert(AUTH_CONTRACT_MGR_ADDRESS,
         std::make_shared<ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm),
-        [](uint32_t version, bool isAuthCheck) -> bool {
+        [](uint32_t version, bool isAuthCheck, ledger::Features const& features) -> bool {
             return isAuthCheck || version >= BlockVersion::V3_3_VERSION;
         });
 
     m_precompiled->insert(SHARDING_PRECOMPILED_ADDRESS,
         std::make_shared<ShardingPrecompiled>(GlobalHashImpl::g_hashImpl),
-        BlockVersion::V3_3_VERSION);
+        [](uint32_t version, bool isAuthCheck, ledger::Features const& features) {
+            return features.get(ledger::Features::Flag::feature_sharding);
+        });
     m_precompiled->insert(CAST_ADDRESS,
         std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl), BlockVersion::V3_2_VERSION);
     m_precompiled->insert(ACCOUNT_MGR_ADDRESS, std::make_shared<AccountManagerPrecompiled>(),

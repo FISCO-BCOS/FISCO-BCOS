@@ -187,6 +187,7 @@ public:
     }
 
     bcos::crypto::Hash::Ptr getHashImpl() { return m_hashImpl; }
+    const ledger::LedgerConfig& ledgerConfig() const { return *m_ledgerConfig; }
 
 private:
     void handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,

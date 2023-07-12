@@ -82,7 +82,8 @@ void ExecutiveFactory::setParams(std::shared_ptr<TransactionExecutive> executive
 std::shared_ptr<bcos::precompiled::Precompiled> ExecutiveFactory::getPrecompiled(
     const std::string& address) const
 {
-    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck());
+    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck(),
+        m_blockContext.features());
 }
 
 std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(

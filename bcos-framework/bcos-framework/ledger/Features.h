@@ -78,6 +78,12 @@ public:
         {
             set(Flag::bugfix_revert);
         }
+
+        if (version >= protocol::BlockVersion::V3_3_VERSION &&
+            version <= protocol::BlockVersion::V3_4_VERSION)
+        {
+            set(Flag::feature_sharding);
+        }
     }
 
     auto flags() const
