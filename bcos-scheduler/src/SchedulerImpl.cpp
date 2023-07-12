@@ -24,8 +24,6 @@
 
 using namespace bcos::scheduler;
 
-namespace bcos::scheduler
-{
 const __itt_domain* const ITT_DOMAIN_SCHEDULER_EXECUTE = __itt_domain_create("scheduler.execute");
 const __itt_domain* const ITT_DOMAIN_SCHEDULER_COMMIT = __itt_domain_create("scheduler.commit");
 
@@ -37,7 +35,66 @@ const __itt_string_handle* const ITT_STRING_SCHEDULER_COMMIT =
     __itt_string_handle_create("scheduler.commit");
 // __itt_id ITT_SCHEDULER_EXECUTE_ID = 1;
 
-}  // namespace bcos::scheduler
+SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
+    bcos::ledger::LedgerInterface::Ptr ledger,
+    bcos::storage::TransactionalStorageInterface::Ptr storage,
+    bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+    bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
+    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId,
+    size_t keyPageSize)
+  : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory, txPool,
+        transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false, schedulerTermId,
+        keyPageSize)
+{}
+
+SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
+    bcos::ledger::LedgerInterface::Ptr ledger,
+    bcos::storage::TransactionalStorageInterface::Ptr storage,
+    bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+    bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
+    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
+    int64_t schedulerTermId, size_t keyPageSize)
+  : m_executorManager(std::move(executorManager)),
+    m_ledger(std::move(ledger)),
+    m_storage(std::move(storage)),
+    m_executionMessageFactory(std::move(executionMessageFactory)),
+    m_blockExecutiveFactory(
+        std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute, keyPageSize)),
+    m_blockFactory(std::move(blockFactory)),
+    m_txPool(txPool),
+    m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
+    m_hashImpl(std::move(hashImpl)),
+    m_isAuthCheck(isAuthCheck),
+    m_isWasm(isWasm),
+    m_isSerialExecute(isSerialExecute),
+    m_schedulerTermId(schedulerTermId),
+    m_preExeWorker("preExeScheduler", 2),  // assume that preExe is no slower than exe speed/2
+    m_exeWorker("exeScheduler", 1)
+{
+    start();
+
+    if (!m_ledgerConfig)
+    {
+        std::promise<bcos::ledger::LedgerConfig::Ptr> promise;
+        auto future = promise.get_future();
+        asyncGetLedgerConfig(
+            [&promise](Error::Ptr const& error, bcos::ledger::LedgerConfig::Ptr ledgerConfig) {
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR) << LOG_DESC("failed to get ledger config")
+                                         << LOG_KV("error", error->errorCode())
+                                         << LOG_KV("errorMessage", error->errorMessage());
+                    promise.set_exception(std::make_exception_ptr(*error));
+                    return;
+                }
+                promise.set_value(std::move(ledgerConfig));
+            });
+
+        m_ledgerConfig = future.get();
+    }
+}
 
 void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
     std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)
@@ -1034,6 +1091,15 @@ void SchedulerImpl::asyncGetLedgerConfig(
                     nullptr);
 
                 return;
+            }
+
+            // Set feature_shareding if version between 3.3 and 3.4
+            if (ledgerConfig->compatibilityVersion() >= protocol::BlockVersion::V3_3_VERSION &&
+                ledgerConfig->compatibilityVersion() <= protocol::BlockVersion::V3_4_VERSION)
+            {
+                auto features = ledgerConfig->features();
+                features.set(ledger::Features::Flag::feature_sharding);
+                ledgerConfig->setFeatures(features);
             }
 
             (*callback)(nullptr, std::move(ledgerConfig));

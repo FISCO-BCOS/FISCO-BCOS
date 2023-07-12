@@ -41,6 +41,7 @@ public:
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
+
         return m_flags[*index];
     }
     bool get(std::string_view flag) const
