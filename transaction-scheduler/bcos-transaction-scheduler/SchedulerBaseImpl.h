@@ -40,8 +40,8 @@ public:
 
         static constexpr int HASH_CHUNK_SIZE = 32;
         auto range = it.range() | RANGES::views::chunk(HASH_CHUNK_SIZE);
-        tbb::combinable<bcos::h256> combinableHash;
 
+        tbb::combinable<bcos::h256> combinableHash;
         tbb::task_group taskGroup;
         for (auto&& subrange : range)
         {

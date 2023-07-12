@@ -207,7 +207,6 @@ public:
             RANGES::views::zip(RANGES::views::iota(0LU, (size_t)RANGES::size(transactions)),
                 transactions | RANGES::views::addressof, receipts | RANGES::views::addressof);
 
-        // while (offset < RANGES::size(transactions) && retryCount < MAX_RETRY_COUNT)
         while (offset < RANGES::size(transactions))
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,

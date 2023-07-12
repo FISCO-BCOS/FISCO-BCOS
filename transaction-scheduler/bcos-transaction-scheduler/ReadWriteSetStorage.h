@@ -39,8 +39,8 @@ public:
     using Value = typename Storage::Value;
     ReadWriteSetStorage(Storage& storage) : m_storage(storage) {}
 
-    // RAW means read after write
-    bool hasRAWIntersection(const ReadWriteSetStorage& rhs)
+    // RAW: read after write
+    bool hasRAWIntersection(const ReadWriteSetStorage& rhs) const
     {
         auto const& lhsSet = m_readWriteSet;
         auto const& rhsSet = rhs.m_readWriteSet;
