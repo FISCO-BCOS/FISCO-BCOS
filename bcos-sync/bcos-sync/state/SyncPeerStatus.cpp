@@ -20,27 +20,30 @@
  */
 #include "SyncPeerStatus.h"
 
+#include <utility>
+
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
 PeerStatus::PeerStatus(BlockSyncConfig::Ptr _config, PublicPtr _nodeId, BlockNumber _number,
-    HashType const& _hash, HashType const& _gensisHash)
-  : m_nodeId(_nodeId),
+    HashType const& _hash, HashType const& _genesisHash)
+  : m_nodeId(std::move(_nodeId)),
     m_number(_number),
     m_hash(_hash),
-    m_genesisHash(_gensisHash),
+    m_genesisHash(_genesisHash),
     m_downloadRequests(std::make_shared<DownloadRequestQueue>(_config, m_nodeId))
 {}
 
 PeerStatus::PeerStatus(BlockSyncConfig::Ptr _config, PublicPtr _nodeId)
-  : PeerStatus(_config, _nodeId, 0, HashType(), HashType())
+  : PeerStatus(std::move(_config), std::move(_nodeId), 0, HashType(), HashType())
 {}
 
 PeerStatus::PeerStatus(
     BlockSyncConfig::Ptr _config, PublicPtr _nodeId, BlockSyncStatusInterface::ConstPtr _status)
-  : PeerStatus(_config, _nodeId, _status->number(), _status->hash(), _status->genesisHash())
+  : PeerStatus(std::move(_config), std::move(_nodeId), _status->number(), _status->hash(),
+        _status->genesisHash())
 {}
 
 bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
@@ -78,23 +81,24 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 
 bool SyncPeerStatus::hasPeer(PublicPtr _peer)
 {
-    ReadGuard l(x_peersStatus);
-    return m_peersStatus.count(_peer);
+    Guard lock(x_peersStatus);
+    return m_peersStatus.contains(_peer);
 }
 
 PeerStatus::Ptr SyncPeerStatus::peerStatus(bcos::crypto::PublicPtr _peer)
 {
-    ReadGuard l(x_peersStatus);
-    if (!m_peersStatus.count(_peer))
+    Guard lock(x_peersStatus);
+    auto iter = m_peersStatus.find(_peer);
+    if (iter == m_peersStatus.end())
     {
         return nullptr;
     }
-    return m_peersStatus[_peer];
+    return iter->second;
 }
 
-PeerStatus::Ptr SyncPeerStatus::insertEmptyPeer(PublicPtr _peer)
+PeerStatus::Ptr SyncPeerStatus::insertEmptyPeer(const PublicPtr& _peer)
 {
-    WriteGuard l(x_peersStatus);
+    Guard lock(x_peersStatus);
     // create and insert the new peer status
     auto peerStatus = std::make_shared<PeerStatus>(m_config, _peer);
     m_peersStatus.insert(std::make_pair(_peer, peerStatus));
@@ -104,7 +108,6 @@ PeerStatus::Ptr SyncPeerStatus::insertEmptyPeer(PublicPtr _peer)
 bool SyncPeerStatus::updatePeerStatus(
     PublicPtr _peer, BlockSyncStatusInterface::ConstPtr _peerStatus)
 {
-    WriteGuard l(x_peersStatus);
     // check the status
     if (_peerStatus->genesisHash() != m_config->genesisHash())
     {
@@ -116,19 +119,30 @@ bool SyncPeerStatus::updatePeerStatus(
                              << LOG_KV("expectedGenesisHash", m_config->genesisHash().abridged());
         return false;
     }
-    // update the existed peer status
-    if (m_peersStatus.count(_peer))
+    PeerStatus::Ptr peerStatus{nullptr};
     {
-        auto status = m_peersStatus[_peer];
-        if (status->update(_peerStatus))
+        Guard lock(x_peersStatus);
+        // update the existed peer status
+        auto iter = m_peersStatus.find(_peer);
+        if (iter != m_peersStatus.end())
+        {
+            peerStatus = iter->second;
+        }
+    }
+    if (peerStatus != nullptr)
+    {
+        if (peerStatus->update(_peerStatus))
         {
             updateKnownMaxBlockInfo(_peerStatus);
         }
         return true;
     }
     // create and insert the new peer status
-    auto peerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
-    m_peersStatus.insert(std::make_pair(_peer, peerStatus));
+    peerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
+    {
+        Guard lock(x_peersStatus);
+        m_peersStatus.insert({_peer, peerStatus});
+    }
     BLKSYNC_LOG(DEBUG) << LOG_DESC("updatePeerStatus: new peer")
                        << LOG_KV("peer", _peer->shortHex())
                        << LOG_KV("number", _peerStatus->number())
@@ -136,6 +150,7 @@ bool SyncPeerStatus::updatePeerStatus(
                        << LOG_KV("genesisHash", _peerStatus->genesisHash().abridged())
                        << LOG_KV("node", m_config->nodeID()->shortHex());
     updateKnownMaxBlockInfo(_peerStatus);
+
     return true;
 }
 
@@ -155,7 +170,7 @@ void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr 
 
 void SyncPeerStatus::deletePeer(PublicPtr _peer)
 {
-    WriteGuard l(x_peersStatus);
+    Guard lock(x_peersStatus);
     auto peer = m_peersStatus.find(_peer);
     if (peer != m_peersStatus.end())
     {
@@ -163,9 +178,9 @@ void SyncPeerStatus::deletePeer(PublicPtr _peer)
     }
 }
 
-void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _f) const
+void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _func) const
 {
-    ReadGuard l(x_peersStatus);
+    Guard lock(x_peersStatus);
     if (m_peersStatus.empty())
     {
         return;
@@ -193,19 +208,19 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
         {
             continue;
         }
-        if (peer->second && !_f(peer->second))
+        if (peer->second && !_func(peer->second))
         {
             break;
         }
     }
 }
 
-void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f) const
+void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _func) const
 {
-    ReadGuard l(x_peersStatus);
-    for (auto peer : m_peersStatus)
+    Guard lock(x_peersStatus);
+    for (const auto& peer : m_peersStatus)
     {
-        if (peer.second && !_f(peer.second))
+        if (peer.second && !_func(peer.second))
         {
             break;
         }
@@ -215,8 +230,10 @@ void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f)
 std::shared_ptr<NodeIDs> SyncPeerStatus::peers()
 {
     auto nodeIds = std::make_shared<NodeIDs>();
-    ReadGuard l(x_peersStatus);
+    Guard lock(x_peersStatus);
     for (auto& peer : m_peersStatus)
+    {
         nodeIds->emplace_back(peer.first);
+    }
     return nodeIds;
 }
