@@ -56,7 +56,6 @@ public:
             schedulerTermId, keyPageSize)
     {}
 
-
     SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
@@ -82,6 +81,26 @@ public:
         m_exeWorker("exeScheduler", 1)
     {
         start();
+
+        if (!m_ledgerConfig)
+        {
+            std::promise<bcos::ledger::LedgerConfig::Ptr> promise;
+            auto future = promise.get_future();
+            asyncGetLedgerConfig(
+                [&promise](Error::Ptr const& error, bcos::ledger::LedgerConfig::Ptr ledgerConfig) {
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR) << LOG_DESC("failed to get ledger config")
+                                             << LOG_KV("error", error->errorCode())
+                                             << LOG_KV("errorMessage", error->errorMessage());
+                        promise.set_exception(std::make_exception_ptr(*error));
+                        return;
+                    }
+                    promise.set_value(std::move(ledgerConfig));
+                });
+
+            m_ledgerConfig = future.get();
+        }
     }
 
     SchedulerImpl(const SchedulerImpl&) = delete;
@@ -249,5 +268,6 @@ private:
 
     bcos::ThreadPool m_preExeWorker;
     bcos::ThreadPool m_exeWorker;
+    ledger::LedgerConfig::Ptr m_ledgerConfig;
 };
 }  // namespace bcos::scheduler
