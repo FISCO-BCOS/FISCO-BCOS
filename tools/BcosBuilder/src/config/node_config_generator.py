@@ -134,6 +134,7 @@ class NodeConfigGenerator:
         # set storage_security config
         # access key_center to encrypt the certificates and the private keys
         self.__update_storage_security_info(ini_config, node_config, node_type)
+        self.__update_hsm_info(ini_config, node_config)
         return ini_config
 
     def __update_chain_info(self, ini_config, node_config):
@@ -199,6 +200,17 @@ class NodeConfigGenerator:
             node_config.enable_storage_security)
         ini_config[section]["key_center_url"] = node_config.key_center_url
         ini_config[section]["cipher_data_key"] = node_config.cipher_data_key
+
+    def __update_hsm_info(self, ini_config, node_config):
+        """
+        update the security hsm for config.ini
+        """
+        section = "security"
+        ini_config[section]["enable_hsm"] = utilities.convert_bool_to_str(
+            node_config.enable_hsm)
+        ini_config[section]["hsm_lib_path"] = node_config.hsm_lib_path
+        ini_config[section]["key_index"] = node_config.key_index
+        ini_config[section]["password"] = node_config.password
 
     def __generate_pem_file(self, outputdir, node_config):
         """

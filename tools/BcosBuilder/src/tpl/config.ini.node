@@ -8,6 +8,11 @@
 
 [security]
     private_key_path=conf/node.pem
+    enable_hsm=false
+    ; path of hsm dynamic library
+    ;hsm_lib_path=
+    ;key_index=
+    ;password=
 
 [storage_security]
     ; enable data disk encryption or not, default is false
