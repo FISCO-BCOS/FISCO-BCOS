@@ -215,8 +215,8 @@ void BlockSync::printBehindPeers()
                 BLKSYNC_LOG(ERROR) << "The lowest blocknumber is too far behind the highest block "
                                       "number queried by getSyncStatus, "
                                    << "[highest block number: " << knownHighestNumber
-                                   << ", current nodeid: " << _p->nodeId()->shortHex()
-                                   << ", current block number: " << _p->number() << "]";
+                                   << ", lower node: " << _p->nodeId()->shortHex()
+                                   << ", lower node block number: " << _p->number() << "]";
                 lastLogUtcTime = utcTime();
             }
             return true;
