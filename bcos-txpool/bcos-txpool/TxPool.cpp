@@ -191,6 +191,13 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
             }
             auto txpoolStorage = txpool->m_txpoolStorage;
             auto missedTxs = txpoolStorage->batchVerifyProposal(block);
+            if (!missedTxs)
+            {
+                _onVerifyFinished(BCOS_ERROR_PTR(CommonError::InconsistentTransactions,
+                                      "asyncVerifyBlock failed for duplicate transaction"),
+                    false);
+                return;
+            }
             auto onVerifyFinishedWrapper =
                 [txpool, txpoolStorage, _onVerifyFinished, block, blockHeader, missedTxs, startT](
                     Error::Ptr _error, bool _ret) {
@@ -385,12 +392,14 @@ void TxPool::asyncMarkTxs(HashListPtr _txsHash, bool _sealedFlag,
     bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
-    m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
+    auto allMarked = m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
     if (!_onRecvResponse)
     {
         return;
     }
-    _onRecvResponse(nullptr);
+    _onRecvResponse(allMarked ? nullptr :
+                                BCOS_ERROR_PTR(CommonError::TransactionsMissing,
+                                    "TransactionsMissing during asyncMarkTxs"));
 }
 
 void TxPool::asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse)
