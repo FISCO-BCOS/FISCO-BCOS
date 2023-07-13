@@ -446,9 +446,9 @@ void MemoryStorage::printPendingTxs()
         {
             continue;
         }
-        TXPOOL_LOG(DEBUG) << LOG_KV("hash", tx->hash().abridged()) << LOG_KV("id", tx->batchId())
-                          << LOG_KV("hash", tx->batchHash().abridged())
-                          << LOG_KV("seal", tx->sealed());
+        TXPOOL_LOG(DEBUG) << LOG_KV("hash", tx->hash()) << LOG_KV("batchId", tx->batchId())
+                         << LOG_KV("batchHash", tx->batchHash().abridged())
+                         << LOG_KV("sealed", tx->sealed());
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle finish");
     m_printed = true;
@@ -600,6 +600,8 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     startT = utcTime();
     auto currentTime = (int64_t)utcTime();
     size_t traverseCount = 0;
+    size_t sealed = 0;
+    size_t avoid = 0;
     for (auto const& it : m_txsTable)
     {
         traverseCount++;
@@ -620,6 +622,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         // the transaction has already been sealed for newer proposal
         if (_avoidDuplicate && tx->sealed())
         {
+            ++sealed;
             continue;
         }
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
@@ -653,6 +656,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         }
         if (_avoidTxs && _avoidTxs->count(txHash))
         {
+            ++avoid;
             continue;
         }
         auto txMetaData = m_config->blockFactory()->createTransactionMetaData();
@@ -690,7 +694,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     }
     auto fetchTxsT = utcTime() - startT;
     notifyUnsealedTxsSize();
-
+    auto invalidTxsSize = m_invalidTxs.size();
     UpgradeGuard writeLock(l);
     removeInvalidTxs(false);
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
@@ -699,7 +703,8 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
                      << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
                      << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
                      << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT)
-                     << LOG_KV("traverseCount", traverseCount);
+                     << LOG_KV("invalid", invalidTxsSize) << LOG_KV("sealed", sealed)
+                     << LOG_KV("avoid", avoid) << LOG_KV("traverseCount", traverseCount);
 }
 
 void MemoryStorage::removeInvalidTxs(bool lock)
@@ -990,23 +995,31 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
         {
             continue;
         }
+        auto result = m_config->txValidator()->submittedToChain(tx);
+        if (result != TransactionStatus::None)
+        {
+            m_invalidTxs.insert(tx->hash());
+        }
         if ((int)txsHash->size() >= _limit)
         {
             break;
         }
         txsHash->emplace_back(it.first);
     }
+    removeInvalidTxs(false);
     return txsHash;
 }
 
 void MemoryStorage::cleanUpExpiredTransactions()
 {
     m_cleanUpTimer->restart();
-
+    // printPendingTxs();
     // Note: In order to minimize the impact of cleanUp on performance,
     // the normal consensus node does not clear expired txs in m_clearUpTimer, but clears
     // expired txs in the process of sealing txs
-    if (m_txsCleanUpSwitch && !m_txsCleanUpSwitch())
+    // if last block is sealed in 30s, do not clean up txs
+    if (m_txsCleanUpSwitch && !m_txsCleanUpSwitch() &&
+        (utcTime() - m_blockNumberUpdatedTime <= 1000 * 30))
     {
         return;
     }
@@ -1030,11 +1043,12 @@ void MemoryStorage::cleanUpExpiredTransactions()
         {
             continue;
         }
+        auto result = m_config->txValidator()->submittedToChain(tx);
         // the txs expired or not
         // if the tx is sealed, the tx will be removed when the block is committed, in case of
         // sealed but not remove.
         if (currentTime > (tx->importTime() + m_txsExpirationTime) ||
-            (tx->sealed() && tx->batchId() < m_blockNumber))
+            (tx->sealed() && tx->batchId() < m_blockNumber) || (result != TransactionStatus::None))
         {
             m_invalidTxs.insert(tx->hash());
             m_invalidNonces.insert(tx->nonce());

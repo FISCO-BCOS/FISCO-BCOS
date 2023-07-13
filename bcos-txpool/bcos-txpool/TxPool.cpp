@@ -445,6 +445,8 @@ void TxPool::init()
     auto txsSyncConfig = m_transactionSync->config();
     txsSyncConfig->setConsensusNodeList(ledgerConfig->consensusNodeList());
     txsSyncConfig->setObserverList(ledgerConfig->observerNodeList());
+    m_transactionSync->config()->setMaxResponseTxsToNodesWithEmptyTxs(
+        ledgerConfig->blockTxCountLimit());
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config success");
 }
 
