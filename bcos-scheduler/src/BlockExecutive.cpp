@@ -90,7 +90,7 @@ void BlockExecutive::prepare()
 
     m_hasPrepared = true;
 
-    SCHEDULER_LOG(DEBUG) << METRIC << LOG_BADGE("BlockTrace") << BLOCK_NUMBER(number())
+    SCHEDULER_LOG(INFO) << METRIC << LOG_BADGE("BlockTrace") << BLOCK_NUMBER(number())
                          << "preExeBlock success"
                          << LOG_KV("blockHeader.timestamp", blockHeader()->timestamp())
                          << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
