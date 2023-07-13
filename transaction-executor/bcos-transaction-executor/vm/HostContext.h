@@ -64,7 +64,7 @@ inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
         GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-template <StateStorage Storage>
+template <StateStorage Storage, class PrecompiledManager>
 class HostContext : public evmc_host_context
 {
 private:
@@ -76,11 +76,12 @@ private:
     const evmc_address& m_origin;
     int m_contextID;
     int64_t& m_seq;
+    PrecompiledManager const& m_precompiledManager;
 
     TableNameID m_myContractTable;
     TableNameID m_codeTable;
     TableNameID m_abiTable;
-    evmc_address m_newContractAddress = {};
+    evmc_address m_newContractAddress;  // Set by getMyContractTable, not need initialize value!
     std::vector<protocol::LogEntry> m_logs;
 
     TableNameID getTableNameID(const evmc_address& address)
@@ -126,8 +127,15 @@ private:
 public:
     HostContext(VMFactory& vmFactory, Storage& storage, TableNamePool& tableNamePool,
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
-        const evmc_address& origin, int contextID, int64_t& seq)
-      : evmc_host_context(),
+        const evmc_address& origin, int contextID, int64_t& seq,
+        PrecompiledManager const& precompiledManager)
+      : evmc_host_context{.interface = getHostInterface<HostContext>(),
+            .wasm_interface = nullptr,
+            .hash_fn = evm_hash_fn,
+            .isSMCrypto =
+                (GlobalHashImpl::g_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash),
+            .version = 0,
+            .metrics = nullptr},
         m_vmFactory(vmFactory),
         m_rollbackableStorage(storage),
         m_tableNamePool(tableNamePool),
@@ -136,22 +144,11 @@ public:
         m_origin(origin),
         m_contextID(contextID),
         m_seq(seq),
+        m_precompiledManager(precompiledManager),
         m_myContractTable(getMyContractTable(blockHeader, message)),
         m_codeTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CODE_BINARY)),
         m_abiTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CONTRACT_ABI))
-    {
-        interface = getHostInterface<HostContext>();
-        wasm_interface = nullptr;
-
-        hash_fn = evm_hash_fn;
-        // version = m_executive->blockContext().blockVersion();
-        isSMCrypto = false;
-        if (GlobalHashImpl::g_hashImpl &&
-            GlobalHashImpl::g_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash)
-        {
-            isSMCrypto = true;
-        }
-    }
+    {}
     ~HostContext() noexcept = default;
 
     HostContext(HostContext const&) = delete;
@@ -196,38 +193,24 @@ public:
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
     {
-        if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        // Need block version >= 3.1
+        auto codeHashIt = co_await m_rollbackableStorage.read(RANGES::single_view<StateKey>(
+            RANGES::in_place, getTableNameID(address), ACCOUNT_CODE_HASH));
+        co_await codeHashIt.next();
+        if (co_await codeHashIt.hasValue())
         {
-            auto codeHashIt = co_await m_rollbackableStorage.read(RANGES::single_view<StateKey>(
-                RANGES::in_place, getTableNameID(address), ACCOUNT_CODE_HASH));
-            co_await codeHashIt.next();
-            if (co_await codeHashIt.hasValue())
+            auto&& codeHashEntry = co_await codeHashIt.value();
+
+            auto codeIt = co_await m_rollbackableStorage.read(
+                RANGES::single_view(StateKey{m_codeTable, codeHashEntry.get()}));
+
+            co_await codeIt.next();
+            if (co_await codeIt.hasValue())
             {
-                auto&& codeHashEntry = co_await codeHashIt.value();
-
-                auto codeIt = co_await m_rollbackableStorage.read(
-                    RANGES::single_view(StateKey{m_codeTable, codeHashEntry.get()}));
-
-                co_await codeIt.next();
-                if (co_await codeIt.hasValue())
-                {
-                    auto&& codeEntry = co_await codeIt.value();
-                    co_return std::make_optional<storage::Entry>(codeEntry);
-                }
+                auto&& codeEntry = co_await codeIt.value();
+                co_return std::make_optional<storage::Entry>(codeEntry);
             }
-            co_return std::optional<storage::Entry>{};
         }
-
-        // Old logic
-        auto codeIt = co_await m_rollbackableStorage.read(
-            RANGES::single_view(StateKey{getTableNameID(address), ACCOUNT_CODE}));
-        co_await codeIt.next();
-        if (co_await codeIt.hasValue())
-        {
-            auto&& codeEntry = co_await codeIt.value();
-            co_return std::forward<decltype(codeEntry)>(codeEntry);
-        }
-
         co_return std::optional<storage::Entry>{};
     }
 
@@ -236,35 +219,21 @@ public:
         storage::Entry codeHashEntry;
         codeHashEntry.set(std::string_view((const char*)codeHash.data(), codeHash.size()));
 
-        if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
+        // Need block version >= 3.1
+        // Query the code table first
+        if (!co_await storage2::existsOne(
+                m_rollbackableStorage, StateKey{m_codeTable, codeHashEntry.get()}))
         {
-            // Query the code table first
-            if (!co_await storage2::existsOne(
-                    m_rollbackableStorage, StateKey{m_codeTable, codeHashEntry.get()}))
-            {
-                storage::Entry codeEntry;
-                codeEntry.set(code.toBytes());
-                co_await m_rollbackableStorage.write(RANGES::single_view<StateKey>(RANGES::in_place,
-                                                         m_codeTable, codeHashEntry.get()),
-                    RANGES::single_view(std::move(codeEntry)));
-            }
-            co_await m_rollbackableStorage.write(RANGES::single_view<StateKey>(RANGES::in_place,
-                                                     m_myContractTable, ACCOUNT_CODE_HASH),
-                RANGES::single_view(std::move(codeHashEntry)));
-
-            co_return;
+            storage::Entry codeEntry;
+            codeEntry.set(code.toBytes());
+            co_await m_rollbackableStorage.write(
+                RANGES::single_view<StateKey>(RANGES::in_place, m_codeTable, codeHashEntry.get()),
+                RANGES::single_view(std::move(codeEntry)));
         }
-
-        // old logic
-        storage::Entry codeEntry;
-        codeEntry.set(code.toBytes());
-
         co_await m_rollbackableStorage.write(
-            RANGES::single_view(StateKey{m_myContractTable, ACCOUNT_CODE_HASH}),
-            RANGES::single_view(codeHashEntry));
-        co_await m_rollbackableStorage.write(
-            RANGES::single_view(StateKey{m_myContractTable, ACCOUNT_CODE}),
-            RANGES::single_view(codeEntry));
+            RANGES::single_view<StateKey>(RANGES::in_place, m_myContractTable, ACCOUNT_CODE_HASH),
+            RANGES::single_view(std::move(codeHashEntry)));
+
         co_return;
     }
 
@@ -281,56 +250,42 @@ public:
 
         storage::Entry abiEntry;
         abiEntry.set(std::move(abi));
-        if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
+        auto abiIt = co_await m_rollbackableStorage.read(
+            RANGES::single_view(StateKey{m_abiTable, codeHashView}));
+        co_await abiIt.next();
+        if (!co_await abiIt.hasValue())
         {
-            auto abiIt = co_await m_rollbackableStorage.read(
-                RANGES::single_view(StateKey{m_abiTable, codeHashView}));
-            co_await abiIt.next();
-            if (!co_await abiIt.hasValue())
-            {
-                co_await m_rollbackableStorage.write(m_abiTable,
-                    RANGES::single_view(StateKey{m_abiTable, codeHashView}),
-                    RANGES::single_view(abiEntry));
-            }
-            co_return;
+            co_await m_rollbackableStorage.write(m_abiTable,
+                RANGES::single_view(StateKey{m_abiTable, codeHashView}),
+                RANGES::single_view(abiEntry));
         }
-        co_await m_rollbackableStorage.write(
-            RANGES::single_view(StateKey{m_myContractTable, ACCOUNT_ABI}),
-            RANGES::single_view(std::move(abiEntry)));
+        co_return;
     }
 
     task::Task<size_t> codeSizeAt(const evmc_address& address)
     {
-        if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        // TODO: Check is precompiled
+        auto codeEntry = co_await code(address);
+        if (codeEntry)
         {
-            // TODO: Check is precompiled
-            auto codeEntry = co_await code(address);
-            if (codeEntry)
-            {
-                co_return codeEntry->get().size();
-            }
-            co_return 0;
+            co_return codeEntry->get().size();
         }
-        co_return 1;
+        co_return 0;
     }
 
     task::Task<h256> codeHashAt(const evmc_address& address)
     {
-        if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        // TODO: check is precompiled
+        auto it = co_await m_rollbackableStorage.read(
+            RANGES::single_view(StateKey{getTableNameID(address), ACCOUNT_CODE_HASH}));
+        co_await it.next();
+        if (co_await it.hasValue())
         {
-            // TODO: check is precompiled
-            auto it = co_await m_rollbackableStorage.read(
-                RANGES::single_view(StateKey{getTableNameID(address), ACCOUNT_CODE_HASH}));
-            co_await it.next();
-            if (co_await it.hasValue())
-            {
-                auto&& codeHashEntry = co_await it.value();
-                auto view = codeHashEntry.get();
-                h256 codeHash((const bcos::byte*)view.data(), view.size());
-                co_return codeHash;
-            }
+            auto&& codeHashEntry = co_await it.value();
+            auto view = codeHashEntry.get();
+            h256 codeHash((const bcos::byte*)view.data(), view.size());
+            co_return codeHash;
         }
-        co_return h256{};
     }
 
     task::Task<bool> exists([[maybe_unused]] const std::string_view& address)
@@ -355,12 +310,6 @@ public:
     evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const
     {
-        // TODO: add version check
-        // if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-        // {
-        //     // FISCO BCOS only has tx Gas limit. We use it as block gas limit
-        //     return m_executive->blockContext().txGasLimit();
-        // }
         return 30000 * 10000;  // TODO: add config
     }
 
@@ -383,10 +332,13 @@ public:
         // TODO:
         // 1: Check auth
 
-        auto result = callPrecompiled();
-        if (result)
+        auto address = fromBigEndian<u160>(
+            bcos::bytesConstRef(m_message.recipient.bytes, sizeof(m_message.recipient.bytes)));
+        auto const* precompiled =
+            m_precompiledManager.getPrecompiled(address.convert_to<unsigned long>());
+        if (precompiled)
         {
-            co_return std::move(*result);
+            co_return precompiled->call(m_message);
         }
 
         if (m_message.kind == EVMC_CREATE || m_message.kind == EVMC_CREATE2)
@@ -419,7 +371,6 @@ public:
             result.create_address = m_newContractAddress;
         }
 
-        releaseResult(result);
         co_return result;
     }
 
@@ -464,45 +415,11 @@ public:
         }
     }
 
-    std::optional<evmc_result> callPrecompiled() const
-    {
-        std::optional<evmc_result> result;
-
-        auto address = fromBigEndian<u160>(
-            bcos::bytesConstRef(m_message.recipient.bytes, sizeof(m_message.recipient.bytes)));
-        auto const* precompiled =
-            g_precompiledManager.getPrecompiled(address.convert_to<unsigned long>());
-
-        if (precompiled != nullptr)
-        {
-            result.emplace();
-
-            auto [success, output, gasUsed] = std::visit(
-                [this](executor::PrecompiledContract const& contract) {
-                    return std::tuple_cat(
-                        contract.execute({m_message.input_data, m_message.input_size}),
-                        std::tuple{contract.cost({m_message.input_data, m_message.input_size})});
-                },
-                *precompiled);
-            result->status_code =
-                (evmc_status_code)(int32_t)(success ?
-                                                protocol::TransactionStatus::None :
-                                                protocol::TransactionStatus::RevertInstruction);
-            result->gas_left = m_message.gas - gasUsed.template convert_to<int64_t>();
-            result->gas_refund = 0;
-            result->output_data = output.data();
-            result->output_size = output.size();
-            result->release = nullptr;
-        }
-
-        return result;
-    }
-
     task::Task<evmc_result> externalCall(const evmc_message& message)
     {
         ++m_seq;
         HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_tableNamePool, m_blockHeader,
-            message, m_origin, m_contextID, m_seq);
+            message, m_origin, m_contextID, m_seq, m_precompiledManager);
 
         auto result = co_await hostcontext.execute();
         if (result.status_code == EVMC_SUCCESS && !hostcontext.m_logs.empty())

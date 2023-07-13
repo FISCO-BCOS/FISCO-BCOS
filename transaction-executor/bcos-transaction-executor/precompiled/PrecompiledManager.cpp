@@ -1,4 +1,33 @@
 #include "PrecompiledManager.h"
+#include "bcos-utilities/Overloaded.h"
+
+evmc_result bcos::transaction_executor::Precompiled::call(evmc_message const& message) const
+{
+    auto result = std::visit(
+        bcos::overloaded{
+            [&](executor::PrecompiledContract const& contract) {
+                evmc_result result;
+
+                auto [success, output] = contract.execute({message.input_data, message.input_size});
+                auto gas = contract.cost({message.input_data, message.input_size});
+
+                result.status_code =
+                    (evmc_status_code)(int32_t)(success ?
+                                                    protocol::TransactionStatus::None :
+                                                    protocol::TransactionStatus::RevertInstruction);
+                result.gas_left = message.gas - gas.template convert_to<int64_t>();
+                result.gas_refund = 0;
+                result.output_data = output.data();
+                result.output_size = output.size();
+                result.release = nullptr;
+
+                return result;
+            },
+            [](std::shared_ptr<precompiled::Precompiled> const&) { return evmc_result{}; }},
+        *this);
+
+    return result;
+}
 
 bcos::transaction_executor::PrecompiledManager::PrecompiledManager()
 {
@@ -31,7 +60,7 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager()
         [](const auto& lhs, const auto& rhs) { return std::get<0>(lhs) < std::get<0>(rhs); });
 }
 
-bcos::transaction_executor::PrecompiledManager::Precompiled const*
+bcos::transaction_executor::Precompiled const*
 bcos::transaction_executor::PrecompiledManager::getPrecompiled(unsigned long contractAddress) const
 {
     auto it = std::lower_bound(m_evmPrecompiled.begin(), m_evmPrecompiled.end(), contractAddress,

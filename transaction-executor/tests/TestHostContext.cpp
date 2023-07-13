@@ -1,4 +1,5 @@
 // #include "../bcos-transaction-executor/HostContext.h"
+#include "../bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "TestBytecode.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
@@ -27,6 +28,7 @@ public:
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             std::make_shared<bcos::crypto::Keccak256>();
+        precompiledManager.emplace();
 
         // deploy the hello world contract
         syncWait([this]() -> Task<void> {
@@ -54,8 +56,9 @@ public:
                 .code_address = {}};
             evmc_address origin = {};
 
+
             HostContext hostContext(vmFactory, rollbackableStorage, tableNamePool, blockHeader,
-                message, origin, 0, seq);
+                message, origin, 0, seq, *precompiledManager);
             auto result = co_await hostContext.execute();
 
             BOOST_REQUIRE_EQUAL(result.status_code, 0);
@@ -94,8 +97,8 @@ public:
             .code_address = helloworldAddress};
         evmc_address origin = {};
 
-        HostContext hostContext(
-            vmFactory, rollbackableStorage, tableNamePool, blockHeader, message, origin, 0, seq);
+        HostContext hostContext(vmFactory, rollbackableStorage, tableNamePool, blockHeader, message,
+            origin, 0, seq, *precompiledManager);
         auto result = co_await hostContext.execute();
 
         co_return result;
@@ -107,6 +110,7 @@ public:
     evmc_address helloworldAddress;
     VMFactory vmFactory;
     int64_t seq = 0;
+    std::optional<PrecompiledManager> precompiledManager;
 };
 
 bcos::crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;

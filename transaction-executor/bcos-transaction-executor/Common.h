@@ -244,21 +244,21 @@ inline bytes toBytes(const std::string_view& _addr)
     return {(char*)_addr.data(), (char*)(_addr.data() + _addr.size())};
 }
 
-inline std::string getContractTableName(const std::string_view& _address)
+inline std::string getContractTableName(const std::string_view& address)
 {
     constexpr static std::string_view prefix("/apps/");
     std::string out;
-    if (_address[0] == '/')
+    if (address[0] == '/')
     {
-        out.reserve(prefix.size() + _address.size() - 1);
+        out.reserve(prefix.size() + address.size() - 1);
         std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
-        std::copy(_address.begin() + 1, _address.end(), std::back_inserter(out));
+        std::copy(address.begin() + 1, address.end(), std::back_inserter(out));
     }
     else
     {
-        out.reserve(prefix.size() + _address.size());
+        out.reserve(prefix.size() + address.size());
         std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
-        std::copy(_address.begin(), _address.end(), std::back_inserter(out));
+        std::copy(address.begin(), address.end(), std::back_inserter(out));
     }
 
     return out;

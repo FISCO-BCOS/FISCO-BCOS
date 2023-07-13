@@ -62,7 +62,7 @@ bool bcos::executor::PrecompiledMap::contains(std::string const& key, uint32_t v
 
 PrecompiledExecutor const& PrecompiledRegistrar::executor(std::string const& _name)
 {
-    if (!get()->m_execs.count(_name))
+    if (get()->m_execs.count(_name) == 0u)
         BOOST_THROW_EXCEPTION(ExecutorNotFound());
     return get()->m_execs[_name];
 }

@@ -26,11 +26,11 @@ namespace bcos::transaction_executor
 struct InvalidArgumentsError: public bcos::Error {};
 // clang-format on
 
-template <StateStorage Storage>
+template <StateStorage Storage, class PrecompiledManager>
 class TransactionExecutorImpl
 {
 private:
-    evmc_address unhexAddress(std::string_view view)
+    static evmc_address unhexAddress(std::string_view view)
     {
         if (view.empty())
         {
@@ -57,11 +57,15 @@ private:
     Storage& m_storage;
     protocol::TransactionReceiptFactory& m_receiptFactory;
     TableNamePool& m_tableNamePool;
+    PrecompiledManager const& m_precompiledManager;
 
 public:
     TransactionExecutorImpl(Storage& storage, protocol::TransactionReceiptFactory& receiptFactory,
-        TableNamePool& tableNamePool)
-      : m_storage(storage), m_receiptFactory(receiptFactory), m_tableNamePool(tableNamePool)
+        TableNamePool& tableNamePool, PrecompiledManager const& precompiledManager)
+      : m_storage(storage),
+        m_receiptFactory(receiptFactory),
+        m_tableNamePool(tableNamePool),
+        m_precompiledManager(precompiledManager)
     {}
 
     task::Task<protocol::TransactionReceipt::Ptr> execute(
@@ -96,7 +100,7 @@ public:
 
             int64_t seq = 0;
             HostContext hostContext(vmFactory, rollbackableStorage, m_tableNamePool, blockHeader,
-                evmcMessage, evmcMessage.sender, contextID, seq);
+                evmcMessage, evmcMessage.sender, contextID, seq, m_precompiledManager);
             auto evmcResult = co_await hostContext.execute();
             auto finallyAction = gsl::finally([&]() { releaseResult(evmcResult); });
 

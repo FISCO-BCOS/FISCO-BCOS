@@ -6,16 +6,24 @@
 namespace bcos::transaction_executor
 {
 
+class Precompiled
+  : public std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>
+{
+public:
+    using std::variant<executor::PrecompiledContract,
+        std::shared_ptr<precompiled::Precompiled>>::variant;
+
+    evmc_result call(evmc_message const& message) const;
+};
+
 class PrecompiledManager
 {
 public:
-    using Precompiled = std::variant<executor::PrecompiledContract>;
     PrecompiledManager();
     Precompiled const* getPrecompiled(unsigned long contractAddress) const;
 
 private:
     std::vector<std::tuple<unsigned long, Precompiled>> m_evmPrecompiled;
 };
-const inline PrecompiledManager g_precompiledManager{};
 
 }  // namespace bcos::transaction_executor
