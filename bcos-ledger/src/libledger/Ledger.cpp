@@ -1785,15 +1785,6 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     // Write default features
     Features features;
     features.setToDefault(protocol::BlockVersion(versionNumber));
-    for (auto [flag, name, value] : features.flags())
-    {
-        if (value)
-        {
-            Entry entry;
-            entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
-            sysTable->setRow(name, std::move(entry));
-        }
-    }
 
     // tx count limit
     Entry txLimitEntry;
@@ -1808,13 +1799,11 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
     if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
     {
-        Entry consensusTypeEntry;
-        consensusTypeEntry.setObject(SystemConfigEntry{_consensusType, 0});
-        sysTable->setRow(SYSTEM_KEY_CONSENSUS_TYPE, std::move(consensusTypeEntry));
-
         // rpbft config
         if (RPBFT_CONSENSUS_TYPE == _consensusType)
         {
+            features.set(ledger::Features::Flag::feature_rpbft);
+
             Entry epochSealerNumEntry;
             epochSealerNumEntry.setObject(
                 SystemConfigEntry{boost::lexical_cast<std::string>(_epochSealerNum), 0});
@@ -1952,6 +1941,16 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     Entry archivedNumber;
     archivedNumber.importFields({"0"});
     stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
+
+    for (auto [flag, name, value] : features.flags())
+    {
+        if (value)
+        {
+            Entry entry;
+            entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
+            sysTable->setRow(name, std::move(entry));
+        }
+    }
 
     return true;
 }

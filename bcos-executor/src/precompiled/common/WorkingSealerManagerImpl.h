@@ -34,7 +34,7 @@ public:
     using Ptr = std::shared_ptr<WorkingSealerManagerImpl>;
     ~WorkingSealerManagerImpl() = default;
 
-    void createVRFInfo(std::string _vrfProof, std::string _vrfPublicKey, std::string _vrfInput);
+    void createVRFInfo(bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput);
     void rotateWorkingSealer(const executor::TransactionExecutive::Ptr& _executive,
         const PrecompiledExecResult::Ptr& _callParameters);
 
