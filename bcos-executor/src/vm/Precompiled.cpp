@@ -32,14 +32,12 @@ using namespace std;
 using namespace bcos;
 using namespace bcos::crypto;
 
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 PrecompiledRegistrar* PrecompiledRegistrar::s_this = nullptr;
 
-bcos::precompiled::Precompiled::Ptr bcos::executor::PrecompiledMap::at(
-    std::string const& _key, uint32_t version, bool isAuth) const noexcept
+bcos::precompiled::Precompiled::Ptr bcos::executor::PrecompiledMap::at(std::string const& _key,
+    uint32_t version, bool isAuth, ledger::Features const& features) const noexcept
 {
     if (!_key.starts_with(precompiled::SYS_ADDRESS_PREFIX) && !_key.starts_with(tool::FS_SYS_BIN))
     {
@@ -50,16 +48,16 @@ bcos::precompiled::Precompiled::Ptr bcos::executor::PrecompiledMap::at(
     {
         return nullptr;
     }
-    if (it->second.availableFunc(version, isAuth))
+    if (it->second.availableFunc(version, isAuth, features))
     {
         return it->second.precompiled;
     }
     return nullptr;
 }
-bool bcos::executor::PrecompiledMap::contains(
-    std::string const& key, uint32_t version, bool isAuth) const noexcept
+bool bcos::executor::PrecompiledMap::contains(std::string const& key, uint32_t version, bool isAuth,
+    ledger::Features const& features) const noexcept
 {
-    return at(key, version, isAuth) != nullptr;
+    return at(key, version, isAuth, features) != nullptr;
 }
 
 PrecompiledExecutor const& PrecompiledRegistrar::executor(std::string const& _name)
@@ -76,8 +74,7 @@ PrecompiledPricer const& PrecompiledRegistrar::pricer(std::string const& _name)
     return get()->m_pricers[_name];
 }
 
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor
 
 namespace
 {

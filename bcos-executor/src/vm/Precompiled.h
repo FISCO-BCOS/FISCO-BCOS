@@ -297,7 +297,7 @@ namespace executor
 struct PrecompiledAvailable
 {
     precompiled::Precompiled::Ptr precompiled;
-    std::function<bool(uint32_t, bool)> availableFunc;
+    std::function<bool(uint32_t, bool, ledger::Features const& features)> availableFunc;
 };
 class PrecompiledMap
 {
@@ -314,7 +314,8 @@ public:
         protocol::BlockVersion minVersion = protocol::BlockVersion::RC4_VERSION,
         bool needAuth = false)
     {
-        auto func = [minVersion, needAuth](uint32_t version, bool isAuth) -> bool {
+        auto func = [minVersion, needAuth](
+                        uint32_t version, bool isAuth, ledger::Features const& features) -> bool {
             bool flag = true;
             if (needAuth)
             {
@@ -326,13 +327,14 @@ public:
     }
 
     auto insert(std::string const& _key, precompiled::Precompiled::Ptr _precompiled,
-        std::function<bool(uint32_t, bool)> func)
+        std::function<bool(uint32_t, bool, ledger::Features const& features)> func)
     {
         return m_map.insert({_key, {std::move(_precompiled), std::move(func)}});
     }
-    precompiled::Precompiled::Ptr at(
-        std::string const&, uint32_t version, bool isAuth) const noexcept;
-    bool contains(std::string const& key, uint32_t version, bool isAuth) const noexcept;
+    precompiled::Precompiled::Ptr at(std::string const&, uint32_t version, bool isAuth,
+        ledger::Features const& features) const noexcept;
+    bool contains(std::string const& key, uint32_t version, bool isAuth,
+        ledger::Features const& features) const noexcept;
     size_t size() const noexcept { return m_map.size(); }
 
 private:

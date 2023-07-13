@@ -41,6 +41,7 @@ public:
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
+
         return m_flags[*index];
     }
     bool get(std::string_view flag) const
@@ -77,6 +78,12 @@ public:
         if (version >= protocol::BlockVersion::V3_2_VERSION)
         {
             set(Flag::bugfix_revert);
+        }
+
+        if (version >= protocol::BlockVersion::V3_3_VERSION &&
+            version <= protocol::BlockVersion::V3_4_VERSION)
+        {
+            set(Flag::feature_sharding);
         }
     }
 
