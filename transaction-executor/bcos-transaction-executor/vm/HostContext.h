@@ -22,12 +22,12 @@
 #pragma once
 
 #include "../Common.h"
+#include "../precompiled/PrecompiledManager.h"
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/storage2/StringPool.h"
-#include "bcos-utilities/DataConvertUtility.h"
-#include "bcos-utilities/Overloaded.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -64,14 +64,14 @@ inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
         GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-template <StateStorage Storage, protocol::IsBlockHeader BlockHeader>
+template <StateStorage Storage>
 class HostContext : public evmc_host_context
 {
 private:
     VMFactory& m_vmFactory;
     Storage& m_rollbackableStorage;
     TableNamePool& m_tableNamePool;
-    BlockHeader const& m_blockHeader;
+    protocol::BlockHeader const& m_blockHeader;
     const evmc_message& m_message;
     const evmc_address& m_origin;
     int m_contextID;
@@ -80,7 +80,7 @@ private:
     TableNameID m_myContractTable;
     TableNameID m_codeTable;
     TableNameID m_abiTable;
-    evmc_address m_newContractAddress;
+    evmc_address m_newContractAddress = {};
     std::vector<protocol::LogEntry> m_logs;
 
     TableNameID getTableNameID(const evmc_address& address)
@@ -125,8 +125,8 @@ private:
 
 public:
     HostContext(VMFactory& vmFactory, Storage& storage, TableNamePool& tableNamePool,
-        BlockHeader const& blockHeader, const evmc_message& message, const evmc_address& origin,
-        int contextID, int64_t& seq)
+        protocol::BlockHeader const& blockHeader, const evmc_message& message,
+        const evmc_address& origin, int contextID, int64_t& seq)
       : evmc_host_context(),
         m_vmFactory(vmFactory),
         m_rollbackableStorage(storage),
@@ -382,7 +382,12 @@ public:
     {
         // TODO:
         // 1: Check auth
-        // 2: Check is precompiled
+
+        auto result = callPrecompiled();
+        if (result)
+        {
+            co_return std::move(*result);
+        }
 
         if (m_message.kind == EVMC_CREATE || m_message.kind == EVMC_CREATE2)
         {
@@ -459,12 +464,38 @@ public:
         }
     }
 
-    task::Task<evmc_result> callBuiltInPrecompiled(
-        const evmc_message* message, bool _isEvmPrecompiled)
+    std::optional<evmc_result> callPrecompiled() const
     {
-        // TODO: to be done
-        BOOST_THROW_EXCEPTION(std::runtime_error("Unsupported method!"));
-        co_return evmc_result{};
+        std::optional<evmc_result> result;
+
+        auto address = fromBigEndian<u160>(
+            bcos::bytesConstRef(m_message.recipient.bytes, sizeof(m_message.recipient.bytes)));
+        auto const* precompiled =
+            g_precompiledManager.getPrecompiled(address.convert_to<unsigned long>());
+
+        if (precompiled != nullptr)
+        {
+            result.emplace();
+
+            auto [success, output, gasUsed] = std::visit(
+                [this](executor::PrecompiledContract const& contract) {
+                    return std::tuple_cat(
+                        contract.execute({m_message.input_data, m_message.input_size}),
+                        std::tuple{contract.cost({m_message.input_data, m_message.input_size})});
+                },
+                *precompiled);
+            result->status_code =
+                (evmc_status_code)(int32_t)(success ?
+                                                protocol::TransactionStatus::None :
+                                                protocol::TransactionStatus::RevertInstruction);
+            result->gas_left = m_message.gas - gasUsed.template convert_to<int64_t>();
+            result->gas_refund = 0;
+            result->output_data = output.data();
+            result->output_size = output.size();
+            result->release = nullptr;
+        }
+
+        return result;
     }
 
     task::Task<evmc_result> externalCall(const evmc_message& message)

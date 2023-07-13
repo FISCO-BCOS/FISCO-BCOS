@@ -208,6 +208,7 @@ inline evmc_bytes32 toEvmC(bcos::h256 const& hash)
     std::uninitialized_copy(hash.begin(), hash.end(), evmBytes.bytes);
     return evmBytes;
 }
+
 /**
  * @brief : trans uint256 number of evm-represented to u256
  * @param _n : the uint256 number that can parsed by evm
