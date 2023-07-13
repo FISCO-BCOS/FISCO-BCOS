@@ -353,6 +353,14 @@ void SystemConfigPrecompiled::upgradeChain(
     {
         Features features;
         features.setToDefault(protocol::BlockVersion(toVersion));
+
+        // From 3.3 or 3.4, enable the feature_sharding
+        if (version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION &&
+            toVersion >= BlockVersion::V3_5_VERSION)
+        {
+            features.set(ledger::Features::Flag::feature_sharding);
+        }
+
         for (auto [flag, name, value] : features.flags())
         {
             if (value)

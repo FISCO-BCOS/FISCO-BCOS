@@ -157,6 +157,10 @@ public:
             entry.setObject(SystemConfigEntry{"3000000", 0});
 
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
+
+            Entry entry2;
+            entry2.setObject(SystemConfigEntry{"1", 0});
+            table->setRow("feature_sharding", entry2);
         }
 
         m_blockVersion = version;
