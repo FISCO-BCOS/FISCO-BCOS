@@ -89,19 +89,6 @@ enum ConsensusType : uint32_t
     PBFT_TYPE = 1,
     RPBFT_TYPE = 2,
 };
-
-inline uint32_t consensusTypeFromString(std::string_view consensus)
-{
-    if (consensus == PBFT_CONSENSUS_TYPE)
-    {
-        return ConsensusType::PBFT_TYPE;
-    }
-    if (consensus == RPBFT_CONSENSUS_TYPE)
-    {
-        return ConsensusType::RPBFT_TYPE;
-    }
-    return 0;
-}
 struct CurrentState
 {
     bcos::protocol::BlockNumber latestBlockNumber;

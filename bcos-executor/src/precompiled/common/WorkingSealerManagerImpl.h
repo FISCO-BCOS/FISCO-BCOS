@@ -41,8 +41,7 @@ public:
 private:
     void checkVRFInfos(crypto::HashType const& parentHash, std::string const& origin);
     bool shouldRotate(const executor::TransactionExecutive::Ptr& _executive);
-    void getConsensusNodeListFromStorage(
-        const executor::TransactionExecutive::Ptr& _executive, std::string const& origin);
+    void getConsensusNodeListFromStorage(const executor::TransactionExecutive::Ptr& _executive);
     void setNotifyRotateFlag(const executor::TransactionExecutive::Ptr& executive, unsigned flag);
     bool getNotifyRotateFlag(const executor::TransactionExecutive::Ptr& executive);
     // calculate the number of working sealers that need to be added and removed

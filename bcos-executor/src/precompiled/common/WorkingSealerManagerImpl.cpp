@@ -45,13 +45,13 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
     auto parentHash = _executive->blockContext().parentHash();
     try
     {
-        getConsensusNodeListFromStorage(_executive, _callParameters->m_origin);
+        getConsensusNodeListFromStorage(_executive);
         checkVRFInfos(parentHash, _callParameters->m_origin);
     }
     catch (protocol::PrecompiledError const& e)
     {
         PRECOMPILED_LOG(WARNING) << LOG_DESC(
-            "rotateWorkingSealer failed for checkVRFInfos failed, notifyNextLeaderRotate now");
+            "rotateWorkingSealer failed, notifyNextLeaderRotate now");
         setNotifyRotateFlag(_executive, 1);
         throw;
     }
@@ -107,6 +107,33 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
 
 void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::string const& origin)
 {
+    // check origin: the origin must be among the workingSealerList
+    if (!m_workingSealer.empty()) [[likely]]
+    {
+        if (!std::any_of(m_workingSealer.begin(), m_workingSealer.end(),
+                [&origin](auto const& node) { return covertPublicToHexAddress(node) == origin; }))
+            [[unlikely]]
+        {
+            PRECOMPILED_LOG(WARNING)
+                << LOG_DESC("Permission denied, must be among the working sealer list!")
+                << LOG_KV("origin", origin);
+            BOOST_THROW_EXCEPTION(
+                bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
+        }
+    }
+    else
+    {
+        if (!std::any_of(m_pendingSealer.begin(), m_pendingSealer.end(),
+                [&origin](auto const& node) { return covertPublicToHexAddress(node) == origin; }))
+            [[unlikely]]
+        {
+            PRECOMPILED_LOG(WARNING)
+                << LOG_DESC("Permission denied, must be among the pending sealer list!")
+                << LOG_KV("origin", origin);
+            BOOST_THROW_EXCEPTION(
+                bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
+        }
+    }
     if (HashType(m_vrfInfo->vrfInput()) != parentHash)
     {
         PRECOMPILED_LOG(ERROR)
@@ -189,7 +216,7 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
 }
 
 void WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
-    const executor::TransactionExecutive::Ptr& _executive, std::string const& origin)
+    const executor::TransactionExecutive::Ptr& _executive)
 {
     auto const& blockContext = _executive->blockContext();
     auto entry = _executive->storage().getRow(ledger::SYS_CONSENSUS, "key");
@@ -211,31 +238,6 @@ void WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
         }
     }
     m_consensusNodes.swap(consensusNodeList);
-    // check origin: the origin must be among the workingSealerList
-    if (!m_workingSealer.empty()) [[likely]]
-    {
-        if (!std::any_of(m_workingSealer.begin(), m_workingSealer.end(),
-                [&origin](auto const& node) { return covertPublicToHexAddress(node) == origin; }))
-            [[unlikely]]
-        {
-            PRECOMPILED_LOG(WARNING)
-                << LOG_DESC("Permission denied, must be among the working sealer list!")
-                << LOG_KV("origin", origin);
-            BOOST_THROW_EXCEPTION(
-                bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
-        }
-        return;
-    }
-    if (!std::any_of(m_pendingSealer.begin(), m_pendingSealer.end(), [&origin](auto const& node) {
-            return covertPublicToHexAddress(node) == origin;
-        })) [[unlikely]]
-    {
-        PRECOMPILED_LOG(WARNING) << LOG_DESC(
-                                        "Permission denied, must be among the pending sealer list!")
-                                 << LOG_KV("origin", origin);
-        BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
-    }
 }
 
 void WorkingSealerManagerImpl::setNotifyRotateFlag(
