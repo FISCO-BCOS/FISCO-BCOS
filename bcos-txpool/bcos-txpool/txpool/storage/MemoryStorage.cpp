@@ -789,34 +789,37 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
     return unknownTxsList;
 }
 
-void MemoryStorage::batchMarkTxs(
+bool MemoryStorage::batchMarkTxs(
     HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
 {
     if (_sealFlag)
     {
         ReadGuard l(x_txpoolMutex);
-        batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
-        return;
+        return batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
     }
     // Note: setting flag to false is pessimistic, use writeLock here in case of the same txs has
     // been sealed twice
     WriteGuard l(x_txpoolMutex);
-    batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
+    return batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
 }
 
-void MemoryStorage::batchMarkTxsWithoutLock(
+bool MemoryStorage::batchMarkTxsWithoutLock(
     HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
 {
     auto recordT = utcTime();
     auto startT = utcTime();
     ssize_t successCount = 0;
+    ssize_t notFound = 0;
     for (auto txHash : _txsHashList)
     {
         auto it = m_txsTable.find(txHash);
+        /// NOTE: here will cause bug, if the tx is not in the pool, but the tx is in the block,
+        /// the tx will be removed from the pool
         if (it == m_txsTable.end())
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("batchMarkTxs: missing transaction")
                               << LOG_KV("tx", txHash.abridged()) << LOG_KV("sealFlag", _sealFlag);
+            notFound++;
             continue;
         }
         auto tx = it->second;
@@ -853,12 +856,14 @@ void MemoryStorage::batchMarkTxsWithoutLock(
                           << LOG_KV("hash", tx->batchHash().abridged()) << LOG_KV("txPointer", tx);
 #endif
     }
-    TXPOOL_LOG(DEBUG) << LOG_DESC("batchMarkTxs ") << LOG_KV("txsSize", _txsHashList.size())
-                      << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
-                      << LOG_KV("flag", _sealFlag) << LOG_KV("succ", successCount)
-                      << LOG_KV("timecost", utcTime() - recordT)
-                      << LOG_KV("markT", (utcTime() - startT));
+    TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs") << LOG_KV("txsSize", _txsHashList.size())
+                     << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
+                     << LOG_KV("sealFlag", _sealFlag) << LOG_KV("notFound", notFound)
+                     << LOG_KV("succ", successCount) << LOG_KV("timecost", utcTime() - recordT)
+                     << LOG_KV("markT", (utcTime() - startT));
     notifyUnsealedTxsSize();
+    // return true if all txs have been marked
+    return notFound == 0;
 }
 
 void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
@@ -954,9 +959,24 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     for (size_t i = 0; i < txsSize; i++)
     {
         auto txHash = _block->transactionHash(i);
-        if (!(m_txsTable.count(txHash)))
+        auto txIt = m_txsTable.find(txHash);
+        if (txIt == m_txsTable.end())
         {
             missedTxs->emplace_back(txHash);
+        }
+        else if (txIt->second->sealed())
+        {
+            auto header = _block->blockHeader();
+            if ((txIt->second->batchId() != header->number() && txIt->second->batchId() != -1) ||
+                txIt->second->batchHash() != header->hash())
+            {
+                TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
+                                 << LOG_KV("blkNum", header->number())
+                                 << LOG_KV("blkHash", header->hash().abridged())
+                                 << LOG_KV("txBatchId", txIt->second->batchId())
+                                 << LOG_KV("txBatchHash", txIt->second->batchHash().abridged());
+                return nullptr;
+            }
         }
     }
     TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal") << LOG_KV("consNum", batchId)
