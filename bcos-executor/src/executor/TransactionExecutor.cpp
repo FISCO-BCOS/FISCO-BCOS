@@ -1069,7 +1069,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
 void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback)
 {
-    EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes";
+    EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(number) << "GetTableHashes";
 
     if (!m_isRunning)
     {
@@ -1104,10 +1104,11 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
 
     // remove suicides beforehand
     m_blockContext->killSuicides();
-
+    auto start = utcTime();
     auto hash = last.storage->hash(m_hashImpl);
+    auto end = utcTime();
     EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes success"
-                            << LOG_KV("hash", hash.hex());
+                            << LOG_KV("hash", hash.hex()) << LOG_KV("time(ms)", (end - start));
 
     callback(nullptr, std::move(hash));
 }
