@@ -1432,6 +1432,7 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     if (!_syncedBlock)
     {
         m_cacheProcessor->resetTimer();
+        m_timer->restart();
     }
 }
 
