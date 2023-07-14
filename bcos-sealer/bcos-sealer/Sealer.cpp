@@ -21,6 +21,8 @@
 #include "Common.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 
+#include <utility>
+
 using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::protocol;
@@ -81,6 +83,12 @@ void Sealer::asyncNoteLatestBlockNumber(int64_t _blockNumber)
     SEAL_LOG(INFO) << LOG_DESC("asyncNoteLatestBlockNumber") << LOG_KV("number", _blockNumber);
 }
 
+void Sealer::asyncNoteLatestBlockHash(crypto::HashType _hash)
+{
+    SEAL_LOG(INFO) << LOG_DESC("asyncNoteLatestBlockHash") << LOG_KV("_hash", _hash.abridged());
+    m_sealingManager->resetCurrentHash(std::move(_hash));
+}
+
 void Sealer::asyncNoteUnSealedTxsSize(
     uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
 {
@@ -102,7 +110,10 @@ void Sealer::executeWorker()
     // try to generateProposal
     if (m_sealingManager->shouldGenerateProposal())
     {
-        auto ret = m_sealingManager->generateProposal();
+        auto ret =
+            m_sealingManager->generateProposal([this](bcos::protocol::Block::Ptr _block) -> bool {
+                return hookWhenSealBlock(std::move(_block));
+            });
         auto proposal = ret.second;
         submitProposal(ret.first, proposal);
     }

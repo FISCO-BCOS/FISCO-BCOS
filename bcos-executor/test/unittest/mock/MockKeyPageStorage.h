@@ -100,8 +100,8 @@ public:
                 std::unique_lock<std::mutex> lock(mutex);
 
                 auto keyHex = boost::algorithm::hex_lower(std::string(key));
-                // EXECUTOR_LOG(TRACE) << "Merge data" << LOG_KV("table", table)
-                //                 << LOG_KV("key", keyHex) << LOG_KV("fields", fields);
+                EXECUTOR_LOG(TRACE) << "Merge data" << LOG_KV("table", table) << LOG_KV("key", key)
+                                    << LOG_KV("fields", entry.get());
 
                 auto myTable = m_inner->openTable(table);
                 if (!myTable)

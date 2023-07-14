@@ -22,6 +22,7 @@
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -408,6 +409,8 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
     {
         // broadcast the pre-prepare packet
         auto encodedData = m_config->codec()->encode(pbftMessage);
+        PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
+                       << LOG_KV("packetSize", encodedData->size());
         // only broadcast pbft message to the consensus nodes
         m_config->frontService()->asyncSendBroadcastMessage(
             bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
@@ -773,6 +776,55 @@ bool PBFTEngine::checkProposalSignature(
         nodeInfo->nodeID(), _proposal->hash(), _proposal->signature());
 }
 
+bool PBFTEngine::checkRotateTransactionValid(
+    PBFTMessageInterface::Ptr _proposal, ConsensusNodeInterface::Ptr _leaderInfo)
+{
+    if (m_config->consensusType() == ConsensusType::PBFT_TYPE) [[likely]]
+    {
+        return true;
+    }
+
+    // Note: if the block contains rotatingTx when m_shouldRotateSealers is false
+    //       the rotatingTx will be reverted by the ordinary node when executing
+    if (!m_config->shouldRotateSealers()) [[unlikely]]
+    {
+        return true;
+    }
+
+    auto block = m_config->blockFactory()->createBlock(_proposal->consensusProposal()->data());
+
+    PBFT_LOG(DEBUG) << LOG_DESC("checkRotateTransactionValid")
+                    << LOG_KV("reqIndex", _proposal->index())
+                    << LOG_KV("reqHash", _proposal->hash().abridged())
+                    << LOG_KV("leaderIdx", _proposal->generatedFrom())
+                    << LOG_KV("nodeIdx", m_config->nodeIndex())
+                    << LOG_KV("txSize", block->transactionsSize());
+
+    auto rotatingTx = block->transactionMetaData(0);
+    if (rotatingTx->to() != bcos::precompiled::CONSENSUS_ADDRESS ||
+        rotatingTx->to() != bcos::precompiled::CONSENSUS_TABLE_NAME) [[unlikely]]
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("checkRotateTransactionValid failed")
+                          << LOG_KV("reqIndex", _proposal->index())
+                          << LOG_KV("reqHash", _proposal->hash().abridged())
+                          << LOG_KV("fromIdx", _proposal->generatedFrom())
+                          << LOG_KV("currentTo", rotatingTx->to());
+        return false;
+    }
+
+    if (rotatingTx->source() == _leaderInfo->nodeID()->hex())
+    {
+        return true;
+    }
+
+    PBFT_LOG(WARNING) << LOG_DESC("checkRotateTransactionValid failed")
+                      << LOG_KV("reqIndex", _proposal->index())
+                      << LOG_KV("reqHash", _proposal->hash().abridged())
+                      << LOG_KV("fromIdx", _proposal->generatedFrom())
+                      << LOG_KV("sender", rotatingTx->source());
+    return false;
+}
+
 bool PBFTEngine::isSyncingHigher()
 {
     auto committedIndex = m_config->committedProposal()->index();
@@ -864,7 +916,8 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     m_config->validator()->verifyProposal(leaderNodeInfo->nodeID(),
         _prePrepareMsg->consensusProposal(),
-        [self, _prePrepareMsg, _generatedFromNewView](auto&& _error, bool _verifyResult) {
+        [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo](
+            auto&& _error, bool _verifyResult) {
             try
             {
                 auto pbftEngine = self.lock();
@@ -893,8 +946,10 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
                     return;
                 }
+                auto rotateResult =
+                    pbftEngine->checkRotateTransactionValid(_prePrepareMsg, leaderNodeInfo);
                 // verify failed
-                if (!_verifyResult)
+                if (!_verifyResult || !rotateResult)
                 {
                     PBFT_LOG(WARNING)
                         << LOG_DESC("verify proposal failed") << printPBFTMsgInfo(_prePrepareMsg);
@@ -926,6 +981,9 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr const& _prePrepar
     m_cacheProcessor->addPrepareCache(prepareMsg);
 
     auto encodedData = m_config->codec()->encode(prepareMsg, m_config->pbftMsgDefaultVersion());
+
+    PBFT_LOG(INFO) << LOG_DESC("broadcast prepare packet")
+                   << LOG_KV("packetSize", encodedData->size());
     // only broadcast to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
@@ -1103,7 +1161,8 @@ void PBFTEngine::broadcastViewChangeReq()
     // only broadcast to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
-    PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq);
+    PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq)
+                   << LOG_KV("packetSize", encodedData->size());
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
     auto newViewMsg = m_cacheProcessor->checkAndTryIntoNewView();
@@ -1373,6 +1432,7 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     if (!_syncedBlock)
     {
         m_cacheProcessor->resetTimer();
+        m_timer->restart();
     }
 }
 

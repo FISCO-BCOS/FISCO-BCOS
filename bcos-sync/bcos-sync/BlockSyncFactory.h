@@ -37,8 +37,7 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::consensus::ConsensusInterface::Ptr _consensus,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-        const bool enableSendBlockStatusByTree = true,
-        const std::uint32_t syncTreeWidth = 3);
+        bool enableSendBlockStatusByTree = false, std::uint32_t syncTreeWidth = 3);
     virtual ~BlockSyncFactory() = default;
 
     virtual BlockSync::Ptr createBlockSync();

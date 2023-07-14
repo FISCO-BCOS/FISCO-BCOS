@@ -19,22 +19,21 @@
  * @date 2021-04-09
  */
 #pragma once
-#include "../framework/ConsensusConfigInterface.h"
 #include "Common.h"
+#include "bcos-framework/consensus/ConsensusConfigInterface.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-utilities/Common.h>
 
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class ConsensusConfig : public ConsensusConfigInterface
 {
 public:
     using Ptr = std::shared_ptr<ConsensusConfig>;
+    using ConstPtr = std::shared_ptr<const ConsensusConfig>;
     explicit ConsensusConfig(bcos::crypto::KeyPairInterface::Ptr _keyPair)
-      : m_keyPair(_keyPair),
+      : m_keyPair(std::move(_keyPair)),
         m_consensusNodeList(std::make_shared<ConsensusNodeList>()),
         m_observerNodeList(std::make_shared<ConsensusNodeList>())
     {}
@@ -124,13 +123,14 @@ public:
         }
     }
 
-    virtual void registerVersionInfoNotification(
-        std::function<void(uint32_t _version)> _versionNotification)
+    virtual void registerVersionInfoNotification(std::function<void(uint32_t)> _versionNotification)
     {
-        m_versionNotification = _versionNotification;
+        m_versionNotification = std::move(_versionNotification);
     }
 
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
+
+    virtual bool shouldRotateSealers() const { return false; }
 
 protected:
     bool compareConsensusNode(ConsensusNodeList const& _left, ConsensusNodeList const& _right);
@@ -143,29 +143,26 @@ protected:
 
     ConsensusNodeListPtr m_consensusNodeList;
     mutable bcos::SharedMutex x_consensusNodeList;
-    std::atomic_bool m_consensusNodeListUpdated = {false};
-
     ConsensusNodeListPtr m_observerNodeList;
     mutable bcos::SharedMutex x_observerNodeList;
+
+    std::atomic_bool m_consensusNodeListUpdated = {false};
     std::atomic_bool m_observerNodeListUpdated = {false};
+    std::atomic_bool m_syncingState = {false};
+    std::atomic_bool m_asMasterNode = {false};
+    uint32_t m_compatibilityVersion = (uint32_t)(bcos::protocol::DEFAULT_VERSION);
 
     // default timeout is 3000ms
     std::atomic<uint64_t> m_consensusTimeout = {3000};
     constexpr const static uint64_t s_consensusTimeout = 3000;
+
     // default blockTxCountLimit is 1000
     std::atomic<uint64_t> m_blockTxCountLimit = {1000};
-
     ProposalInterface::Ptr m_committedProposal;
     mutable bcos::SharedMutex x_committedProposal;
 
     std::atomic<bcos::protocol::BlockNumber> m_progressedIndex = {0};
-    std::atomic_bool m_syncingState = {false};
     bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
-
-    std::atomic_bool m_asMasterNode = {false};
-
     std::function<void(uint32_t _version)> m_versionNotification;
-    uint32_t m_compatibilityVersion = (uint32_t)(bcos::protocol::DEFAULT_VERSION);
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

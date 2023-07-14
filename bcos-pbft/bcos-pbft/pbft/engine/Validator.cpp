@@ -39,6 +39,7 @@ void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
         }
         return;
     }
+    // TODO: passing block directly, no need to createBlock twice
     m_txPool->asyncVerifyBlock(_fromNode, _proposal->data(), _verifyFinishedHandler);
 }
 

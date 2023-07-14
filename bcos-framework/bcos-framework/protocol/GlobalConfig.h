@@ -42,7 +42,7 @@ public:
         // nodeService
         c_supportedProtocols.insert({ProtocolModuleID::NodeService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::NodeService, ProtocolVersion::V0, ProtocolVersion::V1)});
+                ProtocolModuleID::NodeService, ProtocolVersion::V0, ProtocolVersion::V2)});
         // gatewayService
         c_supportedProtocols.insert({ProtocolModuleID::GatewayService,
             std::make_shared<ProtocolInfo>(
@@ -76,6 +76,9 @@ public:
     virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = _codec; }
     virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
 
+    virtual void setIsWasm(bool _isWasm) noexcept { m_isWasm = _isWasm; }
+    virtual bool isWasm() const noexcept { return m_isWasm; }
+
     void setStorageType(std::string const& _storageType) { m_storageType = _storageType; }
     std::string const& storageType() const { return m_storageType; }
 
@@ -93,11 +96,11 @@ private:
     // the minimum supported version
     BlockVersion m_minSupportedVersion = BlockVersion::MIN_VERSION;
     BlockVersion m_maxSupportedVersion = BlockVersion::MAX_VERSION;
-
     ProtocolInfoCodec::Ptr m_codec;
     std::string m_storageType;
     bool m_enableDAG = true;
     bool m_needRetInput = false;  // need add 'input' param in sendTransaction() return value
+    bool m_isWasm = false;
 };
 }  // namespace protocol
 }  // namespace bcos

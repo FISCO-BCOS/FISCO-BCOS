@@ -87,7 +87,9 @@ enum ModuleID
 
     SYNC_PUSH_TRANSACTION = 5000,
     SYNC_GET_TRANSACTIONS = 5001,
-    SYNC_END = 5999
+    SYNC_END = 5999,
+
+    TREE_PUSH_TRANSACTION = 6000,
 };
 
 enum ProtocolModuleID : uint32_t
@@ -104,28 +106,6 @@ enum ProtocolVersion : uint32_t
     V1 = 1,
     V2 = 2,
 };
-
-enum ConsensusType : uint32_t
-{
-    PBFT_TYPE = 1,
-    RPBFT_TYPE = 2,
-};
-
-static constexpr const std::string_view PBFT_STR = "pbft";
-static constexpr const std::string_view RPBFT_STR = "rpbft";
-
-inline uint32_t consensusTypeFromString(std::string_view consensus)
-{
-    if (consensus == PBFT_STR)
-    {
-        return ConsensusType::PBFT_TYPE;
-    }
-    if (consensus == RPBFT_STR)
-    {
-        return ConsensusType::RPBFT_TYPE;
-    }
-    return 0;
-}
 
 // BlockVersion only present the data version with format major.minor.patch of 3 bytes, data should
 // be compatible with the same major.minor version, the patch version should always be compatible,
@@ -321,6 +301,8 @@ inline std::string moduleIDToString(ModuleID _moduleID)
         return "sync_get";
     case ModuleID::SYNC_PUSH_TRANSACTION:
         return "sync_push";
+    case ModuleID::TREE_PUSH_TRANSACTION:
+        return "tree_push";
     default:
         BCOS_LOG(DEBUG) << LOG_BADGE("unrecognized module") << LOG_KV("moduleID", _moduleID);
         return "unrecognized module";

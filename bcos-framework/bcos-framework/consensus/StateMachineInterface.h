@@ -19,8 +19,8 @@
  * @date 2021-05-18
  */
 #pragma once
+#include "ConsensusNode.h"
 #include "ProposalInterface.h"
-#include <bcos-framework/consensus/ConsensusNode.h>
 namespace bcos::consensus
 {
 class StateMachineInterface

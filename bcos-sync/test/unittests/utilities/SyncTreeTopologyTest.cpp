@@ -67,14 +67,15 @@ public:
     {
         std::int64_t offset = m_startIndex - 1;
         std::int64_t nodeIndex = _nodeIndex + 1 - m_startIndex;
-        return SyncTreeTopology::selectParentNodes(selectedNodeList, peers, nodeIndex, offset);
+        return SyncTreeTopology::selectParentNodes(
+            selectedNodeList, peers, nodeIndex, offset, false);
     }
     virtual std::int64_t nodeNum() { return m_nodeNum; }
 
     virtual bcos::crypto::NodeIDPtr nodeId() { return m_nodeId; }
 
     virtual std::int64_t nodeIndex() const { return m_nodeIndex; }
-    virtual std::int64_t consIndex() const { return m_consIndex; }
+    std::int32_t consIndex() const override { return m_consIndex; }
     virtual std::int64_t endIndex() const { return m_endIndex; }
     virtual std::int64_t startIndex() const { return m_startIndex; }
 };

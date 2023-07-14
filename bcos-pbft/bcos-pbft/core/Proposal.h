@@ -19,8 +19,8 @@
  * @date 2021-04-09
  */
 #pragma once
+#include "bcos-framework/consensus/ProposalInterface.h"
 #include "bcos-pbft/core/proto/Consensus.pb.h"
-#include "bcos-pbft/framework/ProposalInterface.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-protocol/Common.h>
 

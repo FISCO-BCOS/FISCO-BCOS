@@ -145,8 +145,9 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             m_submitResult;
     };
 
-    Awaitable awaitable{
-        .m_transaction = transaction, .m_self = shared_from_this(), .m_submitResult = {}};
+    Awaitable awaitable{.m_transaction = std::move(transaction),
+        .m_self = shared_from_this(),
+        .m_submitResult = {}};
     co_return co_await awaitable;
 }
 
@@ -978,15 +979,15 @@ size_t MemoryStorage::unSealedTxsSize()
 size_t MemoryStorage::unSealedTxsSizeWithoutLock()
 {
     auto txsSize = m_txsTable.size();
-     TXPOOL_LOG(DEBUG) << LOG_DESC("unSealedTxsSize") << LOG_KV("txsSize", txsSize)
+    TXPOOL_LOG(DEBUG) << LOG_DESC("unSealedTxsSize") << LOG_KV("txsSize", txsSize)
                       << LOG_KV("sealedTxsSize", m_sealedTxsSize);
 
-     if (txsSize < m_sealedTxsSize)
-     {
-         m_sealedTxsSize = txsSize;
-         return 0;
-     }
-     return (txsSize - m_sealedTxsSize);
+    if (txsSize < m_sealedTxsSize)
+    {
+        m_sealedTxsSize = txsSize;
+        return 0;
+    }
+    return (txsSize - m_sealedTxsSize);
 }
 
 void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
@@ -1038,12 +1039,31 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     auto txHashes =
         RANGES::iota_view<size_t, size_t>{0, txsSize} |
         RANGES::views::transform([&_block](size_t i) { return _block->transactionHash(i); });
+    bool findErrorTxInBlock = false;
 
     m_txsTable.batchFind<TxsMap::ReadAccessor>(
-        txHashes, [&missedTxs](const auto& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+        txHashes, [&missedTxs, &findErrorTxInBlock, _block](
+                      const auto& txHash, TxsMap::ReadAccessor::Ptr accessor) {
             if (!accessor)
             {
                 missedTxs->emplace_back(txHash);
+            }
+            else if (accessor->value()->sealed())
+            {
+                auto header = _block->blockHeader();
+                if ((accessor->value()->batchId() != header->number() &&
+                        accessor->value()->batchId() != -1) ||
+                    accessor->value()->batchHash() != header->hash())
+                {
+                    TXPOOL_LOG(INFO)
+                        << LOG_DESC("batchVerifyProposal unexpected wrong tx")
+                        << LOG_KV("blkNum", header->number())
+                        << LOG_KV("blkHash", header->hash().abridged())
+                        << LOG_KV("txBatchId", accessor->value()->batchId())
+                        << LOG_KV("txBatchHash", accessor->value()->batchHash().abridged());
+                    findErrorTxInBlock = true;
+                    return false;
+                }
             }
             return true;
         });
@@ -1052,7 +1072,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
                      << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
                      << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT))
                      << LOG_KV("missedTxs", missedTxs->size());
-    return missedTxs;
+    return findErrorTxInBlock ? nullptr : missedTxs;
 }
 
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)

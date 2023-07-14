@@ -25,8 +25,8 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/FileUtility.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/FileUtility.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -79,6 +79,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadFailOverConfig(_pt, _enforceMemberID);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
+    loadSyncConfig(_pt);
     loadOthersConfig(_pt);
 }
 
@@ -619,10 +620,15 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
                          << LOG_KV("keyCenterUrl", storageSecurityKeyCenterUrl);
 }
 
-void NodeConfig::loadSyncConfig(const boost::property_tree::ptree &_pt)
+void NodeConfig::loadSyncConfig(const boost::property_tree::ptree& _pt)
 {
-    m_enableSendBlockStatusByTree = _pt.get<bool>("sync.sync_block_by_tree", true);
+    m_enableSendBlockStatusByTree = _pt.get<bool>("sync.sync_block_by_tree", false);
+    m_enableSendTxByTree = _pt.get<bool>("sync.send_txs_by_tree", false);
     m_treeWidth = _pt.get<std::uint32_t>("sync.tree_width", 3);
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSyncConfig")
+                         << LOG_KV("sync_block_by_tree", m_enableSendBlockStatusByTree)
+                         << LOG_KV("send_txs_by_tree", m_enableSendTxByTree)
+                         << LOG_KV("tree_width", m_treeWidth);
 }
 
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
@@ -757,7 +763,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                 "consensus.consensus_type is illegal, it must be pbft or rpbft!"));
     }
     // blockTxCountLimit
-    auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
+    auto blockTxCountLimit =
+        checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
     if (blockTxCountLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -775,7 +782,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>("version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
+        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
@@ -874,7 +882,8 @@ void NodeConfig::generateGenesisData()
         auto genesisData = std::make_shared<bcos::ledger::GenesisConfig>(m_smCryptoType, m_chainId,
             m_groupId, m_consensusType, m_ledgerConfig->blockTxCountLimit(),
             m_ledgerConfig->leaderSwitchPeriod(), m_compatibilityVersionStr, m_txGasLimit, m_isWasm,
-            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute);
+            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute, m_epochSealerNum,
+            m_epochBlockNum);
         genesisdata = genesisData->genesisDataOutPut();
         size_t j = 0;
         for (const auto& node : m_ledgerConfig->consensusNodeList())

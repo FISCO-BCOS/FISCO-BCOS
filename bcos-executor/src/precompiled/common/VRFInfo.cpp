@@ -28,21 +28,21 @@ using namespace bcos::precompiled;
 
 bool VRFInfo::isValidVRFPublicKey()
 {
-    CInputBuffer rawPk{(const char*)m_vrfPublicKey.c_str(), m_vrfPublicKey.size()};
+    CInputBuffer rawPk{(const char*)m_vrfPublicKey.data(), m_vrfPublicKey.size()};
     return wedpr_curve25519_vrf_is_valid_public_key(&rawPk) == WEDPR_SUCCESS;
 }
 
 bool VRFInfo::verifyProof()
 {
-    CInputBuffer rawPk{(const char*)m_vrfPublicKey.c_str(), m_vrfPublicKey.size()};
-    CInputBuffer rawInput{(const char*)m_vrfInput.c_str(), m_vrfInput.size()};
-    CInputBuffer rawProof{(const char*)m_vrfProof.c_str(), m_vrfProof.size()};
+    CInputBuffer rawPk{(const char*)m_vrfPublicKey.data(), m_vrfPublicKey.size()};
+    CInputBuffer rawInput{(const char*)m_vrfInput.data(), m_vrfInput.size()};
+    CInputBuffer rawProof{(const char*)m_vrfProof.data(), m_vrfProof.size()};
     return (wedpr_curve25519_vrf_verify_utf8(&rawPk, &rawInput, &rawProof) == WEDPR_SUCCESS);
 }
 
 HashType VRFInfo::getHashFromProof()
 {
-    CInputBuffer rawProof{(const char*)m_vrfProof.c_str(), m_vrfProof.size()};
+    CInputBuffer rawProof{(const char*)m_vrfProof.data(), m_vrfProof.size()};
     HashType vrfHash;
     COutputBuffer outputHash{(char*)vrfHash.data(), vrfHash.size()};
     if (wedpr_curve25519_vrf_proof_to_hash(&rawProof, &outputHash) == WEDPR_SUCCESS)

@@ -20,62 +20,62 @@
  */
 #pragma once
 #include <bcos-tool/TreeTopology.h>
+#include <utility>
 
 #define SYNCTREE_LOG(LEVEL)                                                      \
     BCOS_LOG(LEVEL) << LOG_BADGE("SYNCTREE") << LOG_KV("nodeIndex", m_nodeIndex) \
                     << LOG_KV("consIndex", m_consIndex) << LOG_KV("nodeId", m_nodeId->shortHex())
 
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class SyncTreeTopology : public bcos::tool::TreeTopology
 {
 public:
     using Ptr = std::shared_ptr<SyncTreeTopology>;
 
-    SyncTreeTopology(bcos::crypto::NodeIDPtr _nodeId, std::uint32_t const _treeWidth = 3)
-      : TreeTopology(_nodeId, _treeWidth)
+    explicit SyncTreeTopology(bcos::crypto::NodeIDPtr _nodeId, std::uint32_t const _treeWidth = 3)
+      : TreeTopology(std::move(_nodeId), _treeWidth)
     {
         m_nodeList = std::make_shared<bcos::crypto::NodeIDs>();
     }
 
-    virtual ~SyncTreeTopology() {}
+    virtual ~SyncTreeTopology() = default;
+    SyncTreeTopology(SyncTreeTopology const&) = delete;
+    SyncTreeTopology& operator=(SyncTreeTopology const&) = delete;
+    SyncTreeTopology(SyncTreeTopology&&) = delete;
+    SyncTreeTopology& operator=(SyncTreeTopology&&) = delete;
+
     // update corresponding info when the nodes changed
-    virtual void updateNodeInfo(bcos::crypto::NodeIDs _nodeList);
+    virtual void updateNodeInfo(bcos::crypto::NodeIDs const& _nodeList);
     // consensus info must be updated with nodeList
     virtual void updateAllNodeInfo(
-        bcos::crypto::NodeIDs _consensusNodes, bcos::crypto::NodeIDs _nodeList);
+        bcos::crypto::NodeIDs const& _consensusNodes, bcos::crypto::NodeIDs const& _nodeList);
     // select the nodes by tree topology
-    virtual bcos::crypto::NodeIDListPtr selectNodesForBlockSync(bcos::crypto::NodeIDSetPtr _peers);
+    virtual bcos::crypto::NodeIDListPtr selectNodesForBlockSync(
+        bcos::crypto::NodeIDSetPtr const& _peers);
 
 protected:
-    bool getNodeIDByIndex(
-        bcos::crypto::NodeIDPtr& _nodeID, std::int64_t const _nodeIndex) const override;
+    bool getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, std::int32_t _nodeIndex) const override;
     // update the tree-topology range the nodes located in
     void updateStartAndEndIndex() override;
 
     // select the child nodes by tree
-    void recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-        std::int64_t const _parentIndex, bcos::crypto::NodeIDSetPtr _peers,
-        std::int64_t const _startIndex) override;
+    void recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr const& _selectedNodeList,
+        std::int32_t _parentIndex, bcos::crypto::NodeIDSetPtr const& _peers,
+        std::int32_t _startIndex) override;
     // select the parent nodes by tree
-    void selectParentNodes(bcos::crypto::NodeIDListPtr _selectedNodeList,
-        bcos::crypto::NodeIDSetPtr _peers, std::int64_t const _nodeIndex,
-        std::int64_t const _startIndex, bool const _selectAll = false) override;
+    void selectParentNodes(bcos::crypto::NodeIDListPtr const& _selectedNodeList,
+        bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex,
+        bool _selectAll) override;
 
 private:
-    bool locatedInGroup()
-    {
-        return (m_consIndex != -1) || (m_nodeIndex != -1);
-    }
+    inline bool locatedInGroup() { return (m_consIndex != -1) || (m_nodeIndex != -1); }
 
 protected:
     mutable Mutex m_mutex;
     // the nodeList include both the consensus nodes and the observer nodes
     bcos::crypto::NodeIDListPtr m_nodeList;
 
-    std::atomic_int64_t m_nodeIndex{0};
+    std::atomic_int32_t m_nodeIndex{0};
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

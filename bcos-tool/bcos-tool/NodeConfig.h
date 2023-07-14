@@ -230,6 +230,7 @@ public:
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
     bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
+    bool enableSendTxByTree() const { return m_enableSendTxByTree; }
     std::int64_t treeWidth() const { return m_treeWidth; }
 
     int sendTxTimeout() const { return m_sendTxTimeout; }
@@ -408,8 +409,9 @@ private:
     std::string m_p2pNodeFileName;
 
     // config for sync
-    bool m_enableSendBlockStatusByTree;
-    std::uint32_t m_treeWidth;
+    bool m_enableSendBlockStatusByTree = false;
+    bool m_enableSendTxByTree = false;
+    std::uint32_t m_treeWidth = 3;
 
     // config for cert
     std::string m_certPath;

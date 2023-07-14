@@ -477,6 +477,7 @@ void Session::drop(DisconnectReason _reason)
         }
         catch (...)
         {
+            SESSION_LOG(ERROR) << LOG_DESC("drop error") << LOG_KV("endpoint", nodeIPEndpoint());
         }
     }
 }
@@ -556,6 +557,7 @@ void Session::doRead()
                         else if (result == 0)
                         {
                             auto length = message->lengthDirect();
+                            assert(length <= session->allowMaxMsgSize());
                             if (length > session->allowMaxMsgSize())
                             {
                                 SESSION_LOG(ERROR)

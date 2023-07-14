@@ -21,6 +21,7 @@
 #pragma once
 #include "../consensus/ConsensusNodeInterface.h"
 #include "../protocol/ProtocolTypeDef.h"
+#include "Features.h"
 
 namespace bcos::ledger
 {
@@ -146,7 +147,10 @@ public:
     }
     uint64_t notifyRotateFlagInfo() const { return m_notifyRotateFlagInfo; }
 
-protected:
+    Features const& features() const { return m_features; }
+    void setFeatures(Features features) { m_features = features; }
+
+private:
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
     bcos::consensus::ConsensusNodeListPtr m_workingSealerNodeList;
@@ -166,5 +170,6 @@ protected:
     int64_t m_sealerId = -1;
     int64_t m_txsSize = -1;
     uint32_t m_authCheckStatus = 0;
+    Features m_features;
 };
 }  // namespace bcos::ledger
