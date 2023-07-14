@@ -1594,9 +1594,10 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
 }
 
 // sync method
-bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit, const std::string_view& _genesisData,
-                               std::string const& _compatibilityVersion, bool _isAuthCheck, std::string const& _consensusType,
-                               std::int64_t _epochSealerNum, std::int64_t _epochBlockNum)
+bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
+    const std::string_view& _genesisData, std::string const& _compatibilityVersion,
+    bool _isAuthCheck, std::string const& _consensusType, std::int64_t _epochSealerNum,
+    std::int64_t _epochBlockNum)
 {
     LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
     if (_gasLimit < TX_GAS_LIMIT_MIN)
@@ -1783,16 +1784,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
     // Write default features
     Features features;
-    features.setToDefault();
-    for (auto [flag, name, value] : features.flags())
-    {
-        if (value)
-        {
-            Entry entry;
-            entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
-            sysTable->setRow(name, std::move(entry));
-        }
-    }
+    features.setToDefault(protocol::BlockVersion(versionNumber));
 
     // tx count limit
     Entry txLimitEntry;
@@ -1805,23 +1797,21 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     gasLimitEntry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>(_gasLimit), 0});
     sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
 
-    if(versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
+    if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
     {
-        Entry consensusTypeEntry;
-        consensusTypeEntry.setObject(SystemConfigEntry{_consensusType, 0});
-        sysTable->setRow(SYSTEM_KEY_CONSENSUS_TYPE, std::move(consensusTypeEntry));
-
         // rpbft config
         if (RPBFT_CONSENSUS_TYPE == _consensusType)
         {
+            features.set(ledger::Features::Flag::feature_rpbft);
+
             Entry epochSealerNumEntry;
             epochSealerNumEntry.setObject(
-                    SystemConfigEntry{boost::lexical_cast<std::string>(_epochSealerNum), 0});
+                SystemConfigEntry{boost::lexical_cast<std::string>(_epochSealerNum), 0});
             sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, std::move(epochSealerNumEntry));
 
             Entry epochBlockNumEntry;
             epochBlockNumEntry.setObject(
-                    SystemConfigEntry{boost::lexical_cast<std::string>(_epochBlockNum), 0});
+                SystemConfigEntry{boost::lexical_cast<std::string>(_epochBlockNum), 0});
             sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, std::move(epochBlockNumEntry));
 
             Entry notifyRotateEntry;
@@ -1951,6 +1941,16 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     Entry archivedNumber;
     archivedNumber.importFields({"0"});
     stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
+
+    for (auto [flag, name, value] : features.flags())
+    {
+        if (value)
+        {
+            Entry entry;
+            entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
+            sysTable->setRow(name, std::move(entry));
+        }
+    }
 
     return true;
 }

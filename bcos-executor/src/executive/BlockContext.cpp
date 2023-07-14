@@ -29,6 +29,7 @@
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-task/Wait.h"
 #include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
@@ -57,7 +58,16 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_hashImpl(std::move(_hashImpl)),
     m_ledgerCache(std::move(ledgerCache)),
     m_backendStorage(std::move(backendStorage))
-{}
+{
+    if (!m_storage)
+    {
+        EXECUTOR_LOG(WARNING) << "No available storage, make sure it's testing";
+        return;
+    }
+
+    m_features =
+        task::syncWait(ledger::Features::readFeaturesFromStorage(*m_storage, m_blockNumber));
+}
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,

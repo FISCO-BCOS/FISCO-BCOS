@@ -52,10 +52,16 @@ public:
 
     // for sys block
     void asyncNoteLatestBlockNumber(int64_t _blockNumber) override;
+    void asyncNoteLatestBlockHash(crypto::HashType _hash) override;
     // interface for the consensus module to notify reset the sealing transactions
     void asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse) override;
 
     virtual void init(bcos::consensus::ConsensusInterface::Ptr _consensus);
+
+    virtual bool hookWhenSealBlock([[maybe_unused]] bcos::protocol::Block::Ptr _block) override
+    {
+        return true;
+    }
 
 protected:
     void executeWorker() override;

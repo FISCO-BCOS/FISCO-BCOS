@@ -1,11 +1,9 @@
 #pragma once
 
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-framework/protocol/TransactionReceipt.h"
-#include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-tars-protocol/tars/RPC.h"
+#include "detail/Core.h"
 #include <servant/Communicator.h>
-#include <any>
 
 namespace bcos::sdk
 {
@@ -21,41 +19,6 @@ public:
 
     virtual ~CompletionQueue() noexcept = default;
     virtual void notify(std::any tag) = 0;
-};
-
-class TarsCallback : public bcostars::RPCPrxCallback
-{
-private:
-    CompletionQueue* m_completionQueue = nullptr;
-    std::any m_tag;
-    std::promise<tars::ReqMessagePtr> m_promise;
-    std::variant<long, protocol::TransactionReceipt::Ptr> m_response;
-
-public:
-    TarsCallback(
-        CompletionQueue* completionQueue, std::any tag, std::promise<tars::ReqMessagePtr> promise);
-    TarsCallback(TarsCallback const&) = delete;
-    TarsCallback& operator=(TarsCallback const&) = delete;
-    TarsCallback(TarsCallback&&) = default;
-    TarsCallback& operator=(TarsCallback&&) = default;
-    ~TarsCallback() noexcept override = default;
-
-    CompletionQueue* completionQueue();
-    std::any& tag();
-    std::promise<tars::ReqMessagePtr>& promise();
-
-    template <class Response>
-    Response getResponse() &&
-    {
-        return std::move(std::get<Response>(m_response));
-    }
-
-    void callback_sendTransaction(
-        bcostars::Error const& error, bcostars::TransactionReceipt const& response) override;
-    void callback_sendTransaction_exception(tars::Int32 ret) override;
-
-    void callback_blockNumber(bcostars::Error const& error, tars::Int64 response) override;
-    void callback_blockNumber_exception(tars::Int32 ret) override;
 };
 
 template <class Response>
@@ -78,7 +41,7 @@ public:
         auto message = m_future.get();
         message->callback->dispatch(message);
 
-        auto& tarsCallback = dynamic_cast<TarsCallback&>(*message->callback.get());
+        auto& tarsCallback = dynamic_cast<detail::TarsCallback&>(*message->callback.get());
         return std::move(tarsCallback).getResponse<Response>();
     }
     void wait() { m_future.wait(); }
@@ -103,7 +66,6 @@ private:
     static void onMessage(tars::ReqMessagePtr message);
 
 public:
-    RPCClient(std::vector<std::string> endpoints, std::string locator = "") {}
     RPCClient(const std::string& connectionString);
 
     Future<bcos::protocol::TransactionReceipt::Ptr> sendTransaction(

@@ -165,5 +165,4 @@ private:
     ledger::Features m_features;
 };
 
-}  // namespace executor
-
+}  // namespace bcos::executor

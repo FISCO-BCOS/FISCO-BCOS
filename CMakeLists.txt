@@ -43,6 +43,7 @@ if(FULLNODE)
         include(ProjectBCOSWASM)
     endif()
     include(ProjectGroupSig)
+    include(ProjectPaillier)
     include(ProjectSDF)
     include(ProjectITTAPI)
 

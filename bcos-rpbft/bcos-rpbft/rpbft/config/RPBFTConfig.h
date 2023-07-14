@@ -23,10 +23,7 @@
 
 #include "bcos-pbft/bcos-pbft/pbft/config/PBFTConfig.h"
 
-namespace bcos
-{
-
-namespace consensus
+namespace bcos::consensus
 {
 
 class RPBFTConfig : public PBFTConfig
@@ -39,17 +36,16 @@ public:
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
-        StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage)
+        StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
+        bcos::protocol::BlockFactory::Ptr _blockFactory)
       : PBFTConfig(std::move(_cryptoSuite), std::move(_keyPair), std::move(_pbftMessageFactory),
             std::move(_codec), std::move(_validator), std::move(_frontService),
-            std::move(_stateMachine), std::move(_storage))
+            std::move(_stateMachine), std::move(_storage), std::move(_blockFactory))
     {}
 
-public:
     void resetConfig(
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock = false) override;
 
-protected:
     void updateWorkingSealerNodeList(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
 
     void updateShouldRotateSealers(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
@@ -59,8 +55,8 @@ protected:
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool& isEpochSealerNumChanged);
     void updateNotifyRotateFlag(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
 
-    void setShouldRotateSealers(const bool _shouldRotateSealers);
-    bool shouldRotateSealers() const;
+    void setShouldRotateSealers(bool _shouldRotateSealers);
+    bool shouldRotateSealers() const override;
 
 private:
     // the node index in working consensus node list
@@ -72,6 +68,7 @@ private:
     ConsensusNodeListPtr m_workingSealerNodeList;
     mutable bcos::SharedMutex x_workingSealerNodeList;
     std::atomic_bool m_workingSealerNodeListUpdated{false};
+    std::atomic_bool m_shouldRotateWorkingSealer{false};
 
     // epoch block num
     std::atomic_uint64_t m_epochBlockNum{0};
@@ -82,10 +79,6 @@ private:
     bcos::protocol::BlockNumber m_epochSealerNumEnableNumber{0};
 
     std::atomic_uint64_t m_notifyRotateFlag{0};
-
-    std::atomic_bool m_shouldRotateWorkingSealer{false};
 };
 
-}  // namespace consensus
-
-}  // namespace bcos
+}  // namespace bcos::consensus

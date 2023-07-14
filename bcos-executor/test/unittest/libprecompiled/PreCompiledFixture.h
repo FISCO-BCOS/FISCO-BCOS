@@ -157,6 +157,10 @@ public:
             entry.setObject(SystemConfigEntry{"3000000", 0});
 
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
+
+            Entry entry2;
+            entry2.setObject(SystemConfigEntry{"1", 0});
+            table->setRow("feature_sharding", entry2);
         }
 
         m_blockVersion = version;
@@ -283,8 +287,9 @@ public:
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
 
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
+        bcos::protocol::ParentInfo p{
+            .blockNumber = blockNumber - 1, .blockHash = h256(blockNumber - 1)};
+        std::vector<bcos::protocol::ParentInfo> parentInfos{p};
         blockHeader->setParentInfo(parentInfos);
 
         blockHeader->setVersion((uint32_t)version);

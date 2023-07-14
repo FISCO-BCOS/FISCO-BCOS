@@ -91,11 +91,6 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
             defaultCmp(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, _value, RPBFT_EPOCH_SEALER_NUM_MIN,
                 version, BlockVersion::V3_5_VERSION);
         }));
-    m_sysValueCmp.insert(
-        std::make_pair(SYSTEM_KEY_CONSENSUS_TYPE, [defaultCmp](int64_t _value, uint32_t version) {
-            defaultCmp(SYSTEM_KEY_CONSENSUS_TYPE, _value, ConsensusType::RPBFT_TYPE, version,
-                BlockVersion::V3_5_VERSION);
-        }));
     // for compatibility
     // Note: the compatibility_version is not compatibility
     m_sysValueCmp.insert(
@@ -122,10 +117,6 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
                 }
             }
             return version;
-        }));
-    m_valueConverter.insert(std::make_pair(SYSTEM_KEY_CONSENSUS_TYPE,
-        [](const std::string& _value, uint32_t blockVersion) -> uint32_t {
-            return consensusTypeFromString(_value);
         }));
 }
 
@@ -160,7 +151,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            int64_t value = checkValueValid(configKey, configValue, blockContext.blockVersion());
+            int64_t value = validate(configKey, configValue, blockContext.blockVersion());
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
@@ -203,7 +194,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     return _callParameters;
 }
 
-int64_t SystemConfigPrecompiled::checkValueValid(
+int64_t SystemConfigPrecompiled::validate(
     std::string_view _key, std::string_view value, uint32_t blockVersion)
 {
     int64_t configuredValue = 0;
@@ -345,6 +336,30 @@ void SystemConfigPrecompiled::upgradeChain(
         {
             _executive->storage().createTable(
                 std::string(tables.at(i)), std::string(tables.at(i + 1)));
+        }
+    }
+
+    // Write default features when data version changes
+    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_VERSION))
+    {
+        Features features;
+        features.setToDefault(protocol::BlockVersion(toVersion));
+
+        // From 3.3 or 3.4, enable the feature_sharding
+        if (version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION &&
+            toVersion >= BlockVersion::V3_5_VERSION)
+        {
+            features.set(ledger::Features::Flag::feature_sharding);
+        }
+
+        for (auto [flag, name, value] : features.flags())
+        {
+            if (value)
+            {
+                Entry entry;
+                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
+                _executive->storage().setRow(SYS_CONFIG, name, std::move(entry));
+            }
         }
     }
 }
