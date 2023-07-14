@@ -240,6 +240,13 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
             }
             auto txpoolStorage = txpool->m_txpoolStorage;
             auto missedTxs = txpoolStorage->batchVerifyProposal(block);
+            if (!missedTxs)
+            {
+                _onVerifyFinished(BCOS_ERROR_PTR(CommonError::InconsistentTransactions,
+                                      "asyncVerifyBlock failed for duplicate transaction"),
+                    false);
+                return;
+            }
             auto onVerifyFinishedWrapper =
                 [txpool, txpoolStorage, _onVerifyFinished, block, blockHeader, missedTxs, startT](
                     Error::Ptr _error, bool _ret) {
