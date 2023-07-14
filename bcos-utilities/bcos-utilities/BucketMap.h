@@ -35,12 +35,11 @@ class EmptyType
 {
 };
 
-template <class KeyType, class ValueType>
-class Bucket : public std::enable_shared_from_this<Bucket<KeyType, ValueType>>
+template <class KeyType, class ValueType, class MapType = std::unordered_map<KeyType, ValueType>>
+class Bucket : public std::enable_shared_from_this<Bucket<KeyType, ValueType, MapType>>
 {
 public:
     using Ptr = std::shared_ptr<Bucket>;
-    using MapType = std::unordered_map<KeyType, ValueType>;
 
     Bucket() = default;
     Bucket(const Bucket&) = default;
@@ -140,6 +139,8 @@ public:
         }
 
         auto it = m_values.find(key);
+        BCOS_LOG(DEBUG) << LOG_KV("it ?= m_values.end()",it == m_values.end()) << LOG_KV("it->first", it->first) << LOG_KV("it->second", it->second)
+                        << LOG_KV("m_values.end()->first", m_values.end()->first) << LOG_KV("m_values.end()->second", m_values.end()->second);
         if (it == m_values.end())
         {
             return false;
@@ -254,24 +255,24 @@ public:
 
     SharedMutex& getMutex() { return m_mutex; }
 
-private:
+protected:
     MapType m_values;
     mutable SharedMutex m_mutex;
 };
 
-template <class KeyType, class ValueType, class BucketHasher = std::hash<KeyType>>
+template <class KeyType, class ValueType,  class BucketHasher = std::hash<KeyType>, class BucketType = Bucket<KeyType, ValueType>>
 class BucketMap
 {
 public:
     using Ptr = std::shared_ptr<BucketMap>;
-    using WriteAccessor = typename Bucket<KeyType, ValueType>::WriteAccessor;
-    using ReadAccessor = typename Bucket<KeyType, ValueType>::ReadAccessor;
+    using WriteAccessor = typename BucketType::WriteAccessor;
+    using ReadAccessor = typename BucketType::ReadAccessor;
 
     BucketMap(size_t bucketSize)
     {
         for (size_t i = 0; i < bucketSize; i++)
         {
-            m_buckets.push_back(std::make_shared<Bucket<KeyType, ValueType>>());
+            m_buckets.push_back(std::make_shared<BucketType>());
         }
     }
 
@@ -282,6 +283,7 @@ public:
     {
         auto idx = getBucketIndex(key);
         auto bucket = m_buckets[idx];
+        BCOS_LOG(DEBUG) << LOG_KV("m_buckets size:", m_buckets.size()) << LOG_KV("idx:", idx);
         return bucket->template find<AccessorType>(accessor, key);
     }
 
@@ -291,7 +293,7 @@ public:
         const auto& keys, std::function<bool(const KeyType&, typename AccessorType::Ptr)> handler)
     {
         forEach<AccessorType>(keys, [handler = std::move(handler)](const KeyType& key,
-                                        typename Bucket<KeyType, ValueType>::Ptr bucket,
+                                        typename BucketType::Ptr bucket,
                                         typename AccessorType::Ptr accessor) {
             bool has = bucket->template find<AccessorType>(accessor, key);
             return handler(key, has ? accessor : nullptr);
@@ -302,7 +304,7 @@ public:
         std::function<void(bool, const KeyType&, typename WriteAccessor::Ptr)> onInsert)
     {
         forEach<WriteAccessor>(kvs, [onInsert = std::move(onInsert)](decltype(kvs.front()) kv,
-                                        typename Bucket<KeyType, ValueType>::Ptr bucket,
+                                        typename BucketType::Ptr bucket,
                                         typename WriteAccessor::Ptr accessor) {
             bucket->insert(accessor, kv);
             return true;
@@ -318,7 +320,7 @@ public:
         const auto& keys, std::function<void(bool, const KeyType&, const ValueType&)> onRemove)
     {
         forEach<WriteAccessor>(keys, [onRemove = std::move(onRemove)](const KeyType& key,
-                                         typename Bucket<KeyType, ValueType>::Ptr bucket,
+                                         typename BucketType::Ptr bucket,
                                          typename WriteAccessor::Ptr accessor) {
             auto [success, value] = bucket->remove(accessor, key);
             onRemove(success, key, value);
@@ -370,17 +372,17 @@ public:
         {
             for (size_t i = 0; i < m_buckets.size(); i++)
             {
-                m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+                m_buckets[i] = std::make_shared<BucketType>();
             }
         }
         else
         {
             // idx and bucket
-            std::queue<std::pair<size_t, typename Bucket<KeyType, ValueType>::Ptr>> bucket2Remove;
+            std::queue<std::pair<size_t, typename BucketType::Ptr>> bucket2Remove;
             for (size_t i = 0; i < m_buckets.size(); i++)
             {
                 auto bucket = m_buckets[i];
-                m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+                m_buckets[i] = std::make_shared<BucketType>();
                 bucket2Remove.emplace(i, std::move(bucket));
             }
 
@@ -434,7 +436,7 @@ public:
             RANGES::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
 
         forEachBucket<AccessorType>(indexes,
-            [handler = std::move(handler)](size_t, typename Bucket<KeyType, ValueType>::Ptr bucket,
+            [handler = std::move(handler)](size_t, typename BucketType::Ptr bucket,
                 typename AccessorType::Ptr accessor) {
                 return bucket->template forEach<AccessorType>(handler, accessor);
             });
@@ -443,11 +445,11 @@ public:
     template <class AccessorType>  // handler return isContinue
     void forEachBucket(const auto& bucketIndexes,
         std::function<bool(
-            size_t idx, typename Bucket<KeyType, ValueType>::Ptr, typename AccessorType::Ptr)>
+            size_t idx, typename BucketType::Ptr, typename AccessorType::Ptr)>
             handler)
     {
         // idx and bucket
-        std::queue<std::pair<size_t, typename Bucket<KeyType, ValueType>::Ptr>> bucket2Process;
+        std::queue<std::pair<size_t, typename BucketType::Ptr>> bucket2Process;
 
         for (size_t idx : bucketIndexes)
         {
@@ -479,7 +481,7 @@ public:
 
     template <class AccessorType>  // handler return isContinue
     void forEach(const auto& objs,
-        std::function<bool(decltype(objs.front()), typename Bucket<KeyType, ValueType>::Ptr,
+        std::function<bool(decltype(objs.front()), typename BucketType::Ptr,
             typename AccessorType::Ptr)>
             handler)
     {
@@ -488,7 +490,7 @@ public:
         });
 
         std::queue<
-            std::tuple<size_t, decltype(batches.front()), typename Bucket<KeyType, ValueType>::Ptr>>
+            std::tuple<size_t, decltype(batches.front()), typename BucketType::Ptr>>
             bucket2Process;
 
         for (const auto& batch : batches)
@@ -555,7 +557,7 @@ protected:
         return hash % m_buckets.size();
     }
 
-    tbb::concurrent_vector<typename Bucket<KeyType, ValueType>::Ptr> m_buckets;
+    tbb::concurrent_vector<typename BucketType::Ptr> m_buckets;
 };
 
 template <class KeyType, class BucketHasher = std::hash<KeyType>>

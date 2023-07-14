@@ -28,6 +28,9 @@
 #include <memory>
 #include <tuple>
 #include <variant>
+#include <thread>
+
+#define CPU_CORES std::thread::hardware_concurrency()
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -81,6 +84,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     protocol::Transaction::Ptr transaction)
 {
     transaction->setImportTime(utcTime());
+//    TXPOOL_LOG(DEBUG) << LOG_KV("#### importTime", transaction->importTime());
     struct Awaitable
     {
         [[maybe_unused]] constexpr bool await_ready() { return false; }
@@ -274,6 +278,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     Transaction::Ptr transaction, TxSubmitCallback txSubmitCallback, bool checkPoolLimit, bool lock)
 {
     size_t txsSize = m_txsTable.size();
+    TXPOOL_LOG(DEBUG) << LOG_KV("txsSize", txsSize);
 
     auto result = txpoolStorageCheck(*transaction);
     if (result != TransactionStatus::None)
