@@ -23,7 +23,7 @@ public:
     Precompiled const* getPrecompiled(unsigned long contractAddress) const;
 
 private:
-    std::vector<std::tuple<unsigned long, Precompiled>> m_evmPrecompiled;
+    std::vector<std::tuple<unsigned long, Precompiled>> m_address2Precompiled;
 };
 
 }  // namespace bcos::transaction_executor

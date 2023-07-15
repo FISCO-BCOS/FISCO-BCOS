@@ -247,7 +247,6 @@ public:
                     auto transactionRootFuture = transactionRootPromise.get_future();
                     newBlockHeader->setTxsRoot(transactionRootFuture.get());
                     newBlockHeader->calculateHash(self->m_hashImpl);
-                    newBlockHeader->calculateHash(self->m_hashImpl);
                 }
 
                 if (verify && newBlockHeader->hash() != blockHeader->hash())
