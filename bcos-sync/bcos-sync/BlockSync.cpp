@@ -77,7 +77,7 @@ void BlockSync::init()
     BLKSYNC_LOG(INFO) << LOG_DESC("start fetch the ledger config for block sync module");
     fetcher->fetchBlockNumberAndHash();
     fetcher->fetchCompatibilityVersion();
-    fetcher->fetchFeature();
+    fetcher->fetchFeatures();
     fetcher->fetchConsensusNodeList();
     fetcher->fetchObserverNodeList();
     fetcher->fetchWorkingSealerList();

@@ -710,7 +710,7 @@ void DownloadingQueue::fetchAndUpdateLedgerConfig()
         BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
         m_ledgerFetcher->fetchBlockNumberAndHash();
         m_ledgerFetcher->fetchCompatibilityVersion();
-        m_ledgerFetcher->fetchFeature();
+        m_ledgerFetcher->fetchFeatures();
         m_ledgerFetcher->fetchConsensusNodeList();
         // Note: must fetchObserverNode here to notify the latest sealerList and observerList to
         // txpool

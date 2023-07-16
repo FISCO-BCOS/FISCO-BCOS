@@ -36,7 +36,7 @@ void LedgerConfigFetcher::fetchAll()
     // should not change fetch order
     fetchBlockNumberAndHash();
     fetchCompatibilityVersion();
-    fetchFeature();
+    fetchFeatures();
     fetchConsensusNodeList();
     fetchObserverNodeList();
     fetchWorkingSealerList();
@@ -189,7 +189,7 @@ void LedgerConfigFetcher::fetchConsensusLeaderPeriod()
     m_ledgerConfig->setLeaderSwitchPeriod(boost::lexical_cast<uint64_t>(ret));
 }
 
-void LedgerConfigFetcher::fetchFeature()
+void LedgerConfigFetcher::fetchFeatures()
 {
     Features features;
     for (auto const& key : Features::featureKeys())

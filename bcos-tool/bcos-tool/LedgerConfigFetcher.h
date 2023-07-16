@@ -48,7 +48,7 @@ public:
     virtual void fetchGenesisHash();
     virtual void fetchNonceList(protocol::BlockNumber _startNumber, int64_t _offset);
     virtual void fetchConsensusLeaderPeriod();
-    virtual void fetchFeature();
+    virtual void fetchFeatures();
     virtual void fetchCompatibilityVersion();
     virtual void fetchAuthCheckStatus();
     virtual void fetchEpochSealerNum();
