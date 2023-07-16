@@ -49,14 +49,20 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
         auto keyPair = m_sealerConfig->keyPair();
         CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
             keyPair->secretKey()->size()};
+        bytes vrfPublicKey;
+        // FIXME: make it constant
+        vrfPublicKey.resize(32);
+        COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+        auto pubkeyDerive = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
+
         CInputBuffer inputMsg{reinterpret_cast<const char*>(blockHash.data()), blockHash.size()};
-        std::string vrfProof;
+        bcos::bytes vrfProof;
         // FIXME: make it constant
         size_t proofSize = 96;
         vrfProof.resize(proofSize);
-        COutputBuffer proof{vrfProof.data(), proofSize};
-        auto ret = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
-        if (ret != WEDPR_SUCCESS)
+        COutputBuffer proof{(char*)vrfProof.data(), proofSize};
+        auto vrfProve = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
+        if (vrfProve != WEDPR_SUCCESS || pubkeyDerive != WEDPR_SUCCESS)
         {
             SEAL_LOG(WARNING) << LOG_DESC(
                                      "generateTransactionForRotating: generate vrf-proof failed")
@@ -67,8 +73,7 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
         std::string interface = precompiled::WSM_METHOD_ROTATE_STR;
 
         bcos::CodecWrapper codec(m_hashImpl, g_BCOSConfig.isWasm());
-        auto input =
-            codec.encodeWithSig(interface, keyPair->publicKey()->hex(), blockHash.hex(), vrfProof);
+        auto input = codec.encodeWithSig(interface, vrfPublicKey, blockHash.asBytes(), vrfProof);
 
         auto tx = m_sealerConfig->blockFactory()->transactionFactory()->createTransaction(0,
             precompiled::CONSENSUS_ADDRESS, input, std::to_string(utcSteadyTimeUs()), INT64_MAX,

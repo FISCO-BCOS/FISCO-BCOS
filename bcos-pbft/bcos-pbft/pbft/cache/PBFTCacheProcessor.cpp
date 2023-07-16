@@ -961,14 +961,14 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
 void PBFTCacheProcessor::checkAndCommitStableCheckPoint()
 {
     std::vector<PBFTCache::Ptr> stabledCacheList;
-    for (auto const& it : m_caches)
+    for (auto const& [_, cache] : m_caches)
     {
-        auto ret = it.second->checkAndCommitStableCheckPoint();
+        auto ret = cache->checkAndCommitStableCheckPoint();
         if (!ret)
         {
             continue;
         }
-        stabledCacheList.emplace_back(it.second);
+        stabledCacheList.emplace_back(cache);
     }
     // Note: since updateStableCheckPointQueue may update m_caches after commitBlock
     // must call it after iterator m_caches

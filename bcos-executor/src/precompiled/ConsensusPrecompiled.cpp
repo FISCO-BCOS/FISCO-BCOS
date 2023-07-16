@@ -94,7 +94,8 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
         // setWeight(string,uint256)
         result = setWeight(_executive, data, codec);
     }
-    else if (_executive->blockContext().blockVersion() >= protocol::BlockVersion::V3_5_VERSION &&
+    else if (blockContext.blockVersion() >= protocol::BlockVersion::V3_5_VERSION &&
+             blockContext.features().get(Features::Flag::feature_rpbft) &&
              func == name2Selector[WSM_METHOD_ROTATE_STR])
     {
         // TODO: use feature
@@ -374,23 +375,29 @@ int ConsensusPrecompiled::setWeight(
 
 void ConsensusPrecompiled::rotateWorkingSealer(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    PrecompiledExecResult::Ptr _callParameters, const CodecWrapper& codec)
+    const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec)
 {
     auto const& blockContext = _executive->blockContext();
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_DESC("rotateWorkingSealer");
-    std::string vrfPublicKey;
-    std::string vrfInput;
-    std::string vrfProof;
+    bytes vrfPublicKey;
+    bytes vrfInput;
+    bytes vrfProof;
     codec.decode(_callParameters->params(), vrfPublicKey, vrfInput, vrfProof);
     try
     {
         WorkingSealerManagerImpl sealerManger;
-        // FIXME: if transaction not from sealer, should throw exception
-        // BOOST_THROW_EXCEPTION(
-        //    bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
         sealerManger.createVRFInfo(
             std::move(vrfProof), std::move(vrfPublicKey), std::move(vrfInput));
         sealerManger.rotateWorkingSealer(_executive, _callParameters);
+    }
+    catch (protocol::PrecompiledError const& _e)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("WorkingSealerManagerPrecompiled")
+                               << LOG_DESC("rotateWorkingSealer exception occurred")
+                               << LOG_KV("errorInfo", _e.what())
+                               << LOG_KV("origin", _callParameters->m_origin)
+                               << LOG_KV("sender", _callParameters->m_sender);
+        BOOST_THROW_EXCEPTION(_e);
     }
     catch (std::exception const& _e)
     {

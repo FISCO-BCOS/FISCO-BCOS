@@ -54,7 +54,7 @@ private:
         bytesConstRef& _data, const CodecWrapper& codec);
 
     void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr _callParameters, const CodecWrapper& codec);
+        const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec);
 
     void showConsensusTable(const std::shared_ptr<executor::TransactionExecutive>& _executive);
 };

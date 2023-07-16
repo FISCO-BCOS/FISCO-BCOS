@@ -20,6 +20,7 @@
  */
 #include "PBFTFactory.h"
 #include "bcos-pbft/core/StateMachine.h"
+#include "bcos-rpbft/bcos-rpbft/rpbft/config/RPBFTConfig.h"
 #include "engine/Validator.h"
 #include "protocol/PB/PBFTCodec.h"
 #include "protocol/PB/PBFTMessageFactoryImpl.h"
@@ -39,7 +40,8 @@ PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
-    bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
+    bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
+    std::string_view _consensusType)
   : m_cryptoSuite(std::move(_cryptoSuite)),
     m_keyPair(std::move(_keyPair)),
     m_frontService(std::move(_frontService)),
@@ -48,7 +50,8 @@ PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     m_scheduler(std::move(_scheduler)),
     m_txpool(std::move(_txpool)),
     m_blockFactory(std::move(_blockFactory)),
-    m_txResultFactory(std::move(_txResultFactory))
+    m_txResultFactory(std::move(_txResultFactory)),
+    m_consensusType(_consensusType)
 {}
 
 PBFTImpl::Ptr PBFTFactory::createPBFT()
@@ -67,9 +70,19 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     auto pbftStorage =
         std::make_shared<LedgerStorage>(m_scheduler, m_storage, m_blockFactory, pbftMessageFactory);
 
-    PBFT_LOG(INFO) << LOG_DESC("create pbftConfig");
-    auto pbftConfig = std::make_shared<PBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory,
-        pbftCodec, validator, m_frontService, stateMachine, pbftStorage);
+    PBFTConfig::Ptr pbftConfig;
+    if (m_consensusType == ledger::PBFT_CONSENSUS_TYPE) [[likely]]
+    {
+        PBFT_LOG(INFO) << LOG_DESC("create pbftConfig");
+        pbftConfig = std::make_shared<PBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory,
+            pbftCodec, validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
+    }
+    else if (m_consensusType == ledger::RPBFT_CONSENSUS_TYPE) [[unlikely]]
+    {
+        // FIXME: use rpbft factory
+        // pbftConfig = std::make_shared<RPBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory,
+        //    pbftCodec, validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
+    }
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFTEngine");
     auto pbftEngine = std::make_shared<PBFTEngine>(pbftConfig);
