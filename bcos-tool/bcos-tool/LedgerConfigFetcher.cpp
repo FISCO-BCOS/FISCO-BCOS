@@ -31,6 +31,24 @@ using namespace bcos::consensus;
 using namespace bcos::tool;
 using namespace bcos::ledger;
 
+void LedgerConfigFetcher::fetchAll()
+{
+    // should not change fetch order
+    fetchBlockNumberAndHash();
+    fetchCompatibilityVersion();
+    fetchFeature();
+    fetchConsensusNodeList();
+    fetchObserverNodeList();
+    fetchWorkingSealerList();
+    fetchBlockTxCountLimit();
+    fetchGenesisHash();
+    fetchConsensusLeaderPeriod();
+    fetchAuthCheckStatus();
+    fetchEpochSealerNum();
+    fetchEpochBlockNum();
+    fetchNotifyRotateFlagInfo();
+}
+
 void LedgerConfigFetcher::fetchBlockNumberAndHash()
 {
     std::promise<std::pair<Error::Ptr, BlockNumber>> blockNumberPromise;
@@ -108,12 +126,31 @@ std::string LedgerConfigFetcher::fetchSystemConfig(std::string_view _key)
     return std::get<1>(ret);
 }
 
+bcos::ledger::SystemConfigEntry LedgerConfigFetcher::fetchSystemConfigNoException(
+    std::string_view _key, bcos::ledger::SystemConfigEntry _defaultValue) noexcept
+{
+    std::promise<std::tuple<Error::Ptr, bcos::ledger::SystemConfigEntry>> systemConfigPromise;
+    m_ledger->asyncGetSystemConfigByKey(_key, [&systemConfigPromise](const Error::Ptr& _error,
+                                                  std::string _sysValue, BlockNumber _blockNumber) {
+        systemConfigPromise.set_value({_error, {std::move(_sysValue), _blockNumber}});
+    });
+    auto ret = systemConfigPromise.get_future().get();
+    auto error = std::get<0>(ret);
+    if (error)
+    {
+        TOOL_LOG(INFO) << LOG_DESC("fetchSystemConfig failed") << LOG_KV("code", error->errorCode())
+                       << LOG_KV("msg", error->errorMessage()) << LOG_KV("key", _key);
+        return _defaultValue;
+    }
+    return std::get<SystemConfigEntry>(ret);
+}
+
 ConsensusNodeListPtr LedgerConfigFetcher::fetchNodeListByNodeType(std::string_view _type)
 {
     std::promise<std::pair<Error::Ptr, ConsensusNodeListPtr>> nodeListPromise;
     m_ledger->asyncGetNodeListByType(
         _type, [&nodeListPromise](Error::Ptr _error, ConsensusNodeListPtr _nodes) {
-            nodeListPromise.set_value(std::make_pair(_error, _nodes));
+            nodeListPromise.set_value({std::move(_error), std::move(_nodes)});
         });
     auto ret = nodeListPromise.get_future().get();
     auto error = ret.first;
@@ -150,6 +187,32 @@ void LedgerConfigFetcher::fetchConsensusLeaderPeriod()
     auto ret = fetchSystemConfig(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD);
     TOOL_LOG(INFO) << LOG_DESC("fetchConsensusLeaderPeriod success") << LOG_KV("value", ret);
     m_ledgerConfig->setLeaderSwitchPeriod(boost::lexical_cast<uint64_t>(ret));
+}
+
+void LedgerConfigFetcher::fetchFeature()
+{
+    Features features;
+    for (auto const& key : Features::featureKeys())
+    {
+        auto value = fetchSystemConfigNoException(key, {"0", 0});
+        if (std::get<0>(value) == "1")
+        {
+            features.set(key);
+        }
+    }
+    m_ledgerConfig->setFeatures(features);
+}
+
+void LedgerConfigFetcher::fetchWorkingSealerList()
+{
+    if (m_ledgerConfig->compatibilityVersion() < protocol::BlockVersion::V3_5_VERSION)
+    {
+        return;
+    }
+    auto sealerList = fetchNodeListByNodeType(CONSENSUS_WORKING_SEALER);
+    TOOL_LOG(INFO) << LOG_DESC("fetchWorkingSealerList success")
+                   << LOG_KV("size", sealerList->size());
+    m_ledgerConfig->setWorkingSealerNodeList(*sealerList);
 }
 
 void LedgerConfigFetcher::fetchBlockTxCountLimit()
@@ -220,4 +283,40 @@ void LedgerConfigFetcher::fetchAuthCheckStatus()
         TOOL_LOG(INFO) << LOG_DESC("fetchAuthCheckStatus failed, set default value UINT32_MAX.");
         m_ledgerConfig->setAuthCheckStatus(UINT32_MAX);
     }
+}
+
+void LedgerConfigFetcher::fetchEpochBlockNum()
+{
+    if (m_ledgerConfig->compatibilityVersion() < BlockVersion::V3_5_VERSION)
+    {
+        return;
+    }
+    auto ret = fetchSystemConfigNoException(ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, {"1000", 0});
+    TOOL_LOG(INFO) << LOG_DESC("fetchEpochBlockNum success") << LOG_KV("value", std::get<0>(ret));
+    m_ledgerConfig->setEpochBlockNum({boost::lexical_cast<uint64_t>(std::get<0>(ret)),
+        boost::lexical_cast<uint64_t>(std::get<1>(ret))});
+}
+
+void LedgerConfigFetcher::fetchEpochSealerNum()
+{
+    if (m_ledgerConfig->compatibilityVersion() < BlockVersion::V3_5_VERSION)
+    {
+        return;
+    }
+    auto ret = fetchSystemConfigNoException(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, {"4", 0});
+    TOOL_LOG(INFO) << LOG_DESC("fetchEpochSealerNum success") << LOG_KV("value", std::get<0>(ret));
+    m_ledgerConfig->setEpochSealerNum({boost::lexical_cast<uint64_t>(std::get<0>(ret)),
+        boost::lexical_cast<uint64_t>(std::get<1>(ret))});
+}
+
+void LedgerConfigFetcher::fetchNotifyRotateFlagInfo()
+{
+    if (m_ledgerConfig->compatibilityVersion() < BlockVersion::V3_5_VERSION)
+    {
+        return;
+    }
+    auto ret = fetchSystemConfigNoException(ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, {"0", 0});
+    TOOL_LOG(INFO) << LOG_DESC("fetchNotifyRotateFlagInfo success")
+                   << LOG_KV("value", std::get<0>(ret));
+    m_ledgerConfig->setNotifyRotateFlagInfo(boost::lexical_cast<uint64_t>(std::get<0>(ret)));
 }

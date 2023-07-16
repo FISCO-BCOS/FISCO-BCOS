@@ -76,8 +76,11 @@ void BlockSync::init()
     auto fetcher = std::make_shared<LedgerConfigFetcher>(m_config->ledger());
     BLKSYNC_LOG(INFO) << LOG_DESC("start fetch the ledger config for block sync module");
     fetcher->fetchBlockNumberAndHash();
+    fetcher->fetchCompatibilityVersion();
+    fetcher->fetchFeature();
     fetcher->fetchConsensusNodeList();
     fetcher->fetchObserverNodeList();
+    fetcher->fetchWorkingSealerList();
     fetcher->fetchGenesisHash();
     // set the syncConfig
     auto genesisHash = fetcher->genesisHash();
