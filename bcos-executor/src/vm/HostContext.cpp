@@ -248,6 +248,11 @@ evmc_result HostContext::callBuiltInPrecompiled(
         resultCode =
             (int32_t)(success ? TransactionStatus::None : TransactionStatus::RevertInstruction);
         resultData.swap(output);
+
+        // TODO: To be remove
+        EXECUTOR_LOG(INFO) << "[PRECOMPILED]"
+                           << "Called builtin precompiled, status_code: " << resultCode
+                           << " result:" << toHex(resultData);
     }
     else
     {

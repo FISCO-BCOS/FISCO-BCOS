@@ -34,6 +34,8 @@ evmc_result bcos::transaction_executor::Precompiled::call(evmc_message const& me
                     .create_address = {},
                     .padding = {},
                 };
+                PRECOMPILED_LOG(INFO) << "Gas left: " << result.gas_left;
+
                 return result;
             },
             [](std::shared_ptr<precompiled::Precompiled> const&) {
@@ -82,7 +84,10 @@ bcos::transaction_executor::Precompiled const*
 bcos::transaction_executor::PrecompiledManager::getPrecompiled(unsigned long contractAddress) const
 {
     auto it = std::lower_bound(m_address2Precompiled.begin(), m_address2Precompiled.end(),
-        contractAddress, [](const auto& lhs, const auto& rhs) { return std::get<0>(lhs) < rhs; });
+        contractAddress,
+        [](const decltype(m_address2Precompiled)::value_type& lhs, unsigned long rhs) {
+            return std::get<0>(lhs) < rhs;
+        });
     if (it != m_address2Precompiled.end() && std::get<0>(*it) == contractAddress)
     {
         return std::addressof(std::get<1>(*it));

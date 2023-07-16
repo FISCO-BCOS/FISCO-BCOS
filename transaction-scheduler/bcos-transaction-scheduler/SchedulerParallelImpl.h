@@ -172,9 +172,10 @@ public:
 
     SchedulerParallelImpl(MultiLayerStorage& multiLayerStorage,
         protocol::TransactionReceiptFactory& receiptFactory,
-        transaction_executor::TableNamePool& tableNamePool)
+        transaction_executor::TableNamePool& tableNamePool,
+        PrecompiledManager const& precompiledManager)
       : SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>(
-            multiLayerStorage, receiptFactory, tableNamePool),
+            multiLayerStorage, receiptFactory, tableNamePool, precompiledManager),
         m_asyncTaskGroup(std::make_unique<tbb::task_group>())
     {}
 

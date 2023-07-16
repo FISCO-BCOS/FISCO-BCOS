@@ -11,6 +11,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-executor/TransactionExecutorImpl.h>
+#include <bcos-transaction-executor/precompiled/PrecompiledManager.h>
 #include <bcos-transaction-scheduler/MultiLayerStorage.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
@@ -61,15 +62,15 @@ struct Fixture
 
         if constexpr (parallel)
         {
-            m_scheduler.template emplace<
-                SchedulerParallelImpl<MultiLayerStorageType, TransactionExecutorImpl>>(
-                m_multiLayerStorage, *m_receiptFactory, m_tableNamePool);
+            m_scheduler.template emplace<SchedulerParallelImpl<MultiLayerStorageType,
+                TransactionExecutorImpl, PrecompiledManager>>(
+                m_multiLayerStorage, *m_receiptFactory, m_tableNamePool, m_precompiledManager);
         }
         else
         {
-            m_scheduler.template emplace<
-                SchedulerSerialImpl<MultiLayerStorageType, TransactionExecutorImpl>>(
-                m_multiLayerStorage, *m_receiptFactory, m_tableNamePool);
+            m_scheduler.template emplace<SchedulerSerialImpl<MultiLayerStorageType,
+                TransactionExecutorImpl, PrecompiledManager>>(
+                m_multiLayerStorage, *m_receiptFactory, m_tableNamePool, m_precompiledManager);
         }
     }
 
@@ -285,9 +286,10 @@ struct Fixture
     TableNamePool m_tableNamePool;
     bcos::bytes m_helloworldBytecodeBinary;
 
+    PrecompiledManager m_precompiledManager;
     std::variant<std::monostate,
-        SchedulerSerialImpl<MultiLayerStorageType, TransactionExecutorImpl>,
-        SchedulerParallelImpl<MultiLayerStorageType, TransactionExecutorImpl>>
+        SchedulerSerialImpl<MultiLayerStorageType, TransactionExecutorImpl, PrecompiledManager>,
+        SchedulerParallelImpl<MultiLayerStorageType, TransactionExecutorImpl, PrecompiledManager>>
         m_scheduler;
 
     std::string m_contractAddress;

@@ -5,6 +5,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -27,7 +28,7 @@ struct Fixture
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         m_receiptFactory(m_cryptoSuite),
-        executor(backendStorage, m_receiptFactory, m_tableNamePool),
+        executor(backendStorage, m_receiptFactory, m_tableNamePool, m_precompiledManager),
         blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
@@ -55,7 +56,9 @@ struct Fixture
     MutableStorage backendStorage;
     ReceiptFactory m_receiptFactory;
     TableNamePool m_tableNamePool;
-    bcos::transaction_executor::TransactionExecutorImpl<MutableStorage> executor;
+    PrecompiledManager m_precompiledManager;
+    bcos::transaction_executor::TransactionExecutorImpl<MutableStorage, PrecompiledManager>
+        executor;
     bcos::bytes m_helloworldBytecodeBinary;
 
     bcostars::BlockHeader tarsBlockHeader;

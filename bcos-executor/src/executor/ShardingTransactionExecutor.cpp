@@ -22,6 +22,7 @@
 #include "ShardingTransactionExecutor.h"
 #include "../executive/ExecutiveDagFlow.h"
 #include "../executive/ExecutiveFactory.h"
+#include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/executor/ExecuteError.h>
 
 using namespace std;
@@ -34,7 +35,7 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
 {
-    if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
+    if (m_blockContext->features().get(ledger::Features::Flag::feature_sharding))
     {
         do
         {
@@ -187,7 +188,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
         return;
     }
 
-    if (blockHeader->version() >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
+    if (m_blockContext->features().get(ledger::Features::Flag::feature_sharding))
     {
         auto blockContext = createTmpBlockContext(blockHeader);
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
@@ -401,7 +402,7 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
     std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
     bool isStaticCall)
 {
-    if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
+    if (m_blockContext->features().get(ledger::Features::Flag::feature_sharding))
     {
         EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
 

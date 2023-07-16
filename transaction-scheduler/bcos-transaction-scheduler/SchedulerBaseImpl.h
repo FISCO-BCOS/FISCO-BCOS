@@ -89,7 +89,7 @@ public:
         view.newTemporaryMutable();
 
         Executor<decltype(view), PrecompiledManager> executor(
-            view, m_receiptFactory, m_tableNamePool);
+            view, m_receiptFactory, m_tableNamePool, m_precompiledManager);
         co_return co_await executor.execute(blockHeader, transaction, 0);
     }
 

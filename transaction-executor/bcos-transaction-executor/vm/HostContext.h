@@ -306,7 +306,7 @@ public:
     }
     int64_t blockNumber() const { return m_blockHeader.number(); }
     uint32_t blockVersion() const { return m_blockHeader.version(); }
-    uint64_t timestamp() const { return m_blockHeader.timestamp(); }
+    int64_t timestamp() const { return m_blockHeader.timestamp(); }
     evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const
     {
@@ -331,15 +331,6 @@ public:
     {
         // TODO:
         // 1: Check auth
-
-        auto address = fromBigEndian<u160>(
-            bcos::bytesConstRef(m_message.recipient.bytes, sizeof(m_message.recipient.bytes)));
-        auto const* precompiled =
-            m_precompiledManager.getPrecompiled(address.convert_to<unsigned long>());
-        if (precompiled)
-        {
-            co_return precompiled->call(m_message);
-        }
 
         if (m_message.kind == EVMC_CREATE || m_message.kind == EVMC_CREATE2)
         {
@@ -386,37 +377,41 @@ public:
         auto code = codeEntry->get();
         auto mode = toRevision(vmSchedule());
 
-        if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        auto codeHash = co_await codeHashAt(m_message.code_address);
+        auto vmInstance = m_vmFactory.create(VMKind::evmone, codeHash, code, mode);
+        auto savepoint = m_rollbackableStorage.current();
+        auto result = vmInstance.execute(
+            interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
+        if (result.status_code != 0)
         {
-            auto codeHash = co_await codeHashAt(m_message.code_address);
-            auto vmInstance = m_vmFactory.create(VMKind::evmone, codeHash, code, mode);
-            auto savepoint = m_rollbackableStorage.current();
-            auto result = vmInstance.execute(
-                interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
-            if (result.status_code != 0)
-            {
-                co_await m_rollbackableStorage.rollback(savepoint);
-            }
-
-            co_return result;
+            HOST_CONTEXT_LOG(INFO) << "Execute transaction failed, status: " << result.status_code;
+            co_await m_rollbackableStorage.rollback(savepoint);
         }
-        else
-        {
-            auto vmInstance = VMFactory::create();
-            auto savepoint = m_rollbackableStorage.current();
-            auto result = vmInstance.execute(
-                interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
-            if (result.status_code != 0)
-            {
-                co_await m_rollbackableStorage.rollback(savepoint);
-            }
 
-            co_return result;
-        }
+        co_return result;
     }
 
     task::Task<evmc_result> externalCall(const evmc_message& message)
     {
+        constexpr static unsigned long MAX_PRECOMPILED_ADDRESS = 100000;
+        auto address = fromBigEndian<u160>(
+            bcos::bytesConstRef(message.code_address.bytes, sizeof(message.code_address.bytes)));
+        if (address > 0 && address < MAX_PRECOMPILED_ADDRESS)
+        {
+            auto addressUL = address.convert_to<unsigned long>();
+            auto const* precompiled = m_precompiledManager.getPrecompiled(addressUL);
+
+            if (precompiled)
+            {
+                HOST_CONTEXT_LOG(INFO) << "Calling precompiled: " << addressUL << " " << address;
+                auto result = precompiled->call(message);
+                HOST_CONTEXT_LOG(INFO)
+                    << "Calling result status: " << result.status_code << " "
+                    << toHex(std::string_view((const char*)result.output_data, result.output_size));
+                co_return result;
+            }
+        }
+
         ++m_seq;
         HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_tableNamePool, m_blockHeader,
             message, m_origin, m_contextID, m_seq, m_precompiledManager);

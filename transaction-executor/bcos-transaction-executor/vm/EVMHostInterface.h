@@ -142,11 +142,17 @@ template <class HostContextType>
 evmc_tx_context getTxContext(evmc_host_context* context) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
-    evmc_tx_context result = {};
-    result.tx_origin = hostContext.origin();
-    result.block_number = hostContext.blockNumber();
-    result.block_timestamp = hostContext.timestamp();
-    result.block_gas_limit = hostContext.blockGasLimit();
+    evmc_tx_context result = {
+        .tx_gas_price = 0,
+        .tx_origin = hostContext.origin(),
+        .block_coinbase = {},
+        .block_number = hostContext.blockNumber(),
+        .block_timestamp = hostContext.timestamp(),
+        .block_gas_limit = hostContext.blockGasLimit(),
+        .block_prev_randao = {},
+        .chain_id = {},
+        .block_base_fee = {},
+    };
     return result;
 }
 
