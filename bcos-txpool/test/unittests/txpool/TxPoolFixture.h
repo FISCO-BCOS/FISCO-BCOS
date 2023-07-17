@@ -125,8 +125,6 @@ public:
             std::make_shared<TxPoolFactory>(_nodeId, _cryptoSuite, m_txResultFactory,
                 m_blockFactory, m_frontService, m_ledger, m_groupId, m_chainId, m_blockLimit);
         m_txpool = txPoolFactory->createTxPool();
-        auto fakeMemoryStorage = std::make_shared<FakeMemoryStorage>(m_txpool->txpoolConfig());
-        m_txpool->setTxPoolStorage(fakeMemoryStorage);
 
         m_sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
         auto syncConfig = m_sync->config();
@@ -154,13 +152,11 @@ public:
         for (const auto& nodeId : m_nodeIdList)
         {
             auto txpool = txPoolFactory->createTxPool();
-            auto txpoolStorage = std::make_shared<FakeMemoryStorage>(txpool->txpoolConfig());
 
             auto sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
             sync = std::make_shared<FakeTransactionSync1>(sync->config());
             txpool->setTransactionSync(sync);
 
-            txpool->setTxPoolStorage(std::move(txpoolStorage));
             if (enableTree)
             {
                 auto router = std::make_shared<TreeTopology>(nodeId);
@@ -180,6 +176,18 @@ public:
         if (m_txpool)
         {
             m_txpool->stop();
+        }
+        if (m_ledger)
+        {
+            m_ledger->stop();
+        }
+        if (m_frontService)
+        {
+            m_frontService->stop();
+        }
+        if (m_sync)
+        {
+            m_sync->stop();
         }
         if (m_fakeGateWay)
         {

@@ -53,7 +53,7 @@ public:
     RateCollector(std::string _moduleName, uint64_t _intervalMS)
       : m_moduleName(std::move(_moduleName)), m_intervalMS(_intervalMS)
     {
-        m_reportTimer = std::make_shared<Timer>(_intervalMS, _moduleName);
+        m_reportTimer = std::make_unique<Timer>(_intervalMS, _moduleName);
         m_reportTimer->registerTimeoutHandler([this]() {
             report();
             flush();
@@ -81,6 +81,7 @@ public:
         if (m_reportTimer)
         {
             m_reportTimer->stop();
+            m_reportTimer->destroy();
         }
     }
 
@@ -141,7 +142,7 @@ private:
     std::string m_moduleName;
     uint32_t m_intervalMS;
     RateCollectorStat m_rateCollectorStat;
-    std::shared_ptr<Timer> m_reportTimer;
+    std::unique_ptr<Timer> m_reportTimer;
 };
 
 class RateCollectorFactory

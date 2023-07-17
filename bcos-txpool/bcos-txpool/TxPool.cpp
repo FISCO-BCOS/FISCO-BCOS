@@ -83,9 +83,26 @@ void TxPool::stop()
     {
         m_worker->stop();
     }
+    if (m_sealer)
+    {
+        m_sealer->stop();
+    }
+    if (m_txsPreStore)
+    {
+        m_txsPreStore->stop();
+    }
+    if (m_verifier)
+    {
+        m_verifier->stop();
+    }
     if (m_txpoolStorage)
     {
         m_txpoolStorage->stop();
+    }
+
+    if (m_transactionSync)
+    {
+        m_transactionSync->stop();
     }
 
     m_running = false;
@@ -126,8 +143,7 @@ void TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
     }
 }
 
-void TxPool::broadcastTransactionBufferByTree(
-    const bcos::bytesConstRef& _data, bool isStartNode)
+void TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data, bool isStartNode)
 {
     if (m_treeRouter != nullptr)
     {
