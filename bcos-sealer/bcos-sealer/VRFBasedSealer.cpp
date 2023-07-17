@@ -20,6 +20,7 @@
 
 #include "VRFBasedSealer.h"
 #include "bcos-pbft/core/ConsensusConfig.h"
+#include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -44,7 +45,7 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
 {
     try
     {
-        auto blockNumber = m_sealingManager->currentNumber();
+        auto blockNumber = _block->blockHeader()->number();
         auto blockHash = m_sealingManager->currentHash();
         auto keyPair = m_sealerConfig->keyPair();
         CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
@@ -72,17 +73,30 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
 
         std::string interface = precompiled::WSM_METHOD_ROTATE_STR;
 
+        auto random = std::mt19937(std::random_device{}());
         bcos::CodecWrapper codec(m_hashImpl, g_BCOSConfig.isWasm());
         auto input = codec.encodeWithSig(interface, vrfPublicKey, blockHash.asBytes(), vrfProof);
 
         auto tx = m_sealerConfig->blockFactory()->transactionFactory()->createTransaction(0,
-            precompiled::CONSENSUS_ADDRESS, input, std::to_string(utcSteadyTimeUs()), INT64_MAX,
-            m_sealerConfig->chainId(), m_sealerConfig->groupId(), utcTime(), keyPair);
+            g_BCOSConfig.isWasm() ? precompiled::CONSENSUS_TABLE_NAME :
+                                    precompiled::CONSENSUS_ADDRESS,
+            input, std::to_string(utcSteadyTimeUs() * random()),
+            m_sealingManager->currentNumber() + 600, m_sealerConfig->chainId(),
+            m_sealerConfig->groupId(), utcTime(), keyPair);
 
         // append in txpool, in case other peers need it
-        // FIXME: too tricky hear
+        // FIXME: too tricky here
         auto& txpool = dynamic_cast<txpool::TxPool&>(*m_sealerConfig->txpool());
-        txpool.txpoolStorage()->insert(tx);
+        auto& txpoolStorage = dynamic_cast<txpool::MemoryStorage&>(*txpool.txpoolStorage());
+        auto submitResult = txpoolStorage.verifyAndSubmitTransaction(tx, nullptr, false, true);
+        if (submitResult != protocol::TransactionStatus::None) [[unlikely]]
+        {
+            SEAL_LOG(WARNING) << LOG_DESC("generateTransactionForRotating failed for txpool submit")
+                              << LOG_KV("nodeIdx", m_sealerConfig->consensus()->nodeIndex())
+                              << LOG_KV("submitResult", submitResult);
+            return false;
+        }
+
 
         // put the generated transaction into the 0th position of the block transactions
         // Note: must set generatedTx into the first transaction for other transactions may change
@@ -92,19 +106,16 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
             tx->hash(), std::string(tx->to()));
         _block->appendTransactionMetaData(txMeta);
 
-        if (c_fileLogLevel <= DEBUG)
-        {
-            SEAL_LOG(DEBUG) << LOG_DESC("generateTransactionForRotating succ")
-                            << LOG_KV("nodeIdx", m_sealerConfig->consensus()->nodeIndex())
-                            << LOG_KV("blkNum", blockNumber) << LOG_KV("hash", blockHash.abridged())
-                            << LOG_KV("nodeId", keyPair->publicKey()->hex());
-        }
+        SEAL_LOG(INFO) << LOG_DESC("generateTransactionForRotating succ")
+                       << LOG_KV("nodeIdx", m_sealerConfig->consensus()->nodeIndex())
+                       << LOG_KV("blkNum", blockNumber) << LOG_KV("hash", blockHash.abridged())
+                       << LOG_KV("nodeId", keyPair->publicKey()->hex());
     }
     catch (const std::exception& e)
     {
-        SEAL_LOG(ERROR) << LOG_DESC("generateTransactionForRotating failed")
-                        << LOG_KV("nodeIdx", m_sealerConfig->consensus()->nodeIndex())
-                        << LOG_KV("exception", boost::diagnostic_information(e));
+        SEAL_LOG(INFO) << LOG_DESC("generateTransactionForRotating failed")
+                       << LOG_KV("nodeIdx", m_sealerConfig->consensus()->nodeIndex())
+                       << LOG_KV("exception", boost::diagnostic_information(e));
         return false;
     }
     return true;

@@ -125,14 +125,15 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) override;
 
+    bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
+        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
+        bool checkPoolLimit, bool lock);
+
 protected:
     bcos::protocol::TransactionStatus insertWithoutLock(
         bcos::protocol::Transaction::Ptr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
-    bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
-        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
-        bool checkPoolLimit, bool lock);
     size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(
         const bcos::protocol::Transaction& transaction);
