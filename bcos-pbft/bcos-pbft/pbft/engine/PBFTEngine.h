@@ -21,6 +21,7 @@
 #pragma once
 #include "PBFTLogSync.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
+#include "bcos-rpbft/bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ConcurrentQueue.h>
 #include <bcos-utilities/Error.h>
@@ -102,6 +103,14 @@ public:
     {
         m_ledgerFetcher = std::move(_ledgerFetcher);
     }
+    bool shouldRotateSealers() const
+    {
+        if (m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE)
+        {
+            return false;
+        }
+        return m_rpbftConfigTools->shouldRotateSealers();
+    }
 
 protected:
     virtual void initSendResponseHandler();
@@ -134,7 +143,7 @@ protected:
 
     virtual CheckResult checkPBFTMsgState(std::shared_ptr<PBFTMessageInterface> _pbftReq) const;
     virtual bool checkRotateTransactionValid(
-        PBFTMessageInterface::Ptr _proposal, ConsensusNodeInterface::Ptr _leaderInfo);
+        PBFTMessageInterface::Ptr const& _proposal, ConsensusNodeInterface::Ptr const& _leaderInfo);
 
     // When pre-prepare proposal seems ok, then broadcast prepare msg
     virtual void broadcastPrepareMsg(std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg);
@@ -241,6 +250,7 @@ protected:
 
     // the timer used to resend checkPointProposal
     std::shared_ptr<bcos::Timer> m_timer;
+    RPBFTConfigTools::Ptr m_rpbftConfigTools;
 };
 }  // namespace consensus
 }  // namespace bcos
