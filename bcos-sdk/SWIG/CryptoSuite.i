@@ -16,19 +16,12 @@ inline std::shared_ptr<bcos::crypto::CryptoSuite> newCryptoSuite(bool sm) {
     }
     return std::make_shared<CryptoSuite>(std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), std::make_shared<AESCrypto>());
 }
-inline const bcos::crypto::KeyPairInterface& pointerToReference(const bcos::crypto::KeyPairInterface* _ptr) {
-    return *_ptr;
+inline const bcos::crypto::KeyPairInterface& pointerToReference(const bcos::crypto::KeyPairInterface::UniquePtr& ptr) {
+    return *ptr;
 }
 %}
 
 %include <stdint.i>
-%include <std_shared_ptr.i>
-%include <std_unique_ptr.i>
-
-%shared_ptr(bcos::crypto::CryptoSuite)
-%shared_ptr(bcos::crypto::Hash)
-%shared_ptr(bcos::crypto::KeyPairInterface)
-%unique_ptr(bcos::crypto::KeyPairInterface)
 
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/CryptoSuite.h"
@@ -53,5 +46,5 @@ public:
     HashType hash(bytesConstRef _data) const override;
 };
 inline std::shared_ptr<bcos::crypto::CryptoSuite> newCryptoSuite(bool sm);
-inline const bcos::crypto::KeyPairInterface& pointerToReference(const bcos::crypto::KeyPairInterface* _ptr);
+inline const bcos::crypto::KeyPairInterface& pointerToReference(const bcos::crypto::KeyPairInterface::UniquePtr& ptr);
 

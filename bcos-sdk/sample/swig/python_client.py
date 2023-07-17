@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import string
+import random
 import bcos
 
 deployBin = bytes.fromhex("608060405234801561001057600080fd5b50611621806100206000396000f3fe608060405234801561001057600080"
@@ -125,20 +127,23 @@ deployBin = bytes.fromhex("608060405234801561001057600080fd5b5061162180610020600
                           "08120033a26469706673582212207f4fa2554331e8c5ef4917fea82fc88828584fb34b5f7a57d6d48d7b832d5cf564"
                           "736f6c63430008120033")
 
+
+def random_string(length):
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(length))
+
+
 cryptoSuite = bcos.newCryptoSuite(False)
 keyPair = bcos.secp256k1GenerateKeyPair()
 rpcClient = bcos.RPCClient(
     "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000")
 
-future = rpcClient.blockNumber()
-blockNumber = future.get()
-
-print("blockNumber: ", blockNumber)
+blockNumber = rpcClient.blockNumber().get()
 transactionFactory = bcos.TransactionFactoryImpl(cryptoSuite)
-print(keyPair)
-print(dir(keyPair))
-transaction = transactionFactory.createTransaction(
-    0, "", deployBin, "nonce_1110", blockNumber + 500, "chain0", "group0", 0, bcos.pointerToReference(keyPair))
+deployTransaction = transactionFactory.createTransaction(
+    0, "", deployBin, random_string(32), blockNumber + 500, "chain0", "group0", 0, bcos.pointerToReference(keyPair))
+receipt = rpcClient.sendTransaction(deployTransaction).get()
+contractAddress = receipt.contractAddress()
 
-txFuture = rpcClient.sendTransaction(transaction)
-receipt = txFuture.get()
+print("Deploy contract success, address:",
+      bcos.stringViewToString(contractAddress))
