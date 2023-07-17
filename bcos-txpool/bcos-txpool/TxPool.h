@@ -50,9 +50,9 @@ public:
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
         protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) override;
 
-    task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
-    task::Task<void> broadcastTransactionBuffer(const bytesConstRef& _data) override;
-    task::Task<void> broadcastTransactionBufferByTree(
+    void broadcastTransaction(const protocol::Transaction& transaction) override;
+    void broadcastTransactionBuffer(const bytesConstRef& _data) override;
+    void broadcastTransactionBufferByTree(
         const bcos::bytesConstRef& _data, bool isStartNode = false) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
