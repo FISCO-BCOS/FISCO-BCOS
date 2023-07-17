@@ -53,14 +53,21 @@ public:
             auto packet = m_recvPackets.front();
             if (bytesTransferred + packet->size() > limit)
             {
+                limit = limit - bytesTransferred;
+                boost::asio::buffer_copy(buffers, boost::asio::buffer(*packet), limit);
+                bytesTransferred += limit;
+                packet->erase(packet->begin(), packet->begin() + limit);
                 break;
             }
-
-            m_recvPackets.pop();
-            boost::asio::buffer_copy(buffers, boost::asio::buffer(*packet));
-            buffers += packet->size();
-            bytesTransferred += packet->size();
+            else
+            {
+                m_recvPackets.pop();
+                boost::asio::buffer_copy(buffers, boost::asio::buffer(*packet));
+                buffers += packet->size();
+                bytesTransferred += packet->size();
+            }
         }
+
         handler(boost::system::error_code(), bytesTransferred);
     }
 
@@ -70,6 +77,7 @@ public:
         m_threadPool->enqueue([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())
             {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 asyncReadSome(socket, buffers, handler);
                 return;
             }
@@ -115,6 +123,7 @@ public:
         }
 
         uint8_t length = _buffer[0];
+        m_length = length;
         if (_buffer.size() < length)
         {
             return MessageDecodeStatus::MESSAGE_INCOMPLETE;
@@ -130,7 +139,6 @@ public:
             }
         }
 
-        m_length = length;
         m_payload->assign(_buffer.begin(), _buffer.begin() + length);
         return length;
     }
@@ -301,7 +309,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     std::atomic<size_t> recvBufferSize = 0;
     std::atomic<uint64_t> lastReadTime = utcSteadyTime();
 
-    auto session = std::make_shared<Session>(2);
+    auto session = std::make_shared<Session>(2, true);
     session->setMessageFactory(fakeHost->messageFactory());
     session->setHost(fakeHost);
     session->setSocket(fakeSocket);
