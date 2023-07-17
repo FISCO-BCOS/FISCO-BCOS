@@ -6,12 +6,6 @@
 
 using namespace bcos;
 using namespace bcos::protocol;
-
-inline bcos::bytes encodeTransaction(bcos::protocol::Transaction const& transaction) {
-    bytes output;
-    transaction.encode(output);
-    return output;
-}
 %}
 
 %include <stdint.i>
@@ -23,5 +17,3 @@ inline bcos::bytes encodeTransaction(bcos::protocol::Transaction const& transact
 %include "../bcos-framework/bcos-framework/protocol/Transaction.h"
 %include "../bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionImpl.h"
 %include "../bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-
-inline bcos::bytes encodeTransaction(bcos::protocol::Transaction const& transaction);
