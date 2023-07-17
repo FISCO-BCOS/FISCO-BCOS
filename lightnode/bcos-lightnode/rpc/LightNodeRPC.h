@@ -34,6 +34,7 @@ namespace bcos::rpc
 {
 // clang-format off
 struct NotFoundTransactionHash: public bcos::error::Exception {};
+struct CheckMerkleRootFailed: public bcos::error::Exception{};
 // clang-format on
 
 template <bcos::concepts::ledger::Ledger LocalLedgerType,
@@ -268,76 +269,109 @@ public:
                             << onlyHeader;
 
         bcos::task::wait([](decltype(this) self, bool onlyHeader, int64_t blockNumber,
-                             RespFunc respFunc) -> task::Task<void> {
+                            RespFunc respFunc) -> task::Task<void> {
             bcostars::Block block;
-            if (onlyHeader)
+            try
             {
-                co_await self->localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
-                    blockNumber, block);
-            }
-            else
-            {
-                co_await self->remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
-                    blockNumber, block);
-
-                if (!RANGES::empty(block.transactionsMetaData))
+                if (onlyHeader)
                 {
-                    // Check transaction merkle
-                    crypto::merkle::Merkle<Hasher> merkle;
-                    auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
-                    ](const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
-                        return transactionMetaData.hash;
-                    });
-                    std::vector<std::array<std::byte, Hasher::HASH_SIZE>> merkles;
-                    merkle.generateMerkle(hashesRange, merkles);
-
-                    if (RANGES::empty(merkles))
-                    {
-                        BOOST_THROW_EXCEPTION(
-                            std::runtime_error{"Unable to generate transaction merkle root!"});
-                    }
-
-                    if (!bcos::concepts::bytebuffer::equalTo(
-                            block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
-                    {
-                        BOOST_THROW_EXCEPTION(std::runtime_error{"No match transaction root!"});
-                    }
-                }
-
-                // Check parentBlock
-                if (blockNumber > 0)
-                {
-                    decltype(block) parentBlock;
                     co_await self->localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
-                        blockNumber - 1, parentBlock);
-
-                    std::array<std::byte, Hasher::HASH_SIZE> parentHash;
-                    bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
-
-                    if (RANGES::empty(block.blockHeader.data.parentInfo) ||
-                        (block.blockHeader.data.parentInfo[0].blockNumber !=
-                            parentBlock.blockHeader.data.blockNumber) ||
-                        !bcos::concepts::bytebuffer::equalTo(
-                            block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                            blockNumber, block);
+                }
+                else
+                {
+                    co_await self->remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
+                            blockNumber, block);
+                    if (RANGES::empty(block.transactionsMetaData) && blockNumber != 0)
                     {
-                        LIGHTNODE_LOG(ERROR) << "No match parentHash!";
-                        BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
+                        LIGHTNODE_LOG(ERROR) << LOG_DESC("getBlockByNumber")
+                                             << LOG_KV("block has no transaction, blockNumber", blockNumber);
+                        auto error = bcos::Error();
+                        self->toErrorResp(error, respFunc);
+                        co_return;
+                    }
+                    if (!RANGES::empty(block.transactionsMetaData))
+                    {// Check transaction merkle
+                        crypto::merkle::Merkle<Hasher> merkle;
+                        auto hashesRange = block.transactionsMetaData | RANGES::views::transform([]
+                                (const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
+                            return transactionMetaData.hash;
+                        });
+                        std::vector<std::array<std::byte, Hasher::HASH_SIZE>> merkles;
+                        merkle.generateMerkle(hashesRange, merkles);
+
+                        if (RANGES::empty(merkles))
+                        {
+                            BOOST_THROW_EXCEPTION(
+                                    std::runtime_error{"Unable to generate transaction merkle root!"});
+                        }
+                        LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
+                                             << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
+                                             << LOG_KV("transaction number", block.transactions.size());
+
+                        if (!bcos::concepts::bytebuffer::equalTo(
+                                block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
+                        {
+                            if (c_fileLogLevel <= bcos::LogLevel::TRACE) {
+                                for(size_t i = 0; i < hashesRange.size(); ++i) {
+                                    LIGHTNODE_LOG(TRACE) << LOG_KV("hashesRange txHash", toHexStringWithPrefix(hashesRange[i]));
+                                }
+                            }
+                            auto merkleRoot = *RANGES::rbegin(merkles);
+                            std::ostringstream strHex;
+                            strHex << "0x" << std::hex << std::setfill('0');
+                            for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
+                                strHex << std::setw(2) << static_cast<unsigned int>(merkleRoot[i]);
+                            }
+                            LIGHTNODE_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber)
+                                                 << LOG_KV("blockTxsRoot",toHexStringWithPrefix(block.blockHeader.data.txsRoot))
+                                                 << LOG_KV("transaction number", block.transactions.size())
+                                                 << LOG_KV("merkleRoot", strHex.str());
+                            auto error = bcos::Error::buildError("TxsRoot check failed", -1, "CheckMerkleRootFailed");
+                            self->toErrorResp(error, respFunc);
+                            co_return;
+                            BOOST_THROW_EXCEPTION(
+                                    CheckMerkleRootFailed{} << bcos::error::ErrorMessage{"Check block transactionMerkle failed!"});
+                        }
+                    }
+
+                    // Check parentBlock
+                    if (blockNumber > 0)
+                    {
+                        decltype(block) parentBlock;
+                        co_await self->localLedger().template getBlock<bcos::concepts::ledger::HEADER>(
+                                blockNumber - 1, parentBlock);
+
+                        std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+                        bcos::concepts::hash::calculate<Hasher>(parentBlock, parentHash);
+
+                        if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+                            (block.blockHeader.data.parentInfo[0].blockNumber !=
+                             parentBlock.blockHeader.data.blockNumber) ||
+                            !bcos::concepts::bytebuffer::equalTo(
+                                    block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+                        {
+                            std::ostringstream parentHashHex;
+                            parentHashHex << "0x" << std::hex << std::setfill('0');
+                            for (size_t i = 0; i < Hasher::HASH_SIZE; ++i){
+                                parentHashHex << std::setw(2) << static_cast<unsigned int>(parentHash[i]);
+                            }
+                            LIGHTNODE_LOG(DEBUG) << LOG_KV("blockParentNumber", block.blockHeader.data.parentInfo[0].blockNumber)
+                                                 << LOG_KV("parentBlockNumber", parentBlock.blockHeader.data.blockNumber)
+                                                 << LOG_KV("calculate parentHash", parentHashHex.str())
+                                                 << LOG_KV("parentHash", toHexStringWithPrefix(block.blockHeader.data.parentInfo[0].blockHash));
+                            LIGHTNODE_LOG(ERROR) << "No match parentHash!";
+                            BOOST_THROW_EXCEPTION(std::runtime_error{"No match parentHash!"});
+                        }
                     }
                 }
-            }
-
-            using ResultType = std::remove_cvref_t<decltype(block)>;
-            if constexpr (std::is_same_v<ResultType, std::exception_ptr>)
-            {
-                self->toErrorResp(block, respFunc);
-                co_return;
-            }
-            else
-            {
                 Json::Value resp;
                 toJsonResp<Hasher>(block, resp, onlyHeader);
-
                 respFunc(nullptr, resp);
+            }
+            catch (bcos::Error& error)
+            {
+                self->toErrorResp(error, respFunc);
             }
         }(this, onlyHeader, blockNumber, std::move(respFunc)));
     }
