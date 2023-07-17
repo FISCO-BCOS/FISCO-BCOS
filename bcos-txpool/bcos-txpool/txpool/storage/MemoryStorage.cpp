@@ -425,11 +425,11 @@ void MemoryStorage::notifyTxResult(
 // TODO: remove this, now just for bug tracing
 void MemoryStorage::printPendingTxs()
 {
-    if (m_printed)
-    {
-        return;
-    }
-    if (utcTime() - m_blockNumberUpdatedTime <= 1000 * 50)
+    // if (m_printed)
+    // {
+    //     return;
+    // }
+    if (utcTime() - m_blockNumberUpdatedTime <= 1000 * 5)
     {
         return;
     }
@@ -446,12 +446,12 @@ void MemoryStorage::printPendingTxs()
         {
             continue;
         }
-        TXPOOL_LOG(DEBUG) << LOG_KV("hash", tx->hash()) << LOG_KV("batchId", tx->batchId())
+        TXPOOL_LOG(INFO) << LOG_KV("hash", tx->hash()) << LOG_KV("batchId", tx->batchId())
                          << LOG_KV("batchHash", tx->batchHash().abridged())
                          << LOG_KV("sealed", tx->sealed());
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle finish");
-    m_printed = true;
+    // m_printed = true;
 }
 void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults const& txsResult)
 {
@@ -858,7 +858,7 @@ void MemoryStorage::batchMarkTxsWithoutLock(
                           << LOG_KV("hash", tx->batchHash().abridged()) << LOG_KV("txPointer", tx);
 #endif
     }
-    TXPOOL_LOG(DEBUG) << LOG_DESC("batchMarkTxs ") << LOG_KV("txsSize", _txsHashList.size())
+    TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs") << LOG_KV("txsSize", _txsHashList.size())
                       << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
                       << LOG_KV("flag", _sealFlag) << LOG_KV("succ", successCount)
                       << LOG_KV("timecost", utcTime() - recordT)
@@ -1013,7 +1013,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
 void MemoryStorage::cleanUpExpiredTransactions()
 {
     m_cleanUpTimer->restart();
-    // printPendingTxs();
+    printPendingTxs();
     // Note: In order to minimize the impact of cleanUp on performance,
     // the normal consensus node does not clear expired txs in m_clearUpTimer, but clears
     // expired txs in the process of sealing txs
