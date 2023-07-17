@@ -27,12 +27,9 @@
 #include <boost/thread/thread.hpp>
 #include <atomic>
 #include <unordered_map>
+#include <utility>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 static std::string m_moduleName = "DEFAULT";
 class WsTools
@@ -42,11 +39,7 @@ public:
     {
         boost::system::error_code ec;
         boost::asio::ip::address::from_string(_ip, ec);
-        if (ec)
-        {
-            return false;
-        }
-        return true;
+        return !static_cast<bool>(ec);
     }
 
     static bool validPort(uint16_t _port) { return _port > 1024; }
@@ -56,8 +49,6 @@ public:
     static void close(boost::asio::ip::tcp::socket& skt);
 
     static std::string moduleName() { return m_moduleName; }
-    static void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+    static void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 };
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

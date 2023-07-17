@@ -31,6 +31,7 @@
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/ConsensusNode.h"
+#include "bcos-tool/NodeConfig.h"
 #include "common/FakeBlock.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -182,14 +183,11 @@ public:
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(0);
 
-        auto result1 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+        auto result1 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
         BOOST_CHECK(result1);
-        auto result2 =
-            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::V3_1_VERSION_STR);
+        auto result2 = m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::V3_1_VERSION_STR);
         BOOST_CHECK(!result2);
-        auto result3 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+        auto result3 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
         BOOST_CHECK(result3);
     }
 

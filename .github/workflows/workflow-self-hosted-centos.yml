@@ -36,11 +36,15 @@ jobs:
           distribution: 'zulu'
           java-version: 8
           java-package: jdk
+      - name: Set up Node.js 16.x
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16.x'
 
       - name: yum install
         run: |
           sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static  glibc-static glibc-devel libzstd-devel
-          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel python3-pip automake
+          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache python-devel python3-devel python3-pip automake openssl
           sudo yum reinstall -y -q https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           sudo yum install -y -q git
 
@@ -77,7 +81,25 @@ jobs:
           make -j8
       - name: Test
         run:
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test && make cov
+
+      - name: upload coverage report
+        uses: codecov/codecov-action@v2
+        with:
+          files: ./build/coverage.info
+          version: "v0.1.15"
+          flags: unittests
+          name: FISCO BCOS coverage
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: prepare RPCAPI Tests
+        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
+
+      - name: FISCO BCOS RpcApiTest
+        uses: matt-ball/newman-action@master
+        with:
+          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}

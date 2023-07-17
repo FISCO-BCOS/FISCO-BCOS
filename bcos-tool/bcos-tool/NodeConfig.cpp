@@ -25,6 +25,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include "bcos-utilities/FileUtility.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
@@ -78,6 +79,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadFailOverConfig(_pt, _enforceMemberID);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
+    loadSyncConfig(_pt);
     loadOthersConfig(_pt);
 }
 
@@ -487,8 +489,8 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set txpool.notify_worker_num to positive !"));
     }
-    m_verifierWorkerNum = checkAndGetValue(
-        _pt, "txpool.verify_worker_num", std::to_string(std::thread::hardware_concurrency()));
+    m_verifierWorkerNum = checkAndGetValue(_pt, "txpool.verify_worker_num",
+        std::to_string(std::min(8U, std::thread::hardware_concurrency())));
     if (m_verifierWorkerNum <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -518,12 +520,12 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
 {
     try
     {
-        m_smCryptoType = _pt.get<bool>("chain.sm_crypto");
+        m_smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
         if (_enforceGroupId)
         {
-            m_groupId = _pt.get<std::string>("chain.group_id");
+            m_groupId = _pt.get<std::string>("chain.group_id", "group");
         }
-        m_chainId = _pt.get<std::string>("chain.chain_id");
+        m_chainId = _pt.get<std::string>("chain.chain_id", "chain");
     }
     catch (std::exception const& e)
     {
@@ -618,15 +620,26 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
                          << LOG_KV("keyCenterUrl", storageSecurityKeyCenterUrl);
 }
 
+void NodeConfig::loadSyncConfig(const boost::property_tree::ptree& _pt)
+{
+    m_enableSendBlockStatusByTree = _pt.get<bool>("sync.sync_block_by_tree", false);
+    m_enableSendTxByTree = _pt.get<bool>("sync.send_txs_by_tree", false);
+    m_treeWidth = _pt.get<std::uint32_t>("sync.tree_width", 3);
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSyncConfig")
+                         << LOG_KV("sync_block_by_tree", m_enableSendBlockStatusByTree)
+                         << LOG_KV("send_txs_by_tree", m_enableSendTxByTree)
+                         << LOG_KV("tree_width", m_treeWidth);
+}
+
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
     m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
     m_maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 4);
-    m_maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", 3);
-    m_writeBufferSize = _pt.get<size_t>("storage.write_buffer_size", 128 << 20);
-    m_minWriteBufferNumberToMerge = _pt.get<int32_t>("storage.min_write_buffer_number_to_merge", 2);
+    m_maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", 4);
+    m_writeBufferSize = _pt.get<size_t>("storage.write_buffer_size", 64 << 20);
+    m_minWriteBufferNumberToMerge = _pt.get<int32_t>("storage.min_write_buffer_number_to_merge", 1);
     m_blockCacheSize = _pt.get<size_t>("storage.block_cache_size", 128 << 20);
     m_enableDBStatistics = _pt.get<bool>("storage.enable_statistics", false);
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
@@ -701,6 +714,8 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_baselineSchedulerConfig.parallel =
         _pt.get<bool>("executor.baseline_scheduler_parallel", false);
 
+    m_tarsRPCConfig.configPath = _pt.get<std::string>("rpc.tars_rpc_config", "");
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize);
 }
@@ -733,15 +748,23 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     // consensus type
     try
     {
-        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type");
+        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type", "pbft");
     }
     catch (std::exception const& e)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "consensus.consensus_type is null， please set it!"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("consensus.consensus_type is null, please set it!"));
+    }
+    if (m_consensusType != bcos::ledger::PBFT_CONSENSUS_TYPE &&
+        m_consensusType != bcos::ledger::RPBFT_CONSENSUS_TYPE)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.consensus_type is illegal, it must be pbft or rpbft!"));
     }
     // blockTxCountLimit
-    auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit");
+    auto blockTxCountLimit =
+        checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
     if (blockTxCountLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -749,7 +772,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     }
     m_ledgerConfig->setBlockTxCountLimit(blockTxCountLimit);
     // txGasLimit
-    auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit");
+    auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit", "3000000000");
     if (txGasLimit <= TX_GAS_LIMIT_MIN)
     {
         BOOST_THROW_EXCEPTION(
@@ -759,7 +782,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>("version.compatibility_version");
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
+        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
@@ -770,8 +794,15 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     }
     m_ledgerConfig->setConsensusNodeList(*consensusNodeList);
 
+    // rpbft
+    if (m_consensusType == RPBFT_CONSENSUS_TYPE)
+    {
+        m_epochSealerNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_sealer_num", 4);
+        m_epochBlockNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_block_num", 1000);
+    }
+
     // leaderSwitchPeriod
-    auto consensusLeaderPeriod = checkAndGetValue(_genesisConfig, "consensus.leader_period");
+    auto consensusLeaderPeriod = checkAndGetValue(_genesisConfig, "consensus.leader_period", "1");
     if (consensusLeaderPeriod <= 0)
     {
         BOOST_THROW_EXCEPTION(
@@ -851,7 +882,8 @@ void NodeConfig::generateGenesisData()
         auto genesisData = std::make_shared<bcos::ledger::GenesisConfig>(m_smCryptoType, m_chainId,
             m_groupId, m_consensusType, m_ledgerConfig->blockTxCountLimit(),
             m_ledgerConfig->leaderSwitchPeriod(), m_compatibilityVersionStr, m_txGasLimit, m_isWasm,
-            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute);
+            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute, m_epochSealerNum,
+            m_epochBlockNum);
         genesisdata = genesisData->genesisDataOutPut();
         size_t j = 0;
         for (const auto& node : m_ledgerConfig->consensusNodeList())
@@ -888,9 +920,9 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
 {
     try
     {
-        m_isWasm = _genesisConfig.get<bool>("executor.is_wasm");
-        m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check");
-        m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute");
+        m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
+        m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
+        m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute", false);
     }
     catch (std::exception const& e)
     {
@@ -924,7 +956,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     try
     {
-        m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account");
+        m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account", "");
         if (m_authAdminAddress.empty() &&
             (m_isAuthCheck || m_compatibilityVersion >= BlockVersion::V3_3_VERSION)) [[unlikely]]
         {

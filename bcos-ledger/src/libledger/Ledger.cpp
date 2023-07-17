@@ -22,7 +22,9 @@
  */
 
 #include "Ledger.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/Common.h"
 #include "utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
@@ -1594,7 +1596,8 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
 // sync method
 bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
     const std::string_view& _genesisData, std::string const& _compatibilityVersion,
-    bool _isAuthCheck)
+    bool _isAuthCheck, std::string const& _consensusType, std::int64_t _epochSealerNum,
+    std::int64_t _epochBlockNum)
 {
     LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
     if (_gasLimit < TX_GAS_LIMIT_MIN)
@@ -1779,6 +1782,10 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONFIG failed!"));
     }
 
+    // Write default features
+    Features features;
+    features.setToDefault(protocol::BlockVersion(versionNumber));
+
     // tx count limit
     Entry txLimitEntry;
     txLimitEntry.setObject(
@@ -1789,6 +1796,29 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     Entry gasLimitEntry;
     gasLimitEntry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>(_gasLimit), 0});
     sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
+
+    if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
+    {
+        // rpbft config
+        if (RPBFT_CONSENSUS_TYPE == _consensusType)
+        {
+            features.set(ledger::Features::Flag::feature_rpbft);
+
+            Entry epochSealerNumEntry;
+            epochSealerNumEntry.setObject(
+                SystemConfigEntry{boost::lexical_cast<std::string>(_epochSealerNum), 0});
+            sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, std::move(epochSealerNumEntry));
+
+            Entry epochBlockNumEntry;
+            epochBlockNumEntry.setObject(
+                SystemConfigEntry{boost::lexical_cast<std::string>(_epochBlockNum), 0});
+            sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, std::move(epochBlockNumEntry));
+
+            Entry notifyRotateEntry;
+            notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
+            sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
+        }
+    }
 
     // consensus leader period
     Entry leaderPeriodEntry;
@@ -1836,6 +1866,24 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     {
         consensusNodeList.emplace_back(
             node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_SEALER}, "0");
+    }
+
+    // update some node type to CONSENSUS_WORKING_SEALER
+    if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
+        RPBFT_CONSENSUS_TYPE == _consensusType)
+    {
+        auto workingSealerList = selectWorkingSealer(_ledgerConfig, _epochSealerNum);
+        for (auto workingSealer : *workingSealerList)
+        {
+            auto iter = std::find_if(consensusNodeList.begin(), consensusNodeList.end(),
+                [&workingSealer](const ConsensusNode& consensusNode) {
+                    return consensusNode.nodeID == workingSealer->nodeID()->hex();
+                });
+            if (iter != consensusNodeList.end()) [[likely]]
+            {
+                iter->type = CONSENSUS_WORKING_SEALER;
+            }
+        }
     }
 
     for (const auto& node : _ledgerConfig->observerNodeList())
@@ -1894,7 +1942,50 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     archivedNumber.importFields({"0"});
     stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
 
+    for (auto [flag, name, value] : features.flags())
+    {
+        if (value)
+        {
+            Entry entry;
+            entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
+            sysTable->setRow(name, std::move(entry));
+        }
+    }
+
     return true;
+}
+
+bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
+    const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig, std::int64_t _epochSealerNum)
+{
+    auto sealerList = _ledgerConfig->consensusNodeList();
+    std::sort(sealerList.begin(), sealerList.end(), bcos::consensus::ConsensusNodeComparator());
+
+    std::int64_t sealersSize = sealerList.size();
+    std::int64_t selectedNum = std::min(_epochSealerNum, sealersSize);
+
+    // shuffle the sealerList according to the genesis hash
+    // select the genesis working sealers randomly according to genesis hash
+    if (sealersSize > selectedNum)
+    {
+        for (std::int64_t i = sealersSize - 1; i > 0; --i)
+        {
+            auto hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
+            std::int64_t selectedNode =
+                (std::int64_t)((u256)(hashImpl->hash(sealerList[i]->nodeID()->data())) % (i + 1));
+            std::swap(sealerList[i], sealerList[selectedNode]);
+        }
+    }
+
+    auto workingSealerList = std::make_shared<bcos::consensus::ConsensusNodeList>();
+    for (std::int64_t i = 0; i < selectedNum; ++i)
+    {
+        LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer")
+                         << LOG_KV("nodeID", sealerList[i]->nodeID()->hex())
+                         << LOG_KV("weight", sealerList[i]->weight());
+        workingSealerList->emplace_back(sealerList[i]);
+    }
+    return workingSealerList;
 }
 
 void Ledger::createFileSystemTables(uint32_t blockVersion)

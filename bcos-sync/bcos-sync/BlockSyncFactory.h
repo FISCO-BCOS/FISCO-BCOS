@@ -36,7 +36,8 @@ public:
         bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::consensus::ConsensusInterface::Ptr _consensus,
-        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
+        bool enableSendBlockStatusByTree = false, std::uint32_t syncTreeWidth = 3);
     virtual ~BlockSyncFactory() = default;
 
     virtual BlockSync::Ptr createBlockSync();
@@ -51,5 +52,7 @@ protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
+    bool m_enableSendBlockStatusByTree;
+    std::int64_t m_syncTreeWidth;
 };
 }  // namespace bcos::sync

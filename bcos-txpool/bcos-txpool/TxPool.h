@@ -27,6 +27,7 @@
 #include "sync/interfaces/TransactionSyncInterface.h"
 #include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-tool/TreeTopology.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <thread>
 namespace bcos::txpool
@@ -46,7 +47,9 @@ public:
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override;
 
-    task::Task<void> broadcastPushTransaction(const protocol::Transaction& transaction) override;
+    task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
+    task::Task<void> broadcastTransactionBuffer(const bytesConstRef& _data) override;
+    task::Task<void> broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
@@ -73,17 +76,16 @@ public:
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         std::function<void(Error::Ptr)> _onRecv) override;
 
-    // hook for validator, update consensus nodes info in config, for broadcast tx to consensus
-    // nodes
-    // FIXME: deprecated, not used when use txpool::broadcastPushTransaction
-    [[deprecated]] void notifyConsensusNodeList(
-        bcos::consensus::ConsensusNodeList const& _consensusNodeList,
+    // hook for validator, update consensus nodes info in config
+    // Note: txpool should use this interface to update consensus nodes info
+    // use this nodes info to check whether tx is from group member or not
+    void notifyConsensusNodeList(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) override;
 
-    // hook for validator, update observer nodes info in config, for broadcast tx to observer nodes
-    // FIXME: deprecated, not used when use txpool::broadcastPushTransaction
-    [[deprecated]] void notifyObserverNodeList(
-        bcos::consensus::ConsensusNodeList const& _observerNodeList,
+    // hook for validator, update observer nodes info in config
+    // Note: txpool should use this interface to update observer nodes info
+    // use this nodes info to check whether tx is from group member or not
+    void notifyObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) override;
 
     // for scheduler to fetch txs
@@ -111,8 +113,7 @@ public:
     void asyncGetPendingTransactionSize(
         std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize) override;
 
-    // deprecated
-    [[deprecated]] void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
+    void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) override;
 
     void tryToSyncTxsFromPeers() override;
@@ -123,6 +124,13 @@ public:
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch) override;
 
     void clearAllTxs() override;
+
+    void setTreeRouter(bcos::tool::TreeTopology::Ptr _treeRouter)
+    {
+        m_treeRouter = std::move(_treeRouter);
+    }
+
+    auto treeRouter() const { return m_treeRouter; }
 
 protected:
     virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
@@ -153,6 +161,7 @@ private:
     ThreadPool::Ptr m_verifier;
     ThreadPool::Ptr m_sealer;
     ThreadPool::Ptr m_txsPreStore;
+    tool::TreeTopology::Ptr m_treeRouter = nullptr;
     std::atomic_bool m_running = {false};
 
     // Note: This x_markTxsMutex is used for locking asyncSealTxs() during sealBlock

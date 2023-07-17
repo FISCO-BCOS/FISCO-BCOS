@@ -1,0 +1,20 @@
+#include "CommonProtocol.tars"
+#include "Block.tars"
+#include "Transaction.tars"
+#include "TransactionMetaData.tars"
+#include "TransactionReceipt.tars"
+
+module bcostars {
+    struct PushBlockNumber
+    {
+        1 require long blockNumber;
+    };
+
+    interface RPC
+    {
+        Error handshake(vector<string> topics);
+        Error sendTransaction(Transaction request, out TransactionReceipt response);
+        Error call(Transaction request, out TransactionReceipt response);
+        Error blockNumber(out long number);
+    };
+};

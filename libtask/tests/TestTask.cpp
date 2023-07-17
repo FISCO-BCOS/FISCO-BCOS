@@ -1,16 +1,23 @@
 #include "bcos-utilities/Overloaded.h"
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
+#include <oneapi/tbb/blocked_range.h>
+#include <oneapi/tbb/task_arena.h>
+#include <oneapi/tbb/task_group.h>
+#include <tbb/concurrent_vector.h>
+#include <tbb/parallel_for.h>
+#include <tbb/task.h>
 #include <tbb/task_group.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
+#include <iostream>
 #include <thread>
 
 using namespace bcos::task;
 
 struct TaskFixture
 {
-    tbb::task_group taskGroup;
+    oneapi::tbb::task_group taskGroup;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TaskTest, TaskFixture)
@@ -67,7 +74,7 @@ BOOST_AUTO_TEST_CASE(normalTask)
     BOOST_CHECK_EQUAL(num, 10000);
 }
 
-Task<int> asyncLevel2(tbb::task_group& taskGroup)
+Task<int> asyncLevel2(oneapi::tbb::task_group& taskGroup)
 {
     struct Awaitable
     {
@@ -92,7 +99,7 @@ Task<int> asyncLevel2(tbb::task_group& taskGroup)
             return num;
         }
 
-        tbb::task_group& taskGroup;
+        oneapi::tbb::task_group& taskGroup;
         int num = 0;
     };
 
@@ -106,7 +113,7 @@ Task<int> asyncLevel2(tbb::task_group& taskGroup)
     co_return num;
 }
 
-Task<int> asyncLevel1(tbb::task_group& taskGroup)
+Task<int> asyncLevel1(oneapi::tbb::task_group& taskGroup)
 {
     std::cout << "co_await asyncLevel2 started" << std::endl;
     auto num1 = co_await asyncLevel2(taskGroup);
@@ -158,17 +165,20 @@ BOOST_AUTO_TEST_CASE(referenceTask)
     BOOST_CHECK_EQUAL(std::addressof(result2), std::addressof(topNumber));
 }
 
-BOOST_AUTO_TEST_CASE(tbbScheduler)
+struct SleepTask
 {
-    // TBBScheduler tbbScheduler;
+    inline static oneapi::tbb::concurrent_vector<std::future<void>> futures;
 
-    // bcos::task::syncWait(
-    //     []() -> Task<void> {
-    //         auto num = co_await level2();
-    //         co_await level3();
-    //         co_return;
-    //     }(),
-    //     &tbbScheduler);
-}
+    constexpr bool await_ready() const { return false; }
+    void await_suspend(CO_STD::coroutine_handle<> handle)
+    {
+        futures.emplace_back(std::async([m_handle = handle]() {
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(1s);
+            m_handle.resume();
+        }));
+    }
+    constexpr void await_resume() const {}
+};
 
 BOOST_AUTO_TEST_SUITE_END()

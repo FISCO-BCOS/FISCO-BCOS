@@ -30,6 +30,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
 
 #ifdef WITH_WASM
@@ -189,6 +190,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
 
     auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq, false);
+
+    m_childExecutives.push_back(executive);  // add child executive for revert() if needed
 
     auto output = executive->start(std::move(input));
 
@@ -405,7 +408,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                 m_blockContext.blockVersion());
         }
 
-        if (m_blockContext.blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_3_VERSION))
+        if (m_blockContext.features().get(ledger::Features::Flag::feature_sharding))
         {
             if (callParameters->origin != callParameters->senderAddress)
             {
@@ -990,13 +993,14 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
 
 bool TransactionExecutive::isPrecompiled(const std::string& address) const
 {
-    return m_precompiled->at(
-               address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck()) != nullptr;
+    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck(),
+               m_blockContext.features()) != nullptr;
 }
 
 std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const
 {
-    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck());
+    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck(),
+        m_blockContext.features());
 }
 
 std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
@@ -1023,7 +1027,18 @@ void TransactionExecutive::setPrecompiled(std::shared_ptr<PrecompiledMap> _preco
 
 void TransactionExecutive::revert()
 {
-    EXECUTOR_BLK_LOG(INFO, m_blockContext.number()) << "Revert transaction";
+    EXECUTOR_BLK_LOG(INFO, m_blockContext.number())
+        << "Revert transaction" << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
+
+    if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_4_VERSION) >= 0 ||
+        (m_blockContext.features().get(ledger::Features::Flag::bugfix_revert)))
+    {
+        // revert child beforehand from back to front
+        for (auto& childExecutive : RANGES::views::reverse(m_childExecutives))
+        {
+            childExecutive->revert();
+        }
+    }
 
     m_blockContext.storage()->rollback(*m_recoder);
     m_recoder->clear();
@@ -1209,7 +1224,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress)
                             << LOG_KV("status", _result.status());
         callResults->status = (int32_t)TransactionStatus::WASMUnreachableInstruction;
-        if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+        if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0 &&
+            versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_4_VERSION) < 0)
         {
             writeErrInfoToOutput("A WebAssembly trap has been hit during execution.", *callResults);
         }
@@ -1418,7 +1434,7 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
                                                            precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
-            m_blockContext.isAuthCheck()));
+            m_blockContext.isAuthCheck(), m_blockContext.features()));
     EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", callParameters->receiveAddress)
                          << LOG_KV("isCreate", callParameters->create)
                          << LOG_KV("originAddress", callParameters->origin);
@@ -1465,7 +1481,7 @@ int32_t TransactionExecutive::checkContractAvailable(
     }
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
-            m_blockContext.isAuthCheck()));
+            m_blockContext.isAuthCheck(), m_blockContext.features()));
     // if status is normal, then return 0; else if status is abnormal, then return else
     // if return <0, it means status row not exist, check pass by default in this case
     auto status = contractAuthPrecompiled->getContractStatus(
@@ -1483,8 +1499,9 @@ uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::Unique
         return 0;
     }
     AccountPrecompiled::Ptr accountPrecompiled =
-        dynamic_pointer_cast<precompiled::AccountPrecompiled>(m_precompiled->at(
-            ACCOUNT_ADDRESS, m_blockContext.blockVersion(), m_blockContext.isAuthCheck()));
+        dynamic_pointer_cast<precompiled::AccountPrecompiled>(
+            m_precompiled->at(ACCOUNT_ADDRESS, m_blockContext.blockVersion(),
+                m_blockContext.isAuthCheck(), m_blockContext.features()));
 
     return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this());
 }

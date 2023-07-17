@@ -51,10 +51,22 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // set blockTxCountLimit
     setBlockTxCountLimit(_ledgerConfig->blockTxCountLimit());
     // set ConsensusNodeList
-    auto& consensusList = _ledgerConfig->mutableConsensusNodeList();
+
+    bcos::consensus::ConsensusNodeList consensusList;
+    bcos::consensus::ConsensusNodeList observerList;
+    if (_ledgerConfig->features().get(Features::Flag::feature_rpbft) &&
+        !_ledgerConfig->workingSealerNodeList().empty())
+    {
+        consensusList = _ledgerConfig->workingSealerNodeList();
+        observerList = _ledgerConfig->observerNodeList() + _ledgerConfig->consensusNodeList();
+    }
+    else
+    {
+        consensusList = _ledgerConfig->mutableConsensusNodeList();
+        observerList = _ledgerConfig->observerNodeList();
+    }
     setConsensusNodeList(consensusList);
-    auto observerList = _ledgerConfig->mutableObserverList();
-    setObserverNodeList(*observerList);
+    setObserverNodeList(observerList);
     // set leader_period
     setLeaderSwitchPeriod(_ledgerConfig->leaderSwitchPeriod());
     // reset the timer
@@ -81,6 +93,17 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
         {
             m_versionNotification(m_compatibilityVersion);
         }
+    }
+
+    // notify the txpool validator to update the consensusNodeList and the observerNodeList
+    if (m_consensusNodeListUpdated || m_observerNodeListUpdated)
+    {
+        m_validator->updateValidatorConfig(consensusList, observerList);
+        PBFT_LOG(INFO) << LOG_DESC("updateValidatorConfig")
+                       << LOG_KV("consensusNodeListUpdated", m_consensusNodeListUpdated)
+                       << LOG_KV("observerNodeListUpdated", m_observerNodeListUpdated)
+                       << LOG_KV("consensusNodeSize", consensusList.size())
+                       << LOG_KV("observerNodeSize", observerList.size());
     }
 
     // notify the latest block number to the sealer
@@ -308,10 +331,10 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     {
         PBFT_LOG(INFO) << LOG_DESC(
                               "Not notify the sealer to sealing for txs of some proposals have not "
-                              "been resetted success")
+                              "been reset success")
                        << LOG_KV("resettingProposalSize", m_validator->resettingProposalSize())
                        << LOG_KV("startSealIndex", startSealIndex) << printCurrentState();
-        // notify the leader to seal when all txs of all proposals have been resetted
+        // notify the leader to seal when all txs of all proposals have been reset
         auto self = weak_from_this();
         m_validator->setVerifyCompletedHook([self, _progressedIndex, _enforce]() {
             auto config = self.lock();

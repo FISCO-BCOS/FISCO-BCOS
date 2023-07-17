@@ -49,10 +49,10 @@ void testRequestAndDownloadBlock(CryptoSuite::Ptr _cryptoSuite)
     BlockNumber minBlock = 5;
     auto lowerPeer = std::make_shared<SyncFixture>(_cryptoSuite, gateWay, (minBlock + 1));
     std::vector<NodeIDPtr> nodeList;
-    nodeList.push_back(newerPeer->nodeID());
-    nodeList.push_back(lowerPeer->nodeID());
-    newerPeer->setObservers(nodeList);
-    lowerPeer->setObservers(nodeList);
+    nodeList.emplace_back(newerPeer->nodeID());
+    nodeList.emplace_back(lowerPeer->nodeID());
+    newerPeer->setConsensus(nodeList);
+    lowerPeer->setConsensus(nodeList);
 
     newerPeer->init();
     lowerPeer->init();
@@ -149,7 +149,7 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
     invalidFaker->init();
     for (auto faker : syncPeerList)
     {
-        faker->setObservers(nodeList);
+        faker->setConsensus(nodeList);
         faker->init();
     }
     // maintainPeersConnection

@@ -29,6 +29,7 @@
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-task/Wait.h"
 #include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
@@ -57,7 +58,16 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_hashImpl(std::move(_hashImpl)),
     m_ledgerCache(std::move(ledgerCache)),
     m_backendStorage(std::move(backendStorage))
-{}
+{
+    if (!m_storage)
+    {
+        EXECUTOR_LOG(WARNING) << "No available storage, make sure it's testing";
+        return;
+    }
+
+    m_features =
+        task::syncWait(ledger::Features::readFeaturesFromStorage(*m_storage, m_blockNumber));
+}
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
@@ -68,7 +78,31 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
         _current->number(), _current->hash(), _current->timestamp(), _current->version(), _schedule,
         _isWasm, _isAuthCheck, std::move(backendStorage))
 {
+    if (_current->number() > 0 && !_current->parentInfo().empty())
+    {
+        auto view = _current->parentInfo();
+        auto it = view.begin();
+        m_parentHash = (*it).blockHash;
+    }
+
     m_keyPageIgnoreTables = std::move(_keyPageIgnoreTables);
+
+    auto table = m_storage->openTable(ledger::SYS_CONFIG);
+    if (table)
+    {
+        for (auto key : bcos::ledger::Features::featureKeys())
+        {
+            auto entry = table->getRow(key);
+            if (entry)
+            {
+                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
+                if (_current->number() >= enableNumber)
+                {
+                    m_features.set(key);
+                }
+            }
+        }
+    }
 }
 
 
@@ -139,4 +173,9 @@ void BlockContext::killSuicides()
                             << "Kill contract: " << LOG_KV("contract2Suicide", table2Suicide)
                             << LOG_KV("blockNumber", m_blockNumber);
     }
+}
+
+const bcos::ledger::Features& bcos::executor::BlockContext::features() const
+{
+    return m_features;
 }

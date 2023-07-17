@@ -103,6 +103,7 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
                         << "dagFlow cache is not prepared, maybe get tx miss, trigger switch"
                         << LOG_KV("number", number) << LOG_KV("timestamp", timestamp)
                         << LOG_KV("codeAddress", contractAddress);
+                    cacheGuard.unlock();
                     callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR,
                                  "dagFlow cache is not prepared, maybe get tx miss"),
                         {});

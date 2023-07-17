@@ -157,6 +157,8 @@ public:
 
     bool active() const override;
 
+    bool active(std::shared_ptr<bcos::gateway::Host>&) const;
+
     std::size_t writeQueueSize() override;
 
     virtual std::weak_ptr<Host> host() { return m_server; }
@@ -301,7 +303,6 @@ private:
     std::atomic<uint64_t> m_lastWriteTime;
     std::shared_ptr<bcos::Timer> m_idleCheckTimer;
     std::string m_hostNodeID;
-    tbb::task_group m_asyncGroup;
 };
 
 class SessionFactory

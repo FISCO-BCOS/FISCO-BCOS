@@ -12,6 +12,7 @@
       "name": "vcpkg-cmake-config",
       "host": true
     },
+    "magic-enum",
     "boost-log",
     "boost-beast",
     "boost-uuid",
@@ -26,6 +27,7 @@
     "boost-iostreams",
     "boost-thread",
     "boost-test",
+    "boost-timer",
     "boost-compute",
     "boost-multiprecision",
     "boost-program-options",
@@ -133,7 +135,7 @@
       ]
     }
   },
-  "builtin-baseline": "1c48ec7f49d69bb753e6afefba51368e18263255",
+  "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139",
   "overrides": [
     {
       "name": "rocksdb",

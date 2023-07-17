@@ -21,9 +21,7 @@
 #pragma once
 #include "Protocol.h"
 #include <memory>
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class ProtocolInfo
 {
@@ -37,7 +35,11 @@ public:
         m_maxVersion(_maxVersion),
         m_version(m_minVersion)
     {}
-    virtual ~ProtocolInfo() {}
+    ProtocolInfo& operator=(const ProtocolInfo&) = default;
+    ProtocolInfo(const ProtocolInfo&) = default;
+    ProtocolInfo(ProtocolInfo&&) = default;
+    ProtocolInfo& operator=(ProtocolInfo&&) = default;
+    virtual ~ProtocolInfo() = default;
     virtual void setProtocolModuleID(ProtocolModuleID _moduleID) { m_protocolModuleID = _moduleID; }
     virtual void setMinVersion(uint32_t _minVersion) { m_minVersion = _minVersion; }
     virtual void setMaxVersion(uint32_t _maxVersion) { m_maxVersion = _maxVersion; }
@@ -54,12 +56,11 @@ public:
     // the negotiated version
     virtual uint32_t version() const { return m_version; }
 
-protected:
+private:
     ProtocolModuleID m_protocolModuleID;
     // Note: here can't use enum Version type in case of setVersion failed for no-defined Version
     uint32_t m_minVersion;
     uint32_t m_maxVersion;
     uint32_t m_version;
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

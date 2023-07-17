@@ -40,6 +40,11 @@
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
 
+[sync]
+    sync_block_by_tree=false
+    send_txs_by_tree=false
+    tree_width=3
+
 [failover]
     ; enable failover or not, default disable
     enable = false

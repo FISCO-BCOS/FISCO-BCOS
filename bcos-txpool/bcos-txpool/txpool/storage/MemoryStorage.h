@@ -81,7 +81,7 @@ public:
     bcos::protocol::TransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
 
-    // FIXME: deprecated, after using txpool::broadcastPushTransaction
+    // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
@@ -94,7 +94,7 @@ public:
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 
-    // FIXME: deprecated, after using txpool::broadcastPushTransaction
+    // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::crypto::HashListPtr filterUnknownTxs(
         bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
@@ -115,18 +115,20 @@ public:
         bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) override;
     void batchImportTxs(bcos::protocol::TransactionsPtr _txs) override;
 
-    void batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
+    // return true if all txs have been marked
+    bool batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) override;
+
+    bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
+        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
+        bool checkPoolLimit, bool lock);
 
 protected:
     bcos::protocol::TransactionStatus insertWithoutLock(
         bcos::protocol::Transaction::Ptr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
-    bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
-        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
-        bool checkPoolLimit, bool lock);
     size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(
         const bcos::protocol::Transaction& transaction);
@@ -150,7 +152,8 @@ protected:
     virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
     virtual void cleanUpExpiredTransactions();
 
-    virtual void batchMarkTxsWithoutLock(bcos::crypto::HashList const& _txsHashList,
+    // return true if all txs have been marked
+    virtual bool batchMarkTxsWithoutLock(bcos::crypto::HashList const& _txsHashList,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag);
 

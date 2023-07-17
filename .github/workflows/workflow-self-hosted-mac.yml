@@ -26,9 +26,6 @@ jobs:
     runs-on: self-hosted-mac3.4
     strategy:
       fail-fast: false
-    env:
-      DEPS_ROOT: ~/cache/deps3.4
-      VCPKG_ROOT: ~/cache/vcpkg
 
     steps:
       - uses: actions/checkout@v3
@@ -41,35 +38,19 @@ jobs:
           java-version: 8
           java-package: jdk
 
-      - name: Reuse build cache
-        run: |
-          mkdir -p ./build
-          rm -rf deps
-          ln -s ${{ env.DEPS_ROOT }} deps
-
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
       - name: Build for mac
         run: |
-          mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          mkdir -p build && cd build && rm -rf  CMakeCache.txt
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DVCPKG_HOST_TRIPLET=arm64-osx -DVCPKG_TARGET_TRIPLET=arm64-osx -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
           cmake --build . --parallel 8
 
-      - name: Test && Generate Coverage
+      - name: Test
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
-          make cov
-
-      - name: upload coverage report
-        uses: codecov/codecov-action@v2
-        with:
-          files: ./build/coverage.info
-          version: "v0.1.15"
-          flags: unittests
-          name: FISCO BCOS coverage
-          fail_ci_if_error: false
-          verbose: true
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}

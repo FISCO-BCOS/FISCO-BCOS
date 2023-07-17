@@ -53,8 +53,19 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual task::Task<void> broadcastPushTransaction(
+    virtual task::Task<void> broadcastTransaction(
         [[maybe_unused]] const protocol::Transaction& transaction)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
+
+    virtual task::Task<void> broadcastTransactionBuffer([[maybe_unused]] const bytesConstRef& _data)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
+
+    virtual task::Task<void> broadcastTransactionBufferByTree(
+        [[maybe_unused]] const bytesConstRef& _data)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
@@ -117,11 +128,10 @@ public:
     virtual void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _id,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
         std::function<void(Error::Ptr _error)> _onRecv) = 0;
-    [[deprecated]] virtual void notifyConsensusNodeList(
+    virtual void notifyConsensusNodeList(
         bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
-    [[deprecated]] virtual void notifyObserverNodeList(
-        bcos::consensus::ConsensusNodeList const& _observerNodeList,
+    virtual void notifyObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
     // for RPC to get pending transactions

@@ -68,8 +68,9 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
         std::make_shared<LedgerStorage>(m_scheduler, m_storage, m_blockFactory, pbftMessageFactory);
 
     PBFT_LOG(INFO) << LOG_DESC("create pbftConfig");
-    auto pbftConfig = std::make_shared<PBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory,
-        pbftCodec, validator, m_frontService, stateMachine, pbftStorage);
+    PBFTConfig::Ptr pbftConfig =
+        std::make_shared<PBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory, pbftCodec,
+            validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFTEngine");
     auto pbftEngine = std::make_shared<PBFTEngine>(pbftConfig);

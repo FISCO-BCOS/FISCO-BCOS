@@ -28,6 +28,7 @@
 #endif
 
 #include <bcos-pbft/pbft/PBFTFactory.h>
+#include <bcos-rpbft/bcos-rpbft/rpbft/utilities/RPBFTFactory.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
@@ -74,7 +75,10 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
 {
     m_groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
+    g_BCOSConfig.setIsWasm(m_nodeConfig->isWasm());
+
     createSealer();
+    // TODO: add rpbft create
     createPBFT();
     createSync();
     registerHandlers();
@@ -283,24 +287,27 @@ void PBFTInitializer::registerHandlers()
 
     // the consensus moudle notify new block to the sync module
     std::weak_ptr<BlockSyncInterface> weakedSync = m_blockSync;
-    m_pbft->registerNewBlockNotifier([weakedSync](bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
-                                         std::function<void(Error::Ptr)> _onRecv) {
-        try
-        {
-            auto sync = weakedSync.lock();
-            if (!sync)
+    m_pbft->registerNewBlockNotifier(
+        [weakedSync, weakedSealer](bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
+            std::function<void(Error::Ptr)> _onRecv) {
+            try
             {
-                return;
+                auto sync = weakedSync.lock();
+                auto sealer = weakedSealer.lock();
+                if (!sync || !sealer)
+                {
+                    return;
+                }
+                sync->asyncNotifyNewBlock(_ledgerConfig, _onRecv);
+                sealer->asyncNoteLatestBlockHash(_ledgerConfig->hash());
             }
-            sync->asyncNotifyNewBlock(_ledgerConfig, _onRecv);
-        }
-        catch (std::exception const& e)
-        {
-            INITIALIZER_LOG(WARNING)
-                << LOG_DESC("call notify the latest block to the sync module exception")
-                << LOG_KV("error", boost::diagnostic_information(e));
-        }
-    });
+            catch (std::exception const& e)
+            {
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("call notify the latest block to the sync module exception")
+                    << LOG_KV("error", boost::diagnostic_information(e));
+            }
+        });
 
     m_pbft->registerFaultyDiscriminator([weakedSync](bcos::crypto::NodeIDPtr _nodeID) -> bool {
         try
@@ -390,21 +397,40 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
 void PBFTInitializer::createSealer()
 {
     // create sealer
-    auto sealerFactory = std::make_shared<SealerFactory>(m_protocolInitializer->blockFactory(),
-        m_txpool, m_nodeConfig->minSealTime(), m_nodeTimeMaintenance);
-    m_sealer = sealerFactory->createSealer();
+    auto sealerFactory = SealerFactory(m_nodeConfig, m_protocolInitializer->blockFactory(),
+        m_txpool, m_nodeTimeMaintenance, m_protocolInitializer->keyPair());
+    // if rpbft sealer, register the sealer to the pbft
+    if (m_nodeConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE) [[unlikely]]
+    {
+        m_sealer = sealerFactory.createVRFBasedSealer();
+    }
+    else [[likely]]
+    {
+        m_sealer = sealerFactory.createSealer();
+    }
 }
 
 void PBFTInitializer::createPBFT()
 {
     auto keyPair = m_protocolInitializer->keyPair();
     auto kvStorage = std::make_shared<bcos::storage::KVStorageHelper>(m_storage);
-    // create pbft
-    auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
-        m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
-        m_txpool, m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory());
+    if (m_nodeConfig->consensusType() == ledger::PBFT_CONSENSUS_TYPE)
+    {
+        auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
+            m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
+            m_txpool, m_protocolInitializer->blockFactory(),
+            m_protocolInitializer->txResultFactory());
+        m_pbft = pbftFactory->createPBFT();
+    }
+    else if (m_nodeConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)
+    {
+        auto rpbftFactory = std::make_shared<RPBFTFactory>(m_protocolInitializer->cryptoSuite(),
+            m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
+            m_txpool, m_protocolInitializer->blockFactory(),
+            m_protocolInitializer->txResultFactory());
+        m_pbft = rpbftFactory->createRPBFT();
+    }
 
-    m_pbft = pbftFactory->createPBFT();
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();
     pbftConfig->setCheckPointTimeoutInterval(m_nodeConfig->checkPointTimeoutInterval());
     pbftConfig->setMinSealTime(m_nodeConfig->minSealTime());

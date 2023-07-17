@@ -293,6 +293,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 // execute/verify exception
                 if (_error != nullptr)
                 {
+                    config->setExecutedBlock(config->blockNumber());
                     // reset the executed number
                     BLKSYNC_LOG(WARNING)
                         << LOG_DESC("applyBlock: executing the downloaded block failed")
@@ -327,7 +328,6 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                             downloadQueue->m_blocks.push(_block);
                         }
                     }
-                    config->setExecutedBlock(config->blockNumber());
                     return;
                 }
                 if (!downloadQueue->verifyExecutedBlock(_block, _blockHeader))
@@ -709,13 +709,15 @@ void DownloadingQueue::fetchAndUpdateLedgerConfig()
     {
         BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
         m_ledgerFetcher->fetchBlockNumberAndHash();
+        m_ledgerFetcher->fetchCompatibilityVersion();
+        m_ledgerFetcher->fetchFeatures();
         m_ledgerFetcher->fetchConsensusNodeList();
         // Note: must fetchObserverNode here to notify the latest sealerList and observerList to
         // txpool
         m_ledgerFetcher->fetchObserverNodeList();
+        m_ledgerFetcher->fetchWorkingSealerList();
         m_ledgerFetcher->fetchBlockTxCountLimit();
         m_ledgerFetcher->fetchConsensusLeaderPeriod();
-        m_ledgerFetcher->fetchCompatibilityVersion();
         auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
         BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                           << LOG_KV("blockNumber", ledgerConfig->blockNumber())

@@ -19,7 +19,7 @@
  * @date 2021-05-18
  */
 #pragma once
-#include "../framework/StateMachineInterface.h"
+#include "bcos-framework/consensus/StateMachineInterface.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -40,7 +40,9 @@ public:
         m_worker = std::make_shared<ThreadPool>("stateMachine", 1);
     }
 
-    ~StateMachine() override
+    ~StateMachine() override { stop(); }
+
+    void stop() override
     {
         if (m_worker)
         {

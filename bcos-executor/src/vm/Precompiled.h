@@ -161,7 +161,8 @@ public:
 
 protected:
     std::map<std::string, uint32_t> name2Selector;
-    std::unordered_map<uint32_t, std::pair<protocol::BlockVersion, PrecompiledParams>>
+    [[no_unique_address]] std::unordered_map<uint32_t,
+        std::pair<protocol::BlockVersion, PrecompiledParams>>
         selector2Func;
     crypto::Hash::Ptr m_hashImpl;
 
@@ -190,6 +191,82 @@ protected:
 
 protected:
     std::shared_ptr<PrecompiledGasFactory> m_precompiledGasFactory;
+
+private:
+    template <typename F>
+    void Invoker(F func, const std::shared_ptr<executor::TransactionExecutive>& executive,
+        PrecompiledExecResult::Ptr const& callParameters)
+    {
+        _Invoker(func, executive, callParameters);
+    }
+    template <typename R, typename T, typename... Args>
+    void _Invoker(R (T::*func)(Args...),
+        const std::shared_ptr<executor::TransactionExecutive>& executive,
+        PrecompiledExecResult::Ptr const& callParameters)
+    {
+        using ArgsType = std::tuple<typename std::decay_t<Args>...>;
+        ArgsType tuple;
+        Deserialize(callParameters->params(), tuple);
+        CallFunc<R>(
+            func, (T*)this, callParameters, tuple, std::make_index_sequence<sizeof...(Args)>{});
+    }
+
+    template <typename Tuple, std::size_t... I>
+    void _Deserialize(
+        bytesConstRef dataRef, CodecWrapper const& codec, Tuple& tup, std::index_sequence<I...>)
+    {
+        codec.decode(dataRef, std::get<I>(tup)...);
+    }
+
+    template <typename... Args>
+    void Deserialize(bytesConstRef dataRef, CodecWrapper const& codec, std::tuple<Args...>& val)
+    {
+        _Deserialize(dataRef, val, std::make_index_sequence<sizeof...(Args)>{});
+    }
+
+    template <typename P>
+    void SetCallResult(P& val, PrecompiledExecResult::Ptr res, CodecWrapper const& codec)
+    {
+        res->setExecResult(codec.encode(val));
+    }
+
+    template <typename Tuple, std::size_t... I>
+    void _SetCallResult(PrecompiledExecResult::Ptr res, CodecWrapper const& codec, Tuple& tup,
+        std::index_sequence<I...>)
+    {
+        res->setExecResult(codec.encode(std::get<I>(tup)...));
+    }
+
+    template <typename... Args>
+    void SetCallResult(
+        std::tuple<Args...>& val, PrecompiledExecResult::Ptr res, CodecWrapper const& codec)
+    {
+        _SetCallResult(res, val, std::make_index_sequence<sizeof...(Args)>{});
+    }
+
+    template <typename R, typename T, typename F, typename Tuple, std::size_t... I>
+    void CallFunc(F func, T* pObj, const std::shared_ptr<executor::TransactionExecutive>& executive,
+        PrecompiledExecResult::Ptr const& res, Tuple& tup, std::index_sequence<I...>)
+    {
+        auto const& blockContext = executive->blockContext();
+        CodecWrapper codec(blockContext.hashHandler(), blockContext.isWasm());
+        try
+        {
+            if constexpr (std::is_same_v<R, void>)
+            {
+                (pObj->*func)(std::get<I>(tup)...);
+            }
+            else if constexpr (!std::is_same_v<R, void>)
+            {
+                R ret = (pObj->*func)(std::get<I>(tup)...);
+                SetCallResult(std::move(ret), res);
+            }
+        }
+        catch (const std::exception& e)
+        {
+            res->setExecResult(codec.encode(std::string(e.what())));
+        }
+    }
 };
 
 }  // namespace precompiled
@@ -220,7 +297,7 @@ namespace executor
 struct PrecompiledAvailable
 {
     precompiled::Precompiled::Ptr precompiled;
-    std::function<bool(uint32_t, bool)> availableFunc;
+    std::function<bool(uint32_t, bool, ledger::Features const& features)> availableFunc;
 };
 class PrecompiledMap
 {
@@ -237,7 +314,8 @@ public:
         protocol::BlockVersion minVersion = protocol::BlockVersion::RC4_VERSION,
         bool needAuth = false)
     {
-        auto func = [minVersion, needAuth](uint32_t version, bool isAuth) -> bool {
+        auto func = [minVersion, needAuth](
+                        uint32_t version, bool isAuth, ledger::Features const& features) -> bool {
             bool flag = true;
             if (needAuth)
             {
@@ -249,13 +327,14 @@ public:
     }
 
     auto insert(std::string const& _key, precompiled::Precompiled::Ptr _precompiled,
-        std::function<bool(uint32_t, bool)> func)
+        std::function<bool(uint32_t, bool, ledger::Features const& features)> func)
     {
         return m_map.insert({_key, {std::move(_precompiled), std::move(func)}});
     }
-    precompiled::Precompiled::Ptr at(
-        std::string const&, uint32_t version, bool isAuth) const noexcept;
-    bool contains(std::string const& key, uint32_t version, bool isAuth) const noexcept;
+    precompiled::Precompiled::Ptr at(std::string const&, uint32_t version, bool isAuth,
+        ledger::Features const& features) const noexcept;
+    bool contains(std::string const& key, uint32_t version, bool isAuth,
+        ledger::Features const& features) const noexcept;
     size_t size() const noexcept { return m_map.size(); }
 
 private:

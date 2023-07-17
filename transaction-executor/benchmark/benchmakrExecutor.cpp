@@ -1,10 +1,10 @@
 #include "../bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "../tests/TestBytecode.h"
+#include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
-#include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -76,8 +76,9 @@ static void create(benchmark::State& state)
         int contextID = 0;
         for (auto const& it : state)
         {
+            ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction, ++contextID);
+                co_await fixture.executor.execute(fixture.blockHeader, transaction, contextID);
         }
     }(state, transaction));
 }
@@ -100,8 +101,10 @@ static void call_setInt(benchmark::State& state)
             auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(contextID));
             transaction.mutableInner().data.input.assign(input.begin(), input.end());
             transaction.mutableInner().data.to = contractAddress;
+
+            ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction, ++contextID);
+                co_await fixture.executor.execute(fixture.blockHeader, transaction, contextID);
         }
     }(state));
 }
@@ -125,8 +128,9 @@ static void call_setString(benchmark::State& state)
                 "setString(string)", fmt::format("Hello world, fisco-bcos! {}", contextID));
             transaction.mutableInner().data.input.assign(input.begin(), input.end());
             transaction.mutableInner().data.to = contractAddress;
+            ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction, ++contextID);
+                co_await fixture.executor.execute(fixture.blockHeader, transaction, contextID);
         }
     }(state));
 }
@@ -148,8 +152,9 @@ static void call_delegateCall(benchmark::State& state)
         int contextID = 0;
         for (auto const& it : state)
         {
+            ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction1, ++contextID);
+                co_await fixture.executor.execute(fixture.blockHeader, transaction1, contextID);
         }
     }(state));
 }
@@ -171,8 +176,9 @@ static void call_deployAndCall(benchmark::State& state)
         int contextID = 0;
         for (auto const& it : state)
         {
+            ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction1, ++contextID);
+                co_await fixture.executor.execute(fixture.blockHeader, transaction1, contextID);
         }
     }(state));
 }

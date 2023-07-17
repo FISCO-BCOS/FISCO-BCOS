@@ -87,8 +87,8 @@ public:
                 codeAnalysis = std::make_shared<evmone::advanced::AdvancedCodeAnalysis>(
                     evmone::advanced::analyze(
                         mode, evmone::bytes_view((const uint8_t*)code.data(), code.size())));
-                m_evmoneCodeAnalysisCache.write(
-                    storage2::singleView(codeHash), storage2::singleView(std::as_const(codeAnalysis)));
+                (void)m_evmoneCodeAnalysisCache.write(storage2::singleView(codeHash),
+                    storage2::singleView(std::as_const(codeAnalysis)));
             }
 
             return VMInstance{std::move(codeAnalysis)};

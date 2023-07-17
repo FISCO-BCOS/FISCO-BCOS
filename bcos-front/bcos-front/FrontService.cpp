@@ -209,6 +209,9 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
         groupNodeInfo = m_groupNodeInfo;
     }
 
+    FRONT_LOG(DEBUG) << LOG_DESC("asyncGetGroupNodeInfo")
+                     << LOG_KV("nodeIDs.size()",
+                               (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
     if (_onGetGroupNodeInfo)
     {
         m_asyncGroup.run([_onGetGroupNodeInfo = std::move(_onGetGroupNodeInfo),
@@ -217,9 +220,6 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
         });
     }
 
-    FRONT_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
-                    << LOG_KV("nodeIDs.size()",
-                           (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
 }
 
 /**
@@ -333,15 +333,16 @@ void FrontService::asyncSendMessageByNodeIDs(
  */
 void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data)
 {
-    auto message = messageFactory()->buildMessage();
-    message->setModuleID(_moduleID);
-    message->setPayload(_data);
+    // auto message = messageFactory()->buildMessage();
+    FrontMessage message;
+    message.setModuleID(_moduleID);
+    message.setPayload(_data);
 
-    auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer);
+    bytes buffer;
+    message.encode(buffer);
 
     m_gatewayInterface->asyncSendBroadcastMessage(
-        _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
+        _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer.data(), buffer.size()));
 }
 
 /**
@@ -385,7 +386,7 @@ void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNod
         auto mutableProtocol = std::const_pointer_cast<ProtocolInfo>(protocol);
         // negotiate failed: can't happen unless the code has a bug
         if (mutableProtocol->minVersion() > m_localProtocol->maxVersion() ||
-            mutableProtocol->maxVersion() < m_localProtocol->minVersion())
+            mutableProtocol->maxVersion() < m_localProtocol->minVersion()) [[unlikely]]
         {
             FRONT_LOG(ERROR) << LOG_DESC("protocolNegotiate failed")
                              << LOG_KV("nodeID", nodeIDList.at(i))
@@ -401,6 +402,7 @@ void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNod
         // set the negotiated version
         auto version = std::min(m_localProtocol->maxVersion(), mutableProtocol->maxVersion());
         mutableProtocol->setVersion((ProtocolVersion)version);
+        m_localProtocolVersion = (ProtocolVersion)version;
         FRONT_LOG(INFO) << LOG_DESC("protocolNegotiate success")
                         << LOG_KV("nodeID", nodeIDList.at(i))
                         << LOG_KV("groupID", _groupNodeInfo->groupID())

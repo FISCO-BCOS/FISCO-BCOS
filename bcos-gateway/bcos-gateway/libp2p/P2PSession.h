@@ -58,7 +58,8 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const
     {
-        ReadGuard l(x_protocolInfo);
+        // TODO: check if the lock below is necessary?
+        // ReadGuard l(x_protocolInfo);
         return m_protocolInfo;
     }
 
