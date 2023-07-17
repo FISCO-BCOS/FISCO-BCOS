@@ -29,14 +29,12 @@ using namespace bcos::consensus;
 
 void RPBFTConfig::resetConfig(bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
-    updateShouldRotateSealers(_ledgerConfig);
-
-    updateWorkingSealerNodeList(_ledgerConfig);
-
     PBFTConfig::resetConfig(_ledgerConfig, _syncedBlock);
+    updateWorkingSealerNodeList(_ledgerConfig);
+    updateShouldRotateSealers(_ledgerConfig);
 }
 
-void RPBFTConfig::updateWorkingSealerNodeList(bcos::ledger::LedgerConfig::Ptr _ledgerConfig)
+void RPBFTConfig::updateWorkingSealerNodeList(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig)
 {
     auto workingSealerNodeList = _ledgerConfig->workingSealerNodeList();
     // make sure the size of working consensus is non-empty
@@ -48,45 +46,43 @@ void RPBFTConfig::updateWorkingSealerNodeList(bcos::ledger::LedgerConfig::Ptr _l
     }
 
     std::sort(
-            workingSealerNodeList.begin(), workingSealerNodeList.end(), ConsensusNodeComparator());
+        workingSealerNodeList.begin(), workingSealerNodeList.end(), ConsensusNodeComparator());
     // update the consensus list
+    // if consensus node list have not been changed
+    if (compareConsensusNode(workingSealerNodeList, *m_workingSealerNodeList))
     {
-        UpgradableGuard lock(x_workingSealerNodeList);
-        // consensus node list have not been changed
-        if (compareConsensusNode(workingSealerNodeList, *m_workingSealerNodeList))
-        {
-            m_workingSealerNodeListUpdated = false;
-            return;
-        }
-        UpgradeGuard ul(lock);
-        // consensus node list have been changed
-        *m_workingSealerNodeList = workingSealerNodeList;
-        m_workingSealerNodeListUpdated = true;
+        m_workingSealerNodeListUpdated = false;
+        return;
     }
-    CONSENSUS_LOG(INFO) << METRIC << LOG_DESC("updateWorkingConsensusNodeList")
-                        << LOG_KV("workingNodeNum", m_workingSealerNodeNum)
-                        << LOG_KV("nodeIndexInWorkingSealer", m_nodeIndexInWorkingSealer)
-                        << LOG_KV("committedIndex",
-                                  (committedProposal() ? committedProposal()->index() : 0))
-                        << decsConsensusNodeList(workingSealerNodeList);
+    // consensus node list have been changed
+    *m_workingSealerNodeList = workingSealerNodeList;
+    m_workingSealerNodeNum = m_workingSealerNodeList->size();
+    m_workingSealerNodeListUpdated = true;
 
-    if (!compareConsensusNode(*m_workingSealerNodeList, *m_consensusNodeList))
-    {
-        bcos::consensus::ConsensusNodeList pendingConsensusNodeList;
-        for (auto node : _ledgerConfig->mutableConsensusNodeList())
-        {
-            if (!ConsensusConfig::isNodeExist(node, *m_workingSealerNodeList))
-            {
-                pendingConsensusNodeList.emplace_back(node);
-            }
-        }
-
-        *_ledgerConfig->mutableConsensusList() = *m_workingSealerNodeList;
-        *_ledgerConfig->mutableObserverList() += pendingConsensusNodeList;
-    }
+    RPBFT_LOG(INFO) << METRIC << LOG_DESC("updateWorkingConsensusNodeList")
+                    << LOG_KV("workingNodeNum", m_workingSealerNodeNum)
+                    << LOG_KV("nodeIndexInWorkingSealer", m_nodeIndexInWorkingSealer)
+                    << LOG_KV("committedIndex",
+                           (committedProposal() ? committedProposal()->index() : 0))
+                    << decsConsensusNodeList(workingSealerNodeList);
+    //
+    //    if (!compareConsensusNode(*m_workingSealerNodeList, *m_consensusNodeList))
+    //    {
+    //        bcos::consensus::ConsensusNodeList pendingConsensusNodeList;
+    //        for (const auto& node : _ledgerConfig->mutableConsensusNodeList())
+    //        {
+    //            if (!ConsensusConfig::isNodeExist(node, *m_workingSealerNodeList))
+    //            {
+    //                pendingConsensusNodeList.emplace_back(node);
+    //            }
+    //        }
+    //
+    //        *_ledgerConfig->mutableConsensusList() = *m_workingSealerNodeList;
+    //        *_ledgerConfig->mutableObserverList() += pendingConsensusNodeList;
+    //    }
 }
 
-void RPBFTConfig::updateShouldRotateSealers(bcos::ledger::LedgerConfig::Ptr _ledgerConfig)
+void RPBFTConfig::updateShouldRotateSealers(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig)
 {
     // reset shouldRotateSealers
     if (shouldRotateSealers())
@@ -98,11 +94,10 @@ void RPBFTConfig::updateShouldRotateSealers(bcos::ledger::LedgerConfig::Ptr _led
     updateEpochBlockNum(_ledgerConfig);
 
     // update according to epoch_sealer_num
-    bool isEpochSealerNumChanged{false};
-    updateEpochSealerNum(_ledgerConfig, isEpochSealerNumChanged);
+    bool isEpochSealerNumChanged = updateEpochSealerNum(_ledgerConfig);
 
     // first setup
-    if (0 == _ledgerConfig->blockNumber())
+    if (_ledgerConfig->blockNumber() == 0)
     {
         return;
     }
@@ -111,18 +106,18 @@ void RPBFTConfig::updateShouldRotateSealers(bcos::ledger::LedgerConfig::Ptr _led
     // verification and the INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE flag was set to true, the current
     // leader needs to rotate working consensus
     updateNotifyRotateFlag(_ledgerConfig);
-    if (m_notifyRotateFlag)
+    if (m_notifyRotateFlag == 1)
     {
         setShouldRotateSealers(true);
         RPBFT_LOG(INFO) << LOG_DESC(
-                        "resetConfig: the previous leader forged an illegal transaction-rotating,"
-                        "still rotate working consensus in this epoch");
+            "resetConfig: the previous leader forged an illegal transaction-rotating,"
+            "still rotate working consensus in this epoch");
     }
 
     // the number of working consensus is smaller than epochSize,
     // trigger rotate in case of the number of working consensus has been decreased to 0
     std::uint64_t maxWorkingSealerNum =
-            std::min(m_epochSealerNum.load(), static_cast<uint64_t>(m_consensusNodeList->size()));
+        std::min(m_epochSealerNum.load(), static_cast<uint64_t>(m_consensusNodeList->size()));
     if (static_cast<std::uint64_t>(m_workingSealerNodeNum) < maxWorkingSealerNum)
     {
         setShouldRotateSealers(true);
@@ -131,44 +126,39 @@ void RPBFTConfig::updateShouldRotateSealers(bcos::ledger::LedgerConfig::Ptr _led
     // After the last batch of working consensus agreed on m_rotateInterval,
     // set m_shouldRotateConsensus to true to notify create rotate transaction
     if (isEpochSealerNumChanged ||
-        0 == (_ledgerConfig->blockNumber() - m_epochBlockNumEnableNumber) % m_epochBlockNum)
+        0 == (_ledgerConfig->blockNumber() + 1 - m_epochBlockNumEnableNumber) % m_epochBlockNum)
     {
         setShouldRotateSealers(true);
     }
-    RPBFT_LOG(DEBUG) << LOG_DESC("resetConfig") << LOG_KV("blkNum", m_committedProposal->index())
-                     << LOG_KV("shouldRotateConsensus", shouldRotateSealers())
-                     << LOG_KV("workingConsensusNum", m_workingSealerNodeNum)
-                     << LOG_KV("rotateInterval", m_epochBlockNum)
-                     << LOG_KV("configuredEpochSealerNum", m_epochSealerNum);
+    RPBFT_LOG(INFO) << LOG_DESC("resetConfig") << LOG_KV("blkNum", _ledgerConfig->blockNumber())
+                    << LOG_KV("shouldRotateConsensus", shouldRotateSealers())
+                    << LOG_KV("workingConsensusNum", m_workingSealerNodeNum)
+                    << LOG_KV("rotateInterval", m_epochBlockNum)
+                    << LOG_KV("configuredEpochSealerNum", m_epochSealerNum);
 }
 
-void RPBFTConfig::updateEpochBlockNum(bcos::ledger::LedgerConfig::Ptr _ledgerConfig)
+void RPBFTConfig::updateEpochBlockNum(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig)
 {
     m_epochBlockNum = std::get<0>(_ledgerConfig->epochBlockNum());
     m_epochBlockNumEnableNumber = std::get<1>(_ledgerConfig->epochBlockNum());
 }
 
-void RPBFTConfig::updateEpochSealerNum(
-    bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool& isEpochSealerNumChanged)
+bool RPBFTConfig::updateEpochSealerNum(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig)
 {
-    std::uint64_t originEpochSealerNum = m_epochSealerNum;
-
-    if (std::get<0>(_ledgerConfig->epochBlockNum()) == originEpochSealerNum)
+    if (std::get<0>(_ledgerConfig->epochBlockNum()) == m_epochSealerNum)
     {
-        isEpochSealerNumChanged = false;
-        return;
+        return false;
     }
 
-    m_epochSealerNum = std::get<0>(_ledgerConfig->epochSealerNum()) > m_consensusNodeList->size() ?
-                           m_consensusNodeList->size() :
-                           std::get<0>(_ledgerConfig->epochSealerNum());
+    std::uint64_t originEpochSealerNum = m_epochSealerNum;
+    m_epochSealerNum =
+        std::min((size_t)std::get<0>(_ledgerConfig->epochSealerNum()), m_consensusNodeList->size());
     m_epochSealerNumEnableNumber = std::get<1>(_ledgerConfig->epochSealerNum());
 
-    isEpochSealerNumChanged =
-        (static_cast<std::uint64_t>(originEpochSealerNum) != m_epochSealerNum);
+    return originEpochSealerNum != m_epochSealerNum;
 }
 
-void RPBFTConfig::updateNotifyRotateFlag(bcos::ledger::LedgerConfig::Ptr _ledgerConfig)
+void RPBFTConfig::updateNotifyRotateFlag(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig)
 {
     m_notifyRotateFlag = _ledgerConfig->notifyRotateFlagInfo();
 }
@@ -178,7 +168,7 @@ bool RPBFTConfig::shouldRotateSealers() const
     return m_shouldRotateWorkingSealer;
 }
 
-void RPBFTConfig::setShouldRotateSealers(const bool _shouldRotateSealers)
+void RPBFTConfig::setShouldRotateSealers(bool _shouldRotateSealers)
 {
     m_shouldRotateWorkingSealer = _shouldRotateSealers;
 }

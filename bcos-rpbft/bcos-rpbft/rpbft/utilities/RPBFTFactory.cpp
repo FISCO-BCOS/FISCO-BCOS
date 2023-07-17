@@ -1,5 +1,5 @@
 /**
- *  Copyright (C) 2021 FISCO BCOS.
+ *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,45 +13,25 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief factory to create the PBFTEngine
- * @file PBFTFactory.cpp
- * @author: yujiechen
- * @date 2021-05-19
+ * @file RPBFTFactory.cpp
+ * @author: kyonGuo
+ * @date 2023/7/14
  */
-#include "PBFTFactory.h"
-#include "bcos-pbft/core/StateMachine.h"
-#include "engine/Validator.h"
-#include "protocol/PB/PBFTCodec.h"
-#include "protocol/PB/PBFTMessageFactoryImpl.h"
-#include "storage/LedgerStorage.h"
-#include "utilities/Common.h"
+
+#include "RPBFTFactory.h"
+#include <bcos-pbft/core/StateMachine.h>
+#include <bcos-pbft/pbft/engine/Validator.h>
+#include <bcos-pbft/pbft/protocol/PB/PBFTCodec.h>
+#include <bcos-pbft/pbft/protocol/PB/PBFTMessageFactoryImpl.h>
+#include <bcos-pbft/pbft/storage/LedgerStorage.h>
+#include <bcos-rpbft/bcos-rpbft/rpbft/config/RPBFTConfig.h>
 #include <memory>
-#include <utility>
 
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
 
-PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
-    bcos::crypto::KeyPairInterface::Ptr _keyPair,
-    std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
-    std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
-    std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
-    bcos::scheduler::SchedulerInterface::Ptr _scheduler, bcos::txpool::TxPoolInterface::Ptr _txpool,
-    bcos::protocol::BlockFactory::Ptr _blockFactory,
-    bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-  : m_cryptoSuite(std::move(_cryptoSuite)),
-    m_keyPair(std::move(_keyPair)),
-    m_frontService(std::move(_frontService)),
-    m_storage(std::move(_storage)),
-    m_ledger(std::move(_ledger)),
-    m_scheduler(std::move(_scheduler)),
-    m_txpool(std::move(_txpool)),
-    m_blockFactory(std::move(_blockFactory)),
-    m_txResultFactory(std::move(_txResultFactory))
-{}
-
-PBFTImpl::Ptr PBFTFactory::createPBFT()
+PBFTImpl::Ptr RPBFTFactory::createRPBFT()
 {
     auto pbftMessageFactory = std::make_shared<PBFTMessageFactoryImpl>();
     PBFT_LOG(INFO) << LOG_DESC("create PBFTCodec");
@@ -67,15 +47,15 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     auto pbftStorage =
         std::make_shared<LedgerStorage>(m_scheduler, m_storage, m_blockFactory, pbftMessageFactory);
 
-    PBFT_LOG(INFO) << LOG_DESC("create pbftConfig");
-    PBFTConfig::Ptr pbftConfig =
-        std::make_shared<PBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory, pbftCodec,
+    PBFT_LOG(INFO) << LOG_DESC("create rPBFTConfig");
+    PBFTConfig::Ptr rpbftConfig =
+        std::make_shared<RPBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory, pbftCodec,
             validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
 
-    PBFT_LOG(INFO) << LOG_DESC("create PBFTEngine");
-    auto pbftEngine = std::make_shared<PBFTEngine>(pbftConfig);
+    PBFT_LOG(INFO) << LOG_DESC("create rPBFTEngine");
+    auto pbftEngine = std::make_shared<PBFTEngine>(rpbftConfig);
 
-    PBFT_LOG(INFO) << LOG_DESC("create PBFT");
+    PBFT_LOG(INFO) << LOG_DESC("create rPBFT");
     auto ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_ledger);
     auto pbft = std::make_shared<PBFTImpl>(pbftEngine);
     pbft->setLedgerFetcher(ledgerFetcher);
