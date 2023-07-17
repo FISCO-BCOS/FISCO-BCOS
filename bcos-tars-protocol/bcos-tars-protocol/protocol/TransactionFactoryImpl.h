@@ -103,11 +103,11 @@ public:
     bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
         std::string _chainId, std::string _groupId, int64_t _importTime,
-        bcos::crypto::KeyPairInterface::Ptr keyPair) override
+        const bcos::crypto::KeyPairInterface& keyPair) override
     {
         auto tx = createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
             std::move(_chainId), std::move(_groupId), _importTime);
-        auto sign = m_cryptoSuite->signatureImpl()->sign(*keyPair, tx->hash(), true);
+        auto sign = m_cryptoSuite->signatureImpl()->sign(keyPair, tx->hash(), true);
 
         auto tarsTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
         auto& inner = tarsTx->mutableInner();

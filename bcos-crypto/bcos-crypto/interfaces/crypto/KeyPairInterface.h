@@ -39,7 +39,11 @@ public:
     using UniquePtr = std::unique_ptr<KeyPairInterface>;
 
     KeyPairInterface() = default;
-    virtual ~KeyPairInterface() {}
+    KeyPairInterface(const KeyPairInterface&) = default;
+    KeyPairInterface(KeyPairInterface&&) = delete;
+    KeyPairInterface& operator=(const KeyPairInterface&) = default;
+    KeyPairInterface& operator=(KeyPairInterface&&) = delete;
+    virtual ~KeyPairInterface() = default;
 
     virtual SecretPtr secretKey() const = 0;
     virtual PublicPtr publicKey() const = 0;

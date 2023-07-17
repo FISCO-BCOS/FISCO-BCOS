@@ -68,7 +68,7 @@ int performance()
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(deployBin));
         auto deployTransaction = transactionFactory.createTransaction(0, "", deployBin,
             boost::lexical_cast<std::string>(rand()), blockNumber + blockLimit, "chain0", "group0",
-            0, keyPair);
+            0, *keyPair);
         auto receipt = rpcClient.sendTransaction(*deployTransaction).get();
 
         if (receipt->status() != 0)
@@ -93,7 +93,7 @@ int performance()
                 auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(it));
                 auto setTransaction = transactionFactory.createTransaction(0,
                     std::string(contractAddress), input, boost::lexical_cast<std::string>(rand()),
-                    blockNumber + blockLimit, "chain0", "group0", 0, keyPair);
+                    blockNumber + blockLimit, "chain0", "group0", 0, *keyPair);
 
                 ++sendProgess;
                 auto& request = requests[it];
