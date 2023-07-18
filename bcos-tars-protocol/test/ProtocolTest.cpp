@@ -75,8 +75,9 @@ BOOST_AUTO_TEST_CASE(transaction)
     std::string nonce("800");
 
     bcostars::protocol::TransactionFactoryImpl factory(cryptoSuite);
-    auto tx = factory.createTransaction(0, to, input, nonce, 100, "testChain", "testGroup", 1000,
-        cryptoSuite->signatureImpl()->generateKeyPair());
+    auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    auto tx = factory.createTransaction(
+        0, to, input, nonce, 100, "testChain", "testGroup", 1000, *keyPair);
 
     tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
     BOOST_CHECK(!tx->sender().empty());

@@ -50,4 +50,5 @@ public:
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}};
     }
 };
+
 }  // namespace bcos::crypto

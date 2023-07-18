@@ -26,23 +26,20 @@
 
 #ifdef WITH_SM2_OPTIMIZE
 
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 class FastSM2Crypto : public SM2Crypto
 {
 public:
     using Ptr = std::shared_ptr<FastSM2Crypto>;
-    FastSM2Crypto() : SM2Crypto()
+    FastSM2Crypto()
     {
         m_signer = fast_sm2_sign;
         m_verifier = fast_sm2_verify;
         m_keyPairFactory = std::make_shared<FastSM2KeyPairFactory>();
     }
-    virtual ~FastSM2Crypto() {}
+    ~FastSM2Crypto() override = default;
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto
 
 #endif
