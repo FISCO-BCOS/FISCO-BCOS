@@ -25,11 +25,12 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
-Session::Session(size_t _recvBufferSize)
+
+Session::Session(size_t _recvBufferSize, bool _forceSize)
   : m_maxRecvBufferSize(_recvBufferSize < MIN_SESSION_RECV_BUFFER_SIZE ?
                             MIN_SESSION_RECV_BUFFER_SIZE :
                             _recvBufferSize),
-    m_recvBuffer(MIN_SESSION_RECV_BUFFER_SIZE)
+    m_recvBuffer(_forceSize ? _recvBufferSize : MIN_SESSION_RECV_BUFFER_SIZE)
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this
                       << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
