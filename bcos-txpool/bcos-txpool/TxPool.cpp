@@ -98,6 +98,13 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 
+task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWithHook(
+    protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook)
+{
+    co_return co_await m_txpoolStorage->submitTransactionWithHook(
+        std::move(transaction), std::move(afterInsertHook));
+}
+
 task::Task<void> TxPool::broadcastTransaction(const protocol::Transaction& transaction)
 {
     bcos::bytes buffer;
@@ -122,15 +129,13 @@ task::Task<void> TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
     co_return;
 }
 
-task::Task<void> TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data)
+task::Task<void> TxPool::broadcastTransactionBufferByTree(
+    const bcos::bytesConstRef& _data, bool isStartNode)
 {
     if (m_treeRouter != nullptr)
     {
         m_frontService->asyncGetGroupNodeInfo(
             [this, _data](Error::Ptr const&, const bcos::gateway::GroupNodeInfo::Ptr& groupInfo) {
-                auto selectedNode =
-                    m_treeRouter->selectNodes(m_transactionSync->config()->connectedGroupNodeList(),
-                        m_treeRouter->consIndex());
                 auto protocolList = groupInfo->nodeProtocolList();
                 // NOTE: the protocolList is a vector which sorted by nodeID, and is NOT convenience
                 // for filter whether send new protocol or not. So one-size-fits-all approach, if
@@ -141,12 +146,28 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(const bcos::bytesConst
                     });
                 if (index != protocolList.end()) [[unlikely]]
                 {
+                    TXPOOL_LOG(TRACE)
+                        << LOG_DESC("broadcastTransactionBufferByTree but have lower version node")
+                        << LOG_KV("index", index->get()->version());
                     // have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default
                     m_frontService->asyncSendBroadcastMessage(
                         protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
                 }
                 else [[likely]]
                 {
+                    auto selectedNode = m_treeRouter->selectNodes(
+                        m_transactionSync->config()->connectedGroupNodeList(),
+                        m_treeRouter->consIndex());
+                    if (c_fileLogLevel == TRACE) [[unlikely]]
+                    {
+                        std::stringstream nodeList;
+                        std::for_each(selectedNode->begin(), selectedNode->end(),
+                            [&](const bcos::crypto::NodeIDPtr& item) {
+                                nodeList << item->shortHex() << ",";
+                            });
+                        TXPOOL_LOG(TRACE) << LOG_DESC("broadcastTransactionBufferByTree")
+                                          << LOG_KV("selectedNode", nodeList.str());
+                    }
                     m_frontService->asyncSendMessageByNodeIDs(
                         protocol::TREE_PUSH_TRANSACTION, *selectedNode, _data);
                 }

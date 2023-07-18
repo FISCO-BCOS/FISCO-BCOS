@@ -210,15 +210,19 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                            decltype(transaction) transaction) -> task::Task<void> {
                 try
                 {
-                    co_await txpool->broadcastTransactionBufferByTree(data);
                     [[maybe_unused]] auto submitResult =
-                        co_await txpool->submitTransaction(std::move(transaction));
+                        txpool->submitTransactionWithHook(std::move(transaction), [data, txpool]() {
+                            task::wait([data](decltype(txpool) txpool) -> task::Task<void> {
+                                co_await txpool->broadcastTransactionBufferByTree(data);
+                            }(txpool));
+                        });
                 }
                 catch (std::exception& e)
                 {
                     TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
                                       << boost::diagnostic_information(e);
                 }
+                co_return;
             }(txpool, std::move(transaction)));
         });
 }
