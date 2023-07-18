@@ -324,8 +324,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
 
         BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
         BOOST_CHECK(message);
-        P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-        recvBufferSize += p2pMessage->payload()->size();
+        BOOST_CHECK(message->lengthDirect() > 0);
+        recvBufferSize += message->lengthDirect();
         recvPacketCnt++;
     });
 
