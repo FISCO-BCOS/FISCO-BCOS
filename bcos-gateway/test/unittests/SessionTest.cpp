@@ -313,6 +313,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     session->setMessageFactory(fakeHost->messageFactory());
     session->setHost(fakeHost);
     session->setSocket(fakeSocket);
+
     session->setMessageHandler([&recvPacketCnt, &recvBufferSize, &lastReadTime](NetworkException e,
                                    SessionFace::Ptr sessionFace, Message::Ptr message) {
         // doRead() call this function after reading a message
@@ -321,10 +322,14 @@ BOOST_AUTO_TEST_CASE(doReadTest)
         {
             std::cout << "error: " << e.errorCode() << " " << e.what() << std::endl;
         }
+        {
+            static bcos::SharedMutex x_mutex;
+            bcos::WriteGuard guard(x_mutex);
+            BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
+            BOOST_CHECK(message);
+            BOOST_CHECK(message->lengthDirect() > 0);
+        }
 
-        BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
-        BOOST_CHECK(message);
-        BOOST_CHECK(message->lengthDirect() > 0);
         recvBufferSize += message->lengthDirect();
         recvPacketCnt++;
     });
