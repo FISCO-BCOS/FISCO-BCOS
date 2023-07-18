@@ -49,7 +49,7 @@ concept TransactionExecutor =
 
         requires std::same_as<task::AwaitableReturnType<decltype(executor.execute(
                                   blockHeader, std::declval<protocol::Transaction>(), 0))>,
-            protocol::ReceiptFactoryReturnType<ReceiptFactory>>;
+            protocol::TransactionReceipt::Ptr>;
     };
 }  // namespace bcos::transaction_executor
 
