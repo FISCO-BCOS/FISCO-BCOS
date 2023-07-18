@@ -78,7 +78,7 @@ int main(int argc, char** argv)
                       << LOG_KV("blockNumber", _blockNumber) << std::endl;
         });
 
-    int i = 0;
+    [[maybe_unused]] int i = 0;
     while (true)
     {
         std::cout << LOG_DESC(" Main thread running ") << std::endl;
