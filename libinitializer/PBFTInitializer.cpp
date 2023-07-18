@@ -204,6 +204,7 @@ void PBFTInitializer::stop()
     m_sealer->stop();
     m_blockSync->stop();
     m_pbft->stop();
+    m_storage->stop();
 }
 
 void PBFTInitializer::init()
