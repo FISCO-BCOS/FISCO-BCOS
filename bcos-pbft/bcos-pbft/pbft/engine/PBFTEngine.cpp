@@ -879,21 +879,11 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 {
                     return;
                 }
-                if (_error != nullptr &&
-                    _error->errorCode() == protocol::CommonError::VerifyProposalFailed)
-                {
-                    PBFT_LOG(WARNING) << LOG_DESC("verify proposal failed")
-                                      << printPBFTMsgInfo(_prePrepareMsg)
-                                      << LOG_KV("errorCode", _error->errorCode())
-                                      << LOG_KV("errorMsg", _error->errorMessage());
-                    pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
-                    return;
-                }
                 // Note: must reset the txs to be sealed no matter verify success or
                 // failed because some nodes may verify failed for timeout,  while
                 // other nodes may verify success
-                // pbftEngine->m_config->validator()->asyncResetTxsFlag(
-                //    _prePrepareMsg->consensusProposal()->data(), true);
+                pbftEngine->m_config->validator()->asyncResetTxsFlag(
+                    _prePrepareMsg->consensusProposal()->data(), true);
 
                 // verify exceptioned
                 if (_error != nullptr)
@@ -915,8 +905,13 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 }
                 // verify success
                 RecursiveGuard l(pbftEngine->m_mutex);
-                pbftEngine->handlePrePrepareMsg(
+                auto ret = pbftEngine->handlePrePrepareMsg(
                     _prePrepareMsg, false, _generatedFromNewView, false);
+                if (!ret)
+                {
+                    pbftEngine->m_config->validator()->asyncResetTxsFlag(
+                        _prePrepareMsg->consensusProposal()->data(), false);
+                }
             }
             catch (std::exception const& _e)
             {

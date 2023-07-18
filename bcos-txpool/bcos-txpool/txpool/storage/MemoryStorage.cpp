@@ -435,7 +435,7 @@ void MemoryStorage::printPendingTxs()
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle")
                       << LOG_KV("pendingSize", m_txsTable.size());
-    for (auto item : m_txsTable)
+    for (const auto& item : m_txsTable)
     {
         auto tx = item.second;
         if (!tx)
@@ -968,14 +968,16 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
         {
             auto header = _block->blockHeader();
             if ((txIt->second->batchId() != header->number() && txIt->second->batchId() != -1) ||
-                txIt->second->batchHash() != header->hash())
+                txIt->second->batchHash() != header->hash()) [[unlikely]]
             {
-                TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
-                                 << LOG_KV("blkNum", header->number())
-                                 << LOG_KV("blkHash", header->hash().abridged())
-                                 << LOG_KV("txBatchId", txIt->second->batchId())
-                                 << LOG_KV("txBatchHash", txIt->second->batchHash().abridged());
-                return nullptr;
+                TXPOOL_LOG(DEBUG) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
+                                  << LOG_KV("blkNum", header->number())
+                                  << LOG_KV("blkHash", header->hash().abridged())
+                                  << LOG_KV("txBatchId", txIt->second->batchId())
+                                  << LOG_KV("txBatchHash", txIt->second->batchHash().abridged());
+                // NOTE: here will cause bug, if new proposal contains the same txs with the old
+                // proposal, but old proposal is resetting txs flag, the new proposal will be failed
+                // return nullptr;
             }
         }
     }
