@@ -49,24 +49,32 @@ private:
         (processGetBlockFlags<Flags>(request.onlyHeader), ...);
 
         bcostars::ResponseBlock response;
-        auto nodeID = co_await p2p().randomSelectNode();
-        co_await p2p().sendMessageByNodeID(
-            bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
+        auto nodeIDs = co_await p2p().getAllNodeID();
+        size_t failedNodeCount = 0;
+        for(auto& nodeID : nodeIDs)
+        {
+            co_await p2p().sendMessageByNodeID(
+                    bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
 
-        if(response.error.errorCode)
-        {
-            LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
-                                   << "response errorCode: " << response.error.errorCode
-                                   << " " << response.error.errorMessage;
+            if(response.error.errorCode)
+            {
+                LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
+                                       << "response errorCode: " << response.error.errorCode
+                                       << " " << response.error.errorMessage;
+                continue;
+            }
+            else
+            {
+                std::swap(response.block, block);
+                LIGHTNODE_LOG(DEBUG) << LOG_DESC("lightNodeGetBlock")
+                                     << LOG_KV("BlockNumber", blockNumber);
+                co_return;
+            }
         }
-        else
-        {
-            std::swap(response.block, block);
-            LIGHTNODE_LOG(DEBUG) << LOG_DESC("lightNodeGetBlock")
-                                 << LOG_KV("BlockNumber", blockNumber);
-            co_return;
-        }
+
         response.block = {};
+        LIGHTNODE_LOG(ERROR) << "lightNode getBlock to allNode failed!"
+                             <<  LOG_KV("response errorCode",response.error.errorCode);
 
         std::swap(response.block, block);
     }
@@ -116,21 +124,33 @@ private:
         bcostars::RequestGetABI request;
         bcostars::ResponseGetABI response;
         request.contractAddress = contractAddress;
-        auto nodeID = co_await p2p().randomSelectNode();
 
-        LIGHTNODE_LOG(TRACE) << LOG_KV("nodeID", nodeID)
-                             << LOG_KV("request.contractAddress", request.contractAddress);
-        co_await p2p().sendMessageByNodeID(
-            protocol::LIGHTNODE_GET_ABI, std::move(nodeID), request, response);
-        if (response.error.errorCode)
-        {
-            LIGHTNODE_LOG(WARNING) << "getABI failed, errorCode: " << response.error.errorCode
-                                   << " " << response.error.errorMessage;
-            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+        auto nodeIDs = co_await p2p().getAllNodeID();
+        for(auto node : nodeIDs){
+            LIGHTNODE_LOG(TRACE) << LOG_KV("nodeID", node)
+                                 << LOG_KV("request.contractAddress", request.contractAddress);
+
+            co_await p2p().sendMessageByNodeID(
+                    protocol::LIGHTNODE_GET_ABI, std::move(node), request, response);
+
+            if (response.error.errorCode)
+            {
+                LIGHTNODE_LOG(WARNING) << "getABI failed, errorCode: " << response.error.errorCode
+                                       << " " << response.error.errorMessage;
+                BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+                continue;
+            }
+            else{
+                LIGHTNODE_LOG(TRACE) << "get contractAddress " << request.contractAddress
+                                     << "ABI from remote, the ABI is" << response.abiStr;
+                auto abiStr = response.abiStr;
+                co_return abiStr;
+            }
         }
-        LIGHTNODE_LOG(TRACE) << "get contractAddress " << request.contractAddress
-                             << "ABI from remote, the ABI is" << response.abiStr;
-        auto abiStr = response.abiStr;
+        LIGHTNODE_LOG(ERROR) << "lightNode getABI to allNode failed!"
+                             <<  LOG_KV("response errorCode",response.error.errorCode);
+
+        auto abiStr = "";
         co_return abiStr;
     }
 
