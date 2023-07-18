@@ -62,6 +62,15 @@ public:
     unsigned forwardPercent() const { return m_forwardPercent; }
     void setForwardPercent(unsigned _forwardPercent) { m_forwardPercent = _forwardPercent; }
     std::shared_ptr<bcos::ledger::LedgerInterface> ledger() { return m_ledger; }
+    void setMaxResponseTxsToNodesWithEmptyTxs(size_t blockTxCount)
+    {
+        m_maxResponseTxsToNodesWithEmptyTxs = blockTxCount;
+    }
+
+    size_t getMaxResponseTxsToNodesWithEmptyTxs() const
+    {
+        return m_maxResponseTxsToNodesWithEmptyTxs;
+    }
 
     // for ut
     void setTxPoolStorage(bcos::txpool::TxPoolStorageInterface::Ptr _txpoolStorage)
@@ -80,6 +89,7 @@ private:
     unsigned m_networkTimeout = 500;
 
     unsigned m_forwardPercent = 25;
+    size_t m_maxResponseTxsToNodesWithEmptyTxs = 1000;
 };
 }  // namespace sync
 }  // namespace bcos
