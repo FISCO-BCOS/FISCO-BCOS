@@ -1956,7 +1956,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 }
 
 bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
-    bcos::ledger::LedgerConfig::Ptr _ledgerConfig, std::int64_t _epochSealerNum)
+    const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig, std::int64_t _epochSealerNum)
 {
     auto sealerList = _ledgerConfig->consensusNodeList();
     std::sort(sealerList.begin(), sealerList.end(), bcos::consensus::ConsensusNodeComparator());
@@ -1980,6 +1980,9 @@ bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
     auto workingSealerList = std::make_shared<bcos::consensus::ConsensusNodeList>();
     for (std::int64_t i = 0; i < selectedNum; ++i)
     {
+        LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer")
+                         << LOG_KV("nodeID", sealerList[i]->nodeID()->hex())
+                         << LOG_KV("weight", sealerList[i]->weight());
         workingSealerList->emplace_back(sealerList[i]);
     }
     return workingSealerList;

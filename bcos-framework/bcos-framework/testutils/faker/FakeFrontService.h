@@ -154,9 +154,11 @@ public:
             auto tx = txFactory->createTransaction(_data);
             bcos::task::wait([](decltype(txpool) txpool, decltype(_data) _data,
                                  decltype(tx) tx) -> bcos::task::Task<void> {
-                // FIXME: broadcast storm, fix it in next PR
-                // co_await txpool->broadcastTransactionBufferByTree(_data);
-                auto submit = co_await txpool->submitTransaction(tx);
+                auto submit = co_await txpool->submitTransactionWithHook(tx, [_data, txpool]() {
+                    bcos::task::wait([_data](decltype(txpool) txpool) -> task::Task<void> {
+                        co_await txpool->broadcastTransactionBufferByTree(_data);
+                    }(txpool));
+                });
                 BOOST_CHECK(submit->status() == (uint32_t)TransactionStatus::None);
             }(txpool, _data, tx));
         }

@@ -68,21 +68,43 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
     bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
         bcos::bytes data;
         tx->encode(data);
-        co_await txpool.broadcastTransactionBuffer(bcos::ref(data));
+        co_await txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
     }(txpool, tx));
-    // broadcast to 3 nodes
-    for (const auto& item : this->m_nodeIdList | RANGES::views::take(3))
+    // broadcast to all nodes finally
+    for (const auto& item : this->m_nodeIdList)
     {
         auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
         auto size = nodeTxpool.txpoolStorage()->size();
         BOOST_CHECK(size == 1);
     }
-    // FIXME: should solve broadcast storm
-    for (const auto& item : this->m_nodeIdList | RANGES::views::drop(3))
+}
+
+BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
+{
+    this->appendObserver(this->m_nodeId);
+    for (const auto& item : this->m_nodeIdList)
+    {
+        this->appendSealer(item);
+    }
+    NodeIDs nodeIds = m_nodeIdList;
+    nodeIds.push_back(this->m_nodeId);
+    auto& txpool = dynamic_cast<TxPool&>(*this->txpool());
+    txpool.treeRouter()->updateConsensusNodeInfo(nodeIds);
+    BCOS_LOG(TRACE) << LOG_DESC("updateRouter")
+                    << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
+
+    auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTime()));
+    bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
+        bcos::bytes data;
+        tx->encode(data);
+        co_await txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
+    }(txpool, tx));
+    // broadcast to all nodes finally
+    for (const auto& item : this->m_nodeIdList)
     {
         auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
         auto size = nodeTxpool.txpoolStorage()->size();
-        BOOST_CHECK(size == 0);
+        BOOST_CHECK(size == 1);
     }
 }
 
