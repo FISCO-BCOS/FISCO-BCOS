@@ -32,8 +32,8 @@ PBFTCache::PBFTCache(PBFTConfig::Ptr _config, BlockNumber _index)
 void PBFTCache::onCheckPointTimeout()
 {
     // Note: this logic is unreachable
-    if (!m_checkpointProposal || std::cmp_less(utcTime() - m_checkPointStartTime,
-                                     m_config->checkPointTimeoutInterval()))
+    if (!m_checkpointProposal ||
+        std::cmp_less(utcTime() - m_checkPointStartTime, m_config->checkPointTimeoutInterval()))
     {
         return;
     }
@@ -302,6 +302,9 @@ void PBFTCache::resetCache(ViewType _curView)
 {
     m_submitted = false;
     m_precommitted = false;
+    PBFT_LOG(INFO) << LOG_DESC("resetCache") << LOG_KV("precommit", m_precommit ? "true" : "false")
+                    << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
+                    << LOG_KV("curView", _curView);
     if (!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
         m_prePrepare->view() < _curView)
     {

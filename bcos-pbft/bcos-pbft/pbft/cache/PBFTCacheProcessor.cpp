@@ -775,7 +775,7 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
     }
     // avoid the failure to verify proposalWeight due to the modification of consensus node list and
     // consensus weight
-    if (!m_caches.count(_precommitMsg->index()))
+    if (!m_caches.contains(_precommitMsg->index()))
     {
         return ret;
     }
@@ -844,6 +844,7 @@ ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(
 void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _consensusedNumber)
 {
     m_proposalsToStableConsensus.erase(_consensusedNumber);
+    uint32_t eraseSize = 0;
     for (auto pcache = m_caches.begin(); pcache != m_caches.end();)
     {
         // Note: can't remove stabledCommitted cache here for need to fetch
@@ -852,11 +853,15 @@ void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _con
         {
             m_proposalsToStableConsensus.erase(pcache->first);
             pcache = m_caches.erase(pcache);
+            eraseSize++;
             continue;
         }
         pcache++;
     }
     removeInvalidViewChange(_view, _consensusedNumber);
+    PBFT_LOG(INFO) << LOG_DESC("removeConsensusedCache finalizeConsensus") << LOG_KV("view", _view)
+                   << LOG_KV("number", _consensusedNumber) << LOG_KV("eraseSize", eraseSize)
+                   << LOG_KV("cacheSize", m_caches.size());
     m_newViewGenerated = false;
 }
 
@@ -864,6 +869,9 @@ void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _con
 void PBFTCacheProcessor::resetCacheAfterViewChange(
     ViewType _view, BlockNumber _latestCommittedProposal)
 {
+    PBFT_LOG(INFO) << LOG_DESC("resetCacheAfterViewChange") << LOG_KV("view", _view)
+                   << LOG_KV("number", _latestCommittedProposal)
+                   << LOG_KV("cacheSize", m_caches.size());
     for (auto const& it : m_caches)
     {
         it.second->resetCache(_view);

@@ -21,6 +21,7 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
+#include "bcos-framework/protocol/CommonError.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -878,11 +879,21 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 {
                     return;
                 }
+                if (_error != nullptr &&
+                    _error->errorCode() == protocol::CommonError::VerifyProposalFailed)
+                {
+                    PBFT_LOG(WARNING) << LOG_DESC("verify proposal failed")
+                                      << printPBFTMsgInfo(_prePrepareMsg)
+                                      << LOG_KV("errorCode", _error->errorCode())
+                                      << LOG_KV("errorMsg", _error->errorMessage());
+                    pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
+                    return;
+                }
                 // Note: must reset the txs to be sealed no matter verify success or
                 // failed because some nodes may verify failed for timeout,  while
                 // other nodes may verify success
-                pbftEngine->m_config->validator()->asyncResetTxsFlag(
-                    _prePrepareMsg->consensusProposal()->data(), true);
+                // pbftEngine->m_config->validator()->asyncResetTxsFlag(
+                //    _prePrepareMsg->consensusProposal()->data(), true);
 
                 // verify exceptioned
                 if (_error != nullptr)
