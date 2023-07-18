@@ -68,7 +68,7 @@ int main(int argc, char** argv)
 
     std::cout << LOG_DESC(" [AMOP][Broadcast] start sdk ... ") << std::endl;
 
-    int i = 0;
+    [[maybe_unused]] int i = 0;
     while (true)
     {
         std::cout << LOG_DESC(" broadcast message ===>>>> ") << LOG_KV("topic", topic)

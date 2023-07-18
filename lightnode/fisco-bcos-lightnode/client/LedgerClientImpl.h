@@ -53,8 +53,20 @@ private:
         co_await p2p().sendMessageByNodeID(
             bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
 
-        if (response.error.errorCode)
-            BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
+        if(response.error.errorCode)
+        {
+            LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
+                                   << "response errorCode: " << response.error.errorCode
+                                   << " " << response.error.errorMessage;
+        }
+        else
+        {
+            std::swap(response.block, block);
+            LIGHTNODE_LOG(DEBUG) << LOG_DESC("lightNodeGetBlock")
+                                 << LOG_KV("BlockNumber", blockNumber);
+            co_return;
+        }
+        response.block = {};
 
         std::swap(response.block, block);
     }

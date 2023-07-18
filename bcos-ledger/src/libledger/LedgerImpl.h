@@ -134,7 +134,9 @@ private:
 
         //create keyPageStorage
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(m_keyPageSize);
-        auto stateStorage =  stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion);
+        auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+                storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+        auto stateStorage =  stateStorageFactory->createStateStorage(m_backupStorage, m_compatibilityVersion, true, keyPageIgnoreTables);
 
         //try to get codeHash
         auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");
