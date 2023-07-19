@@ -39,12 +39,12 @@ public:
     virtual void encode(bytes& _encodedData) const = 0;
     virtual bcos::crypto::HashType hash() const = 0;
     virtual int32_t version() const = 0;
-    virtual u256 gasUsed() const = 0;
+    virtual bcos::u256 gasUsed() const = 0;
     virtual std::string_view contractAddress() const = 0;
     virtual int32_t status() const = 0;
-    virtual bytesConstRef output() const = 0;
+    virtual bcos::bytesConstRef output() const = 0;
     virtual gsl::span<const LogEntry> logEntries() const = 0;
-    virtual BlockNumber blockNumber() const = 0;
+    virtual protocol::BlockNumber blockNumber() const = 0;
 
     // additional information on transaction execution, no need to be involved in the hash
     // calculation
