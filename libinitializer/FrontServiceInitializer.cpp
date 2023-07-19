@@ -211,11 +211,8 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                 try
                 {
                     [[maybe_unused]] auto submitResult =
-                        txpool->submitTransactionWithHook(std::move(transaction), [data, txpool]() {
-                            task::wait([data](decltype(txpool) txpool) -> task::Task<void> {
-                                co_await txpool->broadcastTransactionBufferByTree(data);
-                            }(txpool));
-                        });
+                        txpool->submitTransactionWithHook(std::move(transaction),
+                            [data, txpool]() { txpool->broadcastTransactionBufferByTree(data); });
                 }
                 catch (std::exception& e)
                 {

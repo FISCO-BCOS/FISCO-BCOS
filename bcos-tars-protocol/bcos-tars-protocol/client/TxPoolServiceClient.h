@@ -106,7 +106,7 @@ public:
         co_return co_await awaitable;
     }
 
-    bcos::task::Task<void> broadcastTransaction(
+    void broadcastTransaction(
         [[maybe_unused]] const bcos::protocol::Transaction& transaction) override
     {
         struct TarsCallback : public bcostars::TxPoolServicePrxCallback
@@ -114,98 +114,45 @@ public:
             void callback_broadcastTransaction(const bcostars::Error& ret) override
             {
                 m_error = toBcosError(ret);
-                m_handle.resume();
             }
-            void callback_submit_exception(tars::Int32 ret) override
-            {
-                m_error = toBcosError(ret);
-                m_handle.resume();
-            }
+            void callback_submit_exception(tars::Int32 ret) override { m_error = toBcosError(ret); }
 
-            CO_STD::coroutine_handle<> m_handle;
             bcos::Error::Ptr m_error;
         };
 
-        struct Awaitable
-        {
-            constexpr bool await_ready() const { return false; }
-            void await_suspend(CO_STD::coroutine_handle<> handle)
-            {
-                m_callback->m_handle = handle;
-                m_proxy->tars_set_timeout(600000)->async_broadcastTransaction(m_callback,
-                    dynamic_cast<const bcostars::protocol::TransactionImpl&>(m_transaction)
-                        .inner());  // tars take the m_callback ownership
-            }
-            void await_resume() const
-            {
-                if (m_callback->m_error)
-                {
-                    BOOST_THROW_EXCEPTION(*m_callback->m_error);
-                }
-            }
-
-            TarsCallback* m_callback = nullptr;
-            const bcos::protocol::Transaction& m_transaction;
-            bcostars::TxPoolServicePrx m_proxy;
-        };
-
         auto tarsCallback = std::make_unique<TarsCallback>();
-        auto awaitable = Awaitable{
-            .m_callback = tarsCallback.release(), .m_transaction = transaction, .m_proxy = m_proxy};
-
-        co_return co_await awaitable;
+        m_proxy->tars_set_timeout(600000)->async_broadcastTransaction(tarsCallback.release(),
+            dynamic_cast<const bcostars::protocol::TransactionImpl&>(transaction)
+                .inner());  // tars take the m_callback ownership
     }
 
 
-    bcos::task::Task<void> broadcastTransactionBuffer(
-        [[maybe_unused]] const bcos::bytesConstRef& _data) override
+    void broadcastTransactionBuffer([[maybe_unused]] const bcos::bytesConstRef& _data) override
     {
         struct TarsCallback : public bcostars::TxPoolServicePrxCallback
         {
             void callback_broadcastTransactionBuffer(const bcostars::Error& ret) override
             {
-                m_error = toBcosError(ret);
-                m_handle.resume();
+                auto error = toBcosError(ret);
+                if (error)
+                {
+                    BOOST_THROW_EXCEPTION(*error);
+                }
             }
             void callback_submit_exception(tars::Int32 ret) override
             {
-                m_error = toBcosError(ret);
-                m_handle.resume();
-            }
-
-            CO_STD::coroutine_handle<> m_handle;
-            bcos::Error::Ptr m_error;
-        };
-
-        struct Awaitable
-        {
-            constexpr bool await_ready() const { return false; }
-            void await_suspend(CO_STD::coroutine_handle<> handle)
-            {
-                m_callback->m_handle = handle;
-                m_proxy->tars_set_timeout(600000)->async_broadcastTransactionBuffer(m_callback,
-                    m_transactionBuffer);  // tars take the m_callback
-                                           // ownership
-            }
-            void await_resume() const
-            {
-                if (m_callback->m_error)
+                auto error = toBcosError(ret);
+                if (error)
                 {
-                    BOOST_THROW_EXCEPTION(*m_callback->m_error);
+                    BOOST_THROW_EXCEPTION(*error);
                 }
             }
-
-            TarsCallback* m_callback = nullptr;
-            const std::vector<char> m_transactionBuffer;
-            bcostars::TxPoolServicePrx m_proxy;
         };
 
         auto tarsCallback = std::make_unique<TarsCallback>();
-        auto awaitable = Awaitable{.m_callback = tarsCallback.release(),
-            .m_transactionBuffer = std::vector<char>(_data.begin(), _data.end()),
-            .m_proxy = m_proxy};
 
-        co_return co_await awaitable;
+        m_proxy->tars_set_timeout(600000)->async_broadcastTransactionBuffer(tarsCallback.release(),
+            std::vector<char>(_data.begin(), _data.end()));  // tars take the m_callback ownership
     }
 
     void asyncSealTxs(uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs,

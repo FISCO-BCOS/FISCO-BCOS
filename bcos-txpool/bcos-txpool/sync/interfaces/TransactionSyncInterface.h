@@ -45,6 +45,7 @@ public:
 
     virtual TransactionSyncConfig::Ptr config() { return m_config; }
     virtual void onEmptyTxs() = 0;
+    virtual void stop() = 0;
 
 protected:
     TransactionSyncConfig::Ptr m_config;
