@@ -55,6 +55,9 @@ public:
     virtual void sendTransaction(std::string_view _groupID, std::string_view _nodeName,
         std::string_view _data, bool _requireProof, RespFunc _respFunc) = 0;
 
+    virtual void sendEncodedTransaction(std::string_view groupID, std::string_view nodeName,
+        uint32_t txEncodeType, const Json::Value& data, bool requireProof, RespFunc respFunc) = 0;
+
     virtual void getTransaction(std::string_view _groupID, std::string_view _nodeName,
         std::string_view _txHash, bool _requireProof, RespFunc _respFunc) = 0;
 
@@ -155,6 +158,13 @@ private:
     {
         sendTransaction(toView(req[0u]), toView(req[1u]), toView(req[2u]), req[3u].asBool(),
             std::move(_respFunc));
+    }
+
+    void sendEncodedTransactionI(const Json::Value& req, RespFunc _respFunc)
+    {
+        sendEncodedTransaction(toView(req[0u]), toView(req[1u]), req[2u].asUInt(),
+            req[3u],  // FIXME
+            req[4u].asBool(), std::move(_respFunc));
     }
 
     void getTransactionI(const Json::Value& req, RespFunc _respFunc)

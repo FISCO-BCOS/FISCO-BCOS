@@ -106,8 +106,13 @@ BOOST_AUTO_TEST_CASE(testSecp256k1KeyPair)
 
 BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
 {
-    auto keyPair = secp256k1GenerateKeyPair();
-    auto hashData = keccak256Hash((std::string)("abcd"));
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto fixedSec = h256("ab03f6f6a94d138d6971fa96e64b7311f5678be1328ede7800d06afc2fe826bf");
+    auto sec = std::make_shared<bcos::crypto::KeyImpl>(fixedSec.asBytes());
+    auto keyPair = signatureImpl->createKeyPair(sec);
+
+    auto hashData = h256("0x3832e0f3c7d95f6a23d39f9f161f0821d0e995f83642b5bd346799ac35fe3610");
+
     std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
     std::cout << "#### publicKey:" << keyPair->publicKey()->hex() << std::endl;
     std::cout << "#### publicKey shortHex:" << keyPair->publicKey()->shortHex() << std::endl;
@@ -117,6 +122,7 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     std::cout << "### signData:" << *toHexString(*signData) << std::endl;
     std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
     std::cout << "#### publicKey:" << keyPair->publicKey()->hex() << std::endl;
+    std::cout << "#### secretKey:" << keyPair->secretKey()->hex() << std::endl;
 
     // verify
     bool result = secp256k1Verify(
@@ -191,6 +197,39 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     BOOST_CHECK(*signData == *encodedData);
     auto publicKey = secp256k1Crypto->recover(hashData, ref(*encodedData));
     BOOST_CHECK(publicKey->data() == keyPair->publicKey()->data());
+}
+
+BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify2)
+{
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto fixedSec = h256("ab03f6f6a94d138d6971fa96e64b7311f5678be1328ede7800d06afc2fe826bf");
+    auto sec = std::make_shared<bcos::crypto::KeyImpl>(fixedSec.asBytes());
+    auto keyPair = signatureImpl->createKeyPair(sec);
+    // address: 6da0599583855f1618b380f6782c0c5c25cb96ec
+
+    auto hashData = h256("");
+    std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
+
+    /// normal check
+    // sign
+    auto signData = fromHexString(
+        "0xcb20fdae745dcdf8591e592be82a04d3f7b5fe3e02b48524555c59cb701d09b951c2a4ee23037c037650c7da"
+        "f01c0e650954a37e1d9eba2bbcc2b6491581751d01");
+    // ad527e907ebd772f74d93d1e6cfbf2553c2328461b6e9fc1802f355c9f55aa4046bb16a05243891f30fb799c55abe86b8652ef5dea64b2ccc2da5a28c7adea2c01
+
+    std::cout << "### signData:" << *toHexString(*signData) << std::endl;
+    std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
+
+
+    // recover
+    auto pub = secp256k1Recover(hashData, bytesConstRef(signData->data(), signData->size()));
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto address = calculateAddress(hashImpl, pub);
+    Secp256k1Crypto k1Crypto;
+    auto ret = k1Crypto.recoverAddress(
+        *hashImpl, hashData, bytesConstRef(signData->data(), signData->size()));
+    std::cout << "### right   address:" << address.hex() << std::endl;
+    std::cout << "### recover address:" << toHex(ret.second) << std::endl;
 }
 
 BOOST_AUTO_TEST_CASE(testSM2KeyPair)

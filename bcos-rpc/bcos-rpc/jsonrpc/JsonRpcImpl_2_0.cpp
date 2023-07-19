@@ -422,11 +422,53 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
 void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view nodeName,
     std::string_view data, bool requireProof, RespFunc respFunc)
 {
-    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, std::string_view nodeName,
-                   std::string_view data, bool requireProof,
-                   RespFunc respFunc) -> task::Task<void> {
-        auto nodeService = self->getNodeService(groupID, nodeName, "sendTransaction");
+    auto nodeService = getNodeService(groupID, nodeName, "sendTransaction");
 
+    auto txBytes = decodeData(data);
+    auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
+        bcos::ref(txBytes), false, true);
+
+    sendTransactionInternal(
+        groupID, nodeService, transaction, bcos::ref(txBytes), requireProof, respFunc);
+}
+
+
+void JsonRpcImpl_2_0::sendEncodedTransaction(std::string_view groupID, std::string_view nodeName,
+    uint32_t txEncodeType, const Json::Value& data, bool requireProof, RespFunc respFunc)
+{
+    auto nodeService = getNodeService(groupID, nodeName, "sendTransaction");
+
+    // FIXME: remove shared_ptr
+    bcos::bytes txBytes;
+    bcos::protocol::Transaction::Ptr transaction;
+    if (txEncodeType == bcos::protocol::TransactionFactory::TxEncodeType::TARS)
+    {
+        txBytes = decodeData(data.asString());
+        transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
+            bcos::ref(txBytes), false, true);
+    }
+    else if (txEncodeType == bcos::protocol::TransactionFactory::TxEncodeType::JSON)
+    {
+        transaction =
+            nodeService->blockFactory()->transactionFactory()->createTransaction(data, false, true);
+        transaction->encode(txBytes);
+    }
+    else
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Unexpect txEncodeType"});  // FIXME: define a
+    }
+
+    sendTransactionInternal(
+        groupID, nodeService, transaction, bcos::ref(txBytes), requireProof, respFunc);
+}
+
+void JsonRpcImpl_2_0::sendTransactionInternal(std::string_view groupID,
+    NodeService::Ptr nodeService, bcos::protocol::Transaction::Ptr transaction,
+    bcos::bytesConstRef txBytes, bool requireProof, RespFunc respFunc)
+{
+    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, NodeService::Ptr nodeService,
+                   bcos::protocol::Transaction::Ptr transaction, bcos::bytesConstRef txBytes,
+                   bool requireProof, RespFunc respFunc) -> task::Task<void> {
         auto txpool = nodeService->txpool();
         if (!txpool) [[unlikely]]
         {
@@ -445,19 +487,16 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         try
         {
             auto isWasm = groupInfo->wasm();
-            auto transactionData = decodeData(data);
-            auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
-                bcos::ref(transactionData), false, true);
 
             if (c_fileLogLevel <= TRACE)
             {
                 RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
-                                    << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
+                                    << LOG_KV("isWasm", isWasm);
             }
 
             auto start = utcSteadyTime();
             std::string extraData = std::string(transaction->extraData());
-            co_await txpool->broadcastTransactionBuffer(bcos::ref(transactionData));
+            co_await txpool->broadcastTransactionBuffer(txBytes);  // FIXME
             auto submitResult = co_await txpool->submitTransaction(transaction);
 
             auto txHash = submitResult->txHash();
@@ -523,7 +562,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             RPC_IMPL_LOG(WARNING) << "RPC common error: " << info;
             respFunc(BCOS_ERROR_PTR(-1, std::move(info)), jResp);
         }
-    }(this, groupID, nodeName, data, requireProof, std::move(respFunc)));
+    }(this, groupID, nodeService, transaction, txBytes, requireProof, std::move(respFunc)));
 }
 
 

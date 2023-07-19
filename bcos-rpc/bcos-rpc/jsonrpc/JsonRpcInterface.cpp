@@ -17,6 +17,8 @@ void JsonRpcInterface::initMethod()
         std::bind(&JsonRpcInterface::callI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["sendTransaction"] = std::bind(
         &JsonRpcInterface::sendTransactionI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["sendEncodedTransaction"] = std::bind(&JsonRpcInterface::sendEncodedTransactionI,
+        this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getTransaction"] = std::bind(
         &JsonRpcInterface::getTransactionI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getTransactionReceipt"] = std::bind(&JsonRpcInterface::getTransactionReceiptI,

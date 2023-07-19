@@ -31,6 +31,7 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <json/json.h>
 #include <memory>
 
 namespace bcostars::protocol
@@ -54,6 +55,8 @@ public:
 
     void decode(bcos::bytesConstRef _txData) override;
     void encode(bcos::bytes& txData) const override;
+
+    void decodeFromJson(const Json::Value& txJson);
 
     bcos::crypto::HashType hash() const override;
 

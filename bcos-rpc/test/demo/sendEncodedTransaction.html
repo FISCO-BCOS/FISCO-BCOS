@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ecsign</title>
+</head>
+<body>
+  <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js"type="application/javascript"></script>
+  <script>
+
+    cryptoSuite = {
+            keccak256WithEcdsa :{
+              hash: keccak256, // 实现见下面的代码
+              sign: ecdsa
+            },
+            sm3WithSm2: {
+              hash: sm3,
+              sign: sm2
+            }
+          }
+
+
+    // 非国密交易组装&签名举例
+    async function normalExample() {
+      const txData = {
+          version: 256,
+          chainID: 'chain123',
+          groupID: 'group123',
+          blockLimit: 100000,
+          nonce: 'nonce123',
+          to: '0x6DA0599583855F1618B380f6782c0c5C25CB96Ec',
+          input: '0x11223344556677889900aabbccdef',
+          abi: 'abiData'
+        };    
+
+      let txDataRaw = getTxDataRaw(txData);
+
+      let txHash = cryptoSuite.keccak256WithEcdsa.hash(txDataRaw);
+      let txSign = cryptoSuite.keccak256WithEcdsa.sign(txHash);
+      
+      let txJson = toFullTxJson(txData, txHash, txSign)
+
+      return {txHash, txSign, txJson};
+    }
+
+    function toFullTxJson(txData, txHash, txSign) {
+      const transaction = {
+        data: txData,
+        dataHash: txHash,
+        signature: txSign,
+        //importTime: 0,
+       // attribute: 0,
+        sender: '0x6DA0599583855F1618B380f6782c0c5C25CB96Ec',
+        extraData: ''
+      }
+      return JSON.stringify(transaction);
+    }
+
+    function getTxDataRaw(txData){
+      const encoder = new TextEncoder();
+
+      const version = parseInt32(txData.version);
+      const chainID = encoder.encode(txData.chainID);
+      const groupID = encoder.encode(txData.groupID);
+      const blockLimit = parseInt64(txData.blockLimit);
+      const nonce = encoder.encode(txData.nonce);
+      const to = encoder.encode(txData.to);
+      const input = hexString2Bytes(txData.input);
+      const abi = encoder.encode(txData.abi);
+
+      const dataRaw = concatArrays(
+        version, 
+        chainID,
+        groupID,
+        blockLimit,
+        nonce,
+        to,
+        input,
+        abi
+        );
+      const dataRawHex = '0x' + toHexString(dataRaw);
+      console.log(dataRawHex);
+      return dataRawHex;
+    }
+
+    function keccak256(dataRawHex) {
+      const hashHex = ethers.utils.keccak256(dataRawHex); // keccak256
+      return hashHex;
+    }
+
+    function ecdsa(hashFields) {
+      let keyPair = new ethers.utils.SigningKey('0xab03f6f6a94d138d6971fa96e64b7311f5678be1328ede7800d06afc2fe826bf') // address: 0x6DA0599583855F1618B380f6782c0c5C25CB96Ec
+      let vrs = keyPair.signDigest(hashFields); // should start with 0x
+      // keyPair.signDigest('0x3832e0f3c7d95f6a23d39f9f161f0821d0e995f83642b5bd346799ac35fe3610');
+      let sig = vrs.r.replace('0x','') + vrs.s.replace('0x','') + '0' + (vrs.v - 27).toString(16); // fisco tx sign encode protocol
+      //let sig = vrs.r.replace('0x','') + vrs.s.replace('0x','') + vrs.v.toString(16); // eth tx sign encode protocol
+      
+      return '0x' + sig;
+    }
+
+
+    function sm3(dataRawHex) {
+      
+    }
+
+    function sm2(hashFields) {
+      
+    }
+
+
+    function parseInt32(num) {
+        let uint8Array = new Uint8Array(4);
+        let dataView = new DataView(uint8Array.buffer);
+        dataView.setInt32(0, num, false); // 第三个参数为true表示使用大端字节序，false表示使用小端字节序
+        return uint8Array;
+    }
+
+    function parseInt64(num) {
+        let uint8Array = new Uint8Array(8);
+        let dataView = new DataView(uint8Array.buffer);
+        dataView.setBigInt64(0, num.toString(), false); // 第三个参数为true表示使用大端字节序，false表示使用小端字节序
+        return uint8Array;
+    }
+    
+    function hexString2Bytes(hexString) {
+      // 去掉前缀"0x"
+      hexString = hexString.replace(/^0x/, '');
+
+      // 检查字符串长度是否为偶数
+      if (hexString.length % 2 !== 0) {
+        hexString = '0' + hexString; // 位数不够，前面补0
+      }
+
+      // 创建一个新的Uint8Array
+      const uint8Array = new Uint8Array(hexString.length / 2);
+
+      // 将每两个字符转换为一个字节的整数值
+      for (let i = 0; i < hexString.length; i += 2) {
+        const byte = parseInt(hexString.substr(i, 2), 16);
+        uint8Array[i / 2] = byte;
+      }
+
+      return uint8Array;
+    }
+
+    // 函数用于连接多个Uint8Array数组
+    function concatArrays(...arrays) {
+      const totalLength = arrays.reduce((length, array) => length + array.length, 0);
+      const result = new Uint8Array(totalLength);
+
+      let offset = 0;
+      for (const array of arrays) {
+        result.set(array, offset);
+        offset += array.length;
+      }
+
+      return result;
+    }
+
+    function toHexString(uint8Array) {
+      let hexString = Array.from(uint8Array, byte => byte.toString(16).padStart(2, '0')).join('');
+      return hexString;
+    }
+
+
+
+    normalExample()
+      .then( res => {
+        const hashElement = document.createElement('p');
+        hashElement.textContent = `交易哈希值：${res.txHash}`;
+        document.body.appendChild(hashElement);
+        const signElement = document.createElement('p');
+        signElement.textContent = `交易签名：${res.txSign}`;
+        document.body.appendChild(signElement);
+        const txJson = document.createElement('p');
+        txJson.textContent = `交易Json：${res.txJson}`;
+        document.body.appendChild(txJson);
+      })
+      .catch(error => {
+        console.error(error);
+      });
+
+      
+
+  </script>
+</body>
+</html>

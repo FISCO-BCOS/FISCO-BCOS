@@ -55,6 +55,10 @@ public:
     void sendTransaction(std::string_view _groupID, std::string_view _nodeName,
         std::string_view _data, bool _requireProof, RespFunc _respFunc) override;
 
+    void sendEncodedTransaction(std::string_view groupID, std::string_view nodeName,
+        uint32_t txEncodeType, const Json::Value& data, bool requireProof,
+        RespFunc respFunc) override;
+
     void getTransaction(std::string_view _groupID, std::string_view _nodeName,
         std::string_view _txHash, bool _requireProof, RespFunc _respFunc) override;
 
@@ -126,6 +130,10 @@ public:
     void setSendTxTimeout(int _sendTxTimeout) { m_sendTxTimeout = _sendTxTimeout; }
 
 protected:
+    void sendTransactionInternal(std::string_view groupID, NodeService::Ptr nodeService,
+        bcos::protocol::Transaction::Ptr transaction, bcos::bytesConstRef txBytes,
+        bool requireProof, RespFunc respFunc);
+
     static bcos::bytes decodeData(std::string_view _data);
 
     static void parseRpcResponseJson(std::string_view _responseBody, JsonResponse& _jsonResponse);

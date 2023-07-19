@@ -17,6 +17,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
+#include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -103,6 +104,29 @@ BOOST_AUTO_TEST_CASE(transaction)
 
     auto blockTx = block->transaction(0);
     BOOST_CHECK_EQUAL(blockTx->sender(), tx->sender());
+}
+
+BOOST_AUTO_TEST_CASE(transactionJson)
+{
+    std::string txJson =
+        "{\"data\":{\"version\":256,\"chainID\":\"chain123\",\"groupID\":\"group123\","
+        "\"blockLimit\":100000,\"nonce\":\"nonce123\",\"to\":"
+        "\"0x6DA0599583855F1618B380f6782c0c5C25CB96Ec\",\"input\":"
+        "\"0x11223344556677889900aabbccdef\",\"abi\":\"abiData\"},\"dataHash\":"
+        "\"0xaa0f7414b7f8648410f9818df3a1f43419d5c30313f430712033937ae57854c8\",\"signature\":"
+        "\"0xacd0d6c91242e514655815073f5f0e9aed671f68a4ed3e3e9d693095779f704b01932751f4431c3b4c9d6f"
+        "b1c826d138ee155ea72ac9013d66929f6a265386b401\",\"sender\":"
+        "\"0x6DA0599583855F1618B380f6782c0c5C25CB96Ec\",\"extraData\":\"\"}";
+
+    Json::Value root;
+    Json::Reader reader;
+    reader.parse(txJson, root);
+
+    auto cryptoSuite1 =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    bcostars::protocol::TransactionFactoryImpl factory(cryptoSuite1);
+    auto decodedTx = factory.createTransaction(root, true, true);
 }
 
 BOOST_AUTO_TEST_CASE(transactionMetaData)

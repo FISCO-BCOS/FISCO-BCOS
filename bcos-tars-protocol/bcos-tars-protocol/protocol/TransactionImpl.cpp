@@ -46,6 +46,82 @@ void TransactionImpl::encode(bcos::bytes& txData) const
     bcos::concepts::serialize::encode(*m_inner(), txData);
 }
 
+inline void decodeTransactionDataFromJson(const Json::Value& in, bcostars::TransactionData& out)
+{
+    // require
+    {
+        out.version = in["version"].asInt();
+    }
+    // require
+    {
+        out.chainID = in["chainID"].asString();
+    }
+    // require
+    {
+        out.groupID = in["groupID"].asString();
+    }
+    // require
+    {
+        out.blockLimit = in["blockLimit"].asInt64();
+    }
+    // require
+    {
+        out.nonce = in["nonce"].asString();
+    }
+    // require
+    {
+        out.to = in["to"].asString();
+    }
+    // require
+    {
+        auto inputBytes = *bcos::fromHexString(in["input"].asString());
+        out.input.assign(inputBytes.begin(), inputBytes.end());
+    }
+    // require
+    {
+        out.abi = in["abi"].asString();
+    }
+}
+
+void TransactionImpl::decodeFromJson(const Json::Value& txJson)
+{
+    auto& inner = mutableInner();
+    decodeTransactionDataFromJson(txJson["data"], inner.data);
+
+    // require
+    {
+        auto bytes = *bcos::fromHexString(txJson["dataHash"].asString());
+        inner.dataHash.assign(bytes.begin(), bytes.end());
+    }
+
+    // require
+    {
+        auto bytes = *bcos::fromHexString(txJson["signature"].asString());
+        inner.signature.assign(bytes.begin(), bytes.end());
+    }
+
+    if (!txJson["importTime"].isNull())
+    {
+        inner.importTime = txJson["importTime"].asInt64();
+    }
+
+    if (!txJson["attribute"].isNull())
+    {
+        inner.attribute = txJson["attribute"].asInt();
+    }
+
+    // require
+    {
+        auto bytes = *bcos::fromHexString(txJson["sender"].asString());
+        inner.sender.assign(bytes.begin(), bytes.end());  // FIXME: use swap
+    }
+
+    if (!txJson["extraData"].isNull())
+    {
+        inner.extraData = txJson["extraData"].asString();
+    }
+}
+
 bcos::crypto::HashType TransactionImpl::hash() const
 {
     if (m_inner()->dataHash.empty())

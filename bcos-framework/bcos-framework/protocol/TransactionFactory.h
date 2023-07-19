@@ -21,6 +21,7 @@
 #pragma once
 #include "Transaction.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <json/json.h>
 
 #include <utility>
 
@@ -31,6 +32,12 @@ class TransactionFactory
 public:
     using Ptr = std::shared_ptr<TransactionFactory>;
 
+    enum TxEncodeType : uint32_t
+    {
+        TARS = 1,
+        JSON = 2
+    };
+
     TransactionFactory() = default;
     TransactionFactory(const TransactionFactory&) = default;
     TransactionFactory(TransactionFactory&&) = default;
@@ -40,6 +47,8 @@ public:
 
     virtual Transaction::Ptr createTransaction(
         bytesConstRef txData, bool checkSig = true, bool checkHash = false) = 0;
+    virtual bcos::protocol::Transaction::Ptr createTransaction(
+        const Json::Value& txJson, bool checkSig = true, bool checkHash = false) = 0;
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bytes const& _input, std::string const& _nonce, int64_t blockLimit, std::string _chainId,
         std::string _groupId, int64_t _importTime) = 0;

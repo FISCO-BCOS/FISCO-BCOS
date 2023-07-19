@@ -20,9 +20,10 @@
  */
 #pragma once
 #include "../impl/TarsHashable.h"
-#include "TransactionImpl.h"
+#include "./TransactionImpl.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
+#include <json/json.h>
 #include <fstream>
 #include <stdexcept>
 #include <utility>
@@ -43,21 +44,16 @@ public:
     TransactionFactoryImpl& operator=(TransactionFactoryImpl&&) = default;
     ~TransactionFactoryImpl() override = default;
 
-    bcos::protocol::Transaction::Ptr createTransaction(
-        bcos::bytesConstRef txData, bool checkSig = true, bool checkHash = false) override
+    void checkTxHash(
+        bcos::crypto::CryptoSuite::Ptr cryptoSuite, std::shared_ptr<TransactionType> transaction)
     {
-        auto transaction = std::make_shared<TransactionImpl>(
-            [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
-
-        transaction->decode(txData);
-
         auto originDataHash = std::move(transaction->mutableInner().dataHash);
         transaction->mutableInner().dataHash.clear();
-        transaction->calculateHash(m_cryptoSuite->hashImpl()->hasher());
+        transaction->calculateHash(cryptoSuite->hashImpl()->hasher());
 
         // check if hash matching
-        if (checkHash && !originDataHash.empty() &&
-            (originDataHash != transaction->mutableInner().dataHash)) [[unlikely]]
+        if (!originDataHash.empty() && (originDataHash != transaction->mutableInner().dataHash))
+            [[unlikely]]
         {
             bcos::crypto::HashType originHashResult(
                 (bcos::byte*)originDataHash.data(), originDataHash.size());
@@ -70,12 +66,77 @@ public:
                               << LOG_KV("realHash", hashResult.hex());
             BOOST_THROW_EXCEPTION(std::invalid_argument("transaction hash mismatching"));
         }
+    }
+
+    void checkTxSig(
+        bcos::crypto::CryptoSuite::Ptr cryptoSuite, std::shared_ptr<TransactionType> transaction)
+    {
+        auto givenSender = std::move(transaction->mutableInner().sender);
+        transaction->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
+        if (!givenSender.empty() && (givenSender != transaction->mutableInner().sender))
+        {
+            bcos::crypto::HashType givenSenderResult(
+                (bcos::byte*)givenSender.data(), givenSender.size());
+            bcos::crypto::HashType recoveredResult(
+                (bcos::byte*)transaction->mutableInner().sender.data(),
+                transaction->mutableInner().sender.size());
+
+
+            BCOS_LOG(WARNING) << LOG_DESC("Given signature but check failed")
+                              << LOG_KV("givenSender", givenSenderResult.hex())
+                              << LOG_KV("recoveredSender", recoveredResult.hex());
+            BOOST_THROW_EXCEPTION(std::invalid_argument("transaction hash mismatching"));
+        }
+    }
+
+    void calculateAndCheck(
+        std::shared_ptr<TransactionType> transaction, bool checkSig = true, bool checkHash = false)
+    {
+        if (checkHash)
+        {
+            checkTxHash(m_cryptoSuite, transaction);
+        }
+        else
+        {
+            transaction->calculateHash(m_cryptoSuite->hashImpl()->hasher());
+        }
 
         if (checkSig)
         {
-            transaction->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
+            checkTxSig(m_cryptoSuite, transaction);
         }
-        return transaction;
+        else
+        {
+            // if not check signature, we no need to set sender
+        }
+    }
+
+    bcos::protocol::Transaction::Ptr createTransaction(
+        bcos::bytesConstRef txData, bool checkSig = true, bool checkHash = false) override
+    {
+        {
+            auto transaction = std::make_shared<TransactionImpl>(
+                [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
+
+            transaction->decode(txData);
+            calculateAndCheck(transaction, checkSig, checkHash);
+
+            return transaction;
+        }
+    }
+
+    bcos::protocol::Transaction::Ptr createTransaction(
+        const Json::Value& txJson, bool checkSig = true, bool checkHash = false) override
+    {
+        {
+            auto transaction = std::make_shared<TransactionImpl>(
+                [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
+
+            transaction->decodeFromJson(txJson);
+            calculateAndCheck(transaction, checkSig, checkHash);
+
+            return transaction;
+        }
     }
 
     std::shared_ptr<bcos::protocol::Transaction> createTransaction(int32_t _version,

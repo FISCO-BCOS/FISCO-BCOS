@@ -184,6 +184,11 @@ public:
         }(this, hexTransaction, std::move(respFunc)));
     }
 
+    void sendEncodedTransaction(std::string_view groupID, std::string_view nodeName,
+        uint32_t txEncodeType, const Json::Value& data, bool requireProof,
+        RespFunc respFunc) override
+    {}
+
     void getTransaction([[maybe_unused]] std::string_view _groupID,
         [[maybe_unused]] std::string_view _nodeName, [[maybe_unused]] std::string_view txHash,
         [[maybe_unused]] bool _requireProof, RespFunc _respFunc) override

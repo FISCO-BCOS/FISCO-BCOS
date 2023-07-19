@@ -22,6 +22,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
+#include <boost/endian/conversion.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/test/unit_test_suite.hpp>
 #include <iterator>
@@ -97,6 +98,81 @@ BOOST_AUTO_TEST_CASE(opensslSHA3)
     hasher2.final(hash2);
 
     BOOST_CHECK_EQUAL(hash, hash2);
+}
+
+BOOST_AUTO_TEST_CASE(keccak256Test)
+{
+    int32_t version = (int32_t)boost::endian::native_to_big((int32_t)256);
+    std::string chainID = "chain123";
+    std::string groupID = "group123";
+    int64_t blockLimit = boost::endian::native_to_big((int64_t)100000);
+    std::string nonce = "nonce123";
+    std::string to = "0x6DA0599583855F1618B380f6782c0c5C25CB96Ec";
+    std::string inputStr = "0x11223344556677889900aabbccdef";
+    auto input = *bcos::fromHexString(inputStr);
+    std::string abi = "abiData";
+
+
+    openssl::OpenSSL_Keccak256_Hasher hasher;
+
+    hasher.update(version);
+    hasher.update(chainID);
+    hasher.update(groupID);
+    hasher.update(blockLimit);
+    hasher.update(nonce);
+    hasher.update(to);
+    hasher.update(input);
+    hasher.update(abi);
+
+
+    std::array<std::byte, 32> hash;
+    hasher.final(hash);
+
+    std::string str;
+    str.reserve(hash.size() * 2);
+    std::span<char> view{(char*)hash.data(), hash.size()};
+
+    boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(str));
+    std::cout << "Tx hash: " << str << std::endl;
+    // 0xaa0f7414b7f8648410f9818df3a1f43419d5c30313f430712033937ae57854c8
+    BOOST_CHECK_EQUAL(str, "aa0f7414b7f8648410f9818df3a1f43419d5c30313f430712033937ae57854c8");
+}
+
+BOOST_AUTO_TEST_CASE(sm3Test)
+{
+    int32_t version = (int32_t)boost::endian::native_to_big((int32_t)256);
+    std::string chainID = "chain123";
+    std::string groupID = "group123";
+    int64_t blockLimit = boost::endian::native_to_big((int64_t)100000);
+    std::string nonce = "nonce123";
+    std::string to = "toAddress";
+    std::string inputStr = "inputData";
+    std::vector<char> input(inputStr.begin(), inputStr.end());
+    std::string abi = "abiData";
+
+
+    openssl::OpenSSL_SM3_Hasher hasher;
+
+    hasher.update(version);
+    hasher.update(chainID);
+    hasher.update(groupID);
+    hasher.update(blockLimit);
+    hasher.update(nonce);
+    hasher.update(to);
+    hasher.update(input);
+    hasher.update(abi);
+
+    std::array<std::byte, 32> hash;
+    hasher.final(hash);
+
+    std::string str;
+    str.reserve(hash.size() * 2);
+    std::span<char> view{(char*)hash.data(), hash.size()};
+
+    boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(str));
+
+    std::cout << "Tx hash: " << str << std::endl;
+    // f78d262f937094bfaf0af1711babc4dcf39d341012f56ec908d6626265756af0
 }
 
 BOOST_AUTO_TEST_CASE(dynamicRange)
