@@ -38,6 +38,7 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
+    getConsensusNodeListFromStorage(_executive);
     if (!shouldRotate(_executive))
     {
         return;
@@ -45,7 +46,6 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
     auto parentHash = _executive->blockContext().parentHash();
     try
     {
-        getConsensusNodeListFromStorage(_executive);
         checkVRFInfos(parentHash, _callParameters->m_origin);
     }
     catch (protocol::PrecompiledError const& e)
@@ -220,6 +220,7 @@ void WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
 {
     auto const& blockContext = _executive->blockContext();
     auto entry = _executive->storage().getRow(ledger::SYS_CONSENSUS, "key");
+    assert(entry.has_value());
     auto consensusNodeList = entry->getObject<ledger::ConsensusNodeList>();
     for (const auto& node : consensusNodeList)
     {

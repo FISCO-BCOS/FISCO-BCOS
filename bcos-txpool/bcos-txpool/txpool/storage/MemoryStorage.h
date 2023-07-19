@@ -68,6 +68,11 @@ public:
         override;
     // ============================
 
+    // disassemble submitTransaction
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
+        protocol::Transaction::Ptr transaction,
+        std::function<void()> afterInsertHook = nullptr) override;
+
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
 
@@ -120,14 +125,15 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) override;
 
+    bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
+        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
+        bool checkPoolLimit, bool lock);
+
 protected:
     bcos::protocol::TransactionStatus insertWithoutLock(
         bcos::protocol::Transaction::Ptr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
-    bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
-        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
-        bool checkPoolLimit, bool lock);
     size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(
         const bcos::protocol::Transaction& transaction);

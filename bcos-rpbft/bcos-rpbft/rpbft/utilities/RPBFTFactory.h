@@ -1,5 +1,5 @@
 /**
- *  Copyright (C) 2021 FISCO BCOS.
+ *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,46 +13,46 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief factory to create the PBFTEngine
- * @file PBFTFactory.h
- * @author: yujiechen
- * @date 2021-05-19
+ * @file RPBFTFactory.h
+ * @author: kyonGuo
+ * @date 2023/7/14
  */
+
 #pragma once
-#include "PBFTImpl.h"
-#include "config/PBFTConfig.h"
+
+#include "bcos-pbft/pbft/config/PBFTConfig.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
+
+#include <utility>
 
 namespace bcos::consensus
 {
-class PBFTFactory : public std::enable_shared_from_this<PBFTFactory>
+class RPBFTFactory : public PBFTFactory
 {
 public:
-    using Ptr = std::shared_ptr<PBFTFactory>;
-    PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    using Ptr = std::shared_ptr<RPBFTFactory>;
+    RPBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory);
+        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
+      : PBFTFactory(std::move(_cryptoSuite), std::move(_keyPair), std::move(_frontService),
+            std::move(_storage), std::move(_ledger), std::move(_scheduler), std::move(_txpool),
+            std::move(_blockFactory), std::move(_txResultFactory))
+    {}
+    RPBFTFactory& operator=(const RPBFTFactory&) = delete;
+    RPBFTFactory(const RPBFTFactory&) = delete;
+    RPBFTFactory& operator=(RPBFTFactory&&) = delete;
+    RPBFTFactory(RPBFTFactory&&) = delete;
 
-    virtual ~PBFTFactory() = default;
-    virtual PBFTImpl::Ptr createPBFT();
-
-protected:
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-    bcos::crypto::KeyPairInterface::Ptr m_keyPair;
-    std::shared_ptr<bcos::front::FrontServiceInterface> m_frontService;
-    std::shared_ptr<bcos::storage::KVStorageHelper> m_storage;
-    std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;
-    bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
-    bcos::txpool::TxPoolInterface::Ptr m_txpool;
-    bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
+    ~RPBFTFactory() override = default;
+    PBFTImpl::Ptr createRPBFT();
 };
 }  // namespace bcos::consensus

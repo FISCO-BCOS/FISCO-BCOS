@@ -46,6 +46,7 @@ private:
     std::unique_ptr<AnyHasherInterface> m_anyHasher;
 
 public:
+    AnyHasher() = default;
     template <class Hasher>
     AnyHasher(Hasher hasher)
       : m_anyHasher(std::make_unique<AnyHasherImpl<Hasher>>(std::move(hasher)))
@@ -55,7 +56,7 @@ public:
     AnyHasher& operator=(AnyHasher&&) noexcept = default;
     AnyHasher(const AnyHasher&) = delete;
     AnyHasher& operator=(const AnyHasher&) = delete;
-    ~AnyHasher() = default;
+    ~AnyHasher() noexcept = default;
 
     void update(auto const& input)
     {

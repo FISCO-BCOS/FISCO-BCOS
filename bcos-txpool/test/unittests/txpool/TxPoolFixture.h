@@ -143,7 +143,7 @@ public:
         m_fakeGateWay->addTxPool(_nodeId, m_txpool);
         m_frontService->setGateWay(m_fakeGateWay);
         bcos::crypto::NodeIDs allNode;
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 10; ++i)
         {
             auto key = m_cryptoSuite->signatureImpl()->generateKeyPair();
             auto nodeId = key->publicKey();
@@ -205,6 +205,13 @@ public:
         m_txpool->notifyConsensusNodeList(m_ledger->ledgerConfig()->consensusNodeList(), nullptr);
         updateConnectedNodeList();
     }
+    void appendObserver(NodeIDPtr _nodeId)
+    {
+        auto consensusNode = std::make_shared<ConsensusNode>(_nodeId);
+        m_ledger->ledgerConfig()->mutableObserverList()->emplace_back(consensusNode);
+        m_txpool->notifyObserverNodeList(m_ledger->ledgerConfig()->observerNodeList(), nullptr);
+        updateConnectedNodeList();
+    }
     void init()
     {
         // init the txpool
@@ -233,7 +240,11 @@ private:
     void updateConnectedNodeList()
     {
         NodeIDSet nodeIdSet;
-        for (auto node : m_ledger->ledgerConfig()->consensusNodeList())
+        for (const auto& node : m_ledger->ledgerConfig()->consensusNodeList())
+        {
+            nodeIdSet.insert(node->nodeID());
+        }
+        for (const auto& node : m_ledger->ledgerConfig()->observerNodeList())
         {
             nodeIdSet.insert(node->nodeID());
         }
