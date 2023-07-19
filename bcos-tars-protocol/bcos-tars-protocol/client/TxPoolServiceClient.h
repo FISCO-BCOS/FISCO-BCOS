@@ -133,11 +133,19 @@ public:
         {
             void callback_broadcastTransactionBuffer(const bcostars::Error& ret) override
             {
-                BOOST_THROW_EXCEPTION(*toBcosError(ret));
+                auto error = toBcosError(ret);
+                if (error)
+                {
+                    BOOST_THROW_EXCEPTION(*error);
+                }
             }
             void callback_submit_exception(tars::Int32 ret) override
             {
-                BOOST_THROW_EXCEPTION(*toBcosError(ret));
+                auto error = toBcosError(ret);
+                if (error)
+                {
+                    BOOST_THROW_EXCEPTION(*error);
+                }
             }
         };
 
