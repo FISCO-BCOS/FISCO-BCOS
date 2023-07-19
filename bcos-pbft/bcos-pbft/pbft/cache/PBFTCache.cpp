@@ -303,10 +303,12 @@ void PBFTCache::resetCache(ViewType _curView)
     m_submitted = false;
     m_precommitted = false;
     PBFT_LOG(INFO) << LOG_DESC("resetCache") << LOG_KV("precommit", m_precommit ? "true" : "false")
-                    << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
-                    << LOG_KV("curView", _curView);
-    if (!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
-        m_prePrepare->view() < _curView)
+                   << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
+                   << LOG_KV("curView", _curView);
+    if ((!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
+            m_prePrepare->view() < _curView) ||
+        (!m_precommit && m_exceptionPrePrepare && m_prePrepare &&
+            m_prePrepare->consensusProposal() && m_prePrepare->view() < _curView))
     {
         PBFT_LOG(INFO) << LOG_DESC("resetCache : asyncResetTxsFlag")
                        << printPBFTProposal(m_prePrepare->consensusProposal());
@@ -315,6 +317,7 @@ void PBFTCache::resetCache(ViewType _curView)
         // reset the exceptioned txs to unsealed
         m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
         m_prePrepare = nullptr;
+        m_exceptionPrePrepare = nullptr;
     }
     // clear the expired prepare cache
     resetCacheAfterViewChange(m_prepareCacheList, _curView);

@@ -68,6 +68,14 @@ public:
             });
     }
 
+    void addExceptionCache(PBFTMessageInterface::Ptr _verifyFailedReq)
+    {
+        addCache(m_caches, std::move(_verifyFailedReq),
+            [](const PBFTCache::Ptr& _pbftCache, PBFTMessageInterface::Ptr _verifyFailedReq) {
+                _pbftCache->addExceptionPrePrepareCache(std::move(_verifyFailedReq));
+            });
+    }
+
     virtual void addCommitReq(PBFTMessageInterface::Ptr _commitReq)
     {
         addCache(m_caches, std::move(_commitReq),
@@ -112,7 +120,6 @@ public:
         ViewType _view, bcos::protocol::BlockNumber _latestCommittedProposal);
     virtual void removeInvalidViewChange(
         ViewType _view, bcos::protocol::BlockNumber _latestCommittedProposal);
-
     virtual void setCheckPointProposal(PBFTProposalInterface::Ptr _proposal);
     virtual void addCheckPointMsg(PBFTMessageInterface::Ptr _checkPointMsg);
     virtual void checkAndCommitStableCheckPoint();

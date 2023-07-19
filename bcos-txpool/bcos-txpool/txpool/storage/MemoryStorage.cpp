@@ -443,8 +443,8 @@ void MemoryStorage::printPendingTxs()
             continue;
         }
         TXPOOL_LOG(DEBUG) << LOG_KV("hash", tx->hash()) << LOG_KV("batchId", tx->batchId())
-                         << LOG_KV("batchHash", tx->batchHash().abridged())
-                         << LOG_KV("sealed", tx->sealed());
+                          << LOG_KV("batchHash", tx->batchHash().abridged())
+                          << LOG_KV("sealed", tx->sealed());
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle finish");
 }
@@ -967,8 +967,8 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
         else if (txIt->second->sealed())
         {
             auto header = _block->blockHeader();
-            if ((txIt->second->batchId() != header->number() && txIt->second->batchId() != -1) ||
-                txIt->second->batchHash() != header->hash()) [[unlikely]]
+            if ((txIt->second->batchId() != header->number() && txIt->second->batchId() != -1))
+                [[unlikely]]
             {
                 TXPOOL_LOG(DEBUG) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
                                   << LOG_KV("blkNum", header->number())
@@ -976,8 +976,9 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
                                   << LOG_KV("txBatchId", txIt->second->batchId())
                                   << LOG_KV("txBatchHash", txIt->second->batchHash().abridged());
                 // NOTE: here will cause bug, if new proposal contains the same txs with the old
-                // proposal, but old proposal is resetting txs flag, the new proposal will be failed
-                // return nullptr;
+                // proposal, but old proposal is resetting txs flag, the new proposal will be failed.
+                // so not verify batch hash for now
+                 return nullptr;
             }
         }
     }
@@ -1045,6 +1046,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
     {
         return;
     }
+    // printPendingTxs();
     size_t traversedTxsNum = 0;
     size_t erasedTxs = 0;
     int64_t currentTime = utcTime();

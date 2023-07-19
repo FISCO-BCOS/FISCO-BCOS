@@ -68,6 +68,12 @@ public:
                        << m_config->printCurrentState();
     }
 
+    void addExceptionPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg)
+    {
+        addPrePrepareCache(_prePrepareMsg);
+        m_exceptionPrePrepare = _prePrepareMsg;
+    }
+
     bcos::protocol::BlockNumber index() const { return m_index; }
 
     virtual PBFTMessageInterface::Ptr preCommitCache() { return m_precommit; }
@@ -210,6 +216,7 @@ protected:
     QuorumRecoderType m_commitReqWeight;
 
     PBFTMessageInterface::Ptr m_prePrepare = nullptr;
+    PBFTMessageInterface::Ptr m_exceptionPrePrepare = nullptr;
     PBFTMessageInterface::Ptr m_precommit = nullptr;
     PBFTMessageInterface::Ptr m_precommitWithoutData = nullptr;
 
