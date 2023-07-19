@@ -439,6 +439,14 @@ public:
                 LIGHTNODE_LOG(TRACE) << "RPC get contract " << _contractAddress << " ABI request";
                 auto abiStr = co_await remoteLedger.getABI(_contractAddress);
                 LIGHTNODE_LOG(TRACE) << " lightNode RPC get ABI is: " << abiStr;
+                if (abiStr.size() == 0)
+                {
+                    LIGHTNODE_LOG(ERROR) << LOG_DESC("getABI failed")
+                                         << LOG_KV("AbiStr size", abiStr.size());
+                    auto error = bcos::Error();
+                    toErrorResp(error, _respFunc);
+                    co_return;
+                }
                 Json::Value resp = abiStr;
                 _respFunc(nullptr, resp);
             }
