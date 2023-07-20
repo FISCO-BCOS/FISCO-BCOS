@@ -744,11 +744,13 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
 
 void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
 {
-    auto txsHash = m_config->txpoolStorage()->getTxsHash(c_MaxResponsedTxsToNodesWithEmptyTxs);
-    if (txsHash->empty())
+    if (m_config->txpoolStorage()->size() == 0)
     {
         return;
     }
+    // TODO: get tx directly, not get txHash and request tx indirectly
+    auto txsHash =
+        m_config->txpoolStorage()->getTxsHash(m_config->getMaxResponseTxsToNodesWithEmptyTxs());
     auto txsStatus =
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, *txsHash);
     auto packetData = txsStatus->encode();

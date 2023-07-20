@@ -125,12 +125,17 @@ public:
             m_executorManager->stop();
         }
 
+
         // waiting for stopped
         while (m_scheduler.use_count() > 1)
         {
             SCHEDULER_LOG(DEBUG) << "Scheduler is stopping.. "
                                  << LOG_KV("unfinishedTaskNum", m_scheduler.use_count() - 1);
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+        if (m_factory)
+        {
+            m_factory->stop();
         }
         SCHEDULER_LOG(INFO) << "scheduler has stopped.";
         m_scheduler = nullptr;
