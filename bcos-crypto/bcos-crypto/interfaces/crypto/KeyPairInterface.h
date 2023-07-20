@@ -23,9 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <cstddef>
 #include <memory>
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 enum class KeyPairType : int
 {
@@ -41,7 +39,11 @@ public:
     using UniquePtr = std::unique_ptr<KeyPairInterface>;
 
     KeyPairInterface() = default;
-    virtual ~KeyPairInterface() {}
+    KeyPairInterface(const KeyPairInterface&) = default;
+    KeyPairInterface(KeyPairInterface&&) = delete;
+    KeyPairInterface& operator=(const KeyPairInterface&) = default;
+    KeyPairInterface& operator=(KeyPairInterface&&) = delete;
+    virtual ~KeyPairInterface() = default;
 
     virtual SecretPtr secretKey() const = 0;
     virtual PublicPtr publicKey() const = 0;
@@ -65,5 +67,4 @@ bytes inline calculateAddress(crypto::Hash& _hashImpl, uint8_t* _publicKey, size
     return {address.begin() + 12, address.end()};
 }
 
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

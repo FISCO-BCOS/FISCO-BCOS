@@ -104,6 +104,11 @@ public:
         m_keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
         m_blockFactory = createBlockFactory(_cryptoSuite);
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, _blockNumber, 10, 0, _sealerList);
+        m_ledger->setSystemConfig(SYSTEM_KEY_TX_COUNT_LIMIT, std::to_string(1000));
+        m_ledger->setSystemConfig(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::to_string(1));
+        m_ledger->setSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS, std::to_string(0));
+        m_ledger->setSystemConfig(SYSTEM_KEY_COMPATIBILITY_VERSION, protocol::DEFAULT_VERSION_STR);
+        // m_ledger->ledgerConfig()->setConsensusTimeout(_consensusTimeout * 20);
         m_frontService = std::make_shared<FakeFrontService>(m_keyPair->publicKey());
         m_consensus = std::make_shared<FakeConsensus>();
         m_nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
@@ -148,11 +153,11 @@ public:
         }
         m_sync->config()->setConsensusNodeList(m_ledger->ledgerConfig()->consensusNodeList());
         bcos::crypto::NodeIDSet nodeIdSet;
-        for (auto node : m_ledger->ledgerConfig()->consensusNodeList())
+        for (const auto& node : m_ledger->ledgerConfig()->consensusNodeList())
         {
             nodeIdSet.insert(node->nodeID());
         }
-        for (auto node : m_ledger->ledgerConfig()->observerNodeList())
+        for (const auto& node : m_ledger->ledgerConfig()->observerNodeList())
         {
             nodeIdSet.insert(node->nodeID());
         }
@@ -173,11 +178,11 @@ public:
         }
         m_sync->config()->setObserverList(m_ledger->ledgerConfig()->observerNodeList());
         bcos::crypto::NodeIDSet nodeIdSet;
-        for (auto node : m_ledger->ledgerConfig()->consensusNodeList())
+        for (const auto& node : m_ledger->ledgerConfig()->consensusNodeList())
         {
             nodeIdSet.insert(node->nodeID());
         }
-        for (auto node : m_ledger->ledgerConfig()->observerNodeList())
+        for (const auto& node : m_ledger->ledgerConfig()->observerNodeList())
         {
             nodeIdSet.insert(node->nodeID());
         }

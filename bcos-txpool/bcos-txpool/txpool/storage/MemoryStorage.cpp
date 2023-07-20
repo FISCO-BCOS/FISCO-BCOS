@@ -74,11 +74,21 @@ void MemoryStorage::stop()
     if (m_cleanUpTimer)
     {
         m_cleanUpTimer->stop();
+        m_cleanUpTimer->destroy();
     }
+    m_inRateCollector.stop();
+    m_sealRateCollector.stop();
+    m_removeRateCollector.stop();
 }
 
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
     protocol::Transaction::Ptr transaction)
+{
+    co_return co_await submitTransactionWithHook(transaction, nullptr);
+}
+
+task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransactionWithHook(
+    protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook)
 {
     transaction->setImportTime(utcTime());
     struct Awaitable
@@ -108,6 +118,12 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                     },
                     true, true);
 
+                // already in txpool but not sealed in block now
+                if (result == TransactionStatus::None && m_afterInsertHook != nullptr)
+                {
+                    m_afterInsertHook();
+                }
+
                 if (result != TransactionStatus::None)
                 {
                     TXPOOL_LOG(DEBUG) << "Submit transaction error! " << result;
@@ -136,12 +152,14 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         }
 
         protocol::Transaction::Ptr m_transaction;
+        std::function<void()> m_afterInsertHook;
         std::shared_ptr<MemoryStorage> m_self;
         std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
             m_submitResult;
     };
 
     Awaitable awaitable{.m_transaction = std::move(transaction),
+        .m_afterInsertHook = afterInsertHook,
         .m_self = shared_from_this(),
         .m_submitResult = {}};
     co_return co_await awaitable;
@@ -1034,12 +1052,31 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     auto txHashes =
         RANGES::iota_view<size_t, size_t>{0, txsSize} |
         RANGES::views::transform([&_block](size_t i) { return _block->transactionHash(i); });
+    bool findErrorTxInBlock = false;
 
     m_txsTable.batchFind<TxsMap::ReadAccessor>(
-        txHashes, [&missedTxs](const auto& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+        txHashes, [&missedTxs, &findErrorTxInBlock, _block](
+                      const auto& txHash, TxsMap::ReadAccessor::Ptr accessor) {
             if (!accessor)
             {
                 missedTxs->emplace_back(txHash);
+            }
+            else if (accessor->value()->sealed())
+            {
+                auto header = _block->blockHeader();
+                if ((accessor->value()->batchId() != header->number() &&
+                        accessor->value()->batchId() != -1) ||
+                    accessor->value()->batchHash() != header->hash())
+                {
+                    TXPOOL_LOG(INFO)
+                        << LOG_DESC("batchVerifyProposal unexpected wrong tx")
+                        << LOG_KV("blkNum", header->number())
+                        << LOG_KV("blkHash", header->hash().abridged())
+                        << LOG_KV("txBatchId", accessor->value()->batchId())
+                        << LOG_KV("txBatchHash", accessor->value()->batchHash().abridged());
+                    findErrorTxInBlock = true;
+                    return false;
+                }
             }
             return true;
         });
@@ -1048,7 +1085,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
                      << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
                      << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT))
                      << LOG_KV("missedTxs", missedTxs->size());
-    return missedTxs;
+    return findErrorTxInBlock ? nullptr : missedTxs;
 }
 
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)

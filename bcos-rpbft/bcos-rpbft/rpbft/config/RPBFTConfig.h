@@ -40,20 +40,20 @@ public:
         bcos::protocol::BlockFactory::Ptr _blockFactory)
       : PBFTConfig(std::move(_cryptoSuite), std::move(_keyPair), std::move(_pbftMessageFactory),
             std::move(_codec), std::move(_validator), std::move(_frontService),
-            std::move(_stateMachine), std::move(_storage), std::move(_blockFactory))
+            std::move(_stateMachine), std::move(_storage), std::move(_blockFactory)),
+        m_workingSealerNodeList(std::make_shared<consensus::ConsensusNodeList>())
     {}
 
     void resetConfig(
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock = false) override;
 
-    void updateWorkingSealerNodeList(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
+    void updateWorkingSealerNodeList(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
 
-    void updateShouldRotateSealers(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
+    void updateShouldRotateSealers(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
 
-    void updateEpochBlockNum(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
-    void updateEpochSealerNum(
-        bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool& isEpochSealerNumChanged);
-    void updateNotifyRotateFlag(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
+    void updateEpochBlockNum(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
+    [[nodiscard]] bool updateEpochSealerNum(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
+    void updateNotifyRotateFlag(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
 
     void setShouldRotateSealers(bool _shouldRotateSealers);
     bool shouldRotateSealers() const override;
@@ -62,11 +62,10 @@ private:
     // the node index in working consensus node list
     std::atomic<IndexType> m_nodeIndexInWorkingSealer{0};
     // the number of working consensus nodes
-    std::atomic_int64_t m_workingSealerNodeNum{0};
+    std::atomic_uint64_t m_workingSealerNodeNum{0};
 
     // working consensus node list
     ConsensusNodeListPtr m_workingSealerNodeList;
-    mutable bcos::SharedMutex x_workingSealerNodeList;
     std::atomic_bool m_workingSealerNodeListUpdated{false};
     std::atomic_bool m_shouldRotateWorkingSealer{false};
 

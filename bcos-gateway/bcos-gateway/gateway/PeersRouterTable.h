@@ -60,6 +60,7 @@ public:
         uint16_t _type, std::string const& _group, uint16_t _moduleID, P2PMessage::Ptr _msg);
 
     std::set<P2pID> getAllPeers() const;
+    GatewayStatus::Ptr gatewayInfo(std::string const& _uuid);
 
 protected:
     void batchInsertNodeList(
@@ -71,7 +72,6 @@ protected:
 
     void updateGatewayInfo(P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status);
     void removeNodeFromGatewayInfo(P2pID const& _p2pID);
-    GatewayStatus::Ptr gatewayInfo(std::string const& _uuid);
 
 private:
     std::string m_uuid;

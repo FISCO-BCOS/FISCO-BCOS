@@ -61,12 +61,12 @@ public:
     }
 
     // generateKeyPair generates keyPair
-    virtual KeyPairInterface::UniquePtr generateKeyPair() const = 0;
+    virtual std::unique_ptr<KeyPairInterface> generateKeyPair() const = 0;
 
     // recoverAddress recovers address from a signature(for precompiled)
     virtual std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) const = 0;
 
-    virtual KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const = 0;
+    virtual std::unique_ptr<KeyPairInterface> createKeyPair(SecretPtr _secretKey) const = 0;
 };
 }  // namespace crypto
 }  // namespace bcos

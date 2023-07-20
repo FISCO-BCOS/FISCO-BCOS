@@ -132,7 +132,7 @@ public:
         m_asyncGroup.template run(std::move(f));
     }
 
-private:
+protected:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
     std::string obtainCommonNameFromSubject(std::string const& subject);

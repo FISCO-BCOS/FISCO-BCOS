@@ -32,10 +32,12 @@ PBFTCache::PBFTCache(PBFTConfig::Ptr _config, bcos::protocol::BlockNumber _index
 void PBFTCache::onCheckPointTimeout()
 {
     // Note: this logic is unreachable
-    if (!m_checkpointProposal)
+    if (!m_checkpointProposal ||
+        std::cmp_less(utcTime() - m_checkPointStartTime, m_config->checkPointTimeoutInterval()))
     {
         return;
     }
+    m_checkPointStartTime = utcTime();
     if (m_committedIndexNotifier && !m_config->timer()->running())
     {
         m_committedIndexNotifier(m_config->committedProposal()->index());

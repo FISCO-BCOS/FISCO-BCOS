@@ -43,14 +43,4 @@ public:
 template <class T>
 concept IsTransactionReceiptFactory =
     std::derived_from<T, TransactionReceiptFactory> || std::same_as<T, TransactionReceiptFactory>;
-
-template <IsTransactionReceiptFactory ReceiptFactory>
-struct ReceiptFactoryReturnTrait
-{
-    using type = std::remove_cvref_t<decltype(std::declval<ReceiptFactory>().createReceipt(
-        bcos::u256{}, std::string{}, std::vector<LogEntry>{}, 0, bcos::bytesConstRef{}, 0))>;
-};
-
-template <IsTransactionReceiptFactory ReceiptFactory>
-using ReceiptFactoryReturnType = typename ReceiptFactoryReturnTrait<ReceiptFactory>::type;
 }  // namespace bcos::protocol

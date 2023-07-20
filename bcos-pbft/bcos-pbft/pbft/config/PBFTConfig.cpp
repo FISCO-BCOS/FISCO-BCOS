@@ -51,10 +51,22 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // set blockTxCountLimit
     setBlockTxCountLimit(_ledgerConfig->blockTxCountLimit());
     // set ConsensusNodeList
-    auto& consensusList = _ledgerConfig->mutableConsensusNodeList();
+
+    bcos::consensus::ConsensusNodeList consensusList;
+    bcos::consensus::ConsensusNodeList observerList;
+    if (_ledgerConfig->features().get(Features::Flag::feature_rpbft) &&
+        !_ledgerConfig->workingSealerNodeList().empty())
+    {
+        consensusList = _ledgerConfig->workingSealerNodeList();
+        observerList = _ledgerConfig->observerNodeList() + _ledgerConfig->consensusNodeList();
+    }
+    else
+    {
+        consensusList = _ledgerConfig->mutableConsensusNodeList();
+        observerList = _ledgerConfig->observerNodeList();
+    }
     setConsensusNodeList(consensusList);
-    auto observerList = _ledgerConfig->mutableObserverList();
-    setObserverNodeList(*observerList);
+    setObserverNodeList(observerList);
     // set leader_period
     setLeaderSwitchPeriod(_ledgerConfig->leaderSwitchPeriod());
     // reset the timer
@@ -86,12 +98,12 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // notify the txpool validator to update the consensusNodeList and the observerNodeList
     if (m_consensusNodeListUpdated || m_observerNodeListUpdated)
     {
-        m_validator->updateValidatorConfig(consensusList, *observerList);
+        m_validator->updateValidatorConfig(consensusList, observerList);
         PBFT_LOG(INFO) << LOG_DESC("updateValidatorConfig")
                        << LOG_KV("consensusNodeListUpdated", m_consensusNodeListUpdated)
                        << LOG_KV("observerNodeListUpdated", m_observerNodeListUpdated)
                        << LOG_KV("consensusNodeSize", consensusList.size())
-                       << LOG_KV("observerNodeSize", observerList->size());
+                       << LOG_KV("observerNodeSize", observerList.size());
     }
 
     // notify the latest block number to the sealer

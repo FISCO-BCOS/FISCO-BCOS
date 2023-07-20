@@ -39,8 +39,7 @@ public:
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
-        std::string_view _consensusType = ledger::PBFT_CONSENSUS_TYPE);
+        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory);
 
     virtual ~PBFTFactory() = default;
     virtual PBFTImpl::Ptr createPBFT();
@@ -55,6 +54,5 @@ protected:
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
-    std::string_view m_consensusType = ledger::PBFT_CONSENSUS_TYPE;
 };
 }  // namespace bcos::consensus

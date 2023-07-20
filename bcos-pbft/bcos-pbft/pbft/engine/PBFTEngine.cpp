@@ -1432,6 +1432,7 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     if (!_syncedBlock)
     {
         m_cacheProcessor->resetTimer();
+        m_timer->restart();
     }
 }
 
@@ -1691,14 +1692,7 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
 void PBFTEngine::fetchAndUpdateLedgerConfig()
 {
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
-    m_ledgerFetcher->fetchBlockNumberAndHash();
-    m_ledgerFetcher->fetchConsensusNodeList();
-    // Note: must fetchObserverNode here to notify the latest sealerList and observerList to
-    // txpool
-    m_ledgerFetcher->fetchObserverNodeList();
-    m_ledgerFetcher->fetchBlockTxCountLimit();
-    m_ledgerFetcher->fetchConsensusLeaderPeriod();
-    m_ledgerFetcher->fetchCompatibilityVersion();
+    m_ledgerFetcher->fetchAll();
     auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                    << LOG_KV("blockNumber", ledgerConfig->blockNumber())

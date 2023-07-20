@@ -28,6 +28,7 @@
 #endif
 
 #include <bcos-pbft/pbft/PBFTFactory.h>
+#include <bcos-rpbft/bcos-rpbft/rpbft/utilities/RPBFTFactory.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
@@ -413,13 +414,23 @@ void PBFTInitializer::createPBFT()
 {
     auto keyPair = m_protocolInitializer->keyPair();
     auto kvStorage = std::make_shared<bcos::storage::KVStorageHelper>(m_storage);
-    // create pbft
-    auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
-        m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
-        m_txpool, m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(),
-        m_nodeConfig->consensusType());
+    if (m_nodeConfig->consensusType() == ledger::PBFT_CONSENSUS_TYPE)
+    {
+        auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
+            m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
+            m_txpool, m_protocolInitializer->blockFactory(),
+            m_protocolInitializer->txResultFactory());
+        m_pbft = pbftFactory->createPBFT();
+    }
+    else if (m_nodeConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)
+    {
+        auto rpbftFactory = std::make_shared<RPBFTFactory>(m_protocolInitializer->cryptoSuite(),
+            m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
+            m_txpool, m_protocolInitializer->blockFactory(),
+            m_protocolInitializer->txResultFactory());
+        m_pbft = rpbftFactory->createRPBFT();
+    }
 
-    m_pbft = pbftFactory->createPBFT();
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();
     pbftConfig->setCheckPointTimeoutInterval(m_nodeConfig->checkPointTimeoutInterval());
     pbftConfig->setMinSealTime(m_nodeConfig->minSealTime());
