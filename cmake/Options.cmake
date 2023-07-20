@@ -94,7 +94,11 @@ macro(configure_project)
     endif()
 
     if(NOT ALLOCATOR)
-        set(ALLOCATOR "tcmalloc")
+        if(APPLE)
+            set(ALLOCATOR "defalut")
+        else()
+            set(ALLOCATOR "jemalloc")
+        endif()
     endif()
 
     if(ALLOCATOR STREQUAL "tcmalloc")
