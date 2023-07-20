@@ -342,7 +342,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                     }
                     executeLock->unlock();
                     callback(BCOS_ERROR_WITH_PREV_PTR(
-                                 SchedulerError::UnknownError, "executeBlock error:", *error),
+                                 SchedulerError::UnknownError, "executeBlock failed:", *error),
                         nullptr, _sysBlock);
                     return;
                 }
@@ -503,7 +503,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 fetchGasLimit();
                 commitLock->unlock();
                 callback(BCOS_ERROR_UNIQUE_PTR(
-                             error->errorCode(), "CommitBlock error: " + error->errorMessage()),
+                             error->errorCode(), "CommitBlock failed: " + error->errorMessage()),
                     nullptr);
                 return;
             }
@@ -537,7 +537,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
                     commitLock->unlock();
                     callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                                 SchedulerError::UnknownError, "Get system config error", *error),
+                                 SchedulerError::UnknownError, "Get system config failed", *error),
                         nullptr);
                     return;
                 }
@@ -653,7 +653,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
                                   protocol::TransactionReceipt::Ptr&& receipt) {
         if (error)
         {
-            std::string errorMessage = "asyncCall error: " + error->errorMessage();
+            std::string errorMessage = "asyncCall failed: " + error->errorMessage();
             SCHEDULER_LOG(DEBUG) << errorMessage;
             callback(BCOS_ERROR_WITH_PREV_PTR(error->errorCode(), errorMessage, *error), nullptr);
             return;
@@ -675,8 +675,8 @@ void SchedulerImpl::registerExecutor(std::string name,
     }
     catch (std::exception& e)
     {
-        SCHEDULER_LOG(ERROR) << "registerExecutor error: " << boost::diagnostic_information(e);
-        callback(BCOS_ERROR_WITH_PREV_PTR(-1, "addExecutor error", e));
+        SCHEDULER_LOG(ERROR) << "registerExecutor failed: " << boost::diagnostic_information(e);
+        callback(BCOS_ERROR_WITH_PREV_PTR(-1, "addExecutor failed", e));
         return;
     }
 
@@ -951,9 +951,9 @@ void SchedulerImpl::asyncGetLedgerConfig(
 
             if (failed > 0)
             {
-                SCHEDULER_LOG(ERROR) << "Get ledger config with error: " << failed;
+                SCHEDULER_LOG(ERROR) << "Get ledger config with failed: " << failed;
                 (*callback)(
-                    BCOS_ERROR_PTR(SchedulerError::UnknownError, "Get ledger config with error"),
+                    BCOS_ERROR_PTR(SchedulerError::UnknownError, "Get ledger config with failed"),
                     nullptr);
 
                 return;

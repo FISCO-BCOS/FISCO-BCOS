@@ -141,9 +141,9 @@ void AMOP::publish(
                 errorNew->setErrorMessage(
                     std::string(wsMessage->payload()->begin(), wsMessage->payload()->end()));
 
-                AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response error")
-                                     << LOG_KV("errorCode", errorNew->errorCode())
-                                     << LOG_KV("errorMessage", errorNew->errorMessage());
+                AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response failed")
+                                     << LOG_KV("code", errorNew->errorCode())
+                                     << LOG_KV("message", errorNew->errorMessage());
 
                 _error = errorNew;
             }
@@ -210,7 +210,7 @@ void AMOP::onRecvAMOPRequest(std::shared_ptr<boostssl::MessageFace> _msg,
     if (ret < 0)
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPRequest")
-                             << LOG_DESC("decode amop request message error")
+                             << LOG_DESC("decode amop request message failed")
                              << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("seq", seq);
         return;
     }
@@ -256,7 +256,7 @@ void AMOP::onRecvAMOPBroadcast(std::shared_ptr<boostssl::MessageFace> _msg,
     if (ret < 0)
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPBroadcast")
-                             << LOG_DESC("decode amop request message error")
+                             << LOG_DESC("decode amop request message failed")
                              << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("seq", seq);
         return;
     }

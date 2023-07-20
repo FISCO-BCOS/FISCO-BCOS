@@ -1183,9 +1183,9 @@ public:
         auto [error, entry] = getRawEntryFromStorage(table, key);
         if (error)
         {
-            KeyPage_LOG(ERROR) << LOG_DESC("getData error") << LOG_KV("table", table)
+            KeyPage_LOG(ERROR) << LOG_DESC("getData failed") << LOG_KV("table", table)
                                << LOG_KV("key", toHex(key))
-                               << LOG_KV("error", error->errorMessage());
+                               << LOG_KV("failed", error->errorMessage());
             return std::nullopt;
         }
         if (c_fileLogLevel <= TRACE)

@@ -266,7 +266,7 @@ bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& 
                 if (_error)
                 {
                     GATEWAY_LOG(ERROR)
-                        << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
+                        << LOG_DESC("ROUTER_LOG failed") << LOG_KV("groupID", _groupID)
                         << LOG_KV("moduleID", _moduleID) << LOG_KV("src", _srcNodeID->hex())
                         << LOG_KV("dst", dstNodeID) << LOG_KV("code", _error->errorCode())
                         << LOG_KV("msg", _error->errorMessage());

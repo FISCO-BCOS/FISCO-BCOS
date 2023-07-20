@@ -101,10 +101,10 @@ void AccountManagerPrecompiled::createAccountWithStatus(
 
     if (setStatusRes->status != (int32_t)TransactionStatus::None)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AccountManagerPrecompiled")
-                               << LOG_DESC("set status failed")
-                               << LOG_KV("accountTableName", accountTableName)
-                               << LOG_KV("status", response->status);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled")
+                              << LOG_DESC("set status failed")
+                              << LOG_KV("accountTableName", accountTableName)
+                              << LOG_KV("status", response->status);
         BOOST_THROW_EXCEPTION(PrecompiledError("Set account status failed."));
     }
     _callParameters->setExternalResult(std::move(setStatusRes));
@@ -219,9 +219,9 @@ std::vector<Address> AccountManagerPrecompiled::getGovernorList(
         false, _callParameters->m_gasLeft);
     if (getCommitteeResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AccountManagerPrecompiled")
-                               << LOG_DESC("get committee failed")
-                               << LOG_KV("status", getCommitteeResponse->status);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled")
+                              << LOG_DESC("get committee failed")
+                              << LOG_KV("status", getCommitteeResponse->status);
         BOOST_THROW_EXCEPTION(PrecompiledError("Get committee failed."));
     }
 
@@ -234,9 +234,9 @@ std::vector<Address> AccountManagerPrecompiled::getGovernorList(
 
     if (getInfoResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AccountManagerPrecompiled")
-                               << LOG_DESC("get committee info failed")
-                               << LOG_KV("committee", committee.hex());
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled")
+                              << LOG_DESC("get committee info failed")
+                              << LOG_KV("committee", committee.hex());
         BOOST_THROW_EXCEPTION(PrecompiledError("Get committee info failed."));
     }
     uint8_t participatesRate = 0;

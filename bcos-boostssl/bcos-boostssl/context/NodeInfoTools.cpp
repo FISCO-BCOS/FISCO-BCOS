@@ -120,7 +120,7 @@ NodeInfoTools::initCert2PubHexHandler()
 
             if (!bioMem)
             {
-                errorMessage = "BIO_new error";
+                errorMessage = "BIO_new failed";
                 break;
             }
 
@@ -135,14 +135,14 @@ NodeInfoTools::initCert2PubHexHandler()
 
             if (!x509Ptr)
             {
-                errorMessage = "PEM_read_bio_X509 error";
+                errorMessage = "PEM_read_bio_X509 failed";
                 break;
             }
 
             ASN1_BIT_STRING* pubKey = X509_get0_pubkey_bitstr(x509Ptr.get());
             if (pubKey == NULL)
             {
-                errorMessage = "X509_get0_pubkey_bitstr error";
+                errorMessage = "X509_get0_pubkey_bitstr failed";
                 break;
             }
 
@@ -155,7 +155,7 @@ NodeInfoTools::initCert2PubHexHandler()
         } while (0);
 
         NODEINFO_LOG(WARNING) << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
-                              << LOG_KV("errorMessage", errorMessage);
+                              << LOG_KV("message", errorMessage);
         return false;
     };
 }

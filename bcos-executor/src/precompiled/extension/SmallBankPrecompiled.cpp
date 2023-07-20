@@ -124,7 +124,7 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("error func")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("invaild func")
                               << LOG_KV("func", func);
     }
 
