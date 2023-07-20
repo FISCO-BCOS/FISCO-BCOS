@@ -236,7 +236,7 @@ void PBFTInitializer::registerHandlers()
         catch (std::exception const& e)
         {
             INITIALIZER_LOG(WARNING) << LOG_DESC("call asyncResetSealing to the sealer exception")
-                                     << LOG_KV("error", boost::diagnostic_information(e));
+                                     << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
 
@@ -257,7 +257,7 @@ void PBFTInitializer::registerHandlers()
             catch (std::exception const& e)
             {
                 INITIALIZER_LOG(WARNING) << LOG_DESC("call notify proposal sealing exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
 
@@ -276,7 +276,7 @@ void PBFTInitializer::registerHandlers()
         {
             INITIALIZER_LOG(WARNING)
                 << LOG_DESC("call notify the latest block number to the sealer exception")
-                << LOG_KV("error", boost::diagnostic_information(e));
+                << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
 
@@ -297,7 +297,7 @@ void PBFTInitializer::registerHandlers()
         {
             INITIALIZER_LOG(WARNING)
                 << LOG_DESC("call notify the latest block to the sync module exception")
-                << LOG_KV("error", boost::diagnostic_information(e));
+                << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
 
@@ -316,7 +316,7 @@ void PBFTInitializer::registerHandlers()
             INITIALIZER_LOG(WARNING)
                 << LOG_DESC("determine the node is faulty or not through the sync module exception")
                 << LOG_KV("node", _nodeID->shortHex())
-                << LOG_KV("error", boost::diagnostic_information(e));
+                << LOG_KV("failed", boost::diagnostic_information(e));
         }
         return false;
     });
@@ -338,7 +338,7 @@ void PBFTInitializer::registerHandlers()
                 INITIALIZER_LOG(WARNING) << LOG_DESC(
                                                 "call notify the latest committed proposal index "
                                                 "to the sync module exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
     m_txpool->registerTxsCleanUpSwitch([this]() -> bool {
@@ -369,8 +369,8 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
                 return;
             }
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("Election versionInfoNotification error") << LOG_KV("version", _version)
-                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+                << LOG_DESC("Election versionInfoNotification failed")
+                << LOG_KV("version", _version) << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
         });
         onGroupInfoChanged();
     });
@@ -485,7 +485,7 @@ void PBFTInitializer::syncGroupNodeInfo()
             catch (std::exception const& e)
             {
                 INITIALIZER_LOG(WARNING) << LOG_DESC("asyncGetGroupNodeInfo exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
 }

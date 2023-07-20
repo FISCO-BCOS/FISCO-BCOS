@@ -73,7 +73,7 @@ void ServiceV2::onReceivePeersRouterTable(
 {
     if (_e.errorCode())
     {
-        SERVICE_ROUTER_LOG(WARNING) << LOG_DESC("onReceivePeersRouterTable error")
+        SERVICE_ROUTER_LOG(WARNING) << LOG_DESC("onReceivePeersRouterTable failed")
                                     << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
@@ -123,7 +123,7 @@ void ServiceV2::onReceiveRouterTableRequest(
 {
     if (_e.errorCode())
     {
-        SERVICE_ROUTER_LOG(WARNING) << LOG_DESC("onReceiveRouterTableRequest error")
+        SERVICE_ROUTER_LOG(WARNING) << LOG_DESC("onReceiveRouterTableRequest failed")
                                     << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
@@ -158,7 +158,7 @@ void ServiceV2::onReceiveRouterSeq(
     if (_e.errorCode())
     {
         SERVICE_ROUTER_LOG(WARNING)
-            << LOG_DESC("onReceiveRouterSeq error") << LOG_KV("code", _e.errorCode())
+            << LOG_DESC("onReceiveRouterSeq failed") << LOG_KV("code", _e.errorCode())
             << LOG_KV("message", _e.what());
         return;
     }
@@ -271,7 +271,7 @@ void ServiceV2::onMessage(NetworkException _e, SessionFace::Ptr _session, Messag
 {
     if (_e.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onMessage error") << LOG_KV("code", _e.errorCode())
+        SERVICE_LOG(WARNING) << LOG_DESC("onMessage failed") << LOG_KV("code", _e.errorCode())
                              << LOG_KV("msg", _e.what());
         // calls onMessage of Service to trigger disconnectHandler
         Service::onMessage(_e, _session, _message, _p2pSessionWeakPtr);

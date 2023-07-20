@@ -298,8 +298,8 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                         << LOG_DESC("applyBlock: executing the downloaded block failed")
                         << LOG_KV("number", orgBlockHeader->number())
                         << LOG_KV("hash", orgBlockHeader->hash().abridged())
-                        << LOG_KV("errorCode", _error->errorCode())
-                        << LOG_KV("errorMessage", _error->errorMessage());
+                        << LOG_KV("code", _error->errorCode())
+                        << LOG_KV("message", _error->errorMessage());
                     if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
                     {
                         BLKSYNC_LOG(INFO)
@@ -310,7 +310,8 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     if (!config->masterNode())
                     {
                         BLKSYNC_LOG(INFO) << LOG_DESC(
-                            "applyBlock error: but do nothing for the node is not the master node");
+                            "applyBlock failed: but do nothing for the node is not the master "
+                            "node");
                         return;
                     }
                     {
@@ -377,7 +378,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 BLKSYNC_LOG(WARNING) << LOG_DESC("applyBlock exception")
                                      << LOG_KV("number", orgBlockHeader->number())
                                      << LOG_KV("hash", orgBlockHeader->hash().abridged())
-                                     << LOG_KV("error", boost::diagnostic_information(e));
+                                     << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
 }
@@ -416,7 +417,7 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
             if (_error)
             {
                 BLKSYNC_LOG(WARNING)
-                    << LOG_DESC("asyncCheckBlock error")
+                    << LOG_DESC("asyncCheckBlock failed")
                     << LOG_KV("blockNumber", blockHeader->number())
                     << LOG_KV("hash", blockHeader->hash().abridged())
                     << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
@@ -441,7 +442,7 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
             BLKSYNC_LOG(WARNING) << LOG_DESC("asyncCheckBlock exception")
                                  << LOG_KV("blockNumber", blockHeader->number())
                                  << LOG_KV("hash", blockHeader->hash().abridged())
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+                                 << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
     return true;
@@ -510,7 +511,7 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
     catch (std::exception const& e)
     {
         BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock exception")
-                             << LOG_KV("error", boost::diagnostic_information(e));
+                             << LOG_KV("failed", boost::diagnostic_information(e));
     }
 }
 
@@ -573,7 +574,7 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             BLKSYNC_LOG(WARNING) << LOG_DESC("commitBlock exception")
                                  << LOG_KV("number", blockHeader->number())
                                  << LOG_KV("hash", blockHeader->hash().abridged())
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+                                 << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
 }

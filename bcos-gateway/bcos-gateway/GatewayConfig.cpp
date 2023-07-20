@@ -86,7 +86,7 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     boost::asio::ip::address ip_address = boost::asio::ip::make_address(ip, ec);
     if (ec.value() != 0)
     {
-        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("the host is invalid, make_address error")
+        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("the host is invalid, make_address failed")
                                   << LOG_KV("host", _host);
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment(

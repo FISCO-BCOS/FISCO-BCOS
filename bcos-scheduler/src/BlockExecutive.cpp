@@ -341,11 +341,10 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
         if (future.wait_for(std::chrono::milliseconds(10 * 1000)) != std::future_status::ready)
         {
             // 10s timeout
-            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number())
-                                 << "BlockExecutive prepare: fillBlock timeout/error"
-                                 << LOG_KV("txNum", block->transactionsMetaDataSize())
-                                 << LOG_KV("cost", utcTime() - lastT)
-                                 << LOG_KV("fetchNum", txs ? txs->size() : 0);
+            SCHEDULER_LOG(WARNING)
+                << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock timeout/failed"
+                << LOG_KV("txNum", block->transactionsMetaDataSize())
+                << LOG_KV("cost", utcTime() - lastT) << LOG_KV("fetchNum", txs ? txs->size() : 0);
             return nullptr;
         }
         txs = future.get();
@@ -416,10 +415,10 @@ void BlockExecutive::asyncExecute(
 
             if (error)
             {
-                SCHEDULER_LOG(ERROR)
-                    << BLOCK_NUMBER(number()) << "Next block with error!" << error->errorMessage();
+                SCHEDULER_LOG(WARNING)
+                    << BLOCK_NUMBER(number()) << "Next block with failed!" << error->errorMessage();
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                             SchedulerError::NextBlockError, "Next block error!", *error),
+                             SchedulerError::NextBlockError, "Next block failed!", *error),
                     nullptr, m_isSysBlock);
                 return;
             }
@@ -438,11 +437,11 @@ void BlockExecutive::asyncExecute(
 
                     if (error)
                     {
-                        SCHEDULER_LOG(ERROR)
-                            << BLOCK_NUMBER(number()) << "DAG execute block with error!"
+                        SCHEDULER_LOG(WARNING)
+                            << BLOCK_NUMBER(number()) << "DAG execute block with failed!"
                             << error->errorMessage();
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                                     SchedulerError::DAGError, "DAG execute error!", *error),
+                                     SchedulerError::DAGError, "DAG execute failed!", *error),
                             nullptr, m_isSysBlock);
                         return;
                     }
@@ -486,7 +485,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
         [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
             if (error)
             {
-                SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
+                SCHEDULER_LOG(ERROR) << "Prewrite block failed!" << error->errorMessage();
 
                 if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                 {
@@ -494,7 +493,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 }
 
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
-                    "Prewrite block error: " + error->errorMessage(), *error));
+                    "Prewrite block failed: " + error->errorMessage(), *error));
 
                 return;
             }
@@ -512,7 +511,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
                 if (status.failed > 0)
                 {
-                    std::string errorMessage = "Prepare with errors, begin rollback, status: " +
+                    std::string errorMessage = "Prepare with failed, begin rollback, status: " +
                                                boost::lexical_cast<std::string>(status.failed);
                     SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << errorMessage;
                     batchBlockRollback(
@@ -542,7 +541,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 batchBlockCommit(status.startTS, [this, callback](Error::UniquePtr&& error) {
                     if (error)
                     {
-                        SCHEDULER_LOG(ERROR)
+                        SCHEDULER_LOG(WARNING)
                             << BLOCK_NUMBER(number()) << "Commit block to storage failed!"
                             << error->errorMessage();
 
@@ -579,11 +578,11 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     if (error)
                     {
                         ++status->failed;
-                        SCHEDULER_LOG(ERROR)
+                        SCHEDULER_LOG(WARNING)
                             << BLOCK_NUMBER(number())
-                            << "scheduler asyncPrepare storage error: " << error->errorMessage();
+                            << "scheduler asyncPrepare storage failed: " << error->errorMessage();
                         callback(BCOS_ERROR_UNIQUE_PTR(error->errorCode(),
-                            "asyncPrepare block error: " + error->errorMessage()));
+                            "asyncPrepare block failed: " + error->errorMessage()));
                         return;
                     }
                     ++status->success;
@@ -607,7 +606,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                                 if (error)
                                 {
                                     ++status->failed;
-                                    SCHEDULER_LOG(ERROR)
+                                    SCHEDULER_LOG(WARNING)
                                         << BLOCK_NUMBER(number())
                                         << "asyncPrepare executor failed: " << error->what();
 
@@ -844,7 +843,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                     if (*failed > 0)
                     {
                         (*callbackPtr)(BCOS_ERROR_UNIQUE_PTR(
-                            SchedulerError::DAGError, "Execute dag with errors"));
+                            SchedulerError::DAGError, "Execute dag with failed"));
                         return;
                     }
 
@@ -913,7 +912,7 @@ void BlockExecutive::DMCExecute(
                 batchStatus->error++;
                 batchStatus->errorMessage = error.get()->errorMessage();
                 SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << LOG_BADGE("DmcExecutor")
-                                     << "dmcExecutor->go() with error"
+                                     << "dmcExecutor->go() with failed"
                                      << LOG_KV("code", error ? error->errorCode() : -1)
                                      << LOG_KV("msg", error ? error.get()->errorMessage() : "null");
             }
@@ -1147,7 +1146,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
         if (status.failed > 0)
         {
             auto message = "Next block:" + boost::lexical_cast<std::string>(number()) +
-                           " with errors! " + boost::lexical_cast<std::string>(status.failed);
+                           " with failed! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << message;
 
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::BatchError, std::move(message)));
@@ -1175,7 +1174,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
                         if (error)
                         {
                             SCHEDULER_LOG(ERROR)
-                                << BLOCK_NUMBER(number()) << "Next block executor error!"
+                                << BLOCK_NUMBER(number()) << "Next block executor failed!"
                                 << error->errorMessage();
                             ++status->failed;
 
@@ -1219,7 +1218,7 @@ void BlockExecutive::batchGetHashes(
         if (status.failed > 0)
         {
             auto message = "batchGetHashes" + boost::lexical_cast<std::string>(number()) +
-                           " with errors! " + boost::lexical_cast<std::string>(status.failed);
+                           " with failed! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << message;
 
             callback(
@@ -1241,7 +1240,7 @@ void BlockExecutive::batchGetHashes(
                         WriteGuard lock(status->x_lock);
                         if (error)
                         {
-                            SCHEDULER_LOG(ERROR) << "GetHash error!" << error->errorMessage();
+                            SCHEDULER_LOG(ERROR) << "GetHash failed!" << error->errorMessage();
                             ++status->failed;
                         }
                         else
@@ -1277,7 +1276,7 @@ void BlockExecutive::batchBlockCommit(
         if (status.failed > 0)
         {
             auto message = "Commit block:" + boost::lexical_cast<std::string>(number()) +
-                           " with errors! " + boost::lexical_cast<std::string>(status.failed);
+                           " with failed! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << message;
 
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CommitError, std::move(message)));
@@ -1297,7 +1296,7 @@ void BlockExecutive::batchBlockCommit(
 //#define COMMIT_FAILED_NEED_ROLLBACK
 #ifdef COMMIT_FAILED_NEED_ROLLBACK
                 SCHEDULER_LOG(ERROR)
-                    << BLOCK_NUMBER(number()) << "Commit node storage error! need rollback"
+                    << BLOCK_NUMBER(number()) << "Commit node storage failed! need rollback"
                     << error->errorMessage();
 
                 batchBlockRollback(rollbackVersion, [this, callback](Error::UniquePtr&& error) {
@@ -1347,7 +1346,7 @@ void BlockExecutive::batchBlockCommit(
                             if (error)
                             {
                                 SCHEDULER_LOG(ERROR)
-                                    << BLOCK_NUMBER(number()) << "Commit executor error!"
+                                    << BLOCK_NUMBER(number()) << "Commit executor failed!"
                                     << error->errorMessage();
 
                                 // executor failed is also success++
@@ -1395,7 +1394,7 @@ void BlockExecutive::batchBlockRollback(
         if (status.failed > 0)
         {
             auto message = "Rollback block:" + boost::lexical_cast<std::string>(number()) +
-                           " with errors! " + boost::lexical_cast<std::string>(status.failed);
+                           " with failed! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << message;
 
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::RollbackError, std::move(message)));
@@ -1414,7 +1413,7 @@ void BlockExecutive::batchBlockRollback(
                 WriteGuard lock(status->x_lock);
                 if (error)
                 {
-                    SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number) << "Rollback node storage error!"
+                    SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number) << "Rollback node storage failed!"
                                          << error->errorMessage();
 
                     ++status->failed;
@@ -1457,7 +1456,7 @@ void BlockExecutive::batchBlockRollback(
                                         else
                                         {
                                             SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number)
-                                                                 << "Rollback executor error!"
+                                                                 << "Rollback executor failed!"
                                                                  << error->errorMessage();
                                             ++status->failed;
                                         }

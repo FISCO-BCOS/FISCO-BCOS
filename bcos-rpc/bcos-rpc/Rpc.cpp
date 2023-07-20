@@ -54,7 +54,7 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
             asyncNotifyBlockNumber(_groupID, _nodeName, _blockNumber, [](Error::Ptr _error) {
                 if (_error)
                 {
-                    RPC_LOG(ERROR) << LOG_DESC("asyncNotifyBlockNumber error")
+                    RPC_LOG(ERROR) << LOG_DESC("asyncNotifyBlockNumber failed")
                                    << LOG_KV("code", _error->errorCode())
                                    << LOG_KV("msg", _error->errorMessage());
                 }
@@ -222,8 +222,7 @@ void Rpc::onRecvHandshakeRequest(
                 << LOG_BADGE(
                        "onRecvHandshakeRequest and response failed for get groupInfoList failed")
                 << LOG_KV("endpoint", _session ? _session->endPoint() : "unknown")
-                << LOG_KV("errorCode", _error->errorCode())
-                << LOG_KV("errorMessage", _error->errorMessage());
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("message", _error->errorMessage());
             return;
         }
         auto rpc = self.lock();

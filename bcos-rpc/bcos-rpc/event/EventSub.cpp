@@ -517,8 +517,8 @@ void EventSub::processNextBlock(
                 EVENT_SUB(ERROR) << LOG_BADGE("processNextBlock")
                                  << LOG_DESC("asyncGetBlockDataByNumber")
                                  << LOG_KV("id", _task->id()) << LOG_KV("blockNumber", _blockNumber)
-                                 << LOG_KV("errorCode", _error->errorCode())
-                                 << LOG_KV("errorMessage", _error->errorMessage());
+                                 << LOG_KV("code", _error->errorCode())
+                                 << LOG_KV("message", _error->errorMessage());
                 _callback(_error);
                 return;
             }

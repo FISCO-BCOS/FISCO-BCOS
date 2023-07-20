@@ -125,7 +125,7 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
                 "RocksDB get failed!, " + boost::lexical_cast<std::string>(status.ToString());
             STORAGE_ROCKSDB_LOG(WARNING)
                 << LOG_DESC("asyncGetRow failed") << LOG_KV("table", _table) << LOG_KV("key", _key)
-                << LOG_KV("error", errorMessage);
+                << LOG_KV("failed", errorMessage);
             if (status.getState())
             {
                 errorMessage.append(" ").append(status.getState());
@@ -216,12 +216,12 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                         else if (status.getState())
                         {
                             STORAGE_ROCKSDB_LOG(WARNING)
-                                << "Multi get rows error: " << status.getState();
+                                << "Multi get rows failed: " << status.getState();
                         }
                         else
                         {
                             STORAGE_ROCKSDB_LOG(WARNING)
-                                << "Multi get rows error:" << status.ToString();
+                                << "Multi get rows failed:" << status.ToString();
                         }
                     }
                 }

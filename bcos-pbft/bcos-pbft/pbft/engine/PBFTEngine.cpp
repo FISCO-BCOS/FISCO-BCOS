@@ -99,7 +99,7 @@ void PBFTEngine::initSendResponseHandler()
         catch (std::exception const& e)
         {
             PBFT_LOG(WARNING) << LOG_DESC("sendResponse exception")
-                              << LOG_KV("error", boost::diagnostic_information(e))
+                              << LOG_KV("failed", boost::diagnostic_information(e))
                               << LOG_KV("uuid", _id) << LOG_KV("moduleID", _moduleID)
                               << LOG_KV("peer", _dstNode->shortHex());
         }
@@ -125,7 +125,7 @@ void PBFTEngine::start()
         }
         catch (std::exception const& e)
         {
-            PBFT_LOG(WARNING) << LOG_DESC("tryToResendCheckPoint error")
+            PBFT_LOG(WARNING) << LOG_DESC("tryToResendCheckPoint failed")
                               << LOG_KV("errorInfo", boost::diagnostic_information(e));
         }
     });
@@ -317,7 +317,7 @@ void PBFTEngine::onProposalApplied(int64_t _errorCode, PBFTProposalInterface::Pt
         {
             PBFT_LOG(WARNING) << LOG_DESC("onProposalApplied exception")
                               << printPBFTProposal(_executedProposal)
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
 }
@@ -463,7 +463,7 @@ void PBFTEngine::onReceivePBFTMessage(
             {
                 PBFT_LOG(WARNING) << LOG_DESC("onReceivePBFTMessage exception")
                                   << LOG_KV("fromNode", _nodeID->hex()) << LOG_KV("uuid", _id)
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
 }
@@ -506,7 +506,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
                 catch (std::exception const& e)
                 {
                     PBFT_LOG(WARNING) << LOG_DESC("onReceiveCommittedProposalRequest exception")
-                                      << LOG_KV("error", boost::diagnostic_information(e));
+                                      << LOG_KV("failed", boost::diagnostic_information(e));
                 }
             });
             return;
@@ -528,7 +528,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
                 catch (std::exception const& e)
                 {
                     PBFT_LOG(WARNING) << LOG_DESC("onReceivePrecommitRequest exception")
-                                      << LOG_KV("error", boost::diagnostic_information(e));
+                                      << LOG_KV("failed", boost::diagnostic_information(e));
                 }
             });
             return;
@@ -542,7 +542,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
                           << LOG_KV("fromNode", _fromNode->hex())
                           << LOG_KV("Idx", m_config->nodeIndex())
                           << LOG_KV("nodeId", m_config->nodeID()->hex())
-                          << LOG_KV("error", boost::diagnostic_information(_e));
+                          << LOG_KV("failed", boost::diagnostic_information(_e));
     }
 }
 
@@ -887,10 +887,10 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 // verify exceptioned
                 if (_error != nullptr)
                 {
-                    PBFT_LOG(WARNING) << LOG_DESC("verify proposal exceptioned")
-                                      << printPBFTMsgInfo(_prePrepareMsg)
-                                      << LOG_KV("errorCode", _error->errorCode())
-                                      << LOG_KV("errorMsg", _error->errorMessage());
+                    PBFT_LOG(WARNING)
+                        << LOG_DESC("verify proposal exceptioned")
+                        << printPBFTMsgInfo(_prePrepareMsg) << LOG_KV("code", _error->errorCode())
+                        << LOG_KV("message", _error->errorMessage());
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
                     return;
                 }
@@ -911,7 +911,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
             {
                 PBFT_LOG(WARNING) << LOG_DESC("exception when calls onVerifyFinishedHandler")
                                   << printPBFTMsgInfo(_prePrepareMsg)
-                                  << LOG_KV("error", boost::diagnostic_information(_e));
+                                  << LOG_KV("failed", boost::diagnostic_information(_e));
             }
         });
     return true;

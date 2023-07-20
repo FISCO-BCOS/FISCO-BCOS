@@ -567,7 +567,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         catch (...)
         {
             PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                                  << LOG_DESC("auth map parse error") << LOG_KV("path", path);
+                                  << LOG_DESC("auth map parse failed") << LOG_KV("path", path);
             getErrorCodeOut(
                 _callParameters->mutableExecResult(), CODE_TABLE_AUTH_ROW_NOT_EXIST, codec);
             return;
@@ -608,7 +608,7 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
     catch (...)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("decode method type error");
+                               << LOG_DESC("decode method type failed");
         return (int)CODE_TABLE_AUTH_TYPE_DECODE_ERROR;
     }
 }

@@ -162,7 +162,7 @@ void AMOPClient::onRecvAMOPRequest(
                     // recover the seq
                     responseMsg->setSeq(orgSeq);
                     AMOP_CLIENT_LOG(ERROR)
-                        << LOG_BADGE("onRecvAMOPRequest error")
+                        << LOG_BADGE("onRecvAMOPRequest failed")
                         << LOG_DESC("AMOP async send message callback") << LOG_KV("seq", seq)
                         << LOG_KV("code", _error->errorCode())
                         << LOG_KV("msg", _error->errorMessage());
@@ -184,7 +184,7 @@ void AMOPClient::onRecvAMOPRequest(
             catch (std::exception const& e)
             {
                 AMOP_CLIENT_LOG(WARNING) << LOG_DESC("onRecvAMOPRequest exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
 }
@@ -221,7 +221,7 @@ bool AMOPClient::trySendAMOPRequestToLocalNode(std::shared_ptr<WsSession> _sessi
             catch (std::exception const& e)
             {
                 AMOP_CLIENT_LOG(WARNING) << LOG_DESC("trySendAMOPRequestToLocalNode exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
     return true;
@@ -258,11 +258,11 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
             {
                 AMOP_CLIENT_LOG(WARNING)
                     << LOG_BADGE("asyncNotifyAMOPMessage")
-                    << LOG_DESC("asyncSendMessage callback error")
+                    << LOG_DESC("asyncSendMessage callback failed")
                     << LOG_KV("endpoint", (_session ? _session->endPoint() : std::string("")))
                     << LOG_KV("topic", _topic) << LOG_KV("seq", seq)
-                    << LOG_KV("errorCode", _error ? _error->errorCode() : -1)
-                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success");
+                    << LOG_KV("code", _error ? _error->errorCode() : -1)
+                    << LOG_KV("message", _error ? _error->errorMessage() : "success");
             }
 
             AMOP_CLIENT_LOG(DEBUG)
@@ -435,7 +435,7 @@ void AMOPClient::subscribeTopicToAllNodes()
             m_clientID, topicInfo, [this, endPoint](Error::Ptr&& _error) {
                 if (_error)
                 {
-                    AMOP_CLIENT_LOG(WARNING) << LOG_DESC("asyncSubScribeTopic error")
+                    AMOP_CLIENT_LOG(WARNING) << LOG_DESC("asyncSubScribeTopic failed")
                                              << LOG_KV("gateway", endPoint.getEndpoint().toString())
                                              << LOG_KV("code", _error->errorCode())
                                              << LOG_KV("msg", _error->errorMessage());
@@ -520,8 +520,7 @@ bool AMOPClient::onGatewayInactivated(
     responseMsg->setSeq(seq);
     _session->asyncSendMessage(responseMsg);
 
-    AMOP_CLIENT_LOG(INFO) << LOG_DESC(
-                                 "Gateway inactivated, notify error message to the client directly")
+    AMOP_CLIENT_LOG(INFO) << LOG_DESC("Gateway inactivated, notify message to the client directly")
                           << LOG_KV("endPoint", _session->endPoint()) << LOG_KV("seq", seq);
 
     return true;
