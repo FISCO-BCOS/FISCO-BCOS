@@ -133,6 +133,7 @@ class NodeServiceConfig:
         self.base_service_name = base_service_name
         # Note: in max-node mode, only contains [config.genesis, node.pem]
         #       in pro-node mode, contains [config.ini, config.genesis, node.pem]
+        #       in HSM mode, node.pem contains only public key information
         self.config_file_list = config_file_list
         # Note: in max-node mode, the ini config files prefixed with deploy ip
         self.ini_config_file = "config.ini"
@@ -184,10 +185,10 @@ class NodeConfig:
             sys.exit(-1)
         self.hsm_lib_path = utilities.get_item_value(
             self.config, "hsm_lib_path", "", False, self.desc)
-        self.key_index = utilities.get_item_value(
-            self.config, "key_index", 0, False, self.desc)
-        self.password = utilities.get_item_value(
-            self.config, "password", "", False, self.desc)
+        self.hsm_key_index = utilities.get_item_value(
+            self.config, "hsm_key_index", 0, False, self.desc)
+        self.hsm_password = utilities.get_item_value(
+            self.config, "hsm_password", "", False, self.desc)
         self.hsm_public_key_file_path = utilities.get_item_value(
             self.config, "hsm_public_key_file_path", "", False, self.desc)
         if self.enable_hsm is True and self.hsm_public_key_file_path == "":
@@ -209,19 +210,11 @@ class NodeConfig:
         deploy_ip_list = []
         self.node_config_file_list = None
         if node_type != "max":
-            # HSM model don't need node.pem file
-            if self.enable_hsm is True:
-                self.node_config_file_list = ["config.ini", "config.genesis"]
-            else:
-                self.node_config_file_list = [
-                    "config.ini", "config.genesis", "node.pem"]
+            self.node_config_file_list = [
+                "config.ini", "config.genesis", "node.pem"]
             deploy_ip_list.append(node_deploy_ip)
         else:
-            # HSM model don't need node.pem file
-            if self.enable_hsm is True:
-                self.node_config_file_list = ["config.genesis"]
-            else:
-                self.node_config_file_list = ["config.genesis", "node.pem"]
+            self.node_config_file_list = ["config.genesis", "node.pem"]
             deploy_ip_list = node_deploy_ip
 
         self.node_service = NodeServiceConfig(self.agency_config.chain_id, self.node_service_base_name,

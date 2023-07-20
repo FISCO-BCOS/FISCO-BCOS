@@ -209,8 +209,8 @@ class NodeConfigGenerator:
         ini_config[section]["enable_hsm"] = utilities.convert_bool_to_str(
             node_config.enable_hsm)
         ini_config[section]["hsm_lib_path"] = node_config.hsm_lib_path
-        ini_config[section]["key_index"] = node_config.key_index
-        ini_config[section]["password"] = node_config.password
+        ini_config[section]["key_index"] = str(node_config.hsm_key_index)
+        ini_config[section]["password"] = node_config.hsm_password
         ini_config[section]["hsm_public_key_file_path"] = node_config.hsm_public_key_file_path
 
     def __generate_pem_file(self, outputdir, node_config):
@@ -304,6 +304,8 @@ class NodeConfigGenerator:
                 (ret, node_id) = self.get_nodeid_from_pem_file(node_config.hsm_public_key_file_path)
                 if ret is False:
                     return (False, nodeid_list)
+                path = self.__get_and_generate_node_base_path(node_config)
+                shutil.copy(node_config.hsm_public_key_file_path, os.path.join(path, self.node_pem_file))
             else:
                 (ret, node_id, node_pem_path, node_id_path) = self.generate_node_pem(
                     node_config)
@@ -437,8 +439,7 @@ class NodeConfigGenerator:
                 shutil.copy(config_path, os.path.join(node_dir, 'conf'))
                 shutil.copy(genesis_config_path, os.path.join(node_dir, 'conf'))
                 shutil.copy(nodeid_path, os.path.join(node_dir, 'conf'))
-                if node_config.enable_hsm is False:
-                    shutil.copy(node_pem_path, os.path.join(node_dir, 'conf'))
+                shutil.copy(node_pem_path, os.path.join(node_dir, 'conf'))
 
     def copy_tars_proxy_conf(self):
         self.__copy_service_tars_proxy_conf()

@@ -73,3 +73,8 @@ enable_storage_security = false
         # the tikv storage pd-addresses
         # monitor log path example:"/home/fisco/tars/framework/app_log/"
         monitor_log_path = ""
+        enable_hsm=false
+        # hsm_lib_path=
+        # hsm_key_index=
+        # hsm_password=
+        # hsm_public_key_file_path=
