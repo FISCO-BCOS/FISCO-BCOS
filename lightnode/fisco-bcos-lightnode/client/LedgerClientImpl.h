@@ -75,7 +75,6 @@ private:
         response.block = {};
         LIGHTNODE_LOG(ERROR) << "lightNode getBlock to allNode failed!"
                              <<  LOG_KV("response errorCode",response.error.errorCode);
-
         std::swap(response.block, block);
     }
 

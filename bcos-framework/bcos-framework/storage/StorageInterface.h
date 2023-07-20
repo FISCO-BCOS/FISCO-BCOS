@@ -95,6 +95,8 @@ public:
         return nullptr;
     };
 
+    virtual void stop(){};
+
     virtual std::pair<bcos::Error::UniquePtr, std::optional<Entry>> getRow(
         const std::string_view& table, const std::string_view& _key)
     {
