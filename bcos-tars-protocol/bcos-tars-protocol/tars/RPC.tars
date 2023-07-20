@@ -14,6 +14,7 @@ module bcostars {
     {
         Error handshake(vector<string> topics);
         Error sendTransaction(Transaction request, out TransactionReceipt response);
+        Error sendEncodedTransaction(vector<byte> request, out TransactionReceipt response);
         Error call(Transaction request, out TransactionReceipt response);
         Error blockNumber(out long number);
     };

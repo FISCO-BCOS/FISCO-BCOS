@@ -37,6 +37,19 @@ bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr> bcos::sdk::RPCClient:
     return {std::move(future)};
 }
 
+bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr>
+bcos::sdk::RPCClient::sendEncodedTransaction(
+    const std::vector<char>& encodedBuffer, CompletionQueue* completionQueue, std::any tag)
+{
+    std::promise<tars::ReqMessagePtr> promise;
+    auto future = promise.get_future();
+    auto callback =
+        std::make_unique<detail::TarsCallback>(completionQueue, std::move(tag), std::move(promise));
+    m_rpcProxy->async_sendEncodedTransaction(callback.release(), encodedBuffer);
+
+    return {std::move(future)};
+}
+
 bcos::sdk::Future<long> bcos::sdk::RPCClient::blockNumber(
     CompletionQueue* completionQueue, std::any tag)
 {

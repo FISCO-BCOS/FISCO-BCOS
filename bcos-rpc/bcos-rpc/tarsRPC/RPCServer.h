@@ -34,6 +34,8 @@ public:
         bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current) override;
     bcostars::Error sendTransaction(const bcostars::Transaction& request,
         bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current) override;
+    bcostars::Error sendEncodedTransaction(const std::vector<tars::Char>& request,
+        bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current) override;
     bcostars::Error blockNumber(long& number, tars::TarsCurrentPtr current) override;
 
     int doClose(tars::CurrentPtr current) override;

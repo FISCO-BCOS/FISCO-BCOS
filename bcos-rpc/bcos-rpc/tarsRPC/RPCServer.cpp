@@ -1,5 +1,7 @@
 #include "RPCServer.h"
 #include "../Common.h"
+#include "bcos-concepts/Serialize.h"
+#include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/Wait.h"
@@ -121,6 +123,14 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
     }(this, std::move(transaction), current));
 
     return {};
+}
+
+bcostars::Error bcos::rpc::RPCServer::sendEncodedTransaction(const std::vector<tars::Char>& request,
+    bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current)
+{
+    bcostars::Transaction rawTransaction;
+    bcos::concepts::serialize::decode(request, rawTransaction);
+    return sendTransaction(rawTransaction, response, current);
 }
 
 bcostars::Error bcos::rpc::RPCServer::blockNumber(long& number, tars::TarsCurrentPtr current)
