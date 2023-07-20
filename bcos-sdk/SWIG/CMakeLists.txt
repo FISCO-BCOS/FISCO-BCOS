@@ -30,8 +30,3 @@ ADD_CUSTOM_COMMAND(TARGET bcos_swig_java POST_BUILD
     COMMAND "${Java_JAVAC_EXECUTABLE}" -d "${CMAKE_CURRENT_BINARY_DIR}/bcos_sdk_java_classes/" ${CMAKE_CURRENT_BINARY_DIR}/bcos_sdk_java/*.java
     COMMAND "${Java_JAR_EXECUTABLE}" -cfM bcos_sdk_java_jni.jar -C "${CMAKE_CURRENT_BINARY_DIR}/bcos_sdk_java_classes" .
 )
-
-# file(GLOB JAVA_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/bcos_sdk_java/*.java)
-# message(STATUS "JAVA_SOURCES: ${JAVA_SOURCES}")
-# add_jar(bcos_swig_java_jar SOURCES ${JAVA_SOURCES} RESOURCES NAMESPACE "org.fisco.bcos.sdk.tars" ${CMAKE_CURRENT_BINARY_DIR}/libbcos_swig_java.so DEPENDS bcos_swig_java)
-# add_dependencies(bcos_swig_java_jar bcos_swig_java)
