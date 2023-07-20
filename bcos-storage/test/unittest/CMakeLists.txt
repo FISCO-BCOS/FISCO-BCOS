@@ -39,7 +39,7 @@ config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "${EXCLUDE_SUITES}")
 # add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 
 # for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("storage-coverage" "'/usr*' 'boost/**'")
-endif ()
+#if (COVERAGE)
+#    include(Coverage)
+#    config_coverage("storage-coverage" "'/usr*' 'boost/**'")
+#endif ()
