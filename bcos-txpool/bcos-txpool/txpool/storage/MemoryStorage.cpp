@@ -74,7 +74,11 @@ void MemoryStorage::stop()
     if (m_cleanUpTimer)
     {
         m_cleanUpTimer->stop();
+        m_cleanUpTimer->destroy();
     }
+    m_inRateCollector.stop();
+    m_sealRateCollector.stop();
+    m_removeRateCollector.stop();
 }
 
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(

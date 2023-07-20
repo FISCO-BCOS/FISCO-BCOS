@@ -43,11 +43,9 @@ BOOST_AUTO_TEST_CASE(testFreeNodeTreeSync)
 {
     auto txpool = this->txpool();
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcTime()));
-    bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-        bcos::bytes data;
-        tx->encode(data);
-        co_await txpool->broadcastTransactionBuffer(bcos::ref(data));
-    }(txpool, tx));
+    bcos::bytes data;
+    tx->encode(data);
+    txpool->broadcastTransactionBuffer(bcos::ref(data));
 }
 
 BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
@@ -65,11 +63,9 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
                     << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
 
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTime()));
-    bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-        bcos::bytes data;
-        tx->encode(data);
-        co_await txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
-    }(txpool, tx));
+    bcos::bytes data;
+    tx->encode(data);
+    txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
     // broadcast to all nodes finally
     for (const auto& item : this->m_nodeIdList)
     {
@@ -94,11 +90,9 @@ BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
                     << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
 
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTime()));
-    bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-        bcos::bytes data;
-        tx->encode(data);
-        co_await txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
-    }(txpool, tx));
+    bcos::bytes data;
+    tx->encode(data);
+    txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
     // broadcast to all nodes finally
     for (const auto& item : this->m_nodeIdList)
     {
@@ -132,11 +126,9 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeWithLowerVersionTreeSync)
                     << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
 
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTimeUs()));
-    bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-        bcos::bytes data;
-        tx->encode(data);
-        co_await txpool.broadcastTransactionBuffer(bcos::ref(data));
-    }(txpool, tx));
+    bcos::bytes data;
+    tx->encode(data);
+    txpool.broadcastTransactionBuffer(bcos::ref(data));
     // broadcast to all nodes
     for (const auto& item : this->m_nodeIdList)
     {
