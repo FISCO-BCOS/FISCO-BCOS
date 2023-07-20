@@ -26,7 +26,10 @@
 #include "../../front/FrontServiceInterface.h"
 #include "../../sync/BlockSyncInterface.h"
 #include "../../txpool/TxPoolInterface.h"
+#include "bcos-framework/gateway/GatewayInterface.h"
+#include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-task/Wait.h"
+#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 using namespace bcos;
 using namespace bcos::front;
 using namespace bcos::crypto;
@@ -156,7 +159,7 @@ public:
                                  decltype(tx) tx) -> bcos::task::Task<void> {
                 auto submit = co_await txpool->submitTransactionWithHook(
                     tx, [_data, txpool]() { txpool->broadcastTransactionBufferByTree(_data); });
-                BOOST_CHECK(submit->status() == (uint32_t)TransactionStatus::None);
+                assert(submit->status() == (uint32_t)TransactionStatus::None);
             }(txpool, _data, tx));
         }
 
@@ -169,7 +172,7 @@ public:
             bcos::task::wait(
                 [](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
                     auto submit = co_await txpool->submitTransaction(tx);
-                    BOOST_CHECK(submit->status() == (uint32_t)TransactionStatus::None);
+                    assert(submit->status() == (uint32_t)TransactionStatus::None);
                 }(txpool, tx));
         }
     }
@@ -207,6 +210,80 @@ public:
     std::map<NodeIDPtr, BlockSyncInterface::Ptr, KeyCompare> m_nodeId2Sync;
     std::atomic<int64_t> m_uuid = 0;
     CryptoSuite::Ptr m_cryptoSuite;
+};
+
+class FakeGateWayWrapper : public bcos::gateway::GatewayInterface
+{
+public:
+    using Ptr = std::shared_ptr<FakeGateWayWrapper>;
+    FakeGateWayWrapper() : m_gateWay(std::make_shared<FakeGateWay>()) {}
+    ~FakeGateWayWrapper() override = default;
+
+    void start() override {}
+    void stop() override {}
+
+    void addTxPool(NodeIDPtr _nodeId, TxPoolInterface::Ptr _txpool)
+    {
+        m_gateWay->addTxPool(std::move(_nodeId), std::move(_txpool));
+    }
+
+    void addSync(NodeIDPtr _nodeId, BlockSyncInterface::Ptr _sync)
+    {
+        m_gateWay->addSync(std::move(_nodeId), std::move(_sync));
+    }
+
+    void addConsensusInterface(NodeIDPtr _nodeId, ConsensusInterface::Ptr _consensusInterface)
+    {
+        m_gateWay->addConsensusInterface(std::move(_nodeId), std::move(_consensusInterface));
+    }
+
+    void asyncSendMessageByNodeID(const std::string&, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+        bytesConstRef _payload, gateway::ErrorRespFunc _errorRespFunc) override
+    {
+        m_gateWay->asyncSendMessageByNodeID(_moduleID, _srcNodeID, _dstNodeID, _payload, 0,
+            [func = std::move(_errorRespFunc)](Error::Ptr _e, const bcos::crypto::NodeIDPtr&,
+                bytesConstRef, const std::string&, const ResponseFunc&) { func(std::move(_e)); });
+    }
+
+    void asyncSendResponse(const std::string& _id, int _moduleId, NodeIDPtr _nodeID,
+        bytesConstRef _responseData, ReceiveMsgFunc _receiveCallback)
+    {
+        m_gateWay->asyncSendResponse(
+            _id, _moduleId, std::move(_nodeID), _responseData, _receiveCallback);
+    }
+
+    void asyncGetGroupNodeInfo(
+        const std::string& _groupID, GetGroupNodeInfoFunc _getGroupNodeInfoFunc) override
+    {}
+    void asyncGetPeers(
+        std::function<void(Error::Ptr, gateway::GatewayInfo::Ptr, gateway::GatewayInfosPtr)>
+            _callback) override
+    {}
+    void asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, const NodeIDs& _dstNodeIDs,
+        bytesConstRef _payload) override
+    {}
+    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override
+    {}
+    void asyncNotifyGroupInfo(
+        bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)> function) override
+    {}
+    void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc) override
+    {}
+    void asyncSendBroadcastMessageByTopic(
+        const std::string& _topic, bcos::bytesConstRef _data) override
+    {}
+    void asyncSubscribeTopic(const std::string& _clientID, const std::string& _topicInfo,
+        std::function<void(Error::Ptr&&)> _callback) override
+    {}
+    void asyncRemoveTopic(const std::string& _clientID, const std::vector<std::string>& _topicList,
+        std::function<void(Error::Ptr&&)> _callback) override
+    {}
+
+    FakeGateWay::Ptr m_gateWay = nullptr;
 };
 
 class FakeFrontService : public FrontServiceInterface
