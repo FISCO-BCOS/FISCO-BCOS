@@ -42,8 +42,8 @@ void LedgerConfigFetcher::fetchBlockNumberAndHash()
     if (error)
     {
         TOOL_LOG(WARNING) << LOG_DESC("LedgerConfigFetcher: fetchBlockNumber failed")
-                          << LOG_KV("errorCode", error->errorCode())
-                          << LOG_KV("errorMessage", error->errorMessage());
+                          << LOG_KV("code", error->errorCode())
+                          << LOG_KV("message", error->errorMessage());
         BOOST_THROW_EXCEPTION(LedgerConfigFetcherException()
                               << errinfo_comment("LedgerConfigFetcher: fetchBlockNumber failed "));
     }
@@ -77,8 +77,8 @@ HashType LedgerConfigFetcher::fetchBlockHash(BlockNumber _blockNumber)
     if (error)
     {
         TOOL_LOG(WARNING) << LOG_DESC("LedgerConfigFetcher: fetchBlockHash failed")
-                          << LOG_KV("errorCode", error->errorCode())
-                          << LOG_KV("errorMessage", error->errorMessage())
+                          << LOG_KV("code", error->errorCode())
+                          << LOG_KV("message", error->errorMessage())
                           << LOG_KV("number", _blockNumber);
         BOOST_THROW_EXCEPTION(LedgerConfigFetcherException()
                               << errinfo_comment("LedgerConfigFetcher: fetchBlockHash failed "));
@@ -99,8 +99,8 @@ std::string LedgerConfigFetcher::fetchSystemConfig(std::string_view _key)
     if (error)
     {
         TOOL_LOG(WARNING) << LOG_DESC("fetchSystemConfig failed")
-                          << LOG_KV("errorCode", error->errorCode())
-                          << LOG_KV("errorMessage", error->errorMessage()) << LOG_KV("key", _key);
+                          << LOG_KV("code", error->errorCode())
+                          << LOG_KV("message", error->errorMessage()) << LOG_KV("key", _key);
         BOOST_THROW_EXCEPTION(
             LedgerConfigFetcherException()
             << errinfo_comment("LedgerConfigFetcher: fetchSystemConfig for " + std::string{_key} + " failed"));
@@ -173,8 +173,8 @@ void LedgerConfigFetcher::fetchNonceList(BlockNumber _startNumber, int64_t _offs
     if (error)
     {
         TOOL_LOG(WARNING) << LOG_DESC("LedgerConfigFetcher: fetchNonceList failed")
-                          << LOG_KV("errorCode", error->errorCode())
-                          << LOG_KV("errorMsg", error->errorMessage())
+                          << LOG_KV("code", error->errorCode())
+                          << LOG_KV("message", error->errorMessage())
                           << LOG_KV("startNumber", _startNumber) << LOG_KV("offset", _offset);
         BOOST_THROW_EXCEPTION(LedgerConfigFetcherException() << errinfo_comment(
                                   "LedgerConfigFetcher: fetchNonceList failed, start: " +

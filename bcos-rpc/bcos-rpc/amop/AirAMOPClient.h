@@ -56,7 +56,7 @@ protected:
         m_gateway->asyncSubscribeTopic(m_clientID, topicInfo, [](Error::Ptr&& _error) {
             if (_error)
             {
-                BCOS_LOG(WARNING) << LOG_DESC("asyncSubScribeTopic error")
+                BCOS_LOG(WARNING) << LOG_DESC("asyncSubScribeTopic failed")
                                   << LOG_KV("code", _error->errorCode())
                                   << LOG_KV("msg", _error->errorMessage());
             }

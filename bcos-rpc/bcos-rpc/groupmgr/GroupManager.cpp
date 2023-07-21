@@ -277,7 +277,7 @@ void GroupManager::initNodeInfo(
             if (_error)
             {
                 GROUP_LOG(WARNING)
-                    << LOG_DESC("initNodeInfo error") << LOG_KV("code", _error->errorCode())
+                    << LOG_DESC("initNodeInfo failed") << LOG_KV("code", _error->errorCode())
                     << LOG_KV("msg", _error->errorMessage()) << LOG_KV("groupID", _groupID)
                     << LOG_KV("nodeName", _nodeName);
                 return;
@@ -301,7 +301,7 @@ void GroupManager::initNodeInfo(
             {
                 GROUP_LOG(WARNING) << LOG_DESC("initNodeInfo exception")
                                    << LOG_KV("group", _groupID) << LOG_KV("nodeName", _nodeName)
-                                   << LOG_KV("error", boost::diagnostic_information(e));
+                                   << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
 }

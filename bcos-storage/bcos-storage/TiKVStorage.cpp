@@ -642,7 +642,7 @@ void TiKVStorage::triggerSwitch()
 {
     if (f_onNeedSwitchEvent)
     {
-        STORAGE_TIKV_LOG(WARNING) << LOG_DESC("Trigger switch");
+        STORAGE_TIKV_LOG(INFO) << LOG_DESC("Trigger switch");
         f_onNeedSwitchEvent();
     }
 }

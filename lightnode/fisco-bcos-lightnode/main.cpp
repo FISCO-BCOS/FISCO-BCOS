@@ -49,7 +49,7 @@ static auto newStorage(const std::string& path)
     rocksdb::Status status = rocksdb::DB::Open(options, path, &rocksdb);
     if (!status.ok())
     {
-        BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", status.ToString());
+        BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("message", status.ToString());
         BOOST_THROW_EXCEPTION(std::runtime_error("open rocksDB failed, err:" + status.ToString()));
     }
     return std::make_shared<bcos::storage::RocksDBStorage>(
