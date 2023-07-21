@@ -147,4 +147,3 @@ contractAddress = receipt.contractAddress()
 
 print("Deploy contract success, address:",
       bcos.stringViewToString(contractAddress))
-print(dir(keyPair))
