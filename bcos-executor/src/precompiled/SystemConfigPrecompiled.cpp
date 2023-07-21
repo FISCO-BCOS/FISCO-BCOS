@@ -172,7 +172,9 @@ int64_t SystemConfigPrecompiled::validate(
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
     auto featureKeys = ledger::Features::featureKeys();
-    bool setFeature = (RANGES::find(featureKeys, key) != featureKeys.end());
+    bool setFeature =
+        (blockVersion >= static_cast<uint32_t>(protocol::BlockVersion::V3_2_3_VERSION)) &&
+        (RANGES::find(featureKeys, key) != featureKeys.end());
     if (!c_supportedKey.contains(key) && !setFeature)
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
