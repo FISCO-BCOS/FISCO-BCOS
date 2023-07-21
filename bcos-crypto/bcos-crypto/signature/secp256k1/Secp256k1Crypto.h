@@ -30,7 +30,7 @@ const int SECP256K1_PUBLICKEY_LEN = 64;
 const int SECP256K1_SIGNATURE_V = 64;
 std::shared_ptr<bytes> secp256k1Sign(const KeyPairInterface& _keyPair, const HashType& _hash);
 bool secp256k1Verify(const PublicPtr& _pubKey, const HashType& _hash, bytesConstRef _signatureData);
-KeyPairInterface::UniquePtr secp256k1GenerateKeyPair();
+std::unique_ptr<KeyPairInterface> secp256k1GenerateKeyPair();
 
 PublicPtr secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData);
 std::pair<bool, bytes> secp256k1Recover(Hash::Ptr _hashImpl, bytesConstRef _in);
@@ -59,7 +59,7 @@ public:
     {
         return secp256k1Recover(_hash, _signatureData);
     }
-    KeyPairInterface::UniquePtr generateKeyPair() const override
+    std::unique_ptr<KeyPairInterface> generateKeyPair() const override
     {
         return secp256k1GenerateKeyPair();
     }
@@ -71,6 +71,6 @@ public:
     std::pair<bool, bytes> recoverAddress(crypto::Hash& _hashImpl, const HashType& _hash,
         bytesConstRef _signatureData) const override;
 
-    KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
+    std::unique_ptr<KeyPairInterface> createKeyPair(SecretPtr _secretKey) const override;
 };
 }  // namespace bcos::crypto

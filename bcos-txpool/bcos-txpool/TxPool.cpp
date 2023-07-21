@@ -83,9 +83,26 @@ void TxPool::stop()
     {
         m_worker->stop();
     }
+    if (m_sealer)
+    {
+        m_sealer->stop();
+    }
+    if (m_txsPreStore)
+    {
+        m_txsPreStore->stop();
+    }
+    if (m_verifier)
+    {
+        m_verifier->stop();
+    }
     if (m_txpoolStorage)
     {
         m_txpoolStorage->stop();
+    }
+
+    if (m_transactionSync)
+    {
+        m_transactionSync->stop();
     }
 
     m_running = false;
@@ -105,32 +122,28 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWith
         std::move(transaction), std::move(afterInsertHook));
 }
 
-task::Task<void> TxPool::broadcastTransaction(const protocol::Transaction& transaction)
+void TxPool::broadcastTransaction(const protocol::Transaction& transaction)
 {
     bcos::bytes buffer;
     transaction.encode(buffer);
 
-    co_await broadcastTransactionBuffer(bcos::ref(buffer));
-
-    co_return;
+    broadcastTransactionBuffer(bcos::ref(buffer));
 }
 
-task::Task<void> TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
+void TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
 {
     if (m_treeRouter != nullptr) [[unlikely]]
     {
-        co_await broadcastTransactionBufferByTree(_data);
+        broadcastTransactionBufferByTree(_data);
     }
     else [[likely]]
     {
         m_frontService->asyncSendBroadcastMessage(
             protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
     }
-    co_return;
 }
 
-task::Task<void> TxPool::broadcastTransactionBufferByTree(
-    const bcos::bytesConstRef& _data, bool isStartNode)
+void TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data, bool isStartNode)
 {
     if (m_treeRouter != nullptr)
     {
@@ -173,7 +186,6 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
                 }
             });
     }
-    co_return;
 }
 
 task::Task<std::vector<protocol::Transaction::ConstPtr>> TxPool::getTransactions(

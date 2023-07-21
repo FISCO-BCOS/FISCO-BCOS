@@ -25,13 +25,13 @@ template <class Response>
 class Future
 {
 private:
-    std::future<tars::ReqMessagePtr> m_future;
+    std::shared_future<tars::ReqMessagePtr> m_future;
 
 public:
     Future() = default;
-    Future(std::future<tars::ReqMessagePtr> future) : m_future(std::move(future)) {}
-    Future(Future const&) = delete;
-    Future& operator=(Future const&) = delete;
+    Future(std::shared_future<tars::ReqMessagePtr> future) : m_future(std::move(future)) {}
+    Future(Future const&) = default;
+    Future& operator=(Future const&) = default;
     Future(Future&&) noexcept = default;
     Future& operator=(Future&&) noexcept = default;
     ~Future() noexcept = default;

@@ -37,7 +37,7 @@ endif()
 # buildDoc(bcos-txpool-doc)
 
 # for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("txpool-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
-endif ()
+#if (COVERAGE)
+#    include(Coverage)
+#    config_coverage("txpool-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+#endif ()

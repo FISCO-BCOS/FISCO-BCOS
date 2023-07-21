@@ -34,21 +34,19 @@ public:
     RefDataContainer() = default;
     RefDataContainer(T* _data, size_t _count) : m_dataPointer(_data), m_dataCount(_count) {}
     using RequiredStringPointerType =
-        std::conditional<std::is_const<T>::value, std::string const*, std::string*>;
-    using RequiredVecType = std::conditional<std::is_const<T>::value,
+        std::conditional_t<std::is_const<T>::value, std::string const*, std::string*>;
+    using RequiredVecType = std::conditional_t<std::is_const<T>::value,
         std::vector<typename std::remove_const<T>::type> const*, std::vector<T>*>;
     using RequiredStringRefType =
-        std::conditional<std::is_const<T>::value, std::string const&, std::string&>;
+        std::conditional_t<std::is_const<T>::value, std::string const, std::string>;
 
-    RefDataContainer(typename RequiredStringPointerType::type _data)
+    RefDataContainer(RequiredStringPointerType _data)
       : m_dataPointer(reinterpret_cast<T*>(_data->data())), m_dataCount(_data->size() / sizeof(T))
     {}
-
-    RefDataContainer(typename RequiredVecType::type _data)
+    RefDataContainer(RequiredVecType _data)
       : m_dataPointer(reinterpret_cast<T*>(_data->data())), m_dataCount(_data->size())
     {}
-
-    RefDataContainer(typename RequiredStringRefType::type _data)
+    RefDataContainer(RequiredStringRefType& _data)
       : m_dataPointer(reinterpret_cast<T*>(_data.data())), m_dataCount(_data.size() / sizeof(T))
     {}
 

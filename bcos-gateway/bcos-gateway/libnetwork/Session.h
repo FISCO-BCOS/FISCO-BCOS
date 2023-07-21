@@ -136,7 +136,7 @@ public:
     constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE =
         static_cast<std::size_t>(512 * 1024);
 
-    Session(size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE);
+    Session(size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
 
     Session(const Session&) = delete;
     Session(Session&&) = delete;

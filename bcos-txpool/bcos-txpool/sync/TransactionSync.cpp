@@ -526,3 +526,16 @@ void TransactionSync::onEmptyTxs()
         bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
         ModuleID::TxsSync, ref(*packetData));
 }
+
+void TransactionSync::stop()
+{
+    SYNC_LOG(INFO) << LOG_DESC("stop TransactionSync");
+    if (m_worker)
+    {
+        m_worker->stop();
+    }
+    if (m_txsRequester)
+    {
+        m_txsRequester->stop();
+    }
+}

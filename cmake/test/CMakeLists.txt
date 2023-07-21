@@ -33,4 +33,4 @@ include(CompilerSettings)
 include(BuildDocs)
 
 include(Coverage)
-config_coverage("test_cov" "")
+#config_coverage("test_cov" "")
