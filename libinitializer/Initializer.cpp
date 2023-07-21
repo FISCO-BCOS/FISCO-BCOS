@@ -465,7 +465,7 @@ void Initializer::initSysContract()
                 if (_error)
                 {
                     BOOST_THROW_EXCEPTION(
-                        BCOS_ERROR(-1, "SysInitializer: scheduler executeBlock error"));
+                        BCOS_ERROR(-1, "SysInitializer: scheduler executeBlock failed"));
                 }
                 INITIALIZER_LOG(INFO)
                     << LOG_BADGE("SysInitializer") << LOG_DESC("scheduler execute block success!")
@@ -493,7 +493,7 @@ void Initializer::initSysContract()
                 << LOG_BADGE("SysInitializer") << LOG_DESC("Error in commitBlock")
                 << (error ? "errorMsg" + error->errorMessage() : "")
                 << LOG_KV("configNumber", newConfig->blockNumber());
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "SysInitializer commitBlock error"));
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "SysInitializer commitBlock failed"));
         }
     }
 }

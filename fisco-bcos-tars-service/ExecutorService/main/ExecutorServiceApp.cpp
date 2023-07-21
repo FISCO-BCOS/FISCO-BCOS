@@ -202,7 +202,7 @@ void ExecutorServiceApp::registerExecutor()
         if (_error)
         {
             EXECUTOR_SERVICE_LOG(ERROR)
-                << LOG_DESC("registerExecutor error") << LOG_KV("name", m_executorName)
+                << LOG_DESC("registerExecutor failed") << LOG_KV("name", m_executorName)
                 << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
             return;
         }

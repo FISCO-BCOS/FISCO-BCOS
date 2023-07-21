@@ -51,7 +51,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> Config::loadConfig(const std::stri
     {
         BCOS_LOG(WARNING) << LOG_BADGE("loadConfig") << LOG_DESC("loadConfig failed")
                           << LOG_KV("configPath", _configPath)
-                          << LOG_KV("error", boost::diagnostic_information(e));
+                          << LOG_KV("failed", boost::diagnostic_information(e));
 
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment(boost::diagnostic_information(e)));

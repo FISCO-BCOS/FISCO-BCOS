@@ -97,7 +97,8 @@ public:
         rocksdb::Status status = rocksdb::DB::Open(options, _path, &db);
         if (!status.ok())
         {
-            BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", status.ToString());
+            BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed")
+                           << LOG_KV("message", status.ToString());
             throw std::runtime_error("open rocksDB failed, err:" + status.ToString());
         }
         return std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>(
