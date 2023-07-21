@@ -77,6 +77,8 @@ public:
             BOOST_THROW_EXCEPTION(std::invalid_argument("transaction hash mismatching"));
         }
 
+        transaction->mutableInner().sender.clear();  // Bugfix: User will fake a illegal sender,
+                                                     // must clear sender given by rpc
         if (checkSig)
         {
             transaction->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
