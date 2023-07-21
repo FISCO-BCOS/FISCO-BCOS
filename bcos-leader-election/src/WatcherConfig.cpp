@@ -94,7 +94,7 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
         ELECTION_LOG(WARNING) << LOG_DESC("updateLeaderInfo exception")
                               << LOG_KV("watchDir", m_watchDir) << LOG_KV("key", _value.key())
                               << LOG_KV("value", _value.as_string())
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("failed", boost::diagnostic_information(e));
     }
 }
 
@@ -102,7 +102,7 @@ void WatcherConfig::onWatcherKeyChanged(etcd::Response _response)
 {
     if (!_response.is_ok())
     {
-        ELECTION_LOG(WARNING) << LOG_DESC("onWatcherKeyChanged error")
+        ELECTION_LOG(WARNING) << LOG_DESC("onWatcherKeyChanged failed")
                               << LOG_KV("code", _response.error_code())
                               << LOG_KV("msg", _response.error_message());
     }
@@ -125,7 +125,7 @@ void WatcherConfig::callNotificationHandlers(
         {
             ELECTION_LOG(ERROR) << LOG_DESC("callNotificationHandlers exception")
                                 << LOG_KV("key", _key) << LOG_KV("memberID", _member->memberID())
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("failed", boost::diagnostic_information(e));
         }
     }
 }
@@ -144,7 +144,7 @@ void WatcherConfig::onMemberDeleted(
         {
             ELECTION_LOG(ERROR) << LOG_DESC("onMemberDeleted exception") << LOG_KV("key", _key)
                                 << LOG_KV("memberID", _member->memberID())
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("failed", boost::diagnostic_information(e));
         }
     }
 }

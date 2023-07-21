@@ -222,7 +222,7 @@ int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
         GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("requestRedis")
                            << LOG_KV("rateLimitKey", m_rateLimiterKey)
                            << LOG_KV("enableLocalCache", m_enableLocalCache)
-                           << LOG_KV("error", e.what());
+                           << LOG_KV("failed", e.what());
 
         // exception throw, allow this acquire
         return _requiredPermits;
