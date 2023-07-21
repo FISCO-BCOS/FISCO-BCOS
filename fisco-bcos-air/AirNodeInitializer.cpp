@@ -84,7 +84,6 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
-        m_nodeInitializer->protocolInitializer()->cryptoSuite(),
         m_nodeInitializer->protocolInitializer()->dataEncryption());
     rpcFactory.setNodeConfig(nodeConfig);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);

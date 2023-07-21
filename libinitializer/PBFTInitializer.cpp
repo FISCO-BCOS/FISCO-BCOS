@@ -139,6 +139,7 @@ void PBFTInitializer::initChainNodeInfo(
     m_groupInfo = std::make_shared<GroupInfo>(_nodeConfig->chainId(), _nodeConfig->groupId());
     m_groupInfo->setGenesisConfig(generateGenesisConfig(_nodeConfig));
     m_groupInfo->setWasm(_nodeConfig->isWasm());
+    m_groupInfo->setSmCryptoType(_nodeConfig->smCryptoType());
     int32_t nodeType = bcos::group::NodeCryptoType::NON_SM_NODE;
     if (_nodeConfig->smCryptoType())
     {
