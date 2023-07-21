@@ -89,7 +89,7 @@ bool EventSubParams::fromJsonString(const std::string& _jsonString)
         EVENT_PARAMS(WARNING) << LOG_BADGE("fromJsonString")
                               << LOG_DESC("invalid event sub params json object")
                               << LOG_KV("jsonString", _jsonString)
-                              << LOG_KV("error", boost::diagnostic_information(_e));
+                              << LOG_KV("failed", boost::diagnostic_information(_e));
         return false;
     }
 }

@@ -102,7 +102,7 @@ void SealingManager::clearPendingTxs()
         {
             SEAL_LOG(WARNING) << LOG_DESC(
                                      "clearPendingTxs: return back the unhandled txs exception")
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
     UpgradeGuard ul(l);
@@ -293,7 +293,7 @@ void SealingManager::fetchTransactions()
             catch (std::exception const& e)
             {
                 SEAL_LOG(WARNING) << LOG_DESC("fetchTransactions: onRecv sealed txs failed")
-                                  << LOG_KV("error", boost::diagnostic_information(e))
+                                  << LOG_KV("failed", boost::diagnostic_information(e))
                                   << LOG_KV(
                                          "fetchedTxsSize", _txsHashList->transactionsMetaDataSize())
                                   << LOG_KV(

@@ -232,10 +232,10 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
             if (_error && _error->errorCode() != 0)
             {
                 RPC_WS_LOG(WARNING)
-                    << LOG_BADGE("startHandshake") << LOG_DESC("callback response error")
+                    << LOG_BADGE("startHandshake") << LOG_DESC("callback response failed")
                     << LOG_KV("endpoint", session ? session->endPoint() : std::string(""))
-                    << LOG_KV("errorCode", _error ? _error->errorCode() : -1)
-                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : std::string(""));
+                    << LOG_KV("code", _error ? _error->errorCode() : -1)
+                    << LOG_KV("message", _error ? _error->errorMessage() : std::string(""));
                 session->drop(bcos::boostssl::ws::WsError::UserDisconnect);
                 return;
             }
