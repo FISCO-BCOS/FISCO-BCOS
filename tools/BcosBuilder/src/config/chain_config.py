@@ -133,6 +133,7 @@ class NodeServiceConfig:
         self.base_service_name = base_service_name
         # Note: in max-node mode, only contains [config.genesis, node.pem]
         #       in pro-node mode, contains [config.ini, config.genesis, node.pem]
+        #       in HSM mode, node.pem contains only public key information
         self.config_file_list = config_file_list
         # Note: in max-node mode, the ini config files prefixed with deploy ip
         self.ini_config_file = "config.ini"
@@ -176,6 +177,23 @@ class NodeConfig:
         self.node_service_base_name = node_service_base_name
         self.node_service_obj_list = node_service_obj_list
         self.sm_crypto = sm_crypto
+        # parse hsm
+        self.enable_hsm = utilities.get_item_value(
+            self.config, "enable_hsm", False, False, self.desc)
+        if self.enable_hsm is True and self.sm_crypto is False:
+            utilities.log_error("must set sm_crypto as true while using HSM")
+            sys.exit(-1)
+        self.hsm_lib_path = utilities.get_item_value(
+            self.config, "hsm_lib_path", "", False, self.desc)
+        self.hsm_key_index = utilities.get_item_value(
+            self.config, "hsm_key_index", 0, False, self.desc)
+        self.hsm_password = utilities.get_item_value(
+            self.config, "hsm_password", "", False, self.desc)
+        self.hsm_public_key_file_path = utilities.get_item_value(
+            self.config, "hsm_public_key_file_path", "", False, self.desc)
+        if self.enable_hsm is True and self.hsm_public_key_file_path == "":
+            utilities.log_error("must provide hsm_public_key_file_path while using HSM")
+            sys.exit(-1)
         self.service_list = []
         self.__parse_node_service_config(node_type)
 

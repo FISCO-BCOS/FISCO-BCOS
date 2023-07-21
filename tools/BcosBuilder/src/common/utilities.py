@@ -271,6 +271,16 @@ def execute_ansible_with_monitor_command(start_scripts_path, deploy_ip):
     return True
 
 
+def get_hsm_nodeid(hsm_pem_file_path):
+    obtain_hsm_nodeid_cmd = "bash %s -c %s -p %s" % (
+        ServiceInfo.cert_generationscript_path, "get_hsm_nodeid", hsm_pem_file_path)
+    (ret, output) = execute_command_and_getoutput(obtain_hsm_nodeid_cmd)
+    if ret is False:
+        log_error("%s failed exec" % obtain_hsm_nodeid_cmd)
+        sys.exit(-1)
+    return (ret, output)
+
+
 def generate_private_key(sm_type, outputdir):
     return generate_cert_with_command(sm_type, "generate_private_key", outputdir, "")
 

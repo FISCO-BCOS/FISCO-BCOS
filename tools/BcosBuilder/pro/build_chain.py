@@ -10,7 +10,7 @@ from common import parser_handler
 def main():
     try:
         args = parser_handler.parse_command()
-        parser_handler.build_package_operation(args, "proc")
+        parser_handler.build_package_operation(args, "pro")
         parser_handler.chain_operations(args, "pro")
         parser_handler.create_subnet_operation(args)
         parser_handler.add_vxlan_operation(args)
