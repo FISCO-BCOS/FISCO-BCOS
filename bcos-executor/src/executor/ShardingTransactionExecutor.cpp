@@ -22,6 +22,7 @@
 #include "ShardingTransactionExecutor.h"
 #include "../executive/ExecutiveDagFlow.h"
 #include "../executive/ExecutiveFactory.h"
+#include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/executor/ExecuteError.h>
 
 using namespace std;
@@ -401,7 +402,7 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
     std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
     bool isStaticCall)
 {
-    if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
+    if (blockContext->features().get(ledger::Features::Flag::feature_sharding))
     {
         EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
 
@@ -425,9 +426,7 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
         }
         return executiveFlow;
     }
-    else
-    {
-        return TransactionExecutor::getExecutiveFlow(
-            blockContext, codeAddress, useCoroutine, isStaticCall);
-    }
+
+    return TransactionExecutor::getExecutiveFlow(
+        blockContext, codeAddress, useCoroutine, isStaticCall);
 }

@@ -44,7 +44,7 @@ public:
         auto& tarsCallback = dynamic_cast<detail::TarsCallback&>(*message->callback.get());
         return std::move(tarsCallback).getResponse<Response>();
     }
-    void wait() { m_future.wait(); }
+    void waitFor() { m_future.wait(); }
     template <typename Rep, typename Period>
     std::future_status waitFor(const std::chrono::duration<Rep, Period>& rel)
     {

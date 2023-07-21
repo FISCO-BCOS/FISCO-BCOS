@@ -22,29 +22,20 @@ inline const bcos::crypto::KeyPairInterface& pointerToReference(const bcos::cryp
 %}
 
 %include <stdint.i>
+%include <std_shared_ptr.i>
+%shared_ptr(bcos::crypto::CryptoSuite)
 
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/CryptoSuite.h"
+%include "../bcos-crypto/bcos-crypto/interfaces/crypto/Hash.h"
+%include "../bcos-crypto/bcos-crypto/interfaces/crypto/Signature.h"
+%include "../bcos-crypto/bcos-crypto/interfaces/crypto/SymmetricEncryption.h"
 %include "../bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 %include "../bcos-crypto/bcos-crypto/signature/fastsm2/FastSM2Crypto.h"
 %include "../bcos-crypto/bcos-crypto/encrypt/AESCrypto.h"
 %include "../bcos-crypto/bcos-crypto/encrypt/SM4Crypto.h"
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/CommonType.h"
 
-class Keccak256 : public bcos::crypto::Hash
-{
-public:
-    Keccak256();
-    ~Keccak256() noexcept override;
-    HashType hash(bytesConstRef _data) const override;
-};
-class SM3 : public bcos::crypto::Hash
-{
-public:
-    SM3();
-    ~SM3() override;
-    HashType hash(bytesConstRef _data) const override;
-};
 inline std::shared_ptr<bcos::crypto::CryptoSuite> newCryptoSuite(bool sm);
 inline const bcos::crypto::KeyPairInterface& pointerToReference(const bcos::crypto::KeyPairInterface::UniquePtr& ptr);
 

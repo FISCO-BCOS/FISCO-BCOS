@@ -32,15 +32,13 @@ namespace bcostars::protocol
 class TransactionFactoryImpl : public bcos::protocol::TransactionFactory
 {
 public:
-    using TransactionType = TransactionImpl;
-
-    TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
-      : m_cryptoSuite(std::move(cryptoSuite))
-    {}
     TransactionFactoryImpl(const TransactionFactoryImpl&) = default;
     TransactionFactoryImpl(TransactionFactoryImpl&&) = default;
     TransactionFactoryImpl& operator=(const TransactionFactoryImpl&) = default;
     TransactionFactoryImpl& operator=(TransactionFactoryImpl&&) = default;
+    TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
+      : m_cryptoSuite(std::move(cryptoSuite))
+    {}
     ~TransactionFactoryImpl() override = default;
 
     bcos::protocol::Transaction::Ptr createTransaction(

@@ -43,19 +43,19 @@ public:
 class AnyHasher
 {
 private:
-    std::unique_ptr<AnyHasherInterface> m_anyHasher;
+    std::shared_ptr<AnyHasherInterface> m_anyHasher;
 
 public:
     AnyHasher() = default;
     template <class Hasher>
     AnyHasher(Hasher hasher)
-      : m_anyHasher(std::make_unique<AnyHasherImpl<Hasher>>(std::move(hasher)))
+      : m_anyHasher(std::make_shared<AnyHasherImpl<Hasher>>(std::move(hasher)))
     {}
     AnyHasher(std::unique_ptr<AnyHasherInterface> anyHasher) : m_anyHasher(std::move(anyHasher)) {}
-    AnyHasher(AnyHasher&&) noexcept = default;
+    AnyHasher(AnyHasher&&) = default;
     AnyHasher& operator=(AnyHasher&&) noexcept = default;
-    AnyHasher(const AnyHasher&) = delete;
-    AnyHasher& operator=(const AnyHasher&) = delete;
+    AnyHasher(const AnyHasher&) = default;
+    AnyHasher& operator=(const AnyHasher&) noexcept = default;
     ~AnyHasher() noexcept = default;
 
     void update(auto const& input)
