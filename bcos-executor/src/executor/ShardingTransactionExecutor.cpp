@@ -402,7 +402,7 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
     std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
     bool isStaticCall)
 {
-    if (m_blockContext->features().get(ledger::Features::Flag::feature_sharding))
+    if (blockContext->features().get(ledger::Features::Flag::feature_sharding))
     {
         EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
 
@@ -426,9 +426,7 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
         }
         return executiveFlow;
     }
-    else
-    {
-        return TransactionExecutor::getExecutiveFlow(
-            blockContext, codeAddress, useCoroutine, isStaticCall);
-    }
+
+    return TransactionExecutor::getExecutiveFlow(
+        blockContext, codeAddress, useCoroutine, isStaticCall);
 }
