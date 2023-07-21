@@ -82,7 +82,7 @@ void KeyCenterHttpClient::close()
 
     if (ec && ec != beast::errc::not_connected)
     {
-        KC_LOG(DEBUG) << LOG_DESC("Close key manager failed.") << LOG_KV("error_code", ec) << endl;
+        KC_LOG(DEBUG) << LOG_DESC("Close key manager failed.") << LOG_KV("code", ec) << endl;
         BOOST_THROW_EXCEPTION(KeyCenterCloseError());
     }
 }
@@ -137,7 +137,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
 
         if (rsp.result_int() != 200)
         {
-            KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("http error")
+            KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("http failed")
                           << LOG_KV("reason", rsp.result_int());
             throw;
         }
@@ -146,7 +146,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         bool parsingSuccessful = reader.parse(rsp.body().c_str(), res);
         if (!parsingSuccessful)
         {
-            KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("respond json error")
+            KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("respond json failed")
                           << LOG_KV("code", rsp.result_int()) << LOG_KV("string", rsp.body());
             throw;
         }
@@ -155,7 +155,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
     }
     catch (exception& e)
     {
-        KC_LOG(DEBUG) << LOG_DESC("CallMethod error") << LOG_KV("reason", e.what());
+        KC_LOG(DEBUG) << LOG_DESC("CallMethod failed") << LOG_KV("reason", e.what());
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError());
     }
 
