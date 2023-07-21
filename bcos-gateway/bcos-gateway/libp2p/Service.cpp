@@ -123,7 +123,7 @@ void Service::heartBeat()
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
         {
-            SERVICE_LOG(WARNING) << "timer canceled" << LOG_KV("errorCode", error);
+            SERVICE_LOG(WARNING) << "timer canceled" << LOG_KV("code", error);
             return;
         }
         auto service = self.lock();
@@ -165,9 +165,9 @@ void Service::onConnect(
     }
     if (e.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
+        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
                              << LOG_KV("p2pid", p2pID) << LOG_KV("nodeName", p2pInfo.nodeName)
-                             << LOG_KV("endpoint", peer) << LOG_KV("errorMessage", e.what());
+                             << LOG_KV("endpoint", peer) << LOG_KV("message", e.what());
 
         return;
     }
@@ -241,7 +241,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
             return;
-        SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
+        SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
                              << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)
@@ -331,8 +331,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         {
             SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
                                  << LOG_KV("p2pid", p2pID) << LOG_KV("endpoint", nodeIPEndpoint)
-                                 << LOG_KV("errorCode", e.errorCode())
-                                 << LOG_KV("errorMessage", e.what());
+                                 << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
 
             if (p2pSession)
             {
@@ -377,7 +376,8 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "onMessage error" << LOG_KV("what", boost::diagnostic_information(e));
+        SERVICE_LOG(ERROR) << "onMessage failed"
+                           << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
@@ -418,8 +418,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
         NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
-            SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
-                               << LOG_KV("nodeid", nodeID) << LOG_KV("errorCode", error.errorCode())
+            SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID failed")
+                               << LOG_KV("nodeid", nodeID) << LOG_KV("code", error.errorCode())
                                << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
@@ -428,7 +428,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error") << LOG_KV("nodeid", nodeID)
+        SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID failed")
+                           << LOG_KV("nodeid", nodeID)
                            << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
@@ -584,7 +585,7 @@ void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytes
             auto packetType = _p2pMessage ? _p2pMessage->packetType() : 0;
             if (_e.errorCode() != 0)
             {
-                SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByP2PNodeID error")
+                SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByP2PNodeID failed")
                                      << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what())
                                      << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
                 if (_callback)
@@ -640,8 +641,8 @@ void Service::onReceiveProtocol(
 {
     if (_e.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol error")
-                             << LOG_KV("errorCode", _e.errorCode()) << LOG_KV("errorMsg", _e.what())
+        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol failed")
+                             << LOG_KV("code", _e.errorCode()) << LOG_KV("message", _e.what())
                              << LOG_KV("peer", _session ? _session->p2pID() : "unknown");
         return;
     }
