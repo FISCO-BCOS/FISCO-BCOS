@@ -235,9 +235,8 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
 
                     GATEWAY_LOG(ERROR)
                         << LOG_BADGE("Retry") << LOG_DESC("network callback") << LOG_KV("seq", seq)
-                        << LOG_KV("dstP2P", p2pID) << LOG_KV("errorCode", e.errorCode())
-                        << LOG_KV("errorMessage", e.what())
-                        << LOG_KV("timeCost", (utcTime() - startT));
+                        << LOG_KV("dstP2P", p2pID) << LOG_KV("code", e.errorCode())
+                        << LOG_KV("message", e.what()) << LOG_KV("timeCost", (utcTime() - startT));
                     // try again
                     self->trySendMessage();
                     return;
@@ -254,7 +253,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
                     {
                         GATEWAY_LOG(WARNING)
                             << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
-                            << LOG_KV("errorCode", respCode) << LOG_KV("errorMessage", e.what());
+                            << LOG_KV("code", respCode) << LOG_KV("message", e.what());
                         // try again
                         self->trySendMessage();
                         return;
@@ -280,7 +279,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
                         << LOG_KV("src", message->options() ?
                                              toHex(*(message->options()->srcNodeID())) :
                                              "unknown")
-                        << LOG_KV("size", message->length()) << LOG_KV("error", e.what());
+                        << LOG_KV("size", message->length()) << LOG_KV("failed", e.what());
 
                     self->trySendMessage();
                 }
@@ -476,7 +475,7 @@ void Gateway::onReceiveP2PMessage(
 {
     if (_e.errorCode())
     {
-        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveP2PMessage error")
+        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveP2PMessage failed")
                              << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
@@ -524,7 +523,7 @@ void Gateway::onReceiveBroadcastMessage(
 {
     if (_e.errorCode() != 0)
     {
-        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage error")
+        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage failed")
                              << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }

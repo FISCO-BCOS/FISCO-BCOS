@@ -62,7 +62,7 @@ void CampaignConfig::fetchLeaderInfoFromEtcd()
     {
         ELECTION_LOG(WARNING) << LOG_DESC("fetchLeaderInfoFromEtcd exception")
                               << LOG_KV("leaderKey", m_leaderKey)
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("failed", boost::diagnostic_information(e));
     }
 }
 
@@ -78,7 +78,7 @@ bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
     {
         if (_response.error_code() != etcdv3::ERROR_KEY_NOT_FOUND)
         {
-            ELECTION_LOG(WARNING) << LOG_DESC("checkAndUpdateLeaderKey error")
+            ELECTION_LOG(WARNING) << LOG_DESC("checkAndUpdateLeaderKey failed")
                                   << LOG_KV("code", _response.error_code())
                                   << LOG_KV("msg", _response.error_message())
                                   << LOG_KV("key", m_leaderKey);
