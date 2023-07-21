@@ -380,7 +380,7 @@ void PBFTConfig::asyncNotifySealProposal(
             catch (std::exception const& e)
             {
                 PBFT_LOG(WARNING) << LOG_DESC("asyncNotifySealProposal exception")
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
 }

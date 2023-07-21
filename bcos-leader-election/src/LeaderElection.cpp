@@ -65,7 +65,7 @@ std::pair<bool, int64_t> LeaderElection::grantLease()
     auto response = m_etcdClient->leasegrant(m_config->leaseTTL()).get();
     if (!response.is_ok())
     {
-        ELECTION_LOG(ERROR) << LOG_DESC("grantLease error")
+        ELECTION_LOG(ERROR) << LOG_DESC("grantLease failed")
                             << LOG_KV("msg", response.error_message())
                             << LOG_KV("code", response.error_code());
         return std::make_pair(false, 0);
@@ -114,7 +114,7 @@ bool LeaderElection::campaignLeader()
                 // failed for compare-failed error, stop campaign
                 m_campaignTimer->stop();
             }
-            ELECTION_LOG(INFO) << LOG_DESC("campaignLeader error")
+            ELECTION_LOG(INFO) << LOG_DESC("campaignLeader failed")
                                << LOG_KV("msg", response.error_message())
                                << LOG_KV("code", response.error_code())
                                << LOG_KV("purpose", m_config->purpose())
@@ -158,7 +158,7 @@ bool LeaderElection::campaignLeader()
     catch (std::exception const& e)
     {
         ELECTION_LOG(WARNING) << LOG_DESC("campaignLeader exception")
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("failed", boost::diagnostic_information(e));
         // release the leaderKey when exception
         if (m_keepAlive)
         {
@@ -183,7 +183,7 @@ void LeaderElection::onKeepAliveException(std::exception_ptr _exception)
     catch (const std::exception& e)
     {
         ELECTION_LOG(WARNING) << LOG_DESC("onKeepAliveException, restart campaign")
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("failed", boost::diagnostic_information(e));
     }
     if (m_campaignTimer)
     {
@@ -239,7 +239,7 @@ void LeaderElection::updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self
     auto response = m_etcdClient->txn(*tx).get();
     if (!response.is_ok())
     {
-        ELECTION_LOG(WARNING) << LOG_DESC("sync the modified memberConfig to storage error")
+        ELECTION_LOG(WARNING) << LOG_DESC("sync the modified memberConfig to storage failed")
                               << LOG_KV("code", response.error_code())
                               << LOG_KV("msg", response.error_message()) << LOG_KV("lease", leaseID)
                               << LOG_KV("leaderKey", m_config->leaderKey());
