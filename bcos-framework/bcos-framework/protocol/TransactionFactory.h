@@ -29,13 +29,12 @@ namespace bcos::protocol
 class TransactionFactory
 {
 public:
-    using Ptr = std::shared_ptr<TransactionFactory>;
-
     TransactionFactory() = default;
     TransactionFactory(const TransactionFactory&) = default;
     TransactionFactory(TransactionFactory&&) = default;
     TransactionFactory& operator=(const TransactionFactory&) = default;
     TransactionFactory& operator=(TransactionFactory&&) = default;
+    using Ptr = std::shared_ptr<TransactionFactory>;
     virtual ~TransactionFactory() = default;
 
     virtual Transaction::Ptr createTransaction(

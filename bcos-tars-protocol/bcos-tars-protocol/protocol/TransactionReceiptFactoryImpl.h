@@ -33,6 +33,10 @@ namespace bcostars::protocol
 class TransactionReceiptFactoryImpl : public bcos::protocol::TransactionReceiptFactory
 {
 public:
+    TransactionReceiptFactoryImpl(const TransactionReceiptFactoryImpl&) = default;
+    TransactionReceiptFactoryImpl(TransactionReceiptFactoryImpl&&) = delete;
+    TransactionReceiptFactoryImpl& operator=(const TransactionReceiptFactoryImpl&) = default;
+    TransactionReceiptFactoryImpl& operator=(TransactionReceiptFactoryImpl&&) = delete;
     TransactionReceiptFactoryImpl(const bcos::crypto::CryptoSuite::Ptr& cryptoSuite)
       : m_hashImpl(cryptoSuite->hashImpl())
     {}

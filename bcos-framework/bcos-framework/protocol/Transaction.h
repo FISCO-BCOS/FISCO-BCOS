@@ -99,7 +99,7 @@ public:
 
     virtual std::string_view sender() const = 0;
 
-    virtual bytesConstRef input() const = 0;
+    virtual bcos::bytesConstRef input() const = 0;
     virtual int64_t importTime() const = 0;
     virtual void setImportTime(int64_t _importTime) = 0;
     virtual TransactionType type() const
@@ -111,7 +111,7 @@ public:
         return TransactionType::ContractCreation;
     }
     virtual void forceSender(const bcos::bytes& _sender) const = 0;
-    virtual bytesConstRef signatureData() const = 0;
+    virtual bcos::bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;
     virtual void setAttribute(int32_t attribute) = 0;
