@@ -85,7 +85,7 @@ public:
             BCOS_LOG(WARNING) << LOG_DESC("Given signature but check failed")
                               << LOG_KV("givenSender", givenSenderResult.hex())
                               << LOG_KV("recoveredSender", recoveredResult.hex());
-            BOOST_THROW_EXCEPTION(std::invalid_argument("transaction hash mismatching"));
+            BOOST_THROW_EXCEPTION(std::invalid_argument("transaction signature check failed"));
         }
     }
 
@@ -108,6 +108,8 @@ public:
         else
         {
             // if not check signature, we no need to set sender
+            transaction->mutableInner().sender.clear();  // Bugfix: User will fake a illegal sender,
+                                                     // must clear sender given by rpc
         }
     }
 
