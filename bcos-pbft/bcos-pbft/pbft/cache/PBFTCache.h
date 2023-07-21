@@ -70,8 +70,7 @@ public:
 
     void addExceptionPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg)
     {
-        addPrePrepareCache(_prePrepareMsg);
-        m_exceptionPrePrepare = _prePrepareMsg;
+        m_exceptionPrePrepare = std::move(_prePrepareMsg);
     }
 
     bcos::protocol::BlockNumber index() const { return m_index; }
