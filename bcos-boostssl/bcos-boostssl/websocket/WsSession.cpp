@@ -135,7 +135,7 @@ void WsSession::onWsAccept(boost::beast::error_code _ec)
 {
     if (_ec)
     {
-        WEBSOCKET_SESSION(WARNING) << LOG_BADGE("onWsAccept") << LOG_KV("error", _ec.message());
+        WEBSOCKET_SESSION(WARNING) << LOG_BADGE("onWsAccept") << LOG_KV("failed", _ec.message());
         return drop(WsError::AcceptError);
     }
 
@@ -162,7 +162,7 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
         if (message->decode(bytesConstRef(data, size)) < 0)
         {  // invalid packet, stop this session ?
             WEBSOCKET_SESSION(WARNING)
-                << LOG_BADGE("onReadPacket") << LOG_DESC("decode packet error")
+                << LOG_BADGE("onReadPacket") << LOG_DESC("decode packet failed")
                 << LOG_KV("endpoint", endPoint()) << LOG_KV("session", this);
             return drop(WsError::PacketError);
         }
@@ -173,7 +173,7 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
     catch (std::exception const& e)
     {
         WEBSOCKET_SESSION(WARNING) << LOG_DESC("onReadPacket: decode message exception")
-                                   << LOG_KV("error", boost::diagnostic_information(e));
+                                   << LOG_KV("failed", boost::diagnostic_information(e));
     }
 }
 
@@ -226,7 +226,7 @@ void WsSession::asyncRead()
             if (_ec)
             {
                 BCOS_LOG(INFO) << "[WS][SESSION]" << LOG_BADGE("asyncRead")
-                               << LOG_KV("error", _ec.message())
+                               << LOG_KV("message", _ec.message())
                                << LOG_KV("endpoint", session->endPoint())
                                << LOG_KV("refCount", session.use_count());
 

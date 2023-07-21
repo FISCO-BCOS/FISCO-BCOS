@@ -91,7 +91,7 @@ public:
             if (ec)
             {
                 HTTP_SESSION(WARNING) << LOG_BADGE("onRead") << LOG_DESC("close the connection")
-                                      << LOG_KV("error", ec);
+                                      << LOG_KV("failed", ec);
                 // return doClose();
                 return;
             }
@@ -129,7 +129,7 @@ public:
         {
             HTTP_SESSION(WARNING) << LOG_DESC("onRead exception")
                                   << LOG_KV("bytesSize", bytes_transferred)
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("failed", boost::diagnostic_information(e));
         }
 
         if (!m_queue->isFull())
@@ -145,7 +145,7 @@ public:
         if (ec)
         {
             HTTP_SESSION(WARNING) << LOG_BADGE("onWrite") << LOG_DESC("close the connection")
-                                  << LOG_KV("error", ec);
+                                  << LOG_KV("failed", ec);
             // return doClose();
             return;
         }
