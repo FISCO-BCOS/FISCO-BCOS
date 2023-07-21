@@ -71,9 +71,6 @@ public:
     Future<bcos::protocol::TransactionReceipt::Ptr> sendTransaction(
         const bcos::protocol::Transaction& transaction, CompletionQueue* completionQueue = nullptr,
         std::any tag = {});
-    Future<bcos::protocol::TransactionReceipt::Ptr> sendEncodedTransaction(
-        const std::vector<char>& encodedBuffer, CompletionQueue* completionQueue = nullptr,
-        std::any tag = {});
     Future<long> blockNumber(CompletionQueue* completionQueue = nullptr, std::any tag = {});
 };
 }  // namespace bcos::sdk

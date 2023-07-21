@@ -125,14 +125,6 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
     return {};
 }
 
-bcostars::Error bcos::rpc::RPCServer::sendEncodedTransaction(const std::vector<tars::Char>& request,
-    bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current)
-{
-    bcostars::Transaction rawTransaction;
-    bcos::concepts::serialize::decode(request, rawTransaction);
-    return sendTransaction(rawTransaction, response, current);
-}
-
 bcostars::Error bcos::rpc::RPCServer::blockNumber(long& number, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
