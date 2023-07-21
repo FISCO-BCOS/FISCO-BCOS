@@ -1030,8 +1030,7 @@ void TransactionExecutive::revert()
     EXECUTOR_BLK_LOG(INFO, m_blockContext.number())
         << "Revert transaction" << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
 
-    if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_4_VERSION) >= 0 ||
-        (m_blockContext.features().get(ledger::Features::Flag::bugfix_revert)))
+    if (m_blockContext.features().get(ledger::Features::Flag::bugfix_revert))
     {
         // revert child beforehand from back to front
         for (auto& childExecutive : RANGES::views::reverse(m_childExecutives))
