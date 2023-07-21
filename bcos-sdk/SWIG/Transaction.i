@@ -17,6 +17,7 @@ inline std::vector<bcos::h256> h256SpanToVector(gsl::span<const bcos::h256> view
 }
 %}
 
+%include "CryptoSuite.i"
 %include <stdint.i>
 %include <std_shared_ptr.i>
 %include <std_string.i>
@@ -29,9 +30,13 @@ using bcos::crypto::HashType = bcos::h256;
 %shared_ptr(bcostars::protocol::TransactionImpl)
 %shared_ptr(bcos::protocol::TransactionReceipt)
 %shared_ptr(bcostars::protocol::TransactionReceiptImpl)
+%shared_ptr(bcos::protocol::TransactionFactory)
+%shared_ptr(bcostars::protocol::TransactionFactoryImpl)
 
 %template(LogEntryVector) std::vector<bcos::protocol::LogEntry>;
 %template(H256Vector) std::vector<bcos::h256>;
+
+%feature("notabstract") bcostars::protocol::TransactionFactoryImpl;
 
 %include "../bcos-framework/bcos-framework/protocol/LogEntry.h"
 %include "../bcos-framework/bcos-framework/protocol/Transaction.h"

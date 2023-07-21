@@ -22,6 +22,9 @@ inline const bcos::crypto::KeyPairInterface& pointerToReference(const bcos::cryp
 %}
 
 %include <stdint.i>
+%include <std_shared_ptr.i>
+%shared_ptr(bcos::crypto::CryptoSuite)
+
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/CryptoSuite.h"
 %include "../bcos-crypto/bcos-crypto/interfaces/crypto/Hash.h"
