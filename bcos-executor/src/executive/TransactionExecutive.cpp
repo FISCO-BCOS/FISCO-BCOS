@@ -322,9 +322,9 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     catch (protocol::PrecompiledError const& e)
     {
         EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "PrecompiledError"
+                            << "Precompiledfailed"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
-                            << LOG_KV("error", e.what());
+                            << LOG_KV("message", e.what());
         // Note: considering the scenario where the contract calls the contract, the error message
         // still needs to be written to the output
         writeErrInfoToOutput(e.what(), *callParameters);
@@ -337,7 +337,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     {
         EXECUTIVE_LOG(WARNING) << "Exception"
                                << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
-                               << LOG_KV("error", e.what());
+                               << LOG_KV("failed", e.what());
         writeErrInfoToOutput(e.what(), *callParameters);
         revert();
         callParameters->type = CallParameters::REVERT;
@@ -348,9 +348,9 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     {
         // Note: Since the information of std::exception may be affected by the version of the c++
         // library, in order to ensure compatibility, the information is not written to output
-        writeErrInfoToOutput("InternalPrecompiledError", *callParameters);
+        writeErrInfoToOutput("InternalPrecompiledfailed", *callParameters);
         EXECUTIVE_LOG(WARNING) << LOG_DESC("callPrecompiled")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("failed", boost::diagnostic_information(e));
         revert();
         callParameters->type = CallParameters::REVERT;
         callParameters->status = (int32_t)TransactionStatus::Unknown;
@@ -699,7 +699,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             if (callResults->status != (int32_t)TransactionStatus::None)
             {
                 EXECUTIVE_LOG(INFO)
-                    << "Revert transaction: " << LOG_DESC("deploy failed due to status error")
+                    << "Revert transaction: " << LOG_DESC("deploy failed due to status failed")
                     << LOG_KV("status", callResults->status)
                     << LOG_KV("sender", callResults->senderAddress)
                     << LOG_KV("address", callResults->codeAddress);
@@ -830,7 +830,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     writeErrInfoToOutput("Call address error.", *callResult);
                 }
                 EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                                    << LOG_DESC("call address error, maybe address not exist")
+                                    << LOG_DESC("call address failed, maybe address not exist")
                                     << LOG_KV("address", callResult->codeAddress)
                                     << LOG_KV("sender", callResult->senderAddress);
                 return callResult;
@@ -984,7 +984,7 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
         auto execResult = precompiled->call(shared_from_this(), _precompiledParams);
         return execResult;
     }
-    [[unlikely]] EXECUTIVE_LOG(ERROR)
+    [[unlikely]] EXECUTIVE_LOG(WARNING)
         << LOG_DESC("[call]Can't find precompiled address")
         << LOG_KV("address", _precompiledParams->m_precompiledAddress);
     BOOST_THROW_EXCEPTION(PrecompiledError("can't find precompiled address."));

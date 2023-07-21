@@ -82,6 +82,6 @@ void WsTools::close(boost::asio::ip::tcp::socket& _socket)
     catch (std::exception const& e)
     {
         WEBSOCKET_TOOL(WARNING) << LOG_DESC("WsTools close exception")
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("failed", boost::diagnostic_information(e));
     }
 }
