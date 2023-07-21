@@ -67,7 +67,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
             {
                 WEBSOCKET_CONNECTOR(WARNING)
                     << LOG_BADGE("connectToWsServer") << LOG_DESC("async_resolve failed")
-                    << LOG_KV("error", _ec) << LOG_KV("errorMessage", _ec.message())
+                    << LOG_KV("failed", _ec) << LOG_KV("message", _ec.message())
                     << LOG_KV("endpoint", endpoint);
                 _callback(_ec, "", nullptr, nullptr);
                 connector->erasePendingConns(endpoint);
@@ -91,7 +91,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
                     {
                         WEBSOCKET_CONNECTOR(WARNING)
                             << LOG_BADGE("connectToWsServer") << LOG_DESC("async_connect failed")
-                            << LOG_KV("error", _ec.message()) << LOG_KV("endpoint", endpoint);
+                            << LOG_KV("failed", _ec.message()) << LOG_KV("endpoint", endpoint);
                         _callback(_ec, "", nullptr, nullptr);
                         connector->erasePendingConns(endpoint);
                         return;
@@ -117,7 +117,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
                             WEBSOCKET_CONNECTOR(WARNING)
                                 << LOG_BADGE("connectToWsServer")
                                 << LOG_DESC("ssl async_handshake failed") << LOG_KV("host", _host)
-                                << LOG_KV("port", _port) << LOG_KV("error", _ec.message());
+                                << LOG_KV("port", _port) << LOG_KV("failed", _ec.message());
                             _callback(_ec, " ssl handshake failed", nullptr, nullptr);
                             connector->erasePendingConns(endpoint);
                             return;
@@ -142,7 +142,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
                                     WEBSOCKET_CONNECTOR(WARNING)
                                         << LOG_BADGE("connectToWsServer")
                                         << LOG_DESC("websocket async_handshake failed")
-                                        << LOG_KV("error", _ec.message()) << LOG_KV("host", _host)
+                                        << LOG_KV("failed", _ec.message()) << LOG_KV("host", _host)
                                         << LOG_KV("port", _port);
                                     _callback(_ec, "", nullptr, nullptr);
                                     connector->erasePendingConns(endpoint);

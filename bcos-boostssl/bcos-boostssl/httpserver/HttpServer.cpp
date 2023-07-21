@@ -47,7 +47,7 @@ void HttpServer::start()
     m_acceptor->open(endpoint.protocol(), ec);
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("open") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("open") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
         BOOST_THROW_EXCEPTION(std::runtime_error("acceptor open failed"));
     }
@@ -56,7 +56,7 @@ void HttpServer::start()
     m_acceptor->set_option(boost::asio::socket_base::reuse_address(true), ec);
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("set_option") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("set_option") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
 
         BOOST_THROW_EXCEPTION(std::runtime_error("acceptor set_option failed"));
@@ -65,7 +65,7 @@ void HttpServer::start()
     m_acceptor->bind(endpoint, ec);
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("bind") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("bind") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
         BOOST_THROW_EXCEPTION(std::runtime_error("acceptor bind failed"));
     }
@@ -73,7 +73,7 @@ void HttpServer::start()
     m_acceptor->listen(boost::asio::socket_base::max_listen_connections, ec);
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("listen") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("listen") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
         BOOST_THROW_EXCEPTION(std::runtime_error("acceptor listen failed"));
     }
@@ -107,22 +107,24 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
 {
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
         return doAccept();
     }
 
     boost::system::error_code sec;
     auto localEndpoint = socket.local_endpoint(sec);
-    if(sec) {
-        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("local_endpoint error", sec)
+    if (sec)
+    {
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("local_endpoint failed", sec)
                              << LOG_KV("message", sec.message());
         ws::WsTools::close(socket);
         return doAccept();
     }
     auto remoteEndpoint = socket.remote_endpoint(sec);
-    if(sec) {
-        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("remote_endpoint error", sec)
+    if (sec)
+    {
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("remote_endpoint failed", sec)
                              << LOG_KV("message", sec.message());
         ws::WsTools::close(socket);
         return doAccept();
@@ -158,7 +160,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
                                   << LOG_DESC("ssl handshake failed")
                                   << LOG_KV("local", localEndpoint)
                                   << LOG_KV("remote", remoteEndpoint)
-                                  << LOG_KV("error", _ec.message());
+                                  << LOG_KV("message", _ec.message());
                 ws::WsTools::close(ss->next_layer().socket());
                 return;
             }

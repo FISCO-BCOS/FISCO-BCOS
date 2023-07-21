@@ -42,11 +42,11 @@ void ContextConfig::initConfig(std::string const& _configPath)
 
         CONTEXT_LOG(WARNING) << LOG_DESC("initConfig failed") << LOG_KV("configPath", _configPath)
                              << LOG_KV("currentPath", currentPath.string())
-                             << LOG_KV("error", boost::diagnostic_information(e));
+                             << LOG_KV("failed", boost::diagnostic_information(e));
 
 
         BOOST_THROW_EXCEPTION(std::runtime_error("initConfig: currentPath:" + currentPath.string() +
-                                                 " ,error:" + boost::diagnostic_information(e)));
+                                                 " ,message:" + boost::diagnostic_information(e)));
     }
 
     CONTEXT_LOG(INFO) << LOG_DESC("initConfig") << LOG_KV("sslType", m_sslType)
