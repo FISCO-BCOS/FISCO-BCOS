@@ -154,7 +154,7 @@ void WsService::reportConnectedNodes()
         catch (std::exception const& e)
         {
             BOOST_SSL_LOG(WARNING) << LOG_DESC("connected nodes exception")
-                                   << LOG_KV("error", boost::diagnostic_information(e));
+                                   << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
 }
@@ -331,7 +331,7 @@ void WsService::reconnect()
         catch (std::exception const& e)
         {
             BOOST_SSL_LOG(WARNING) << LOG_DESC("reconnect exception")
-                                   << LOG_KV("error", boost::diagnostic_information(e));
+                                   << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
 }
@@ -648,9 +648,9 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
                     {
                         BOOST_SSL_LOG(WARNING)
                             << LOG_BADGE(moduleName) << LOG_BADGE("asyncSendMessage")
-                            << LOG_DESC("callback error") << LOG_KV("endpoint", endPoint)
-                            << LOG_KV("errorCode", _error->errorCode())
-                            << LOG_KV("errorMessage", _error->errorMessage());
+                            << LOG_DESC("callback failed") << LOG_KV("endpoint", endPoint)
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("message", _error->errorMessage());
 
                         if (self->respFunc)
                         {
