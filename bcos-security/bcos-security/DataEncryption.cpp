@@ -101,7 +101,7 @@ std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<byt
     }
     catch (exception& e)
     {
-        BCOS_LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile error")
+        BCOS_LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile failed")
                         << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
@@ -132,7 +132,7 @@ std::shared_ptr<bytes> DataEncryption::decryptFile(const std::string& filename)
     }
     catch (exception& e)
     {
-        BCOS_LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile error")
+        BCOS_LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile failed")
                         << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }

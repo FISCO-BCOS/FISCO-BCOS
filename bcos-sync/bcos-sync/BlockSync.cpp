@@ -125,7 +125,7 @@ void BlockSync::initSendResponseHandler()
         catch (std::exception const& e)
         {
             BLKSYNC_LOG(WARNING) << LOG_DESC("sendResponse exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+                                 << LOG_KV("failed", boost::diagnostic_information(e));
         }
     };
 }
@@ -352,7 +352,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
             catch (std::exception const& e)
             {
                 BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage sendResponse failed")
-                                     << LOG_KV("error", boost::diagnostic_information(e))
+                                     << LOG_KV("failed", boost::diagnostic_information(e))
                                      << LOG_KV("id", _uuid) << LOG_KV("dst", _nodeID->shortHex());
             }
         },
@@ -369,7 +369,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
     }
     if (_error != nullptr)
     {
-        BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage error")
+        BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage failed")
                              << LOG_KV("code", _error->errorCode())
                              << LOG_KV("msg", _error->errorMessage());
         return;
@@ -407,7 +407,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
     catch (std::exception const& e)
     {
         BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage exception")
-                             << LOG_KV("error", boost::diagnostic_information(e))
+                             << LOG_KV("failed", boost::diagnostic_information(e))
                              << LOG_KV("peer", _nodeID->shortHex());
     }
 }
@@ -726,8 +726,8 @@ void BlockSync::fetchAndSendBlock(
             {
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("fetchAndSendBlock failed for asyncGetBlockDataByNumber failed")
-                    << LOG_KV("number", _number) << LOG_KV("errorCode", _error->errorCode())
-                    << LOG_KV("errorMessage", _error->errorMessage());
+                    << LOG_KV("number", _number) << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
                 return;
             }
             try
@@ -758,7 +758,7 @@ void BlockSync::fetchAndSendBlock(
             {
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("fetchAndSendBlock exception") << LOG_KV("number", _number)
-                    << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
 }

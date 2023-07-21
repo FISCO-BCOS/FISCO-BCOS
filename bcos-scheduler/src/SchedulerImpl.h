@@ -73,7 +73,7 @@ public:
                     {
                         SCHEDULER_LOG(ERROR) << LOG_DESC("failed to get ledger config")
                                              << LOG_KV("error", error->errorCode())
-                                             << LOG_KV("errorMessage", error->errorMessage());
+                                             << LOG_KV("message", error->errorMessage());
                         promise.set_exception(std::make_exception_ptr(*error));
                         return;
                     }

@@ -61,7 +61,7 @@ bool ZstdCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedD
         ZSTD_CONTENTSIZE_ERROR == cBuffSize)
     {
         BCOS_LOG(ERROR) << LOG_BADGE("ZstdUncompress")
-                        << LOG_DESC("compress failed, compressedData size error")
+                        << LOG_DESC("compress failed, compressedData size failed")
                         << LOG_KV("compressedData size", cBuffSize);
         return false;
     }
