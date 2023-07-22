@@ -37,7 +37,7 @@ public:
 
     void start() { m_multiLayerStorage.newMutable(); }
     task::Task<bcos::h256> finish(
-        protocol::IsBlockHeader auto const& blockHeader, crypto::Hash const& hashImpl)
+        protocol::BlockHeader const& blockHeader, crypto::Hash const& hashImpl)
     {
         auto& mutableStorage = m_multiLayerStorage.mutableStorage();
         auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);

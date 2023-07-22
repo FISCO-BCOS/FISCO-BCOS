@@ -23,9 +23,11 @@
 
 #include "../Common.h"
 #include "bcos-task/Wait.h"
+#include "bcos-transaction-executor/vm/HostContext.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
+#include <boost/core/pointer_traits.hpp>
 #include <boost/optional.hpp>
 #include <functional>
 #include <set>
@@ -174,8 +176,6 @@ evmc_result call(evmc_host_context* context, const evmc_message* message) noexce
 
     auto& hostContext = static_cast<HostContextType&>(*context);
     auto result = task::syncWait(hostContext.externalCall(*message));
-
-    // evmone will take over the release
     evmc_result evmcResult = result;
     result.release = nullptr;
     return evmcResult;

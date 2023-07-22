@@ -21,8 +21,7 @@ public:
     using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::precompiledManager;
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
-        protocol::IsBlockHeader auto const& blockHeader,
-        RANGES::input_range auto const& transactions)
+        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
     {
         auto view = multiLayerStorage().fork(true);
         std::vector<protocol::TransactionReceipt::Ptr> receipts;

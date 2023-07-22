@@ -113,8 +113,7 @@ struct Fixture
                             co_return;
                         }
 
-                        co_await scheduler.template finish<decltype(blockHeader)::element_type>(
-                            *blockHeader, *(m_cryptoSuite->hashImpl()));
+                        co_await scheduler.finish(*blockHeader, *(m_cryptoSuite->hashImpl()));
                         co_await scheduler.commit();
 
                         m_contractAddress = receipts[0]->contractAddress();
@@ -250,8 +249,7 @@ struct Fixture
                                                                                       -> auto& {
                             return *transaction;
                         }));
-                    co_await scheduler.template finish<decltype(blockHeader)>(
-                        blockHeader, *(m_cryptoSuite->hashImpl()));
+                    co_await scheduler.finish(blockHeader, *(m_cryptoSuite->hashImpl()));
 
                     auto balances = receipts |
                                     RANGES::views::transform([&abiCodec](auto const& receipt) {
@@ -334,7 +332,7 @@ static void issue(benchmark::State& state)
                                     [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
                                             transaction) -> auto& { return *transaction; }));
 
-                        co_await scheduler.template finish<decltype(blockHeader)>(
+                        co_await scheduler.finish(
                             blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
                         co_await scheduler.commit();
                     }
@@ -390,8 +388,7 @@ static void transfer(benchmark::State& state)
                                                                               -> auto& {
                             return *transaction;
                         }));
-                    co_await scheduler.template finish<decltype(blockHeader)>(
-                        blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
+                    co_await scheduler.finish(blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
                     co_await scheduler.commit();
 
                     fixture.m_transactions.clear();
@@ -414,7 +411,7 @@ static void transfer(benchmark::State& state)
                                 RANGES::views::transform(
                                     [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
                                             transaction) -> auto& { return *transaction; }));
-                        co_await scheduler.template finish<decltype(blockHeader)>(
+                        co_await scheduler.finish(
                             blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
                         co_await scheduler.commit();
                     }
@@ -580,8 +577,7 @@ static void conflictTransfer(benchmark::State& state)
                                                                               -> auto& {
                             return *transaction;
                         }));
-                    co_await scheduler.template finish<decltype(blockHeader)>(
-                        blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
+                    co_await scheduler.finish(blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
                     co_await scheduler.commit();
 
                     fixture.m_transactions.clear();
@@ -604,7 +600,7 @@ static void conflictTransfer(benchmark::State& state)
                                 RANGES::views::transform(
                                     [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
                                             transaction) -> auto& { return *transaction; }));
-                        auto stateRoot = co_await scheduler.template finish<decltype(blockHeader)>(
+                        auto stateRoot = co_await scheduler.finish(
                             blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
                         if (stateRoot == bcos::h256{})
                         {

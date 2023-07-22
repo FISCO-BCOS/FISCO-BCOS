@@ -84,8 +84,8 @@ private:
         auto count() { return RANGES::size(m_transactionAndReceiptsRange); }
         ChunkLocalStorage& localStorage() & { return m_storages->m_localStorage; }
 
-        task::Task<bool> execute(protocol::IsBlockHeader auto const& blockHeader,
-            auto& receiptFactory, auto& tableNamePool, PrecompiledManager const& precompiledManager)
+        task::Task<bool> execute(protocol::BlockHeader const& blockHeader, auto& receiptFactory,
+            auto& tableNamePool, PrecompiledManager const& precompiledManager)
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().CHUNK_EXECUTE);
@@ -182,8 +182,7 @@ public:
     ~SchedulerParallelImpl() noexcept { m_asyncTaskGroup->wait(); }
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
-        protocol::IsBlockHeader auto const& blockHeader,
-        RANGES::input_range auto const& transactions)
+        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);

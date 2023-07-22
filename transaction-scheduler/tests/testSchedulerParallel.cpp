@@ -98,7 +98,7 @@ struct MockConflictExecutor
     {}
 
     task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(auto&& blockHeader,
-        protocol::IsTransaction auto const& transaction, [[maybe_unused]] int contextID)
+        protocol::Transaction const& transaction, [[maybe_unused]] int contextID)
     {
         auto input = transaction.input();
         auto inputNum =

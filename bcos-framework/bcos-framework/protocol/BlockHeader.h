@@ -143,7 +143,4 @@ public:
     virtual void setSignatureList(SignatureList&& _signatureList) = 0;
 };
 
-template <class T>
-concept IsBlockHeader = std::derived_from<T, BlockHeader> || std::same_as<T, BlockHeader>;
-
 }  // namespace bcos::protocol

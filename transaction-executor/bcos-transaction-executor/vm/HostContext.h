@@ -148,7 +148,13 @@ public:
         m_myContractTable(getMyContractTable(blockHeader, message)),
         m_codeTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CODE_BINARY)),
         m_abiTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CONTRACT_ABI))
-    {}
+    {
+        HOST_CONTEXT_LOG(INFO) << "Sender: "
+                               << toHex(bytesConstRef(
+                                      m_message.sender.bytes, sizeof(m_message.sender.bytes)))
+                               << " Origin: "
+                               << toHex(bytesConstRef(m_origin.bytes, sizeof(m_origin.bytes)));
+    }
     ~HostContext() noexcept = default;
 
     HostContext(HostContext const&) = delete;
@@ -393,6 +399,10 @@ public:
 
     task::Task<EVMCResult> externalCall(const evmc_message& message)
     {
+        HOST_CONTEXT_LOG(INFO) << "External call, sender:"
+                               << toHex(bytesConstRef(
+                                      message.sender.bytes, sizeof(message.sender.bytes)));
+
         constexpr static unsigned long MAX_PRECOMPILED_ADDRESS = 100000;
         auto address = fromBigEndian<u160>(
             bcos::bytesConstRef(message.code_address.bytes, sizeof(message.code_address.bytes)));
@@ -403,23 +413,29 @@ public:
 
             if (precompiled)
             {
-                HOST_CONTEXT_LOG(INFO) << "Calling precompiled: " << addressUL << " " << address;
-                auto result = precompiled->call(message);
-                HOST_CONTEXT_LOG(INFO)
-                    << "Calling result status: " << result.status_code << " "
-                    << toHex(std::string_view((const char*)result.output_data, result.output_size));
-                co_return result;
+                co_return precompiled->call(message);
             }
         }
 
         ++m_seq;
+
+        // Contract create inside contract create, the message's sender will be empty, sure?
+        const auto* messagePtr = std::addressof(message);
+        std::optional<evmc_message> messageWithSender;
+        if (message.kind == EVMC_CREATE && RANGES::equal(message.sender.bytes, EMPTY_ADDRESS.bytes))
+        {
+            messageWithSender.emplace(message);
+            messageWithSender->sender = m_newContractAddress;
+            messagePtr = std::addressof(*messageWithSender);
+        }
+
         HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_tableNamePool, m_blockHeader,
-            message, m_origin, m_contextID, m_seq, m_precompiledManager);
+            *messagePtr, m_origin, m_contextID, m_seq, m_precompiledManager);
 
         auto result = co_await hostcontext.execute();
-        if (result.status_code == EVMC_SUCCESS && !hostcontext.m_logs.empty())
+        auto& logs = hostcontext.logs();
+        if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
-            auto& logs = hostcontext.logs();
             m_logs.reserve(m_logs.size() + RANGES::size(logs));
             RANGES::move(logs, std::back_inserter(m_logs));
         }
@@ -427,7 +443,6 @@ public:
         co_return result;
     }
 
-    const std::vector<protocol::LogEntry>& logs() const& { return m_logs; }
     std::vector<protocol::LogEntry>& logs() & { return m_logs; }
 };
 

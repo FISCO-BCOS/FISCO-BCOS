@@ -45,14 +45,15 @@ public:
         m_precompiledManager(precompiledManager)
     {}
 
-    task::Task<protocol::TransactionReceipt::Ptr> execute(
-        protocol::IsBlockHeader auto const& blockHeader,
-        protocol::IsTransaction auto const& transaction, int contextID)
+    task::Task<protocol::TransactionReceipt::Ptr> execute(protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID)
     {
         constexpr static evmc_address EMPTY_ADDRESS = {};
 
         try
         {
+            TRANSACTION_EXECUTOR_LOG(INFO) << "Execute transaction: " << transaction.hash().hex();
+
             Rollbackable<std::remove_reference_t<decltype(m_storage)>> rollbackableStorage(
                 m_storage);
 
@@ -64,7 +65,10 @@ public:
                 .recipient = toAddress,
                 .destination_ptr = nullptr,
                 .destination_len = 0,
-                .sender = {},
+                .sender = (!transaction.sender().empty() &&
+                              transaction.sender().size() == sizeof(evmc_address)) ?
+                              *(evmc_address*)transaction.sender().data() :
+                              evmc_address{},
                 .sender_ptr = nullptr,
                 .sender_len = 0,
                 .input_data = transaction.input().data(),
@@ -72,8 +76,6 @@ public:
                 .value = {},
                 .create2_salt = {},
                 .code_address = toAddress};
-            std::uninitialized_copy(
-                transaction.sender().begin(), transaction.sender().end(), evmcMessage.sender.bytes);
 
             int64_t seq = 0;
             HostContext hostContext(vmFactory, rollbackableStorage, m_tableNamePool, blockHeader,
