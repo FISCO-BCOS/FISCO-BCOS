@@ -43,7 +43,7 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::Precompiled::
                 BOOST_THROW_EXCEPTION(UnsupportedPrecompiledException());
                 return EVMCResult{evmc_result{}};
             }},
-        *this);
+        m_precompiled);
 
     return result;
 }

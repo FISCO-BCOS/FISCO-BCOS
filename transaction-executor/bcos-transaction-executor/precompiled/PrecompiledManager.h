@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 #include "../Common.h"
 #include "bcos-executor/src/vm/Precompiled.h"
 #include "bcos-utilities/FixedBytes.h"
@@ -8,11 +10,13 @@ namespace bcos::transaction_executor
 {
 
 class Precompiled
-  : public std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>
 {
+private:
+    std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>
+        m_precompiled;
+
 public:
-    using std::variant<executor::PrecompiledContract,
-        std::shared_ptr<precompiled::Precompiled>>::variant;
+    Precompiled(decltype(m_precompiled) precompiled) : m_precompiled(std::move(precompiled)) {}
 
     EVMCResult call(evmc_message const& message) const;
 };
