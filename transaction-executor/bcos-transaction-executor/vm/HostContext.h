@@ -148,13 +148,7 @@ public:
         m_myContractTable(getMyContractTable(blockHeader, message)),
         m_codeTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CODE_BINARY)),
         m_abiTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CONTRACT_ABI))
-    {
-        HOST_CONTEXT_LOG(INFO) << "Sender: "
-                               << toHex(bytesConstRef(
-                                      m_message.sender.bytes, sizeof(m_message.sender.bytes)))
-                               << " Origin: "
-                               << toHex(bytesConstRef(m_origin.bytes, sizeof(m_origin.bytes)));
-    }
+    {}
     ~HostContext() noexcept = default;
 
     HostContext(HostContext const&) = delete;
@@ -390,7 +384,7 @@ public:
             interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
         if (result.status_code != 0)
         {
-            HOST_CONTEXT_LOG(INFO) << "Execute transaction failed, status: " << result.status_code;
+            HOST_CONTEXT_LOG(DEBUG) << "Execute transaction failed, status: " << result.status_code;
             co_await m_rollbackableStorage.rollback(savepoint);
         }
 
@@ -399,9 +393,12 @@ public:
 
     task::Task<EVMCResult> externalCall(const evmc_message& message)
     {
-        HOST_CONTEXT_LOG(INFO) << "External call, sender:"
-                               << toHex(bytesConstRef(
-                                      message.sender.bytes, sizeof(message.sender.bytes)));
+        if (c_fileLogLevel <= LogLevel::TRACE)
+        {
+            HOST_CONTEXT_LOG(TRACE)
+                << "External call, sender:"
+                << toHex(bytesConstRef(message.sender.bytes, sizeof(message.sender.bytes)));
+        }
 
         constexpr static unsigned long MAX_PRECOMPILED_ADDRESS = 100000;
         auto address = fromBigEndian<u160>(

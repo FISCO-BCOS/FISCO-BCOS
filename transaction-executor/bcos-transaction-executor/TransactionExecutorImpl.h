@@ -48,11 +48,13 @@ public:
     task::Task<protocol::TransactionReceipt::Ptr> execute(protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID)
     {
-        constexpr static evmc_address EMPTY_ADDRESS = {};
-
         try
         {
-            TRANSACTION_EXECUTOR_LOG(INFO) << "Execute transaction: " << transaction.hash().hex();
+            if (c_fileLogLevel <= LogLevel::TRACE)
+            {
+                TRANSACTION_EXECUTOR_LOG(TRACE)
+                    << "Execte transaction: " << transaction.hash().hex();
+            }
 
             Rollbackable<std::remove_reference_t<decltype(m_storage)>> rollbackableStorage(
                 m_storage);
