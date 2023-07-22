@@ -6,7 +6,11 @@ find_package(intx REQUIRED)
 find_package(ethash REQUIRED)
 find_package(fmt REQUIRED)
 
-add_library(transaction-executor bcos-transaction-executor/TransactionExecutorImpl.cpp bcos-transaction-executor/precompiled/PrecompiledManager.cpp)
+add_library(transaction-executor
+    bcos-transaction-executor/TransactionExecutorImpl.cpp
+    bcos-transaction-executor/precompiled/PrecompiledManager.cpp
+    bcos-transaction-executor/vm/VMInstance.cpp
+)
 target_include_directories(transaction-executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-transaction-executor>)

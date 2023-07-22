@@ -11,7 +11,8 @@ constexpr static void releaseOutput(const struct evmc_result* result)
     delete[] result->output_data;
 }
 
-evmc_result bcos::transaction_executor::Precompiled::call(evmc_message const& message) const
+bcos::transaction_executor::EVMCResult bcos::transaction_executor::Precompiled::call(
+    evmc_message const& message) const
 {
     auto result = std::visit(
         bcos::overloaded{
@@ -21,7 +22,7 @@ evmc_result bcos::transaction_executor::Precompiled::call(evmc_message const& me
 
                 auto buffer = std::unique_ptr<uint8_t>(new uint8_t[output.size()]);
                 std::copy(output.begin(), output.end(), buffer.get());
-                evmc_result result{
+                EVMCResult result{evmc_result{
                     .status_code =
                         (evmc_status_code)(int32_t)(success ? protocol::TransactionStatus::None :
                                                               protocol::TransactionStatus::
@@ -33,14 +34,14 @@ evmc_result bcos::transaction_executor::Precompiled::call(evmc_message const& me
                     .release = std::addressof(releaseOutput),
                     .create_address = {},
                     .padding = {},
-                };
+                }};
                 PRECOMPILED_LOG(INFO) << "Gas left: " << result.gas_left;
 
                 return result;
             },
             [](std::shared_ptr<precompiled::Precompiled> const&) {
                 BOOST_THROW_EXCEPTION(UnsupportedPrecompiledException());
-                return evmc_result{};
+                return EVMCResult{evmc_result{}};
             }},
         *this);
 

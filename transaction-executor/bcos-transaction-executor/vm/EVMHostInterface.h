@@ -173,7 +173,12 @@ evmc_result call(evmc_host_context* context, const evmc_message* message) noexce
     }
 
     auto& hostContext = static_cast<HostContextType&>(*context);
-    return task::syncWait(hostContext.externalCall(*message));
+    auto result = task::syncWait(hostContext.externalCall(*message));
+
+    // evmone will take over the release
+    evmc_result evmcResult = result;
+    result.release = nullptr;
+    return evmcResult;
 }
 
 template <class HostContextType>

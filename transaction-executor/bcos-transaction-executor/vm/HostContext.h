@@ -135,7 +135,7 @@ public:
             .isSMCrypto =
                 (GlobalHashImpl::g_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash),
             .version = 0,
-            .metrics = nullptr},
+            .metrics = &ethMetrics},
         m_vmFactory(vmFactory),
         m_rollbackableStorage(storage),
         m_tableNamePool(tableNamePool),
@@ -327,7 +327,7 @@ public:
         }
     }
 
-    task::Task<evmc_result> execute()
+    task::Task<EVMCResult> execute()
     {
         // TODO:
         // 1: Check auth
@@ -342,7 +342,7 @@ public:
         }
     }
 
-    task::Task<evmc_result> create()
+    task::Task<EVMCResult> create()
     {
         std::string_view createCode((const char*)m_message.input_data, m_message.input_size);
         auto createCodeHash = GlobalHashImpl::g_hashImpl->hash(createCode);
@@ -365,7 +365,7 @@ public:
         co_return result;
     }
 
-    task::Task<evmc_result> call()
+    task::Task<EVMCResult> call()
     {
         auto codeEntry = co_await code(m_message.code_address);
         if (!codeEntry || codeEntry->size() == 0)
@@ -391,7 +391,7 @@ public:
         co_return result;
     }
 
-    task::Task<evmc_result> externalCall(const evmc_message& message)
+    task::Task<EVMCResult> externalCall(const evmc_message& message)
     {
         constexpr static unsigned long MAX_PRECOMPILED_ADDRESS = 100000;
         auto address = fromBigEndian<u160>(

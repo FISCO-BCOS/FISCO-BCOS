@@ -69,6 +69,10 @@ public:
     VMInstance create(
         VMKind kind, const bcos::h256& codeHash, std::string_view code, evmc_revision mode)
     {
+        // TODO: temp set to evmc_vm
+        return create(kind);
+
+#if 0
         switch (kind)
         {
         case VMKind::evmone:
@@ -96,6 +100,7 @@ public:
         default:
             BOOST_THROW_EXCEPTION(UnknownVMError{});
         }
+#endif
     }
 };
 }  // namespace bcos::transaction_executor

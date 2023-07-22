@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Common.h"
 #include "bcos-executor/src/vm/Precompiled.h"
 #include "bcos-utilities/FixedBytes.h"
 
@@ -13,7 +14,7 @@ public:
     using std::variant<executor::PrecompiledContract,
         std::shared_ptr<precompiled::Precompiled>>::variant;
 
-    evmc_result call(evmc_message const& message) const;
+    EVMCResult call(evmc_message const& message) const;
 };
 
 class PrecompiledManager

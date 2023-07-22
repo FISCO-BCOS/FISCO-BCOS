@@ -19,8 +19,8 @@
 
 namespace bcos::transaction_executor
 {
-
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
+evmc_address unhexAddress(std::string_view view);
 
 // clang-format off
 struct InvalidArgumentsError: public bcos::Error {};
@@ -30,29 +30,6 @@ template <StateStorage Storage, class PrecompiledManager>
 class TransactionExecutorImpl
 {
 private:
-    static evmc_address unhexAddress(std::string_view view)
-    {
-        if (view.empty())
-        {
-            return {};
-        }
-        if (view.starts_with("0x"))
-        {
-            view = view.substr(2);
-        }
-
-        evmc_address address;
-        if (view.empty())
-        {
-            std::uninitialized_fill(address.bytes, address.bytes + sizeof(address.bytes), 0);
-        }
-        else
-        {
-            boost::algorithm::unhex(view, address.bytes);
-        }
-        return address;
-    }
-
     VMFactory vmFactory;
     Storage& m_storage;
     protocol::TransactionReceiptFactory& m_receiptFactory;
@@ -102,7 +79,6 @@ public:
             HostContext hostContext(vmFactory, rollbackableStorage, m_tableNamePool, blockHeader,
                 evmcMessage, evmcMessage.sender, contextID, seq, m_precompiledManager);
             auto evmcResult = co_await hostContext.execute();
-            auto finallyAction = gsl::finally([&]() { releaseResult(evmcResult); });
 
             bcos::bytesConstRef output;
             std::string newContractAddress;

@@ -123,6 +123,39 @@ struct GlobalHashImpl
     static bcos::crypto::Hash::Ptr g_hashImpl;
 };
 
+class EVMCResult : public evmc_result
+{
+public:
+    explicit EVMCResult(evmc_result const& result) : evmc_result(result) {}
+    EVMCResult(const EVMCResult&) = delete;
+    EVMCResult(EVMCResult&& from) noexcept : evmc_result(from)
+    {
+        from.release = nullptr;
+        from.output_data = nullptr;
+        from.output_size = 0;
+    }
+    EVMCResult& operator=(const EVMCResult&) = delete;
+    EVMCResult& operator=(EVMCResult&& from) noexcept
+    {
+        static_cast<evmc_result&>(*this) = from;
+        from.release = nullptr;
+        from.output_data = nullptr;
+        from.output_size = 0;
+        return *this;
+    }
+
+    ~EVMCResult() noexcept
+    {
+        if (release != nullptr)
+        {
+            release(static_cast<evmc_result*>(this));
+            release = nullptr;
+            output_data = nullptr;
+            output_size = 0;
+        }
+    }
+};
+
 struct SubState
 {
     std::set<std::string> suicides;  ///< Any accounts that have suicided.
@@ -171,6 +204,7 @@ static const VMSchedule FiscoBcosScheduleV320 = [] {
 }();
 
 static const VMSchedule DefaultSchedule = FiscoBcosScheduleV320;
+static constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
 
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
