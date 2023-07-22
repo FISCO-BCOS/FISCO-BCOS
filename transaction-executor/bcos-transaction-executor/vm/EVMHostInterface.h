@@ -145,7 +145,7 @@ evmc_tx_context getTxContext(evmc_host_context* context) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
     evmc_tx_context result = {
-        .tx_gas_price = 0,
+        .tx_gas_price = {},
         .tx_origin = hostContext.origin(),
         .block_coinbase = {},
         .block_number = hostContext.blockNumber(),
