@@ -35,7 +35,7 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
 {
-    if (m_blockContext->features().get(ledger::Features::Flag::feature_sharding))
+    if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         do
         {
@@ -188,7 +188,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
         return;
     }
 
-    if (m_blockContext->features().get(ledger::Features::Flag::feature_sharding))
+    if (blockHeader->version() >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         auto blockContext = createTmpBlockContext(blockHeader);
         auto executiveFactory = std::make_shared<ExecutiveFactory>(

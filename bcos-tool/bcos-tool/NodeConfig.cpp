@@ -709,7 +709,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
     m_enableBaselineScheduler = _pt.get<bool>("executor.baseline_scheduler", false);
     m_baselineSchedulerConfig.chunkSize =
-        _pt.get<int>("executor.baseline_scheduler_chunksize", 1000);
+        _pt.get<int>("executor.baseline_scheduler_chunksize", 100);
     m_baselineSchedulerConfig.maxThread = _pt.get<int>("executor.baseline_scheduler_maxthread", 16);
     m_baselineSchedulerConfig.parallel =
         _pt.get<bool>("executor.baseline_scheduler_parallel", false);

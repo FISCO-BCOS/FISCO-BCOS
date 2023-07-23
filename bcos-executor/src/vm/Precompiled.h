@@ -101,12 +101,11 @@ private:
 class PrecompiledContract
 {
 public:
-    using Ptr = std::shared_ptr<PrecompiledContract>;
+    typedef std::shared_ptr<PrecompiledContract> Ptr;
     PrecompiledContract() = default;
-    PrecompiledContract(PrecompiledPricer _cost, PrecompiledExecutor _exec, u256 _startingBlock = 0)
-      : m_cost(std::move(_cost)),
-        m_execute(std::move(_exec)),
-        m_startingBlock(std::move(_startingBlock))
+    PrecompiledContract(PrecompiledPricer const& _cost, PrecompiledExecutor const& _exec,
+        u256 const& _startingBlock = 0)
+      : m_cost(_cost), m_execute(_exec), m_startingBlock(_startingBlock)
     {}
 
     PrecompiledContract(unsigned _base, unsigned _word, PrecompiledExecutor const& _exec,
