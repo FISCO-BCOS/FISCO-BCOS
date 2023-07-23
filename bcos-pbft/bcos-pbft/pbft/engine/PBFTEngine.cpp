@@ -655,12 +655,12 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
         handleCheckPointMsg(checkPointMsg);
         break;
     }
-    [[unlikely]] case PacketType::RecoverRequest:
-    {
-        auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
-        handleRecoverRequest(request);
-        break;
-    }
+        [[unlikely]] case PacketType::RecoverRequest:
+        {
+            auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+            handleRecoverRequest(request);
+            break;
+        }
     case PacketType::RecoverResponse:
     {
         auto recoverResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
@@ -802,7 +802,7 @@ bool PBFTEngine::checkRotateTransactionValid(
                     << LOG_KV("txSize", block->transactionsSize());
 
     auto rotatingTx = block->transactionMetaData(0);
-    if (rotatingTx->to() != bcos::precompiled::CONSENSUS_ADDRESS ||
+    if (rotatingTx->to() != bcos::precompiled::CONSENSUS_ADDRESS &&
         rotatingTx->to() != bcos::precompiled::CONSENSUS_TABLE_NAME) [[unlikely]]
     {
         PBFT_LOG(WARNING) << LOG_DESC("checkRotateTransactionValid failed")
@@ -813,7 +813,8 @@ bool PBFTEngine::checkRotateTransactionValid(
         return false;
     }
 
-    if (rotatingTx->source() == _leaderInfo->nodeID()->hex())
+    auto leaderAddress = right160(m_config->cryptoSuite()->hash(_leaderInfo->nodeID()));
+    if (rotatingTx->source() == leaderAddress.hex())
     {
         return true;
     }
@@ -822,6 +823,7 @@ bool PBFTEngine::checkRotateTransactionValid(
                       << LOG_KV("reqIndex", _proposal->index())
                       << LOG_KV("reqHash", _proposal->hash().abridged())
                       << LOG_KV("fromIdx", _proposal->generatedFrom())
+                      << LOG_KV("leader", _leaderInfo->nodeID()->hex())
                       << LOG_KV("sender", rotatingTx->source());
     return false;
 }

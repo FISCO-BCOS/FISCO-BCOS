@@ -106,6 +106,8 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
         //       here must use noteChange for this function will notify updating the txsCache
         auto txMeta = _sealerConfig->blockFactory()->createTransactionMetaData(
             tx->hash(), std::string(tx->to()));
+        auto address = right160(_hashImpl->hash(keyPair->publicKey()));
+        txMeta->setSource(address.hex());
         _block->appendTransactionMetaData(txMeta);
 
         SEAL_LOG(INFO) << LOG_DESC("generateTransactionForRotating succ")
