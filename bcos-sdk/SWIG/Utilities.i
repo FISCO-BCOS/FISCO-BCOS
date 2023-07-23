@@ -21,6 +21,12 @@ using bcos::bytes = std::vector<bcos::byte>;
 %template(toString) bcos::sdk::swig::toString<std::string_view>;
 %template(toString) bcos::sdk::swig::toString<bcos::bytesConstRef>;
 %template(toString) bcos::sdk::swig::toString<bcos::bytes>;
+%template(toString) bcos::sdk::swig::toString<bcos::u256>;
+
+%template(toHex) bcos::sdk::swig::toHex<std::string_view>;
+%template(toHex) bcos::sdk::swig::toHex<bcos::bytesConstRef>;
+%template(toHex) bcos::sdk::swig::toHex<bcos::bytes>;
+%template(toHex) bcos::sdk::swig::toHex<bcos::h256>;
 
 %apply (char *STRING, size_t LENGTH) { (const char data[], size_t len) }
 %template(fillBytes) bcos::sdk::swig::fillBytes<std::string_view>;
