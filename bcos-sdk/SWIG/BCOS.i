@@ -1,5 +1,5 @@
 %module bcos
 %include "Utilities.i"
-%include "CryptoSuite.i"
+%include "Crypto.i"
 %include "Transaction.i"
 %include "TarsClient.i"
