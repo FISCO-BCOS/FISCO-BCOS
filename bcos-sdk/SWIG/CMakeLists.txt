@@ -1,4 +1,5 @@
 include(UseSWIG)
+include(UseJava)
 
 add_library(bcos_swig_helper Helper.cpp)
 target_link_libraries(bcos_swig_helper PUBLIC ${BCOS_CPP_SDK_TARGET} bcos-framework bcos-utilities)
@@ -16,10 +17,19 @@ swig_add_library(bcos_swig_python
 target_link_libraries(bcos_swig_python PRIVATE ${BCOS_CPP_SDK_TARGET} ${TARS_PROTOCOL_TARGET} bcos_swig_helper Python3::Python)
 
 find_package(JNI REQUIRED)
+find_package(Java REQUIRED)
 swig_add_library(bcos_swig_java
     TYPE SHARED
     LANGUAGE java
     SOURCES BCOS.i
     OUTPUT_DIR bcos_sdk_java
 )
-target_link_libraries(bcos_swig_java PRIVATE ${BCOS_CPP_SDK_TARGET} ${TARS_PROTOCOL_TARGET} bcos_swig_helper JNI::JNI)
+set_property(TARGET bcos_swig_java PROPERTY SWIG_COMPILE_OPTIONS -package org.fisco.bcos.sdk.tars)
+target_link_libraries(bcos_swig_java PRIVATE bcos_swig_helper ${BCOS_CPP_SDK_TARGET} ${TARS_PROTOCOL_TARGET} bcos-framework JNI::JNI)
+
+FILE(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bcos_sdk_java_classes/")
+FILE(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bcos_sdk_java_classes/META-INFO")
+ADD_CUSTOM_COMMAND(TARGET bcos_swig_java POST_BUILD
+    COMMAND "${Java_JAVAC_EXECUTABLE}" -d "${CMAKE_CURRENT_BINARY_DIR}/bcos_sdk_java_classes/" ${CMAKE_CURRENT_BINARY_DIR}/bcos_sdk_java/*.java
+    COMMAND "${Java_JAR_EXECUTABLE}" -cfM bcos_sdk_java_jni.jar -C "${CMAKE_CURRENT_BINARY_DIR}/bcos_sdk_java_classes" .
+)

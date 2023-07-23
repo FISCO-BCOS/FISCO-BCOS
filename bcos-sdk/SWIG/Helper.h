@@ -37,4 +37,10 @@ std::string_view toStringView(Buffer input)
     return {(const char*)input.data(), input.size()};
 }
 
+template <class Buffer>
+void fillBytes(Buffer const& input, char* STRING, size_t LENGTH)
+{
+    std::copy(input.data(), input.data() + LENGTH, STRING);
+}
+
 }  // namespace bcos::sdk::swig

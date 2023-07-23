@@ -21,3 +21,8 @@ using bcos::bytes = std::vector<bcos::byte>;
 %template(toString) bcos::sdk::swig::toString<std::string_view>;
 %template(toString) bcos::sdk::swig::toString<bcos::bytesConstRef>;
 %template(toString) bcos::sdk::swig::toString<bcos::bytes>;
+
+%apply (char *STRING, size_t LENGTH) { (const char data[], size_t len) }
+%template(fillBytes) bcos::sdk::swig::fillBytes<std::string_view>;
+%template(fillBytes) bcos::sdk::swig::fillBytes<bcos::bytesConstRef>;
+%template(fillBytes) bcos::sdk::swig::fillBytes<bcos::bytes>;
