@@ -1,10 +1,9 @@
 #pragma once
 
-#include <utility>
-
 #include "../Common.h"
 #include "bcos-executor/src/vm/Precompiled.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <utility>
 
 namespace bcos::transaction_executor
 {

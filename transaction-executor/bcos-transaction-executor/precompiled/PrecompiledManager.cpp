@@ -14,7 +14,7 @@ constexpr static void releaseOutput(const struct evmc_result* result)
 bcos::transaction_executor::EVMCResult bcos::transaction_executor::Precompiled::call(
     evmc_message const& message) const
 {
-    auto result = std::visit(
+    return std::visit(
         bcos::overloaded{
             [&](executor::PrecompiledContract const& contract) {
                 auto [success, output] = contract.execute({message.input_data, message.input_size});
@@ -35,7 +35,6 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::Precompiled::
                     .create_address = {},
                     .padding = {},
                 }};
-                PRECOMPILED_LOG(INFO) << "Gas left: " << result.gas_left;
 
                 return result;
             },
@@ -44,8 +43,6 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::Precompiled::
                 return EVMCResult{evmc_result{}};
             }},
         m_precompiled);
-
-    return result;
 }
 
 bcos::transaction_executor::PrecompiledManager::PrecompiledManager()
