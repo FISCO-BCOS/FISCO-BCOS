@@ -21,6 +21,7 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
+#include "bcos-framework/protocol/CommonError.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -947,6 +948,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                                       << LOG_KV("errorCode", _error->errorCode())
                                       << LOG_KV("errorMsg", _error->errorMessage());
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
+                    pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
                 auto rotateResult =
@@ -957,12 +959,17 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                     PBFT_LOG(WARNING)
                         << LOG_DESC("verify proposal failed") << printPBFTMsgInfo(_prePrepareMsg);
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
+                    pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
                 // verify success
                 RecursiveGuard lock(pbftEngine->m_mutex);
-                pbftEngine->handlePrePrepareMsg(
+                auto ret = pbftEngine->handlePrePrepareMsg(
                     _prePrepareMsg, false, _generatedFromNewView, false);
+                if (!ret)
+                {
+                    pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
+                }
             }
             catch (std::exception const& _e)
             {
