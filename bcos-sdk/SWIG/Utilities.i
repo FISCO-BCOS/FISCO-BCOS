@@ -1,58 +1,34 @@
 %{
-#include "bcos-utilities/FixedBytes.h"
-#include "bcos-utilities/Common.h"
-#include <string_view>
-
-using namespace bcos;
-
-inline bcos::bytesConstRef byteArrayToBytesConstRef(const char* data, size_t length) {
-    return {(const bcos::byte*)data, length};
-}
-inline bcos::bytesConstRef bytesToBytesConstRef(std::vector<uint8_t> const& input) {
-    return {input.data(), input.size()};
-}
-inline bcos::bytes bytesConstRefToBytes(bcos::bytesConstRef input) {
-    return bcos::bytes(input.begin(), input.end());
-}
-inline bcos::bytes h256ToBytes(h256 const& input) {
-    return {input.data(), input.data() + input.size()};
-}
-inline h256 bytesToH256(bcos::bytes const& input) {
-    return h256(input.data(), input.size());
-}
-inline std::string h256ToString(const bcos::h256& hash) {
-    return hash.hex();
-}
-
-inline std::string u256ToString(const bcos::u256& value) {
-    return value.str();
-}
-
-inline std::string stringViewToString(std::string_view view) {
-    return std::string{view};
-}
-inline std::string_view stringToStringView(const std::string& string) {
-    return std::string_view{string};
-}
+#include "SWIG/Helper.h"
 %}
 
 %include <stdint.i>
 %include <std_vector.i>
 %include <std_string.i>
+%include "Helper.h"
 
-%template(bytes) std::vector<uint8_t>;
 using bcos::byte = uint8_t;
 using bcos::bytes = std::vector<bcos::byte>;
 
-%apply (char *STRING, size_t LENGTH) { (const char* data, size_t length) }
-inline bcos::bytesConstRef byteArrayToBytesConstRef(const char* data, size_t length);
-inline bcos::bytesConstRef bytesToBytesConstRef(std::vector<uint8_t> const& input);
-inline bcos::bytes bytesConstRefToBytes(bcos::bytesConstRef input);
-inline bcos::bytes h256ToBytes(h256 const& input);
-inline h256 bytesToH256(bcos::bytes const& input);
-inline std::string h256ToString(const bcos::h256& hash);
+%template(toBytesConstRef) bcos::sdk::swig::toBytesConstRef<std::string_view>;
+%template(toBytesConstRef) bcos::sdk::swig::toBytesConstRef<std::string>;
+%template(toBytesConstRef) bcos::sdk::swig::toBytesConstRef<bcos::bytes>;
 
-inline std::string u256ToString(const bcos::u256& value);
+%template(toBytes) bcos::sdk::swig::toBytes<std::string_view>;
+%template(toBytes) bcos::sdk::swig::toBytes<std::string>;
+%template(toBytes) bcos::sdk::swig::toBytes<bcos::bytesConstRef>;
 
-inline std::string stringViewToString(std::string_view view);
-inline std::string_view stringToStringView(const std::string& string);
+%template(toString) bcos::sdk::swig::toString<std::string_view>;
+%template(toString) bcos::sdk::swig::toString<bcos::bytesConstRef>;
+%template(toString) bcos::sdk::swig::toString<bcos::bytes>;
+%template(toString) bcos::sdk::swig::toString<bcos::u256>;
+
+%template(toHex) bcos::sdk::swig::toHex<std::string_view>;
+%template(toHex) bcos::sdk::swig::toHex<bcos::bytesConstRef>;
+%template(toHex) bcos::sdk::swig::toHex<bcos::bytes>;
+%template(toHex) bcos::sdk::swig::toHex<bcos::h256>;
+
+%apply (char *STRING, size_t LENGTH) { (const char data[], size_t len) }
+%template(fillBytes) bcos::sdk::swig::fillBytes<std::string_view>;
+%template(fillBytes) bcos::sdk::swig::fillBytes<bcos::bytesConstRef>;
+%template(fillBytes) bcos::sdk::swig::fillBytes<bcos::bytes>;
