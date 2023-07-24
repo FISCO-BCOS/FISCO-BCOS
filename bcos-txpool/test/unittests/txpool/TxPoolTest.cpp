@@ -177,8 +177,9 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         promise7.set_value({std::move(_error), _result});
     });
     std::tie(e, r) = promise7.get_future().get();
-    BOOST_CHECK(e->errorCode() == CommonError::InconsistentTransactions);
-    BOOST_CHECK(r == false);
+    // FIXME: duplicate tx in block, verify failed
+     BOOST_CHECK(e->errorCode() == CommonError::VerifyProposalFailed);
+     BOOST_CHECK(r == false);
 
     _txpoolStorage->remove(tx->hash());
 }

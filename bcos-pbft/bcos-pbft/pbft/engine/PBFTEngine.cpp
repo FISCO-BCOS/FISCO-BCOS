@@ -21,6 +21,7 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
+#include "bcos-framework/protocol/CommonError.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -796,7 +797,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                        << m_config->printCurrentState();
         return false;
     }
-    if (m_cacheProcessor->executingProposals().count(_prePrepareMsg->hash()))
+    if (m_cacheProcessor->executingProposals().contains(_prePrepareMsg->hash()))
     {
         PBFT_LOG(DEBUG) << LOG_DESC(
                                "handlePrePrepareMsg: reject the prePrepareMsg "
@@ -892,6 +893,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                         << printPBFTMsgInfo(_prePrepareMsg) << LOG_KV("code", _error->errorCode())
                         << LOG_KV("message", _error->errorMessage());
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
+                    pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
                 // verify failed
@@ -900,12 +902,17 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                     PBFT_LOG(WARNING)
                         << LOG_DESC("verify proposal failed") << printPBFTMsgInfo(_prePrepareMsg);
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
+                    pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
                 // verify success
                 RecursiveGuard l(pbftEngine->m_mutex);
-                pbftEngine->handlePrePrepareMsg(
+                auto ret = pbftEngine->handlePrePrepareMsg(
                     _prePrepareMsg, false, _generatedFromNewView, false);
+                if (!ret)
+                {
+                    pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
+                }
             }
             catch (std::exception const& _e)
             {
