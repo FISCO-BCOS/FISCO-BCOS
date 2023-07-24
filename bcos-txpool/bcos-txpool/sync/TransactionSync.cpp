@@ -85,9 +85,9 @@ void TransactionSync::onRecvSyncMessage(
     {
         if (_error != nullptr)
         {
-            SYNC_LOG(WARNING) << LOG_DESC("onRecvSyncMessage error")
-                              << LOG_KV("errorCode", _error->errorCode())
-                              << LOG_KV("errorMsg", _error->errorMessage());
+            SYNC_LOG(WARNING) << LOG_DESC("onRecvSyncMessage failed")
+                              << LOG_KV("code", _error->errorCode())
+                              << LOG_KV("message", _error->errorMessage());
             return;
         }
         // reject the message from the outside-group
@@ -121,7 +121,7 @@ void TransactionSync::onRecvSyncMessage(
                 catch (std::exception const& e)
                 {
                     SYNC_LOG(WARNING) << LOG_DESC("onRecvSyncMessage: send txs response exception")
-                                      << LOG_KV("error", boost::diagnostic_information(e))
+                                      << LOG_KV("failed", boost::diagnostic_information(e))
                                       << LOG_KV("peer", _nodeID->shortHex());
                 }
             });
@@ -142,7 +142,7 @@ void TransactionSync::onRecvSyncMessage(
                 catch (std::exception const& e)
                 {
                     SYNC_LOG(WARNING) << LOG_DESC("onRecvSyncMessage:  onPeerTxsStatus exception")
-                                      << LOG_KV("error", boost::diagnostic_information(e))
+                                      << LOG_KV("failed", boost::diagnostic_information(e))
                                       << LOG_KV("peer", _nodeID->shortHex());
                 }
             });
@@ -151,7 +151,7 @@ void TransactionSync::onRecvSyncMessage(
     catch (std::exception const& e)
     {
         SYNC_LOG(WARNING) << LOG_DESC("onRecvSyncMessage exception")
-                          << LOG_KV("error", boost::diagnostic_information(e))
+                          << LOG_KV("failed", boost::diagnostic_information(e))
                           << LOG_KV("peer", _nodeID->shortHex());
     }
 }
@@ -353,7 +353,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                 SYNC_LOG(WARNING)
                     << LOG_DESC(
                            "requestMissedTxs: verifyFetchedTxs when recv txs response exception")
-                    << LOG_KV("error", boost::diagnostic_information(e))
+                    << LOG_KV("failed", boost::diagnostic_information(e))
                     << LOG_KV("_peer", _nodeID->shortHex());
             }
         });

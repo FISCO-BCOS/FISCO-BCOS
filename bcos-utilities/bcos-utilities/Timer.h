@@ -46,7 +46,7 @@ public:
                 catch (std::exception const& e)
                 {
                     BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
-                                      << LOG_KV("error", boost::diagnostic_information(e));
+                                      << LOG_KV("failed", boost::diagnostic_information(e));
                 }
                 m_ioService->reset();
             }

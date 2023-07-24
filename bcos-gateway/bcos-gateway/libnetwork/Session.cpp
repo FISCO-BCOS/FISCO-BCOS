@@ -111,7 +111,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                 catch (std::exception const& e)
                 {
                     SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("failed", boost::diagnostic_information(e));
                 }
             });
             handler->timeoutHandler = timeoutHandler;
@@ -186,7 +186,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << LOG_DESC("onWrite error") << LOG_KV("endpoint", nodeIPEndpoint())
+        SESSION_LOG(ERROR) << LOG_DESC("onWrite failed") << LOG_KV("endpoint", nodeIPEndpoint())
                            << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
@@ -261,7 +261,7 @@ void Session::write()
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
+        SESSION_LOG(ERROR) << LOG_DESC("write failed") << LOG_KV("endpoint", nodeIPEndpoint())
                            << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
@@ -334,16 +334,16 @@ void Session::drop(DisconnectReason _reason)
                 /// drop operation has been aborted
                 if (error == boost::asio::error::operation_aborted)
                 {
-                    SESSION_LOG(DEBUG) << "[drop] operation aborted  by async_shutdown"
-                                       << LOG_KV("errorValue", error.value())
-                                       << LOG_KV("message", error.message());
+                    SESSION_LOG(DEBUG)
+                        << "[drop] operation aborted  by async_shutdown"
+                        << LOG_KV("value", error.value()) << LOG_KV("message", error.message());
                     return;
                 }
                 /// shutdown timer error
                 if (error && error != boost::asio::error::operation_aborted)
                 {
                     SESSION_LOG(WARNING)
-                        << "[drop] shutdown timer error" << LOG_KV("errorValue", error.value())
+                        << "[drop] shutdown timer failed" << LOG_KV("value", error.value())
                         << LOG_KV("message", error.message());
                 }
                 /// force to shutdown when timeout
@@ -362,7 +362,7 @@ void Session::drop(DisconnectReason _reason)
                     if (error)
                     {
                         SESSION_LOG(WARNING)
-                            << "[drop] shutdown failed " << LOG_KV("errorValue", error.value())
+                            << "[drop] shutdown failed " << LOG_KV("value", error.value())
                             << LOG_KV("message", error.message());
                     }
                     /// force to close the socket
@@ -417,7 +417,7 @@ void Session::doRead()
                 if (ec)
                 {
                     SESSION_LOG(WARNING)
-                        << LOG_DESC("doRead error") << LOG_KV("endpoint", s->nodeIPEndpoint())
+                        << LOG_DESC("doRead failed") << LOG_KV("endpoint", s->nodeIPEndpoint())
                         << LOG_KV("message", ec.message());
                     s->drop(TCPError);
                     return;
@@ -449,7 +449,7 @@ void Session::doRead()
                         else
                         {
                             SESSION_LOG(ERROR)
-                                << LOG_DESC("Decode message error") << LOG_KV("result", result);
+                                << LOG_DESC("Decode message failed") << LOG_KV("result", result);
                             s->onMessage(
                                 NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
                                 message);
@@ -459,7 +459,7 @@ void Session::doRead()
                     catch (std::exception const& e)
                     {
                         SESSION_LOG(ERROR) << LOG_DESC("Decode message exception")
-                                           << LOG_KV("error", boost::diagnostic_information(e));
+                                           << LOG_KV("failed", boost::diagnostic_information(e));
                         s->onMessage(
                             NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
                             message);
@@ -494,7 +494,7 @@ bool Session::checkRead(boost::system::error_code _ec)
     if (_ec && _ec.category() != boost::asio::error::get_misc_category() &&
         _ec.value() != boost::asio::error::eof)
     {
-        SESSION_LOG(WARNING) << LOG_DESC("checkRead error") << LOG_KV("message", _ec.message());
+        SESSION_LOG(WARNING) << LOG_DESC("checkRead failed") << LOG_KV("message", _ec.message());
         drop(TCPError);
 
         return false;
@@ -626,7 +626,7 @@ void Session::checkNetworkStatus()
     }
     catch (std::exception const& e)
     {
-        SESSION_LOG(WARNING) << LOG_DESC("checkNetworkStatus error")
+        SESSION_LOG(WARNING) << LOG_DESC("checkNetworkStatus failed")
                              << LOG_KV("msg", boost::diagnostic_information(e));
     }
 }

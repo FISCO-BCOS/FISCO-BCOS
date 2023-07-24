@@ -108,7 +108,7 @@ void PBFTLogSync::requestPBFTData(
                               << LOG_KV("startIndex", _pbftRequest->index())
                               << LOG_KV("offset", _pbftRequest->size())
                               << LOG_KV("hash", _pbftRequest->hash().abridged())
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("failed", boost::diagnostic_information(e));
         }
     });
 }
@@ -119,10 +119,10 @@ void PBFTLogSync::onRecvCommittedProposalsResponse(Error::Ptr _error, NodeIDPtr 
 {
     if (_error)
     {
-        PBFT_LOG(WARNING) << LOG_DESC("onRecvCommittedProposalResponse error")
+        PBFT_LOG(WARNING) << LOG_DESC("onRecvCommittedProposalResponse failed")
                           << LOG_KV("from", _nodeID->shortHex())
-                          << LOG_KV("errorCode", _error->errorCode())
-                          << LOG_KV("errorMsg", _error->errorMessage());
+                          << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("message", _error->errorMessage());
         for (size_t i = 0; i < _offset; i++)
         {
             m_pbftCache->eraseCommittedProposalList(_startIndex + i);
@@ -154,10 +154,10 @@ void PBFTLogSync::onRecvPrecommitResponse(Error::Ptr _error, bcos::crypto::NodeI
 {
     if (_error != nullptr)
     {
-        PBFT_LOG(WARNING) << LOG_DESC("onRecvPrecommitResponse error")
+        PBFT_LOG(WARNING) << LOG_DESC("onRecvPrecommitResponse failed")
                           << LOG_KV("from", _nodeID->shortHex())
-                          << LOG_KV("errorCode", _error->errorCode())
-                          << LOG_KV("errorMsg", _error->errorMessage());
+                          << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("message", _error->errorMessage());
     }
     auto response = m_config->codec()->decode(_data);
     if (response->packetType() != PacketType::PreparedProposalResponse)

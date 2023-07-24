@@ -619,8 +619,8 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
             if (error)
             {
                 KeyPage_LOG(ERROR)
-                    << LOG_DESC("getData error") << LOG_KV("table", tableView)
-                    << LOG_KV("key", toHex(key)) << LOG_KV("error", error->errorMessage());
+                    << LOG_DESC("getData failed") << LOG_KV("table", tableView)
+                    << LOG_KV("key", toHex(key)) << LOG_KV("failed", error->errorMessage());
                 return std::make_tuple(std::move(error), std::nullopt);
             }
             if (c_fileLogLevel <= TRACE)
@@ -951,7 +951,7 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
             if (error)
             {
                 KeyPage_LOG(FATAL)
-                    << LOG_DESC("merge page getData error") << LOG_KV("table", table)
+                    << LOG_DESC("merge page getData failed") << LOG_KV("table", table)
                     << LOG_KV("key", toHex(key)) << LOG_KV("pageKey", toHex(pageKey));
             }
             auto* nextPage = nextPageData.value()->getPage();

@@ -327,8 +327,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
     if (error)
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake failed")
-                          << LOG_KV("errorValue", error.value())
-                          << LOG_KV("message", error.message())
+                          << LOG_KV("value", error.value()) << LOG_KV("message", error.message())
                           << LOG_KV("endpoint", socket->nodeIPEndpoint());
         socket->close();
         return;
@@ -448,8 +447,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         if (error && error != boost::asio::error::operation_aborted)
         {
             HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
-                            << LOG_KV("errorValue", error.value())
-                            << LOG_KV("message", error.message());
+                            << LOG_KV("value", error.value()) << LOG_KV("message", error.message());
         }
         if (socket->isConnected())
         {
@@ -506,8 +504,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
     if (error)
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed")
-                          << LOG_KV("endpoint", _nodeIPEndpoint)
-                          << LOG_KV("errorValue", error.value())
+                          << LOG_KV("endpoint", _nodeIPEndpoint) << LOG_KV("value", error.value())
                           << LOG_KV("message", error.message());
 
         if (socket->isConnected())
