@@ -8,7 +8,7 @@ plugins {
 println("Notice: current gradle version is " + gradle.gradleVersion)
 
 allprojects {
-    group = 'org.fisco-bcos.sdk-tars'
+    group = 'org.fisco-bcos'
     version = '3.5.0-SNAPSHOT'
 
     apply plugin: 'maven-publish'
@@ -94,7 +94,7 @@ publishing {
     signing {
         sign publishing.publications.mavenJava
     }
-} 
+}
 
 jar {
     archiveName "fisco-bcos-tars-sdk" + '-' + project.version + '.jar'
