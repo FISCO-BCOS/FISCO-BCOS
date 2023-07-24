@@ -59,12 +59,10 @@ using namespace boost::archive::iterators;
 
 JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-    std::shared_ptr<boostssl::ws::WsService> _wsService,
-    bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
+    std::shared_ptr<boostssl::ws::WsService> _wsService)
   : m_groupManager(std::move(_groupManager)),
     m_gatewayInterface(std::move(_gatewayInterface)),
-    m_wsService(std::move(_wsService)),
-    m_callValidator(CallValidator(std::move(_cryptoSuite)))
+    m_wsService(std::move(_wsService))
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
         boost::bind(&JsonRpcImpl_2_0::handleRpcRequest, this, boost::placeholders::_1,
@@ -399,12 +397,14 @@ void JsonRpcImpl_2_0::call(std::string_view _groupID, std::string_view _nodeName
                             << LOG_KV("node", _nodeName) << LOG_KV("data", _data)
                             << LOG_KV("sign", _sign);
     }
-
     auto nodeService = getNodeService(_groupID, _nodeName, "call");
+    auto groupInfo = m_groupManager->getGroupInfo(_groupID);
+    // FIXME: groupInfo tars not maintenance smCryptoType
+    auto cryptoType = groupInfo->smCryptoType()? group::SM_NODE : group::NON_SM_NODE;
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
     auto transaction = transactionFactory->createTransaction(
         0, std::string(_to), decodeData(_data), "", 0, std::string(), std::string(), 0);
-    auto [result, sender] = m_callValidator.verify(_to, _data, _sign);
+    auto [result, sender] = CallValidator::verify(_to, _data, _sign, cryptoType);
     if (!result) [[unlikely]]
     {
         RPC_IMPL_LOG(TRACE) << LOG_DESC("call with sign verify failed") << LOG_KV("to", _to)
