@@ -157,10 +157,10 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
     boost::trim(_keyField);
     if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
     {  // mysql TableName and fieldName length limit is 64
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
-            "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
-            std::string("table key name length overflow ") +
-            std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("code: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
+                                       std::string("table key name length overflow ") +
+                                       std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
     }
 
     for (auto& str : fieldNameList)
@@ -169,7 +169,7 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
         if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
         {  // mysql TableName and fieldName length limit is 64
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
-                "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
+                "code: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
                 std::string("table field name length overflow ") +
                 std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
         }
@@ -189,10 +189,10 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
     if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S)
     {
         // mysql TableName and fieldName length limit is 64
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
-            "errorCode: " + std::to_string(CODE_TABLE_NAME_LENGTH_OVERFLOW) +
-            std::string(" tableName length overflow ") +
-            std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("code: " + std::to_string(CODE_TABLE_NAME_LENGTH_OVERFLOW) +
+                                       std::string(" tableName length overflow ") +
+                                       std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
     }
     return valueField;
 }

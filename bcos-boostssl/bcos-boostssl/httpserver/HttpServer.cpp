@@ -116,7 +116,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
     auto localEndpoint = socket.local_endpoint(sec);
     if (sec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("local_endpoint error", sec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("local_endpoint failed", sec)
                              << LOG_KV("message", sec.message());
         ws::WsTools::close(socket);
         return doAccept();
@@ -124,7 +124,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
     auto remoteEndpoint = socket.remote_endpoint(sec);
     if (sec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("remote_endpoint error", sec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("remote_endpoint failed", sec)
                              << LOG_KV("message", sec.message());
         ws::WsTools::close(socket);
         return doAccept();
@@ -210,6 +210,7 @@ HttpSession::Ptr HttpServer::buildHttpSession(
     session->setHttpStream(_httpStream);
     session->setRequestHandler(m_httpReqHandler);
     session->setWsUpgradeHandler(m_wsUpgradeHandler);
+    session->setThreadPool(threadPool());
     session->setNodeId(_nodeId);
 
     return session;
