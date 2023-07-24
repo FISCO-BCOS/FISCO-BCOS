@@ -75,10 +75,7 @@ public:
 
     ~BufferWriter() {}
 
-    void reset()
-    {
-        _len = 0;
-    }
+    void reset() { _len = 0; }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -97,14 +94,8 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const
-    {
-        return _buf;
-    }
-    size_t getLength() const
-    {
-        return _len;
-    }
+    const ByteType* getBuffer() const { return _buf; }
+    size_t getLength() const { return _len; }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -163,9 +154,16 @@ inline bcos::group::GroupInfo::Ptr toBcosGroupInfo(
     groupInfo->setGenesisConfig(_tarsGroupInfo.genesisConfig);
     groupInfo->setIniConfig(_tarsGroupInfo.iniConfig);
     groupInfo->setWasm(_tarsGroupInfo.isWasm);
+    bool isFirst = true;
     for (auto const& tarsNodeInfo : _tarsGroupInfo.nodeList)
     {
-        groupInfo->appendNodeInfo(toBcosChainNodeInfo(_nodeFactory, tarsNodeInfo));
+        auto nodeInfo = toBcosChainNodeInfo(_nodeFactory, tarsNodeInfo);
+        if (isFirst)
+        {
+            groupInfo->setSmCryptoType(nodeInfo->smCryptoType());
+            isFirst = false;
+        }
+        groupInfo->appendNodeInfo(std::move(nodeInfo));
     }
     return groupInfo;
 }

@@ -19,9 +19,13 @@
  */
 
 #include "CallValidator.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 using namespace bcos;
-std::pair<bool, bytes> bcos::rpc::CallValidator::verify(
-    std::string_view _to, std::string_view _data, std::string_view _sign)
+std::pair<bool, bytes> bcos::rpc::CallValidator::verify(std::string_view _to,
+    std::string_view _data, std::string_view _sign, group::NodeCryptoType _type)
 {
     // trim hex prefix
     auto trimHex = [](std::string_view str, std::string_view prefix = "0x") {
@@ -35,7 +39,19 @@ std::pair<bool, bytes> bcos::rpc::CallValidator::verify(
     auto data = trimHex(_data);
     auto sign = trimHex(_sign);
 
-    auto hashImpl = m_cryptoSuite->hashImpl();
+    crypto::Hash::UniquePtr hashImpl;
+    crypto::SignatureCrypto::UniquePtr signatureImpl;
+    if (_type == group::NodeCryptoType::SM_NODE)
+    {
+        hashImpl = std::make_unique<crypto::SM3>();
+        signatureImpl = std::make_unique<crypto::FastSM2Crypto>();
+    }
+    else
+    {
+        hashImpl = std::make_unique<crypto::Keccak256>();
+        signatureImpl = std::make_unique<crypto::Secp256k1Crypto>();
+    }
+
     crypto::HashType hash;
     auto hasher = hashImpl->hasher();
     // Note: use fromHex because java sdk hash the raw data
@@ -45,8 +61,7 @@ std::pair<bool, bytes> bcos::rpc::CallValidator::verify(
     bcos::bytes signBytes = bcos::fromHex(sign);
     try
     {
-        return m_cryptoSuite->signatureImpl()->recoverAddress(
-            *hashImpl, hash, bcos::ref(signBytes));
+        return signatureImpl->recoverAddress(*hashImpl, hash, bcos::ref(signBytes));
     }
     catch (...)
     {
