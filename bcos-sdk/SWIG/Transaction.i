@@ -17,7 +17,7 @@ inline std::vector<bcos::h256> h256SpanToVector(gsl::span<const bcos::h256> view
 }
 %}
 
-%include "CryptoSuite.i"
+%include "Crypto.i"
 %include <stdint.i>
 %include <std_shared_ptr.i>
 %include <std_string.i>
