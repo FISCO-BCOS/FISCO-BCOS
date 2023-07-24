@@ -36,6 +36,7 @@ enum CommonError : int32_t
     InconsistentTransactions = 2001,
     TxsSignatureVerifyFailed = 2002,
     FetchTransactionsFailed = 2003,
+    VerifyProposalFailed = 2004,
     NotFoundPeerByTopicSendMsg = 3001,
     NotFoundClientByTopicDispatchMsg = 3002,
     AMOPSendMsgFailed = 3003,

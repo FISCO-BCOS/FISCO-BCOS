@@ -553,7 +553,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
                 if (blockExecutive->isSysBlock())
                 {
-                    removeAllPreparedBlock();  // must clear prepared cacche
+                    removeAllPreparedBlock();  // must clear prepared cache
                 }
 
                 SCHEDULER_LOG(INFO)

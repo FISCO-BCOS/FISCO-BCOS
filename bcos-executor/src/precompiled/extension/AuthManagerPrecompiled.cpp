@@ -551,6 +551,7 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
         {
             PRECOMPILED_LOG(FATAL)
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
+            return {};
         }
         auto fields = entry->getObject<std::vector<std::string>>();
         typeStr.assign(fields[2]);
@@ -559,7 +560,27 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
     {
         auto entry = _executive->storage().getRow(tool::FS_APPS, FS_ACL_TYPE);
         // entry must exist
-        typeStr.assign(entry->get());
+        if (entry) [[likely]]
+        {
+            typeStr.assign(entry->get());
+        }
+        else if (_executive->blockContext().lock()->blockVersion() ==
+                 (uint32_t)protocol::BlockVersion::V3_0_VERSION) [[unlikely]]
+        {
+            // Note: when 3.0.0 -> 3.1.0 upgrade tx concurrent with deploy contract tx,
+            // the deploy-contract tx will be failed, because the FS_APPS is not exist.
+            // Try to read in 3.1.0 format.
+            entry = _executive->storage().getRow(tool::FS_ROOT, tool::FS_APPS.substr(1));
+            // apps must exist
+            if (!entry) [[unlikely]]
+            {
+                PRECOMPILED_LOG(FATAL)
+                    << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
+                return {};
+            }
+            auto fields = entry->getObject<std::vector<std::string>>();
+            typeStr.assign(fields[2]);
+        }
     }
     u256 type = 0;
     try
@@ -604,11 +625,11 @@ void AuthManagerPrecompiled::setDeployType(
     }
     u256 type = _type[_type.size() - 1];
     PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployType")
-                           << LOG_KV("type", type);
+                          << LOG_KV("type", type);
     if (type > 2) [[unlikely]]
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
-                               << LOG_DESC("deploy auth type must be 1 or 2.");
+                              << LOG_DESC("deploy auth type must be 1 or 2.");
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;
     }
@@ -661,7 +682,7 @@ void AuthManagerPrecompiled::setDeployAuth(
         return;
     }
     PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("setDeployAuth")
-                           << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
+                          << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
     auto type = getDeployAuthType(_executive);
     std::map<std::string, bool> aclMap;
     bool access = _isClose ? (type == (int)AuthType::BLACK_LIST_MODE) :

@@ -555,17 +555,6 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
     {
     case protocol::ExecutionMessage::MESSAGE:
     {
-        auto blockHeader = m_lastCommittedBlockHeader;
-        if (!blockHeader)
-        {
-            auto message = "dmcCall could not get current block header, contextID: " +
-                           boost::lexical_cast<std::string>(input->contextID()) +
-                           " seq: " + boost::lexical_cast<std::string>(input->seq());
-            EXECUTOR_NAME_LOG(ERROR) << message;
-            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
-            return;
-        }
-
         storage::StorageInterface::Ptr prev;
 
         if (m_cachedStorage)
@@ -582,7 +571,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
 
         // Create a temp block context
         blockContext = createBlockContextForCall(
-            blockHeader->number() + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
+            m_lastCommittedBlockNumber + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -734,17 +723,6 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     {
     case protocol::ExecutionMessage::MESSAGE:
     {
-        auto blockHeader = m_lastCommittedBlockHeader;
-        if (!blockHeader)
-        {
-            auto message = "call could not get current block header, contextID: " +
-                           boost::lexical_cast<std::string>(input->contextID()) +
-                           " seq: " + boost::lexical_cast<std::string>(input->seq());
-            EXECUTOR_NAME_LOG(WARNING) << message;
-            callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::CALL_ERROR, message), nullptr);
-            return;
-        }
-
         storage::StorageInterface::Ptr prev;
 
         if (m_cachedStorage)
@@ -761,7 +739,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
 
         // Create a temp block context
         blockContext = createBlockContextForCall(
-            blockHeader->number() + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
+            m_lastCommittedBlockNumber + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -1845,7 +1823,7 @@ void TransactionExecutor::commit(
 
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
-        m_lastCommittedBlockHeader = getBlockHeaderInStorage(blockNumber);
+        m_lastCommittedBlockNumber = blockNumber;
         m_ledgerCache->fetchCompatibilityVersion();
 
         setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
@@ -2590,17 +2568,17 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
         callParameters->codeAddress = input.delegateCallAddress();
     }
 
-    if (!m_isWasm)
+    if (!m_isWasm && !callParameters->create)
     {
         if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->codeAddress.insert(
-                0, callParameters->codeAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->codeAddress.size(), '0');
         }
         if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->receiveAddress.insert(
-                0, callParameters->receiveAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
 
@@ -2633,18 +2611,18 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
 
-    if (!m_isWasm)
+    if (!m_isWasm && !callParameters->create)
     {
         constexpr static auto addressSize = Address::SIZE * 2;
         if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->codeAddress.insert(
-                0, callParameters->codeAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->codeAddress.size(), '0');
         }
         if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
         {
             callParameters->receiveAddress.insert(
-                0, callParameters->receiveAddress.size() - addressSize, '0');
+                0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
     return callParameters;
