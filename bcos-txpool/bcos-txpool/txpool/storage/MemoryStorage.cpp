@@ -1019,7 +1019,7 @@ bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 HashListPtr MemoryStorage::getTxsHash(int _limit)
 {
     auto txsHash = std::make_shared<HashList>();
-    ReadGuard l(x_txpoolMutex);
+    UpgradableGuard l(x_txpoolMutex);
     for (auto const& it : m_txsTable)
     {
         auto tx = it.second;
@@ -1038,6 +1038,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
         }
         txsHash->emplace_back(it.first);
     }
+    UpgradeGuard ulock(l);
     removeInvalidTxs(false);
     return txsHash;
 }
