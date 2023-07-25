@@ -19,7 +19,7 @@ void NodeTimeMaintenance::tryToUpdatePeerTimeInfo(
     auto peerTimeOffset = time - localTime;
 
     {
-        Guard l(x_mutex);
+        Guard lock(x_mutex);
         // The time information of the same node is within m_minTimeOffset,
         // and the time information of the node is not updated
         auto it = m_node2TimeOffset.find(nodeID);
@@ -34,8 +34,15 @@ void NodeTimeMaintenance::tryToUpdatePeerTimeInfo(
         }
         else
         {
-            // update time information
-            m_node2TimeOffset.insert(std::make_pair(nodeID, peerTimeOffset));
+            if (std::abs(peerTimeOffset) >= m_minInitOffset)
+            {
+                // update time information
+                m_node2TimeOffset.insert({nodeID, peerTimeOffset});
+            }
+            else
+            {
+                m_node2TimeOffset.insert({nodeID, 0});
+            }
         }
     }
 
@@ -60,9 +67,11 @@ void NodeTimeMaintenance::updateTimeInfo()
     // get median time offset
     std::vector<std::int64_t> timeOffsetVec;
     {
-        Guard l(x_mutex);
+        Guard lock(x_mutex);
         for (auto const& it : m_node2TimeOffset)
+        {
             timeOffsetVec.emplace_back(it.second);
+        }
     }
     std::sort(timeOffsetVec.begin(), timeOffsetVec.end());
 
@@ -96,8 +105,6 @@ void NodeTimeMaintenance::checkLocalTimeAndWarning(const std::vector<std::int64_
                                   << LOG_KV("medianTimeOffset", m_medianTimeOffset)
                                   << LOG_KV("peersSize", timeOffsetVec.size());
         }
-        else
-            break;
     }
 }
 

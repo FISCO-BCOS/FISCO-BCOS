@@ -10,9 +10,7 @@
 
 #define TIMESYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TIMESYNC")
 
-namespace bcos
-{
-namespace tool
+namespace bcos::tool
 {
 
 class NodeTimeMaintenance
@@ -33,12 +31,12 @@ private:
     mutable Mutex x_mutex;
     std::map<bcos::crypto::PublicPtr, std::int64_t, bcos::crypto::KeyCompare> m_node2TimeOffset;
 
-    std::atomic_int64_t m_medianTimeOffset{ 0 };
+    std::atomic_int64_t m_medianTimeOffset{0};
 
     // 30min
-    std::int64_t m_maxTimeOffset{ 30 * 60 * 1000 };
+    static constexpr std::int64_t m_maxTimeOffset{30 * 60 * 1000};
     // 3min
-    std::int64_t m_minTimeOffset{ 3 * 60 * 1000 };
+    static constexpr std::int64_t m_minTimeOffset{3 * 60 * 1000};
+    static constexpr std::int64_t m_minInitOffset{1 * 60 * 1000};
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::tool
