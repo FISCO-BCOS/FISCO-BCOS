@@ -67,8 +67,8 @@ public:
         sign = std::make_shared<Secp256k1Crypto>();
         cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, sign, nullptr);
         gateway = std::make_shared<FakeGateWayWrapper>();
-        factory = std::make_shared<bcos::rpc::RpcFactory>(
-            chainId, gateway, cryptoSuite->keyFactory(), cryptoSuite);
+        factory =
+            std::make_shared<bcos::rpc::RpcFactory>(chainId, gateway, cryptoSuite->keyFactory());
         nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
         nodeConfig->loadConfigFromString(configini);
         factory->setNodeConfig(nodeConfig);

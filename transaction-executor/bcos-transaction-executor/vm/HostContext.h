@@ -286,6 +286,7 @@ public:
             h256 codeHash((const bcos::byte*)view.data(), view.size());
             co_return codeHash;
         }
+        co_return h256{};
     }
 
     task::Task<bool> exists([[maybe_unused]] const std::string_view& address)
