@@ -107,7 +107,7 @@ if(COVERAGE)
         set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
         set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
     endif()
-    config_coverage("cov" "")
+    config_coverage("coverage" "")
 endif()
 
 print_config("FISCO BCOS")
