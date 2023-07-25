@@ -176,7 +176,7 @@ bool RouterTable::updateDstNodeEntry(
     }
 
     // discover smaller distance
-    auto currentEntry = m_routerEntries.at(_entry->dstNode());
+    auto currentEntry = it->second;
     auto currentDistance = currentEntry->distance();
     auto distance = _entry->distance() + 1;
     if (currentDistance > distance)
