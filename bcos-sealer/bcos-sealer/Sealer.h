@@ -58,10 +58,7 @@ public:
 
     virtual void init(bcos::consensus::ConsensusInterface::Ptr _consensus);
 
-    virtual bool hookWhenSealBlock([[maybe_unused]] bcos::protocol::Block::Ptr _block) override
-    {
-        return true;
-    }
+    bool hookWhenSealBlock([[maybe_unused]] bcos::protocol::Block::Ptr _block) override;
 
 protected:
     void executeWorker() override;

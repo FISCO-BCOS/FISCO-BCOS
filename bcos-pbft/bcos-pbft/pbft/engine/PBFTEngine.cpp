@@ -39,7 +39,8 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
   : ConsensusEngine("pbft", 0),
     m_config(_config),
     m_worker(std::make_shared<ThreadPool>("pbftWorker", 1)),
-    m_msgQueue(std::make_shared<PBFTMsgQueue>())
+    m_msgQueue(std::make_shared<PBFTMsgQueue>()),
+    m_rpbftConfigTools(std::make_shared<RPBFTConfigTools>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
@@ -777,7 +778,7 @@ bool PBFTEngine::checkProposalSignature(
 }
 
 bool PBFTEngine::checkRotateTransactionValid(
-    PBFTMessageInterface::Ptr _proposal, ConsensusNodeInterface::Ptr _leaderInfo)
+    PBFTMessageInterface::Ptr const& _proposal, ConsensusNodeInterface::Ptr const& _leaderInfo)
 {
     if (m_config->consensusType() == ConsensusType::PBFT_TYPE) [[likely]]
     {
@@ -786,7 +787,7 @@ bool PBFTEngine::checkRotateTransactionValid(
 
     // Note: if the block contains rotatingTx when m_shouldRotateSealers is false
     //       the rotatingTx will be reverted by the ordinary node when executing
-    if (!m_config->shouldRotateSealers()) [[unlikely]]
+    if (!m_rpbftConfigTools->shouldRotateSealers()) [[unlikely]]
     {
         return true;
     }
@@ -801,7 +802,7 @@ bool PBFTEngine::checkRotateTransactionValid(
                     << LOG_KV("txSize", block->transactionsSize());
 
     auto rotatingTx = block->transactionMetaData(0);
-    if (rotatingTx->to() != bcos::precompiled::CONSENSUS_ADDRESS ||
+    if (rotatingTx->to() != bcos::precompiled::CONSENSUS_ADDRESS &&
         rotatingTx->to() != bcos::precompiled::CONSENSUS_TABLE_NAME) [[unlikely]]
     {
         PBFT_LOG(WARNING) << LOG_DESC("checkRotateTransactionValid failed")
@@ -812,7 +813,8 @@ bool PBFTEngine::checkRotateTransactionValid(
         return false;
     }
 
-    if (rotatingTx->source() == _leaderInfo->nodeID()->hex())
+    auto leaderAddress = right160(m_config->cryptoSuite()->hash(_leaderInfo->nodeID()));
+    if (rotatingTx->source() == leaderAddress.hex())
     {
         return true;
     }
@@ -821,6 +823,7 @@ bool PBFTEngine::checkRotateTransactionValid(
                       << LOG_KV("reqIndex", _proposal->index())
                       << LOG_KV("reqHash", _proposal->hash().abridged())
                       << LOG_KV("fromIdx", _proposal->generatedFrom())
+                      << LOG_KV("leader", _leaderInfo->nodeID()->hex())
                       << LOG_KV("sender", rotatingTx->source());
     return false;
 }
@@ -1421,6 +1424,15 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     RecursiveGuard l(m_mutex);
     // resetConfig after submit the block to ledger
     m_config->resetConfig(_ledgerConfig, _syncedBlock);
+    if (_ledgerConfig->features().get(ledger::Features::Flag::feature_rpbft) &&
+        m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE) [[unlikely]]
+    {
+        m_config->setConsensusType(ledger::ConsensusType::RPBFT_TYPE);
+    }
+    if (m_config->consensusType() == ledger::ConsensusType::RPBFT_TYPE) [[unlikely]]
+    {
+        m_rpbftConfigTools->resetConfig(_ledgerConfig);
+    }
     m_cacheProcessor->checkAndCommitStableCheckPoint();
     m_cacheProcessor->tryToApplyCommitQueue();
     // tried to commit the stable checkpoint

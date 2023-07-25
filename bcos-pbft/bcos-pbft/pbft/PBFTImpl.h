@@ -157,6 +157,8 @@ public:
         m_pbftEngine->clearExceptionProposalState(_number);
     }
 
+    bool shouldRotateSealers() const override { return m_pbftEngine->shouldRotateSealers(); }
+
 protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;
