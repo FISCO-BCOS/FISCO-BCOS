@@ -31,7 +31,8 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
     SystemConfigPrecompiledFixture()
     {
         GlobalHashImpl::g_hashImpl = hashImpl;
-        executive->setStorageWrapper();
+        executive310->setStorageWrapper();
+        executive323->setStorageWrapper();
 
         stateStorage->createTable(std::string(SYS_CONFIG), SYS_VALUE_AND_ENABLE_BLOCK_NUMBER);
     }
@@ -41,13 +42,22 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
         std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
     std::shared_ptr<wasm::GasInjector> gasInjector;
     std::shared_ptr<StateStorage> stateStorage = std::make_shared<StateStorage>(nullptr);
-    std::shared_ptr<BlockContext> blockContext =
+
+    std::shared_ptr<BlockContext> blockContext310 =
+        std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
+            static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), FiscoBcosSchedule, false,
+            false);
+    std::shared_ptr<MockTransactionExecutive> executive310 =
+        std::make_shared<MockTransactionExecutive>(
+            std::weak_ptr<BlockContext>(blockContext310), "", 100, 0, gasInjector);
+
+    std::shared_ptr<BlockContext> blockContext323 =
         std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
             static_cast<uint32_t>(protocol::BlockVersion::V3_2_3_VERSION), FiscoBcosSchedule, false,
             false);
-    std::shared_ptr<MockTransactionExecutive> executive =
+    std::shared_ptr<MockTransactionExecutive> executive323 =
         std::make_shared<MockTransactionExecutive>(
-            std::weak_ptr<BlockContext>(blockContext), "", 100, 0, gasInjector);
+            std::weak_ptr<BlockContext>(blockContext323), "", 100, 0, gasInjector);
 };
 
 BOOST_FIXTURE_TEST_SUITE(SystemConfigPrecompiledTest, SystemConfigPrecompiledFixture)
@@ -61,17 +71,17 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
     auto setInput = codec.encodeWithSig(
         "setValueByKey(string,string)", std::string("feature_unknown"), std::string("100"));
     setParameters->m_input = bcos::ref(setInput);
-    BOOST_CHECK_THROW(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError);
+    BOOST_CHECK_THROW(systemConfigPrecompiled.call(executive323, setParameters), PrecompiledError);
 
     setInput = codec.encodeWithSig(
         "setValueByKey(string,string)", std::string("bugfix_revert"), std::string("2"));
     setParameters->m_input = bcos::ref(setInput);
-    BOOST_CHECK_THROW(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError);
+    BOOST_CHECK_THROW(systemConfigPrecompiled.call(executive323, setParameters), PrecompiledError);
 
     setInput = codec.encodeWithSig(
         "setValueByKey(string,string)", std::string("bugfix_revert"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
-    auto result = systemConfigPrecompiled.call(executive, setParameters);
+    auto result = systemConfigPrecompiled.call(executive323, setParameters);
 
     bcos::s256 code = -1;
     codec.decode(bcos::ref(result->execResult()), code);
@@ -80,7 +90,7 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
     auto getParameters = std::make_shared<PrecompiledExecResult>();
     auto getInput = codec.encodeWithSig("getValueByKey(string)", std::string("bugfix_revert"));
     getParameters->m_input = bcos::ref(getInput);
-    result = systemConfigPrecompiled.call(executive, getParameters);
+    result = systemConfigPrecompiled.call(executive323, getParameters);
 
     std::string value;
     codec.decode(bcos::ref(result->execResult()), value);
@@ -96,7 +106,7 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
     auto setInput = codec.encodeWithSig("setValueByKey(string,string)",
         std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.1.3"));
     setParameters->m_input = bcos::ref(setInput);
-    auto result = systemConfigPrecompiled.call(executive, setParameters);
+    auto result = systemConfigPrecompiled.call(executive310, setParameters);
     bcos::s256 code = -1;
     codec.decode(bcos::ref(result->execResult()), code);
     BOOST_CHECK_EQUAL(code, 0);
@@ -104,20 +114,20 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
     auto getParameters = std::make_shared<PrecompiledExecResult>();
     auto getInput = codec.encodeWithSig("getValueByKey(string)", std::string("bugfix_revert"));
     getParameters->m_input = bcos::ref(getInput);
-    result = systemConfigPrecompiled.call(executive, getParameters);
+    result = systemConfigPrecompiled.call(executive310, getParameters);
     std::string value;
     codec.decode(bcos::ref(result->execResult()), value);
     BOOST_CHECK_EQUAL(value, "");
 
     setInput = codec.encodeWithSig("setValueByKey(string,string)",
-        std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.2.0"));
+        std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.2.3"));
     setParameters->m_input = bcos::ref(setInput);
-    result = systemConfigPrecompiled.call(executive, setParameters);
+    result = systemConfigPrecompiled.call(executive310, setParameters);
     code = -1;
     codec.decode(bcos::ref(result->execResult()), code);
     BOOST_CHECK_EQUAL(code, 0);
 
-    result = systemConfigPrecompiled.call(executive, getParameters);
+    result = systemConfigPrecompiled.call(executive310, getParameters);
     codec.decode(bcos::ref(result->execResult()), value);
     BOOST_CHECK_EQUAL(value, "1");
 }
