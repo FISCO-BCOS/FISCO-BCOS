@@ -43,7 +43,7 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
     std::shared_ptr<StateStorage> stateStorage = std::make_shared<StateStorage>(nullptr);
     std::shared_ptr<BlockContext> blockContext =
         std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
-            static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), FiscoBcosSchedule, false,
+            static_cast<uint32_t>(protocol::BlockVersion::V3_2_3_VERSION), FiscoBcosSchedule, false,
             false);
     std::shared_ptr<MockTransactionExecutive> executive =
         std::make_shared<MockTransactionExecutive>(

@@ -19,7 +19,11 @@
  * @date 2021-04-21
  */
 #pragma once
+#include "bcos-utilities/Exceptions.h"
+#include <fmt/compile.h>
+#include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/throw_exception.hpp>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -122,7 +126,7 @@ enum class BlockVersion : uint32_t
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string V3_0_VERSION_STR = "3.0.0";
 const std::string V3_1_VERSION_STR = "3.1.0";
-const std::string V3_2_VERSION_STR = "3.2.0";
+// const std::string V3_2_VERSION_STR = "3.2.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
@@ -144,27 +148,25 @@ const uint8_t MIN_MAJOR_VERSION = 3;
         _v1);
     return flag;
 }
-inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion const& _version)
+
+struct InvalidVersion : public bcos::Exception
 {
-    switch (_version)
+};
+inline std::ostream& operator<<(std::ostream& out, bcos::protocol::BlockVersion version)
+{
+    if (version == bcos::protocol::BlockVersion::RC4_VERSION)
     {
-    case bcos::protocol::BlockVersion::RC4_VERSION:
-        _out << RC4_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_0_VERSION:
-        _out << V3_0_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_1_VERSION:
-        _out << V3_1_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_2_VERSION:
-        _out << V3_2_VERSION_STR;
-        break;
-    default:
-        _out << "Unknown";
-        break;
+        out << RC4_VERSION_STR;
+        return out;
     }
-    return _out;
+
+    auto versionNumber = static_cast<uint32_t>(version);
+    constexpr uint32_t num1 = (0x03020400 >> 24) & (0xff);
+    constexpr uint32_t num2 = (0x03020400 >> 16) & (0xff);
+    constexpr uint32_t num3 = (0x03020400 >> 8) & (0xff);
+
+    out << fmt::format(FMT_COMPILE("{}.{}.{}"), num1, num2, num3);
+    return out;
 }
 inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
 {
