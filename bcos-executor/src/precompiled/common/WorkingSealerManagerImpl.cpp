@@ -169,6 +169,19 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     {
         return true;
     }
+    auto featureSwitch =
+        _executive->storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_SWITCH);
+    if (featureSwitch)
+    {
+        auto featureInfo = featureSwitch->getObject<ledger::SystemConfigEntry>();
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: enable feature_rpbft last block")
+                               << LOG_KV("value", std::get<0>(featureInfo))
+                               << LOG_KV("enableBlk", std::get<1>(featureInfo));
+        if (std::get<1>(featureInfo) == blockContext.number())
+        {
+            return true;
+        }
+    }
     auto epochEntry =
         _executive->storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
     if (epochEntry) [[likely]]

@@ -42,8 +42,8 @@ public:
 
     bool hookWhenSealBlock(bcos::protocol::Block::Ptr _block) override;
 
-private:
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
-    bool generateTransactionForRotating(bcos::protocol::Block::Ptr& _block);
+    static bool generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,
+        SealerConfig::Ptr const&, SealingManager::ConstPtr const&, crypto::Hash::Ptr const&);
 };
 }  // namespace bcos::sealer

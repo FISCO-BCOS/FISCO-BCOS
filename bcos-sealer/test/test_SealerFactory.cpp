@@ -1,5 +1,6 @@
 #include "bcos-crypto/bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/bcos-crypto/signature/key/KeyImpl.h"
+#include "bcos-framework/testutils/faker/FakeConsensus.h"
 #include "bcos-sealer/SealerConfig.h"
 #include "bcos-sealer/SealerFactory.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
@@ -86,6 +87,10 @@ BOOST_AUTO_TEST_CASE(constructor)
     auto factory = std::make_shared<bcos::sealer::SealerFactory>(
         nodeConfig, blockFactory, nullptr, nullptr, nullptr);
     auto sealer = factory->createSealer();
+
+    consensus::ConsensusInterface::Ptr consensus = std::make_shared<test::FakeConsensus>();
+    sealer->init(consensus);
+
     BOOST_TEST(sealer != nullptr);
     BOOST_TEST(sealer->hookWhenSealBlock(nullptr) == true);
     sealer->start();
@@ -97,6 +102,7 @@ BOOST_AUTO_TEST_CASE(constructor)
     auto sealingManager = std::make_shared<bcos::sealer::SealingManager>(sealerConfig);
     BOOST_TEST(sealingManager != nullptr);
     sealingManager->stop();
+    consensus->stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

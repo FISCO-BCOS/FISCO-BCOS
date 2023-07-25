@@ -1102,6 +1102,13 @@ void SchedulerImpl::asyncGetLedgerConfig(
                 ledgerConfig->setFeatures(features);
             }
 
+            if (ledgerConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)
+            {
+                auto features = ledgerConfig->features();
+                features.set(ledger::Features::Flag::feature_rpbft);
+                ledgerConfig->setFeatures(features);
+            }
+
             (*callback)(nullptr, std::move(ledgerConfig));
         }
     };

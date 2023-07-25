@@ -19,6 +19,7 @@
  */
 #include "Sealer.h"
 #include "Common.h"
+#include "VRFBasedSealer.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 
 #include <utility>
@@ -26,6 +27,10 @@
 using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::protocol;
+namespace bcos::sealer
+{
+class VRFBasedSealer;
+}
 
 void Sealer::start()
 {
@@ -184,4 +189,14 @@ void Sealer::asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse)
     {
         _onRecvResponse(nullptr);
     }
+}
+
+bool Sealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
+{
+    if (!m_sealerConfig->consensus()->shouldRotateSealers())
+    {
+        return true;
+    }
+    return VRFBasedSealer::generateTransactionForRotating(
+        _block, m_sealerConfig, m_sealingManager, m_hashImpl);
 }

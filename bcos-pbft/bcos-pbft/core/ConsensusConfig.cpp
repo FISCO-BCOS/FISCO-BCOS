@@ -77,7 +77,7 @@ bool ConsensusConfig::isNodeExist(
             return _node->nodeID()->data() == _consensusNode->nodeID()->data() &&
                    _node->weight() == _consensusNode->weight();
         });
-    return _nodeList.end() == iter ? false : true;
+    return !(_nodeList.end() == iter);
 }
 
 void ConsensusConfig::setObserverNodeList(ConsensusNodeList& _observerNodeList)
