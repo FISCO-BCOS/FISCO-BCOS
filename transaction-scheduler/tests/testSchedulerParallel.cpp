@@ -15,11 +15,18 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-template <class Storage>
+class Precompiled;
+struct MockPrecompiledManager
+{
+    Precompiled const* getPrecompiled(unsigned long contractAddress) const { return nullptr; }
+};
+
+template <class Storage, class PrecompiledManager>
 struct MockExecutor
 {
     MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
-        [[maybe_unused]] auto&& tableNamePool)
+        [[maybe_unused]] auto&& tableNamePool,
+        [[maybe_unused]] PrecompiledManager const& precompiledManager)
     {}
 
     task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(
@@ -58,8 +65,9 @@ BOOST_FIXTURE_TEST_SUITE(TestSchedulerParallel, TestSchedulerParallelFixture)
 BOOST_AUTO_TEST_CASE(simple)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        SchedulerParallelImpl<decltype(multiLayerStorage), MockExecutor> scheduler(
-            multiLayerStorage, receiptFactory, tableNamePool);
+        MockPrecompiledManager percompiledManager;
+        SchedulerParallelImpl<decltype(multiLayerStorage), MockExecutor, MockPrecompiledManager>
+            scheduler(multiLayerStorage, receiptFactory, tableNamePool, percompiledManager);
 
         scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
@@ -81,16 +89,16 @@ BOOST_AUTO_TEST_CASE(simple)
     // Wait for tbb
 }
 
-template <StateStorage Storage>
+template <StateStorage Storage, class PrecompiledManager>
 struct MockConflictExecutor
 {
-    MockConflictExecutor(
-        Storage& storage, [[maybe_unused]] auto&& receiptFactory, TableNamePool& tableNamePool)
+    MockConflictExecutor(Storage& storage, [[maybe_unused]] auto&& receiptFactory,
+        TableNamePool& tableNamePool, [[maybe_unused]] PrecompiledManager const& percompiledManager)
       : m_storage(storage), m_tableNamePool(tableNamePool)
     {}
 
     task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(auto&& blockHeader,
-        protocol::IsTransaction auto const& transaction, [[maybe_unused]] int contextID)
+        protocol::Transaction const& transaction, [[maybe_unused]] int contextID)
     {
         auto input = transaction.input();
         auto inputNum =
@@ -147,8 +155,10 @@ struct MockConflictExecutor
 BOOST_AUTO_TEST_CASE(conflict)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        SchedulerParallelImpl<decltype(multiLayerStorage), MockConflictExecutor> scheduler(
-            multiLayerStorage, receiptFactory, tableNamePool);
+        MockPrecompiledManager percompiledManager;
+        SchedulerParallelImpl<decltype(multiLayerStorage), MockConflictExecutor,
+            MockPrecompiledManager>
+            scheduler(multiLayerStorage, receiptFactory, tableNamePool, percompiledManager);
         scheduler.setChunkSize(1);
         scheduler.setMaxToken(4);
         scheduler.start();

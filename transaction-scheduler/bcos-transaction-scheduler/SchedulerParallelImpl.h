@@ -20,15 +20,17 @@ namespace bcos::transaction_scheduler
 
 #define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
 
-template <class MultiLayerStorage, template <typename> class Executor>
-class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Executor>
+template <class MultiLayerStorage, template <typename, typename> class Executor,
+    class PrecompiledManager>
+class SchedulerParallelImpl
+  : public SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>
 {
 private:
     std::unique_ptr<tbb::task_group> m_asyncTaskGroup;
     using ChunkLocalStorage =
         transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
             decltype(std::declval<MultiLayerStorage>().fork(true))>;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor>::multiLayerStorage;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::multiLayerStorage;
     constexpr static size_t MIN_CHUNK_SIZE = 32;
     constexpr static size_t MAX_RETRY_COUNT = 30;
 
@@ -82,14 +84,15 @@ private:
         auto count() { return RANGES::size(m_transactionAndReceiptsRange); }
         ChunkLocalStorage& localStorage() & { return m_storages->m_localStorage; }
 
-        task::Task<bool> execute(protocol::IsBlockHeader auto const& blockHeader,
-            auto& receiptFactory, auto& tableNamePool)
+        task::Task<bool> execute(protocol::BlockHeader const& blockHeader, auto& receiptFactory,
+            auto& tableNamePool, PrecompiledManager const& precompiledManager)
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().CHUNK_EXECUTE);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
-            Executor<decltype(m_storages->m_readWriteSetStorage)> executor(
-                m_storages->m_readWriteSetStorage, receiptFactory, tableNamePool);
+            Executor<decltype(m_storages->m_readWriteSetStorage), PrecompiledManager> executor(
+                m_storages->m_readWriteSetStorage, receiptFactory, tableNamePool,
+                precompiledManager);
             for (auto&& [contextID, transaction, receipt] : m_transactionAndReceiptsRange)
             {
                 if (m_chunkIndex >= *m_lastChunkIndex)
@@ -162,36 +165,24 @@ private:
         }
     };
 
-    task::Task<void> serialExecute(protocol::BlockHeader const& blockHeader,
-        protocol::TransactionReceiptFactory& receiptFactory,
-        transaction_executor::TableNamePool& tableNamePool,
-        RANGES::range auto&& transactionAndReceipts, auto& storage)
-    {
-        Executor<std::remove_cvref_t<decltype(storage)>> executor(
-            storage, receiptFactory, tableNamePool);
-        for (auto&& [contextID, transaction, receipt] : transactionAndReceipts)
-        {
-            *receipt = co_await executor.execute(blockHeader, *transaction, contextID);
-        }
-    }
-
 public:
-    using SchedulerBaseImpl<MultiLayerStorage, Executor>::receiptFactory;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor>::tableNamePool;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::receiptFactory;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::tableNamePool;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::precompiledManager;
 
     SchedulerParallelImpl(MultiLayerStorage& multiLayerStorage,
         protocol::TransactionReceiptFactory& receiptFactory,
-        transaction_executor::TableNamePool& tableNamePool)
-      : SchedulerBaseImpl<MultiLayerStorage, Executor>(
-            multiLayerStorage, receiptFactory, tableNamePool),
+        transaction_executor::TableNamePool& tableNamePool,
+        PrecompiledManager const& precompiledManager)
+      : SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>(
+            multiLayerStorage, receiptFactory, tableNamePool, precompiledManager),
         m_asyncTaskGroup(std::make_unique<tbb::task_group>())
     {}
 
     ~SchedulerParallelImpl() noexcept { m_asyncTaskGroup->wait(); }
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
-        protocol::IsBlockHeader auto const& blockHeader,
-        RANGES::input_range auto const& transactions)
+        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
@@ -207,7 +198,6 @@ public:
             RANGES::views::zip(RANGES::views::iota(0LU, (size_t)RANGES::size(transactions)),
                 transactions | RANGES::views::addressof, receipts | RANGES::views::addressof);
 
-        // while (offset < RANGES::size(transactions) && retryCount < MAX_RETRY_COUNT)
         while (offset < RANGES::size(transactions))
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
@@ -261,8 +251,8 @@ public:
                             }
 
                             auto& chunkIt = *input;
-                            if (!task::syncWait(chunkIt->execute(
-                                    blockHeader, receiptFactory(), tableNamePool())))
+                            if (!task::syncWait(chunkIt->execute(blockHeader, receiptFactory(),
+                                    tableNamePool(), precompiledManager())))
                             {
                                 return {};
                             }

@@ -14,34 +14,38 @@
 namespace bcos::transaction_scheduler
 {
 
-template <class MultiLayerStorage, template <typename> class Executor>
+template <class MultiLayerStorage, template <typename, typename> class Executor,
+    class PrecompiledManager>
 class SchedulerBaseImpl
 {
 private:
     MultiLayerStorage& m_multiLayerStorage;
     protocol::TransactionReceiptFactory& m_receiptFactory;
     transaction_executor::TableNamePool& m_tableNamePool;
+    PrecompiledManager const& m_precompiledManager;
 
 public:
     SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage,
         protocol::TransactionReceiptFactory& receiptFactory,
-        transaction_executor::TableNamePool& tableNamePool)
+        transaction_executor::TableNamePool& tableNamePool,
+        PrecompiledManager const& precompiledManager)
       : m_multiLayerStorage(multiLayerStorage),
         m_receiptFactory(receiptFactory),
-        m_tableNamePool(tableNamePool)
+        m_tableNamePool(tableNamePool),
+        m_precompiledManager(precompiledManager)
     {}
 
     void start() { m_multiLayerStorage.newMutable(); }
     task::Task<bcos::h256> finish(
-        protocol::IsBlockHeader auto const& blockHeader, crypto::Hash const& hashImpl)
+        protocol::BlockHeader const& blockHeader, crypto::Hash const& hashImpl)
     {
         auto& mutableStorage = m_multiLayerStorage.mutableStorage();
         auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
 
         static constexpr int HASH_CHUNK_SIZE = 32;
         auto range = it.range() | RANGES::views::chunk(HASH_CHUNK_SIZE);
-        tbb::combinable<bcos::h256> combinableHash;
 
+        tbb::combinable<bcos::h256> combinableHash;
         tbb::task_group taskGroup;
         for (auto&& subrange : range)
         {
@@ -84,13 +88,15 @@ public:
         auto view = m_multiLayerStorage.fork(false);
         view.newTemporaryMutable();
 
-        Executor<decltype(view)> executor(view, m_receiptFactory, m_tableNamePool);
+        Executor<decltype(view), PrecompiledManager> executor(
+            view, m_receiptFactory, m_tableNamePool, m_precompiledManager);
         co_return co_await executor.execute(blockHeader, transaction, 0);
     }
 
     MultiLayerStorage& multiLayerStorage() & { return m_multiLayerStorage; }
     decltype(m_receiptFactory)& receiptFactory() & { return m_receiptFactory; }
     transaction_executor::TableNamePool& tableNamePool() & { return m_tableNamePool; }
+    PrecompiledManager const& precompiledManager() const& { return m_precompiledManager; }
 };
 
 }  // namespace bcos::transaction_scheduler

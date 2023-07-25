@@ -23,9 +23,11 @@
 
 #include "../Common.h"
 #include "bcos-task/Wait.h"
+#include "bcos-transaction-executor/vm/HostContext.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
+#include <boost/core/pointer_traits.hpp>
 #include <boost/optional.hpp>
 #include <functional>
 #include <set>
@@ -142,11 +144,17 @@ template <class HostContextType>
 evmc_tx_context getTxContext(evmc_host_context* context) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
-    evmc_tx_context result = {};
-    result.tx_origin = hostContext.origin();
-    result.block_number = hostContext.blockNumber();
-    result.block_timestamp = hostContext.timestamp();
-    result.block_gas_limit = hostContext.blockGasLimit();
+    evmc_tx_context result = {
+        .tx_gas_price = {},
+        .tx_origin = hostContext.origin(),
+        .block_coinbase = {},
+        .block_number = hostContext.blockNumber(),
+        .block_timestamp = hostContext.timestamp(),
+        .block_gas_limit = hostContext.blockGasLimit(),
+        .block_prev_randao = {},
+        .chain_id = {},
+        .block_base_fee = {},
+    };
     return result;
 }
 
@@ -167,7 +175,10 @@ evmc_result call(evmc_host_context* context, const evmc_message* message) noexce
     }
 
     auto& hostContext = static_cast<HostContextType&>(*context);
-    return task::syncWait(hostContext.externalCall(*message));
+    auto result = task::syncWait(hostContext.externalCall(*message));
+    evmc_result evmcResult = result;
+    result.release = nullptr;
+    return evmcResult;
 }
 
 template <class HostContextType>

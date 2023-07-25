@@ -46,6 +46,8 @@ inline auto getLogger(LogLevel level)
     return bcos::FileLoggerHandler;
 }
 
+constexpr static evmc_address EMPTY_ADDRESS = {};
+
 static constexpr std::string_view USER_TABLE_PREFIX = "/tables/";
 static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
 static constexpr std::string_view USER_SYS_PREFIX = "/sys/";
@@ -123,6 +125,39 @@ struct GlobalHashImpl
     static bcos::crypto::Hash::Ptr g_hashImpl;
 };
 
+class EVMCResult : public evmc_result
+{
+public:
+    explicit EVMCResult(evmc_result const& result) : evmc_result(result) {}
+    EVMCResult(const EVMCResult&) = delete;
+    EVMCResult(EVMCResult&& from) noexcept : evmc_result(from)
+    {
+        from.release = nullptr;
+        from.output_data = nullptr;
+        from.output_size = 0;
+    }
+    EVMCResult& operator=(const EVMCResult&) = delete;
+    EVMCResult& operator=(EVMCResult&& from) noexcept
+    {
+        static_cast<evmc_result&>(*this) = from;
+        from.release = nullptr;
+        from.output_data = nullptr;
+        from.output_size = 0;
+        return *this;
+    }
+
+    ~EVMCResult() noexcept
+    {
+        if (release != nullptr)
+        {
+            release(static_cast<evmc_result*>(this));
+            release = nullptr;
+            output_data = nullptr;
+            output_size = 0;
+        }
+    }
+};
+
 struct SubState
 {
     std::set<std::string> suicides;  ///< Any accounts that have suicided.
@@ -171,6 +206,7 @@ static const VMSchedule FiscoBcosScheduleV320 = [] {
 }();
 
 static const VMSchedule DefaultSchedule = FiscoBcosScheduleV320;
+static constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
 
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
@@ -208,6 +244,7 @@ inline evmc_bytes32 toEvmC(bcos::h256 const& hash)
     std::uninitialized_copy(hash.begin(), hash.end(), evmBytes.bytes);
     return evmBytes;
 }
+
 /**
  * @brief : trans uint256 number of evm-represented to u256
  * @param _n : the uint256 number that can parsed by evm
@@ -243,21 +280,21 @@ inline bytes toBytes(const std::string_view& _addr)
     return {(char*)_addr.data(), (char*)(_addr.data() + _addr.size())};
 }
 
-inline std::string getContractTableName(const std::string_view& _address)
+inline std::string getContractTableName(const std::string_view& address)
 {
     constexpr static std::string_view prefix("/apps/");
     std::string out;
-    if (_address[0] == '/')
+    if (address[0] == '/')
     {
-        out.reserve(prefix.size() + _address.size() - 1);
+        out.reserve(prefix.size() + address.size() - 1);
         std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
-        std::copy(_address.begin() + 1, _address.end(), std::back_inserter(out));
+        std::copy(address.begin() + 1, address.end(), std::back_inserter(out));
     }
     else
     {
-        out.reserve(prefix.size() + _address.size());
+        out.reserve(prefix.size() + address.size());
         std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
-        std::copy(_address.begin(), _address.end(), std::back_inserter(out));
+        std::copy(address.begin(), address.end(), std::back_inserter(out));
     }
 
     return out;
