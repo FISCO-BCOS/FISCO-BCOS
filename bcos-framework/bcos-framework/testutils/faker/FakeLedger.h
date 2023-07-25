@@ -22,6 +22,7 @@
 #include "../../ledger/LedgerConfig.h"
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
+#include "bcos-tars-protocol/testutil/FakeBlock.h"
 #include <bcos-utilities/ThreadPool.h>
 
 #include <utility>

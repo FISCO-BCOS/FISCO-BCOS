@@ -55,7 +55,8 @@ public:
         bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr);
     virtual ~RpcFactory() = default;
 
-    std::shared_ptr<boostssl::ws::WsConfig> initConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
+    std::shared_ptr<boostssl::ws::WsConfig> initConfig(
+        const bcos::tool::NodeConfig::Ptr& _nodeConfig);
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
         bcos::boostssl::ws::WsConfig::Ptr _config);
 
@@ -83,9 +84,11 @@ protected:
 
 
     bcos::rpc::JsonRpcImpl_2_0::Ptr buildJsonRpc(int sendTxTimeout,
-        std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
+        const std::shared_ptr<boostssl::ws::WsService>& _wsService,
+        GroupManager::Ptr _groupManager);
     bcos::event::EventSub::Ptr buildEventSub(
-        std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
+        const std::shared_ptr<boostssl::ws::WsService>& _wsService,
+        GroupManager::Ptr _groupManager);
 
 private:
     std::string m_chainID;

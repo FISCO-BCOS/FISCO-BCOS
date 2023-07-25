@@ -8,18 +8,20 @@ namespace bcos::transaction_scheduler
 
 #define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
 
-template <class MultiLayerStorage, template <typename> class Executor>
-class SchedulerSerialImpl : public SchedulerBaseImpl<MultiLayerStorage, Executor>
+template <class MultiLayerStorage, template <typename, typename> class Executor,
+    class PrecompiledManager>
+class SchedulerSerialImpl
+  : public SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>
 {
 public:
-    using SchedulerBaseImpl<MultiLayerStorage, Executor>::SchedulerBaseImpl;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor>::multiLayerStorage;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor>::receiptFactory;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor>::tableNamePool;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::SchedulerBaseImpl;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::multiLayerStorage;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::receiptFactory;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::tableNamePool;
+    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::precompiledManager;
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
-        protocol::IsBlockHeader auto const& blockHeader,
-        RANGES::input_range auto const& transactions)
+        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
     {
         auto view = multiLayerStorage().fork(true);
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
@@ -29,7 +31,8 @@ public:
         }
 
         int contextID = 0;
-        Executor<decltype(view)> executor(view, receiptFactory(), tableNamePool());
+        Executor<decltype(view), PrecompiledManager> executor(
+            view, receiptFactory(), tableNamePool(), precompiledManager());
         for (auto const& transaction : transactions)
         {
             receipts.emplace_back(co_await executor.execute(blockHeader, transaction, contextID++));
