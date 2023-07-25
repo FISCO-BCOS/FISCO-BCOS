@@ -871,6 +871,8 @@ done
 
 
 if [ ! -z \${node_pid} ];then
+    kill -USR1 \${node_pid}
+    kill -USR2 \${node_pid}
     echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
 else

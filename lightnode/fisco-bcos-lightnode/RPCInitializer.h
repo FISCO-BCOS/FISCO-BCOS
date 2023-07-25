@@ -100,6 +100,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             groupInfo->setGroupID(nodeConfig->groupId());
             groupInfo->setWasm(nodeConfig->isWasm());
             groupInfo->setIniConfig("");
+            groupInfo->setSmCryptoType(nodeConfig->smCryptoType());
 
             auto nodeInfo = std::make_shared<bcos::group::ChainNodeInfo>();
 
