@@ -312,7 +312,7 @@ public:
             ++retryCount;
         }
 
-        PARALLEL_SCHEDULER_LOG(DEBUG)
+        PARALLEL_SCHEDULER_LOG(INFO)
             << "Parallel scheduler execute finished, retry counts: " << retryCount;
         m_asyncTaskGroup->run([storageView = std::move(storageView)]() {});
 

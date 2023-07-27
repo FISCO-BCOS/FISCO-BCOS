@@ -59,6 +59,8 @@ public:
     void pushBlockNumber(long blockNumber);
     void pushAMOPMessage(std::string_view topic, bcos::bytesConstRef message);
 
+    static std::string generateTarsConfig(std::string_view host, uint16_t port, size_t threadCount);
+
 private:
     Params m_params;
 };

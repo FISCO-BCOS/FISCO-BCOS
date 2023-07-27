@@ -1,5 +1,6 @@
 #include "RPCServer.h"
 #include "../Common.h"
+#include "Config.h"
 #include "bcos-concepts/Serialize.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
@@ -164,4 +165,20 @@ void bcos::rpc::RPCApplication::pushBlockNumber(long blockNumber)
 {
     for (auto& [current, _] : m_params.sessions)
     {}
+}
+
+std::string bcos::rpc::RPCApplication::generateTarsConfig(
+    std::string_view host, uint16_t port, size_t threadCount)
+{
+    constexpr static std::string_view HOST_PLACEHOLDER = "[[TARS_HOST]]";
+    constexpr static std::string_view PORT_PLACEHOLDER = "[[TARS_PORT]]";
+    constexpr static std::string_view THREAD_COUNT_PLACEHOLDER = "[[TARS_THREAD_COUNT]]";
+
+    std::string config{TARS_CONFIG_TEMPLATE};
+    config.replace(config.find(HOST_PLACEHOLDER), HOST_PLACEHOLDER.size(), host);
+    config.replace(config.find(PORT_PLACEHOLDER), PORT_PLACEHOLDER.size(), std::to_string(port));
+    config.replace(config.find(THREAD_COUNT_PLACEHOLDER), THREAD_COUNT_PLACEHOLDER.size(),
+        std::to_string(threadCount));
+
+    return config;
 }
