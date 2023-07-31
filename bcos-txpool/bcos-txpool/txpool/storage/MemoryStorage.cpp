@@ -1081,7 +1081,8 @@ void MemoryStorage::cleanUpExpiredTransactions()
             traversedTxsNum++;
             continue;
         }
-        if (tx->sealed() && tx->batchId() >= m_blockNumber)
+        if (tx->sealed() &&
+            (tx->batchId() >= m_blockNumber || tx->batchId() == -1))  // -1 means seal by my self
         {
             continue;
         }
