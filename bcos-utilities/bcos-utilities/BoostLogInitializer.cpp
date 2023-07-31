@@ -266,7 +266,7 @@ unsigned BoostLogInitializer::getLogLevel(std::string const& levelStr)
         return boost::log::trivial::severity_level::debug;
     if (boost::iequals(levelStr, "warning"))
         return boost::log::trivial::severity_level::warning;
-    if (boost::iequals(levelStr, "error"))
+    if (boost::iequals(levelStr, "failed"))
         return boost::log::trivial::severity_level::error;
     if (boost::iequals(levelStr, "fatal"))
         return boost::log::trivial::severity_level::fatal;

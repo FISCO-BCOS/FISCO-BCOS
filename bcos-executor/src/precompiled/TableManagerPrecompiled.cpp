@@ -208,7 +208,7 @@ void TableManagerPrecompiled::createKVTable(
     if (response->status != (int32_t)TransactionStatus::None)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
-                              << LOG_DESC("create kv table error")
+                              << LOG_DESC("create kv table failed")
                               << LOG_KV("tableName", newTableName) << LOG_KV("valueField", value);
         BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
     }
@@ -432,7 +432,8 @@ void TableManagerPrecompiled::externalCreateTable(
     if (response->status != (int32_t)TransactionStatus::None)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
-                              << LOG_DESC("create table error") << LOG_KV("tableName", newTableName)
+                              << LOG_DESC("create table failed")
+                              << LOG_KV("tableName", newTableName)
                               << LOG_KV("valueField", valueField);
         BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
     }

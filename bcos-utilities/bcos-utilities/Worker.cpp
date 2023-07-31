@@ -75,7 +75,7 @@ void Worker::startWorking()
                 {
                     BCOS_LOG(WARNING) << LOG_DESC("Exception thrown in Worker thread")
                                       << LOG_KV("threadName", m_threadName)
-                                      << LOG_KV("errorMsg", boost::diagnostic_information(e));
+                                      << LOG_KV("message", boost::diagnostic_information(e));
                 }
 
                 {

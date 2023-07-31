@@ -165,7 +165,7 @@ std::shared_ptr<PrecompiledExecResult> DagTransferPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("error func")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("invalid func")
                               << LOG_KV("func", func);
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());

@@ -101,7 +101,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
 {
     if (_e.errorCode())
     {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveStatusSeq error")
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveStatusSeq failed")
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
@@ -136,7 +136,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
 {
     if (_e.errorCode())
     {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveNodeStatus error")
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveNodeStatus failed")
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
@@ -185,7 +185,7 @@ void GatewayNodeManager::onRequestNodeStatus(
 {
     if (_e.errorCode())
     {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus network error")
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus network failed")
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
@@ -193,7 +193,7 @@ void GatewayNodeManager::onRequestNodeStatus(
     auto nodeStatusData = generateNodeStatus();
     if (!nodeStatusData)
     {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus: generate nodeInfo error")
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus: generate nodeInfo failed")
                                   << LOG_KV("from", from);
         return;
     }

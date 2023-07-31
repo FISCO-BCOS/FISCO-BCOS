@@ -96,7 +96,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 
                 if (result != TransactionStatus::None)
                 {
-                    TXPOOL_LOG(DEBUG) << "Submit transaction error! " << result;
+                    TXPOOL_LOG(DEBUG) << "Submit transaction failed! " << result;
                     m_submitResult.emplace<Error::Ptr>(
                         BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
                     handle.resume();
@@ -104,7 +104,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             }
             catch (std::exception& e)
             {
-                TXPOOL_LOG(ERROR) << "Unexpected exception: " << boost::diagnostic_information(e);
+                TXPOOL_LOG(WARNING) << "Unexpected exception: " << boost::diagnostic_information(e);
                 m_submitResult.emplace<Error::Ptr>(
                     BCOS_ERROR_PTR((int32_t)TransactionStatus::Malform, "Unknown exception"));
                 handle.resume();
@@ -418,7 +418,7 @@ void MemoryStorage::notifyTxResult(
     catch (std::exception const& e)
     {
         TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxResult failed") << LOG_KV("tx", txHash.abridged())
-                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                            << LOG_KV("info", boost::diagnostic_information(e));
     }
 }
 
@@ -435,7 +435,7 @@ void MemoryStorage::printPendingTxs()
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle")
                       << LOG_KV("pendingSize", m_txsTable.size());
-    for (auto item : m_txsTable)
+    for (const auto& item : m_txsTable)
     {
         auto tx = item.second;
         if (!tx)
@@ -443,8 +443,8 @@ void MemoryStorage::printPendingTxs()
             continue;
         }
         TXPOOL_LOG(DEBUG) << LOG_KV("hash", tx->hash()) << LOG_KV("batchId", tx->batchId())
-                         << LOG_KV("batchHash", tx->batchHash().abridged())
-                         << LOG_KV("sealed", tx->sealed());
+                          << LOG_KV("batchHash", tx->batchHash().abridged())
+                          << LOG_KV("sealed", tx->sealed());
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle finish");
 }
@@ -735,7 +735,7 @@ void MemoryStorage::removeInvalidTxs(bool lock)
     catch (std::exception const& e)
     {
         TXPOOL_LOG(WARNING) << LOG_DESC("removeInvalidTxs exception")
-                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                            << LOG_KV("info", boost::diagnostic_information(e));
     }
 }
 
@@ -926,8 +926,8 @@ void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
             return;
         }
         TXPOOL_LOG(WARNING) << LOG_DESC("notifyUnsealedTxsSize failed")
-                            << LOG_KV("errorCode", _error->errorCode())
-                            << LOG_KV("errorMsg", _error->errorMessage());
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("message", _error->errorMessage());
         auto memoryStorage = self.lock();
         if (!memoryStorage)
         {
@@ -967,14 +967,31 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
         else if (txIt->second->sealed())
         {
             auto header = _block->blockHeader();
-            if ((txIt->second->batchId() != header->number() && txIt->second->batchId() != -1) ||
-                txIt->second->batchHash() != header->hash())
+            if ((txIt->second->batchId() != header->number() && txIt->second->batchId() != -1))
+                [[unlikely]]
             {
-                TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
-                                 << LOG_KV("blkNum", header->number())
-                                 << LOG_KV("blkHash", header->hash().abridged())
-                                 << LOG_KV("txBatchId", txIt->second->batchId())
-                                 << LOG_KV("txBatchHash", txIt->second->batchHash().abridged());
+                if (c_fileLogLevel == TRACE)
+                {
+                    TXPOOL_LOG(TRACE)
+                        << LOG_DESC("batchVerifyProposal unexpected wrong tx")
+                        << LOG_KV("blkNum", header->number())
+                        << LOG_KV("blkHash", header->hash().abridged())
+                        << LOG_KV("txBatchId", txIt->second->batchId())
+                        << LOG_KV("txBatchHash", txIt->second->batchHash().abridged());
+                }
+                // NOTE: In certain scenarios, a bug may occur here: The leader generates the (N)th
+                // proposal, which includes transaction A. The local node puts this proposal into
+                // the cache and sets the batchId of transaction A to (N) and the batchHash to the
+                // hash of the (N)th proposal.
+                // However, at this point, a view change happens, and the next leader completes the
+                // resetTx operation for the (N)th proposal and includes transaction A in the new
+                // block of the (N)th proposal.
+                // Meanwhile, the local node, due to the lengthy resetTx operation caused by the
+                // view change, has not completed it yet, and it receives the (N+1)th proposal sent
+                // by the new leader. During the verification process, transaction A has a
+                // consistent batchId, but the batchHash doesn't match the one in the (N+1)th
+                // proposal, leading to false positives.
+                // Therefore, we do not validate the consistency of the batchHash for now.
                 return nullptr;
             }
         }
@@ -1002,7 +1019,7 @@ bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 HashListPtr MemoryStorage::getTxsHash(int _limit)
 {
     auto txsHash = std::make_shared<HashList>();
-    ReadGuard l(x_txpoolMutex);
+    UpgradableGuard l(x_txpoolMutex);
     for (auto const& it : m_txsTable)
     {
         auto tx = it.second;
@@ -1021,6 +1038,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
         }
         txsHash->emplace_back(it.first);
     }
+    UpgradeGuard ulock(l);
     removeInvalidTxs(false);
     return txsHash;
 }
@@ -1043,6 +1061,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
     {
         return;
     }
+    // printPendingTxs();
     size_t traversedTxsNum = 0;
     size_t erasedTxs = 0;
     int64_t currentTime = utcTime();
@@ -1102,7 +1121,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         if (ret != TransactionStatus::None)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("batchImportTxs failed")
-                              << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("error", ret);
+                              << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("failed", ret);
             continue;
         }
         successCount++;

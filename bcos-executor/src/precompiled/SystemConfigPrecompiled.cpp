@@ -172,7 +172,9 @@ int64_t SystemConfigPrecompiled::validate(
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
     auto featureKeys = ledger::Features::featureKeys();
-    bool setFeature = (RANGES::find(featureKeys, key) != featureKeys.end());
+    bool setFeature =
+        (blockVersion >= static_cast<uint32_t>(protocol::BlockVersion::V3_2_3_VERSION)) &&
+        (RANGES::find(featureKeys, key) != featureKeys.end());
     if (!c_supportedKey.contains(key) && !setFeature)
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
@@ -208,7 +210,7 @@ int64_t SystemConfigPrecompiled::validate(
             std::to_string(bcos::protocol::MIN_MAJOR_VERSION) + " to " +
             std::to_string(bcos::protocol::MAX_MAJOR_VERSION);
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: invalid version")
-                              << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                              << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg));
     }
     catch (std::exception const& e)
@@ -216,7 +218,7 @@ int64_t SystemConfigPrecompiled::validate(
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                               << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
                               << LOG_KV("value", value)
-                              << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                              << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             PrecompiledError("The value for " + key + " must be a valid number."));
     }

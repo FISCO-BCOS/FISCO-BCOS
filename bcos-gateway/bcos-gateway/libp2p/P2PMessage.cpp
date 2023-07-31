@@ -158,7 +158,7 @@ ssize_t P2PMessageOptions::decode(bytesConstRef _buffer)
     }
     catch (const std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << LOG_DESC("decode message error")
+        P2PMSG_LOG(ERROR) << LOG_DESC("decode message failed")
                           << LOG_KV("e", boost::diagnostic_information(e));
         // invalid packet?
         return MessageDecodeStatus::MESSAGE_ERROR;

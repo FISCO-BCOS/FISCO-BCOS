@@ -260,7 +260,9 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
 {
+    auto startT = utcSteadyTime();
     RecursiveGuard lock(m_mutex);
+    auto lockNotifyT = utcSteadyTime() - startT;
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
     {
@@ -292,6 +294,7 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     if (m_sealEndIndex.load() >= endProposalIndex)
     {
         PBFT_LOG(INFO) << LOG_DESC("notifySealer return for invalid seal range")
+                       << LOG_KV("lockNotifyT", lockNotifyT)
                        << LOG_KV("currentEndIndex", m_sealEndIndex)
                        << LOG_KV("expectedEndIndex", endProposalIndex) << printCurrentState();
         return;
@@ -300,6 +303,7 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     if (startSealIndex > endProposalIndex)
     {
         PBFT_LOG(INFO) << LOG_DESC("notifySealer return for invalid seal range")
+                       << LOG_KV("lockNotifyT", lockNotifyT)
                        << LOG_KV("expectedStartIndex", startSealIndex)
                        << LOG_KV("expectedEndIndex", endProposalIndex) << printCurrentState();
         return;
@@ -334,8 +338,8 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     m_sealStartIndex = startSealIndex;
     m_sealEndIndex = endProposalIndex;
     PBFT_LOG(INFO) << LOG_DESC("notifySealer: notify the new leader to seal block")
-                   << LOG_KV("idx", nodeIndex()) << LOG_KV("startIndex", startSealIndex)
-                   << LOG_KV("endIndex", endProposalIndex)
+                   << LOG_KV("lockNotifyT", lockNotifyT) << LOG_KV("idx", nodeIndex())
+                   << LOG_KV("startIndex", startSealIndex) << LOG_KV("endIndex", endProposalIndex)
                    << LOG_KV("notifyBeginIndex", _progressedIndex)
                    << LOG_KV("waitSealUntil", m_waitSealUntil)
                    << LOG_KV("waitResealUntil", m_waitResealUntil)
@@ -380,7 +384,7 @@ void PBFTConfig::asyncNotifySealProposal(
             catch (std::exception const& e)
             {
                 PBFT_LOG(WARNING) << LOG_DESC("asyncNotifySealProposal exception")
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("failed", boost::diagnostic_information(e));
             }
         });
 }

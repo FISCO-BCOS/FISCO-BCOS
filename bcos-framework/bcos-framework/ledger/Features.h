@@ -73,7 +73,7 @@ public:
 
     void setToDefault(protocol::BlockVersion version)
     {
-        if (version >= protocol::BlockVersion::V3_2_VERSION)
+        if (version >= protocol::BlockVersion::V3_2_3_VERSION)
         {
             set(Flag::bugfix_revert);
         }

@@ -481,13 +481,31 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
     BOOST_CHECK_EQUAL(f6.get(), true);
 }
 
-BOOST_AUTO_TEST_CASE(features)
+BOOST_AUTO_TEST_CASE(featuresIn320)
 {
     auto param = std::make_shared<LedgerConfig>();
     param->setBlockNumber(0);
     param->setHash(HashType(""));
     param->setBlockTxCountLimit(0);
     m_ledger->buildGenesisBlock(param, 3000000000, "", "3.2.0");
+    std::promise<void> promise;
+    auto future = promise.get_future();
+    m_storage->asyncGetRow(
+        SYS_CONFIG, "bugfix_revert", [&promise](Error::UniquePtr, std::optional<Entry> entry) {
+            BOOST_CHECK(!entry.has_value());
+            promise.set_value();
+        });
+
+    future.get();
+}
+
+BOOST_AUTO_TEST_CASE(featuresIn323)
+{
+    auto param = std::make_shared<LedgerConfig>();
+    param->setBlockNumber(0);
+    param->setHash(HashType(""));
+    param->setBlockTxCountLimit(0);
+    m_ledger->buildGenesisBlock(param, 3000000000, "", "3.2.3");
     std::promise<void> promise;
     auto future = promise.get_future();
     m_storage->asyncGetRow(

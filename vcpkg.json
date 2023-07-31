@@ -29,6 +29,7 @@
     "ms-gsl",
     "zstd",
     "tbb",
+    "fmt",
     "zlib",
     {
       "name": "redis-plus-plus",
