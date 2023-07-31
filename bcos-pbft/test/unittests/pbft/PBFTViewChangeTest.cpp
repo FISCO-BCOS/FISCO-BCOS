@@ -107,6 +107,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     {
         otherNode.second->pbftEngine()->executeWorker();
     }
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     // assume five nodes into preCommit
     size_t precommitSize = 5;
     for (size_t i = 0; i < std::min(precommitSize, fakerMap.size()); i++)

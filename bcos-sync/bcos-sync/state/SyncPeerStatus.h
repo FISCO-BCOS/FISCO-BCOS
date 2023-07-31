@@ -23,9 +23,8 @@
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/state/DownloadRequestQueue.h"
 #include "bcos-sync/utilities/Common.h"
-namespace bcos
-{
-namespace sync
+#include <utility>
+namespace bcos::sync
 {
 class PeerStatus
 {
@@ -39,7 +38,7 @@ public:
     PeerStatus(BlockSyncConfig::Ptr _config, bcos::crypto::PublicPtr _nodeId,
         BlockSyncStatusInterface::ConstPtr _status);
 
-    virtual ~PeerStatus() {}
+    virtual ~PeerStatus() = default;
 
     virtual bool update(BlockSyncStatusInterface::ConstPtr _status);
 
@@ -86,11 +85,11 @@ class SyncPeerStatus
 {
 public:
     using Ptr = std::shared_ptr<SyncPeerStatus>;
-    explicit SyncPeerStatus(BlockSyncConfig::Ptr _config) : m_config(_config) {}
-    virtual ~SyncPeerStatus() {}
+    explicit SyncPeerStatus(BlockSyncConfig::Ptr _config) : m_config(std::move(_config)) {}
+    virtual ~SyncPeerStatus() = default;
 
-    virtual bool hasPeer(bcos::crypto::PublicPtr _peer);
-    virtual PeerStatus::Ptr peerStatus(bcos::crypto::PublicPtr _peer);
+    virtual bool hasPeer(bcos::crypto::PublicPtr const& _peer) const;
+    virtual PeerStatus::Ptr peerStatus(bcos::crypto::PublicPtr const& _peer) const;
     virtual bool updatePeerStatus(
         bcos::crypto::PublicPtr _peer, BlockSyncStatusInterface::ConstPtr _peerStatus);
     virtual void deletePeer(bcos::crypto::PublicPtr _peer);
@@ -104,10 +103,14 @@ protected:
     virtual void updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr _peerStatus);
 
 private:
+    auto peersStatsCopy() const
+    {
+        Guard lock(x_peersStatus);
+        return m_peersStatus;
+    }
     std::map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyCompare> m_peersStatus;
     mutable Mutex x_peersStatus;
 
     BlockSyncConfig::Ptr m_config;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

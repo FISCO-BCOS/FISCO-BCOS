@@ -39,4 +39,4 @@ private:
     static constexpr std::int64_t m_minTimeOffset{3 * 60 * 1000};
     static constexpr std::int64_t m_minInitOffset{1 * 60 * 1000};
 };
-}  // namespace bcos
+}  // namespace bcos::tool
