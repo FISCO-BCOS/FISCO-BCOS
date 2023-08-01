@@ -173,6 +173,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         result.release = nullptr;  // no output to release
         result.gas_left = 0;
         result.gas_refund = 0;
+        result.output_size = 0;
         return result;
     }
     case EVMC_CREATE:
