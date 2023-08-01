@@ -60,6 +60,21 @@ public:
         return _first->data() < _second->data();
     }
 };
+
+struct KeyHasher
+{
+    size_t hash(KeyInterface::Ptr const& _key) const
+    {
+        size_t seed = hashString(_key->hex());
+        return seed;
+    }
+
+    bool equal(const KeyInterface::Ptr& lhs, const KeyInterface::Ptr& rhs) const
+    {
+        return lhs->data() == rhs->data();
+    }
+    std::hash<std::string_view> hashString;
+};
 using NodeIDSet = std::set<bcos::crypto::NodeIDPtr, KeyCompare>;
 using NodeIDSetPtr = std::shared_ptr<NodeIDSet>;
 }  // namespace crypto

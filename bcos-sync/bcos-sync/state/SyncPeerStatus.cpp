@@ -79,13 +79,13 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
     return true;
 }
 
-bool SyncPeerStatus::hasPeer(PublicPtr _peer)
+bool SyncPeerStatus::hasPeer(PublicPtr const& _peer) const
 {
     Guard lock(x_peersStatus);
     return m_peersStatus.contains(_peer);
 }
 
-PeerStatus::Ptr SyncPeerStatus::peerStatus(bcos::crypto::PublicPtr _peer)
+PeerStatus::Ptr SyncPeerStatus::peerStatus(bcos::crypto::PublicPtr const& _peer) const
 {
     Guard lock(x_peersStatus);
     auto iter = m_peersStatus.find(_peer);
@@ -180,35 +180,33 @@ void SyncPeerStatus::deletePeer(PublicPtr _peer)
 
 void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _func) const
 {
-    Guard lock(x_peersStatus);
-    if (m_peersStatus.empty())
-    {
-        return;
-    }
-
     // Get nodeid list
     NodeIDs nodeIds;
-    for (const auto& peer : m_peersStatus)
     {
-        nodeIds.emplace_back(peer.first);
-    }
+        Guard lock(x_peersStatus);
+        if (m_peersStatus.empty())
+        {
+            return;
+        }
+        for (const auto& peer : m_peersStatus)
+        {
+            nodeIds.emplace_back(peer.first);
+        }
 
-    // Random nodeid list
-    for (size_t i = nodeIds.size() - 1; i > 0; --i)
-    {
-        size_t select = rand() % (i + 1);
-        swap(nodeIds[i], nodeIds[select]);
+        // Random nodeid list
+        for (size_t i = nodeIds.size() - 1; i > 0; --i)
+        {
+            size_t select = rand() % (i + 1);
+            swap(nodeIds[i], nodeIds[select]);
+        }
     }
 
     // access _f() according to the random list
     for (const auto& nodeId : nodeIds)
     {
-        auto const& peer = m_peersStatus.find(nodeId);
-        if (peer == m_peersStatus.end())
-        {
-            continue;
-        }
-        if (peer->second && !_func(peer->second))
+        // check the peers status in case peersStatus changed during the loop
+        auto const& peer = peerStatus(nodeId);
+        if (peer && !_func(peer))
         {
             break;
         }
@@ -217,8 +215,9 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
 
 void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _func) const
 {
-    Guard lock(x_peersStatus);
-    for (const auto& peer : m_peersStatus)
+    // copy the peers status in case peersStatus changed during the loop
+    auto&& peersStatus = peersStatsCopy();
+    for (const auto& peer : peersStatus)
     {
         if (peer.second && !_func(peer.second))
         {
