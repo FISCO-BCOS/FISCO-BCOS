@@ -90,6 +90,7 @@ BOOST_AUTO_TEST_CASE(serialTest)
 
 
         {  // constains
+            ReadAccessor::Ptr accessor;
             bool has = bucketMap.contains(i);
             BOOST_CHECK(has);
         }

@@ -43,7 +43,7 @@ struct SubmitTransactionError : public bcos::error::Exception
 MemoryStorage::MemoryStorage(
     TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)),
-    m_txsTable(256),
+    m_txsTable(2),
     m_invalidTxs(256),
     m_missedTxs(32),
     m_txsExpirationTime(_txsExpirationTime),
@@ -614,6 +614,10 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
+    if (_txsLimit > 100)
+    {
+        _txsLimit = 100;
+    }
     TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
                      << LOG_KV("limit", _txsLimit);
     auto blockFactory = m_config->blockFactory();
@@ -719,7 +723,20 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         m_txsTable.forEach<TxsMap::ReadAccessor>(
             m_knownLatestSealedTxHash, [&](TxsMap::ReadAccessor::Ptr accessor) {
                 const auto& tx = accessor->value();
+                //                auto _eachBucketTxsLimit = _txsLimit / 256;
+                //                auto _lastBucketTxsLimit = _txsLimit % 256;
                 handleTx(tx);
+                //                if(traverseCount <= 256 * _eachBucketTxsLimit)
+                //                {
+                //                    return (_txsList->transactionsMetaDataSize() +
+                //                               _sysTxsList->transactionsMetaDataSize()) <
+                //                               _eachBucketTxsLimit;
+                //                }
+                //                else{
+                //                    return (_txsList->transactionsMetaDataSize() +
+                //                               _sysTxsList->transactionsMetaDataSize()) <
+                //                               _lastBucketTxsLimit;
+                //                }
                 return (_txsList->transactionsMetaDataSize() +
                            _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
             });

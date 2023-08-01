@@ -139,8 +139,6 @@ public:
         }
 
         auto it = m_values.find(key);
-        BCOS_LOG(DEBUG) << LOG_KV("it ?= m_values.end()",it == m_values.end()) << LOG_KV("it->first", it->first) << LOG_KV("it->second", it->second)
-                        << LOG_KV("m_values.end()->first", m_values.end()->first) << LOG_KV("m_values.end()->second", m_values.end()->second);
         if (it == m_values.end())
         {
             return false;
