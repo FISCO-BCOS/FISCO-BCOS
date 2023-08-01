@@ -23,6 +23,8 @@
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/state/DownloadRequestQueue.h"
 #include "bcos-sync/utilities/Common.h"
+#include <tbb/concurrent_hash_map.h>
+#include <utility>
 namespace bcos::sync
 {
 class PeerStatus
@@ -38,6 +40,10 @@ public:
         BlockSyncStatusInterface::ConstPtr _status);
 
     virtual ~PeerStatus() = default;
+    PeerStatus(PeerStatus const&) = delete;
+    PeerStatus& operator=(PeerStatus const&) = delete;
+    PeerStatus(PeerStatus&&) = delete;
+    PeerStatus& operator=(PeerStatus&&) = delete;
 
     virtual bool update(BlockSyncStatusInterface::ConstPtr _status);
 
@@ -86,9 +92,12 @@ public:
     using Ptr = std::shared_ptr<SyncPeerStatus>;
     explicit SyncPeerStatus(BlockSyncConfig::Ptr _config) : m_config(std::move(_config)) {}
     virtual ~SyncPeerStatus() = default;
+    SyncPeerStatus(SyncPeerStatus const&) = delete;
+    SyncPeerStatus& operator=(SyncPeerStatus const&) = delete;
+    SyncPeerStatus(SyncPeerStatus&&) = delete;
+    SyncPeerStatus& operator=(SyncPeerStatus&&) = delete;
 
-    virtual bool hasPeer(bcos::crypto::PublicPtr _peer);
-    virtual PeerStatus::Ptr peerStatus(bcos::crypto::PublicPtr _peer);
+    virtual PeerStatus::Ptr peerStatus(bcos::crypto::PublicPtr const& _peer) const;
     virtual bool updatePeerStatus(
         bcos::crypto::PublicPtr _peer, BlockSyncStatusInterface::ConstPtr _peerStatus);
     virtual void deletePeer(bcos::crypto::PublicPtr _peer);
@@ -96,19 +105,18 @@ public:
     void foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const&) const;
     void foreachPeer(std::function<bool(PeerStatus::Ptr)> const&) const;
     std::shared_ptr<bcos::crypto::NodeIDs> peers();
-    size_t peersSize() const
-    {
-        std::lock_guard<std::mutex> lock(x_peersStatus);
-        return m_peersStatus.size();
-    }
+    size_t peersSize() const { return m_peersStatus.size(); }
     PeerStatus::Ptr insertEmptyPeer(bcos::crypto::PublicPtr _peer);
 
 protected:
     virtual void updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr _peerStatus);
 
 private:
-    std::map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyCompare> m_peersStatus;
-    mutable std::mutex x_peersStatus;
+    tbb::concurrent_hash_map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyHasher>
+        m_peersStatus;
+    //    std::map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyCompare>
+    //    m_peersStatus;
+    //    mutable std::mutex x_peersStatus;
 
     BlockSyncConfig::Ptr m_config;
 };
