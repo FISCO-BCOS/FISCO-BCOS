@@ -173,7 +173,13 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         result.release = nullptr;  // no output to release
         result.gas_left = 0;
         result.gas_refund = 0;
-        result.output_size = 0;
+
+        // Bugfix:
+        // To compat with lower version,
+        // we must give a big number to trigger OUT_OF_GAS
+        // 200M is ok
+        result.output_size = 2 * 1024 * 1024;  // 200M is ok
+
         return result;
     }
     case EVMC_CREATE:
