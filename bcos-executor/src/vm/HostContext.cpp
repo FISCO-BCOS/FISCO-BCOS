@@ -178,7 +178,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         // To compat with lower version,
         // we must give a big number to trigger OUT_OF_GAS
         // 200M is ok
-        result.output_size = 2 * 1024 * 1024;  // 200M is ok
+        result.output_size = 200 * 1024 * 1024;  // 200M is ok
 
         return result;
     }
