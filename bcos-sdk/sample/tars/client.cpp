@@ -90,10 +90,10 @@ int performance()
                         long startTime = currentTime();
                         try
                         {
-                            auto future = co_await coRPCClient.sendTransaction(*transaction);
+                            auto handle = co_await coRPCClient.sendTransaction(*transaction);
 
                             co_await tbbScheduler;
-                            auto receipt = future.get();
+                            auto receipt = handle.get();
                             if (receipt->status() != 0)
                             {
                                 ++failed;

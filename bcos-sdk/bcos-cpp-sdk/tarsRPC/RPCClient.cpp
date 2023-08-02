@@ -9,7 +9,7 @@ void bcos::sdk::RPCClient::onMessage(tars::ReqMessagePtr message)
 
     if (callbackBase.callback() != nullptr)
     {
-        callbackBase.callback();
+        callbackBase.callback()->onMessage();
     }
 }
 
