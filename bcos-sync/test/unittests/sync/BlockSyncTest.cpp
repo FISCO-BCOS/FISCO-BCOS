@@ -60,8 +60,8 @@ void testRequestAndDownloadBlock(CryptoSuite::Ptr _cryptoSuite)
     // maintainPeersConnection
     newerPeer->sync()->executeWorker();
     lowerPeer->sync()->executeWorker();
-    while (!newerPeer->sync()->syncStatus()->hasPeer(lowerPeer->nodeID()) ||
-           !lowerPeer->sync()->syncStatus()->hasPeer(newerPeer->nodeID()))
+    while (!newerPeer->sync()->syncStatus()->peerStatus(lowerPeer->nodeID()) ||
+           !lowerPeer->sync()->syncStatus()->peerStatus(newerPeer->nodeID()))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }

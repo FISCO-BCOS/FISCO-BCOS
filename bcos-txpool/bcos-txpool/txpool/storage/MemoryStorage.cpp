@@ -478,6 +478,32 @@ void MemoryStorage::notifyTxResult(
     }
 }
 
+void MemoryStorage::printPendingTxs()
+{
+    if (utcTime() - m_blockNumberUpdatedTime <= 1000 * 50)
+    {
+        return;
+    }
+    if (unSealedTxsSize() > 0 || m_txsTable.size() == 0)
+    {
+        return;
+    }
+    TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandled")
+                      << LOG_KV("pendingSize", m_txsTable.size());
+    m_txsTable.forEach<TxsMap::ReadAccessor>([](const TxsMap::ReadAccessor::Ptr& accessor) {
+        auto tx = accessor->value();
+        if (!tx)
+        {
+            return true;
+        }
+        TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs") << LOG_KV("hash", tx->hash())
+                          << LOG_KV("batchId", tx->batchId())
+                          << LOG_KV("batchHash", tx->batchHash().abridged())
+                          << LOG_KV("sealed", tx->sealed());
+        return true;
+    });
+    TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandled finish");
+}
 void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults const& txsResult)
 {
     auto startT = utcTime();
@@ -1065,8 +1091,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
             {
                 auto header = _block->blockHeader();
                 if ((accessor->value()->batchId() != header->number() &&
-                        accessor->value()->batchId() != -1) ||
-                    accessor->value()->batchHash() != header->hash())
+                        accessor->value()->batchId() != -1))
                 {
                     TXPOOL_LOG(INFO)
                         << LOG_DESC("batchVerifyProposal unexpected wrong tx")
@@ -1074,6 +1099,22 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
                         << LOG_KV("blkHash", header->hash().abridged())
                         << LOG_KV("txBatchId", accessor->value()->batchId())
                         << LOG_KV("txBatchHash", accessor->value()->batchHash().abridged());
+                    // NOTE: In certain scenarios, a bug may occur here: The leader generates the
+                    // (N)th proposal, which includes transaction A. The local node puts this
+                    // proposal into the cache and sets the batchId of transaction A to (N) and the
+                    // batchHash to the hash of the (N)th proposal.
+                    //
+                    // However, at this point, a view change happens, and the next leader completes
+                    // the resetTx operation for the (N)th proposal and includes transaction A in
+                    // the new block of the (N)th proposal.
+                    //
+                    // Meanwhile, the local node, due to the lengthy resetTx operation caused by the
+                    // view change, has not completed it yet, and it receives the (N+1)th proposal
+                    // sent by the new leader. During the verification process, transaction A has a
+                    // consistent batchId, but the batchHash doesn't match the one in the (N+1)th
+                    // proposal, leading to false positives.
+                    //
+                    // Therefore, we do not validate the consistency of the batchHash for now.
                     findErrorTxInBlock = true;
                     return false;
                 }
@@ -1146,6 +1187,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
     {
         return;
     }
+    // printPendingTxs();
     size_t traversedTxsNum = 0;
     size_t erasedTxs = 0;
     size_t sealedTxs = 0;
