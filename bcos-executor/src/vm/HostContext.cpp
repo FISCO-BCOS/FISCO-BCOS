@@ -170,6 +170,21 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         result.release = nullptr;  // no output to release
         result.gas_left = 0;
         result.gas_refund = 0;
+
+        // Bugfix:
+        // To compat with lower version,
+        // we must set output_size larger than 0 to trigger OUT_OF_GAS
+        static auto response = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        response->data = bytes(130 * 1024 * 1024);
+        result.output_size = response->data.size();
+        result.output_data = response->data.data();
+        EXECUTOR_LOG(WARNING) << LOG_DESC(
+                                     "delegatecall/callcode is unsupported in your compatibility "
+                                     "version(3.0.0), please update it to 3.1.0(or after) using "
+                                     "console. Otherwise it may "
+                                     "lead to unpredictable behavior.")
+                              << LOG_KV("version", blockContext->blockVersion());
+
         return result;
     }
     case EVMC_CREATE:
