@@ -183,7 +183,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         result.output_data = response->data.data();
         EXECUTOR_LOG(WARNING) << LOG_DESC(
                                      "delegatecall/callcode is unsupported in your compatibility "
-                                     "version, please update it using console. Otherwise it may "
+                                     "version(3.0.0), please update it to 3.1.0(or after) using "
+                                     "console. Otherwise it may "
                                      "lead to unpredictable behavior.")
                               << LOG_KV("version", blockContext->blockVersion());
 
