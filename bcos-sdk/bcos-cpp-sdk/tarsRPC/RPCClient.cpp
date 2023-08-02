@@ -4,12 +4,12 @@
 
 void bcos::sdk::RPCClient::onMessage(tars::ReqMessagePtr message)
 {
-    auto& callbackBase = dynamic_cast<detail::TarsCallback&>(*message->callback.get());
+    auto& callbackBase = dynamic_cast<detail::TarsCallback&>(*message->callback);
     callbackBase.promise().set_value(std::move(message));
 
-    if (callbackBase.completionQueue() != nullptr)
+    if (callbackBase.callback() != nullptr)
     {
-        callbackBase.completionQueue()->notify(std::move(callbackBase.tag()));
+        callbackBase.callback();
     }
 }
 
@@ -22,29 +22,28 @@ bcos::sdk::RPCClient::RPCClient(const std::string& connectionString)
     m_rpcProxy->tars_async_timeout(timeout);
 }
 
-bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr> bcos::sdk::RPCClient::sendTransaction(
-    const bcos::protocol::Transaction& transaction, CompletionQueue* completionQueue, std::any tag)
+bcos::sdk::SendTransaction& bcos::sdk::SendTransaction::send(
+    const bcos::protocol::Transaction& transaction)
 {
     auto const& tarsTransaction =
         dynamic_cast<bcostars::protocol::TransactionImpl const&>(transaction);
 
     std::promise<tars::ReqMessagePtr> promise;
-    auto future = promise.get_future();
-    auto callback =
-        std::make_unique<detail::TarsCallback>(completionQueue, std::move(tag), std::move(promise));
-    m_rpcProxy->async_sendTransaction(callback.release(), tarsTransaction.inner());
+    setFuture(promise.get_future());
 
-    return {std::move(future)};
+    auto tarsCallback = std::make_unique<detail::TarsCallback>(callback(), std::move(promise));
+    rpcClient().rpcProxy()->async_sendTransaction(tarsCallback.release(), tarsTransaction.inner());
+
+    return *this;
 }
 
-bcos::sdk::Future<long> bcos::sdk::RPCClient::blockNumber(
-    CompletionQueue* completionQueue, std::any tag)
+bcos::sdk::BlockNumber& bcos::sdk::BlockNumber::send()
 {
     std::promise<tars::ReqMessagePtr> promise;
-    auto future = promise.get_future();
-    auto callback =
-        std::make_unique<detail::TarsCallback>(completionQueue, std::move(tag), std::move(promise));
-    m_rpcProxy->async_blockNumber(callback.release());
+    setFuture(promise.get_future());
 
-    return {std::move(future)};
+    auto tarsCallback = std::make_unique<detail::TarsCallback>(callback(), std::move(promise));
+    rpcClient().rpcProxy()->async_blockNumber(tarsCallback.release());
+
+    return *this;
 }

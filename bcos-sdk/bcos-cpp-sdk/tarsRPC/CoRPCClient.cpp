@@ -1,25 +1,35 @@
 #include "CoRPCClient.h"
+#include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 
-void bcos::sdk::CoRPCClient::CoCompletionQueue::notify(std::any tag)
+class CoCallback : public bcos::sdk::Callback
 {
-    auto handle = std::any_cast<CO_STD::coroutine_handle<>>(tag);
-    handle.resume();
-}
+private:
+    CO_STD::coroutine_handle<> m_handle;
+
+public:
+    CoCallback(CO_STD::coroutine_handle<> handle) : m_handle(handle) {}
+    void onMessage() override { m_handle.resume(); }
+};
 
 bcos::sdk::CoRPCClient::CoRPCClient(RPCClient& rpcClient) : m_rpcClient(rpcClient) {}
 
-bcos::sdk::Awaitable<bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr>>
-bcos::sdk::CoRPCClient::sendTransaction(const bcos::protocol::Transaction& transaction)
+bcos::sdk::Awaitable<bcos::sdk::SendTransaction> bcos::sdk::CoRPCClient::sendTransaction(
+    const bcos::protocol::Transaction& transaction)
 {
     return {[this, &transaction](CO_STD::coroutine_handle<> handle) {
-        return m_rpcClient.sendTransaction(
-            transaction, std::addressof(m_coCompletionQueue), handle);
+        bcos::sdk::SendTransaction sendTransaction(m_rpcClient);
+        sendTransaction.setCallback(std::make_shared<CoCallback>(handle));
+        sendTransaction.send(transaction);
+        return sendTransaction;
     }};
 }
 
-bcos::sdk::Awaitable<bcos::sdk::Future<long>> bcos::sdk::CoRPCClient::blockNumber()
+bcos::sdk::Awaitable<bcos::sdk::BlockNumber> bcos::sdk::CoRPCClient::blockNumber()
 {
     return {[this](CO_STD::coroutine_handle<> handle) {
-        return m_rpcClient.blockNumber(std::addressof(m_coCompletionQueue), handle);
+        bcos::sdk::BlockNumber blockNumber(m_rpcClient);
+        blockNumber.setCallback(std::make_shared<CoCallback>(handle));
+        blockNumber.send();
+        return blockNumber;
     }};
 }

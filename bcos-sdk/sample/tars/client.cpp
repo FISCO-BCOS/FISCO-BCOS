@@ -3,9 +3,11 @@
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-task/Wait.h"
 #include <bcos-codec/abi/ContractABICodec.h>
+#include <bcos-cpp-sdk/tarsRPC/CoRPCClient.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-task/TBBScheduler.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -22,29 +24,6 @@ long currentTime()
         .count();
 }
 
-struct Request
-{
-    bcos::sdk::Future<bcos::protocol::TransactionReceipt::Ptr> m_future;
-    long m_sendTime = 0;
-    long m_receiveTime = 0;
-};
-
-struct LatchCompletionQueue : public bcos::sdk::CompletionQueue
-{
-    std::latch& m_latch;
-    std::vector<Request>& m_requests;
-
-    LatchCompletionQueue(std::latch& latch, std::vector<Request>& requests)
-      : m_latch(latch), m_requests(requests)
-    {}
-    void notify(std::any tag) override
-    {
-        auto index = std::any_cast<size_t>(tag);
-        m_requests[index].m_receiveTime = currentTime();
-        m_latch.count_down();
-    }
-};
-
 int performance()
 {
     try
@@ -54,14 +33,14 @@ int performance()
                 std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
         auto keyPair = std::shared_ptr<bcos::crypto::KeyPairInterface>(
             cryptoSuite->signatureImpl()->generateKeyPair());
-        size_t count = 10 * 10000;
+        constexpr static size_t count = 10UL * 10000;
 
-        std::string_view connectionString =
+        constexpr static std::string_view connectionString =
             "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000";
         bcos::sdk::RPCClient rpcClient(std::string{connectionString});
 
-        auto blockNumber = rpcClient.blockNumber().get();
-        constexpr long blockLimit = 500;
+        auto blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+        constexpr static long blockLimit = 500;
 
         bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
         bcos::bytes deployBin;
@@ -69,7 +48,7 @@ int performance()
         auto deployTransaction = transactionFactory.createTransaction(0, "", deployBin,
             boost::lexical_cast<std::string>(rand()), blockNumber + blockLimit, "chain0", "group0",
             0, *keyPair);
-        auto receipt = rpcClient.sendTransaction(*deployTransaction).get();
+        auto receipt = bcos::sdk::SendTransaction(rpcClient).send(*deployTransaction).get();
 
         if (receipt->status() != 0)
         {
@@ -78,13 +57,19 @@ int performance()
         }
 
         auto const& contractAddress = receipt->contractAddress();
-        std::latch latch(count);
-        std::vector<Request> requests(count);
-        LatchCompletionQueue completionQueue{latch, requests};
 
         long elapsed = currentTime();
+        std::atomic_long allTimeCost = 0;
+        std::atomic_int finished = 0;
+        std::atomic_int failed = 0;
         std::cout << "Sending transaction..." << std::endl;
         boost::timer::progress_display sendProgess(count);
+
+        bcos::sdk::CoRPCClient coRPCClient(rpcClient);
+        tbb::task_group taskGroup;
+        bcos::task::tbb::TBBScheduler tbbScheduler(taskGroup);
+
+        std::latch latch(count);
         tbb::parallel_for(tbb::blocked_range(0LU, count), [&](const auto& range) {
             auto rand = std::mt19937(std::random_device{}());
             for (auto it = range.begin(); it != range.end(); ++it)
@@ -96,41 +81,39 @@ int performance()
                     blockNumber + blockLimit, "chain0", "group0", 0, *keyPair);
 
                 ++sendProgess;
-                auto& request = requests[it];
-                request.m_future = rpcClient.sendTransaction(*setTransaction, &completionQueue, it);
-                request.m_sendTime = currentTime();
+                ++finished;
+                bcos::task::wait(
+                    [](decltype(setTransaction) transaction, decltype(coRPCClient)& coRPCClient,
+                        decltype(failed)& failed, decltype(allTimeCost)& allTimeCost,
+                        decltype(tbbScheduler)& tbbScheduler,
+                        decltype(latch)& latch) -> bcos::task::Task<void> {
+                        long startTime = currentTime();
+                        try
+                        {
+                            auto future = co_await coRPCClient.sendTransaction(*transaction);
+
+                            co_await tbbScheduler;
+                            auto receipt = future.get();
+                            if (receipt->status() != 0)
+                            {
+                                ++failed;
+                            }
+                        }
+                        catch (std::exception& e)
+                        {
+                            ++failed;
+                        }
+                        latch.count_down();
+                        allTimeCost += (currentTime() - startTime);
+                    }(std::move(setTransaction), coRPCClient, failed, allTimeCost, tbbScheduler,
+                                                    latch));
             }
         });
         long sendElapsed = currentTime() - elapsed;
 
-        std::cout << std::endl << "All transaction sended, Waiting for response..." << std::endl;
         latch.wait();
-        std::cout << "All response received" << std::endl;
+        taskGroup.wait();
         elapsed = currentTime() - elapsed;
-
-        std::atomic_long allTimeCost = 0;
-        std::atomic_int finished = 0;
-        std::atomic_int failed = 0;
-        tbb::parallel_for(tbb::blocked_range(0LU, count), [&](const auto& range) {
-            for (auto it = range.begin(); it != range.end(); ++it)
-            {
-                try
-                {
-                    ++finished;
-                    auto& request = requests[it];
-                    auto receipt = request.m_future.get();
-                    allTimeCost += (request.m_receiveTime - request.m_sendTime);
-                    if (receipt->status() != 0)
-                    {
-                        ++failed;
-                    }
-                }
-                catch (std::exception& e)
-                {
-                    ++failed;
-                }
-            }
-        });
 
         std::cout << std::endl << "=======================================" << std::endl;
         std::cout << "Total received: " << finished << std::endl;
@@ -146,7 +129,6 @@ int performance()
     {
         std::cout << boost::diagnostic_information(e);
     }
-
 
     return 0;
 }

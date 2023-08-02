@@ -8,41 +8,60 @@
 namespace bcos::sdk
 {
 
-class CompletionQueue
+class RPCClient
+{
+private:
+    tars::Communicator m_communicator;
+    bcostars::RPCPrx m_rpcProxy;
+
+    static void onMessage(tars::ReqMessagePtr message);
+
+public:
+    RPCClient(const std::string& connectionString);
+    bcostars::RPCPrx& rpcProxy() { return m_rpcProxy; }
+};
+
+class Callback
 {
 public:
-    CompletionQueue() = default;
-    CompletionQueue(const CompletionQueue&) = default;
-    CompletionQueue& operator=(const CompletionQueue&) = default;
-    CompletionQueue(CompletionQueue&&) = default;
-    CompletionQueue& operator=(CompletionQueue&&) = default;
+    Callback() = default;
+    Callback(const Callback&) = default;
+    Callback(Callback&&) noexcept = default;
+    Callback& operator=(const Callback&) = default;
+    Callback& operator=(Callback&&) noexcept = default;
 
-    virtual ~CompletionQueue() noexcept = default;
-    virtual void notify(std::any tag) = 0;
+    virtual ~Callback() noexcept = default;
+    virtual void onMessage() = 0;
 };
 
 template <class Response>
-class Future
+class Handle
 {
 private:
-    std::shared_future<tars::ReqMessagePtr> m_future;
+    RPCClient& m_rpcClient;
+    std::future<tars::ReqMessagePtr> m_future;
+    std::shared_ptr<Callback> m_callback;
+
+protected:
+    RPCClient& rpcClient() { return m_rpcClient; }
+    void setFuture(std::future<tars::ReqMessagePtr> future) { m_future = std::move(future); }
+    std::shared_ptr<Callback> callback() { return m_callback; }
 
 public:
-    Future() = default;
-    Future(std::shared_future<tars::ReqMessagePtr> future) : m_future(std::move(future)) {}
-    Future(Future const&) = default;
-    Future& operator=(Future const&) = default;
-    Future(Future&&) noexcept = default;
-    Future& operator=(Future&&) noexcept = default;
-    ~Future() noexcept = default;
+    Handle(RPCClient& rpcClient) : m_rpcClient(rpcClient){};
+    Handle(Handle const&) = default;
+    Handle& operator=(Handle const&) = default;
+    Handle(Handle&&) noexcept = default;
+    Handle& operator=(Handle&&) noexcept = default;
+    ~Handle() noexcept = default;
 
     Response get()
     {
         auto message = m_future.get();
         message->callback->dispatch(message);
 
-        auto& tarsCallback = dynamic_cast<detail::TarsCallback&>(*message->callback.get());
-        return std::move(tarsCallback).getResponse<Response>();
+        auto& tarsCallback = dynamic_cast<detail::TarsCallback&>(*message->callback);
+        return std::move(tarsCallback).takeResponse<Response>();
     }
     void waitFor() { m_future.wait(); }
     template <typename Rep, typename Period>
@@ -55,22 +74,21 @@ public:
     {
         return m_future.wait_until(abs);
     }
+    void setCallback(std::shared_ptr<Callback> callback) { m_callback = std::move(callback); }
 };
 
-class RPCClient
+class SendTransaction : public Handle<bcos::protocol::TransactionReceipt::Ptr>
 {
-private:
-    tars::Communicator m_communicator;
-    bcostars::RPCPrx m_rpcProxy;
-
-    static void onMessage(tars::ReqMessagePtr message);
-
 public:
-    RPCClient(const std::string& connectionString);
-
-    Future<bcos::protocol::TransactionReceipt::Ptr> sendTransaction(
-        const bcos::protocol::Transaction& transaction, CompletionQueue* completionQueue = nullptr,
-        std::any tag = {});
-    Future<long> blockNumber(CompletionQueue* completionQueue = nullptr, std::any tag = {});
+    SendTransaction(RPCClient& rpcClient) : Handle(rpcClient){};
+    SendTransaction& send(const bcos::protocol::Transaction& transaction);
 };
+
+class BlockNumber : public Handle<long>
+{
+public:
+    BlockNumber(RPCClient& rpcClient) : Handle(rpcClient){};
+    BlockNumber& send();
+};
+
 }  // namespace bcos::sdk
