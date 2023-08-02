@@ -22,6 +22,7 @@ bcos::sdk::RPCClient::RPCClient(const std::string& connectionString)
     m_rpcProxy->tars_async_timeout(timeout);
 }
 
+bcos::sdk::SendTransaction::SendTransaction(RPCClient& rpcClient) : Handle(rpcClient){};
 bcos::sdk::SendTransaction& bcos::sdk::SendTransaction::send(
     const bcos::protocol::Transaction& transaction)
 {
@@ -37,6 +38,7 @@ bcos::sdk::SendTransaction& bcos::sdk::SendTransaction::send(
     return *this;
 }
 
+bcos::sdk::BlockNumber::BlockNumber(RPCClient& rpcClient) : Handle(rpcClient){};
 bcos::sdk::BlockNumber& bcos::sdk::BlockNumber::send()
 {
     std::promise<tars::ReqMessagePtr> promise;
