@@ -48,7 +48,7 @@ public:
         protocol::Transaction::Ptr transaction) override;
 
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) override;
+        protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted) override;
 
     void broadcastTransaction(const protocol::Transaction& transaction) override;
     void broadcastTransactionBuffer(const bytesConstRef& _data) override;
