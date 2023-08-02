@@ -406,7 +406,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                     }
                     // convert json to transaction
                     int32_t version = jsonValue["version"].asInt();
-                    auto nonce = jsonValue["nonce"].asString();
+                    auto nonce = asString(fromHex(jsonValue["nonce"].asString()));
                     auto input = fromHexWithPrefix(jsonValue["input"].asString());
                     auto signature = fromHexWithPrefix(jsonValue["signature"].asString());
                     auto tx = transactionFactory->createTransaction(version,
