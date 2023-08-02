@@ -177,9 +177,13 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         // Bugfix:
         // To compat with lower version,
         // we must give a big number to trigger OUT_OF_GAS
-        // 200M is ok
-        result.output_size = 200 * 1024 * 1024;  // 200M is ok
-
+        // 130M is ok
+        result.output_size = 130 * 1024 * 1024;  // 130M is ok
+        EXECUTOR_LOG(WARNING) << LOG_DESC(
+                                     "delegatecall/callcode is unsupported in your compatibility "
+                                     "version, please update it using console. Otherwise it may "
+                                     "lead to unpredictable behavior.")
+                              << LOG_KV("version", blockContext->blockVersion());
         return result;
     }
     case EVMC_CREATE:
