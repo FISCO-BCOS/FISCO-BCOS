@@ -7,7 +7,7 @@
 namespace bcos::sdk
 {
 
-class CompletionQueue;
+class Callback;
 
 namespace detail
 {
@@ -15,26 +15,23 @@ namespace detail
 class TarsCallback : public bcostars::RPCPrxCallback
 {
 private:
-    CompletionQueue* m_completionQueue = nullptr;
-    std::any m_tag;
+    std::shared_ptr<Callback> m_callback;
     std::promise<tars::ReqMessagePtr> m_promise;
     std::variant<long, protocol::TransactionReceipt::Ptr> m_response;
 
 public:
-    TarsCallback(
-        CompletionQueue* completionQueue, std::any tag, std::promise<tars::ReqMessagePtr> promise);
+    TarsCallback(std::shared_ptr<Callback> callback, std::promise<tars::ReqMessagePtr> promise);
     TarsCallback(TarsCallback const&) = delete;
     TarsCallback& operator=(TarsCallback const&) = delete;
-    TarsCallback(TarsCallback&&) = default;
-    TarsCallback& operator=(TarsCallback&&) = default;
+    TarsCallback(TarsCallback&&) noexcept = default;
+    TarsCallback& operator=(TarsCallback&&) noexcept = default;
     ~TarsCallback() noexcept override = default;
 
-    CompletionQueue* completionQueue();
-    std::any& tag();
+    Callback* callback();
     std::promise<tars::ReqMessagePtr>& promise();
 
     template <class Response>
-    Response getResponse() &&
+    Response takeResponse() &&
     {
         return std::move(std::get<Response>(m_response));
     }

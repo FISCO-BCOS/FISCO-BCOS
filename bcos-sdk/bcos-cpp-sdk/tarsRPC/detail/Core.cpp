@@ -1,19 +1,16 @@
 #include "Core.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 
-bcos::sdk::detail::TarsCallback::TarsCallback(bcos::sdk::CompletionQueue* completionQueue,
-    std::any tag, std::promise<tars::ReqMessagePtr> promise)
-  : m_completionQueue(completionQueue), m_tag(std::move(tag)), m_promise(std::move(promise))
+bcos::sdk::detail::TarsCallback::TarsCallback(
+    std::shared_ptr<Callback> callback, std::promise<tars::ReqMessagePtr> promise)
+  : m_callback(std::move(callback)), m_promise(std::move(promise))
 {}
 
-bcos::sdk::CompletionQueue* bcos::sdk::detail::TarsCallback::completionQueue()
+bcos::sdk::Callback* bcos::sdk::detail::TarsCallback::callback()
 {
-    return m_completionQueue;
+    return m_callback.get();
 }
-std::any& bcos::sdk::detail::TarsCallback::tag()
-{
-    return m_tag;
-}
+
 std::promise<tars::ReqMessagePtr>& bcos::sdk::detail::TarsCallback::promise()
 {
     return m_promise;

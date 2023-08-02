@@ -257,7 +257,9 @@ public:
 
     struct TarsRPCConfig
     {
-        std::string configPath;
+        std::string host;
+        uint16_t port = 0;
+        uint32_t threadCount = 0;
     };
     TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
 

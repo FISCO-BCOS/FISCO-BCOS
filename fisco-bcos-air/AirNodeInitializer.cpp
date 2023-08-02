@@ -98,14 +98,14 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_nodeInitializer->initSysContract();
 
     // tars rpc
-    if (!nodeConfig->tarsRPCConfig().configPath.empty())
+    if (!nodeConfig->tarsRPCConfig().host.empty() && nodeConfig->tarsRPCConfig().port > 0 &&
+        nodeConfig->tarsRPCConfig().threadCount > 0)
     {
         m_rpcThread.emplace([nodeConfig, nodeService, this]() {
             m_rpcApplication.emplace(nodeService);
-
-            std::ifstream stream(nodeConfig->tarsRPCConfig().configPath);
-            std::string configContent(
-                (std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+            std::string configContent =
+                RPCApplication::generateTarsConfig(nodeConfig->tarsRPCConfig().host,
+                    nodeConfig->tarsRPCConfig().port, nodeConfig->tarsRPCConfig().threadCount);
             m_rpcApplication->main(configContent);
             m_rpcApplication->waitForShutdown();
         });
