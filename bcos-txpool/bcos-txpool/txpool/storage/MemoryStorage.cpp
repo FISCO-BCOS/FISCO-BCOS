@@ -723,8 +723,8 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         m_txsTable.forEach<TxsMap::ReadAccessor>(
             m_knownLatestSealedTxHash, [&](TxsMap::ReadAccessor::Ptr accessor) {
                 const auto& tx = accessor->value();
-                //                auto _eachBucketTxsLimit = _txsLimit / 256;
-                //                auto _lastBucketTxsLimit = _txsLimit % 256;
+                auto _eachBucketTxsLimit = _txsLimit / 256;
+                auto _lastBucketTxsLimit = _txsLimit % 256;
                 handleTx(tx);
                 //                if(traverseCount <= 256 * _eachBucketTxsLimit)
                 //                {

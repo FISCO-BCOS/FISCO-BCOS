@@ -122,29 +122,30 @@ public:
     bool forEach(std::function<bool(typename AccessorType::Ptr)> handler,
                  typename AccessorType::Ptr accessor = nullptr)
     {
-        //        for (const auto& item : multiIndexMap.get<1>())
-        //        {
-        //            auto it = IteratorImpl(item.txHash, item.transaction);
-        //            TXPOOL_LOG(DEBUG) << LOG_KV("txHash:",it.first) <<
-        //            LOG_KV("timestamp:",it.second->importTime());
-        //            accessor->setValue(std::make_shared<IteratorImpl>(it));
-        //            if (!handler(accessor))
-        //            {
-        //                return false;
-        //            }
-        //        }
-        for (auto it = multiIndexMap.get<1>().rbegin(); it != multiIndexMap.get<1>().rend(); ++it)
+        for (const auto& item : multiIndexMap.get<1>())
         {
-            const auto& item = *it;
-            auto it1 = IteratorImpl(item.txHash, item.transaction);
-            TXPOOL_LOG(DEBUG) << LOG_KV("txHash:", it1.first)
-                              << LOG_KV("timestamp:", it1.second->importTime());
-            accessor->setValue(std::make_shared<IteratorImpl>(it1));
+            auto it = IteratorImpl(item.txHash, item.transaction);
+            TXPOOL_LOG(DEBUG) << LOG_KV("txHash:", it.first)
+                              << LOG_KV("timestamp:", it.second->importTime());
+            accessor->setValue(std::make_shared<IteratorImpl>(it));
             if (!handler(accessor))
             {
                 return false;
             }
         }
+        //        for (auto it = multiIndexMap.get<1>().rbegin(); it !=
+        //        multiIndexMap.get<1>().rend(); ++it)
+        //        {
+        //            const auto& item = *it;
+        //            auto it1 = IteratorImpl(item.txHash, item.transaction);
+        //            TXPOOL_LOG(DEBUG) << LOG_KV("txHash:", it1.first)
+        //                              << LOG_KV("timestamp:", it1.second->importTime());
+        //            accessor->setValue(std::make_shared<IteratorImpl>(it1));
+        //            if (!handler(accessor))
+        //            {
+        //                return false;
+        //            }
+        //        }
         return true;
     }
 
