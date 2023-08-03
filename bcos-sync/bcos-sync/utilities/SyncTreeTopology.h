@@ -39,7 +39,7 @@ public:
         m_nodeList = std::make_shared<bcos::crypto::NodeIDs>();
     }
 
-    virtual ~SyncTreeTopology() = default;
+    ~SyncTreeTopology() override = default;
     SyncTreeTopology(SyncTreeTopology const&) = delete;
     SyncTreeTopology& operator=(SyncTreeTopology const&) = delete;
     SyncTreeTopology(SyncTreeTopology&&) = delete;
@@ -51,20 +51,19 @@ public:
     virtual void updateAllNodeInfo(
         bcos::crypto::NodeIDs const& _consensusNodes, bcos::crypto::NodeIDs const& _nodeList);
     // select the nodes by tree topology
-    virtual bcos::crypto::NodeIDListPtr selectNodesForBlockSync(
+    [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectNodesForBlockSync(
         bcos::crypto::NodeIDSetPtr const& _peers);
 
 protected:
-    bool getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, std::int32_t _nodeIndex) const override;
+    [[nodiscard]] bcos::crypto::NodeIDPtr getNodeIDByIndex(std::int32_t _nodeIndex) const override;
     // update the tree-topology range the nodes located in
     void updateStartAndEndIndex() override;
 
     // select the child nodes by tree
-    void recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr const& _selectedNodeList,
-        std::int32_t _parentIndex, bcos::crypto::NodeIDSetPtr const& _peers,
-        std::int32_t _startIndex) override;
+    [[nodiscard]] bcos::crypto::NodeIDSetPtr recursiveSelectChildNodes(std::int32_t _parentIndex,
+        bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _startIndex) override;
     // select the parent nodes by tree
-    void selectParentNodes(bcos::crypto::NodeIDListPtr const& _selectedNodeList,
+    [[nodiscard]] bcos::crypto::NodeIDSetPtr selectParentNodes(
         bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex,
         bool _selectAll) override;
 

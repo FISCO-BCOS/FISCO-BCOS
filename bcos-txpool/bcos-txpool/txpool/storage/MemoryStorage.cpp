@@ -33,9 +33,6 @@ using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
-struct SubmitTransactionError : public bcos::error::Exception
-{
-};
 
 MemoryStorage::MemoryStorage(
     TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
@@ -88,7 +85,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 }
 
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransactionWithHook(
-    protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook)
+    protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted)
 {
     transaction->setImportTime(utcTime());
     struct Awaitable
@@ -119,9 +116,9 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                     true, true);
 
                 // already in txpool but not sealed in block now
-                if (result == TransactionStatus::None && m_afterInsertHook != nullptr)
+                if (result == TransactionStatus::None && m_onTxSubmitted != nullptr)
                 {
-                    m_afterInsertHook();
+                    m_onTxSubmitted();
                 }
 
                 if (result != TransactionStatus::None)
@@ -152,14 +149,14 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         }
 
         protocol::Transaction::Ptr m_transaction;
-        std::function<void()> m_afterInsertHook;
+        std::function<void()> m_onTxSubmitted;
         std::shared_ptr<MemoryStorage> m_self;
         std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
             m_submitResult;
     };
 
     Awaitable awaitable{.m_transaction = std::move(transaction),
-        .m_afterInsertHook = afterInsertHook,
+        .m_onTxSubmitted = onTxSubmitted,
         .m_self = shared_from_this(),
         .m_submitResult = {}};
     co_return co_await awaitable;

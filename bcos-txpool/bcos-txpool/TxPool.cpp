@@ -116,10 +116,10 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
 }
 
 task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWithHook(
-    protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook)
+    protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted)
 {
     co_return co_await m_txpoolStorage->submitTransactionWithHook(
-        std::move(transaction), std::move(afterInsertHook));
+        std::move(transaction), std::move(onTxSubmitted));
 }
 
 void TxPool::broadcastTransaction(const protocol::Transaction& transaction)
@@ -181,8 +181,11 @@ void TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data, 
                         TXPOOL_LOG(TRACE) << LOG_DESC("broadcastTransactionBufferByTree")
                                           << LOG_KV("selectedNode", nodeList.str());
                     }
-                    m_frontService->asyncSendMessageByNodeIDs(
-                        protocol::TREE_PUSH_TRANSACTION, *selectedNode, _data);
+                    for (const auto& node : (*selectedNode))
+                    {
+                        m_frontService->asyncSendMessageByNodeID(
+                            protocol::TREE_PUSH_TRANSACTION, node, _data, 0, front::CallbackFunc());
+                    }
                 }
             });
     }
@@ -381,6 +384,16 @@ void TxPool::notifyConsensusNodeList(
     ConsensusNodeList const& _consensusNodeList, std::function<void(Error::Ptr)> _onRecvResponse)
 {
     m_transactionSync->config()->setConsensusNodeList(_consensusNodeList);
+    if (m_treeRouter)
+    {
+        auto nodeIds = crypto::NodeIDs();
+        nodeIds.reserve(_consensusNodeList.size());
+        for (const auto& node : _consensusNodeList)
+        {
+            nodeIds.push_back(node->nodeID());
+        }
+        m_treeRouter->updateConsensusNodeInfo(nodeIds);
+    }
     if (!_onRecvResponse)
     {
         return;
