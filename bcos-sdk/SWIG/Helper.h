@@ -12,13 +12,13 @@ bcos::bytesConstRef toBytesConstRef(Buffer const& input)
 {
     return {(const bcos::byte*)input.data(), input.size()};
 }
-bcos::bytesConstRef toBytesConstRef(char* STRING, size_t LENGTH);
 
 template <class Buffer>
-bcos::bytes toBytes(bcos::bytesConstRef input)
+bcos::bytes toBytes(Buffer const& input)
 {
     return {(const bcos::byte*)input.data(), (const bcos::byte*)input.data() + input.size()};
 }
+bcos::bytes toBytes(char* STRING, size_t LENGTH);
 
 template <class Buffer>
 h256 toH256(Buffer const& input)
