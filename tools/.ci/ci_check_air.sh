@@ -61,13 +61,13 @@ wait_and_start()
     fi
 }
 
-init() 
+init()
 {
     sm_option="${1}"
     cd ${current_path}
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
-    rm -rf nodes
+    clear_node
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
     cd nodes/127.0.0.1 && wait_and_start
 }
@@ -89,8 +89,8 @@ check_consensus()
             LOG_ERROR "checkView failed ******* print log info for ${node} finish *******"
             exit_node "check_consensus for ${node} failed for not reachNewView"
         else
-            LOG_INFO "check_consensus for ${node} success"  
-        fi 
+            LOG_INFO "check_consensus for ${node} success"
+        fi
     done
 }
 
@@ -137,7 +137,7 @@ send_transactions()
     do
         bash console.sh deploy HelloWorld
         sleep 1
-    done  
+    done
     blockNumber=`bash console.sh getBlockNumber`
     if [ "${blockNumber}" == "${txs_num}" ]; then
         LOG_INFO "send transaction success, current blockNumber: ${blockNumber}"
