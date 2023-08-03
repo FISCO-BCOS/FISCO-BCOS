@@ -183,7 +183,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
                                      "version(3.0.0), please update it to 3.1.0(or after) using "
                                      "console. Otherwise it may "
                                      "lead to unpredictable behavior.")
-                              << LOG_KV("version", blockContext->blockVersion());
+                              << LOG_KV("version", blockContext.blockVersion());
 
         return result;
     }
