@@ -31,7 +31,7 @@ void SyncTreeTopology::updateNodeInfo(bcos::crypto::NodeIDs const& _nodeList)
         return;
     }
     // update the nodeNum
-    std::int64_t nodeNum = _nodeList.size();
+    std::int32_t nodeNum = _nodeList.size();
     if (m_nodeNum != nodeNum)
     {
         m_nodeNum = nodeNum;
@@ -115,70 +115,65 @@ void SyncTreeTopology::updateStartAndEndIndex()
  *  false: the given node doesn't locate in the node list
  *  true:  the given node locates in the node list, and assign its node Id to _nodeID
  */
-bool SyncTreeTopology::getNodeIDByIndex(
-    bcos::crypto::NodeIDPtr& _nodeID, std::int32_t _nodeIndex) const
+bcos::crypto::NodeIDPtr SyncTreeTopology::getNodeIDByIndex(std::int32_t _nodeIndex) const
 {
     if (_nodeIndex >= m_nodeNum || _nodeIndex < 0)
     {
         SYNCTREE_LOG(DEBUG) << LOG_DESC("getNodeIDByIndex: invalidNode")
                             << LOG_KV("nodeIndex", _nodeIndex) << LOG_KV("nodeListSize", m_nodeNum);
-        return false;
+        return nullptr;
     }
-    _nodeID = (*m_nodeList)[_nodeIndex];
-    return true;
+    return m_nodeList->at(_nodeIndex);
 }
 
 // select the child nodes by tree
-void SyncTreeTopology::recursiveSelectChildNodes(
-    bcos::crypto::NodeIDListPtr const& _selectedNodeList, std::int32_t _parentIndex,
-    bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _startIndex)
+bcos::crypto::NodeIDSetPtr SyncTreeTopology::recursiveSelectChildNodes(
+    std::int32_t _parentIndex, bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _startIndex)
 {
     // if the node doesn't locate in the group
     if (!locatedInGroup())
     {
-        return;
+        return std::make_shared<crypto::NodeIDSet>();
     }
-    return TreeTopology::recursiveSelectChildNodes(
-        _selectedNodeList, _parentIndex, _peers, _startIndex);
+    return TreeTopology::recursiveSelectChildNodes(_parentIndex, _peers, _startIndex);
 }
 
 // select the parent nodes by tree
-void SyncTreeTopology::selectParentNodes(bcos::crypto::NodeIDListPtr const& _selectedNodeList,
+bcos::crypto::NodeIDSetPtr SyncTreeTopology::selectParentNodes(
     bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex,
     bool)
 {
     // if the node doesn't locate in the group
     if (!locatedInGroup())
     {
-        return;
+        return std::make_shared<crypto::NodeIDSet>();
     }
     // push all other consensus node to the selectedNodeList if this node is the consensus node
     if (m_consIndex >= 0)
     {
+        auto selectedNodeSet = std::make_shared<bcos::crypto::NodeIDSet>();
         for (auto const& [idx, consNode] : *m_consensusNodes | RANGES::views::enumerate)
         {
-            if (_peers->contains(consNode) &&
-                !bcos::crypto::KeyCompareTools::isNodeIDExist(consNode, *_selectedNodeList) &&
-                static_cast<std::uint64_t>(m_consIndex) != idx)
+            if (_peers->contains(consNode) && static_cast<std::uint64_t>(m_consIndex) != idx)
             {
-                _selectedNodeList->emplace_back(consNode);
+                selectedNodeSet->insert(consNode);
             }
         }
-        return;
+        return selectedNodeSet;
     }
-    return TreeTopology::selectParentNodes(
-        _selectedNodeList, _peers, _nodeIndex, _startIndex, false);
+    // if observer node
+    return TreeTopology::selectParentNodes(_peers, _nodeIndex, _startIndex, false);
 }
 
-bcos::crypto::NodeIDListPtr SyncTreeTopology::selectNodesForBlockSync(
+bcos::crypto::NodeIDSetPtr SyncTreeTopology::selectNodesForBlockSync(
     bcos::crypto::NodeIDSetPtr const& _peers)
 {
     Guard lock(m_mutex);
-    bcos::crypto::NodeIDListPtr selectedNodeList = std::make_shared<bcos::crypto::NodeIDs>();
+    auto selectedNodeSet = std::make_shared<bcos::crypto::NodeIDSet>();
     // the node doesn't locate in the group
     if (!locatedInGroup())
     {
-        return selectedNodeList;
+        return selectedNodeSet;
     }
     // here will not overflow
     // the sync-tree-topology is:
@@ -186,20 +181,14 @@ bcos::crypto::NodeIDListPtr SyncTreeTopology::selectNodesForBlockSync(
     // however, the tree-topology is:
     // consensusNode(0)->{1->{3,4}, 2->{5,6}}
     // so every node of tree-topology should decrease 1 to get sync-tree-topology
-    std::int64_t offset = m_startIndex - 1;
-    std::int64_t nodeIndex = m_nodeIndex + 1 - m_startIndex;
-    selectParentNodes(selectedNodeList, _peers, nodeIndex, offset, false);
+    std::int32_t offset = m_startIndex - 1;
+    std::int32_t nodeIndex = m_nodeIndex + 1 - m_startIndex;
+    selectedNodeSet = selectParentNodes(_peers, nodeIndex, offset, false);
 
-    // the node is the consensusNode, chose the childNode
-    if (m_consIndex >= 0)
-    {
-        recursiveSelectChildNodes(selectedNodeList, 0, _peers, offset);
-    }
-    // the node is not the consensusNode
-    else
-    {
-        recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, offset);
-    }
-
-    return selectedNodeList;
+    // if the node is the consensusNode, chose the childNode
+    // the node is not the consensusNode,
+    auto recursiveNodeSet =
+        recursiveSelectChildNodes(m_consIndex >= 0 ? 0 : nodeIndex, _peers, offset);
+    selectedNodeSet->insert(recursiveNodeSet->begin(), recursiveNodeSet->end());
+    return selectedNodeSet;
 }

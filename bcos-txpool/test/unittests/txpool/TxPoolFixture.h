@@ -136,6 +136,7 @@ public:
             auto router = std::make_shared<TreeTopology>(_nodeId);
             m_txpool->setTreeRouter(std::move(router));
         }
+        m_txpool->init();
         m_txpool->start();
 
         m_fakeGateWay->addTxPool(_nodeId, m_txpool);
