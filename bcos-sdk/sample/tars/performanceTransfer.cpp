@@ -98,7 +98,7 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
     std::latch latch(transactionCount);
     std::vector<std::optional<bcos::sdk::SendTransaction>> handles(transactionCount);
 
-    bcos::sample::Collector collector(userCount, "Transfer");
+    bcos::sample::Collector collector(transactionCount, "Transfer");
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)transactionCount), [&](const auto& range) {
         auto rand = std::mt19937(std::random_device{}());
         for (auto it = range.begin(); it != range.end(); ++it)
