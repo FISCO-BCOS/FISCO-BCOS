@@ -19,12 +19,11 @@
  */
 
 #pragma once
-
+#include <bcos-utilities/BoostLog.h>
 #include <memory>
+#define RATELIMIT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RateLimiter]"
 
 namespace bcos
-{
-namespace gateway
 {
 namespace ratelimiter
 {
@@ -72,5 +71,4 @@ public:
 };
 
 }  // namespace ratelimiter
-}  // namespace gateway
 }  // namespace bcos

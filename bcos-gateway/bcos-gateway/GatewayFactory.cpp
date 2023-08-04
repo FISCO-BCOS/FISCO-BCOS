@@ -6,7 +6,7 @@
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
+#include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
@@ -26,7 +26,7 @@
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
-#include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
+#include <bcos-utilities/ratelimiter/TokenBucketRateLimiter.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
@@ -474,7 +474,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
     return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
 }
 
-std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRateLimiter(
+std::shared_ptr<gateway::ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRateLimiter(
     const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
     const GatewayConfig::RedisConfig& _redisConfig)
 {
@@ -497,7 +497,7 @@ std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRat
     return gatewayRateLimiter;
 }
 
-std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimiterManager(
+std::shared_ptr<gateway::ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimiterManager(
     const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
     std::shared_ptr<sw::redis::Redis> _redis)
 {
@@ -510,7 +510,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     bool allowExceedMaxPermitSize = _rateLimiterConfig.allowExceedMaxPermitSize;
 
     // total outgoing bandwidth Limit for p2p network
-    ratelimiter::RateLimiterInterface::Ptr totalOutgoingRateLimiter = nullptr;
+    bcos::ratelimiter::RateLimiterInterface::Ptr totalOutgoingRateLimiter = nullptr;
     if (_rateLimiterConfig.totalOutgoingBwLimit > 0)
     {
         totalOutgoingRateLimiter = rateLimiterFactory->buildTimeWindowRateLimiter(
@@ -537,7 +537,7 @@ std::shared_ptr<ratelimiter::RateLimiterManager> GatewayFactory::buildRateLimite
     {
         for (const auto& [group, bandWidth] : _rateLimiterConfig.group2BwLimit)
         {
-            ratelimiter::RateLimiterInterface::Ptr rateLimiterInterface = nullptr;
+            bcos::ratelimiter::RateLimiterInterface::Ptr rateLimiterInterface = nullptr;
             if (_rateLimiterConfig.enableDistributedRatelimit)
             {
                 rateLimiterInterface = rateLimiterFactory->buildDistributedRateLimiter(

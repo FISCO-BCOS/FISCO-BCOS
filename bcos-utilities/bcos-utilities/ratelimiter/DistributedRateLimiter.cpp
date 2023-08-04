@@ -18,14 +18,12 @@
  * @date 2022-06-30
  */
 
-#include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
-#include <bcos-gateway/libratelimit/DistributedRateLimiter.h>
+#include <bcos-utilities/ratelimiter/DistributedRateLimiter.h>
 #include <bcos-utilities/Common.h>
 
 using namespace bcos;
-using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimiter;
+using namespace bcos::ratelimiter;
 
 // lua script for redis distributed rate limit
 const std::string DistributedRateLimiter::LUA_SCRIPT = R"(
@@ -37,7 +35,7 @@ const std::string DistributedRateLimiter::LUA_SCRIPT = R"(
         local requestToken = tonumber(ARGV[2])
         -- 限流间隔，单位秒
         local interval = tonumber(ARGV[3])
-        
+
         -- key不存在, 未初始化或过期, 初始化
         local r = redis.call('get', key)
         if not r then
@@ -46,10 +44,10 @@ const std::string DistributedRateLimiter::LUA_SCRIPT = R"(
             -- 设置过期时间
             redis.call("EXPIRE", key, ARGV[3])
         end
-        
+
         -- 剩余token
         local curentToken = tonumber(redis.call('get', key) or '0')
-        
+
         -- 是否超出限流
         if curentToken < requestToken then
             -- 返回(拒绝)
@@ -236,7 +234,7 @@ int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
 
         if (c_fileLogLevel <= TRACE)
         {
-            GATEWAY_LOG(TRACE) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("requestRedis")
+            RATELIMIT_LOG(TRACE) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("requestRedis")
                                << LOG_KV("rateLimitKey", m_rateLimiterKey)
                                << LOG_KV("enableLocalCache", m_enableLocalCache)
                                << LOG_KV("error", e.what());
@@ -253,7 +251,7 @@ int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
  */
 void DistributedRateLimiter::stat()
 {
-    GATEWAY_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter") << LOG_BADGE("stat")
+    RATELIMIT_LOG(DEBUG) << LOG_BADGE("DistributedRateLimiter") << LOG_BADGE("stat")
                        << LOG_BADGE(m_rateLimiterKey) << LOG_KV("totalC", m_stat.totalRequestRedis)
                        << LOG_KV("totalExpC", m_stat.totalRequestRedisExp)
                        << LOG_KV("totalFailedC", m_stat.totalRequestRedisFailed)

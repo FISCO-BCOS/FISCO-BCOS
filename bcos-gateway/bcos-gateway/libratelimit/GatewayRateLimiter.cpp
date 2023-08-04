@@ -42,16 +42,16 @@ std::optional<std::string> GatewayRateLimiter::checkOutGoing(const std::string& 
     do
     {
         // total outgoing bandwidth
-        ratelimiter::RateLimiterInterface::Ptr totalOutGoingBWLimit =
+        bcos::ratelimiter::RateLimiterInterface::Ptr totalOutGoingBWLimit =
             m_rateLimiterManager->getRateLimiter(
                 ratelimiter::RateLimiterManager::TOTAL_OUTGOING_KEY);
 
         // connection outgoing bandwidth
-        ratelimiter::RateLimiterInterface::Ptr connOutGoingBWLimit =
+        bcos::ratelimiter::RateLimiterInterface::Ptr connOutGoingBWLimit =
             m_rateLimiterManager->getConnRateLimiter(endpoint);
 
         // group outgoing bandwidth
-        ratelimiter::RateLimiterInterface::Ptr groupOutGoingBWLimit = nullptr;
+        bcos::ratelimiter::RateLimiterInterface::Ptr groupOutGoingBWLimit = nullptr;
         if (!groupID.empty())
         {
             groupOutGoingBWLimit = m_rateLimiterManager->getGroupRateLimiter(groupID);
