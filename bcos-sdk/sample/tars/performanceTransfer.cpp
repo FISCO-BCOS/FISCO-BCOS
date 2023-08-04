@@ -157,8 +157,22 @@ void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClien
 
 int main(int argc, char* argv[])
 {
-    constexpr static std::string_view connectionString =
-        "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000";
+    if (argc < 5)
+    {
+        std::cout << "Usage: " << argv[0]
+                  << " <connectionString> <userCount> <transactionCount> <qps>" << std::endl
+                  << "Example: " << argv[0]
+                  << " \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 1000 0 " << std::endl;
+
+        return 1;
+    }
+    std::string connectionString = argv[1];
+    int userCount = boost::lexical_cast<int>(argv[2]);
+    int transactionCount = boost::lexical_cast<int>(argv[3]);
+    int qps = boost::lexical_cast<int>(argv[4]);
+
+    // constexpr static std::string_view connectionString =
+    //     "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000";
     bcos::sdk::RPCClient rpcClient(std::string{connectionString});
     std::jthread getBlockNumber(
         [&](std::stop_token token) { loopFetchBlockNumber(token, rpcClient); });
@@ -183,8 +197,9 @@ int main(int argc, char* argv[])
     }
     auto const& contractAddress = receipt->contractAddress();
 
-    issue(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), 1000, 0);
-    transfer(rpcClient, cryptoSuite, std::string(contractAddress), keyPair, 1000, 10000, 0);
+    issue(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), userCount, qps);
+    transfer(rpcClient, cryptoSuite, std::string(contractAddress), keyPair, userCount,
+        transactionCount, qps);
 
     getBlockNumber.request_stop();
     return 0;
