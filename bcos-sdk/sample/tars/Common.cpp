@@ -1,10 +1,5 @@
-#pragma once
-
-#include <string_view>
-
-/*
-From HelloWorld.sol
-*/
+#include "Common.h"
+#include <chrono>
 
 constexpr static std::string_view helloworldBytecode =
     "608060405234801561001057600080fd5b50611621806100206000396000f3fe608060405234801561001057600080"
@@ -129,3 +124,50 @@ constexpr static std::string_view helloworldBytecode =
     "6970667358221220fa853e743e1e2a844a7a788534a46c2dce6fbff27bef6a64ac3c15c67549f2e164736f6c634300"
     "08120033a26469706673582212207f4fa2554331e8c5ef4917fea82fc88828584fb34b5f7a57d6d48d7b832d5cf564"
     "736f6c63430008120033";
+
+bcos::bytes bcos::sample::getContractBin()
+{
+    bcos::bytes deployBin;
+    boost::algorithm::unhex(helloworldBytecode, std::back_inserter(deployBin));
+    return deployBin;
+}
+
+long bcos::sample::currentTime()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+bcos::sample::Collector::Collector(int count, std::string title)
+  : m_startTime(currentTime()), m_count(count), m_title(std::move(title)), m_progress(m_count)
+{}
+void bcos::sample::Collector::finishSend()
+{
+    sendElapsed = bcos::sample::currentTime() - m_startTime;
+}
+void bcos::sample::Collector::receive(bool success, long elapsed)
+{
+    ++m_progress;
+    ++m_finished;
+    if (!success)
+    {
+        ++m_failed;
+    }
+    m_allTimeCost += elapsed;
+}
+void bcos::sample::Collector::report() const
+{
+    long receiveElapsed = bcos::sample::currentTime() - m_startTime;
+
+    std::cout << std::endl << m_title << " done!" << std::endl;
+    std::cout << "=======================================" << std::endl;
+    std::cout << "Total received: " << m_finished << std::endl;
+    std::cout << "Total failed: " << m_failed << std::endl;
+    std::cout << "Receive elapsed: " << receiveElapsed << "ms" << std::endl;
+    std::cout << "Avg time cost: " << ((double)m_allTimeCost.load() / (double)m_count) << "ms"
+              << std::endl;
+    std::cout << "Send TPS: " << ((double)m_count / (double)sendElapsed) * 1000.0 << std::endl;
+    std::cout << "Receive TPS: " << ((double)m_count / (double)receiveElapsed) * 1000.0
+              << std::endl;
+}
