@@ -17,6 +17,9 @@
 #include <atomic>
 #include <chrono>
 #include <exception>
+#ifdef __APPLE__
+#include <jthread.hpp>
+#endif
 #include <latch>
 #include <random>
 #include <thread>
