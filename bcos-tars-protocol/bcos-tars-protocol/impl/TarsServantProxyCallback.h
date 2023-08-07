@@ -85,10 +85,11 @@ public:
     {
         try
         {
+            static bool isFirstLog = true;
             auto p = addInactiveEndpoint(ep);
-            if (m_isLogged == false)
+            if (isFirstLog)
             {
-                m_isLogged = true;
+                isFirstLog = true;
                 BCOS_LOG(INFO) << LOG_DESC("onClose") << m_serviceName
                                << LOG_KV("endpoint", ep.toString())
                                << LOG_KV("inActiveEndPointSize", p.second);
@@ -240,7 +241,6 @@ private:
     std::shared_ptr<bcos::Timer> m_heartbeat = nullptr;
     // TODO: circle reference
     tars::TC_AutoPtr<tars::ServantProxy> m_proxy;
-    bool m_isLogged = false;
 };
 
 template <typename T>
