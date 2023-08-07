@@ -20,7 +20,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-gateway/libratelimit/DistributedRateLimiter.h>
+#include <bcos-utilities/ratelimiter/DistributedRateLimiter.h>
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -134,7 +134,7 @@ int main(int argc, char** argv)
     {
         auto redis = factory->initRedis(redisConfig);
         auto rateLimiter =
-            std::make_shared<DistributedRateLimiter>(redis, limitToken, rate, rateInterval);
+            std::make_shared<bcos::ratelimiter::DistributedRateLimiter>(redis, limitToken, rate, rateInterval);
         threads.emplace_back([rateLimiter, rate, rateInterval, &allThreadsInitSuc, &stateData]() {
             while (true)
             {
