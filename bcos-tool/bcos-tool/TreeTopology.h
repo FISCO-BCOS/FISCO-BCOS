@@ -114,8 +114,9 @@ protected:
     // index of consensus, if observer than -1
     std::atomic_int32_t m_consIndex{0};
 
-    std::atomic_int32_t m_endIndex{0};
+    // node select range, [startIndex, endIndex]
     std::atomic_int32_t m_startIndex{0};
+    std::atomic_int32_t m_endIndex{0};
 };
 
 }  // namespace bcos::tool

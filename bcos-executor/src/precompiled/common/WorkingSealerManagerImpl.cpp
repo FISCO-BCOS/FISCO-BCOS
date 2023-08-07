@@ -53,7 +53,7 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
         PRECOMPILED_LOG(WARNING) << LOG_DESC(
             "rotateWorkingSealer failed, notifyNextLeaderRotate now");
         setNotifyRotateFlag(_executive, 1);
-        throw;
+        BOOST_THROW_EXCEPTION(e);
     }
     //  a valid transaction, reset the INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE flag
     if (m_notifyNextLeaderRotateSet)
@@ -169,6 +169,8 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     {
         return true;
     }
+    // NOTE: if dynamic switch to rpbft, should rotate next block
+    // cannot get feature from BlockContext, because of determine enable number
     auto featureSwitch =
         _executive->storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_SWITCH);
     if (featureSwitch)

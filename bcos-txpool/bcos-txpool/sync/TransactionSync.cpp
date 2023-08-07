@@ -272,7 +272,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                         {
                             return;
                         }
-                        _onVerifyFinished(_error, _result);
+                        _onVerifyFinished(std::move(_error), _result);
                         if (!(proposalHeader))
                         {
                             return;

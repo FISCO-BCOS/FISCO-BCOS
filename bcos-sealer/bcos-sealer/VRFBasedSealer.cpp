@@ -48,22 +48,21 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
     try
     {
         auto blockNumber = _block->blockHeader()->number();
-        auto blockHash = _sealingManager->currentHash();
+        auto blockHash = _sealingManager->latestHash();
         auto keyPair = _sealerConfig->keyPair();
         CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
             keyPair->secretKey()->size()};
         bytes vrfPublicKey;
-        // FIXME: make it constant
-        vrfPublicKey.resize(32);
+        vrfPublicKey.resize(curve25519PublicKeySize);
         COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+        // NOTE: curve25519 fits sm2 and secp256k1 private key value range, so if you want to change
+        // elliptic curve, do think twice here.
         auto pubkeyDerive = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
 
         CInputBuffer inputMsg{reinterpret_cast<const char*>(blockHash.data()), blockHash.size()};
         bcos::bytes vrfProof;
-        // FIXME: make it constant
-        size_t proofSize = 96;
-        vrfProof.resize(proofSize);
-        COutputBuffer proof{(char*)vrfProof.data(), proofSize};
+        vrfProof.resize(curve25519VRFProofSize);
+        COutputBuffer proof{(char*)vrfProof.data(), curve25519VRFProofSize};
         auto vrfProve = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
         if (vrfProve != WEDPR_SUCCESS || pubkeyDerive != WEDPR_SUCCESS)
         {
@@ -75,7 +74,7 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
 
         std::string interface = precompiled::WSM_METHOD_ROTATE_STR;
 
-        auto random = std::mt19937(std::random_device{}());
+        auto random = std::random_device{};
         bcos::CodecWrapper codec(_hashImpl, g_BCOSConfig.isWasm());
         auto input = codec.encodeWithSig(interface, vrfPublicKey, blockHash.asBytes(), vrfProof);
 
@@ -83,11 +82,10 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
             g_BCOSConfig.isWasm() ? precompiled::CONSENSUS_TABLE_NAME :
                                     precompiled::CONSENSUS_ADDRESS,
             input, std::to_string(utcSteadyTimeUs() * random()),
-            _sealingManager->currentNumber() + 600, _sealerConfig->chainId(),
+            _sealingManager->latestNumber() + txpool::DEFAULT_BLOCK_LIMIT, _sealerConfig->chainId(),
             _sealerConfig->groupId(), utcTime(), keyPair);
 
         // append in txpool, in case other peers need it
-        // FIXME: too tricky here
         auto& txpool = dynamic_cast<txpool::TxPool&>(*_sealerConfig->txpool());
         auto& txpoolStorage = dynamic_cast<txpool::MemoryStorage&>(*txpool.txpoolStorage());
         auto submitResult = txpoolStorage.verifyAndSubmitTransaction(tx, nullptr, false, true);
@@ -99,7 +97,6 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
             return false;
         }
 
-
         // put the generated transaction into the 0th position of the block transactions
         // Note: must set generatedTx into the first transaction for other transactions may change
         //       the _sys_config_ and _sys_consensus_
@@ -107,6 +104,7 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
         auto txMeta = _sealerConfig->blockFactory()->createTransactionMetaData(
             tx->hash(), std::string(tx->to()));
         auto address = right160(_hashImpl->hash(keyPair->publicKey()));
+        // FIXME: remove source
         txMeta->setSource(address.hex());
         _block->appendTransactionMetaData(txMeta);
 

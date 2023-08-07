@@ -1678,6 +1678,12 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         }
     }
     auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
+    if (versionNumber > (uint32_t)protocol::BlockVersion::MAX_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
+                                  "The genesis compatibilityVersion is " + _compatibilityVersion +
+                                  ", high than support maxVersion"));
+    }
     // clang-format off
     std::vector<std::string_view> tables {
         SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
@@ -1724,13 +1730,6 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
 
     createFileSystemTables(versionNumber);
-    if (versionNumber > (uint32_t)protocol::BlockVersion::MAX_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
-                                  "The genesis compatibilityVersion is " + _compatibilityVersion +
-                                  ", high than support maxVersion"));
-    }
-
     auto txLimit = _ledgerConfig->blockTxCountLimit();
     LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit)
                      << LOG_KV("leaderSwitchPeriod", _ledgerConfig->leaderSwitchPeriod())
@@ -1968,6 +1967,12 @@ bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
     // select the genesis working sealers randomly according to genesis hash
     if (sealersSize > selectedNum)
     {
+        // from back to front, hash random swap selectedNode
+        // [0,1,2,3] (i=3, chose n in [0,1,2,3] to swap)
+        // => [0,1,3],2  (i=2, chose n in [0,1,3] to swap)
+        // => [0,3],1,2  (i=1, chose n in [0,3] to swap)
+        // => [0],3,1,2
+        // no need to swap 0th element
         for (std::int64_t i = sealersSize - 1; i > 0; --i)
         {
             auto hashImpl = m_blockFactory->cryptoSuite()->hashImpl();

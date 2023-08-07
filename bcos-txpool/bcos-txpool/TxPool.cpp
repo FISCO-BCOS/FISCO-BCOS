@@ -285,10 +285,10 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
             }
             auto onVerifyFinishedWrapper =
                 [txpool, txpoolStorage, _onVerifyFinished, block, blockHeader, missedTxs, startT](
-                    Error::Ptr _error, bool _ret) {
+                    const Error::Ptr& _error, bool _ret) {
                     auto verifyRet = _ret;
                     auto verifyError = _error;
-                    if (missedTxs->size() > 0)
+                    if (!missedTxs->empty())
                     {
                         // try to fetch the missed txs from the local  txpool again
                         if (_error && _error->errorCode() == CommonError::TransactionsMissing)
@@ -324,7 +324,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                     }
                 };
 
-            if (missedTxs->size() == 0)
+            if (missedTxs->empty())
             {
                 TXPOOL_LOG(DEBUG) << LOG_DESC("asyncVerifyBlock: hit all transactions in txpool")
                                   << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
