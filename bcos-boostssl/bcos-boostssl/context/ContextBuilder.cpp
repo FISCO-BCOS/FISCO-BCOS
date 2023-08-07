@@ -138,7 +138,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
             sslContext->native_handle(), _smCertConfig.nodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file failed"));
     }
 
     /* Load the private-key corresponding to the server certificate */
@@ -146,14 +146,14 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
             sslContext->native_handle(), _smCertConfig.nodeKey.c_str(), SSL_FILETYPE_PEM) <= 0)
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_PrivateKey_file failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_PrivateKey_file failed"));
     }
 
     /* Check if the server certificate and private-key matches */
     if (!SSL_CTX_check_private_key(sslContext->native_handle()))
     {
         fprintf(stderr, "Private key does not match the certificate public key\n");
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
     }
 
     /* Load the server encrypt certificate into the SSL_CTX structure */
@@ -161,7 +161,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
             sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file failed"));
     }
 
     /* Load the private-key corresponding to the server encrypt certificate */
@@ -169,7 +169,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
             sslContext->native_handle(), _smCertConfig.enNodeKey.c_str(), SSL_FILETYPE_PEM) <= 0)
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_PrivateKey_file failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_PrivateKey_file failed"));
     }
 
     /* Check if the server encrypt certificate and private-key matches */
@@ -177,7 +177,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
     {
         fprintf(stderr, "Private key does not match the certificate public key\n");
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_enc_private_key failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_enc_private_key failed"));
     }
 
     /* Load the RSA CA certificate into the SSL_CTX structure
@@ -254,7 +254,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
     /* Check if the server certificate and private-key matches */
     if (!SSL_CTX_check_private_key(sslContext->native_handle()))
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
     }
 
     /* Load the server encrypt certificate into the SSL_CTX structure */
@@ -262,7 +262,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
             sslContext->native_handle(), toX509(_smCertConfig.enNodeCert.c_str())))
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file failed"));
     }
 
     /* Load the private-key corresponding to the server encrypt certificate */
@@ -270,14 +270,14 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
             sslContext->native_handle(), toEvpPkey(_smCertConfig.enNodeKey.c_str())))
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_PrivateKey_file failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_PrivateKey_file failed"));
     }
 
     /* Check if the server encrypt certificate and private-key matches */
     if (!SSL_CTX_check_enc_private_key(sslContext->native_handle()))
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_enc_private_key failed));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_enc_private_key failed"));
     }
 
     sslContext->add_certificate_authority(boost::asio::const_buffer(
