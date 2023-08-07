@@ -584,14 +584,15 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
 {
     auto table = _executive->storage().openTable(_path);
     // _table can't be nullopt
-    auto entry = table->getRow(METHOD_AUTH_TYPE);
-    if (!entry || entry->getField(SYS_VALUE).empty())
+    if (!table || !table->getRow(METHOD_AUTH_TYPE) ||
+        table->getRow(METHOD_AUTH_TYPE)->getField(SYS_VALUE).empty())
     {
         PRECOMPILED_LOG(TRACE)
             << LOG_BADGE("ContractAuthMgrPrecompiled")
             << LOG_DESC("no acl strategy exist, should set the method access auth type firstly");
         return (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST;
     }
+    auto entry = table->getRow(METHOD_AUTH_TYPE);
     std::string authTypeStr = std::string(entry->getField(SYS_VALUE));
     std::map<bytes, uint8_t> authTypeMap;
     try
@@ -664,9 +665,9 @@ void ContractAuthMgrPrecompiled::setContractStatus(
         address = contractAddress.hex();
     }
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                           << LOG_BADGE("ContractAuthMgrPrecompiled")
-                           << LOG_DESC("setContractStatus") << LOG_KV("address", address)
-                           << LOG_KV("isFreeze", isFreeze);
+                          << LOG_BADGE("ContractAuthMgrPrecompiled")
+                          << LOG_DESC("setContractStatus") << LOG_KV("address", address)
+                          << LOG_KV("isFreeze", isFreeze);
     auto path = getAuthTableName(address);
     auto table = _executive->storage().openTable(path);
     if (!table)
@@ -719,9 +720,9 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
         address = contractAddress.hex();
     }
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
-                           << LOG_BADGE("ContractAuthMgrPrecompiled")
-                           << LOG_DESC("setContractStatus") << LOG_KV("address", address)
-                           << LOG_KV("status", std::to_string(status));
+                          << LOG_BADGE("ContractAuthMgrPrecompiled")
+                          << LOG_DESC("setContractStatus") << LOG_KV("address", address)
+                          << LOG_KV("status", std::to_string(status));
     auto path = getAuthTableName(address);
     auto table = _executive->storage().openTable(path);
     if (!table) [[unlikely]]
