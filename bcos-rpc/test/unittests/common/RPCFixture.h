@@ -116,7 +116,6 @@ public:
 
     rpc::NodeService::Ptr nodeService;
     group::GroupInfo::Ptr groupInfo;
-#pragma region
     // clang-format off
     std::string configini = "[p2p]\n"
         "    listen_ip=0.0.0.0\n"
@@ -189,6 +188,5 @@ std::string wrongConfigini = "[p2p]\n"
     "    multi_ca_path=multiCaPath\n"
     "\n";
     // clang-format on
-#pragma endregion
 };
 }  // namespace bcos::test

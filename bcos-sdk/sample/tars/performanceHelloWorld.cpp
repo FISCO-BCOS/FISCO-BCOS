@@ -1,4 +1,4 @@
-#include "TestBytecode.h"
+#include "Common.h"
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-task/Wait.h"
@@ -16,13 +16,6 @@
 #include <exception>
 #include <latch>
 #include <random>
-
-long currentTime()
-{
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now().time_since_epoch())
-        .count();
-}
 
 int performance()
 {
@@ -43,8 +36,7 @@ int performance()
         constexpr static long blockLimit = 500;
 
         bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
-        bcos::bytes deployBin;
-        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(deployBin));
+        bcos::bytes deployBin = bcos::sample::getContractBin();
         auto deployTransaction = transactionFactory.createTransaction(0, "", deployBin,
             boost::lexical_cast<std::string>(rand()), blockNumber + blockLimit, "chain0", "group0",
             0, *keyPair);
@@ -58,7 +50,7 @@ int performance()
 
         auto const& contractAddress = receipt->contractAddress();
 
-        long elapsed = currentTime();
+        long elapsed = bcos::sample::currentTime();
         std::atomic_long allTimeCost = 0;
         std::atomic_int finished = 0;
         std::atomic_int failed = 0;
@@ -87,11 +79,10 @@ int performance()
                         decltype(failed)& failed, decltype(allTimeCost)& allTimeCost,
                         decltype(tbbScheduler)& tbbScheduler,
                         decltype(latch)& latch) -> bcos::task::Task<void> {
-                        long startTime = currentTime();
+                        long startTime = bcos::sample::currentTime();
                         try
                         {
                             auto handle = co_await coRPCClient.sendTransaction(*transaction);
-
                             co_await tbbScheduler;
                             auto receipt = handle.get();
                             if (receipt->status() != 0)
@@ -104,16 +95,16 @@ int performance()
                             ++failed;
                         }
                         latch.count_down();
-                        allTimeCost += (currentTime() - startTime);
+                        allTimeCost += (bcos::sample::currentTime() - startTime);
                     }(std::move(setTransaction), coRPCClient, failed, allTimeCost, tbbScheduler,
                                                     latch));
             }
         });
-        long sendElapsed = currentTime() - elapsed;
+        long sendElapsed = bcos::sample::currentTime() - elapsed;
 
         latch.wait();
         taskGroup.wait();
-        elapsed = currentTime() - elapsed;
+        elapsed = bcos::sample::currentTime() - elapsed;
 
         std::cout << std::endl << "=======================================" << std::endl;
         std::cout << "Total received: " << finished << std::endl;

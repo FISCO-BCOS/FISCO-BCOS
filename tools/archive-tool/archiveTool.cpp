@@ -412,7 +412,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                     auto tx = transactionFactory->createTransaction(version,
                         jsonValue["to"].asString(), input, nonce, jsonValue["blockLimit"].asInt64(),
                         jsonValue["chainID"].asString(), jsonValue["groupID"].asString(),
-                        jsonValue["importTime"].asInt64());
+                        jsonValue["importTime"].asInt64(), jsonValue["abi"].asString());
                     dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx)->setSignatureData(
                         signature);
                     tx->encode(txs[i]);
