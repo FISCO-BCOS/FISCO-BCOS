@@ -17,7 +17,9 @@ private:
 
 public:
     RPCClient(const std::string& connectionString);
-    bcostars::RPCPrx& rpcProxy() { return m_rpcProxy; }
+    bcostars::RPCPrx& rpcProxy();
+
+    static std::string toConnectionString(const std::vector<std::string>& hostAndPorts);
 };
 
 class SendTransaction : public bcos::sdk::Handle<bcos::protocol::TransactionReceipt::Ptr>
