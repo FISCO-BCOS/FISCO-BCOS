@@ -1678,6 +1678,12 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
         }
     }
     auto versionNumber = bcos::tool::toVersionNumber(_compatibilityVersion);
+    if (versionNumber > (uint32_t)protocol::BlockVersion::MAX_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
+                                  "The genesis compatibilityVersion is " + _compatibilityVersion +
+                                  ", high than support maxVersion"));
+    }
     // clang-format off
     std::vector<std::string_view> tables {
         SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
@@ -1724,13 +1730,6 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
 
     createFileSystemTables(versionNumber);
-    if (versionNumber > (uint32_t)protocol::BlockVersion::MAX_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
-                                  "The genesis compatibilityVersion is " + _compatibilityVersion +
-                                  ", high than support maxVersion"));
-    }
-
     auto txLimit = _ledgerConfig->blockTxCountLimit();
     LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit)
                      << LOG_KV("leaderSwitchPeriod", _ledgerConfig->leaderSwitchPeriod())
