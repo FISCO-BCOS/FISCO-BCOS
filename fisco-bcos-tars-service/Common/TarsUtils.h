@@ -109,9 +109,19 @@ S createServantProxy(tars::Communicator* communicator, std::string const& _servi
     TarsServantProxyOnCloseHandler _closeHandler = TarsServantProxyOnCloseHandler())
 {
     auto prx = communicator->stringToProxy<S>(_serviceName);
+    if (m_isLogged == false)
+    {
+        m_isLogged = true;
+        BCOS_LOG(INFO) << LOG_BADGE("createServantProxy") << LOG_DESC("create servant proxy")
+                       << LOG_KV("serviceName", _serviceName) << LOG_KV("proxy address", prx.get());
+    }
+    else
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("createServantProxy") << LOG_DESC("create servant proxy")
+                        << LOG_KV("serviceName", _serviceName)
+                        << LOG_KV("proxy address", prx.get());
+    }
 
-    BCOS_LOG(INFO) << LOG_BADGE("createServantProxy") << LOG_DESC("create servant proxy")
-                   << LOG_KV("serviceName", _serviceName) << LOG_KV("proxy address", prx.get());
     if (!prx->tars_get_push_callback())
     {
         auto proxyCallback = std::make_unique<bcostars::TarsServantProxyCallback>(
@@ -182,4 +192,6 @@ S createServantProxy(bool _withEndPoints, std::string const& _serviceName,
     return createServantProxy<S>(serviceParams);
 }
 
+private:
+bool m_isLogged = false;
 }  // namespace bcostars

@@ -86,9 +86,19 @@ public:
         try
         {
             auto p = addInactiveEndpoint(ep);
-            BCOS_LOG(INFO) << LOG_DESC("onClose") << m_serviceName
-                           << LOG_KV("endpoint", ep.toString())
-                           << LOG_KV("inActiveEndPointSize", p.second);
+            if (m_isLogged == false)
+            {
+                m_isLogged = true;
+                BCOS_LOG(INFO) << LOG_DESC("onClose") << m_serviceName
+                               << LOG_KV("endpoint", ep.toString())
+                               << LOG_KV("inActiveEndPointSize", p.second);
+            }
+            else
+            {
+                BCOS_LOG(TRACE) << LOG_DESC("onClose") << m_serviceName
+                                << LOG_KV("endpoint", ep.toString())
+                                << LOG_KV("inActiveEndPointSize", p.second);
+            }
             if (p.first && m_onCloseHandler)
             {
                 m_onCloseHandler(ep);
@@ -230,6 +240,7 @@ private:
     std::shared_ptr<bcos::Timer> m_heartbeat = nullptr;
     // TODO: circle reference
     tars::TC_AutoPtr<tars::ServantProxy> m_proxy;
+    bool m_isLogged = false;
 };
 
 template <typename T>
