@@ -22,7 +22,7 @@
 
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Timer.h"
-#include <bcos-gateway/libratelimit/RateLimiterInterface.h>
+#include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
 #include <bcos-gateway/libratelimit/RateLimiterStat.h>
 #include <bcos-utilities/Common.h>
@@ -57,7 +57,7 @@ public:
     {
         if (m_running)
         {
-            RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
+            GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
                                 << LOG_DESC("gateway ratelimiter is running");
             return;
         }
@@ -71,7 +71,7 @@ public:
             bStartStat = true;
         }
 
-        RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
+        GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
                             << LOG_DESC("gateway ratelimiter start end")
                             << LOG_KV("bStartStat", bStartStat)
                             << LOG_KV("enableOutRateLimit", enableOutRateLimit)
@@ -82,7 +82,7 @@ public:
     {
         if (!m_running)
         {
-            RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
+            GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
                                 << LOG_DESC("gateway ratelimiter has been stopped");
             return;
         }
@@ -93,7 +93,7 @@ public:
             m_rateLimiterStat->stop();
         }
 
-        RATELIMIT_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
+        GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
                             << LOG_DESC("gateway ratelimiter stop end");
     }
 

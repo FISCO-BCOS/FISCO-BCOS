@@ -20,13 +20,11 @@
  * @author: yujiechen
  * @date: 2020-04-15
  */
-#include <bcos-gateway/Common.h>
-#include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
+#include <bcos-utilities/ratelimiter/TokenBucketRateLimiter.h>
 #include <thread>
 
 using namespace bcos;
-using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimiter;
+using namespace bcos::ratelimiter;
 
 TokenBucketRateLimiter::TokenBucketRateLimiter(int64_t _maxQPS)
   : m_maxQPS(_maxQPS),

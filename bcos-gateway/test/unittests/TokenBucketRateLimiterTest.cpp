@@ -19,15 +19,13 @@
  * @date 2023-07-23
  */
 
-#include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
+#include <bcos-utilities/ratelimiter/TokenBucketRateLimiter.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <thread>
 
 using namespace bcos;
-using namespace gateway;
-using namespace gateway::ratelimiter;
 using namespace bcos::test;
 
 BOOST_FIXTURE_TEST_SUITE(TokenBucketRateLimiterTest, TestPromptFixture)
@@ -36,7 +34,7 @@ BOOST_FIXTURE_TEST_SUITE(TokenBucketRateLimiterTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(acquireTest)
 {
     int64_t maxPermit = 100;
-    TokenBucketRateLimiter rateLimiter(maxPermit);
+    bcos::ratelimiter::TokenBucketRateLimiter rateLimiter(maxPermit);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // check acquire failed
@@ -52,7 +50,7 @@ BOOST_AUTO_TEST_CASE(acquireTest)
 BOOST_AUTO_TEST_CASE(tryAcquireTest)
 {
     int64_t maxPermit = 100;
-    TokenBucketRateLimiter rateLimiter(maxPermit);
+    bcos::ratelimiter::TokenBucketRateLimiter rateLimiter(maxPermit);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // check acquire failed
@@ -73,7 +71,7 @@ BOOST_AUTO_TEST_CASE(tryAcquireTest)
 BOOST_AUTO_TEST_CASE(rollbackTest)
 {
     int64_t maxPermit = 100;
-    TokenBucketRateLimiter rateLimiter(maxPermit);
+    bcos::ratelimiter::TokenBucketRateLimiter rateLimiter(maxPermit);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     BOOST_CHECK(rateLimiter.acquire(maxPermit));

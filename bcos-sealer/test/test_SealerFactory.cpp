@@ -94,6 +94,7 @@ BOOST_AUTO_TEST_CASE(constructor)
     BOOST_TEST(sealer != nullptr);
     BOOST_TEST(sealer->hookWhenSealBlock(nullptr) == true);
     sealer->start();
+    sealer->start();
     sealer->stop();
     auto vrfSealer = factory->createVRFBasedSealer();
     BOOST_TEST(vrfSealer != nullptr);
