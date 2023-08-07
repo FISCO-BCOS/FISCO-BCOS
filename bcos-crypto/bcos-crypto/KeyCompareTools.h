@@ -27,19 +27,21 @@
 
 namespace bcos::crypto
 {
+template <class NodeType>
+concept Node = requires(NodeType node)
+{
+    node->data();
+};
+template <class NodesType>
+concept Nodes = requires(NodesType nodesType)
+{
+    requires RANGES::bidirectional_range<NodesType>;
+    requires Node<RANGES::range_value_t<NodesType>>;
+};
 class KeyCompareTools
 {
 public:
-    template <RANGES::bidirectional_range NodesType>
-    requires requires
-    {
-        typename NodesType::value_type;
-        requires requires(typename NodesType::value_type value)
-        {
-            value->data();
-        };
-    }
-    static bool compareTwoNodeIDs(NodesType nodes1, NodesType nodes2)
+    static bool compareTwoNodeIDs(Nodes auto const& nodes1, Nodes auto const& nodes2)
     {
         if (RANGES::size(nodes1) != RANGES::size(nodes2))
         {
@@ -53,39 +55,10 @@ public:
                 return false;
             }
         }
-
         return true;
     }
 
-    template <RANGES::bidirectional_range NodesType, RANGES::bidirectional_range OutputType>
-    requires requires
-    {
-        typename NodesType::value_type;
-        requires requires(typename NodesType::value_type value)
-        {
-            value->data();
-        };
-        requires requires
-        {
-            std::declval<OutputType>().emplace_back(
-                std::declval<typename NodesType::value_type>()->data());
-        };
-    }
-    static void extractNodeIDsBytes(NodesType nodes, OutputType& values)
-    {
-        values = nodes | RANGES::views::transform([](auto& node) { return node->data(); });
-    }
-
-    template <RANGES::bidirectional_range NodesType>
-    requires requires
-    {
-        typename NodesType::value_type;
-        requires requires(typename NodesType::value_type value)
-        {
-            value->data();
-        };
-    }
-    static bool isNodeIDExist(typename NodesType::value_type node, NodesType const& nodes)
+    static bool isNodeIDExist(Node auto const& node, Nodes auto const& nodes)
     {
         return RANGES::find_if(RANGES::begin(nodes), RANGES::end(nodes),
                    [&node](auto&& n) { return n->data() == node->data(); }) != RANGES::end(nodes);

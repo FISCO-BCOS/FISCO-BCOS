@@ -872,7 +872,7 @@ void BlockSync::sendSyncStatusByTree()
         m_config->archiveBlockNumber());
     m_syncStatus->updatePeerStatus(m_config->nodeID(), statusMsg);
     auto encodedData = statusMsg->encode();
-    BLKSYNC_LOG(TRACE) << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatus")
+    BLKSYNC_LOG(TRACE) << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatusByTree")
                        << LOG_KV("number", statusMsg->number())
                        << LOG_KV("genesisHash", statusMsg->genesisHash().abridged())
                        << LOG_KV("currentHash", statusMsg->hash().abridged());

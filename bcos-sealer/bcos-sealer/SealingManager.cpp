@@ -54,7 +54,7 @@ bool SealingManager::shouldGenerateProposal()
         return false;
     }
     // should wait the given block submit to the ledger
-    if (m_currentNumber < m_waitUntil)
+    if (m_latestNumber < m_waitUntil)
     {
         return false;
     }
@@ -145,7 +145,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
         return std::pair(false, nullptr);
     }
     WriteGuard l(x_pendingTxs);
-    m_sealingNumber = std::max(m_sealingNumber.load(), m_currentNumber.load() + 1);
+    m_sealingNumber = std::max(m_sealingNumber.load(), m_latestNumber.load() + 1);
     auto block = m_config->blockFactory()->createBlock();
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(m_sealingNumber);
@@ -161,7 +161,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
         m_waitUntil.store(m_sealingNumber);
         SEAL_LOG(INFO) << LOG_DESC("seal the system transactions")
                        << LOG_KV("sealNextBlockUntil", m_waitUntil)
-                       << LOG_KV("curNum", m_currentNumber);
+                       << LOG_KV("curNum", m_latestNumber);
     }
     bool containSysTxs = false;
     if (_handleBlockHook)
@@ -170,10 +170,13 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
         // Note: must set generatedTx into the first transaction for other transactions may change
         //       the _sys_config_ and _sys_consensus_
         //       here must use noteChange for this function will notify updating the txsCache
-        _handleBlockHook(block);
-        if (block->transactionsSize() > 0)
+        if (_handleBlockHook(block))
         {
-            containSysTxs = true;
+            if (block->transactionsSize() > 0)
+            {
+                containSysTxs = true;
+                txsSize--;
+            }
         }
     }
     for (size_t i = 0; i < systemTxsSize; i++)

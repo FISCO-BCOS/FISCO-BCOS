@@ -1968,6 +1968,12 @@ bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
     // select the genesis working sealers randomly according to genesis hash
     if (sealersSize > selectedNum)
     {
+        // from back to front, hash random swap selectedNode
+        // [0,1,2,3] (i=3, chose n in [0,1,2,3] to swap)
+        // => [0,1,3],2  (i=2, chose n in [0,1,3] to swap)
+        // => [0,3],1,2  (i=1, chose n in [0,3] to swap)
+        // => [0],3,1,2
+        // no need to swap 0th element
         for (std::int64_t i = sealersSize - 1; i > 0; --i)
         {
             auto hashImpl = m_blockFactory->cryptoSuite()->hashImpl();

@@ -94,11 +94,9 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
         // setWeight(string,uint256)
         result = setWeight(_executive, data, codec);
     }
-    else if (blockContext.blockVersion() >= protocol::BlockVersion::V3_5_VERSION &&
-             blockContext.features().get(Features::Flag::feature_rpbft) &&
+    else if (blockContext.features().get(Features::Flag::feature_rpbft) &&
              func == name2Selector[WSM_METHOD_ROTATE_STR])
     {
-        // TODO: use feature
         rotateWorkingSealer(_executive, _callParameters, codec);
     }
     else [[unlikely]]

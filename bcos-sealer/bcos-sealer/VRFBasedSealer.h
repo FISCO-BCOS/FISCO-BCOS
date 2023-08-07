@@ -28,6 +28,8 @@
 
 namespace bcos::sealer
 {
+constexpr static const uint16_t curve25519PublicKeySize = 32;
+constexpr static const uint16_t curve25519VRFProofSize = 96;
 class VRFBasedSealer : public bcos::sealer::Sealer
 {
 public:
