@@ -84,14 +84,14 @@ void Sealer::asyncNotifySealProposal(uint64_t _proposalStartIndex, uint64_t _pro
 
 void Sealer::asyncNoteLatestBlockNumber(int64_t _blockNumber)
 {
-    m_sealingManager->resetCurrentNumber(_blockNumber);
+    m_sealingManager->resetLatestNumber(_blockNumber);
     SEAL_LOG(INFO) << LOG_DESC("asyncNoteLatestBlockNumber") << LOG_KV("number", _blockNumber);
 }
 
 void Sealer::asyncNoteLatestBlockHash(crypto::HashType _hash)
 {
     SEAL_LOG(INFO) << LOG_DESC("asyncNoteLatestBlockHash") << LOG_KV("_hash", _hash.abridged());
-    m_sealingManager->resetCurrentHash(std::move(_hash));
+    m_sealingManager->resetLatestHash(std::move(_hash));
 }
 
 void Sealer::asyncNoteUnSealedTxsSize(
@@ -136,11 +136,11 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     {
         return;
     }
-    if (_block->blockHeader()->number() <= m_sealingManager->currentNumber())
+    if (_block->blockHeader()->number() <= m_sealingManager->latestNumber())
     {
         SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has already been committed")
                        << LOG_KV("proposalIndex", _block->blockHeader()->number())
-                       << LOG_KV("currentNumber", m_sealingManager->currentNumber());
+                       << LOG_KV("currentNumber", m_sealingManager->latestNumber());
         m_sealingManager->notifyResetProposal(_block);
         return;
     }
@@ -166,7 +166,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     _block->encode(*encodedData);
     SEAL_LOG(INFO) << LOG_DESC("++++++++++++++++ Generate proposal")
                    << LOG_KV("index", _block->blockHeader()->number())
-                   << LOG_KV("curNum", m_sealingManager->currentNumber())
+                   << LOG_KV("curNum", m_sealingManager->latestNumber())
                    << LOG_KV("hash", _block->blockHeader()->hash().abridged())
                    << LOG_KV("sysTxs", _containSysTxs)
                    << LOG_KV("txsSize", _block->transactionsHashSize())

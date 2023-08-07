@@ -814,6 +814,7 @@ bool PBFTEngine::checkRotateTransactionValid(
         return false;
     }
 
+    // FIXME: should not use source
     auto leaderAddress = right160(m_config->cryptoSuite()->hash(_leaderInfo->nodeID()));
     if (rotatingTx->source() == leaderAddress.hex())
     {
@@ -1431,15 +1432,8 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     RecursiveGuard l(m_mutex);
     // resetConfig after submit the block to ledger
     m_config->resetConfig(_ledgerConfig, _syncedBlock);
-    if (_ledgerConfig->features().get(ledger::Features::Flag::feature_rpbft) &&
-        m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE) [[unlikely]]
-    {
-        m_config->setConsensusType(ledger::ConsensusType::RPBFT_TYPE);
-    }
-    if (m_config->consensusType() == ledger::ConsensusType::RPBFT_TYPE) [[unlikely]]
-    {
-        m_rpbftConfigTools->resetConfig(_ledgerConfig);
-    }
+    // try to switch rpbft
+    resetRPBFTConfig(_ledgerConfig);
     m_cacheProcessor->checkAndCommitStableCheckPoint();
     m_cacheProcessor->tryToApplyCommitQueue();
     // tried to commit the stable checkpoint
@@ -1719,4 +1713,18 @@ void PBFTEngine::fetchAndUpdateLedgerConfig()
                    << LOG_KV("maxTxsPerBlock", ledgerConfig->blockTxCountLimit())
                    << LOG_KV("consensusNodeList", ledgerConfig->consensusNodeList().size());
     m_config->resetConfig(ledgerConfig);
+}
+
+
+void PBFTEngine::resetRPBFTConfig(const LedgerConfig::Ptr& _ledgerConfig)
+{
+    if (_ledgerConfig->features().get(ledger::Features::Flag::feature_rpbft) &&
+        this->m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE) [[unlikely]]
+    {
+        this->m_config->setConsensusType(ledger::ConsensusType::RPBFT_TYPE);
+    }
+    if (this->m_config->consensusType() == ledger::ConsensusType::RPBFT_TYPE) [[unlikely]]
+    {
+        this->m_rpbftConfigTools->resetConfig(_ledgerConfig);
+    }
 }

@@ -64,6 +64,8 @@ use_ipv6=""
 # for modifying multipy ca node
 modify_node_path=""
 multi_ca_path=""
+consensus_type="pbft"
+supported_consensus=(pbft rpbft)
 
 LOG_WARN() {
     local content=${1}
@@ -566,6 +568,7 @@ Usage:
     -N <node path>                      [Optional] set the path of the node modified to multi ca mode
     -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -6 <ipv6 mode>                      [Optional] IPv6 mode use :: as default listen ip, default is false
+    -T <Consensus Algorithm>            [Optional] Default PBFT. Options can be pbft / rpbft, pbft is recommended
     -h Help
 
 deploy nodes e.g
@@ -586,7 +589,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:6" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:6T:" option; do
         case $option in
         6) use_ipv6="true" && default_listen_ip="::"
         ;;
@@ -670,6 +673,12 @@ parse_params() {
                 multi_ca_path=${OPTARG%/*}
             fi
             file_must_exists "${multi_ca_path}"
+            ;;
+        T) consensus_type=$OPTARG
+                if ! echo "${supported_consensus[*]}" | grep -i "${consensus_type}" &>/dev/null; then
+                    LOG_WARN "${consensus_type} is not supported. Please set one of ${supported_consensus[*]}"
+                    exit 1;
+                fi
             ;;
         h) help ;;
         *) help ;;
@@ -1604,8 +1613,8 @@ generate_genesis_config() {
     chain_id=${default_chainid}
 
 [consensus]
-    ; consensus algorithm now support PBFT(consensus_type=pbft)
-    consensus_type=pbft
+    ; consensus algorithm now support PBFT(consensus_type=pbft), rPBFT(consensus_type=rpbft)
+    consensus_type=${consensus_type}
     ; the max number of transactions of a block
     block_tx_count_limit=1000
     ; in millisecond, block consensus timeout, at least 3000ms

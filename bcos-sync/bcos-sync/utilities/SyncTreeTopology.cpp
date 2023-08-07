@@ -83,7 +83,7 @@ void SyncTreeTopology::updateStartAndEndIndex()
     std::int64_t consensusNodeSize = m_consensusNodes->size();
     // max node size every consensus node responses to sync the newest block
     std::int64_t slotSize = (m_nodeNum + consensusNodeSize - 1) / consensusNodeSize;
-    // calculate the node index interval([m_startIndex, m_endIndex]) every consensus node repsonses
+    // calculate the node index interval([m_startIndex, m_endIndex]) every consensus node responses
     // the node is the consensus node, calculate m_startIndex
     if (m_consIndex >= 0)
     {

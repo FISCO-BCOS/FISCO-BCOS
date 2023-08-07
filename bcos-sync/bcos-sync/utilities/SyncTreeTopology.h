@@ -75,6 +75,7 @@ protected:
     // the nodeList include both the consensus nodes and the observer nodes
     bcos::crypto::NodeIDListPtr m_nodeList;
 
+    // index in nodeList
     std::atomic_int32_t m_nodeIndex{0};
 };
 }  // namespace bcos::sync

@@ -221,6 +221,7 @@ private:
         boost::unique_lock<boost::mutex> lock(x_signalled);
         m_signalled.wait_for(lock, boost::chrono::milliseconds(5));
     }
+    void resetRPBFTConfig(const ledger::LedgerConfig::Ptr& _ledgerConfig);
 
 protected:
     // PBFT configuration class
