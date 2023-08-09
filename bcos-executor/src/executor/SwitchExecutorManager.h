@@ -73,7 +73,7 @@ public:
             }
             catch (Exception const& _e)
             {
-                EXECUTOR_LOG(ERROR)
+                EXECUTOR_LOG(WARNING)
                     << LOG_DESC("selfAsyncRefreshExecutor exception. Re-push to task pool")
                     << LOG_KV("toTermId", toTermId) << LOG_KV("currentTermId", m_schedulerTermId)
                     << diagnostic_information(_e);
@@ -131,10 +131,10 @@ public:
         }
         catch (Exception const& _e)
         {
-            EXECUTOR_LOG(ERROR) << LOG_DESC("nextBlockHeader: not refreshExecutor for exception")
-                                << LOG_KV("toTermId", schedulerTermId)
-                                << LOG_KV("currentTermId", m_schedulerTermId)
-                                << diagnostic_information(_e);
+            EXECUTOR_LOG(WARNING) << LOG_DESC("nextBlockHeader: not refreshExecutor for exception")
+                                  << LOG_KV("toTermId", schedulerTermId)
+                                  << LOG_KV("currentTermId", m_schedulerTermId)
+                                  << diagnostic_information(_e);
             callback(BCOS_ERROR_UNIQUE_PTR(
                 bcos::executor::ExecuteError::INTERNAL_ERROR, "refreshExecutor exception"));
             return;

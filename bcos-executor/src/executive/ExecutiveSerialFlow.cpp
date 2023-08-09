@@ -124,6 +124,6 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
     {
         EXECUTIVE_LOG(ERROR) << "ExecutiveSerialFlow run error: "
                              << boost::diagnostic_information(e);
-        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveSerialFlow run error", e));
+        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveSerialFlow run failed", e));
     }
 }

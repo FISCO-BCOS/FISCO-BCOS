@@ -144,7 +144,7 @@ void ZkpPrecompiled::verifyEitherEqualityProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyEitherEqualityProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyEitherEqualityProof: ") << verifyResult;
@@ -167,7 +167,7 @@ void ZkpPrecompiled::verifyKnowledgeProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyKnowledgeProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyKnowledgeProof: ") << verifyResult;
@@ -199,7 +199,7 @@ void ZkpPrecompiled::verifyFormatProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyFormatProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyFormatProof: ") << verifyResult;
@@ -225,7 +225,7 @@ void ZkpPrecompiled::verifySumProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifySumProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifySumProof: ") << verifyResult;
@@ -251,7 +251,7 @@ void ZkpPrecompiled::verifyProductProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyProductProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyProductProof: ") << verifyResult;
@@ -275,7 +275,7 @@ void ZkpPrecompiled::verifyEqualityProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyEqualityProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyEqualityProof: ") << verifyResult;
@@ -297,7 +297,7 @@ void ZkpPrecompiled::aggregateRistrettoPoint(
     {
         retCode = -1;
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("aggregateRistrettoPoint exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(retCode, result));
 }

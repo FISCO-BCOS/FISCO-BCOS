@@ -157,5 +157,5 @@ bytes DiscreteLogarithmZkp::aggregateRistrettoPoint(bytes const& pointSum, bytes
     {
         return aggregatedResult;
     }
-    BOOST_THROW_EXCEPTION(ZkpExcetpion() << errinfo_comment("aggregateRistrettoPoint error"));
+    BOOST_THROW_EXCEPTION(ZkpExcetpion() << errinfo_comment("aggregateRistrettoPoint failed"));
 }
