@@ -131,7 +131,7 @@ int ConsensusPrecompiled::addSealer(
             [](unsigned char _ch) { return std::isxdigit(_ch); }) != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                               << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
     if (weight == 0)
@@ -205,7 +205,7 @@ int ConsensusPrecompiled::addObserver(
             [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                               << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
 
@@ -267,7 +267,7 @@ int ConsensusPrecompiled::removeNode(
     if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                               << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
 
@@ -326,7 +326,7 @@ int ConsensusPrecompiled::setWeight(
     if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                               << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
     if (weight == 0)

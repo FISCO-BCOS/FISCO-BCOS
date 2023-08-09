@@ -130,9 +130,9 @@ void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
     }
     catch (std::exception& e)
     {
-        EXECUTIVE_LOG(ERROR) << "ExecutiveStackFlow run error: "
+        EXECUTIVE_LOG(ERROR) << "ExecutiveStackFlow run failed: "
                              << boost::diagnostic_information(e);
-        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveStackFlow run error", e));
+        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveStackFlow run failed", e));
     }
 }
 
