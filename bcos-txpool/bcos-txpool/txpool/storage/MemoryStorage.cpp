@@ -715,7 +715,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     if (_avoidDuplicate)
     {
         size_t _eachBucketTxsLimit = 0;
-        if (m_txsTable.size() < _txsLimit)
+        if (_txsLimit / 256 == 0 || m_txsTable.size() <= _txsLimit)
         {
             _eachBucketTxsLimit = _txsLimit;
         }
@@ -736,7 +736,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     else
     {
         size_t _eachBucketTxsLimit = 0;
-        if (_txsLimit < 10 || m_txsTable.size() <= _txsLimit)
+        if (_txsLimit <= 10 || m_txsTable.size() <= _txsLimit)
         {
             _eachBucketTxsLimit = _txsLimit;
         }
