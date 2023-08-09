@@ -31,7 +31,7 @@ private:
 protected:
     RPCClient& rpcClient() { return m_rpcClient; }
     void setFuture(std::future<tars::ReqMessagePtr> future) { m_future = std::move(future); }
-    std::shared_ptr<Callback> callback() { return m_callback; }
+    std::shared_ptr<Callback> callback() const { return m_callback; }
 
 public:
     Handle(RPCClient& rpcClient) : m_rpcClient(rpcClient){};

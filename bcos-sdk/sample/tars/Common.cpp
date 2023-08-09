@@ -1,7 +1,7 @@
 #include "Common.h"
 #include <chrono>
 
-constexpr static std::string_view helloworldBytecode =
+constexpr static std::string_view HELLOWORLD_BYTECODE =
     "608060405234801561001057600080fd5b50611621806100206000396000f3fe608060405234801561001057600080"
     "fd5b50600436106100cf5760003560e01c8063805e3da01161008c578063e3d670d711610066578063e3d670d71461"
     "01b4578063e5175c58146101e4578063f28a3b6514610214578063fd8f59071461021e576100cf565b8063805e3da0"
@@ -125,10 +125,43 @@ constexpr static std::string_view helloworldBytecode =
     "08120033a26469706673582212207f4fa2554331e8c5ef4917fea82fc88828584fb34b5f7a57d6d48d7b832d5cf564"
     "736f6c63430008120033";
 
+constexpr static std::string_view HELLOWORLD_ABI =
+    "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"int256\",\"name\":"
+    "\"value1\",\"type\":\"int256\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":"
+    "\"value2\",\"type\":\"string\"}],\"name\":\"EventExample\",\"type\":\"event\"},{\"inputs\":[{"
+    "\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"balance\","
+    "\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],"
+    "\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"createTwice\","
+    "\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],"
+    "\"name\":\"delegateCall\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":"
+    "\"function\"},{\"inputs\":[{\"internalType\":\"int256\",\"name\":\"value\",\"type\":"
+    "\"int256\"}],\"name\":\"deployAndCall\",\"outputs\":[{\"internalType\":\"int256\",\"name\":"
+    "\"\",\"type\":\"int256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
+    "\"inputs\":[],\"name\":\"getInt\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\","
+    "\"type\":\"int256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],"
+    "\"name\":\"getString\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":"
+    "\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{"
+    "\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":"
+    "\"int256\",\"name\":\"count\",\"type\":\"int256\"}],\"name\":\"issue\",\"outputs\":[],"
+    "\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"logOut\","
+    "\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],"
+    "\"name\":\"returnRequire\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":"
+    "\"int256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],"
+    "\"name\":\"returnRevert\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":"
+    "\"int256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{"
+    "\"internalType\":\"int256\",\"name\":\"value\",\"type\":\"int256\"}],\"name\":\"setInt\","
+    "\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{"
+    "\"internalType\":\"string\",\"name\":\"value\",\"type\":\"string\"}],\"name\":\"setString\","
+    "\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{"
+    "\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"internalType\":"
+    "\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"int256\",\"name\":"
+    "\"count\",\"type\":\"int256\"}],\"name\":\"transfer\",\"outputs\":[],\"stateMutability\":"
+    "\"nonpayable\",\"type\":\"function\"}]";
+
 bcos::bytes bcos::sample::getContractBin()
 {
     bcos::bytes deployBin;
-    boost::algorithm::unhex(helloworldBytecode, std::back_inserter(deployBin));
+    boost::algorithm::unhex(HELLOWORLD_BYTECODE, std::back_inserter(deployBin));
     return deployBin;
 }
 

@@ -26,6 +26,7 @@
 
 std::atomic_long blockNumber = 0;
 constexpr static long blockLimit = 500;
+constexpr static int64_t initialValue = 1000000000;
 
 class PerformanceCallback : public bcos::sdk::Callback
 {
@@ -56,15 +57,14 @@ int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoS
 
     bcos::sample::Collector collector(userCount, "Issue");
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
-        auto rand = std::mt19937(std::random_device{}());
         for (auto it = range.begin(); it != range.end(); ++it)
         {
             bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
-            auto input =
-                abiCodec.abiIn("issue(address,int256)", bcos::Address(it), bcos::s256(1000000000));
+            auto input = abiCodec.abiIn(
+                "issue(address,int256)", bcos::Address(it), bcos::s256(initialValue));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                boost::lexical_cast<std::string>(rand()), blockNumber + blockLimit, "chain0",
-                "group0", 0, *keyPair);
+                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
+                *keyPair);
 
             handles[it].emplace(rpcClient);
             auto& sendTransaction = *(handles[it]);
@@ -103,18 +103,17 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
 
     bcos::sample::Collector collector(transactionCount, "Transfer");
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)transactionCount), [&](const auto& range) {
-        auto rand = std::mt19937(std::random_device{}());
         for (auto it = range.begin(); it != range.end(); ++it)
         {
-            auto from = (it + userCount) % userCount;
-            auto to = (it + userCount) % userCount;
+            auto fromAddress = (it + userCount) % userCount;
+            auto toAddress = (it + userCount) % userCount;
 
             bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
-            auto input = abiCodec.abiIn("transfer(address,address,int256)", bcos::Address(from),
-                bcos::Address(to), bcos::s256(1));
+            auto input = abiCodec.abiIn("transfer(address,address,int256)",
+                bcos::Address(fromAddress), bcos::Address(toAddress), bcos::s256(1));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                boost::lexical_cast<std::string>(rand()), blockNumber + blockLimit, "chain0",
-                "group0", 0, *keyPair);
+                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
+                *keyPair);
 
             handles[it].emplace(rpcClient);
             auto& sendTransaction = *(handles[it]);
@@ -174,9 +173,12 @@ int main(int argc, char* argv[])
     int transactionCount = boost::lexical_cast<int>(argv[3]);
     int qps = boost::lexical_cast<int>(argv[4]);
 
-    // constexpr static std::string_view connectionString =
-    //     "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000";
-    bcos::sdk::RPCClient rpcClient(std::string{connectionString});
+    bcos::sdk::Config config = {
+        .connectionString = connectionString,
+        .sendQueueSize = transactionCount,
+        .timeoutMs = 60000,
+    };
+    bcos::sdk::RPCClient rpcClient(config);
     std::jthread getBlockNumber(
         [&](std::stop_token token) { loopFetchBlockNumber(token, rpcClient); });
 
@@ -190,7 +192,7 @@ int main(int argc, char* argv[])
     bcos::bytes deployBin = bcos::sample::getContractBin();
     auto deployTransaction = transactionFactory.createTransaction(0, "", deployBin,
         boost::lexical_cast<std::string>(rand()), blockNumber + blockLimit, "chain0", "group0", 0,
-        *keyPair);
+        *keyPair, "");
     auto receipt = bcos::sdk::SendTransaction(rpcClient).send(*deployTransaction).get();
 
     if (receipt->status() != 0)

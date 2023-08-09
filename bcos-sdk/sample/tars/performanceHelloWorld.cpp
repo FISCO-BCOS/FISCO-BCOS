@@ -28,9 +28,12 @@ int performance()
             cryptoSuite->signatureImpl()->generateKeyPair());
         constexpr static size_t count = 10UL * 10000;
 
-        constexpr static std::string_view connectionString =
-            "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000";
-        bcos::sdk::RPCClient rpcClient(std::string{connectionString});
+        bcos::sdk::Config config = {
+            .connectionString = "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000",
+            .sendQueueSize = 100000,
+            .timeoutMs = 600000,
+        };
+        bcos::sdk::RPCClient rpcClient(config);
 
         auto blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
         constexpr static long blockLimit = 500;
