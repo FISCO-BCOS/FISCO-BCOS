@@ -55,12 +55,10 @@ public:
             if (lhs && rhs) {
                 return *lhs == *rhs;
             }
-            return lhs.get() == rhs.get();
+            return lhs == rhs;
         }
 
-        bool operator==(const IteratorImpl& other) const {
-            return m_iterator == other.m_iterator && first == other.first && second == other.second;
-        }
+        bool operator==(const IteratorImpl& other) const { return m_iterator == other.m_iterator; }
 
         Container::nth_index<0>::type::iterator getIterator() const { return m_iterator; }
 
@@ -104,9 +102,7 @@ public:
     {
         MyStruct newData(key, value);
         auto result = multiIndexMap.insert(newData);
-        auto txhash = result.first->txHash;
-        auto it = multiIndexMap.get<0>().find(txhash);
-        return {std::make_shared<IteratorImpl>(it), result.second};
+        return {std::make_shared<IteratorImpl>(result.first), result.second};
     }
 
     bool contains(const bcos::crypto::HashType& key){
@@ -125,27 +121,14 @@ public:
         for (const auto& item : multiIndexMap.get<1>())
         {
             auto it = IteratorImpl(item.txHash, item.transaction);
-            TXPOOL_LOG(DEBUG) << LOG_KV("txHash:", it.first)
-                              << LOG_KV("timestamp:", it.second->importTime());
+            //            TXPOOL_LOG(DEBUG) << LOG_KV("txHash:", it.first)
+            //                              << LOG_KV("timestamp:", it.second->importTime());
             accessor->setValue(std::make_shared<IteratorImpl>(it));
             if (!handler(accessor))
             {
                 return false;
             }
         }
-        //        for (auto it = multiIndexMap.get<1>().rbegin(); it !=
-        //        multiIndexMap.get<1>().rend(); ++it)
-        //        {
-        //            const auto& item = *it;
-        //            auto it1 = IteratorImpl(item.txHash, item.transaction);
-        //            TXPOOL_LOG(DEBUG) << LOG_KV("txHash:", it1.first)
-        //                              << LOG_KV("timestamp:", it1.second->importTime());
-        //            accessor->setValue(std::make_shared<IteratorImpl>(it1));
-        //            if (!handler(accessor))
-        //            {
-        //                return false;
-        //            }
-        //        }
         return true;
     }
 

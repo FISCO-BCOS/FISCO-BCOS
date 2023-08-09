@@ -43,7 +43,7 @@ struct SubmitTransactionError : public bcos::error::Exception
 MemoryStorage::MemoryStorage(
     TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)),
-    m_txsTable(2),
+    m_txsTable(256),
     m_invalidTxs(256),
     m_missedTxs(32),
     m_txsExpirationTime(_txsExpirationTime),
@@ -84,7 +84,6 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     protocol::Transaction::Ptr transaction)
 {
     transaction->setImportTime(utcTime());
-//    TXPOOL_LOG(DEBUG) << LOG_KV("#### importTime", transaction->importTime());
     struct Awaitable
     {
         [[maybe_unused]] constexpr bool await_ready() { return false; }
@@ -279,7 +278,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     Transaction::Ptr transaction, TxSubmitCallback txSubmitCallback, bool checkPoolLimit, bool lock)
 {
     size_t txsSize = m_txsTable.size();
-    TXPOOL_LOG(DEBUG) << LOG_KV("txsSize", txsSize);
 
     auto result = txpoolStorageCheck(*transaction);
     if (result != TransactionStatus::None)
@@ -614,10 +612,6 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
-    if (_txsLimit > 100)
-    {
-        _txsLimit = 100;
-    }
     TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
                      << LOG_KV("limit", _txsLimit);
     auto blockFactory = m_config->blockFactory();
@@ -720,35 +714,45 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
 
     if (_avoidDuplicate)
     {
-        m_txsTable.forEach<TxsMap::ReadAccessor>(
-            m_knownLatestSealedTxHash, [&](TxsMap::ReadAccessor::Ptr accessor) {
+        size_t _eachBucketTxsLimit = 0;
+        if (m_txsTable.size() < _txsLimit)
+        {
+            _eachBucketTxsLimit = _txsLimit;
+        }
+        else
+        {
+            _eachBucketTxsLimit = _txsLimit / 256;
+        }
+        TXPOOL_LOG(TRACE) << LOG_DESC("batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
+                          << LOG_KV("limit", _txsLimit)
+                          << LOG_KV("eachBucketTxsLimit", _eachBucketTxsLimit);
+        m_txsTable.forEach<TxsMap::ReadAccessor>(m_knownLatestSealedTxHash, _eachBucketTxsLimit,
+            _txsLimit, [&](TxsMap::ReadAccessor::Ptr accessor) {
                 const auto& tx = accessor->value();
-                auto _eachBucketTxsLimit = _txsLimit / 256;
-                auto _lastBucketTxsLimit = _txsLimit % 256;
                 handleTx(tx);
-                //                if(traverseCount <= 256 * _eachBucketTxsLimit)
-                //                {
-                //                    return (_txsList->transactionsMetaDataSize() +
-                //                               _sysTxsList->transactionsMetaDataSize()) <
-                //                               _eachBucketTxsLimit;
-                //                }
-                //                else{
-                //                    return (_txsList->transactionsMetaDataSize() +
-                //                               _sysTxsList->transactionsMetaDataSize()) <
-                //                               _lastBucketTxsLimit;
-                //                }
-                return (_txsList->transactionsMetaDataSize() +
-                           _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
+                return true;
             });
     }
     else
     {
-        m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
-            const auto& tx = accessor->value();
-            handleTx(tx);
-            return (_txsList->transactionsMetaDataSize() +
-                       _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
-        });
+        size_t _eachBucketTxsLimit = 0;
+        if (_txsLimit < 10 || m_txsTable.size() <= _txsLimit)
+        {
+            _eachBucketTxsLimit = _txsLimit;
+        }
+        else
+        {
+            _eachBucketTxsLimit = _txsLimit / 256;
+        }
+        TXPOOL_LOG(TRACE) << LOG_DESC("batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
+                          << LOG_KV("limit", _txsLimit)
+                          << LOG_KV("eachBucketTxsLimit", _eachBucketTxsLimit);
+        m_txsTable.forEach<TxsMap::ReadAccessor>(
+            _eachBucketTxsLimit, _txsLimit, [&](TxsMap::ReadAccessor::Ptr accessor) {
+                const auto& tx = accessor->value();
+                handleTx(tx);
+                return true;
+            });
     }
     auto invalidTxsSize = m_invalidTxs.size();
     notifyUnsealedTxsSize();
