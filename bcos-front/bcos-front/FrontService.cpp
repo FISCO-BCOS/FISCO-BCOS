@@ -33,7 +33,7 @@ using namespace bcos;
 using namespace front;
 using namespace protocol;
 
-FrontService::FrontService()
+FrontService::FrontService() : m_asyncGroup("P2P", std::thread::hardware_concurrency())
 {
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this)
