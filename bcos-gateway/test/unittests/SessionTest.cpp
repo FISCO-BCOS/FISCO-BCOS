@@ -237,7 +237,8 @@ class FakeHost : public bcos::gateway::Host
 public:
     FakeHost(std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
-      : Host(_asioInterface, _sessionFactory, _messageFactory)
+      : Host(_asioInterface, _sessionFactory, _messageFactory,
+            std::make_shared<bcos::ThreadPool>("TestP2P", 1))
     {
         m_run = true;
     }

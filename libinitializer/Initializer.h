@@ -25,6 +25,7 @@
 #include "ProPBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "bcos-utilities/ThreadPool.h"
 #include "tools/archive-tool/ArchiveService.h"
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
@@ -50,7 +51,7 @@ class Initializer
 {
 public:
     using Ptr = std::shared_ptr<Initializer>;
-    Initializer() = default;
+    Initializer();
     virtual ~Initializer() { stop(); }
 
     virtual void start();
@@ -84,6 +85,7 @@ public:
 
     /// NOTE: this should be last called
     void initSysContract();
+    std::shared_ptr<bcos::ThreadPool> p2pThreadPool() const;
 
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
@@ -106,6 +108,8 @@ private:
     std::function<void()> m_baselineSchedulerInitializerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setBaselineSchedulerBlockNumberNotifier;
+
+    std::shared_ptr<bcos::ThreadPool> m_p2pThreadPool;
 };
 }  // namespace initializer
 }  // namespace bcos

@@ -27,7 +27,8 @@ using namespace bcos;
 using namespace front;
 
 FrontService::Ptr FrontServiceFactory::buildFrontService(
-    const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID)
+    std::shared_ptr<bcos::ThreadPool> threadPool, const std::string& _groupID,
+    bcos::crypto::NodeIDPtr _nodeID)
 {
     if (!m_gatewayInterface)
     {
@@ -38,7 +39,7 @@ FrontService::Ptr FrontServiceFactory::buildFrontService(
     FRONT_LOG(INFO) << LOG_DESC("FrontServiceFactory::buildFrontService")
                     << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", _nodeID->hex());
 
-    auto frontService = std::make_shared<FrontService>();
+    auto frontService = std::make_shared<FrontService>(threadPool);
     frontService->setMessageFactory(std::make_shared<FrontMessageFactory>());
     frontService->setGroupID(_groupID);
     frontService->setNodeID(std::move(_nodeID));

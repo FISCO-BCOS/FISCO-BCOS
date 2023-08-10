@@ -38,16 +38,17 @@ using namespace bcos::front;
 
 FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer,
-    bcos::gateway::GatewayInterface::Ptr _gateWay)
+    bcos::gateway::GatewayInterface::Ptr _gateWay, std::shared_ptr<bcos::ThreadPool> threadPool)
   : m_nodeConfig(std::move(_nodeConfig)),
     m_protocolInitializer(std::move(_protocolInitializer)),
-    m_gateWay(std::move(_gateWay))
+    m_gateWay(std::move(_gateWay)),
+    m_threadPool(std::move(threadPool))
 {
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(m_gateWay);
 
     m_front = frontServiceFactory->buildFrontService(
-        m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());
+        m_threadPool, m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());
 }
 
 void FrontServiceInitializer::start()

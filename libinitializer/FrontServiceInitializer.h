@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #pragma once
+#include "bcos-utilities/ThreadPool.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <memory>
@@ -56,7 +57,8 @@ public:
     using Ptr = std::shared_ptr<FrontServiceInitializer>;
     FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         std::shared_ptr<bcos::initializer::ProtocolInitializer> _protocolInitializer,
-        std::shared_ptr<bcos::gateway::GatewayInterface> _gateWay);
+        std::shared_ptr<bcos::gateway::GatewayInterface> _gateWay,
+        std::shared_ptr<bcos::ThreadPool> threadPool);
     virtual ~FrontServiceInitializer() { stop(); }
 
     virtual void init(std::shared_ptr<bcos::consensus::ConsensusInterface> _pbft,
@@ -77,6 +79,7 @@ private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     std::shared_ptr<bcos::initializer::ProtocolInitializer> m_protocolInitializer;
     std::shared_ptr<bcos::gateway::GatewayInterface> m_gateWay;
+    std::shared_ptr<bcos::ThreadPool> m_threadPool;
 
     std::shared_ptr<bcos::front::FrontService> m_front;
     std::atomic_bool m_running = {false};

@@ -13,21 +13,27 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
-#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 #include <sw/redis++/redis++.h>
 #include <boost/asio/ssl.hpp>
+#include <utility>
 
-namespace bcos
+namespace bcos::gateway
 {
-namespace gateway
-{
-class GatewayFactory : public bcos::ObjectCounter<GatewayFactory>
+class GatewayFactory
 {
 public:
     using Ptr = std::shared_ptr<GatewayFactory>;
-    GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName,
+    GatewayFactory(const GatewayFactory&) = delete;
+    GatewayFactory(GatewayFactory&&) = delete;
+    GatewayFactory& operator=(const GatewayFactory&) = delete;
+    GatewayFactory& operator=(GatewayFactory&&) = delete;
+    GatewayFactory(std::shared_ptr<bcos::ThreadPool> threadPool, std::string _chainID,
+        std::string _rpcServiceName,
         bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr)
-      : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName), m_dataEncrypt(_dataEncrypt)
+      : m_threadPool(std::move(threadPool)),
+        m_chainID(std::move(_chainID)),
+        m_rpcServiceName(std::move(_rpcServiceName)),
+        m_dataEncrypt(std::move(_dataEncrypt))
     {
         // For compatibility, p2p communication between nodes still uses the old public key analysis
         // method
@@ -138,11 +144,10 @@ private:
     void initFailOver(std::shared_ptr<Gateway> _gateWay,
         bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
 
-private:
+    std::shared_ptr<bcos::ThreadPool> m_threadPool;
     std::string m_chainID;
     std::string m_rpcServiceName;
 
     bcos::security::DataEncryptInterface::Ptr m_dataEncrypt{nullptr};
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

@@ -378,7 +378,7 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     std::shared_ptr<SessionFace> session = m_sessionFactory->create_session(
         weakHost, socket, m_messageFactory, m_sessionCallbackManager);
 
-    m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {
+    m_asyncGroup->enqueue([weakHost, session = std::move(session), p2pInfo]() {
         auto host = weakHost.lock();
         if (!host)
         {
@@ -478,7 +478,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
                                 << LOG_KV("message", ec.message());
                 socket->close();
 
-                m_asyncGroup.run([callback = std::move(callback)]() {
+                m_asyncGroup->enqueue([callback = std::move(callback)]() {
                     callback(NetworkException(ConnectError, "Connect failed"), {}, {});
                 });
                 return;
@@ -551,12 +551,14 @@ void Host::stop()
 {
     // ignore if already stopped/stopping
     if (!m_run)
+    {
         return;
+    }
     // signal run() to prepare for shutdown and reset m_timer
     m_run = false;
     if (m_asioInterface)
     {
         m_asioInterface->stop();
     }
-    m_asyncGroup.wait();
+    m_asyncGroup->stop();
 }

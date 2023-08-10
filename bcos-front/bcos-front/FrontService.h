@@ -36,7 +36,7 @@ class FrontService : public FrontServiceInterface, public std::enable_shared_fro
 public:
     using Ptr = std::shared_ptr<FrontService>;
 
-    FrontService();
+    FrontService(std::shared_ptr<bcos::ThreadPool> threadPool);
     FrontService(const FrontService&) = delete;
     FrontService(FrontService&&) = delete;
     ~FrontService() noexcept override;
@@ -262,8 +262,7 @@ protected:
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
 private:
-    bcos::ThreadPool m_asyncGroup;
-    // tbb::task_arena m_asyncGroup;
+    std::shared_ptr<bcos::ThreadPool> m_asyncGroup;
     // timer
     std::shared_ptr<boost::asio::io_service> m_ioService;
     /// gateway interface

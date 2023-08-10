@@ -6,10 +6,10 @@
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -26,11 +26,11 @@
 #include <bcos-gateway/libp2p/ServiceV2.h>
 #include <bcos-gateway/libp2p/router/RouterTableImpl.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
-#include <bcos-utilities/ratelimiter/TokenBucketRateLimiter.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/ratelimiter/TokenBucketRateLimiter.h>
 #include <openssl/asn1.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
@@ -616,7 +616,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
 
     // init Host
-    auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
+    auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory, m_threadPool);
     host->setHostPort(_config->listenIP(), _config->listenPort());
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);

@@ -19,6 +19,7 @@
  * @date 2021-04-26
  */
 
+#include "bcos-utilities/ThreadPool.h"
 #define BOOST_TEST_MAIN
 
 #include "FakeGateway.h"
@@ -57,7 +58,9 @@ std::shared_ptr<FrontService> buildFrontService()
 
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(gateway);
-    auto frontService = frontServiceFactory->buildFrontService(g_groupID, srcNodeID);
+
+    auto threadPool = std::make_shared<bcos::ThreadPool>("TestFront", 1);
+    auto frontService = frontServiceFactory->buildFrontService(threadPool, g_groupID, srcNodeID);
     frontService->start();
 
     gateway->setFrontService(frontService);
