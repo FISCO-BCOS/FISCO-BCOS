@@ -297,6 +297,6 @@ private:
     // the local protocolInfo
     // Note: frontService is responsible for version negotiation of blockchain nodes
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
-    bcos::protocol::ProtocolVersion m_localProtocolVersion;
+    bcos::protocol::ProtocolVersion m_localProtocolVersion = {};
 };
 }  // namespace bcos::front

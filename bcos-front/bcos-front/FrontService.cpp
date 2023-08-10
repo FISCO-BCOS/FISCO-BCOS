@@ -33,9 +33,10 @@ using namespace bcos;
 using namespace front;
 using namespace protocol;
 
-FrontService::FrontService() : m_asyncGroup("P2P", std::thread::hardware_concurrency())
+FrontService::FrontService()
+  : m_asyncGroup("P2P", std::thread::hardware_concurrency()),
+    m_localProtocol(g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService))
 {
-    m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this)
                     << LOG_KV("minVersion", m_localProtocol->minVersion())
                     << LOG_KV("maxVersion", m_localProtocol->maxVersion());
