@@ -176,7 +176,7 @@ int main(int argc, char* argv[])
     bcos::sdk::Config config = {
         .connectionString = connectionString,
         .sendQueueSize = transactionCount,
-        .timeoutMs = 60000,
+        .timeoutMs = 600000,
     };
     bcos::sdk::RPCClient rpcClient(config);
     std::jthread getBlockNumber(
@@ -192,7 +192,7 @@ int main(int argc, char* argv[])
     bcos::bytes deployBin = bcos::sample::getContractBin();
     auto deployTransaction = transactionFactory.createTransaction(0, "", deployBin,
         boost::lexical_cast<std::string>(rand()), blockNumber + blockLimit, "chain0", "group0", 0,
-        *keyPair, "");
+        *keyPair, std::string{bcos::sample::getContractABI()});
     auto receipt = bcos::sdk::SendTransaction(rpcClient).send(*deployTransaction).get();
 
     if (receipt->status() != 0)

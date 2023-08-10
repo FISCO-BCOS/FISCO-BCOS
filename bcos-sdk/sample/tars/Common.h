@@ -6,6 +6,7 @@ namespace bcos::sample
 {
 
 bcos::bytes getContractBin();
+std::string_view getContractABI();
 long currentTime();
 
 class Collector

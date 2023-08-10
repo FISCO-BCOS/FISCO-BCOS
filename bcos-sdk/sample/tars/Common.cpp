@@ -128,41 +128,59 @@ constexpr static std::string_view HELLOWORLD_BYTECODE =
 constexpr static std::string_view HELLOWORLD_ABI =
     "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"int256\",\"name\":"
     "\"value1\",\"type\":\"int256\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":"
-    "\"value2\",\"type\":\"string\"}],\"name\":\"EventExample\",\"type\":\"event\"},{\"inputs\":[{"
-    "\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"balance\","
-    "\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],"
-    "\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"createTwice\","
-    "\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],"
-    "\"name\":\"delegateCall\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":"
-    "\"function\"},{\"inputs\":[{\"internalType\":\"int256\",\"name\":\"value\",\"type\":"
-    "\"int256\"}],\"name\":\"deployAndCall\",\"outputs\":[{\"internalType\":\"int256\",\"name\":"
-    "\"\",\"type\":\"int256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
-    "\"inputs\":[],\"name\":\"getInt\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\","
-    "\"type\":\"int256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],"
-    "\"name\":\"getString\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":"
-    "\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{"
+    "\"value2\",\"type\":\"string\"}],\"name\":\"EventExample\",\"type\":\"event\"},{"
+    "\"conflictFields\":[{\"kind\":3,\"slot\":2,\"value\":[0]}],\"inputs\":[{\"internalType\":"
+    "\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"balance\",\"outputs\":[{"
+    "\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"selector\":[3822481623,"
+    "2638755045],\"stateMutability\":\"view\",\"type\":\"function\"},{\"conflictFields\":[{"
+    "\"kind\":0}],\"inputs\":[],\"name\":\"createTwice\",\"outputs\":[],\"selector\":[124863204,"
+    "402369018],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"conflictFields\":[{"
+    "\"kind\":0}],\"inputs\":[],\"name\":\"delegateCall\",\"outputs\":[],\"selector\":[4069145445,"
+    "778625272],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"conflictFields\":[{"
+    "\"kind\":0}],\"inputs\":[{\"internalType\":\"int256\",\"name\":\"value\",\"type\":\"int256\"}]"
+    ",\"name\":\"deployAndCall\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":"
+    "\"int256\"}],\"selector\":[3843513432,2945246509],\"stateMutability\":\"nonpayable\",\"type\":"
+    "\"function\"},{\"conflictFields\":[{\"kind\":4,\"value\":[0]}],\"inputs\":[],\"name\":"
+    "\"getInt\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],"
+    "\"selector\":[1651739032,2655239241],\"stateMutability\":\"view\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":4,\"value\":[1]}],\"inputs\":[],\"name\":\"getString\","
+    "\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"selector\":["
+    "2313839663,167785564],\"stateMutability\":\"view\",\"type\":\"function\"},{\"conflictFields\":"
+    "[{\"kind\":3,\"slot\":2,\"value\":[0]}],\"inputs\":[{\"internalType\":\"address\",\"name\":"
+    "\"to\",\"type\":\"address\"},{\"internalType\":\"int256\",\"name\":\"count\",\"type\":"
+    "\"int256\"}],\"name\":\"issue\",\"outputs\":[],\"selector\":[567142599,2699444860],"
+    "\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"conflictFields\":[{\"kind\":4,"
+    "\"value\":[0]},{\"kind\":4,\"value\":[1]}],\"inputs\":[],\"name\":\"logOut\",\"outputs\":[],"
+    "\"selector\":[1273242286,2646634669],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}"
+    ",{\"conflictFields\":[{\"kind\":4,\"value\":[0]}],\"inputs\":[],\"name\":\"returnRequire\","
+    "\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"selector\":["
+    "2153659808,2565523220],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":4,\"value\":[0]}],\"inputs\":[],\"name\":\"returnRevert\","
+    "\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"selector\":["
+    "3705370812,3338033196],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":4,\"value\":[0]}],\"inputs\":[{\"internalType\":\"int256\","
+    "\"name\":\"value\",\"type\":\"int256\"}],\"name\":\"setInt\",\"outputs\":[],\"selector\":["
+    "1953859256,4271946802],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":4,\"value\":[1]}],\"inputs\":[{\"internalType\":\"string\","
+    "\"name\":\"value\",\"type\":\"string\"}],\"name\":\"setString\",\"outputs\":[],\"selector\":["
+    "2144007782,1407179006],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":3,\"slot\":2,\"value\":[0]},{\"kind\":3,\"slot\":2,\"value\":[1]"
+    "}],\"inputs\":[{\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{"
     "\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":"
-    "\"int256\",\"name\":\"count\",\"type\":\"int256\"}],\"name\":\"issue\",\"outputs\":[],"
-    "\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"logOut\","
-    "\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],"
-    "\"name\":\"returnRequire\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":"
-    "\"int256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],"
-    "\"name\":\"returnRevert\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":"
-    "\"int256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{"
-    "\"internalType\":\"int256\",\"name\":\"value\",\"type\":\"int256\"}],\"name\":\"setInt\","
-    "\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{"
-    "\"internalType\":\"string\",\"name\":\"value\",\"type\":\"string\"}],\"name\":\"setString\","
-    "\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{"
-    "\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"internalType\":"
-    "\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"int256\",\"name\":"
-    "\"count\",\"type\":\"int256\"}],\"name\":\"transfer\",\"outputs\":[],\"stateMutability\":"
-    "\"nonpayable\",\"type\":\"function\"}]";
+    "\"int256\",\"name\":\"count\",\"type\":\"int256\"}],\"name\":\"transfer\",\"outputs\":[],"
+    "\"selector\":[4254030087,1368843653],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}"
+    "]";
 
 bcos::bytes bcos::sample::getContractBin()
 {
     bcos::bytes deployBin;
     boost::algorithm::unhex(HELLOWORLD_BYTECODE, std::back_inserter(deployBin));
     return deployBin;
+}
+
+std::string_view bcos::sample::getContractABI()
+{
+    return HELLOWORLD_ABI;
 }
 
 long bcos::sample::currentTime()
