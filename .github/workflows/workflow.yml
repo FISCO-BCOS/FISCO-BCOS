@@ -26,7 +26,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-20.04, macos-latest ]
+        os: [ ubuntu-18.04, macos-latest ]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -43,10 +43,6 @@ jobs:
             deps-v9-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             deps-v9-${{ runner.temp }}-${{ github.base_ref }}-
             deps-v9-${{ runner.temp }}-
-      - uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '8.0.345'
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -56,6 +52,10 @@ jobs:
             ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-v4-${{ runner.temp }}-
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '8.0.345'
       - name: install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install openssl@1.1 ccache gmp cmake
