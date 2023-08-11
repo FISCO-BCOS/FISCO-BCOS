@@ -101,10 +101,10 @@ void AccountManagerPrecompiled::createAccountWithStatus(
 
     if (setStatusRes->status != (int32_t)TransactionStatus::None)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AccountManagerPrecompiled")
-                               << LOG_DESC("set status failed")
-                               << LOG_KV("accountTableName", accountTableName)
-                               << LOG_KV("status", response->status);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled")
+                              << LOG_DESC("set status failed")
+                              << LOG_KV("accountTableName", accountTableName)
+                              << LOG_KV("status", response->status);
         BOOST_THROW_EXCEPTION(PrecompiledError("Set account status failed."));
     }
     _callParameters->setExternalResult(std::move(setStatusRes));

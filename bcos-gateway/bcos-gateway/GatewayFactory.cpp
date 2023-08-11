@@ -761,7 +761,6 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 return result ? std::make_optional(
                                     bcos::Error::buildError("", OutBWOverflow, result.value())) :
                                 std::nullopt;
-                return std::nullopt;
             });
 
             service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,

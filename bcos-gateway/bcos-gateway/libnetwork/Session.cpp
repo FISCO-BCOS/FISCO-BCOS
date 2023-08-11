@@ -222,12 +222,14 @@ void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
             drop(TCPError);
             return;
         }
+        if (m_writing)
         {
-            if (m_writing)
-            {
-                m_writing = false;
-            }
             m_writeConstBuffer.clear();
+            m_writing = false;
+        }
+        else
+        {
+            SESSION_LOG(ERROR) << LOG_DESC("onWrite wrong state") << LOG_KV("m_writing", m_writing);
         }
 
         write();

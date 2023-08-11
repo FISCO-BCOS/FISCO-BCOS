@@ -85,10 +85,21 @@ public:
     {
         try
         {
+            static bool isFirstLog = true;
             auto p = addInactiveEndpoint(ep);
-            BCOS_LOG(INFO) << LOG_DESC("onClose") << m_serviceName
-                           << LOG_KV("endpoint", ep.toString())
-                           << LOG_KV("inActiveEndPointSize", p.second);
+            if (isFirstLog)
+            {
+                isFirstLog = true;
+                BCOS_LOG(INFO) << LOG_DESC("onClose") << m_serviceName
+                               << LOG_KV("endpoint", ep.toString())
+                               << LOG_KV("inActiveEndPointSize", p.second);
+            }
+            else
+            {
+                BCOS_LOG(TRACE) << LOG_DESC("onClose") << m_serviceName
+                                << LOG_KV("endpoint", ep.toString())
+                                << LOG_KV("inActiveEndPointSize", p.second);
+            }
             if (p.first && m_onCloseHandler)
             {
                 m_onCloseHandler(ep);
