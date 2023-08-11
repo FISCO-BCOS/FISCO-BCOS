@@ -45,16 +45,14 @@ bcos::sdk::RPCClient::RPCClient(bcos::sdk::Config const& config)
     m_rpcProxy = m_communicator.stringToProxy<bcostars::RPCPrx>(config.connectionString);
     m_rpcProxy->tars_set_custom_callback(&RPCClient::onMessage);
     m_rpcProxy->tars_async_timeout(config.timeoutMs);
-    unsigned int rand = std::random_device{}();
-    // m_noncePrefix.
 }
 std::string bcos::sdk::RPCClient::generateNonce()
 {
     struct NoncePrefix
     {
-        unsigned int rand1;
-        unsigned int rand2;
-        unsigned int rand3;
+        uint32_t rand1;
+        uint32_t rand2;
+        uint32_t rand3;
         uint32_t requestid;
     };
     static unsigned rand1 = std::random_device{}();

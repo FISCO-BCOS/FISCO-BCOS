@@ -2,6 +2,7 @@
 #include "bcos-cpp-sdk/tarsRPC/Handle.h"
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-codec/abi/ContractABICodec.h>
@@ -65,11 +66,15 @@ int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoS
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
                 *keyPair);
+            transaction->setAttribute(bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC |
+                                      bcos::protocol::Transaction::Attribute::DAG);
 
             handles[it].emplace(rpcClient);
             auto& sendTransaction = *(handles[it]);
             sendTransaction.setCallback(std::make_shared<PerformanceCallback>(latch, collector));
             sendTransaction.send(*transaction);
+
+            collector.send(true, 0);
         }
     });
     collector.finishSend();
@@ -105,8 +110,8 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)transactionCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
-            auto fromAddress = (it + userCount) % userCount;
-            auto toAddress = (it + userCount) % userCount;
+            auto fromAddress = it % userCount;
+            auto toAddress = ((it + (userCount / 2)) % userCount);
 
             bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
             auto input = abiCodec.abiIn("transfer(address,address,int256)",
@@ -114,11 +119,15 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
                 *keyPair);
+            transaction->setAttribute(bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC |
+                                      bcos::protocol::Transaction::Attribute::DAG);
 
             handles[it].emplace(rpcClient);
             auto& sendTransaction = *(handles[it]);
             sendTransaction.setCallback(std::make_shared<PerformanceCallback>(latch, collector));
             sendTransaction.send(*transaction);
+
+            collector.send(true, 0);
         }
     });
     collector.finishSend();

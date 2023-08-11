@@ -191,24 +191,56 @@ long bcos::sample::currentTime()
 }
 
 bcos::sample::Collector::Collector(int count, std::string title)
-  : m_startTime(currentTime()), m_count(count), m_title(std::move(title)), m_progress(m_count)
-{}
+  : m_startTime(currentTime()),
+    m_count(count),
+    m_title(std::move(title)),
+    m_sendProgressBar{indicators::option::BarWidth{70}, indicators::option::ShowElapsedTime{true},
+        indicators::option::ShowRemainingTime{true}, indicators::option::Start{"["},
+        indicators::option::End{"]"}, indicators::option::ForegroundColor{indicators::Color::white},
+        indicators::option::PostfixText{"Send   "},
+        indicators::option::FontStyles{
+            std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}},
+    m_receiveProgressBar{indicators::option::BarWidth{70},
+        indicators::option::ShowElapsedTime{true}, indicators::option::ShowRemainingTime{true},
+        indicators::option::Start{"["}, indicators::option::End{"]"},
+        indicators::option::ForegroundColor{indicators::Color::white},
+        indicators::option::PostfixText{"Receive"},
+        indicators::option::FontStyles{
+            std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}},
+    m_progressBar{m_sendProgressBar, m_receiveProgressBar}
+{
+    indicators::show_console_cursor(false);
+}
 void bcos::sample::Collector::finishSend()
 {
     sendElapsed = bcos::sample::currentTime() - m_startTime;
 }
+void bcos::sample::Collector::send(bool success, long elapsed)
+{
+    ++m_sended;
+    while (m_sendProgressBar.current() < (size_t)(((double)m_sended / m_count) * 100.0))
+    {
+        m_progressBar.tick<0>();
+    }
+}
 void bcos::sample::Collector::receive(bool success, long elapsed)
 {
-    ++m_progress;
     ++m_finished;
+    while (m_receiveProgressBar.current() < (size_t)(((double)m_finished / m_count) * 100.0))
+    {
+        m_progressBar.tick<1>();
+    }
     if (!success)
     {
         ++m_failed;
     }
     m_allTimeCost += elapsed;
 }
-void bcos::sample::Collector::report() const
+void bcos::sample::Collector::report()
 {
+    m_progressBar.print_progress();
+    indicators::show_console_cursor(true);
+
     long receiveElapsed = bcos::sample::currentTime() - m_startTime;
 
     std::cout << std::endl << m_title << " done!" << std::endl;

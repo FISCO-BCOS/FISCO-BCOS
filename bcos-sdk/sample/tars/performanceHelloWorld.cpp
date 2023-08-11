@@ -11,7 +11,6 @@
 #include <oneapi/tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/timer/progress_display.hpp>
 #include <atomic>
 #include <exception>
 #include <latch>
@@ -58,7 +57,6 @@ int performance()
         std::atomic_int finished = 0;
         std::atomic_int failed = 0;
         std::cout << "Sending transaction..." << std::endl;
-        boost::timer::progress_display sendProgess(count);
 
         bcos::sdk::CoRPCClient coRPCClient(rpcClient);
         tbb::task_group taskGroup;
@@ -75,7 +73,6 @@ int performance()
                     std::string(contractAddress), input, boost::lexical_cast<std::string>(rand()),
                     blockNumber + blockLimit, "chain0", "group0", 0, *keyPair);
 
-                ++sendProgess;
                 ++finished;
                 bcos::task::wait(
                     [](decltype(setTransaction) transaction, decltype(coRPCClient)& coRPCClient,

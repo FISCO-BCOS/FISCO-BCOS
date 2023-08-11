@@ -27,7 +27,7 @@
     "boost-iostreams",
     "boost-thread",
     "boost-test",
-    "boost-timer",
+    "indicators",
     "boost-compute",
     "boost-multiprecision",
     "boost-program-options",
