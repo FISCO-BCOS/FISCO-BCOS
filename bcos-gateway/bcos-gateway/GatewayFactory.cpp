@@ -616,7 +616,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
 
     // init Host
-    auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory, m_threadPool);
+    auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);

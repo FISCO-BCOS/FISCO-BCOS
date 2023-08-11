@@ -48,12 +48,10 @@ public:
     Host& operator=(const Host&) = delete;
     Host& operator=(Host&&) = delete;
     Host(std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory,
-        std::shared_ptr<bcos::ThreadPool> threadPool)
+        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
       : m_asioInterface(std::move(_asioInterface)),
         m_sessionFactory(std::move(_sessionFactory)),
-        m_messageFactory(std::move(_messageFactory)),
-        m_asyncGroup(std::move(threadPool)){};
+        m_messageFactory(std::move(_messageFactory)){};
     virtual ~Host() { stop(); };
 
     using Ptr = std::shared_ptr<Host>;
@@ -136,7 +134,7 @@ public:
     template <class F>
     void asyncTo(F f)
     {
-        m_asyncGroup->template enqueue(std::move(f));
+        m_asyncGroup.template run(std::move(f));
     }
 
 protected:
@@ -191,6 +189,7 @@ protected:
         }
     }
 
+    tbb::task_group m_asyncGroup;
     std::shared_ptr<SessionCallbackManagerInterface> m_sessionCallbackManager;
 
     /// representing to the network state
@@ -200,7 +199,6 @@ protected:
     std::set<NodeIPEndpoint> m_pendingConns;
     bcos::Mutex x_pendingConns;
     MessageFactory::Ptr m_messageFactory;
-    std::shared_ptr<bcos::ThreadPool> m_asyncGroup;
 
     std::string m_listenHost;
     uint16_t m_listenPort = 0;

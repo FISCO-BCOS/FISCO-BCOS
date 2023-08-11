@@ -32,7 +32,7 @@ class FrontServiceFactory
 public:
     using Ptr = std::shared_ptr<FrontServiceFactory>;
 
-    FrontService::Ptr buildFrontService(std::shared_ptr<bcos::ThreadPool> threadPool,
+    FrontService::Ptr buildFrontService(
         const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
 
     void setGatewayInterface(bcos::gateway::GatewayInterface::Ptr _gatewayInterface)

@@ -191,12 +191,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     protocolInitializer.loadKeyPair(nodeConfig->privateKeyPath());
     auto nodeID = protocolInitializer.keyPair()->publicKey()->hex();
 
-    auto p2pThreadPool = std::make_shared<bcos::ThreadPool>(
-        "P2P", std::thread::hardware_concurrency());  // TODO: Change to configuable
-    auto front = std::make_shared<bcos::front::FrontService>(p2pThreadPool);
+    auto front = std::make_shared<bcos::front::FrontService>();
     // gateway
-    bcos::gateway::GatewayFactory gatewayFactory(
-        p2pThreadPool, nodeConfig->chainId(), "local", nullptr);
+    bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
     auto gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
     auto protocolInfo = g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService);
     gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),

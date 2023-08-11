@@ -23,17 +23,9 @@ class GatewayFactory
 {
 public:
     using Ptr = std::shared_ptr<GatewayFactory>;
-    GatewayFactory(const GatewayFactory&) = delete;
-    GatewayFactory(GatewayFactory&&) = delete;
-    GatewayFactory& operator=(const GatewayFactory&) = delete;
-    GatewayFactory& operator=(GatewayFactory&&) = delete;
-    GatewayFactory(std::shared_ptr<bcos::ThreadPool> threadPool, std::string _chainID,
-        std::string _rpcServiceName,
+    GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName,
         bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr)
-      : m_threadPool(std::move(threadPool)),
-        m_chainID(std::move(_chainID)),
-        m_rpcServiceName(std::move(_rpcServiceName)),
-        m_dataEncrypt(std::move(_dataEncrypt))
+      : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName), m_dataEncrypt(_dataEncrypt)
     {
         // For compatibility, p2p communication between nodes still uses the old public key analysis
         // method
@@ -144,7 +136,7 @@ private:
     void initFailOver(std::shared_ptr<Gateway> _gateWay,
         bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
 
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
+private:
     std::string m_chainID;
     std::string m_rpcServiceName;
 

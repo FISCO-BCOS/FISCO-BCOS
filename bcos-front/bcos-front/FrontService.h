@@ -25,7 +25,7 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <oneapi/tbb/task_arena.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/asio.hpp>
 #include <utility>
 
@@ -36,7 +36,7 @@ class FrontService : public FrontServiceInterface, public std::enable_shared_fro
 public:
     using Ptr = std::shared_ptr<FrontService>;
 
-    FrontService(std::shared_ptr<bcos::ThreadPool> threadPool);
+    FrontService();
     FrontService(const FrontService&) = delete;
     FrontService(FrontService&&) = delete;
     ~FrontService() noexcept override;
@@ -262,12 +262,11 @@ protected:
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
 private:
-    std::shared_ptr<bcos::ThreadPool> m_asyncGroup;
+    tbb::task_group m_asyncGroup;
     // timer
     std::shared_ptr<boost::asio::io_service> m_ioService;
     /// gateway interface
     std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
-
     FrontMessageFactory::Ptr m_messageFactory;
 
     std::unordered_map<int,

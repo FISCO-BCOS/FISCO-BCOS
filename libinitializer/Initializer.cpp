@@ -73,10 +73,6 @@ using namespace bcos::tool;
 using namespace bcos::protocol;
 using namespace bcos::initializer;
 
-bcos::initializer::Initializer::Initializer()
-  : m_p2pThreadPool(std::make_shared<bcos::ThreadPool>("P2P", std::thread::hardware_concurrency()))
-{}
-
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, const std::string& _logPath)
 {
@@ -140,8 +136,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
 {
     // build the front service
-    m_frontServiceInitializer = std::make_shared<FrontServiceInitializer>(
-        m_nodeConfig, m_protocolInitializer, _gateway, m_p2pThreadPool);
+    m_frontServiceInitializer =
+        std::make_shared<FrontServiceInitializer>(m_nodeConfig, m_protocolInitializer, _gateway);
 
     // build the storage
     auto storagePath = m_nodeConfig->storagePath();
@@ -603,11 +599,6 @@ void Initializer::initSysContract()
             BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "SysInitializer commitBlock error"));
         }
     }
-}
-
-std::shared_ptr<bcos::ThreadPool> bcos::initializer::Initializer::p2pThreadPool() const
-{
-    return m_p2pThreadPool;
 }
 
 void Initializer::start()

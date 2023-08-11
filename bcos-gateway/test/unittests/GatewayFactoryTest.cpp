@@ -19,7 +19,6 @@
  * @date 2021-05-17
  */
 
-#include "bcos-utilities/ThreadPool.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -35,8 +34,7 @@ BOOST_FIXTURE_TEST_SUITE(GatewayFactoryTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(test_certPubHexHandler)
 {
-    auto threadPool = std::make_shared<bcos::ThreadPool>("TestFront", 1);
-    auto factory = std::make_shared<GatewayFactory>(threadPool, "", "");
+    auto factory = std::make_shared<GatewayFactory>("", "");
     {
         // sm cert
         std::string cert = "../../../bcos-gateway/test/unittests/data/sm_ca/sm_node.crt";
@@ -58,8 +56,7 @@ BOOST_AUTO_TEST_CASE(test_certPubHexHandler)
 
 BOOST_AUTO_TEST_CASE(test_buildSSLContext)
 {
-    auto factory =
-        std::make_shared<GatewayFactory>(std::make_shared<bcos::ThreadPool>("TestP2P", 1), "", "");
+    auto factory = std::make_shared<GatewayFactory>("", "");
 
     {
         // SM SSLContext
