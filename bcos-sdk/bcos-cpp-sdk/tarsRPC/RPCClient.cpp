@@ -24,7 +24,7 @@ std::string bcos::sdk::RPCClient::toConnectionString(const std::vector<std::stri
         {
             BOOST_THROW_EXCEPTION(InvalidHostPortStringError{});
         }
-        connectionString += "tcp -h " + items[0] + " -p " + items[1] + " -t 60000:";
+        connectionString += "tcp -h " + items[0] + " -p " + items[1] + ":";
     }
     return connectionString.substr(0, connectionString.size() - 1);
 }
@@ -39,13 +39,35 @@ void bcos::sdk::RPCClient::onMessage(tars::ReqMessagePtr message)
         callbackBase.callback()->onMessage();
     }
 }
-bcos::sdk::RPCClient::RPCClient(const std::string& connectionString)
+bcos::sdk::RPCClient::RPCClient(bcos::sdk::Config const& config)
 {
-    constexpr static int timeout = 60000;
-
-    m_rpcProxy = m_communicator.stringToProxy<bcostars::RPCPrx>(connectionString);
+    m_communicator.setProperty("sendqueuelimit", std::to_string(config.sendQueueSize));
+    m_rpcProxy = m_communicator.stringToProxy<bcostars::RPCPrx>(config.connectionString);
     m_rpcProxy->tars_set_custom_callback(&RPCClient::onMessage);
-    m_rpcProxy->tars_async_timeout(timeout);
+    m_rpcProxy->tars_async_timeout(config.timeoutMs);
+}
+std::string bcos::sdk::RPCClient::generateNonce()
+{
+    struct NoncePrefix
+    {
+        uint32_t rand1;
+        uint32_t rand2;
+        uint32_t rand3;
+        uint32_t requestid;
+    };
+    static unsigned rand1 = std::random_device{}();
+    static unsigned rand2 = std::random_device{}();
+    static thread_local std::mt19937 randomDevice{std::random_device{}()};
+
+    std::string nonce;
+    nonce.resize(sizeof(NoncePrefix));
+    auto* noncePtr = reinterpret_cast<NoncePrefix*>(nonce.data());
+    noncePtr->rand1 = rand1;
+    noncePtr->rand2 = rand2;
+    noncePtr->rand3 = randomDevice();
+    noncePtr->requestid = m_rpcProxy->tars_gen_requestid();
+
+    return nonce;
 }
 
 bcos::sdk::SendTransaction::SendTransaction(RPCClient& rpcClient) : Handle(rpcClient) {}

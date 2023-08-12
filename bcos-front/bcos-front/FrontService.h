@@ -161,7 +161,7 @@ public:
     }
 
     bcos::crypto::NodeIDPtr nodeID() const { return m_nodeID; }
-    void setNodeID(bcos::crypto::NodeIDPtr _nodeID) { m_nodeID = _nodeID; }
+    void setNodeID(bcos::crypto::NodeIDPtr _nodeID) { m_nodeID = std::move(_nodeID); }
     std::string groupID() const { return m_groupID; }
     void setGroupID(const std::string& _groupID) { m_groupID = _groupID; }
 
@@ -169,7 +169,7 @@ public:
 
     void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface)
     {
-        m_gatewayInterface = _gatewayInterface;
+        m_gatewayInterface = std::move(_gatewayInterface);
     }
 
     std::shared_ptr<boost::asio::io_service> ioService() const { return m_ioService; }
@@ -247,10 +247,10 @@ public:
         return callback;
     }
 
-    void addCallback(const std::string& _uuid, Callback::Ptr _callback)
+    void addCallback(const std::string& _uuid, Callback::Ptr callback)
     {
         Guard guard(x_callback);
-        m_callback[_uuid] = _callback;
+        m_callback[_uuid] = std::move(callback);
     }
 
 protected:
@@ -267,15 +267,13 @@ private:
     std::shared_ptr<boost::asio::io_service> m_ioService;
     /// gateway interface
     std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
-
     FrontMessageFactory::Ptr m_messageFactory;
 
-    std::unordered_map<int, std::function<void(bcos::crypto::NodeIDPtr _nodeID,
-                                const std::string& _id, bytesConstRef _data)>>
+    std::unordered_map<int,
+        std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>
         m_moduleID2MessageDispatcher;
 
-    std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
-                                ReceiveMsgFunc _receiveMsgCallback)>>
+    std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc)>>
         m_module2GroupNodeInfoNotifier;
 
     // service is running or not
@@ -297,6 +295,6 @@ private:
     // the local protocolInfo
     // Note: frontService is responsible for version negotiation of blockchain nodes
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
-    bcos::protocol::ProtocolVersion m_localProtocolVersion;
+    bcos::protocol::ProtocolVersion m_localProtocolVersion = {};
 };
 }  // namespace bcos::front

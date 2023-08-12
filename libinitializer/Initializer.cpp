@@ -249,7 +249,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             baselineSchedulerInitializer;
 
         auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
-        if (baselineSchedulerConfig.parallel)
+        if (baselineSchedulerConfig.parallel != 0)
         {
             baselineSchedulerInitializer =
                 std::make_shared<transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>(

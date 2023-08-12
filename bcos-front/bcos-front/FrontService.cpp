@@ -34,8 +34,8 @@ using namespace front;
 using namespace protocol;
 
 FrontService::FrontService()
+  : m_localProtocol(g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService))
 {
-    m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this)
                     << LOG_KV("minVersion", m_localProtocol->minVersion())
                     << LOG_KV("maxVersion", m_localProtocol->maxVersion());
@@ -211,7 +211,7 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
 
     FRONT_LOG(DEBUG) << LOG_DESC("asyncGetGroupNodeInfo")
                      << LOG_KV("nodeIDs.size()",
-                               (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
+                            (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
     if (_onGetGroupNodeInfo)
     {
         m_asyncGroup.run([_onGetGroupNodeInfo = std::move(_onGetGroupNodeInfo),
@@ -219,7 +219,6 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
             _onGetGroupNodeInfo(nullptr, groupNodeInfo);
         });
     }
-
 }
 
 /**

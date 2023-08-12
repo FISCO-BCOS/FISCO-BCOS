@@ -11,7 +11,6 @@
 #include <oneapi/tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/timer/progress_display.hpp>
 #include <atomic>
 #include <exception>
 #include <latch>
@@ -28,9 +27,12 @@ int performance()
             cryptoSuite->signatureImpl()->generateKeyPair());
         constexpr static size_t count = 10UL * 10000;
 
-        constexpr static std::string_view connectionString =
-            "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000";
-        bcos::sdk::RPCClient rpcClient(std::string{connectionString});
+        bcos::sdk::Config config = {
+            .connectionString = "fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021 -t 60000",
+            .sendQueueSize = 100000,
+            .timeoutMs = 600000,
+        };
+        bcos::sdk::RPCClient rpcClient(config);
 
         auto blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
         constexpr static long blockLimit = 500;
@@ -55,7 +57,6 @@ int performance()
         std::atomic_int finished = 0;
         std::atomic_int failed = 0;
         std::cout << "Sending transaction..." << std::endl;
-        boost::timer::progress_display sendProgess(count);
 
         bcos::sdk::CoRPCClient coRPCClient(rpcClient);
         tbb::task_group taskGroup;
@@ -72,7 +73,6 @@ int performance()
                     std::string(contractAddress), input, boost::lexical_cast<std::string>(rand()),
                     blockNumber + blockLimit, "chain0", "group0", 0, *keyPair);
 
-                ++sendProgess;
                 ++finished;
                 bcos::task::wait(
                     [](decltype(setTransaction) transaction, decltype(coRPCClient)& coRPCClient,

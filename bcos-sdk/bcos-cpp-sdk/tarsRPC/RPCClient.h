@@ -7,6 +7,13 @@
 namespace bcos::sdk
 {
 
+struct Config
+{
+    std::string connectionString;
+    long sendQueueSize = 0;
+    int timeoutMs = 60000;
+};
+
 class RPCClient
 {
 private:
@@ -16,10 +23,11 @@ private:
     static void onMessage(tars::ReqMessagePtr message);
 
 public:
-    RPCClient(const std::string& connectionString);
+    RPCClient(Config const& config);
     bcostars::RPCPrx& rpcProxy();
 
     static std::string toConnectionString(const std::vector<std::string>& hostAndPorts);
+    std::string generateNonce();
 };
 
 class SendTransaction : public bcos::sdk::Handle<bcos::protocol::TransactionReceipt::Ptr>

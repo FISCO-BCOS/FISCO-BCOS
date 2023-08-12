@@ -1,7 +1,7 @@
 #include "Common.h"
 #include <chrono>
 
-constexpr static std::string_view helloworldBytecode =
+constexpr static std::string_view HELLOWORLD_BYTECODE =
     "608060405234801561001057600080fd5b50611621806100206000396000f3fe608060405234801561001057600080"
     "fd5b50600436106100cf5760003560e01c8063805e3da01161008c578063e3d670d711610066578063e3d670d71461"
     "01b4578063e5175c58146101e4578063f28a3b6514610214578063fd8f59071461021e576100cf565b8063805e3da0"
@@ -125,11 +125,62 @@ constexpr static std::string_view helloworldBytecode =
     "08120033a26469706673582212207f4fa2554331e8c5ef4917fea82fc88828584fb34b5f7a57d6d48d7b832d5cf564"
     "736f6c63430008120033";
 
+constexpr static std::string_view HELLOWORLD_ABI =
+    "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"int256\",\"name\":"
+    "\"value1\",\"type\":\"int256\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":"
+    "\"value2\",\"type\":\"string\"}],\"name\":\"EventExample\",\"type\":\"event\"},{"
+    "\"conflictFields\":[{\"kind\":3,\"slot\":2,\"value\":[0]}],\"inputs\":[{\"internalType\":"
+    "\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"balance\",\"outputs\":[{"
+    "\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"selector\":[3822481623,"
+    "2638755045],\"stateMutability\":\"view\",\"type\":\"function\"},{\"conflictFields\":[{"
+    "\"kind\":0}],\"inputs\":[],\"name\":\"createTwice\",\"outputs\":[],\"selector\":[124863204,"
+    "402369018],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"conflictFields\":[{"
+    "\"kind\":0}],\"inputs\":[],\"name\":\"delegateCall\",\"outputs\":[],\"selector\":[4069145445,"
+    "778625272],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"conflictFields\":[{"
+    "\"kind\":0}],\"inputs\":[{\"internalType\":\"int256\",\"name\":\"value\",\"type\":\"int256\"}]"
+    ",\"name\":\"deployAndCall\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":"
+    "\"int256\"}],\"selector\":[3843513432,2945246509],\"stateMutability\":\"nonpayable\",\"type\":"
+    "\"function\"},{\"conflictFields\":[{\"kind\":4,\"value\":[0]}],\"inputs\":[],\"name\":"
+    "\"getInt\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],"
+    "\"selector\":[1651739032,2655239241],\"stateMutability\":\"view\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":4,\"value\":[1]}],\"inputs\":[],\"name\":\"getString\","
+    "\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"selector\":["
+    "2313839663,167785564],\"stateMutability\":\"view\",\"type\":\"function\"},{\"conflictFields\":"
+    "[{\"kind\":3,\"slot\":2,\"value\":[0]}],\"inputs\":[{\"internalType\":\"address\",\"name\":"
+    "\"to\",\"type\":\"address\"},{\"internalType\":\"int256\",\"name\":\"count\",\"type\":"
+    "\"int256\"}],\"name\":\"issue\",\"outputs\":[],\"selector\":[567142599,2699444860],"
+    "\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"conflictFields\":[{\"kind\":4,"
+    "\"value\":[0]},{\"kind\":4,\"value\":[1]}],\"inputs\":[],\"name\":\"logOut\",\"outputs\":[],"
+    "\"selector\":[1273242286,2646634669],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}"
+    ",{\"conflictFields\":[{\"kind\":4,\"value\":[0]}],\"inputs\":[],\"name\":\"returnRequire\","
+    "\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"selector\":["
+    "2153659808,2565523220],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":4,\"value\":[0]}],\"inputs\":[],\"name\":\"returnRevert\","
+    "\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"selector\":["
+    "3705370812,3338033196],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":4,\"value\":[0]}],\"inputs\":[{\"internalType\":\"int256\","
+    "\"name\":\"value\",\"type\":\"int256\"}],\"name\":\"setInt\",\"outputs\":[],\"selector\":["
+    "1953859256,4271946802],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":4,\"value\":[1]}],\"inputs\":[{\"internalType\":\"string\","
+    "\"name\":\"value\",\"type\":\"string\"}],\"name\":\"setString\",\"outputs\":[],\"selector\":["
+    "2144007782,1407179006],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{"
+    "\"conflictFields\":[{\"kind\":3,\"slot\":2,\"value\":[0]},{\"kind\":3,\"slot\":2,\"value\":[1]"
+    "}],\"inputs\":[{\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{"
+    "\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":"
+    "\"int256\",\"name\":\"count\",\"type\":\"int256\"}],\"name\":\"transfer\",\"outputs\":[],"
+    "\"selector\":[4254030087,1368843653],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}"
+    "]";
+
 bcos::bytes bcos::sample::getContractBin()
 {
     bcos::bytes deployBin;
-    boost::algorithm::unhex(helloworldBytecode, std::back_inserter(deployBin));
+    boost::algorithm::unhex(HELLOWORLD_BYTECODE, std::back_inserter(deployBin));
     return deployBin;
+}
+
+std::string_view bcos::sample::getContractABI()
+{
+    return HELLOWORLD_ABI;
 }
 
 long bcos::sample::currentTime()
@@ -140,24 +191,56 @@ long bcos::sample::currentTime()
 }
 
 bcos::sample::Collector::Collector(int count, std::string title)
-  : m_startTime(currentTime()), m_count(count), m_title(std::move(title)), m_progress(m_count)
-{}
+  : m_startTime(currentTime()),
+    m_count(count),
+    m_title(std::move(title)),
+    m_sendProgressBar{indicators::option::BarWidth{70}, indicators::option::ShowElapsedTime{true},
+        indicators::option::ShowRemainingTime{true}, indicators::option::Start{"["},
+        indicators::option::End{"]"}, indicators::option::ForegroundColor{indicators::Color::white},
+        indicators::option::PostfixText{"Send   "},
+        indicators::option::FontStyles{
+            std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}},
+    m_receiveProgressBar{indicators::option::BarWidth{70},
+        indicators::option::ShowElapsedTime{true}, indicators::option::ShowRemainingTime{true},
+        indicators::option::Start{"["}, indicators::option::End{"]"},
+        indicators::option::ForegroundColor{indicators::Color::white},
+        indicators::option::PostfixText{"Receive"},
+        indicators::option::FontStyles{
+            std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}},
+    m_progressBar{m_sendProgressBar, m_receiveProgressBar}
+{
+    indicators::show_console_cursor(false);
+}
 void bcos::sample::Collector::finishSend()
 {
     sendElapsed = bcos::sample::currentTime() - m_startTime;
 }
+void bcos::sample::Collector::send(bool success, long elapsed)
+{
+    ++m_sended;
+    while (m_sendProgressBar.current() < (size_t)(((double)m_sended / m_count) * 100.0))
+    {
+        m_progressBar.tick<0>();
+    }
+}
 void bcos::sample::Collector::receive(bool success, long elapsed)
 {
-    ++m_progress;
     ++m_finished;
+    while (m_receiveProgressBar.current() < (size_t)(((double)m_finished / m_count) * 100.0))
+    {
+        m_progressBar.tick<1>();
+    }
     if (!success)
     {
         ++m_failed;
     }
     m_allTimeCost += elapsed;
 }
-void bcos::sample::Collector::report() const
+void bcos::sample::Collector::report()
 {
+    m_progressBar.print_progress();
+    indicators::show_console_cursor(true);
+
     long receiveElapsed = bcos::sample::currentTime() - m_startTime;
 
     std::cout << std::endl << m_title << " done!" << std::endl;

@@ -551,7 +551,9 @@ void Host::stop()
 {
     // ignore if already stopped/stopping
     if (!m_run)
+    {
         return;
+    }
     // signal run() to prepare for shutdown and reset m_timer
     m_run = false;
     if (m_asioInterface)
