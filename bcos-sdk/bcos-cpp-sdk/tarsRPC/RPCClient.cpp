@@ -86,6 +86,21 @@ bcos::sdk::SendTransaction& bcos::sdk::SendTransaction::send(
     return *this;
 }
 
+bcos::sdk::Call::Call(RPCClient& rpcClient) : Handle(rpcClient) {}
+bcos::sdk::Call& bcos::sdk::Call::send(const protocol::Transaction& transaction)
+{
+    auto const& tarsTransaction =
+        dynamic_cast<bcostars::protocol::TransactionImpl const&>(transaction);
+
+    std::promise<tars::ReqMessagePtr> promise;
+    setFuture(promise.get_future());
+
+    auto tarsCallback = std::make_unique<detail::TarsCallback>(callback(), std::move(promise));
+    rpcClient().rpcProxy()->async_call(tarsCallback.release(), tarsTransaction.inner());
+
+    return *this;
+}
+
 bcos::sdk::BlockNumber::BlockNumber(RPCClient& rpcClient) : Handle(rpcClient) {}
 bcos::sdk::BlockNumber& bcos::sdk::BlockNumber::send()
 {

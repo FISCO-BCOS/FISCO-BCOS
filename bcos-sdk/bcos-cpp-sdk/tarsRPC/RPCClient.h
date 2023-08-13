@@ -2,6 +2,7 @@
 
 #include "Handle.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/RPC.h"
 
 namespace bcos::sdk
@@ -35,6 +36,13 @@ class SendTransaction : public bcos::sdk::Handle<bcos::protocol::TransactionRece
 public:
     SendTransaction(RPCClient& rpcClient);
     SendTransaction& send(const bcos::protocol::Transaction& transaction);
+};
+
+class Call : public bcos::sdk::Handle<protocol::TransactionReceipt::Ptr>
+{
+public:
+    Call(RPCClient& rpcClient);
+    Call& send(const protocol::Transaction& transaction);
 };
 
 class BlockNumber : public bcos::sdk::Handle<long>
