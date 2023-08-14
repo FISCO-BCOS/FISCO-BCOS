@@ -103,7 +103,7 @@ public:
                 for (auto const& c : *criticals)
                 {
                     auto [it, success] = dependencies.try_emplace(c, id);
-                    if (!success)
+                    if (!success && it->second != id)
                     {
                         auto pId = it->second;
                         pIds.insert(pId);
