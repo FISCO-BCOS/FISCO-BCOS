@@ -32,6 +32,7 @@ public:
     CoRPCClient(RPCClient& rpcClient);
 
     Awaitable<SendTransaction> sendTransaction(const bcos::protocol::Transaction& transaction);
+    Awaitable<Call> call(const bcos::protocol::Transaction& transaction);
     Awaitable<BlockNumber> blockNumber();
 };
 }  // namespace bcos::sdk

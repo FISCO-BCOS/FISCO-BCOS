@@ -24,6 +24,17 @@ bcos::sdk::Awaitable<bcos::sdk::SendTransaction> bcos::sdk::CoRPCClient::sendTra
     }};
 }
 
+bcos::sdk::Awaitable<bcos::sdk::Call> bcos::sdk::CoRPCClient::call(
+    const bcos::protocol::Transaction& transaction)
+{
+    return {[this, &transaction](CO_STD::coroutine_handle<> handle) {
+        bcos::sdk::Call call(m_rpcClient);
+        call.setCallback(std::make_shared<CoCallback>(handle));
+        call.send(transaction);
+        return call;
+    }};
+}
+
 bcos::sdk::Awaitable<bcos::sdk::BlockNumber> bcos::sdk::CoRPCClient::blockNumber()
 {
     return {[this](CO_STD::coroutine_handle<> handle) {

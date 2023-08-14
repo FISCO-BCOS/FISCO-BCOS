@@ -138,6 +138,7 @@ private:
                 }
             }
 
+            // m_lastChunkIndex may had been changed, check again
             if (m_chunkIndex < *m_lastChunkIndex)
             {
                 bool expected = false;

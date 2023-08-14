@@ -40,6 +40,10 @@ public:
         bcostars::Error const& error, bcostars::TransactionReceipt const& response) override;
     void callback_sendTransaction_exception(tars::Int32 ret) override;
 
+    void callback_call(
+        const bcostars::Error& ret, const bcostars::TransactionReceipt& response) override;
+    void callback_call_exception(tars::Int32 ret) override;
+
     void callback_blockNumber(bcostars::Error const& error, tars::Int64 response) override;
     void callback_blockNumber_exception(tars::Int32 ret) override;
 };
