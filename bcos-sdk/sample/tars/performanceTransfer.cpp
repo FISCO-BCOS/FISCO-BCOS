@@ -11,6 +11,7 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-task/TBBScheduler.h>
+#include <bcos-utilities/ratelimiter/TimeWindowRateLimiter.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -86,8 +87,8 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
             auto receipt = handles[it]->get();
             if (receipt->status() != 0)
             {
-                std::cout << "Issue with error! " << receipt->status() << std::endl;
-                BOOST_THROW_EXCEPTION(std::runtime_error("Issue with error!"));
+                std::cout << "Query with error! " << receipt->status() << std::endl;
+                BOOST_THROW_EXCEPTION(std::runtime_error("Query with error!"));
             }
 
             auto output = receipt->output();
@@ -161,10 +162,12 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
     std::latch latch(transactionCount);
     std::vector<std::optional<bcos::sdk::SendTransaction>> handles(transactionCount);
 
+    bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(transactionCount, "Transfer");
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)transactionCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
+            limiter.acquire(1);
             auto fromAddress = it % userCount;
             auto toAddress = ((it + (userCount / 2)) % userCount);
 
@@ -268,6 +271,7 @@ int main(int argc, char* argv[])
     }
     auto const& contractAddress = receipt->contractAddress();
 
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     auto balances = query(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), userCount);
     issue(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), userCount, qps, balances);
     transfer(rpcClient, cryptoSuite, std::string(contractAddress), keyPair, userCount,
