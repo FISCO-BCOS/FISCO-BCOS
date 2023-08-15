@@ -392,7 +392,7 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("WorkingSealerManagerPrecompiled")
                                << LOG_DESC("rotateWorkingSealer exception occurred")
-                               << LOG_KV("errorInfo", _e.what())
+                               << LOG_KV("msg", _e.what())
                                << LOG_KV("origin", _callParameters->m_origin)
                                << LOG_KV("sender", _callParameters->m_sender);
         BOOST_THROW_EXCEPTION(_e);
@@ -401,7 +401,7 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("WorkingSealerManagerPrecompiled")
                                << LOG_DESC("rotateWorkingSealer exception occurred")
-                               << LOG_KV("errorInfo", boost::diagnostic_information(_e))
+                               << LOG_KV("msg", boost::diagnostic_information(_e))
                                << LOG_KV("origin", _callParameters->m_origin)
                                << LOG_KV("sender", _callParameters->m_sender);
         BOOST_THROW_EXCEPTION(

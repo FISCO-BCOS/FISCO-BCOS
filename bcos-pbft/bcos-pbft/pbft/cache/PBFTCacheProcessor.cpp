@@ -112,7 +112,7 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
             {
                 PBFT_LOG(WARNING) << LOG_DESC("loadAndVerifyProposal exception")
                                   << printPBFTProposal(_proposal)
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("msg", boost::diagnostic_information(e));
             }
         });
 }
@@ -465,7 +465,7 @@ void PBFTCacheProcessor::applyStateMachine(
             catch (std::exception const& e)
             {
                 PBFT_LOG(WARNING) << LOG_DESC("applyStateMachine failed")
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
@@ -493,7 +493,7 @@ void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _propo
                 {
                     PBFT_LOG(WARNING) << LOG_DESC("notifyCommittedProposalIndex error")
                                       << LOG_KV("index", _proposalIndex)
-                                      << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                                      << LOG_KV("msg", boost::diagnostic_information(e));
                 }
             });
     }

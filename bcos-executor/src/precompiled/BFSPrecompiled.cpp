@@ -931,10 +931,10 @@ void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecut
                     {
                         PRECOMPILED_LOG(ERROR) << LOG_BADGE("BFSPrecompiled")
                                                << LOG_DESC("fixBfs320 asyncGetPrimaryKeys error")
-                                               << LOG_KV("errorCode", error->errorCode())
-                                               << LOG_KV("errorMessage", error->errorMessage());
+                                               << LOG_KV("code", error->errorCode())
+                                               << LOG_KV("message", error->errorMessage());
                         BOOST_THROW_EXCEPTION(PrecompiledError(
-                            "BFSPrecompiled fixBfs320 asyncGetPrimaryKeys error."));
+                            "BFSPrecompiled fixBfs320 asyncGetPrimaryKeys failed."));
                     }
                     promise.set_value(std::forward<decltype(keys)>(keys));
                 });
@@ -961,10 +961,10 @@ void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecut
                 {
                     PRECOMPILED_LOG(ERROR)
                         << LOG_BADGE("BFSPrecompiled") << LOG_DESC("fixBfs320 asyncGetRow error")
-                        << LOG_KV("errorCode", error->errorCode())
-                        << LOG_KV("errorMessage", error->errorMessage());
+                        << LOG_KV("code", error->errorCode())
+                        << LOG_KV("message", error->errorMessage());
                     BOOST_THROW_EXCEPTION(
-                        PrecompiledError("BFSPrecompiled fixBfs320 asyncGetRow error."));
+                        PrecompiledError("BFSPrecompiled fixBfs320 asyncGetRow failed."));
                 }
                 getRowPromise.set_value(std::forward<decltype(entry)>(entry));
             });

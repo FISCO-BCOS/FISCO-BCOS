@@ -89,7 +89,7 @@ PBFTProposalListPtr LedgerStorage::loadState(BlockNumber _stabledIndex)
                     << LOG_DESC(
                            "The committedProposals have been received, but the "
                            "callback is called exception")
-                    << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
     startT = utcSteadyTime();
@@ -143,8 +143,8 @@ void LedgerStorage::asyncGetCommittedProposals(
             {
                 PBFT_STORAGE_LOG(WARNING)
                     << LOG_DESC("asyncGetCommittedProposals: get proposals failed")
-                    << LOG_KV("error", _error->errorCode())
-                    << LOG_KV("errorMessage", _error->errorMessage());
+                    << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
                 return;
             }
             try
@@ -176,7 +176,7 @@ void LedgerStorage::asyncGetCommittedProposals(
             catch (std::exception const& e)
             {
                 PBFT_STORAGE_LOG(WARNING) << LOG_DESC("asyncGetCommittedProposals exception")
-                                          << LOG_KV("error", boost::diagnostic_information(e));
+                                          << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
@@ -204,8 +204,8 @@ void LedgerStorage::asyncGetLatestCommittedProposalIndex()
                 {
                     PBFT_STORAGE_LOG(WARNING)
                         << LOG_DESC("asyncGetLatestCommittedProposalIndex failed")
-                        << LOG_KV("errorCode", _error->errorCode())
-                        << LOG_KV("errorMessage", _error->errorMessage());
+                        << LOG_KV("code", _error->errorCode())
+                        << LOG_KV("message", _error->errorMessage());
                     storage->m_signalled.notify_all();
                     return;
                 }
@@ -224,7 +224,7 @@ void LedgerStorage::asyncGetLatestCommittedProposalIndex()
             {
                 PBFT_STORAGE_LOG(WARNING)
                     << LOG_DESC("asyncGetLatestCommittedProposalIndex exception")
-                    << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
@@ -292,7 +292,7 @@ void LedgerStorage::asyncPutProposal(std::string const& _dbName, std::string con
             catch (std::exception const& e)
             {
                 PBFT_STORAGE_LOG(WARNING) << LOG_DESC("asyncPutProposal exception")
-                                          << LOG_KV("error", boost::diagnostic_information(e));
+                                          << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
@@ -369,8 +369,8 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
             if (_error != nullptr)
             {
                 PBFT_STORAGE_LOG(ERROR) << LOG_DESC("commitStableCheckPoint failed")
-                                        << LOG_KV("errorCode", _error->errorCode())
-                                        << LOG_KV("errorInfo", _error->errorMessage())
+                                        << LOG_KV("code", _error->errorCode())
+                                        << LOG_KV("message", _error->errorMessage())
                                         << LOG_KV("proposalIndex", _blockHeader->number())
                                         << LOG_KV("timecost", utcTime() - startT);
                 ledgerStorage->m_onStableCheckPointCommitFailed(std::move(_error), _stableProposal);
@@ -401,7 +401,7 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
         catch (std::exception const& e)
         {
             PBFT_STORAGE_LOG(WARNING) << LOG_DESC("commitStableCheckPoint exception")
-                                      << LOG_KV("error", boost::diagnostic_information(e));
+                                      << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
