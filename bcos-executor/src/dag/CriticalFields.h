@@ -117,9 +117,12 @@ public:
                 }
                 else
                 {
-                    for (ID pId : pIds)
+                    for (ID pId : pIds)  // ignore conflict like: [a, b, a]
                     {
-                        _onConflict(pId, id);
+                        if (pId != id) [[likely]]
+                        {
+                            _onConflict(pId, id);
+                        }
                     }
                 }
             }

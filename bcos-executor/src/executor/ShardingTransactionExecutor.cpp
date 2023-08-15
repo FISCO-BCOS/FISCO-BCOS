@@ -39,7 +39,8 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
     {
         do
         {
-            if (!m_blockContext)
+            if (!m_blockContext ||
+                !m_blockContext.features().get(ledger::Features::Flag::feature_sharding))
             {
                 TransactionExecutor::executeTransactions(
                     contractAddress, std::move(inputs), std::move(callback));
