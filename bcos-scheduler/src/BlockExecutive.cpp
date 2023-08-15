@@ -345,11 +345,10 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
         if (future.wait_for(std::chrono::milliseconds(10 * 1000)) != std::future_status::ready)
         {
             // 10s timeout
-            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number())
-                                 << "BlockExecutive prepare: fillBlock timeout/error"
-                                 << LOG_KV("txNum", block->transactionsMetaDataSize())
-                                 << LOG_KV("cost", utcTime() - lastT)
-                                 << LOG_KV("fetchNum", txs ? txs->size() : 0);
+            SCHEDULER_LOG(WARNING)
+                << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock timeout/failed"
+                << LOG_KV("txNum", block->transactionsMetaDataSize())
+                << LOG_KV("cost", utcTime() - lastT) << LOG_KV("fetchNum", txs ? txs->size() : 0);
             return nullptr;
         }
         txs = future.get();
@@ -420,10 +419,10 @@ void BlockExecutive::asyncExecute(
 
             if (error)
             {
-                SCHEDULER_LOG(ERROR)
-                    << BLOCK_NUMBER(number()) << "Next block with error!" << error->errorMessage();
+                SCHEDULER_LOG(WARNING)
+                    << BLOCK_NUMBER(number()) << "Next block with failed!" << error->errorMessage();
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                             SchedulerError::NextBlockError, "Next block error!", *error),
+                             SchedulerError::NextBlockError, "Next block failed!", *error),
                     nullptr, m_isSysBlock);
                 return;
             }
@@ -442,11 +441,11 @@ void BlockExecutive::asyncExecute(
 
                     if (error)
                     {
-                        SCHEDULER_LOG(ERROR)
-                            << BLOCK_NUMBER(number()) << "DAG execute block with error!"
+                        SCHEDULER_LOG(WARNING)
+                            << BLOCK_NUMBER(number()) << "DAG execute block with failed!"
                             << error->errorMessage();
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                                     SchedulerError::DAGError, "DAG execute error!", *error),
+                                     SchedulerError::DAGError, "DAG execute failed!", *error),
                             nullptr, m_isSysBlock);
                         return;
                     }
@@ -499,7 +498,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 }
 
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
-                    "Prewrite block error: " + error->errorMessage(), *error));
+                    "Prewrite block failed: " + error->errorMessage(), *error));
 
                 return;
             }
@@ -547,7 +546,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 batchBlockCommit(status.startTS, [this, callback](Error::UniquePtr&& error) {
                     if (error)
                     {
-                        SCHEDULER_LOG(ERROR)
+                        SCHEDULER_LOG(WARNING)
                             << BLOCK_NUMBER(number()) << "Commit block to storage failed!"
                             << error->errorMessage();
 
@@ -587,7 +586,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             WriteGuard lock(status->x_lock);
                             ++status->failed;
                         }
-                        SCHEDULER_LOG(ERROR)
+                        SCHEDULER_LOG(WARNING)
                             << BLOCK_NUMBER(number())
                             << "scheduler asyncPrepare storage error: " << error->errorMessage();
                         callback(BCOS_ERROR_UNIQUE_PTR(error->errorCode(),
