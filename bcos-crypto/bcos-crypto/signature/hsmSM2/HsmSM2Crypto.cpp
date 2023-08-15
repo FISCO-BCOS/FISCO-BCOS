@@ -77,7 +77,7 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     if (code != SDR_OK)
     {
         CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of compute H(M')"
-                          << LOG_KV("error", provider.GetErrorMessage(code));
+                          << LOG_KV("message", provider.GetErrorMessage(code));
         return nullptr;
     }
 

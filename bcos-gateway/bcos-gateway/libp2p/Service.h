@@ -201,7 +201,7 @@ protected:
         catch (std::exception const& e)
         {
             SERVICE_LOG(WARNING) << LOG_DESC("callNewSessionHandlers exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+                                 << LOG_KV("msg", boost::diagnostic_information(e));
         }
     }
     virtual void callDeleteSessionHandlers(P2PSession::Ptr _session)
@@ -216,7 +216,7 @@ protected:
         catch (std::exception const& e)
         {
             SERVICE_LOG(WARNING) << LOG_DESC("callDeleteSessionHandlers exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+                                 << LOG_KV("msg", boost::diagnostic_information(e));
         }
     }
 
