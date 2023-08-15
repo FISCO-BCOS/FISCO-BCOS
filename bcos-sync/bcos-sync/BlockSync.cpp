@@ -231,7 +231,7 @@ void BlockSync::executeWorker()
         {
             BLKSYNC_LOG(ERROR) << LOG_DESC(
                                       "maintainDownloadingQueue or maintainPeersStatus exception")
-                               << LOG_KV("message, boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
     // send block to other nodes
