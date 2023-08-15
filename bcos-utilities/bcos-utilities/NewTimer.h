@@ -231,7 +231,7 @@ private:
                 {
                     BCOS_LOG(WARNING) << LOG_BADGE("startThread")
                                       << LOG_DESC("Exception in Worker Thread of timer")
-                                      << LOG_KV("error", boost::diagnostic_information(e));
+                                      << LOG_KV("message", boost::diagnostic_information(e));
                 }
                 m_ioService->reset();
             }

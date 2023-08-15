@@ -145,7 +145,7 @@ void BlockSync::initSendResponseHandler()
         catch (std::exception const& e)
         {
             BLKSYNC_LOG(WARNING) << LOG_DESC("sendResponse exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+                                 << LOG_KV("message", boost::diagnostic_information(e));
         }
     };
 }
@@ -231,7 +231,7 @@ void BlockSync::executeWorker()
         {
             BLKSYNC_LOG(ERROR) << LOG_DESC(
                                       "maintainDownloadingQueue or maintainPeersStatus exception")
-                               << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                               << LOG_KV("message, boost::diagnostic_information(e));
         }
     });
     // send block to other nodes
@@ -243,7 +243,7 @@ void BlockSync::executeWorker()
         catch (std::exception const& e)
         {
             BLKSYNC_LOG(ERROR) << LOG_DESC("maintainBlockRequest exception")
-                               << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
@@ -264,7 +264,7 @@ void BlockSync::workerProcessLoop()
         catch (std::exception const& e)
         {
             BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync executeWorker exception")
-                               << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
         }
     }
 }
@@ -331,7 +331,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
             catch (std::exception const& e)
             {
                 BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage sendResponse failed")
-                                     << LOG_KV("error", boost::diagnostic_information(e))
+                                     << LOG_KV("message", boost::diagnostic_information(e))
                                      << LOG_KV("id", _uuid) << LOG_KV("dst", _nodeID->shortHex());
             }
         },
@@ -386,7 +386,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
     catch (std::exception const& e)
     {
         BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage exception")
-                             << LOG_KV("error", boost::diagnostic_information(e))
+                             << LOG_KV("message", boost::diagnostic_information(e))
                              << LOG_KV("peer", _nodeID->shortHex());
     }
 }
@@ -786,8 +786,8 @@ void BlockSync::fetchAndSendBlock(PublicPtr const& _peer, BlockNumber _number)
             {
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("fetchAndSendBlock failed for asyncGetBlockDataByNumber failed")
-                    << LOG_KV("number", _number) << LOG_KV("errorCode", _error->errorCode())
-                    << LOG_KV("errorMessage", _error->errorMessage());
+                    << LOG_KV("number", _number) << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
                 return;
             }
             try
@@ -818,7 +818,7 @@ void BlockSync::fetchAndSendBlock(PublicPtr const& _peer, BlockNumber _number)
             {
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("fetchAndSendBlock exception") << LOG_KV("number", _number)
-                    << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }

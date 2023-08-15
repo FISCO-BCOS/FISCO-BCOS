@@ -582,8 +582,8 @@ void Initializer::initSysContract()
             header, [&](Error::Ptr&& _error, bcos::ledger::LedgerConfig::Ptr&& _config) {
                 if (_error)
                 {
-                    INITIALIZER_LOG(ERROR) << LOG_BADGE("SysInitializer")
-                                           << LOG_KV("errorMsg", _error->errorMessage());
+                    INITIALIZER_LOG(ERROR)
+                        << LOG_BADGE("SysInitializer") << LOG_KV("msg", _error->errorMessage());
                     committedConfig.set_value(std::make_tuple(std::move(_error), nullptr));
                     return;
                 }
