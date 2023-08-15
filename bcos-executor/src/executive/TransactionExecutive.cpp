@@ -598,7 +598,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
             auto leftGas = hostContext.gas();
 
-            evmc_message evmcMessage;
+            evmc_message evmcMessage{};
             evmcMessage.kind = kind;
             evmcMessage.flags = flags;
             evmcMessage.depth = 0;  // depth own by scheduler

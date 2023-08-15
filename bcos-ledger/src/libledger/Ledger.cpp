@@ -431,8 +431,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
             {
                 auto hash = blockTxs ? blockTxs->at(i)->hash() : block->transaction(i)->hash();
                 txsHash[i] = std::string((char*)hash.data(), hash.size());
-                auto receipt = block->receipt(i);
-                receipt->encode(receipts[i]);
+                block->receipt(i)->encode(receipts[i]);
                 receiptsView[i] = std::string_view((char*)receipts[i].data(), receipts[i].size());
             }
         });
