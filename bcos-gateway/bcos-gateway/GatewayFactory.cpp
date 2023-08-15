@@ -98,7 +98,7 @@ void GatewayFactory::initCert2PubHexHandler()
         {
             GATEWAY_FACTORY_LOG(ERROR)
                 << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
-                << LOG_KV("errorMessage", "unable to load cert content, cert: " + _cert);
+                << LOG_KV("message", "unable to load cert content, cert: " + _cert);
             return false;
         }
 
@@ -116,7 +116,7 @@ void GatewayFactory::initCert2PubHexHandler()
         {
             GATEWAY_FACTORY_LOG(ERROR)
                 << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
-                << LOG_KV("errorMessage", "BIO_new error");
+                << LOG_KV("message", "BIO_new error");
             return false;
         }
 
@@ -133,7 +133,7 @@ void GatewayFactory::initCert2PubHexHandler()
         {
             GATEWAY_FACTORY_LOG(ERROR)
                 << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
-                << LOG_KV("errorMessage", "PEM_read_bio_X509 error");
+                << LOG_KV("message", "PEM_read_bio_X509 error");
             return false;
         }
 
@@ -152,7 +152,7 @@ void GatewayFactory::initSSLContextPubHexHandler()
         if (pubKey == NULL)
         {
             GATEWAY_FACTORY_LOG(ERROR)
-                << LOG_DESC("initSSLContextPubHexHandler X509_get0_pubkey_bitstr error");
+                << LOG_DESC("initSSLContextPubHexHandler X509_get0_pubkey_bitstr failed");
             return false;
         }
 
@@ -174,7 +174,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
         if (nullptr == pKey)
         {
             GATEWAY_FACTORY_LOG(ERROR)
-                << LOG_DESC("initSSLContextPubHexHandler X509_get_pubkey error");
+                << LOG_DESC("initSSLContextPubHexHandler X509_get_pubkey failed");
             return false;
         }
 
@@ -185,7 +185,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
             if (nullptr == rsa)
             {
                 GATEWAY_FACTORY_LOG(ERROR)
-                    << LOG_DESC("initSSLContextPubHexHandler EVP_PKEY_get0_RSA error");
+                    << LOG_DESC("initSSLContextPubHexHandler EVP_PKEY_get0_RSA failed");
                 return false;
             }
 
@@ -193,7 +193,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
             if (nullptr == n)
             {
                 GATEWAY_FACTORY_LOG(ERROR)
-                    << LOG_DESC("initSSLContextPubHexHandler RSA_get0_n error");
+                    << LOG_DESC("initSSLContextPubHexHandler RSA_get0_n failed");
                 return false;
             }
 
@@ -205,7 +205,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
             if (nullptr == ecPublicKey)
             {
                 GATEWAY_FACTORY_LOG(ERROR)
-                    << LOG_DESC("initSSLContextPubHexHandler EVP_PKEY_get1_EC_KEY error");
+                    << LOG_DESC("initSSLContextPubHexHandler EVP_PKEY_get1_EC_KEY failed");
                 return false;
             }
 
@@ -213,7 +213,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
             if (nullptr == ecPoint)
             {
                 GATEWAY_FACTORY_LOG(ERROR)
-                    << LOG_DESC("initSSLContextPubHexHandler EC_KEY_get0_public_key error");
+                    << LOG_DESC("initSSLContextPubHexHandler EC_KEY_get0_public_key failed");
                 return false;
             }
 
@@ -221,7 +221,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
             if (nullptr == ecGroup)
             {
                 GATEWAY_FACTORY_LOG(ERROR)
-                    << LOG_DESC("initSSLContextPubHexHandler EC_KEY_get0_group error");
+                    << LOG_DESC("initSSLContextPubHexHandler EC_KEY_get0_group failed");
                 return false;
             }
 
@@ -238,8 +238,9 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
         }
         else
         {
-            GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("initSSLContextPubHexHandler unknown type error")
-                                       << LOG_KV("type", type);
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_DESC("initSSLContextPubHexHandler unknown type failed")
+                << LOG_KV("type", type);
 
             return false;
         }
@@ -357,7 +358,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
             sslContext->native_handle(), _smCertConfig.nodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file error"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file failed"));
     }
 
     std::shared_ptr<bytes> keyContent;
@@ -388,7 +389,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     if (!SSL_CTX_check_private_key(sslContext->native_handle()))
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key error"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
     }
 
     std::shared_ptr<bytes> enNodeKeyContent;
@@ -418,17 +419,17 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
             sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
     {
         ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file error"));
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file failed"));
     }
     std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
 
     if (SSL_CTX_use_enc_PrivateKey(sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <=
         0)
     {
-        GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey error");
+        GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey failed");
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment("GatewayFactory::buildSSLContext "
-                                                  "SSL_CTX_use_enc_PrivateKey error"));
+                                                  "SSL_CTX_use_enc_PrivateKey failed"));
     }
     auto caContent =
         readContentsToString(boost::filesystem::path(_smCertConfig.caCert));  // node.key content
@@ -796,7 +797,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
     catch (const std::exception& e)
     {
         GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("GatewayFactory::init")
-                                   << LOG_KV("error", boost::diagnostic_information(e));
+                                   << LOG_KV("message", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
 }
@@ -817,7 +818,7 @@ void GatewayFactory::initFailOver(
             _gateWay->asyncNotifyGroupInfo(groupInfo, [](Error::Ptr&& _error) {
                 if (_error)
                 {
-                    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification error")
+                    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification failed")
                                               << LOG_KV("code", _error->errorCode())
                                               << LOG_KV("msg", _error->errorMessage());
                     return;
@@ -930,7 +931,7 @@ std::shared_ptr<sw::redis::Redis> GatewayFactory::initRedis(
 
         GATEWAY_FACTORY_LOG(ERROR)
             << LOG_BADGE("initRedis") << LOG_DESC("initialize redis exception")
-            << LOG_KV("error", e.what());
+            << LOG_KV("message", e.what());
 
         std::throw_with_nested(e);
     }

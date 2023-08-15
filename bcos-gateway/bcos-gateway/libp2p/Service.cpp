@@ -195,9 +195,9 @@ void Service::onConnect(
     }
     if (e.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
+        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
                              << LOG_KV("p2pid", p2pID) << LOG_KV("nodeName", p2pInfo.nodeName)
-                             << LOG_KV("endpoint", peer) << LOG_KV("errorMessage", e.what());
+                             << LOG_KV("endpoint", peer) << LOG_KV("message", e.what());
 
         return;
     }
@@ -361,8 +361,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         {
             SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
                                  << LOG_KV("p2pid", p2pID) << LOG_KV("endpoint", nodeIPEndpoint)
-                                 << LOG_KV("errorCode", e.errorCode())
-                                 << LOG_KV("errorMessage", e.what());
+                                 << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
 
             if (p2pSession)
             {
@@ -698,9 +697,8 @@ void Service::onReceiveProtocol(
 {
     if (_error.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol error")
-                             << LOG_KV("errorCode", _error.errorCode())
-                             << LOG_KV("errorMsg", _error.what())
+        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol failed")
+                             << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what())
                              << LOG_KV("peer", _session ? _session->p2pID() : "unknown");
         return;
     }

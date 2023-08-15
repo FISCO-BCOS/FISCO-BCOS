@@ -169,7 +169,7 @@ private:
         auto entry = storage().getRow(SYS_NUMBER_2_HASH, key);
         if (!entry)
         {
-            LEDGER_LOG(WARNING) << "Not found block number: " << number;
+            LEDGER_LOG(DEBUG) << "Not found block number: " << number;
             co_return;
         }
 
