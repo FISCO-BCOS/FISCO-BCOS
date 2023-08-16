@@ -123,7 +123,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 
                 if (result != TransactionStatus::None)
                 {
-                    TXPOOL_LOG(DEBUG) << "Submit transaction error! " << result;
+                    TXPOOL_LOG(DEBUG) << "Submit transaction failed! " << result;
                     m_submitResult.emplace<Error::Ptr>(
                         BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
                     handle.resume();
@@ -131,7 +131,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             }
             catch (std::exception& e)
             {
-                TXPOOL_LOG(ERROR) << "Unexpected exception: " << boost::diagnostic_information(e);
+                TXPOOL_LOG(WARNING) << "Unexpected exception: " << boost::diagnostic_information(e);
                 m_submitResult.emplace<Error::Ptr>(
                     BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"));
                 handle.resume();
@@ -471,7 +471,7 @@ void MemoryStorage::notifyTxResult(
     catch (std::exception const& e)
     {
         TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxResult failed") << LOG_KV("tx", txHash.abridged())
-                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                            << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 
@@ -855,7 +855,7 @@ void MemoryStorage::removeInvalidTxs(bool lock)
     catch (std::exception const& e)
     {
         TXPOOL_LOG(WARNING) << LOG_DESC("removeInvalidTxs exception")
-                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                            << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 
@@ -1042,8 +1042,8 @@ void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
             return;
         }
         TXPOOL_LOG(WARNING) << LOG_DESC("notifyUnsealedTxsSize failed")
-                            << LOG_KV("errorCode", _error->errorCode())
-                            << LOG_KV("errorMsg", _error->errorMessage());
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("msg", _error->errorMessage());
         auto memoryStorage = self.lock();
         if (!memoryStorage)
         {
@@ -1274,7 +1274,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         if (ret != TransactionStatus::None)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("batchImportTxs failed")
-                              << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("error", ret);
+                              << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("msg", ret);
             continue;
         }
         successCount++;

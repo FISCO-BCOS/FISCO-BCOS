@@ -79,17 +79,17 @@ int main(int argc, char** argv)
                 boost::ignore_unused(_session);
                 if (_error)
                 {
-                    std::cout << " \t something is wrong" << LOG_KV("error", _error->errorCode())
-                              << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
+                    std::cout << " \t something is wrong" << LOG_KV("code", _error->errorCode())
+                              << LOG_KV("message", _error->errorMessage()) << std::endl;
                     return;
                 }
                 else
                 {
                     if (_msg->status() != 0)
                     {
-                        std::cout << " \t something is wrong" << LOG_KV("error", _msg->status())
-                                  << LOG_KV("errorMessage", std::string(_msg->payload()->begin(),
-                                                                _msg->payload()->end()))
+                        std::cout << " \t something is wrong" << LOG_KV("msg", _msg->status())
+                                  << LOG_KV("message", std::string(_msg->payload()->begin(),
+                                                           _msg->payload()->end()))
                                   << std::endl;
                         return;
                     }

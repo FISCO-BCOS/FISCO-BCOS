@@ -130,8 +130,8 @@ void SerialBlockExecutive::asyncExecute(
                         << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute block failed")
                         << LOG_KV("createMsgT", createMsgT)
                         << LOG_KV("executeT", (utcTime() - startT))
-                        << LOG_KV("errorCode", error->errorCode())
-                        << LOG_KV("errorMessage", error->errorMessage());
+                        << LOG_KV("code", error->errorCode())
+                        << LOG_KV("message", error->errorMessage());
                     callback(std::move(error), nullptr, isSysBlock);
                     return;
                 }

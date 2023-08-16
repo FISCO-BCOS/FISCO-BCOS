@@ -77,8 +77,8 @@ int main(int argc, char** argv)
             boost::ignore_unused(_session);
             if (_error)
             {
-                std::cout << " \t something is wrong" << LOG_KV("error", _error->errorCode())
-                          << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
+                std::cout << " \t something is wrong" << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("message", _error->errorMessage()) << std::endl;
             }
             else
             {
