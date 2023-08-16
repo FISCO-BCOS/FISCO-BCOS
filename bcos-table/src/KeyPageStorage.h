@@ -1185,7 +1185,7 @@ public:
         {
             KeyPage_LOG(ERROR) << LOG_DESC("getData error") << LOG_KV("table", table)
                                << LOG_KV("key", toHex(key))
-                               << LOG_KV("error", error->errorMessage());
+                               << LOG_KV("message", error->errorMessage());
             return std::nullopt;
         }
         if (c_fileLogLevel <= TRACE)

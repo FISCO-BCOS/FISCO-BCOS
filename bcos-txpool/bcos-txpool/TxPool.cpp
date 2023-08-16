@@ -345,7 +345,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
             TXPOOL_LOG(WARNING) << LOG_DESC("asyncVerifyBlock exception")
                                 << LOG_KV("fromNodeId", _generatedNodeID->shortHex())
                                 << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
@@ -369,7 +369,7 @@ void TxPool::asyncNotifyTxsSyncMessage(Error::Ptr _error, std::string const& _uu
             catch (std::exception const& e)
             {
                 TXPOOL_LOG(TRACE) << LOG_DESC("asyncNotifyTxsSyncMessage: sendResponse failed")
-                                  << LOG_KV("error", boost::diagnostic_information(e))
+                                  << LOG_KV("msg", boost::diagnostic_information(e))
                                   << LOG_KV("uuid", _uuid) << LOG_KV("dst", _nodeID->shortHex());
             }
         });
@@ -589,7 +589,7 @@ void TxPool::initSendResponseHandler()
         catch (std::exception const& e)
         {
             TXPOOL_LOG(WARNING) << LOG_DESC("sendResponse exception")
-                                << LOG_KV("error", boost::diagnostic_information(e))
+                                << LOG_KV("message", boost::diagnostic_information(e))
                                 << LOG_KV("uuid", _id) << LOG_KV("moduleID", _moduleID)
                                 << LOG_KV("peer", _dstNode->shortHex());
         }
@@ -616,7 +616,7 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
             if (_error)
             {
                 TXPOOL_LOG(WARNING)
-                    << LOG_DESC("storeVerifiedBlock, fillBlock error")
+                    << LOG_DESC("storeVerifiedBlock, fillBlock failed")
                     << LOG_KV("consNum", blockHeader->number())
                     << LOG_KV("hash", blockHeader->hash().abridged())
                     << LOG_KV("msg", _error->errorMessage()) << LOG_KV("code", _error->errorCode());
@@ -632,7 +632,7 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
                     if (_error)
                     {
                         TXPOOL_LOG(WARNING)
-                            << LOG_DESC("storeVerifiedBlock: asyncPreStoreBlockTxs error")
+                            << LOG_DESC("storeVerifiedBlock: asyncPreStoreBlockTxs failed")
                             << LOG_KV("consNum", blockHeader->number())
                             << LOG_KV("hash", blockHeader->hash().abridged())
                             << LOG_KV("msg", _error->errorMessage())

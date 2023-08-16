@@ -310,7 +310,7 @@ void EventSub::onRecvEventSubMessage(
         getTaskAndRemove(resp->id());
         task->callback()(nullptr, strResp);
 
-        EVENT_SUB(INFO) << LOG_BADGE("onRecvEventSubMessage") << LOG_DESC("event sub error")
+        EVENT_SUB(INFO) << LOG_BADGE("onRecvEventSubMessage") << LOG_DESC("event sub failed")
                         << LOG_KV("id", task->id()) << LOG_KV("endpoint", _session->endPoint())
                         << LOG_KV("response", strResp);
     }
@@ -370,9 +370,9 @@ void EventSub::subscribeEvent(EventSubTask::Ptr _task, Callback _callback)
             if (_error && _error->errorCode() != 0)
             {
                 EVENT_SUB(WARNING)
-                    << LOG_BADGE("subscribeEvent") << LOG_DESC("callback response error")
-                    << LOG_KV("id", id) << LOG_KV("errorCode", _error->errorCode())
-                    << LOG_KV("errorMessage", _error->errorMessage());
+                    << LOG_BADGE("subscribeEvent") << LOG_DESC("callback response failed")
+                    << LOG_KV("id", id) << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
 
                 _callback(_error, "");
                 return;
@@ -391,7 +391,7 @@ void EventSub::subscribeEvent(EventSubTask::Ptr _task, Callback _callback)
             {
                 _callback(nullptr, strResp);
                 EVENT_SUB(WARNING)
-                    << LOG_BADGE("subscribeEvent") << LOG_DESC("callback response error")
+                    << LOG_BADGE("subscribeEvent") << LOG_DESC("callback response failed")
                     << LOG_KV("id", id) << LOG_KV("response", strResp);
             }
             else
@@ -482,9 +482,9 @@ void EventSub::unsubscribeEvent(const std::string& _id)
             if (_error && _error->errorCode() != 0)
             {
                 EVENT_SUB(WARNING)
-                    << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback response error")
-                    << LOG_KV("id", _id) << LOG_KV("errorCode", _error->errorCode())
-                    << LOG_KV("errorMessage", _error->errorMessage());
+                    << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback response failed")
+                    << LOG_KV("id", _id) << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
                 return;
             }
 
@@ -501,7 +501,7 @@ void EventSub::unsubscribeEvent(const std::string& _id)
             if (resp->status() != StatusCode::Success)
             {
                 EVENT_SUB(WARNING)
-                    << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback response error")
+                    << LOG_BADGE("unsubscribeEvent") << LOG_DESC("callback response failed")
                     << LOG_KV("id", _id) << LOG_KV("status", resp->status())
                     << LOG_KV("response", strResp);
             }

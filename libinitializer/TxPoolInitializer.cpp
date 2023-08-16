@@ -68,7 +68,7 @@ void TxPoolInitializer::init(bcos::sealer::SealerInterface::Ptr _sealer)
             {
                 INITIALIZER_LOG(WARNING)
                     << LOG_DESC("call UnsealedTxsNotifier to the sealer exception")
-                    << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
     m_txpool->init();

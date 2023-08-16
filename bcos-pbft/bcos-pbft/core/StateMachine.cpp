@@ -110,8 +110,8 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
             {
                 CONSENSUS_LOG(WARNING) << LOG_DESC("asyncExecuteBlock failed")
                                        << LOG_KV("number", blockHeader->number())
-                                       << LOG_KV("errorCode", _error->errorCode())
-                                       << LOG_KV("errorInfo", _error->errorMessage());
+                                       << LOG_KV("code", _error->errorCode())
+                                       << LOG_KV("message", _error->errorMessage());
                 _onExecuteFinished(_error->errorCode());
                 return;
             }
@@ -169,8 +169,8 @@ void StateMachine::preApply(
             {
                 CONSENSUS_LOG(ERROR)
                     << LOG_BADGE("prepareBlockExecutive") << LOG_DESC("preApply failed!")
-                    << LOG_KV("errorCode", error->errorCode())
-                    << LOG_KV("errorMessage", error->errorMessage())
+                    << LOG_KV("code", error->errorCode())
+                    << LOG_KV("message", error->errorMessage())
                     << LOG_KV("message", error->errorMessage())
                     << LOG_KV("blockNumber", block->blockHeaderConst()->number())
                     << LOG_KV("blockHeader.timestamps", block->blockHeaderConst()->timestamp())
