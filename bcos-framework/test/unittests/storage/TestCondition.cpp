@@ -11,10 +11,10 @@ namespace bcos
 namespace test
 {
 
-struct ConditionNative
+struct ConditionMock
 {
-    ConditionNative() = default;
-    ~ConditionNative() = default;
+    ConditionMock() = default;
+    ~ConditionMock() = default;
     void EQ(const std::string& value) { m_conditions.emplace_back(Comparator::EQ, value); }
     void NE(const std::string& value) { m_conditions.emplace_back(Comparator::NE, value); }
     // string compare, "2" > "12"
@@ -176,7 +176,7 @@ public:
 
 private:
     bcos::storage::Condition m_condition1;
-    ConditionNative m_condition2;
+    ConditionMock m_condition2;
 };
 
 static std::string fillZero(int _num)
