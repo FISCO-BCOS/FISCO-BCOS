@@ -122,12 +122,10 @@ struct MockConflictExecutor
         co_await m_storage.write(storage2::singleView(key1), storage2::singleView(entry));
 
         StateKey key2{makeStringID(m_tableNamePool, "t_test"), std::string_view("key2")};
-        auto it2 = co_await m_storage.read(storage2::singleView(key2));
-        co_await it2.next();
-        if (co_await it2.hasValue())
+        auto oldEntry = co_await storage2::readOne(m_storage, key2);
+        if (oldEntry)
         {
-            auto& oldEntry = co_await it2.value();
-            auto oldView = oldEntry.get();
+            auto oldView = oldEntry->get();
             auto oldNum = boost::lexical_cast<int>(oldView);
 
             auto newNum = oldNum + 1;
@@ -182,18 +180,14 @@ BOOST_AUTO_TEST_CASE(conflict)
         StateKey key1{makeStringID(tableNamePool, "t_test"), std::string_view("key1")};
         StateKey key2{makeStringID(tableNamePool, "t_test"), std::string_view("key2")};
 
-        auto it = co_await mutableStorage.read(storage2::singleView(key1));
-        co_await it.next();
-        BOOST_CHECK(co_await it.hasValue());
-        auto& entry1 = co_await it.value();
-        auto result1 = boost::lexical_cast<int>(entry1.get());
+        auto entry1 = co_await storage2::readOne(mutableStorage, key1);
+        BOOST_CHECK(entry1);
+        auto result1 = boost::lexical_cast<int>(entry1->get());
         BOOST_CHECK_EQUAL(result1, count - 1);
 
-        auto it2 = co_await mutableStorage.read(storage2::singleView(key2));
-        co_await it2.next();
-        BOOST_REQUIRE(co_await it2.hasValue());
-        auto& entry2 = co_await it2.value();
-        auto result2 = boost::lexical_cast<int>(entry2.get());
+        auto entry2 = co_await storage2::readOne(mutableStorage, key2);
+        BOOST_REQUIRE(entry2);
+        auto result2 = boost::lexical_cast<int>(entry2->get());
         BOOST_CHECK_EQUAL(result2, count - 1);
 
         // co_await scheduler.finish(blockHeader, *hashImpl);
@@ -201,7 +195,6 @@ BOOST_AUTO_TEST_CASE(conflict)
 
         co_return;
     }());
-    // Wait for tbb
 }
 
 BOOST_AUTO_TEST_SUITE_END()

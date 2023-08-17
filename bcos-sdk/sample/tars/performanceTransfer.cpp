@@ -3,17 +3,14 @@
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-task/Wait.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-codec/abi/ContractABICodec.h>
-#include <bcos-cpp-sdk/tarsRPC/CoRPCClient.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
-#include <bcos-task/TBBScheduler.h>
 #include <bcos-utilities/ratelimiter/TimeWindowRateLimiter.h>
 #include <oneapi/tbb/blocked_range.h>
-#include <tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
@@ -50,8 +47,7 @@ public:
 };
 
 std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
-    std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite,
-    std::shared_ptr<bcos::crypto::KeyPairInterface> keyPair, std::string contractAddress,
+    std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite, std::string contractAddress,
     int userCount)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
@@ -195,7 +191,7 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
     collector.report();
 
     // Check result
-    tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
+    tbb::parallel_for(tbb::blocked_range(0LU, (size_t)transactionCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
             auto receipt = handles[it]->get();
@@ -244,7 +240,7 @@ int main(int argc, char* argv[])
 
     bcos::sdk::Config config = {
         .connectionString = connectionString,
-        .sendQueueSize = transactionCount,
+        .sendQueueSize = std::max(userCount, transactionCount),
         .timeoutMs = 600000,
     };
     bcos::sdk::RPCClient rpcClient(config);
@@ -272,12 +268,11 @@ int main(int argc, char* argv[])
     auto const& contractAddress = receipt->contractAddress();
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    auto balances = query(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), userCount);
+    auto balances = query(rpcClient, cryptoSuite, std::string(contractAddress), userCount);
     issue(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), userCount, qps, balances);
     transfer(rpcClient, cryptoSuite, std::string(contractAddress), keyPair, userCount,
         transactionCount, qps, balances);
-    auto resultBalances =
-        query(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), userCount);
+    auto resultBalances = query(rpcClient, cryptoSuite, std::string(contractAddress), userCount);
 
     // Compare the result
     for (int i = 0; i < userCount; ++i)

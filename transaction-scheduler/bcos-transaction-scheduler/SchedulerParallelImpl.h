@@ -67,7 +67,6 @@ private:
         TransactionAndReceiptssRange m_transactionAndReceiptsRange;
 
         std::atomic_bool m_finished = false;
-        std::atomic_bool m_comparePrev = false;
         std::atomic_bool m_compareNext = false;
 
     public:
@@ -120,40 +119,32 @@ private:
             }
 
             // Detected RAW
-            if (m_chunkIndex < *m_lastChunkIndex)
+            bool expected = false;
+            if (m_chunkIndex < *m_lastChunkIndex && prev && prev->m_finished &&
+                prev->m_compareNext.compare_exchange_strong(expected, true))
             {
-                bool expected = false;
-                if (prev && prev->m_finished &&
-                    prev->m_compareNext.compare_exchange_strong(expected, true))
+                if (prev->m_storages->m_readWriteSetStorage.hasRAWIntersection(
+                        m_storages->m_readWriteSetStorage))
                 {
-                    m_comparePrev = true;
-                    if (prev->m_storages->m_readWriteSetStorage.hasRAWIntersection(
-                            m_storages->m_readWriteSetStorage))
-                    {
-                        PARALLEL_SCHEDULER_LOG(DEBUG)
-                            << "Detected left RAW intersection, abort: " << m_chunkIndex;
-                        decreaseNumber(*m_lastChunkIndex, m_chunkIndex);
-                        return;
-                    }
+                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                        << "Detected left RAW intersection, abort: " << m_chunkIndex;
+                    decreaseNumber(*m_lastChunkIndex, m_chunkIndex);
+                    return;
                 }
             }
 
             // m_lastChunkIndex may had been changed, check again
-            if (m_chunkIndex < *m_lastChunkIndex)
+            expected = false;
+            if (m_chunkIndex < *m_lastChunkIndex && next && next->m_finished &&
+                m_compareNext.compare_exchange_strong(expected, true))
             {
-                bool expected = false;
-                if (next && next->m_finished &&
-                    m_compareNext.compare_exchange_strong(expected, true))
+                if (m_storages->m_readWriteSetStorage.hasRAWIntersection(
+                        next->m_storages->m_readWriteSetStorage))
                 {
-                    next->m_comparePrev = true;
-                    if (m_storages->m_readWriteSetStorage.hasRAWIntersection(
-                            next->m_storages->m_readWriteSetStorage))
-                    {
-                        PARALLEL_SCHEDULER_LOG(DEBUG)
-                            << "Detected right RAW intersection, abort: " << m_chunkIndex + 1;
-                        decreaseNumber(*m_lastChunkIndex, m_chunkIndex + 1);
-                        return;
-                    }
+                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                        << "Detected right RAW intersection, abort: " << m_chunkIndex + 1;
+                    decreaseNumber(*m_lastChunkIndex, m_chunkIndex + 1);
+                    return;
                 }
             }
         }
@@ -188,10 +179,9 @@ public:
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
         auto storageView = multiLayerStorage().fork(true);
-        std::vector<protocol::TransactionReceipt::Ptr> receipts;
-        receipts.resize(RANGES::size(transactions));
+        std::vector<protocol::TransactionReceipt::Ptr> receipts(RANGES::size(transactions));
 
-        size_t offset = 0;
+        std::atomic_size_t offset = 0;
         auto chunkSize = m_chunkSize;
 
         size_t retryCount = 0;
@@ -205,7 +195,7 @@ public:
                 ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
 
             auto transactionAndReceiptsChunks = transactionAndReceipts |
-                                                RANGES::views::drop(offset) |
+                                                RANGES::views::drop(offset.load()) |
                                                 RANGES::views::chunk(chunkSize);
             using ChunkType =
                 ChunkExecuteStatus<RANGES::range_value_t<decltype(transactionAndReceiptsChunks)>>;
@@ -220,9 +210,11 @@ public:
 
             auto executeIt = RANGES::begin(executeChunks);
             typename MultiLayerStorage::MutableStorage lastStorage;
-            PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing...";
+            PARALLEL_SCHEDULER_LOG(DEBUG)
+                << "Start new chunk executing... " << offset << " | " << RANGES::size(transactions);
 
-            tbb::parallel_pipeline(m_maxToken == 0 ? executeChunks.size() : m_maxToken,
+            auto liveToken = m_maxToken == 0 ? executeChunks.size() : m_maxToken;
+            tbb::parallel_pipeline(1,
                 tbb::make_filter<void, std::optional<RANGES::iterator_t<decltype(executeChunks)>>>(
                     tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control)
@@ -230,7 +222,7 @@ public:
                         if (chunkIndex >= lastChunkIndex)
                         {
                             control.stop();
-                            return {executeIt++};
+                            return {};
                         }
 
                         if ((size_t)chunkIndex != RANGES::size(transactionAndReceiptsChunks) - 1)
@@ -282,7 +274,7 @@ public:
                             {
                                 return;
                             }
-                            offset += (*input)->count();
+                            offset += (size_t)(*input)->count();
 
                             auto index = (*input)->chunkIndex();
                             {
@@ -290,6 +282,7 @@ public:
                                     ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                                     ittapi::ITT_DOMAINS::instance().PIPELINE_MERGE_STORAGE);
 
+                                PARALLEL_SCHEDULER_LOG(DEBUG) << "Merging... " << index;
                                 task::syncWait(storage2::merge(
                                     executeChunks[index].localStorage().mutableStorage(),
                                     lastStorage));
@@ -300,10 +293,12 @@ public:
                     ittapi::ITT_DOMAINS::instance().FINAL_MERGE_STORAGE);
                 if (storageView.mutableStorage().empty())
                 {
+                    PARALLEL_SCHEDULER_LOG(DEBUG) << "Final swap lastStorage";
                     storageView.mutableStorage().swap(lastStorage);
                 }
                 else
                 {
+                    PARALLEL_SCHEDULER_LOG(DEBUG) << "Final merge lastStorage";
                     co_await storage2::merge(lastStorage, storageView.mutableStorage());
                 }
             }
