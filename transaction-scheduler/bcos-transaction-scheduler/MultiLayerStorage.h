@@ -85,14 +85,13 @@ public:
                 keyValues) -> task::Task<bool>
         {
             auto keyIndexes =
-                RANGES::views::enumerate(keyValues) | RANGES::views::filter([](auto& tuple) {
+                RANGES::views::enumerate(keyValues) | RANGES::views::filter([](auto&& tuple) {
                     return !std::get<1>(std::get<1>(tuple));
                 }) |
-                RANGES::views::transform([](auto& tuple) -> auto{ return std::get<0>(tuple); });
-            auto it = co_await storage.read(
-                keyIndexes | RANGES::views::transform([&](auto& index) -> auto& {
-                    return std::get<0>(keyValues[index]);
-                }));
+                RANGES::views::transform([](auto&& tuple) -> auto{ return std::get<0>(tuple); }) |
+                RANGES::to<boost::container::small_vector<size_t, 1>>();
+            auto it = co_await storage.read(RANGES::views::transform(
+                keyIndexes, [&](auto& index) -> auto& { return std::get<0>(keyValues[index]); }));
 
             bool finished = true;
             auto indexIt = RANGES::begin(keyIndexes);
@@ -171,9 +170,9 @@ public:
         task::Task<ReadIterator> read(RANGES::input_range auto const& keys)
         {
             ReadIterator iterator;
-            iterator.m_keyValues = keys | RANGES::views::transform([](auto& key) {
+            iterator.m_keyValues = RANGES::views::transform(keys, [](auto&& key) {
                 return std::tuple<KeyType, std::optional<ValueType>>(
-                    key, std::optional<ValueType>{});
+                    std::forward<decltype(key)>(key), std::optional<ValueType>{});
             }) | RANGES::to<decltype(iterator.m_keyValues)>();
 
             if (m_mutableStorage)
@@ -206,8 +205,9 @@ public:
             auto missingKeyIndexes =
                 RANGES::views::enumerate(iterator.m_keyValues) |
                 RANGES::views::filter(
-                    [](auto& tuple) { return !std::get<1>(std::get<1>(tuple)); }) |
-                RANGES::views::transform([](auto& tuple) -> auto{ return std::get<0>(tuple); });
+                    [](auto&& tuple) { return !std::get<1>(std::get<1>(tuple)); }) |
+                RANGES::views::transform([](auto&& tuple) -> auto{ return std::get<0>(tuple); }) |
+                RANGES::to<boost::container::small_vector<size_t, 1>>();
             co_await readStorage(m_backendStorage, iterator.m_keyValues);
             // Write data into cache
             if constexpr (withCacheStorage)

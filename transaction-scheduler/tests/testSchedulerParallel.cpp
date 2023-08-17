@@ -173,8 +173,9 @@ BOOST_AUTO_TEST_CASE(conflict)
             return transaction;
         }) | RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-        auto receipts = co_await scheduler.execute(blockHeader,
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
+        auto transactionRefs =
+            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; });
+        auto receipts = co_await scheduler.execute(blockHeader, transactionRefs);
 
         auto& mutableStorage = multiLayerStorage.mutableStorage();
         StateKey key1{makeStringID(tableNamePool, "t_test"), std::string_view("key1")};
