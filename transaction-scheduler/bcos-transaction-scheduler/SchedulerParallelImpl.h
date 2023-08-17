@@ -76,8 +76,8 @@ private:
         {
             m_chunkIndex = chunkIndex;
             m_lastChunkIndex = std::addressof(lastChunkIndex);
-            m_transactionAndReceiptsRange = std::move(transactionAndReceiptsRange);
             m_storages.emplace(storage);
+            m_transactionAndReceiptsRange = std::move(transactionAndReceiptsRange);
         }
 
         int64_t chunkIndex() { return m_chunkIndex; }
