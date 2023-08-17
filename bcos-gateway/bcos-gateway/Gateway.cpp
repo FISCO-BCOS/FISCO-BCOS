@@ -171,10 +171,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
         {
             return;
         }
-        GATEWAY_LOG(WARNING) << LOG_DESC("could not find a gateway to send this message")
-                             << LOG_KV("groupID", _groupID)
-                             << LOG_KV("srcNodeID", _srcNodeID->hex())
-                             << LOG_KV("dstNodeID", _dstNodeID->hex());
+        GATEWAY_LOG(DEBUG) << LOG_DESC("could not find a gateway to send this message")
+                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("dstNodeID", _dstNodeID->hex());
 
         auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
             "could not find a gateway to "
