@@ -24,8 +24,7 @@ private:
         auto it = m_readWriteSet.lower_bound(key);
         if (it == m_readWriteSet.end() || it->first != key)
         {
-            it =
-                m_readWriteSet.emplace_hint(it, key, ReadWriteFlag{.read = !write, .write = write});
+            m_readWriteSet.emplace_hint(it, key, ReadWriteFlag{.read = !write, .write = write});
         }
         else
         {
@@ -39,11 +38,24 @@ public:
     using Value = typename Storage::Value;
     ReadWriteSetStorage(Storage& storage) : m_storage(storage) {}
 
+    auto const& readWriteSet() const { return m_readWriteSet; }
+    void mergeWriteSet(auto& writeSet)
+    {
+        auto const& writeMap = writeSet.readWriteSet();
+        for (auto const& [key, flag] : writeMap)
+        {
+            if (flag.write)
+            {
+                putSet(true, key);
+            }
+        }
+    }
+
     // RAW: read after write
-    bool hasRAWIntersection(const ReadWriteSetStorage& rhs) const
+    bool hasRAWIntersection(const auto& readSet) const
     {
         auto const& lhsSet = m_readWriteSet;
-        auto const& rhsSet = rhs.m_readWriteSet;
+        auto const& rhsSet = readSet.readWriteSet();
 
         if (RANGES::empty(lhsSet) || RANGES::empty(rhsSet))
         {
@@ -57,10 +69,10 @@ public:
         }
 
         auto lhsRange = lhsSet |
-                        RANGES::views::filter([](auto& pair) { return pair.second.write; }) |
+                        RANGES::views::filter([](auto const& pair) { return pair.second.write; }) |
                         RANGES::views::keys;
         auto rhsRange = rhsSet |
-                        RANGES::views::filter([](auto& pair) { return pair.second.read; }) |
+                        RANGES::views::filter([](auto const& pair) { return pair.second.read; }) |
                         RANGES::views::keys;
 
         auto lBegin = RANGES::begin(lhsRange);
