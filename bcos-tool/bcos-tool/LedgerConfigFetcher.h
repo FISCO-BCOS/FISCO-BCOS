@@ -40,6 +40,7 @@ public:
     virtual ~LedgerConfigFetcher() = default;
 
     virtual void fetchAll();
+    virtual void fetchBlockNumber();
     virtual void fetchBlockNumberAndHash();
     virtual void fetchConsensusNodeList();
     virtual void fetchObserverNodeList();
