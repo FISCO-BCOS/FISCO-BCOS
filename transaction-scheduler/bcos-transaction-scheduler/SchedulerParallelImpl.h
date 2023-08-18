@@ -12,6 +12,7 @@
 #include <boost/exception/detail/exception_ptr.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
+#include <cstddef>
 #include <iterator>
 #include <range/v3/view/transform.hpp>
 #include <stdexcept>
@@ -132,22 +133,24 @@ public:
         auto storageView = multiLayerStorage().fork(true);
         std::vector<protocol::TransactionReceipt::Ptr> receipts(RANGES::size(transactions));
 
-        std::atomic_size_t offset = 0;
-        auto chunkSize = m_chunkSize;
-
+        size_t offset = 0;
         size_t retryCount = 0;
         while (offset < RANGES::size(transactions))
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
 
-            auto transactionAndReceiptsChunks =
-                RANGES::views::iota(offset.load(), (size_t)RANGES::size(receipts)) |
+            auto currentTransactionAndReceipts =
+                RANGES::views::iota(offset, (size_t)RANGES::size(receipts)) |
                 RANGES::views::transform([&](auto index) {
                     return std::make_tuple(index, std::addressof(transactions[index]),
                         std::addressof(receipts[index]));
-                }) |
-                RANGES::views::chunk(chunkSize);
+                });
+            auto chunkSize = std::max(m_chunkSize,
+                ((RANGES::size(receipts)) - offset) /
+                    (static_cast<unsigned long>(std::thread::hardware_concurrency()) * 2));
+            auto transactionAndReceiptsChunks =
+                currentTransactionAndReceipts | RANGES::views::chunk(chunkSize);
             using ChunkType =
                 ChunkExecuteStatus<RANGES::range_value_t<decltype(transactionAndReceiptsChunks)>>;
             std::vector<ChunkType> executeChunks(
