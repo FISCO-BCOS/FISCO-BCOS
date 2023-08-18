@@ -319,6 +319,11 @@ std::tuple<uint32_t, uint32_t> WorkingSealerManagerImpl::calNodeRotatingInfo()
 std::unique_ptr<std::vector<std::string>> WorkingSealerManagerImpl::selectNodesFromList(
     std::vector<std::string>& _nodeList, uint32_t _selectNum)
 {
+    auto selectedNodeList = std::make_unique<std::vector<std::string>>();
+    if (_nodeList.empty()) [[unlikely]]
+    {
+        return selectedNodeList;
+    }
     std::sort(_nodeList.begin(), _nodeList.end());
 
     auto proofHashValue = u256(m_vrfInfo->getHashFromProof());
@@ -332,7 +337,6 @@ std::unique_ptr<std::vector<std::string>> WorkingSealerManagerImpl::selectNodesF
         proofHashValue = u256(GlobalHashImpl::g_hashImpl->hash(std::to_string(selectedIdx)));
     }
     // get the selected node list from the shuffled _nodeList
-    auto selectedNodeList = std::make_unique<std::vector<std::string>>();
     selectedNodeList->reserve(_selectNum);
     for (uint32_t i = 0; i < _selectNum; ++i)
     {

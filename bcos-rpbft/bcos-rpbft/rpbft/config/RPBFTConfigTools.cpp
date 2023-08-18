@@ -157,7 +157,7 @@ void RPBFTConfigTools::updateEpochBlockNum(const bcos::ledger::LedgerConfig::Ptr
 
 bool RPBFTConfigTools::updateEpochSealerNum(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig)
 {
-    if (std::get<0>(_ledgerConfig->epochBlockNum()) == m_epochSealerNum)
+    if (std::get<0>(_ledgerConfig->epochSealerNum()) == m_epochSealerNum)
     {
         return false;
     }

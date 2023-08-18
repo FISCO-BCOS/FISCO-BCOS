@@ -28,6 +28,7 @@
 #include "bcos-pbft/pbft/interfaces/PBFTMessageFactory.h"
 #include "bcos-pbft/pbft/interfaces/PBFTStorage.h"
 #include "bcos-pbft/pbft/utilities/Common.h"
+#include "bcos-rpbft/bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
@@ -405,6 +406,12 @@ public:
 
     bcos::protocol::BlockFactory::Ptr blockFactory() const noexcept { return m_blockFactory; }
 
+    void setRPBFTConfigTools(RPBFTConfigTools::Ptr _config)
+    {
+        m_rpbftConfigTools = std::move(_config);
+    }
+    RPBFTConfigTools::Ptr rpbftConfigTools() const noexcept { return m_rpbftConfigTools; }
+
 protected:
     void updateQuorum() override;
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
@@ -485,5 +492,6 @@ protected:
     std::function<void()> m_txsStatusSyncHandler;
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    [[no_unique_address]] RPBFTConfigTools::Ptr m_rpbftConfigTools = nullptr;
 };
 }  // namespace bcos::consensus
