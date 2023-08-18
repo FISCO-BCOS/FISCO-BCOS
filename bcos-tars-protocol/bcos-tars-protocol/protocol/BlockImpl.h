@@ -69,6 +69,7 @@ public:
     // get transaction metaData
     bcos::protocol::TransactionMetaData::ConstPtr transactionMetaData(
         uint64_t _index) const override;
+    TransactionMetaDataImpl transactionMetaDataImpl(uint64_t _index) const;
     void setBlockType(bcos::protocol::BlockType _blockType) override;
 
     // set blockHeader

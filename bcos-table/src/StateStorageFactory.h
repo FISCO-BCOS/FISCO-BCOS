@@ -69,7 +69,7 @@ public:
         bool ignoreNotExist = false,
         std::shared_ptr<std::set<std::string, std::less<>>> const& keyPageIgnoreTables = nullptr)
     {
-        STORAGE_LOG(TRACE) << LOG_KV("compatibilityVersion, ", compatibilityVersion)
+        STORAGE_LOG(TRACE) << LOG_KV("compatibilityVersion", compatibilityVersion)
                            << LOG_KV("protocol::BlockVersion::V3_1_VERSION",
                                   (uint32_t)protocol::BlockVersion::V3_1_VERSION)
                            << LOG_KV("keyPageSize", m_keyPageSize);

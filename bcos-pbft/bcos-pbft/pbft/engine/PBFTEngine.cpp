@@ -22,6 +22,8 @@
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
 #include "bcos-framework/protocol/CommonError.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -403,19 +405,29 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                    << LOG_KV("hash", pbftMessage->hash().abridged())
                    << LOG_KV("sysProposal", pbftProposal->systemProposal());
 
+    m_worker->enqueue([self = this, pbftMessage]() {
+        // broadcast the pre-prepare packet
+        auto encodeStart = utcTime();
+        auto encodedData = self->m_config->codec()->encode(pbftMessage);
+        auto encodeEnd = utcTime();
+        // only broadcast pbft message to the consensus nodes
+        self->m_config->frontService()->asyncSendBroadcastMessage(
+            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+        PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
+                       << LOG_KV("packetSize", encodedData->size())
+                       << LOG_KV("index", pbftMessage->index())
+                       << LOG_KV("encode(ms)", encodeEnd - encodeStart)
+                       << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
+    });
+
     // handle the pre-prepare packet
     RecursiveGuard l(m_mutex);
     auto ret = handlePrePrepareMsg(pbftMessage, false, false, false);
     // only broadcast the prePrepareMsg when local handlePrePrepareMsg success
     if (ret) [[likely]]
     {
-        // broadcast the pre-prepare packet
-        auto encodedData = m_config->codec()->encode(pbftMessage);
-        PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
-                       << LOG_KV("packetSize", encodedData->size());
-        // only broadcast pbft message to the consensus nodes
-        m_config->frontService()->asyncSendBroadcastMessage(
-            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+        PBFT_LOG(INFO) << LOG_DESC("handlePrePrepareMsg success")
+                       << LOG_KV("index", pbftMessage->index());
     }
     else
     {
@@ -677,6 +689,7 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
         return;
     }
     }
+    // m_signalled.notify_all();
 }
 
 CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) const

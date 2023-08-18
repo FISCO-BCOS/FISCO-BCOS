@@ -8,6 +8,7 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/blocked_range.h>
@@ -91,10 +92,10 @@ void BlockExecutive::prepare()
     m_hasPrepared = true;
 
     SCHEDULER_LOG(INFO) << METRIC << LOG_BADGE("BlockTrace") << BLOCK_NUMBER(number())
-                         << "preExeBlock success"
-                         << LOG_KV("blockHeader.timestamp", blockHeader()->timestamp())
-                         << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
-                         << LOG_KV("timeCost", (utcTime() - startT));
+                        << "preExeBlock success"
+                        << LOG_KV("blockHeader.timestamp", blockHeader()->timestamp())
+                        << LOG_KV("metaTxCount", m_block->transactionsMetaDataSize())
+                        << LOG_KV("timeCost", (utcTime() - startT));
 }
 
 bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
@@ -172,24 +173,25 @@ void BlockExecutive::buildExecutivesFromMetaData()
     std::vector<std::tuple<std::string, protocol::ExecutionMessage::UniquePtr, bool>> results(
         m_block->transactionsMetaDataSize());
 
+    auto blockImpl = std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(m_block);
     if (m_blockTxs)
     {
         tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
             [&](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    auto metaData = m_block->transactionMetaData(i);
-                    if (metaData)
+                    auto metaData = blockImpl->transactionMetaDataImpl(i);
+                    // if (metaData)
                     {
-                        m_executiveResults[i].transactionHash = metaData->hash();
-                        m_executiveResults[i].source = metaData->source();
+                        m_executiveResults[i].transactionHash = metaData.hash();
+                        m_executiveResults[i].source = metaData.source();
                     }
                     auto contextID = i + m_startContextID;
 
                     auto& [toAddress, message, enableDAG] = results[i];
                     message = buildMessage(contextID, (*m_blockTxs)[i]);
                     toAddress = {message->to().data(), message->to().size()};
-                    enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+                    enableDAG = metaData.attribute() & bcos::protocol::Transaction::Attribute::DAG;
                 }
             });
     }
@@ -199,11 +201,11 @@ void BlockExecutive::buildExecutivesFromMetaData()
             [&](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    auto metaData = m_block->transactionMetaData(i);
-                    if (metaData)
+                    auto metaData = blockImpl->transactionMetaDataImpl(i);
+                    // if (metaData)
                     {
-                        m_executiveResults[i].transactionHash = metaData->hash();
-                        m_executiveResults[i].source = metaData->source();
+                        m_executiveResults[i].transactionHash = metaData.hash();
+                        m_executiveResults[i].source = metaData.source();
                     }
 
                     auto contextID = i + m_startContextID;
@@ -213,41 +215,41 @@ void BlockExecutive::buildExecutivesFromMetaData()
                     message->setContextID(contextID);
                     message->setType(protocol::ExecutionMessage::TXHASH);
                     // Note: set here for fetching txs when send_back
-                    message->setTransactionHash(metaData->hash());
+                    message->setTransactionHash(metaData.hash());
 
-                    if (metaData->attribute() &
+                    if (metaData.attribute() &
                         bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
                     {
                         // LIQUID
-                        if (metaData->attribute() &
+                        if (metaData.attribute() &
                             bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
                         {
                             message->setCreate(true);
                         }
-                        message->setTo(std::string(metaData->to()));
+                        message->setTo(std::string(metaData.to()));
                     }
                     else
                     {
                         // SOLIDITY
-                        if (metaData->to().empty())
+                        if (metaData.to().empty())
                         {
                             message->setCreate(true);
                         }
                         else
                         {
-                            message->setTo(preprocessAddress(metaData->to()));
+                            message->setTo(preprocessAddress(metaData.to()));
                         }
                     }
 
                     message->setDepth(0);
                     message->setGasAvailable(m_gasLimit);
-                    auto toAddress = metaData->to();
+                    auto toAddress = metaData.to();
                     if (precompiled::c_systemTxsAddress.contains(toAddress))
                     {
                         message->setGasAvailable(TRANSACTION_GAS);
                     }
                     message->setStaticCall(false);
-                    enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
+                    enableDAG = metaData.attribute() & bcos::protocol::Transaction::Attribute::DAG;
                     to = {message->to().data(), message->to().size()};
                 }
             });

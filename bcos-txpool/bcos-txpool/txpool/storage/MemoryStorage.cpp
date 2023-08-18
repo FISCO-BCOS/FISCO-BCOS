@@ -21,6 +21,7 @@
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-utilities/Common.h"
 #include <oneapi/tbb/blocked_range.h>
+#include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -583,10 +584,13 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
         return tx != nullptr;
     }) | RANGES::views::values;
 
-    for (auto& [tx, txResult] : txs2Notify)
-    {
-        notifyTxResult(*tx, std::move(txResult));
-    }
+    tbb::parallel_for_each(txs2Notify.begin(), txs2Notify.end(), [&](auto& _result) {
+        notifyTxResult(*_result.first, std::move(_result.second));
+    });
+    // for (auto& [tx, txResult] : txs2Notify)
+    // {
+    //     notifyTxResult(*tx, std::move(txResult));
+    // }
 
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchRemove txs success")
                      << LOG_KV("expectedSize", txsResult.size()) << LOG_KV("succCount", succCount)
