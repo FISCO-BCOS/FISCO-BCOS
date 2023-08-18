@@ -42,8 +42,7 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
   : ConsensusEngine("pbft", 0),
     m_config(_config),
     m_worker(std::make_shared<ThreadPool>("pbftWorker", 1)),
-    m_msgQueue(std::make_shared<PBFTMsgQueue>()),
-    m_rpbftConfigTools(std::make_shared<RPBFTConfigTools>())
+    m_msgQueue(std::make_shared<PBFTMsgQueue>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
@@ -794,14 +793,15 @@ bool PBFTEngine::checkProposalSignature(
 bool PBFTEngine::checkRotateTransactionValid(
     PBFTMessageInterface::Ptr const& _proposal, ConsensusNodeInterface::Ptr const& _leaderInfo)
 {
-    if (m_config->consensusType() == ConsensusType::PBFT_TYPE) [[likely]]
+    if (m_config->consensusType() == ConsensusType::PBFT_TYPE &&
+        m_config->rpbftConfigTools() == nullptr) [[likely]]
     {
         return true;
     }
 
     // Note: if the block contains rotatingTx when m_shouldRotateSealers is false
     //       the rotatingTx will be reverted by the ordinary node when executing
-    if (!m_rpbftConfigTools->shouldRotateSealers()) [[unlikely]]
+    if (!shouldRotateSealers()) [[unlikely]]
     {
         return true;
     }
@@ -1446,7 +1446,7 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     // resetConfig after submit the block to ledger
     m_config->resetConfig(_ledgerConfig, _syncedBlock);
     // try to switch rpbft
-    resetRPBFTConfig(_ledgerConfig);
+    switchToRPBFT(_ledgerConfig);
     m_cacheProcessor->checkAndCommitStableCheckPoint();
     m_cacheProcessor->tryToApplyCommitQueue();
     // tried to commit the stable checkpoint
@@ -1729,15 +1729,13 @@ void PBFTEngine::fetchAndUpdateLedgerConfig()
 }
 
 
-void PBFTEngine::resetRPBFTConfig(const LedgerConfig::Ptr& _ledgerConfig)
+void PBFTEngine::switchToRPBFT(const LedgerConfig::Ptr& _ledgerConfig)
 {
+    // switch to rpbft
     if (_ledgerConfig->features().get(ledger::Features::Flag::feature_rpbft) &&
-        this->m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE) [[unlikely]]
+        this->m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE &&
+        this->m_config->rpbftConfigTools() == nullptr) [[unlikely]]
     {
-        this->m_config->setConsensusType(ledger::ConsensusType::RPBFT_TYPE);
-    }
-    if (this->m_config->consensusType() == ledger::ConsensusType::RPBFT_TYPE) [[unlikely]]
-    {
-        this->m_rpbftConfigTools->resetConfig(_ledgerConfig);
+        this->m_config->setRPBFTConfigTools(std::make_shared<RPBFTConfigTools>());
     }
 }

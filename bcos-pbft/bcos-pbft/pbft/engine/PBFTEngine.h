@@ -105,11 +105,12 @@ public:
     }
     bool shouldRotateSealers() const
     {
-        if (m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE)
+        if (m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE &&
+            m_config->rpbftConfigTools() == nullptr)
         {
             return false;
         }
-        return m_rpbftConfigTools->shouldRotateSealers();
+        return m_config->rpbftConfigTools()->shouldRotateSealers();
     }
 
 protected:
@@ -221,7 +222,7 @@ private:
         boost::unique_lock<boost::mutex> lock(x_signalled);
         m_signalled.wait_for(lock, boost::chrono::milliseconds(5));
     }
-    void resetRPBFTConfig(const ledger::LedgerConfig::Ptr& _ledgerConfig);
+    void switchToRPBFT(const ledger::LedgerConfig::Ptr& _ledgerConfig);
 
 protected:
     // PBFT configuration class
@@ -251,7 +252,6 @@ protected:
 
     // the timer used to resend checkPointProposal
     std::shared_ptr<bcos::Timer> m_timer;
-    RPBFTConfigTools::Ptr m_rpbftConfigTools;
 };
 }  // namespace consensus
 }  // namespace bcos
