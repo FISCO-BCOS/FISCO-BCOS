@@ -32,8 +32,8 @@ namespace bcos
 namespace executor
 {
 
-using evmoneCodeAnalysis = evmone::advanced::AdvancedCodeAnalysis;
-// using evmoneCodeAnalysis = evmone::baseline::CodeAnalysis;
+// using evmoneCodeAnalysis = evmone::advanced::AdvancedCodeAnalysis;
+using evmoneCodeAnalysis = evmone::baseline::CodeAnalysis;
 class HostContext;
 class Result : public evmc_result
 {
@@ -42,8 +42,10 @@ public:
 
     ~Result()
     {
-        if (release)
+        if (release != nullptr)
+        {
             release(this);
+        }
     }
 
     Result(Result&& _other) noexcept : evmc_result(_other) { _other.release = nullptr; }

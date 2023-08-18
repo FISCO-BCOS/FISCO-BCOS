@@ -60,10 +60,11 @@ VMInstance VMFactory::create(VMKind kind, evmc_revision revision, const crypto::
         std::shared_ptr<evmoneCodeAnalysis> analysis{get(codeHash, revision)};
         if (!analysis)
         {
-            analysis =
-                std::make_shared<evmoneCodeAnalysis>(evmone::advanced::analyze(revision, code));
-            // analysis = std::make_shared<evmoneCodeAnalysis>(
-            //     evmone::baseline::analyze(revision, code));
+            // analysis =
+            //     std::make_shared<evmoneCodeAnalysis>(evmone::advanced::analyze(revision, code));
+
+            analysis = std::make_shared<evmoneCodeAnalysis>(
+                evmone::baseline::analyze(revision, code));  // baseline
             put(codeHash, analysis, revision);
         }
         return VMInstance{analysis, revision, code};
@@ -76,12 +77,18 @@ std::shared_ptr<evmoneCodeAnalysis> VMFactory::get(
 {
     if (revision == m_revision)
     {
+        if (key == m_last.first && m_last.second)
+        {
+            return m_last.second;
+        }
         m_cacheMutex.lock();
         auto analysis = m_cache.get(key);
         m_cacheMutex.unlock();
         if (analysis)
         {
-            return analysis.value();
+            m_last.first = key;
+            m_last.second = analysis.value();
+            return m_last.second;
         }
     }
     return nullptr;
