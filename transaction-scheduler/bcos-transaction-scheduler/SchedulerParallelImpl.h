@@ -146,9 +146,11 @@ public:
                     return std::make_tuple(index, std::addressof(transactions[index]),
                         std::addressof(receipts[index]));
                 });
-            auto chunkSize = std::max(m_chunkSize,
+            auto maxChunkSize =
                 ((RANGES::size(receipts)) - offset) /
-                    (static_cast<unsigned long>(std::thread::hardware_concurrency()) * 2));
+                (static_cast<unsigned long>(std::thread::hardware_concurrency()) * 2);
+            // auto chunkSize = std::max(m_chunkSize, maxChunkSize);
+            auto chunkSize = m_chunkSize;
             auto transactionAndReceiptsChunks =
                 currentTransactionAndReceipts | RANGES::views::chunk(chunkSize);
             using ChunkType =
@@ -202,20 +204,25 @@ public:
                             }
                             auto& chunk = executeChunks[index];
 
-                            if (index > 0 &&
-                                writeSet.hasRAWIntersection(chunk.readWriteSetStorage()))
+                            if (index > 0)
                             {
-                                PARALLEL_SCHEDULER_LOG(DEBUG)
-                                    << "Detected RAW Intersection:" << index;
-                                lastChunkIndex = index;
-                                return;
+                                ittapi::Report report(
+                                    ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                                    ittapi::ITT_DOMAINS::instance().DETECT_RAW);
+                                if (writeSet.hasRAWIntersection(chunk.readWriteSetStorage()))
+                                {
+                                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                                        << "Detected RAW Intersection:" << index;
+                                    lastChunkIndex = index;
+                                    return;
+                                }
                             }
 
                             offset += (size_t)chunk.count();
                             {
                                 ittapi::Report report(
                                     ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                                    ittapi::ITT_DOMAINS::instance().PIPELINE_MERGE_STORAGE);
+                                    ittapi::ITT_DOMAINS::instance().MERGE_STORAGE);
 
                                 PARALLEL_SCHEDULER_LOG(DEBUG) << "Merging... " << index;
                                 writeSet.mergeWriteSet(chunk.readWriteSetStorage());

@@ -1,6 +1,7 @@
 #pragma once
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Trait.h>
+#include <compare>
 #include <type_traits>
 #include <variant>
 
@@ -17,12 +18,12 @@ private:
         bool read = false;
         bool write = false;
     };
-    std::map<typename Storage::Key, ReadWriteFlag, std::less<>> m_readWriteSet;
+    std::unordered_map<typename Storage::Key, ReadWriteFlag> m_readWriteSet;
 
     void putSet(bool write, auto const& key)
     {
-        auto it = m_readWriteSet.lower_bound(key);
-        if (it == m_readWriteSet.end() || it->first != key)
+        auto it = m_readWriteSet.find(key);
+        if (it == m_readWriteSet.end())
         {
             m_readWriteSet.emplace_hint(it, key, ReadWriteFlag{.read = !write, .write = write});
         }
@@ -39,10 +40,10 @@ public:
     ReadWriteSetStorage(Storage& storage) : m_storage(storage) {}
 
     auto const& readWriteSet() const { return m_readWriteSet; }
-    void mergeWriteSet(auto& writeSet)
+    void mergeWriteSet(auto& inputWriteSet)
     {
-        auto const& writeMap = writeSet.readWriteSet();
-        for (auto const& [key, flag] : writeMap)
+        auto const& writeMap = inputWriteSet.readWriteSet();
+        for (auto& [key, flag] : writeMap)
         {
             if (flag.write)
             {
@@ -52,48 +53,21 @@ public:
     }
 
     // RAW: read after write
-    bool hasRAWIntersection(const auto& readSet) const
+    bool hasRAWIntersection(const auto& rhs) const
     {
         auto const& lhsSet = m_readWriteSet;
-        auto const& rhsSet = readSet.readWriteSet();
+        auto const& rhsSet = rhs.readWriteSet();
 
         if (RANGES::empty(lhsSet) || RANGES::empty(rhsSet))
         {
             return false;
         }
 
-        if ((RANGES::back(lhsSet).first < RANGES::front(rhsSet).first) ||
-            (RANGES::front(lhsSet).first > RANGES::back(rhsSet).first))
+        for (auto const& [key, flag] : rhsSet)
         {
-            return false;
-        }
-
-        auto lhsRange = lhsSet |
-                        RANGES::views::filter([](auto const& pair) { return pair.second.write; }) |
-                        RANGES::views::keys;
-        auto rhsRange = rhsSet |
-                        RANGES::views::filter([](auto const& pair) { return pair.second.read; }) |
-                        RANGES::views::keys;
-
-        auto lBegin = RANGES::begin(lhsRange);
-        auto lEnd = RANGES::end(lhsRange);
-        auto rBegin = RANGES::begin(rhsRange);
-        auto rEnd = RANGES::end(rhsRange);
-
-        // O(lhsSet.size() + rhsSet.size())
-        while (lBegin != lEnd && rBegin != rEnd)
-        {
-            if (*lBegin < *rBegin)
+            if (flag.read && lhsSet.contains(key))
             {
-                RANGES::advance(lBegin, 1);
-            }
-            else
-            {
-                if (!(*rBegin < *lBegin))
-                {
-                    return true;
-                }
-                RANGES::advance(rBegin, 1);
+                return true;
             }
         }
 
