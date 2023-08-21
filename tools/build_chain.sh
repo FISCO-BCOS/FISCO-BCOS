@@ -435,10 +435,10 @@ gen_cert_secp256k1() {
     if [ -n "${no_agency}" ];then
         echo "not use $(basename $agpath) to sign $(basename $certpath) ${type}" >>"${logfile}"
         openssl x509 -req -days "${days}" -sha256 -in "$certpath/${type}.csr" -CAkey "$agpath/../ca.key" -CA "$agpath/../ca.crt" \
-            -force_pubkey "$certpath/${type}.pubkey" -out "$certpath/${type}.crt" -CAcreateserial -extensions v3_req -extfile "$agpath/cert.cnf" 2> /dev/null
+            -pubkey -out "$certpath/${type}.crt" -CAcreateserial -extensions v3_req -extfile "$agpath/cert.cnf" 2> /dev/null
     else
         openssl x509 -req -days "${days}" -sha256 -in "$certpath/${type}.csr" -CAkey "$agpath/agency.key" -CA "$agpath/agency.crt" \
-            -force_pubkey "$certpath/${type}.pubkey" -out "$certpath/${type}.crt" -CAcreateserial -extensions v3_req -extfile "$agpath/cert.cnf" 2> /dev/null
+            -pubkey -out "$certpath/${type}.crt" -CAcreateserial -extensions v3_req -extfile "$agpath/cert.cnf" 2> /dev/null
         # openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
         cat "${agpath}/agency.crt" >> "$certpath/${type}.crt"
     fi
