@@ -251,7 +251,7 @@ check_env() {
         macOS="macOS"
     fi
 
-    [ -z "$(openssl version | grep LibreSSL)"  ] || [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep 3.| grep -v LibreSSL)" ] || {
+    [ -z "$(openssl version | grep LibreSSL)" ] && ( [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep 3.)" ] ) || {
         echo "Openssl higher than 1.0.2 is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
        #echo "download openssl from https://www.openssl.org."
       exit 1
