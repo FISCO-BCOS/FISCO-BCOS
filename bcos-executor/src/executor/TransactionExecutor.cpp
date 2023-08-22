@@ -2208,7 +2208,7 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
         callback)
 {
     ExecuteOutputs::Ptr allOutputs = std::make_shared<ExecuteOutputs>();
-    EXECUTOR_NAME_LOG(DEBUG) << "asyncExecuteExecutiveFlow start";
+    EXECUTOR_NAME_LOG(DEBUG) << "asyncExecuteExecutiveFlow start" << LOG_KV("blockNumber", m_blockContext->number());
     executiveFlow->asyncRun(
         // onTxReturn
         [this, allOutputs, callback](CallParameters::UniquePtr output) {

@@ -11,7 +11,7 @@ CallParameters::UniquePtr PromiseTransactionExecutive::start(CallParameters::Uni
                 &PromiseTransactionExecutive::externalAcquireKeyLocks, this, std::placeholders::_1),
             m_recoder);
 
-        m_storageWrapper = m_syncStorageWrapper;  // must set to base class
+        m_storageWrapper = m_syncStorageWrapper.get();  // must set to base class
 
         if (!input->keyLocks.empty())
         {

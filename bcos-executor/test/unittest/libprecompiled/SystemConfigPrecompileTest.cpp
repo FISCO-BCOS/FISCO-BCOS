@@ -21,8 +21,10 @@ public:
     using TransactionExecutive::TransactionExecutive;
     void setStorageWrapper()
     {
-        m_storageWrapper = std::make_shared<StorageWrapper>(m_blockContext.storage(), m_recoder);
+        storageWrapper = std::make_shared<StorageWrapper>(m_blockContext.storage(), m_recoder);
+        m_storageWrapper = storageWrapper.get();
     }
+    std::shared_ptr<StorageWrapper> storageWrapper;
 };
 
 struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
