@@ -42,20 +42,6 @@ public:
     void mergeWriteSet(auto& inputWriteSet)
     {
         auto& writeMap = inputWriteSet.readWriteSet();
-        // while (!writeMap.empty())
-        // {
-        //     auto fromNode = writeMap.extract(writeMap.begin());
-        //     if (fromNode.mapped().write)
-        //     {
-        //         auto result = m_readWriteSet.insert(std::move(fromNode));
-
-        //         if (!result.inserted)
-        //         {
-        //             result.position->second.write = true;
-        //         }
-        //     }
-        // }
-
         for (auto& [key, flag] : writeMap)
         {
             if (flag.write)
