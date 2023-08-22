@@ -77,6 +77,7 @@ struct ITT_DOMAINS
     __itt_string_handle* SINGLE_PASS = __itt_string_handle_create("singlePass");
     __itt_string_handle* DETECT_RAW = __itt_string_handle_create("detectRAW");
     __itt_string_handle* CHUNK_EXECUTE = __itt_string_handle_create("chunkExecute");
+    __itt_string_handle* MERGE_RWSET = __itt_string_handle_create("mergeRWSet");
     __itt_string_handle* MERGE_STORAGE = __itt_string_handle_create("mergeStorage");
     __itt_string_handle* FINAL_MERGE_STORAGE = __itt_string_handle_create("finalMergeStorage");
 

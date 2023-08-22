@@ -1,6 +1,7 @@
 #pragma once
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Trait.h>
+#include <oneapi/tbb.h>
 #include <compare>
 #include <type_traits>
 #include <variant>
@@ -22,12 +23,9 @@ private:
 
     void putSet(bool write, auto const& key)
     {
-        auto it = m_readWriteSet.find(key);
-        if (it == m_readWriteSet.end())
-        {
-            m_readWriteSet.emplace_hint(it, key, ReadWriteFlag{.read = !write, .write = write});
-        }
-        else
+        auto [it, inserted] =
+            m_readWriteSet.try_emplace(key, ReadWriteFlag{.read = !write, .write = write});
+        if (!inserted)
         {
             it->second.write |= write;
             it->second.read |= (!write);
@@ -39,10 +37,25 @@ public:
     using Value = typename Storage::Value;
     ReadWriteSetStorage(Storage& storage) : m_storage(storage) {}
 
+    auto& readWriteSet() { return m_readWriteSet; }
     auto const& readWriteSet() const { return m_readWriteSet; }
     void mergeWriteSet(auto& inputWriteSet)
     {
-        auto const& writeMap = inputWriteSet.readWriteSet();
+        auto& writeMap = inputWriteSet.readWriteSet();
+        // while (!writeMap.empty())
+        // {
+        //     auto fromNode = writeMap.extract(writeMap.begin());
+        //     if (fromNode.mapped().write)
+        //     {
+        //         auto result = m_readWriteSet.insert(std::move(fromNode));
+
+        //         if (!result.inserted)
+        //         {
+        //             result.position->second.write = true;
+        //         }
+        //     }
+        // }
+
         for (auto& [key, flag] : writeMap)
         {
             if (flag.write)

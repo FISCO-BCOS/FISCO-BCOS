@@ -368,7 +368,6 @@ public:
     }
 
     task::AwaitableValue<SeekIterator> seek(auto const& key)
-        requires(withOrdered)
     {
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
@@ -381,7 +380,14 @@ public:
         }
         else
         {
-            it = index.lower_bound(key);
+            if constexpr (withOrdered)
+            {
+                it = index.lower_bound(key);
+            }
+            else
+            {
+                it = index.find(key);
+            }
         }
 
         task::AwaitableValue<SeekIterator> output({});
@@ -498,27 +504,26 @@ public:
         return {};
     }
 
-    task::Task<void> merge(MemoryStorage& from)
+    task::AwaitableValue<void> merge(MemoryStorage& from)
     {
-        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
+        for (auto&& [bucket, fromBucket] : RANGES::views::zip(m_buckets, from.m_buckets))
         {
-            auto& [bucket, fromBucket] = bucketPair;
             Lock toLock(bucket.mutex);
             Lock fromLock(fromBucket.mutex);
 
-            auto& index = bucket.container.template get<0>();
+            auto& toIndex = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
 
             while (!fromIndex.empty())
             {
-                auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
+                auto [it, merged] = toIndex.merge(fromIndex, fromIndex.begin());
                 if (!merged)
                 {
-                    index.insert(index.erase(it), fromIndex.extract(fromIndex.begin()));
+                    toIndex.insert(toIndex.erase(it), fromIndex.extract(fromIndex.begin()));
                 }
             }
         }
-        co_return;
+        return {};
     }
 
     void swap(MemoryStorage& from)

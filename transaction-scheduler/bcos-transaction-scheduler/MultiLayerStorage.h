@@ -117,6 +117,8 @@ public:
         View& operator=(View&&) noexcept = default;
         ~View() noexcept = default;
 
+        void release() { m_mutableLock.unlock(); }
+
         class ReadIterator
         {
             friend class View;
