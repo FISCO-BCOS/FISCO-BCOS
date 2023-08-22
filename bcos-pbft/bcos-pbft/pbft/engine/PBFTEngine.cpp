@@ -41,7 +41,7 @@ using namespace bcos::protocol;
 PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
   : ConsensusEngine("pbft", 0),
     m_config(_config),
-    m_worker(std::make_shared<ThreadPool>("pbftWorker", 1)),
+    m_worker(std::make_shared<ThreadPool>("pbftWorker", 4)),
     m_msgQueue(std::make_shared<PBFTMsgQueue>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
@@ -1007,7 +1007,8 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr const& _prePrepar
     auto encodedData = m_config->codec()->encode(prepareMsg, m_config->pbftMsgDefaultVersion());
 
     PBFT_LOG(INFO) << LOG_DESC("broadcast prepare packet")
-                   << LOG_KV("packetSize", encodedData->size());
+                   << LOG_KV("packetSize", encodedData->size())
+                   << LOG_KV("index", _prePrepareMsg->index());
     // only broadcast to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));

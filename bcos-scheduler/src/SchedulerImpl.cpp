@@ -3,6 +3,7 @@
 #include "Common.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -264,7 +265,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
                         << LOG_KV("metaTxCount", block->transactionsMetaDataSize())
                         << LOG_KV("version", (bcos::protocol::BlockVersion)(block->version()))
                         << LOG_KV("waitT", waitT);
-
+    auto start = utcTime();
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](bcos::Error::Ptr&& error,
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber)
@@ -397,7 +398,8 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
     };
 
     // to execute the block
-    auto whenQueueBack = [this, &executeLock, &blockExecutive, callback, requestBlockNumber]() {
+    auto whenQueueBack = [this, start, &executeLock, &blockExecutive, callback,
+                             requestBlockNumber]() {
         if (!executeLock)
         {
             // if not acquire the lock, return error
@@ -410,7 +412,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
         }
 
         SCHEDULER_LOG(INFO) << BLOCK_NUMBER(requestBlockNumber) << LOG_BADGE("BlockTrace")
-                            << "ExecuteBlock start";
+                            << "ExecuteBlock start" << LOG_KV("time(ms)", utcTime() - start);
         auto startTime = utcTime();
         blockExecutive->asyncExecute(
             [this, startTime, requestBlockNumber, callback = std::move(callback), executeLock](
