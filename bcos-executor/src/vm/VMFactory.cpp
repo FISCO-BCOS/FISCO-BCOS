@@ -77,18 +77,12 @@ std::shared_ptr<evmoneCodeAnalysis> VMFactory::get(
 {
     if (revision == m_revision)
     {
-        if (key == m_last.first && m_last.second)
-        {
-            return m_last.second;
-        }
         m_cacheMutex.lock();
         auto analysis = m_cache.get(key);
         m_cacheMutex.unlock();
         if (analysis)
         {
-            m_last.first = key;
-            m_last.second = analysis.value();
-            return m_last.second;
+            return analysis.value();
         }
     }
     return nullptr;
