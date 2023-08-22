@@ -171,10 +171,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
         {
             return;
         }
-        GATEWAY_LOG(WARNING) << LOG_DESC("could not find a gateway to send this message")
-                             << LOG_KV("groupID", _groupID)
-                             << LOG_KV("srcNodeID", _srcNodeID->hex())
-                             << LOG_KV("dstNodeID", _dstNodeID->hex());
+        GATEWAY_LOG(DEBUG) << LOG_DESC("could not find a gateway to send this message")
+                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("dstNodeID", _dstNodeID->hex());
 
         auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
             "could not find a gateway to "
@@ -435,9 +434,9 @@ void Gateway::onReceiveP2PMessage(
             if (_error)
             {
                 GATEWAY_LOG(TRACE)
-                    << LOG_BADGE("onReceiveP2PMessage") << "callback error"
-                    << LOG_KV("errorCode", _error->errorCode())
-                    << LOG_KV("errorMessage", _error->errorMessage()) << LOG_KV("group", groupID)
+                    << LOG_BADGE("onReceiveP2PMessage") << "callback failed"
+                    << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage()) << LOG_KV("group", groupID)
                     << LOG_KV("moduleID", moduleID) << LOG_KV("src", srcNodeIDPtr->shortHex())
                     << LOG_KV("dst", dstNodeIDPtr->shortHex());
             }
@@ -451,7 +450,7 @@ void Gateway::onReceiveBroadcastMessage(
 {
     if (_e.errorCode() != 0)
     {
-        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage error")
+        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage failed")
                              << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }

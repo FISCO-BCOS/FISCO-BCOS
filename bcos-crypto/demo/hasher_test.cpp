@@ -5,6 +5,7 @@
 #include <boost/lexical_cast.hpp>
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <iostream>
 #include <iterator>
 #include <random>
@@ -16,8 +17,8 @@ using namespace bcos;
 using namespace bcos::crypto::hasher;
 
 template <Hasher HasherType>
-auto hasherTest(std::string_view name, RANGES::random_access_range auto&& input,
-    size_t totalSize, bool multiThread)
+auto hasherTest(std::string_view name, RANGES::random_access_range auto&& input, size_t totalSize,
+    bool multiThread)
 {
     std::vector<std::array<std::byte, 32>> results{RANGES::size(input)};
 
@@ -45,6 +46,7 @@ auto hasherTest(std::string_view name, RANGES::random_access_range auto&& input,
 
     return results;
 }
+
 
 template <size_t blockSize>
 void testHash(size_t count, bool multiThread)

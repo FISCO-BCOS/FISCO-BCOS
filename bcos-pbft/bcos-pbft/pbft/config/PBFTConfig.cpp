@@ -105,6 +105,10 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
                        << LOG_KV("consensusNodeSize", consensusList.size())
                        << LOG_KV("observerNodeSize", observerList.size());
     }
+    if (m_rpbftConfigTools != nullptr)
+    {
+        m_rpbftConfigTools->resetConfig(_ledgerConfig);
+    }
 
     // notify the latest block number to the sealer
     if (m_stateNotifier)
@@ -397,7 +401,7 @@ void PBFTConfig::asyncNotifySealProposal(
             catch (std::exception const& e)
             {
                 PBFT_LOG(WARNING) << LOG_DESC("asyncNotifySealProposal exception")
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }

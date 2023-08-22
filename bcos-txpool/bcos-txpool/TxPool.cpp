@@ -345,7 +345,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
             TXPOOL_LOG(WARNING) << LOG_DESC("asyncVerifyBlock exception")
                                 << LOG_KV("fromNodeId", _generatedNodeID->shortHex())
                                 << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
@@ -369,7 +369,7 @@ void TxPool::asyncNotifyTxsSyncMessage(Error::Ptr _error, std::string const& _uu
             catch (std::exception const& e)
             {
                 TXPOOL_LOG(TRACE) << LOG_DESC("asyncNotifyTxsSyncMessage: sendResponse failed")
-                                  << LOG_KV("error", boost::diagnostic_information(e))
+                                  << LOG_KV("msg", boost::diagnostic_information(e))
                                   << LOG_KV("uuid", _uuid) << LOG_KV("dst", _nodeID->shortHex());
             }
         });
@@ -589,7 +589,7 @@ void TxPool::initSendResponseHandler()
         catch (std::exception const& e)
         {
             TXPOOL_LOG(WARNING) << LOG_DESC("sendResponse exception")
-                                << LOG_KV("error", boost::diagnostic_information(e))
+                                << LOG_KV("message", boost::diagnostic_information(e))
                                 << LOG_KV("uuid", _id) << LOG_KV("moduleID", _moduleID)
                                 << LOG_KV("peer", _dstNode->shortHex());
         }
@@ -600,6 +600,21 @@ void TxPool::initSendResponseHandler()
 void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
 {
     auto blockHeader = _block->blockHeader();
+
+    // return if block has been committed
+    auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_config->ledger());
+    TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock fetch block number from LedgerConfig");
+    ledgerConfigFetcher->fetchBlockNumber();
+    auto committedBlockNumber = ledgerConfigFetcher->ledgerConfig()->blockNumber();
+    if (blockHeader->number() <= committedBlockNumber)
+    {
+        TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock, block already committed")
+                         << LOG_KV("consNum", blockHeader->number())
+                         << LOG_KV("hash", blockHeader->hash().abridged())
+                         << LOG_KV("committedNum", committedBlockNumber);
+        return;
+    }
+
     TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock") << LOG_KV("consNum", blockHeader->number())
                      << LOG_KV("hash", blockHeader->hash().abridged())
                      << LOG_KV("txsSize", _block->transactionsHashSize());
@@ -616,7 +631,7 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
             if (_error)
             {
                 TXPOOL_LOG(WARNING)
-                    << LOG_DESC("storeVerifiedBlock, fillBlock error")
+                    << LOG_DESC("storeVerifiedBlock, fillBlock failed")
                     << LOG_KV("consNum", blockHeader->number())
                     << LOG_KV("hash", blockHeader->hash().abridged())
                     << LOG_KV("msg", _error->errorMessage()) << LOG_KV("code", _error->errorCode());
@@ -632,7 +647,7 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
                     if (_error)
                     {
                         TXPOOL_LOG(WARNING)
-                            << LOG_DESC("storeVerifiedBlock: asyncPreStoreBlockTxs error")
+                            << LOG_DESC("storeVerifiedBlock: asyncPreStoreBlockTxs failed")
                             << LOG_KV("consNum", blockHeader->number())
                             << LOG_KV("hash", blockHeader->hash().abridged())
                             << LOG_KV("msg", _error->errorMessage())

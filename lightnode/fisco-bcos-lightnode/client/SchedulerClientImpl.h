@@ -46,8 +46,8 @@ private:
             }
         }
         LIGHTNODE_LOG(ERROR) << "lightNode implement call with allNode failed!"
-                             <<  LOG_KV("response errorCode",response.error.errorCode)
-                             <<  LOG_KV("response errorMessage",response.error.errorMessage);
+                             << LOG_KV("response code", response.error.errorCode)
+                             << LOG_KV("response message", response.error.errorMessage);
         BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
     }
 

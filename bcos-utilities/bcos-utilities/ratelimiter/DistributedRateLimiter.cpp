@@ -235,9 +235,9 @@ int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
         if (c_fileLogLevel <= TRACE)
         {
             RATELIMIT_LOG(TRACE) << LOG_BADGE("DistributedRateLimiter") << LOG_DESC("requestRedis")
-                               << LOG_KV("rateLimitKey", m_rateLimiterKey)
-                               << LOG_KV("enableLocalCache", m_enableLocalCache)
-                               << LOG_KV("error", e.what());
+                                 << LOG_KV("rateLimitKey", m_rateLimiterKey)
+                                 << LOG_KV("enableLocalCache", m_enableLocalCache)
+                                 << LOG_KV("msg", e.what());
         }
 
         // exception throw, allow this acquire

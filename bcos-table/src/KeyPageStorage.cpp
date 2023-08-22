@@ -620,7 +620,7 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
             {
                 KeyPage_LOG(ERROR)
                     << LOG_DESC("getData error") << LOG_KV("table", tableView)
-                    << LOG_KV("key", toHex(key)) << LOG_KV("error", error->errorMessage());
+                    << LOG_KV("key", toHex(key)) << LOG_KV("message", error->errorMessage());
                 return std::make_tuple(std::move(error), std::nullopt);
             }
             if (c_fileLogLevel <= TRACE)

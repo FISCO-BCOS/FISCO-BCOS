@@ -44,7 +44,7 @@ void BlockSyncConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig)
         BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyNewBlock to consensus failed")
                              << LOG_KV("number", _ledgerConfig->blockNumber())
                              << LOG_KV("hash", _ledgerConfig->hash().abridged())
-                             << LOG_KV("error", _error->errorCode())
+                             << LOG_KV("message", _error->errorCode())
                              << LOG_KV("msg", _error->errorMessage());
     });
 

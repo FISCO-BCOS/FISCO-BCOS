@@ -3,7 +3,6 @@
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
 #include <bcos-utilities/NullLock.h>
-#include <oneapi/tbb/parallel_for_each.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
