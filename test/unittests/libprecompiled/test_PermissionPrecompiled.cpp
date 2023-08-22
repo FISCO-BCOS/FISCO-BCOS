@@ -59,10 +59,10 @@ struct AuthorityPrecompiledFixture
         // clear global name2Selector cache
         clearName2SelectCache();
         context = std::make_shared<ExecutiveContext>();
-        ExecutiveContextFactory factory;
+        ExecutiveContextFactory factory(false);
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
-        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>(false);
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
         factory.setTableFactoryFactory(tableFactoryFactory);

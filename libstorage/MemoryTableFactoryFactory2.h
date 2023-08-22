@@ -33,9 +33,14 @@ namespace storage
 class MemoryTableFactoryFactory2 : public TableFactoryFactory
 {
 public:
+    MemoryTableFactoryFactory2(bool enableReconfirmCommittee)
+      : m_enableReconfirmCommittee(enableReconfirmCommittee)
+    {}
+
     TableFactory::Ptr newTableFactory(const dev::h256& hash, int64_t number) override
     {
-        MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
+        MemoryTableFactory2::Ptr tableFactory =
+            std::make_shared<MemoryTableFactory2>(m_enableReconfirmCommittee);
         tableFactory->setStateStorage(m_storage);
         tableFactory->setBlockHash(hash);
         tableFactory->setBlockNum(number);
@@ -49,6 +54,7 @@ public:
 
 private:
     dev::storage::Storage::Ptr m_storage;
+    bool m_enableReconfirmCommittee;
 };
 
 }  // namespace storage

@@ -316,12 +316,14 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
     Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
-    if (entries->size() == 0u)
+
+    if (entries->size() == 0u || (_context->enableReconfirmCommittee() && entries->size() == 1))
     {  // grant committee member
         result = grantTablePermission(_context, SYS_ACCESS_TABLE, _member, _origin);
         grantTablePermission(_context, SYS_CONFIG, _member, _origin);
         grantTablePermission(_context, SYS_CONSENSUS, _member, _origin);
         // write weight
+
         auto committeeTable = getCommitteeTable(_context);
         auto entry = committeeTable->newEntry();
         entry->setField(CGP_COMMITTEE_TABLE_VALUE, to_string(1));
@@ -332,6 +334,7 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
                                    << LOG_KV("return", result);
         return result;
     }
+
     condition = acTable->newCondition();
     condition->EQ(SYS_AC_ADDRESS, _member);
     auto addrEntries = acTable->select(SYS_ACCESS_TABLE, condition);
