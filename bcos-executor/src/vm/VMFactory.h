@@ -64,6 +64,5 @@ private:
         m_cache;
     evmc_revision m_revision = EVMC_PARIS;
     std::mutex m_cacheMutex;
-    std::pair<crypto::HashType, std::shared_ptr<evmoneCodeAnalysis>> m_last;
 };
 }  // namespace bcos::executor
