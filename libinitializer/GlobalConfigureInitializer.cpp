@@ -234,7 +234,8 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
                           << LOG_KV("versionNumber", g_BCOSConfig.version())
                           << LOG_KV("enableStat", g_BCOSConfig.enableStat())
                           << LOG_KV("chainId", g_BCOSConfig.chainId())
-                          << LOG_KV("useSMCrypto", g_BCOSConfig.SMCrypto());
+                          << LOG_KV("useSMCrypto", g_BCOSConfig.SMCrypto())
+                          << LOG_KV("IgnoreObserverWriteRequest", g_BCOSConfig.enableIgnoreObserverWriteRequest());
 }
 
 void dev::version()

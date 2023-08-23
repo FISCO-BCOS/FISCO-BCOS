@@ -639,6 +639,7 @@ void SyncMaster::maintainPeersConnection()
         }
     }
 
+    m_msgEngine->setObserverList(m_blockChain->observerList());
     // Update sync sealer status
     set<NodeID> sealerSet;
     for (auto sealer : sealers)

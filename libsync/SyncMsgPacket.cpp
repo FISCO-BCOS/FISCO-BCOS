@@ -177,7 +177,7 @@ void SyncBlocksPacket::singleEncode(dev::bytes const& _blockRLP)
 void SyncReqBlockPacket::encode(int64_t _from, unsigned _size)
 {
     m_rlpStream.clear();
-    prep(m_rlpStream, ReqBlocskPacket, 2) << _from << _size;
+    prep(m_rlpStream, ReqBlocksPacket, 2) << _from << _size;
 }
 
 void SyncTxsStatusPacket::encode(

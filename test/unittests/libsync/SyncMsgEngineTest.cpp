@@ -76,7 +76,7 @@ public:
                 onPeerTxsStatus(_packet, _peer, _msg);
                 break;
             // receive txs-requests,  _msg is only used to ensure the life-time for rlps of _packet
-            case TxsRequestPacekt:
+            case TxsRequestPacket:
                 onReceiveTxsRequest(_packet, _peer, _msg);
                 break;
             case StatusPacket:
@@ -85,7 +85,7 @@ public:
             case BlocksPacket:
                 onPeerBlocks(*_packet);
                 break;
-            case ReqBlocskPacket:
+            case ReqBlocksPacket:
                 onPeerRequestBlocks(*_packet);
                 break;
             default:

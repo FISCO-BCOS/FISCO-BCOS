@@ -101,6 +101,12 @@ public:
 
     NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }
 
+    void setObserverList(dev::h512s observerList)
+    {
+        std::lock_guard<std::mutex> lock(x_observerList);
+        m_observerList = std::move(observerList);
+    }
+
 private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
     bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
@@ -146,6 +152,8 @@ protected:
 
     // factory used to create sync related packet
     SyncMsgPacketFactory::Ptr m_syncMsgPacketFactory;
+    std::mutex x_observerList;
+    dev::h512s m_observerList;
 };
 
 class DownloadBlocksContainer
