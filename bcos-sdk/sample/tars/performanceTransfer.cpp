@@ -66,8 +66,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
             {
-                input = abiCodec.abiIn(
-                    "userBalance(string)", std::to_string(it));
+                input = abiCodec.abiIn("userBalance(string)", std::to_string(it));
             }
             else
             {
@@ -303,7 +302,7 @@ int main(int argc, char* argv[])
             return 1;
         }
         contractAddress = receipt->contractAddress();
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     std::cout << "Contract address is:" << contractAddress << std::endl;
     auto balances = query(rpcClient, cryptoSuite, std::string(contractAddress), userCount);

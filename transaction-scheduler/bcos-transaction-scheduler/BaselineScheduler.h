@@ -113,9 +113,7 @@ private:
                     task::syncWait(m_schedulerImpl.finish(blockHeader, m_hashImpl)));
             },
             [&]() {
-                auto hasher = m_hashImpl.hasher();
-                bcos::crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
-                    std::move(hasher));
+                bcos::crypto::merkle::Merkle merkle(m_hashImpl.hasher());
                 auto hashesRange = receipts | RANGES::views::transform([](const auto& receipt) {
                     return receipt->hash();
                 });
@@ -198,6 +196,7 @@ public:
 
                 // start calucate transaction root
                 std::promise<bcos::h256> transactionRootPromise;
+                auto transactionRootFuture = transactionRootPromise.get_future();
                 self->m_asyncGroup.run([&]() {
                     auto hasher = self->m_hashImpl.hasher();
 
@@ -244,7 +243,6 @@ public:
                 auto newBlockHeader = self->m_blockHeaderFactory.populateBlockHeader(blockHeader);
                 {
                     self->finishExecute(receipts, *blockHeader, *newBlockHeader, *block);
-                    auto transactionRootFuture = transactionRootPromise.get_future();
                     newBlockHeader->setTxsRoot(transactionRootFuture.get());
                     newBlockHeader->calculateHash(self->m_hashImpl);
                 }
