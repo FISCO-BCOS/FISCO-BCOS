@@ -1095,15 +1095,6 @@ void SchedulerImpl::asyncGetLedgerConfig(
                 return;
             }
 
-            // Set feature_shareding if version between 3.3 and 3.4
-            if (ledgerConfig->compatibilityVersion() >= protocol::BlockVersion::V3_3_VERSION &&
-                ledgerConfig->compatibilityVersion() <= protocol::BlockVersion::V3_4_VERSION)
-            {
-                auto features = ledgerConfig->features();
-                features.set(ledger::Features::Flag::feature_sharding);
-                ledgerConfig->setFeatures(features);
-            }
-
             if (ledgerConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)
             {
                 auto features = ledgerConfig->features();
@@ -1246,8 +1237,8 @@ void SchedulerImpl::asyncGetLedgerConfig(
                        decltype(collector) collector) -> task::Task<void> {
             try
             {
-                auto features =
-                    co_await ledger::Features::readFeaturesFromStorage(*self->m_storage, number);
+                ledger::Features features;
+                co_await features.readFromStorage(*self->m_storage, number);
                 collector({}, features);
             }
             catch (Error& error)
