@@ -1662,7 +1662,8 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
                     co_await m_storage->coGetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER);
                 if (versionEntry && blockNumberEntry)
                 {
-                    auto storageVersion = bcos::tool::toVersionNumber(versionEntry->get());
+                    auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();
+                    auto storageVersion = bcos::tool::toVersionNumber(versionStr);
 
                     Features shardingFeature;
                     shardingFeature.setToShardingDefault((protocol::BlockVersion)storageVersion);
