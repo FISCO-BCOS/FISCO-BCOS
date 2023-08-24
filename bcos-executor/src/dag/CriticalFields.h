@@ -21,12 +21,12 @@
 
 
 #pragma once
+#include <boost/container_hash/hash.hpp>
 #include <functional>
 #include <map>
-#include <unordered_map>
 #include <set>
+#include <unordered_map>
 #include <vector>
-#include <boost/container_hash/hash.hpp>
 
 namespace bcos
 {
@@ -77,7 +77,8 @@ public:
         OnEmptyConflictHandler const& _onEmptyConflict,
         OnAllConflictHandler const& _onAllConflict) override
     {
-        auto dependencies = std::unordered_map<std::vector<uint8_t>, std::vector<size_t>, boost::hash<std::vector<uint8_t>>>();
+        auto dependencies = std::unordered_map<std::vector<uint8_t>, std::vector<size_t>,
+            boost::hash<std::vector<uint8_t>>>();
 
         for (ID id = 0; id < m_criticals.size(); ++id)
         {
@@ -100,7 +101,10 @@ public:
                     auto& ids = dependencies[c];
                     for (auto pId : ids)
                     {
-                        pIds.insert(pId);
+                        if (pId != id)
+                        {
+                            pIds.insert(pId);
+                        }
                     }
                     ids.push_back(id);
                 }
