@@ -1331,7 +1331,8 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                     {
                         auto field = entry->getField(0);
                         auto transaction = m_blockFactory->transactionFactory()->createTransaction(
-                            bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+                            bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false,
+                            false);
                         transactions.push_back(std::move(transaction));
                     }
 
