@@ -65,22 +65,26 @@ private:
     std::mutex m_resultsMutex;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
-        protocol::Block const& block) const
+        protocol::Block& block) const
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().GET_TRANSACTIONS);
-        if (block.transactionsSize() > 0)
+        if (block.transactionsSize() == 0)
         {
-            co_return RANGES::views::iota(0LU, block.transactionsSize()) |
+            auto transactions = co_await m_txpool.getTransactions(
+                RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
                 RANGES::views::transform(
-                    [&block](uint64_t index) { return block.transaction(index); }) |
-                RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
+                    [&block](uint64_t index) { return block.transactionHash(index); }));
+            for (auto& transaction : transactions)
+            {
+                block.appendTransaction(
+                    std::move(std::const_pointer_cast<protocol::Transaction>(transaction)));
+            }
         }
 
-        co_return co_await m_txpool.getTransactions(
-            RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
+        co_return RANGES::views::iota(0LU, block.transactionsSize()) |
             RANGES::views::transform(
-                [&block](uint64_t index) { return block.transactionHash(index); })) |
+                [&block](uint64_t index) { return block.transaction(index); }) |
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
     }
 
@@ -347,7 +351,6 @@ public:
                 if (blockHeader->number() != 0)
                 {
                     result.m_block->setBlockHeader(blockHeader);
-                    // Write block and receipt
                     co_await self->m_schedulerImpl.commit(self->m_ledger, *(result.m_block));
                 }
                 else

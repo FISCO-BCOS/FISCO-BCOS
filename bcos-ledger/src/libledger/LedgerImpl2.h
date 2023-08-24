@@ -115,10 +115,9 @@ private:
             for (size_t i = 0; i < block.transactionsMetaDataSize(); ++i)
             {
                 auto originTransactionMetaData = block.transactionMetaData(i);
-                auto transactionMetaData =
+                transactionsBlock->appendTransactionMetaData(
                     m_blockFactory.createTransactionMetaData(originTransactionMetaData->hash(),
-                        std::string(originTransactionMetaData->to()));
-                transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
+                        std::string(originTransactionMetaData->to())));
             }
         }
         else if (block.transactionsSize() > 0)
@@ -126,9 +125,9 @@ private:
             for (size_t i = 0; i < block.transactionsSize(); ++i)
             {
                 auto transaction = block.transaction(i);
-                auto transactionMetaData = m_blockFactory.createTransactionMetaData(
-                    transaction->hash(), std::string(transaction->to()));
-                transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
+                transactionsBlock->appendTransactionMetaData(
+                    m_blockFactory.createTransactionMetaData(
+                        transaction->hash(), std::string(transaction->to())));
             }
         }
 
@@ -159,31 +158,22 @@ private:
     {
         LEDGER2_LOG(DEBUG) << "setBlockData transactions: " << blockNumberKey;
 
-        if (block.transactionsMetaDataSize() == 0)
-        {
-            LEDGER2_LOG(INFO) << "SetBlockData TRANSACTIONS not found transaction meta data!";
-            co_return;
-        }
-
-        if (block.transactionsMetaDataSize() != block.transactionsSize())
-        {
-            LEDGER2_LOG(INFO)
-                << "SetBlockData TRANSACTIONS not equal transaction metas and transactions!";
-            co_return;
-        }
-
         auto availableTransactions =
             RANGES::iota_view<size_t, size_t>(0LU, block.transactionsSize()) |
             RANGES::views::transform([&block](uint64_t index) { return block.transaction(index); });
 
-        auto hashes = availableTransactions | RANGES::views::transform([](auto&& transaction) {
-            return transaction->hash();
-        });
-        auto buffers = availableTransactions | RANGES::views::transform([](auto&& transaction) {
-            std::vector<bcos::byte> buffer;
-            bcos::concepts::serialize::encode(*transaction, buffer);
-            return buffer;
-        });
+        std::vector<bcos::h256> hashes(block.transactionsSize());
+        std::vector<std::vector<bcos::byte>> buffers(block.transactionsSize());
+        tbb::parallel_for(
+            tbb::blocked_range(0LU, block.transactionsSize()), [&](auto const& range) {
+                for (auto i = range.begin(); i != range.end(); ++i)
+                {
+                    auto transaction = block.transaction(i);
+                    hashes[i] = transaction->hash();
+                    bcos::concepts::serialize::encode(*transaction, buffers[i]);
+                }
+            });
+
         co_await setTransactions<true>(hashes, buffers);
     }
 
@@ -193,37 +183,36 @@ private:
     {
         LEDGER2_LOG(DEBUG) << "setBlockData receipts: " << blockNumberKey;
 
-        if (block.transactionsMetaDataSize() == 0)
+        std::atomic_size_t totalTransactionCount = 0;
+        std::atomic_size_t failedTransactionCount = 0;
+        std::vector<bcos::h256> hashes(block.receiptsSize());
+        std::vector<std::vector<bcos::byte>> buffers(block.receiptsSize());
+
+        auto setData = [&](auto getHashFunc) {
+            tbb::parallel_for(
+                tbb::blocked_range(0LU, block.receiptsSize()), [&](auto const& range) {
+                    for (auto i = range.begin(); i != range.end(); ++i)
+                    {
+                        hashes[i] = getHashFunc(i);
+                        auto receipt = block.receipt(i);
+                        bcos::concepts::serialize::encode(*receipt, buffers[i]);
+
+                        if (receipt->status() != 0)
+                        {
+                            ++failedTransactionCount;
+                        }
+                        ++totalTransactionCount;
+                    }
+                });
+        };
+        if (block.transactionsMetaDataSize() == block.receiptsSize())
         {
-            LEDGER2_LOG(INFO) << "SetBlockData RECEIPTS not found transaction meta data!";
-            co_return;
+            setData([&](size_t index) { return block.transactionMetaData(index)->hash(); });
         }
-
-        size_t totalTransactionCount = 0;
-        size_t failedTransactionCount = 0;
-        for (uint64_t i = 0; i < block.receiptsSize(); ++i)
+        else
         {
-            auto receipt = block.receipt(i);
-            if (receipt->status() != 0)
-            {
-                ++failedTransactionCount;
-            }
-            ++totalTransactionCount;
+            setData([&](size_t index) { return block.transaction(index)->hash(); });
         }
-
-        auto hashes = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
-                      RANGES::views::transform([&block](uint64_t index) {
-                          auto metaData = block.transactionMetaData(index);
-                          return metaData->hash();
-                      });
-        auto buffers = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
-                       RANGES::views::transform([&block](uint64_t index) {
-                           auto receipt = block.receipt(index);
-                           std::vector<bcos::byte> buffer;
-                           bcos::concepts::serialize::encode(*receipt, buffer);
-                           return buffer;
-                       });
-
         co_await setTransactions<false>(hashes, buffers);
 
         LEDGER2_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
