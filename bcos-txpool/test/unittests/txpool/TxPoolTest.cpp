@@ -194,8 +194,6 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     _txpool->asyncSealTxs(
         txsLimit, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
             BOOST_CHECK(_error == nullptr);
-            std::cout << "transactionsMetaDataSize" << _txsMetaDataList->transactionsMetaDataSize()
-                      << "txsLimit" << txsLimit << std::endl;
             BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == txsLimit);
             for (size_t i = 0; i < _txsMetaDataList->transactionsMetaDataSize(); i++)
             {

@@ -13,14 +13,16 @@ using namespace bcos;
 class MultiIndexTxContainer
 {
 public:
-    struct MyStruct
+    struct TransactionData
     {
         bcos::crypto::HashType txHash;
         std::int64_t timeStamp;
         bcos::protocol::Transaction::Ptr transaction;
 
-        MyStruct(bcos::crypto::HashType _txHash, bcos::protocol::Transaction::Ptr _transaction)
-                : txHash(_txHash), timeStamp(_transaction->importTime()), transaction(_transaction)
+        TransactionData(bcos::protocol::Transaction::Ptr _transaction)
+          : txHash(_transaction->hash()),
+            timeStamp(_transaction->importTime()),
+            transaction(_transaction)
         {}
     };
 
@@ -30,25 +32,36 @@ public:
     MultiIndexTxContainer& operator=(const MultiIndexTxContainer&) = default;
     MultiIndexTxContainer& operator=(MultiIndexTxContainer&&) noexcept = default;
 
-    using Container = boost::multi_index::multi_index_container<
-            MyStruct,
-            boost::multi_index::indexed_by<
-                    boost::multi_index::hashed_unique<
-                            boost::multi_index::member<MyStruct, bcos::crypto::HashType, &MyStruct::txHash>>,
-                    boost::multi_index::ordered_non_unique<
-                            boost::multi_index::member<MyStruct, std::int64_t, &MyStruct::timeStamp>>>>;
+    //    using Container = boost::multi_index::multi_index_container<
+    //            TransactionData,
+    //            boost::multi_index::indexed_by<
+    //                    boost::multi_index::hashed_unique<
+    //                            boost::multi_index::member<TransactionData,
+    //                            bcos::crypto::HashType, &TransactionData::txHash>>,
+    //                    boost::multi_index::ordered_non_unique<
+    //                            boost::multi_index::member<TransactionData, std::int64_t,
+    //                            &TransactionData::timeStamp>>
+    //         >>;
 
+
+    using Container = boost::multi_index::multi_index_container<TransactionData,
+        boost::multi_index::indexed_by<
+            boost::multi_index::hashed_unique<boost::multi_index::member<TransactionData,
+                bcos::crypto::HashType, &TransactionData::txHash>>,
+            boost::multi_index::ordered_non_unique<boost::multi_index::member<TransactionData,
+                std::int64_t, &TransactionData::timeStamp>>>>;
 
 
     class IteratorImpl
     {
     public:
         IteratorImpl(typename Container::nth_index<0>::type::iterator& it)
-                : first(it->txHash), second(it->transaction), m_iterator(it)
+          : first(it->txHash), second(it->transaction), m_iterator(it)
         {}
 
-        IteratorImpl(const bcos::crypto::HashType& _first, const bcos::protocol::Transaction::Ptr& _transaction)
-                : first(_first), second(_transaction), m_iterator()
+        IteratorImpl(const bcos::crypto::HashType& _first,
+            const bcos::protocol::Transaction::Ptr& _transaction)
+          : first(_first), second(_transaction), m_iterator()
         {}
 
         friend bool operator==(const std::shared_ptr<IteratorImpl>& lhs, const std::shared_ptr<IteratorImpl>& rhs) {
@@ -100,8 +113,8 @@ public:
     std::pair<iterator, bool> try_emplace(const bcos::crypto::HashType& key,
                                           const bcos::protocol::Transaction::Ptr& value)
     {
-        MyStruct newData(key, value);
-        auto result = multiIndexMap.insert(newData);
+        TransactionData newData(value);
+        auto result = multiIndexMap.emplace(std::move(newData));
         return {std::make_shared<IteratorImpl>(result.first), result.second};
     }
 
@@ -121,8 +134,6 @@ public:
         for (const auto& item : multiIndexMap.get<1>())
         {
             auto it = IteratorImpl(item.txHash, item.transaction);
-            //            TXPOOL_LOG(DEBUG) << LOG_KV("txHash:", it.first)
-            //                              << LOG_KV("timestamp:", it.second->importTime());
             accessor->setValue(std::make_shared<IteratorImpl>(it));
             if (!handler(accessor))
             {

@@ -433,7 +433,6 @@ public:
         auto indexes =
             RANGES::iota_view<size_t, size_t>{startIdx, startIdx + bucketsSize} |
             RANGES::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
-        // TODO: maybe totalTxLimit not equal 0
         forEachBucket<AccessorType>(
             indexes, [eachBucketTxsLimit, &totalTxLimit, handler = std::move(handler)](size_t,
                          typename BucketType::Ptr bucket, typename AccessorType::Ptr accessor) {
@@ -457,6 +456,48 @@ public:
             });
     }
 
+    //    template <class AccessorType>  // handler return isContinue
+    //    void forEach(const KeyType& startAfter, uint64_t eachBucketTimeLimit, size_t totalTxLimit,
+    //        std::function<bool(typename AccessorType::Ptr accessor)> handler)
+    //    {
+    //        size_t startIdx = (getBucketIndex(startAfter) + 1) % m_buckets.size();
+    //        size_t bucketsSize = m_buckets.size();
+    //
+    //        auto indexes =
+    //            RANGES::iota_view<size_t, size_t>{startIdx, startIdx + bucketsSize} |
+    //            RANGES::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
+    //
+    //        forEachBucket<AccessorType>(
+    //            indexes, [eachBucketTimeLimit, &totalTxLimit, handler =
+    //            std::move(handler)](size_t,
+    //                         typename BucketType::Ptr bucket, typename AccessorType::Ptr accessor)
+    //                         {
+    //                auto bucketStartTime = utcTime();
+    //
+    //                return bucket->template forEach<AccessorType>(
+    //                    [&bucketStartTime, eachBucketTimeLimit, &totalTxLimit, handler =
+    //                    std::move(handler)](
+    //                        typename AccessorType::Ptr accessor) {
+    //                        if (utcTime() - bucketStartTime >= eachBucketTimeLimit)
+    //                        {
+    //                            BCOS_LOG(DEBUG) << LOG_KV("bucketStayTime:", utcTime() -
+    //                            bucketStartTime)
+    //                                            << LOG_KV("eachBucketTxsLimit:",
+    //                                            eachBucketTimeLimit)
+    //                                            << LOG_KV("totalTxLimit:", totalTxLimit);
+    //                            return true;
+    //                        }
+    //                        if (totalTxLimit <= 0)
+    //                        {
+    //                            return false;
+    //                        }
+    //                        totalTxLimit--;
+    //                        return handler(accessor);
+    //                    },
+    //                    accessor);
+    //            });
+    //    }
+
     template <class AccessorType>  // handler return isContinue
     void forEach(const KeyType& startAfter, size_t eachBucketTxsLimit, size_t totalTxLimit,
         std::function<bool(typename AccessorType::Ptr accessor)> handler)
@@ -478,7 +519,7 @@ public:
                         typename AccessorType::Ptr accessor) {
                         if (txsCount >= eachBucketTxsLimit)
                         {
-                            return false;
+                            return true;
                         }
                         if (totalTxLimit <= 0)
                         {
@@ -538,7 +579,7 @@ public:
             {
                 if (!handler(idx, bucket, accessor))
                 {
-                    continue;
+                    break;
                 }
             }
             else
@@ -612,7 +653,6 @@ public:
         }
     }
 
-protected:
     size_t getBucketIndex(const std::pair<const KeyType&, const ValueType&>& kv)
     {
         return getBucketIndex(kv.first);
