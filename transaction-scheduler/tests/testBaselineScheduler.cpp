@@ -39,6 +39,10 @@ struct MockScheduler
         co_return receipts;
     }
     task::Task<bcos::h256> finish(auto&& block, auto&& hashImpl) { co_return bcos::h256{}; }
+    task::Task<void> commit(bcos::concepts::ledger::IsLedger auto& ledger, protocol::Block& block)
+    {
+        co_return;
+    }
     task::Task<void> commit() { co_return; }
 
     task::Task<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>> call(

@@ -1,6 +1,7 @@
 #pragma once
 #include "MultiLayerStorage.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
@@ -79,6 +80,24 @@ public:
 
         co_return combinableHash.combine(
             [](const bcos::h256& lhs, const bcos::h256& rhs) -> bcos::h256 { return lhs ^ rhs; });
+    }
+    task::Task<void> commit(concepts::ledger::IsLedger auto& ledger, protocol::Block& block)
+    {
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+
+            auto lastImmutable = m_multiLayerStorage.lastImmutableStorage();
+            co_await ledger.template setBlock<concepts::ledger::HEADER,
+                concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::TRANSACTIONS,
+                concepts::ledger::RECEIPTS, concepts::ledger::NONCES>(*lastImmutable, block);
+        }
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().MERGE_STATE);
+            auto lastImmutable = m_multiLayerStorage.lastImmutableStorage();
+            co_await m_multiLayerStorage.mergeAndPopImmutableBack();
+        }
     }
     task::Task<void> commit() { co_await m_multiLayerStorage.mergeAndPopImmutableBack(); }
 

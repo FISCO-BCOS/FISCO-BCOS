@@ -80,7 +80,7 @@ private:
             auto& tableNamePool, PrecompiledManager const& precompiledManager)
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                ittapi::ITT_DOMAINS::instance().CHUNK_EXECUTE);
+                ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
             Executor<decltype(m_readWriteSetStorage), PrecompiledManager> executor(
                 m_readWriteSetStorage, receiptFactory, tableNamePool, precompiledManager);
@@ -211,7 +211,7 @@ public:
                                 [&]() {
                                     ittapi::Report report(
                                         ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                                        ittapi::ITT_DOMAINS::instance().MERGE_STORAGE);
+                                        ittapi::ITT_DOMAINS::instance().MERGE_CHUNK);
                                     task::syncWait(storage2::merge(
                                         chunk->localStorage().mutableStorage(), lastStorage));
                                 });
@@ -219,7 +219,7 @@ public:
                         }));
 
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                ittapi::ITT_DOMAINS::instance().FINAL_MERGE_STORAGE);
+                ittapi::ITT_DOMAINS::instance().MERGE_LAST_CHUNK);
             if (storageView.mutableStorage().empty())
             {
                 PARALLEL_SCHEDULER_LOG(DEBUG) << "Final swap lastStorage";

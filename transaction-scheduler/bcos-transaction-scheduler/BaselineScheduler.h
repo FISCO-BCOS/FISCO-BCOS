@@ -348,17 +348,16 @@ public:
                 {
                     result.m_block->setBlockHeader(blockHeader);
                     // Write block and receipt
-                    co_await self->m_ledger.template setBlock<concepts::ledger::HEADER,
-                        concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
-                        concepts::ledger::NONCES>(*(result.m_block));
+                    co_await self->m_schedulerImpl.commit(self->m_ledger, *(result.m_block));
                 }
                 else
                 {
                     BASELINE_SCHEDULER_LOG(INFO) << "Ignore commit block header: 0";
+                    co_await self->m_schedulerImpl.commit();
                 }
 
                 // Write states
-                co_await self->m_schedulerImpl.commit();
+
                 auto ledgerConfig =
                     std::make_shared<ledger::LedgerConfig>(co_await self->m_ledger.getConfig());
                 ledgerConfig->setHash(blockHeader->hash());
