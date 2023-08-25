@@ -10,6 +10,7 @@
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-task/Task.h>
 #include <oneapi/tbb/combinable.h>
+#include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 
 namespace bcos::transaction_scheduler
@@ -81,7 +82,8 @@ public:
         co_return combinableHash.combine(
             [](const bcos::h256& lhs, const bcos::h256& rhs) -> bcos::h256 { return lhs ^ rhs; });
     }
-    task::Task<void> commit(concepts::ledger::IsLedger auto& ledger, protocol::Block& block)
+    task::Task<void> commit(concepts::ledger::IsLedger auto& ledger, protocol::Block& block,
+        std::vector<protocol::Transaction::ConstPtr> const& transactions)
     {
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
@@ -89,13 +91,26 @@ public:
 
             auto lastImmutable = m_multiLayerStorage.lastImmutableStorage();
             co_await ledger.template setBlock<concepts::ledger::HEADER,
-                concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::TRANSACTIONS,
-                concepts::ledger::RECEIPTS, concepts::ledger::NONCES>(*lastImmutable, block);
+                concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
+                concepts::ledger::NONCES>(*lastImmutable, block);
+
+            std::vector<bcos::h256> hashes(RANGES::size(transactions));
+            std::vector<std::vector<bcos::byte>> buffers(RANGES::size(transactions));
+            tbb::parallel_for(
+                tbb::blocked_range(0LU, RANGES::size(transactions)), [&](auto const& range) {
+                    for (auto i = range.begin(); i != range.end(); ++i)
+                    {
+                        auto& transaction = transactions[i];
+                        hashes[i] = transaction->hash();
+                        bcos::concepts::serialize::encode(*transaction, buffers[i]);
+                    }
+                });
+
+            co_await ledger.template setTransactions<true>(std::move(hashes), std::move(buffers));
         }
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-            auto lastImmutable = m_multiLayerStorage.lastImmutableStorage();
             co_await m_multiLayerStorage.mergeAndPopImmutableBack();
         }
     }
