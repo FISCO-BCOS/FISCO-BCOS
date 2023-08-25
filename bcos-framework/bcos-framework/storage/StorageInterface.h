@@ -151,8 +151,8 @@ public:
             constexpr static bool await_ready() noexcept { return false; }
             void await_suspend(CO_STD::coroutine_handle<> handle)
             {
-                m_self->asyncSetRow(
-                    m_table, m_key, std::move(m_entry), [this, handle](Error::UniquePtr error) {
+                m_self->asyncSetRow(m_table, m_key, std::move(m_entry),
+                    [this, handle](Error::UniquePtr error) mutable {
                         if (error)
                         {
                             m_result.emplace<std::exception_ptr>(std::make_exception_ptr(*error));

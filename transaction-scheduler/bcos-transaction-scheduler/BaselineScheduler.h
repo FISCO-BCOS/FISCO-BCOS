@@ -134,8 +134,8 @@ private:
             .count();
     }
 
-    task::Task<std::tuple<bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool>>
-    coExecuteBlockInner(bcos::protocol::Block::Ptr block, bool verify)
+    task::Task<std::tuple<bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool>> coExecuteBlock(
+        bcos::protocol::Block::Ptr block, bool verify)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_BLOCK);
@@ -282,7 +282,7 @@ public:
     {
         task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
                        decltype(callback) callback) -> task::Task<void> {
-            std::apply(callback, co_await self->coExecuteBlockInner(std::move(block), verify));
+            std::apply(callback, co_await self->coExecuteBlock(std::move(block), verify));
         }(this, std::move(block), verify, std::move(callback)));
     }
 
