@@ -29,10 +29,6 @@ private:
     decltype(m_blockFactory.receiptFactory()) m_receiptFactory;
     decltype(m_blockFactory.cryptoSuite()->keyFactory()) m_keyFactory;
 
-    auto& storage() { return m_storage; }
-    auto& blockFactory() { return m_blockFactory; }
-    auto& tableNamePool() { return m_tableNamePool; }
-
     template <std::same_as<bcos::concepts::ledger::HEADER>>
     task::Task<void> setBlockData(
         auto& storage, std::string_view blockNumberKey, protocol::IsBlock auto const& block)
