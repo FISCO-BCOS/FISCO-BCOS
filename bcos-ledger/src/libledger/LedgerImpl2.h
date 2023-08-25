@@ -174,7 +174,7 @@ private:
                 }
             });
 
-        co_await setTransactions<true>(hashes, buffers);
+        co_await setTransactions<true>(storage, hashes, buffers);
     }
 
     template <std::same_as<concepts::ledger::RECEIPTS>>
@@ -213,7 +213,7 @@ private:
         {
             setData([&](size_t index) { return block.transaction(index)->hash(); });
         }
-        co_await setTransactions<false>(hashes, buffers);
+        co_await setTransactions<false>(storage, hashes, buffers);
 
         LEDGER2_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                            << LOG_KV("number", blockNumberKey)
@@ -473,7 +473,8 @@ public:
     }
 
     template <bool isTransaction>
-    task::Task<void> setTransactions(RANGES::range auto&& hashes, RANGES::range auto&& buffers)
+    task::Task<void> setTransactions(
+        auto& storage, RANGES::range auto&& hashes, RANGES::range auto&& buffers)
     {
         if (RANGES::size(buffers) != RANGES::size(hashes))
         {
@@ -488,11 +489,10 @@ public:
         LEDGER2_LOG(INFO) << "setTransactionBuffers: " << *tableNameID << " "
                           << RANGES::size(hashes);
 
-        co_await m_storage.write(
-            hashes | RANGES::views::transform([&tableNameID](auto const& hash) {
-                return transaction_executor::StateKey{tableNameID,
-                    std::string_view((const char*)RANGES::data(hash), RANGES::size(hash))};
-            }),
+        co_await storage.write(hashes | RANGES::views::transform([&tableNameID](auto const& hash) {
+            return transaction_executor::StateKey{
+                tableNameID, std::string_view((const char*)RANGES::data(hash), RANGES::size(hash))};
+        }),
             buffers | RANGES::views::transform([](auto&& buffer) {
                 storage::Entry entry;
                 entry.set(std::forward<decltype(buffer)>(buffer));

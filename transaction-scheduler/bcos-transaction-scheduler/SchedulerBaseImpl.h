@@ -106,7 +106,8 @@ public:
                     }
                 });
 
-            co_await ledger.template setTransactions<true>(std::move(hashes), std::move(buffers));
+            co_await ledger.template setTransactions<true>(
+                *lastImmutable, std::move(hashes), std::move(buffers));
         }
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
