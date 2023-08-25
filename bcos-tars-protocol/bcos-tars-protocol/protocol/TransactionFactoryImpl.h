@@ -32,15 +32,13 @@ namespace bcostars::protocol
 class TransactionFactoryImpl : public bcos::protocol::TransactionFactory
 {
 public:
-    using TransactionType = TransactionImpl;
-
-    TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
-      : m_cryptoSuite(std::move(cryptoSuite))
-    {}
     TransactionFactoryImpl(const TransactionFactoryImpl&) = default;
     TransactionFactoryImpl(TransactionFactoryImpl&&) = default;
     TransactionFactoryImpl& operator=(const TransactionFactoryImpl&) = default;
     TransactionFactoryImpl& operator=(TransactionFactoryImpl&&) = default;
+    TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
+      : m_cryptoSuite(std::move(cryptoSuite))
+    {}
     ~TransactionFactoryImpl() override = default;
 
     bcos::protocol::Transaction::Ptr createTransaction(
@@ -78,8 +76,8 @@ public:
         return transaction;
     }
 
-    bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
-        bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
+    std::shared_ptr<bcos::protocol::Transaction> createTransaction(int32_t _version,
+        std::string _to, bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
         std::string _chainId, std::string _groupId, int64_t _importTime) override
     {
         auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
@@ -103,11 +101,11 @@ public:
     bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
         std::string _chainId, std::string _groupId, int64_t _importTime,
-        bcos::crypto::KeyPairInterface::Ptr keyPair) override
+        const bcos::crypto::KeyPairInterface& keyPair) override
     {
         auto tx = createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
             std::move(_chainId), std::move(_groupId), _importTime);
-        auto sign = m_cryptoSuite->signatureImpl()->sign(*keyPair, tx->hash(), true);
+        auto sign = m_cryptoSuite->signatureImpl()->sign(keyPair, tx->hash(), true);
 
         auto tarsTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
         auto& inner = tarsTx->mutableInner();

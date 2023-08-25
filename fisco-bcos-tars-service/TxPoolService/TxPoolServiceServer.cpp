@@ -41,20 +41,15 @@ bcostars::Error TxPoolServiceServer::broadcastTransaction(
         [m_transaction = std::move(const_cast<bcostars::Transaction&>(tx))]() mutable {
             return &m_transaction;
         });
-    bcos::task::wait([](std::shared_ptr<bcos::txpool::TxPoolInterface> txpool,
-                         protocol::TransactionImpl::Ptr transaction,
-                         tars::TarsCurrentPtr current) -> bcos::task::Task<void> {
-        try
-        {
-            co_await txpool->broadcastTransaction(*transaction);
-            async_response_broadcastTransaction(current, {});
-        }
-        catch (bcos::Error& e)
-        {
-            async_response_broadcastTransaction(current, toTarsError(e));
-        }
-    }(m_txpoolInitializer->txpool(), std::move(transaction), current));
-
+    try
+    {
+        m_txpoolInitializer->txpool()->broadcastTransaction(*transaction);
+        async_response_broadcastTransaction(current, {});
+    }
+    catch (bcos::Error& e)
+    {
+        async_response_broadcastTransaction(current, toTarsError(e));
+    }
     return {};
 }
 
@@ -62,25 +57,17 @@ bcostars::Error TxPoolServiceServer::broadcastTransactionBuffer(
     const vector<tars::Char>& transactionBuffer, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-
-    bcos::task::wait(
-        [](std::shared_ptr<bcos::txpool::TxPoolInterface> txpool, const bcos::bytesConstRef& _data,
-            tars::TarsCurrentPtr current)
-            -> bcos::task::Task<void> {
-            try
-            {
-                co_await txpool->broadcastTransactionBuffer(_data);
-                async_response_broadcastTransactionBuffer(current, {});
-            }
-            catch (bcos::Error& e)
-            {
-                async_response_broadcastTransactionBuffer(current, toTarsError(e));
-            }
-        }(m_txpoolInitializer->txpool(),
-                bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(transactionBuffer.data()),
-                    transactionBuffer.size()),
-                current));
-
+    try
+    {
+        m_txpoolInitializer->txpool()->broadcastTransactionBuffer(
+            bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(transactionBuffer.data()),
+                transactionBuffer.size()));
+        async_response_broadcastTransactionBuffer(current, {});
+    }
+    catch (bcos::Error& e)
+    {
+        async_response_broadcastTransactionBuffer(current, toTarsError(e));
+    }
     return {};
 }
 

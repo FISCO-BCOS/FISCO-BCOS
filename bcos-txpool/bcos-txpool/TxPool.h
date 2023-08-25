@@ -47,9 +47,13 @@ public:
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override;
 
-    task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
-    task::Task<void> broadcastTransactionBuffer(const bytesConstRef& _data) override;
-    task::Task<void> broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data) override;
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
+        protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) override;
+
+    void broadcastTransaction(const protocol::Transaction& transaction) override;
+    void broadcastTransactionBuffer(const bytesConstRef& _data) override;
+    void broadcastTransactionBufferByTree(
+        const bcos::bytesConstRef& _data, bool isStartNode = false) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)

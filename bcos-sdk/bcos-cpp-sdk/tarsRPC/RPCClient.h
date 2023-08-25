@@ -25,13 +25,13 @@ template <class Response>
 class Future
 {
 private:
-    std::future<tars::ReqMessagePtr> m_future;
+    std::shared_future<tars::ReqMessagePtr> m_future;
 
 public:
     Future() = default;
-    Future(std::future<tars::ReqMessagePtr> future) : m_future(std::move(future)) {}
-    Future(Future const&) = delete;
-    Future& operator=(Future const&) = delete;
+    Future(std::shared_future<tars::ReqMessagePtr> future) : m_future(std::move(future)) {}
+    Future(Future const&) = default;
+    Future& operator=(Future const&) = default;
     Future(Future&&) noexcept = default;
     Future& operator=(Future&&) noexcept = default;
     ~Future() noexcept = default;
@@ -44,7 +44,7 @@ public:
         auto& tarsCallback = dynamic_cast<detail::TarsCallback&>(*message->callback.get());
         return std::move(tarsCallback).getResponse<Response>();
     }
-    void wait() { m_future.wait(); }
+    void waitFor() { m_future.wait(); }
     template <typename Rep, typename Period>
     std::future_status waitFor(const std::chrono::duration<Rep, Period>& rel)
     {

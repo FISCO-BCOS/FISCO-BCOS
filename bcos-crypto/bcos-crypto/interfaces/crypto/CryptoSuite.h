@@ -25,10 +25,9 @@
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
 #include <mutex>
+#include <utility>
 
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 class CryptoSuite
 {
@@ -36,13 +35,13 @@ public:
     using Ptr = std::shared_ptr<CryptoSuite>;
     using UniquePtr = std::unique_ptr<CryptoSuite>;
 
-    CryptoSuite(Hash::Ptr _hashImpl, SignatureCrypto::Ptr _signatureImpl,
-        SymmetricEncryption::Ptr _symmetricEncryptionHandler)
-      : m_hashImpl(_hashImpl),
-        m_signatureImpl(_signatureImpl),
-        m_symmetricEncryptionHandler(_symmetricEncryptionHandler)
+    CryptoSuite(std::shared_ptr<Hash> _hashImpl, std::shared_ptr<SignatureCrypto> _signatureImpl,
+        std::shared_ptr<SymmetricEncryption> _symmetricEncryptionHandler)
+      : m_hashImpl(std::move(_hashImpl)),
+        m_signatureImpl(std::move(_signatureImpl)),
+        m_symmetricEncryptionHandler(std::move(_symmetricEncryptionHandler))
     {}
-    virtual ~CryptoSuite() {}
+    virtual ~CryptoSuite() = default;
     Hash::Ptr hashImpl() { return m_hashImpl; }
     SignatureCrypto::Ptr signatureImpl() { return m_signatureImpl; }
     SymmetricEncryption::Ptr symmetricEncryptionHandler() { return m_symmetricEncryptionHandler; }
@@ -67,5 +66,4 @@ private:
     SymmetricEncryption::Ptr m_symmetricEncryptionHandler;
     KeyFactory::Ptr m_keyFactory;
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

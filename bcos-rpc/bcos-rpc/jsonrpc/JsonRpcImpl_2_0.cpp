@@ -457,7 +457,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
 
             auto start = utcSteadyTime();
             std::string extraData = std::string(transaction->extraData());
-            co_await txpool->broadcastTransactionBuffer(bcos::ref(transactionData));
+            txpool->broadcastTransactionBuffer(bcos::ref(transactionData));
             auto submitResult = co_await txpool->submitTransaction(transaction);
 
             auto txHash = submitResult->txHash();

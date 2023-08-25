@@ -83,9 +83,26 @@ void TxPool::stop()
     {
         m_worker->stop();
     }
+    if (m_sealer)
+    {
+        m_sealer->stop();
+    }
+    if (m_txsPreStore)
+    {
+        m_txsPreStore->stop();
+    }
+    if (m_verifier)
+    {
+        m_verifier->stop();
+    }
     if (m_txpoolStorage)
     {
         m_txpoolStorage->stop();
+    }
+
+    if (m_transactionSync)
+    {
+        m_transactionSync->stop();
     }
 
     m_running = false;
@@ -98,39 +115,40 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 
-task::Task<void> TxPool::broadcastTransaction(const protocol::Transaction& transaction)
+task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWithHook(
+    protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook)
+{
+    co_return co_await m_txpoolStorage->submitTransactionWithHook(
+        std::move(transaction), std::move(afterInsertHook));
+}
+
+void TxPool::broadcastTransaction(const protocol::Transaction& transaction)
 {
     bcos::bytes buffer;
     transaction.encode(buffer);
 
-    co_await broadcastTransactionBuffer(bcos::ref(buffer));
-
-    co_return;
+    broadcastTransactionBuffer(bcos::ref(buffer));
 }
 
-task::Task<void> TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
+void TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
 {
     if (m_treeRouter != nullptr) [[unlikely]]
     {
-        co_await broadcastTransactionBufferByTree(_data);
+        broadcastTransactionBufferByTree(_data);
     }
     else [[likely]]
     {
         m_frontService->asyncSendBroadcastMessage(
             protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
     }
-    co_return;
 }
 
-task::Task<void> TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data)
+void TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data, bool isStartNode)
 {
     if (m_treeRouter != nullptr)
     {
         m_frontService->asyncGetGroupNodeInfo(
             [this, _data](Error::Ptr const&, const bcos::gateway::GroupNodeInfo::Ptr& groupInfo) {
-                auto selectedNode =
-                    m_treeRouter->selectNodes(m_transactionSync->config()->connectedGroupNodeList(),
-                        m_treeRouter->consIndex());
                 auto protocolList = groupInfo->nodeProtocolList();
                 // NOTE: the protocolList is a vector which sorted by nodeID, and is NOT convenience
                 // for filter whether send new protocol or not. So one-size-fits-all approach, if
@@ -141,18 +159,33 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(const bcos::bytesConst
                     });
                 if (index != protocolList.end()) [[unlikely]]
                 {
+                    TXPOOL_LOG(TRACE)
+                        << LOG_DESC("broadcastTransactionBufferByTree but have lower version node")
+                        << LOG_KV("index", index->get()->version());
                     // have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default
                     m_frontService->asyncSendBroadcastMessage(
                         protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
                 }
                 else [[likely]]
                 {
+                    auto selectedNode = m_treeRouter->selectNodes(
+                        m_transactionSync->config()->connectedGroupNodeList(),
+                        m_treeRouter->consIndex());
+                    if (c_fileLogLevel == TRACE) [[unlikely]]
+                    {
+                        std::stringstream nodeList;
+                        std::for_each(selectedNode->begin(), selectedNode->end(),
+                            [&](const bcos::crypto::NodeIDPtr& item) {
+                                nodeList << item->shortHex() << ",";
+                            });
+                        TXPOOL_LOG(TRACE) << LOG_DESC("broadcastTransactionBufferByTree")
+                                          << LOG_KV("selectedNode", nodeList.str());
+                    }
                     m_frontService->asyncSendMessageByNodeIDs(
                         protocol::TREE_PUSH_TRANSACTION, *selectedNode, _data);
                 }
             });
     }
-    co_return;
 }
 
 task::Task<std::vector<protocol::Transaction::ConstPtr>> TxPool::getTransactions(

@@ -22,18 +22,19 @@
 #include "Transaction.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 
+#include <utility>
+
 namespace bcos::protocol
 {
 class TransactionFactory
 {
 public:
-    using Ptr = std::shared_ptr<TransactionFactory>;
-
     TransactionFactory() = default;
     TransactionFactory(const TransactionFactory&) = default;
     TransactionFactory(TransactionFactory&&) = default;
     TransactionFactory& operator=(const TransactionFactory&) = default;
     TransactionFactory& operator=(TransactionFactory&&) = default;
+    using Ptr = std::shared_ptr<TransactionFactory>;
     virtual ~TransactionFactory() = default;
 
     virtual Transaction::Ptr createTransaction(
@@ -43,7 +44,15 @@ public:
         std::string _groupId, int64_t _importTime) = 0;
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bytes const& _input, std::string const& _nonce, int64_t _blockLimit, std::string _chainId,
-        std::string _groupId, int64_t _importTime, bcos::crypto::KeyPairInterface::Ptr keyPair) = 0;
+        std::string _groupId, int64_t _importTime,
+        const bcos::crypto::KeyPairInterface& keyPair) = 0;
+    Transaction::Ptr createTransaction(int32_t _version, std::string _to, bytes const& _input,
+        std::string const& _nonce, int64_t _blockLimit, std::string _chainId, std::string _groupId,
+        int64_t _importTime, const bcos::crypto::KeyPairInterface::Ptr& keyPair)
+    {
+        return createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
+            std::move(_chainId), std::move(_groupId), _importTime, *keyPair);
+    }
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() = 0;
 };
 }  // namespace bcos::protocol

@@ -20,7 +20,7 @@ config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "")
 
 
 # for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("executor-coverage" "'/usr*' 'boost/**' 'deps/**'")
-endif ()
+#if (COVERAGE)
+#    include(Coverage)
+#    config_coverage("executor-coverage" "'/usr*' 'boost/**' 'deps/**'")
+#endif ()

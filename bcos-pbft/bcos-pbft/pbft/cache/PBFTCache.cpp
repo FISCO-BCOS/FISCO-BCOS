@@ -32,8 +32,8 @@ PBFTCache::PBFTCache(PBFTConfig::Ptr _config, bcos::protocol::BlockNumber _index
 void PBFTCache::onCheckPointTimeout()
 {
     // Note: this logic is unreachable
-    if (!m_checkpointProposal || std::cmp_less(utcTime() - m_checkPointStartTime,
-                                     m_config->checkPointTimeoutInterval()))
+    if (!m_checkpointProposal ||
+        std::cmp_less(utcTime() - m_checkPointStartTime, m_config->checkPointTimeoutInterval()))
     {
         return;
     }
