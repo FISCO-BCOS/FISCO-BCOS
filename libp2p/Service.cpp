@@ -22,7 +22,9 @@
 #include "Service.h"
 #include "Common.h"
 #include "P2PMessage.h"
-#include "libdevcore/FixedHash.h"      // for FixedHash, hash
+#include "libdevcore/FixedHash.h"  // for FixedHash, hash
+#include "libdevcore/Guards.h"
+#include "libdevcore/Log.h"
 #include "libdevcore/ThreadPool.h"     // for ThreadPool
 #include "libnetwork/ASIOInterface.h"  // for ASIOInterface
 #include "libnetwork/Common.h"         // for SocketFace
@@ -389,8 +391,62 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             updateIncomingTraffic(p2pMessage);
         }
 
+
         if (p2pMessage->isRequestPacket())
         {
+            auto ret = dev::eth::getGroupAndProtocol(abs(p2pMessage->protocolID()));
+            if (g_BCOSConfig.enableIgnoreObserverWriteRequest())
+            {
+                if (isAMOPMessage)
+                {
+                    SERVICE_LOG(INFO)
+                        << LOG_BADGE("Write-filter") << LOG_DESC("ignore observer amop request")
+                        << LOG_KV("nodeID", nodeID.abridged())
+                        << LOG_KV("protocolID", dev::eth::ProtocolID::AMOP)
+                        << LOG_KV("messageSize", p2pMessage->length());
+                    return;
+                }
+                auto groupID = ret.first;
+                {
+                    RecursiveGuard guard(x_nodeList);
+                    auto& nodes = m_groupID2NodeList[groupID];
+                    auto it = std::find(nodes.begin(), nodes.end(), nodeID);
+                    if (it == nodes.end())
+                    {
+                        SERVICE_LOG(INFO)
+                            << LOG_BADGE("Write-filter")
+                            << LOG_DESC("ignore unregistered node request")
+                            << LOG_KV("nodeID", nodeID.abridged()) << LOG_KV("groupID", groupID)
+                            << LOG_KV("protocolID", ret.second)
+                            << LOG_KV("messageSize", p2pMessage->length());
+                        return;
+                    }
+                }
+                RecursiveGuard guard(x_observerList);
+                auto& observers = m_groupID2ObserverList[groupID];
+                auto it = std::find(observers.begin(), observers.end(), nodeID);
+                if (it != observers.end())
+                {
+                    if (ret.second == dev::eth::ProtocolID::PBFT ||
+                        ret.second == dev::eth::ProtocolID::Raft)
+                    {
+                        SERVICE_LOG(INFO)
+                            << LOG_BADGE("Write-filter")
+                            << LOG_DESC("ignore observer consensus request")
+                            << LOG_KV("nodeID", nodeID.abridged()) << LOG_KV("groupID", groupID)
+                            << LOG_KV("protocolID", ret.second)
+                            << LOG_KV("messageSize", p2pMessage->length());
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                SERVICE_LOG(INFO) << LOG_BADGE("Write-filter") << LOG_DESC("receive request")
+                                  << LOG_KV("nodeID", nodeID.abridged())
+                                  << LOG_KV("groupID", ret.first) << LOG_KV("protocolID", ret.second)
+                                  << LOG_KV("messageSize", p2pMessage->length());
+            }
             CallbackFuncWithSession callback;
             {
                 RecursiveGuard lock(x_protocolID2Handler);
@@ -1140,7 +1196,8 @@ bool Service::addPeers(
 {
     if (endpoints.size() > m_peersParamLimit)
     {
-        response = "refused for too many param peers. peers_param_limit: " + std::to_string(m_peersParamLimit);
+        response = "refused for too many param peers. peers_param_limit: " +
+                   std::to_string(m_peersParamLimit);
         return false;
     }
     auto nodes = staticNodes();
@@ -1159,7 +1216,8 @@ bool Service::addPeers(
     {
         SERVICE_LOG(INFO) << LOG_DESC("refused for too many peers")
                           << LOG_KV("LIMIT", m_maxNodesLimit);
-        response = "refused for too many peers. max_nodes_limit: " + std::to_string(m_maxNodesLimit);
+        response =
+            "refused for too many peers. max_nodes_limit: " + std::to_string(m_maxNodesLimit);
         return false;
     }
     setStaticNodes(nodes);
@@ -1173,7 +1231,8 @@ bool Service::erasePeers(
 {
     if (endpoints.size() > m_peersParamLimit)
     {
-        response = "refused for too many param peers. peers_param_limit: " + std::to_string(m_peersParamLimit);
+        response = "refused for too many param peers. peers_param_limit: " +
+                   std::to_string(m_peersParamLimit);
         return false;
     }
     auto nodes = staticNodes();

@@ -104,6 +104,30 @@ bool SyncMsgEngine::interpret(
                                << LOG_KV("type", int(_packet->packetType));
 
         auto self = std::weak_ptr<SyncMsgEngine>(shared_from_this());
+        if (g_BCOSConfig.enableIgnoreObserverWriteRequest())
+        {
+            if (_packet->packetType == TxsRequestPacket || _packet->packetType == TxsStatusPacket ||
+                _packet->packetType == TransactionsPacket)
+            {
+                std::lock_guard<std::mutex> lock(x_observerList);
+                auto it = std::find(m_observerList.begin(), m_observerList.end(), _packet->nodeId);
+                if (it != m_observerList.end())
+                {
+                    SYNC_ENGINE_LOG(INFO)
+                        << LOG_BADGE("Write-filter") << LOG_DESC("Drop observer write request")
+                        << LOG_KV("fromNodeId", _packet->nodeId.abridged())
+                        << LOG_KV("packetType", int(_packet->packetType));
+                    return true;
+                }
+            }
+        }
+        else
+        {
+            SYNC_ENGINE_LOG(INFO)
+                        << LOG_BADGE("Write-filter") << LOG_DESC("receive sync request")
+                        << LOG_KV("fromNodeId", _packet->nodeId.abridged())
+                        << LOG_KV("packetType", int(_packet->packetType));
+        }
         switch (_packet->packetType)
         {
         case StatusPacket:
@@ -121,7 +145,7 @@ bool SyncMsgEngine::interpret(
         case BlocksPacket:
             onPeerBlocks(*_packet);
             break;
-        case ReqBlocskPacket:
+        case ReqBlocksPacket:
             onPeerRequestBlocks(*_packet);
             break;
         // receive transaction hash, _msg is only used to ensure the life-time for rlps of _packet
@@ -135,7 +159,7 @@ bool SyncMsgEngine::interpret(
             });
             break;
         // receive txs-requests,  _msg is only used to ensure the life-time for rlps of _packet
-        case TxsRequestPacekt:
+        case TxsRequestPacket:
             m_txsSender->enqueue([self, _packet, _peer, _msg]() {
                 auto msgEngine = self.lock();
                 if (msgEngine)
