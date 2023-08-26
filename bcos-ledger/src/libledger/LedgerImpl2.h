@@ -31,7 +31,7 @@ private:
 
     template <std::same_as<bcos::concepts::ledger::HEADER>>
     task::Task<void> setBlockData(
-        auto& storage, std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData header: " << blockNumberKey;
         auto blockHeader = block.blockHeaderConst();
@@ -79,7 +79,7 @@ private:
 
     template <std::same_as<concepts::ledger::NONCES>>
     task::Task<void> setBlockData(
-        auto& storage, std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData nonce " << blockNumberKey;
 
@@ -150,7 +150,7 @@ private:
 
     template <std::same_as<concepts::ledger::TRANSACTIONS>>
     task::Task<void> setBlockData(
-        auto& storage, std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData transactions: " << blockNumberKey;
 
@@ -175,7 +175,7 @@ private:
 
     template <std::same_as<concepts::ledger::RECEIPTS>>
     task::Task<void> setBlockData(
-        auto& storage, std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData receipts: " << blockNumberKey;
 
@@ -186,7 +186,7 @@ private:
 
         auto setData = [&](auto getHashFunc) {
             tbb::parallel_for(
-                tbb::blocked_range(0LU, block.receiptsSize()), [&](auto const& range) {
+                tbb::blocked_range<size_t>(0LU, block.receiptsSize()), [&](auto const& range) {
                     for (auto i = range.begin(); i != range.end(); ++i)
                     {
                         hashes[i] = getHashFunc(i);
@@ -249,7 +249,7 @@ private:
 
     template <std::same_as<concepts::ledger::ALL>>
     task::Task<void> setBlockData(
-        Storage& storage, std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+        Storage& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData all: " << blockNumberKey;
 
