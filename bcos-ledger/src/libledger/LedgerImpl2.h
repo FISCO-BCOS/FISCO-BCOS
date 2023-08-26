@@ -161,7 +161,7 @@ private:
         std::vector<bcos::h256> hashes(block.transactionsSize());
         std::vector<std::vector<bcos::byte>> buffers(block.transactionsSize());
         tbb::parallel_for(
-            tbb::blocked_range(0LU, block.transactionsSize()), [&](auto const& range) {
+            tbb::blocked_range<size_t>(0LU, block.transactionsSize()), [&](auto const& range) {
                 for (auto i = range.begin(); i != range.end(); ++i)
                 {
                     auto transaction = block.transaction(i);
