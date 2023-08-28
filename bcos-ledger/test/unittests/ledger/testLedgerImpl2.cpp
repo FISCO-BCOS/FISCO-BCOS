@@ -45,7 +45,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
         co_await ledger.setBlock<bcos::concepts::ledger::HEADER, bcos::concepts::ledger::RECEIPTS>(
-            block);
+            storage, block);
 
         auto blockHeaderEntry = co_await storage2::readOne(storage,
             transaction_executor::StateKey{

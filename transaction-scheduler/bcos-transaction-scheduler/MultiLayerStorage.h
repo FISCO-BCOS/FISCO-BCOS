@@ -369,6 +369,17 @@ public:
         m_immutableStorages.pop_back();
     }
 
+    std::shared_ptr<MutableStorageType> lastImmutableStorage()
+    {
+        std::unique_lock immutablesLock(m_listMutex);
+        if (m_immutableStorages.empty())
+        {
+            BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
+        }
+
+        return m_immutableStorages.back();
+    }
+
     MutableStorageType& mutableStorage()
     {
         if (!m_mutableStorage)
