@@ -6,7 +6,7 @@
     ; the chain id, should never be changed
     chain_id=chain0
 [consensus]
-    ; consensus algorithm now support PBFT(consensus_type=pbft)
+    ; consensus algorithm now support PBFT(consensus_type=pbft),rPBFT(consensus_type=rpbft)
     consensus_type=pbft
     ; the max number of transactions of a block
     block_tx_count_limit=1000
