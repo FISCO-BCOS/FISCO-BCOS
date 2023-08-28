@@ -43,23 +43,27 @@ const uint64_t ENTRY_ID_START = 100000;
 class MemoryTableFactory2 : public TableFactory
 {
 public:
-    typedef std::shared_ptr<MemoryTableFactory2> Ptr;
-    MemoryTableFactory2();
-    virtual ~MemoryTableFactory2() {}
+    using Ptr = std::shared_ptr<MemoryTableFactory2>;
+    MemoryTableFactory2(bool enableReconfirmCommittee);
+    MemoryTableFactory2(const MemoryTableFactory2&) = delete;
+    MemoryTableFactory2(MemoryTableFactory2&&) = delete;
+    MemoryTableFactory2& operator=(const MemoryTableFactory2&) = delete;
+    MemoryTableFactory2& operator=(MemoryTableFactory2&&) = delete;
+    ~MemoryTableFactory2() noexcept override = default;
     virtual void init();
 
-    virtual Table::Ptr openTable(
+    Table::Ptr openTable(
         const std::string& tableName, bool authorityFlag = true, bool isPara = true) override;
-    virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
+    Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
         const std::string& valueField, bool authorityFlag = true,
         Address const& _origin = Address(), bool isPara = true) override;
 
-    virtual uint64_t ID() { return m_ID; };
-    virtual h256 hash() override;
-    virtual size_t savepoint() override;
-    virtual void commit() override;
-    virtual void rollback(size_t _savepoint) override;
-    virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
+    virtual uint64_t ID();
+    h256 hash() override;
+    size_t savepoint() override;
+    void commit() override;
+    void rollback(size_t _savepoint) override;
+    void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
 
 private:
     virtual Table::Ptr openTableWithoutLock(
@@ -76,6 +80,8 @@ private:
 
     // mutex
     mutable tbb::spin_mutex x_name2Table;
+
+    bool m_enableReconfirmCommittee;
 };
 
 }  // namespace storage

@@ -187,16 +187,7 @@ void LedgerParam::initTxExecuteConfig(ptree const& pt)
 {
     if (dev::stringCmpIgnoreCase(mutableStateParam().type, "storage") == 0)
     {
-        // enable parallel since v2.3.0 when stateType is storage
-        if (g_BCOSConfig.version() >= V2_3_0)
-        {
-            mutableTxParam().enableParallel = true;
-        }
-        // can configure enable_parallel before v2.3.0
-        else
-        {
-            mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
-        }
+        mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
     }
     else
     {
@@ -656,6 +647,8 @@ void LedgerParam::initStorageConfig(ptree const& pt)
     mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
     mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
     mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
+    mutableStorageParam().enableReconfirmCommittee =
+        pt.get<bool>("storage.enable_reconfirm_committee", false);
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initStorageConfig")
                           << LOG_KV("stateType", mutableStateParam().type)
@@ -668,7 +661,9 @@ void LedgerParam::initStorageConfig(ptree const& pt)
                           << LOG_KV("dbcharset", mutableStorageParam().dbCharset)
                           << LOG_KV("initconnections", mutableStorageParam().initConnections)
                           << LOG_KV("maxconnections", mutableStorageParam().maxConnections)
-                          << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold);
+                          << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold)
+                          << LOG_KV("enableReconfirmCommittee",
+                                 mutableStorageParam().enableReconfirmCommittee);
 }
 
 void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt)

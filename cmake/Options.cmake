@@ -87,7 +87,6 @@ macro(configure_project)
         endif()
         add_definitions(-DFISCO_SDF)
     endif()
-    
 
     #debug
     eth_default_option(DEBUG OFF)
@@ -95,13 +94,12 @@ macro(configure_project)
         add_definitions(-DFISCO_DEBUG)
     endif()
 
-    
-
     #perf
     eth_default_option(PROF OFF)
     if (PROF)
     	#add_definitions(-DPROF)
 	endif()
+    eth_default_option(WITH_URING OFF)
 
     # Define a matching property name of each of the "features".
     foreach(FEATURE ${ARGN})
@@ -145,8 +143,9 @@ macro(print_config NAME)
     message("-- TESTS              Build tests                  ${TESTS}")
     message("-- APPLE              Apple Machine                ${APPLE}")
     message("-- ARCH_NATIVE        Enable native code           ${ARCH_NATIVE}")
-    message("-- DEBUG                                           ${DEBUG}")
-    message("-- PROF                                            ${PROF}")
+    message("-- DEBUG              Enable debug macro           ${DEBUG}")
+    message("-- PROF               Enable gcc prof              ${PROF}")
+    message("-- WITH_URING         Compile with liburing        ${WITH_URING}")
     message("------------------------------------------------------------------------")
     message("")
 endmacro()

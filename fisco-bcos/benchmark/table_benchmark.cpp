@@ -118,7 +118,7 @@ int main(int argc, const char* argv[])
         cachedStorage->init();
         storage = cachedStorage;
     }
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>(false);
     tableFactoryFactory->setStorage(storage);
     auto tableFactory = tableFactoryFactory->newTableFactory(dev::h256(), blockNumber);
     // create context

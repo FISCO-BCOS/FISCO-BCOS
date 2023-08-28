@@ -26,12 +26,12 @@ struct SystemConfigPrecompiledFixture
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
         context = std::make_shared<ExecutiveContext>();
-        ExecutiveContextFactory factory;
+        ExecutiveContextFactory factory(false);
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
-        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>(false);
         factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         systemConfigPrecompiled = std::make_shared<SystemConfigPrecompiled>();

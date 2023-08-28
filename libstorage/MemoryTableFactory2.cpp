@@ -39,7 +39,8 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-MemoryTableFactory2::MemoryTableFactory2()
+MemoryTableFactory2::MemoryTableFactory2(bool enableReconfirmCommittee)
+  : m_enableReconfirmCommittee(enableReconfirmCommittee)
 {
     m_sysTables.push_back(SYS_CONSENSUS);
     m_sysTables.push_back(SYS_TABLES);
@@ -123,23 +124,48 @@ Table::Ptr MemoryTableFactory2::openTableWithoutLock(
     // authority flag
     if (authorityFlag)
     {
-        // set authorized address to memoryTable
-        if (tableName != std::string(SYS_ACCESS_TABLE))
+        do
         {
-            setAuthorizedAddress(tableInfo);
-        }
-        else
-        {
-            auto tableEntries = memoryTable->select(SYS_ACCESS_TABLE, memoryTable->newCondition());
-            for (size_t i = 0; i < tableEntries->size(); ++i)
+            // set authorized address to memoryTable
+            if (tableName != SYS_ACCESS_TABLE)
             {
-                auto entry = tableEntries->get(i);
-                if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
+                if (m_enableReconfirmCommittee)
                 {
-                    tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
+                    // Check at least 2 committee
+                    auto sysAccessTable = openTableWithoutLock(SYS_ACCESS_TABLE);
+                    auto tableEntries =
+                        sysAccessTable->select(SYS_ACCESS_TABLE, memoryTable->newCondition());
+                    auto count = tableEntries->size();
+
+                    STORAGE_LOG(DEBUG) << "Reconfirm committee count: " << count;
+                    if (count < RECONFIRM_COMMITTEE_COUNT)
+                    {
+                        break;  // by pass authority check
+                    }
+                }
+                setAuthorizedAddress(tableInfo);
+            }
+            else
+            {
+                auto tableEntries =
+                    memoryTable->select(SYS_ACCESS_TABLE, memoryTable->newCondition());
+
+                STORAGE_LOG(DEBUG) << "Reconfirm committee count: " << tableEntries->size();
+                if (tableEntries->size() < RECONFIRM_COMMITTEE_COUNT)
+                {
+                    break;  // by pass authority check
+                }
+
+                for (size_t i = 0; i < tableEntries->size(); ++i)
+                {
+                    auto entry = tableEntries->get(i);
+                    if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
+                    {
+                        tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
+                    }
                 }
             }
-        }
+        } while (false);
     }
 
     memoryTable->setTableInfo(tableInfo);
@@ -392,3 +418,7 @@ void MemoryTableFactory2::setAuthorizedAddress(storage::TableInfo::Ptr _tableInf
         }
     }
 }
+uint64_t dev::storage::MemoryTableFactory2::ID()
+{
+    return m_ID;
+};

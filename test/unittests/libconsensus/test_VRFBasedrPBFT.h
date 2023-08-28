@@ -200,7 +200,7 @@ public:
             m_workingSealerManager->sealerList, _sealersNum, NODE_TYPE_WORKING_SEALER);
         // create FakeVRFBasedrPBFTEngine
         auto blockChain = std::make_shared<FakeBlockChainForrPBFT>(m_workingSealerManager, 5, 5);
-        auto blockVerifier = std::make_shared<BlockVerifier>();
+        auto blockVerifier = std::make_shared<BlockVerifier>(false);
 
         m_fakerPBFT = std::make_shared<FakeConsensus<FakeVRFBasedrPBFTEngine>>(
             ProtocolID::PBFT, sealerList, blockVerifier, blockChain, keyPairVec[0]);

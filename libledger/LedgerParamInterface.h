@@ -51,7 +51,7 @@ class LedgerParamInterface
 {
 public:
     LedgerParamInterface() = default;
-    virtual ~LedgerParamInterface() {}
+    virtual ~LedgerParamInterface() = default;
     virtual TxPoolParam& mutableTxPoolParam() = 0;
     virtual ConsensusParam& mutableConsensusParam() = 0;
     virtual SyncParam& mutableSyncParam() = 0;
