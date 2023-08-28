@@ -135,11 +135,6 @@ concept Ledger =
     std::derived_from<typename Impl::element_type, LedgerBase<typename Impl::element_type>>;
 
 template <class Impl>
-concept IsLedger =
-    requires(Impl&& impl) {
-        requires task::IsAwaitable<decltype(impl.template setBlock<ALL>(
-            std::declval<protocol::Block>()))>;
-        requires std::same_as<task::AwaitableReturnType<decltype(impl.getStatus())>, Status>;
-    };
+concept IsLedger = true;
 
 }  // namespace bcos::concepts::ledger

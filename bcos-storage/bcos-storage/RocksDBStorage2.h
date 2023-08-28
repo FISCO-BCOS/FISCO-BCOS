@@ -1,5 +1,6 @@
 #pragma once
 #include "bcos-concepts/Exception.h"
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/AwaitableValue.h>
@@ -269,8 +270,6 @@ public:
 
     task::Task<void> merge(storage2::SeekableStorage auto& from)
     {
-        ::rocksdb::WriteBatch writeBatch;
-
         auto it = co_await from.seek(storage2::STORAGE_BEGIN);
         using IteratorKeyType = task::AwaitableReturnType<decltype(it.key())>;
         using IteratorValueType = task::AwaitableReturnType<decltype(it.value())>;
@@ -286,89 +285,61 @@ public:
             std::tuple<decltype(m_keyResolver.encode(std::declval<IteratorKeyType>())),
                 decltype(m_valueResolver.encode(std::declval<IteratorValueType>()))>;
         using DeleteKeyBuffer = decltype(m_keyResolver.encode(std::declval<IteratorKeyType>()));
-        using PipelineItem =
-            std::variant<std::monostate, KeyValue, DeleteKey, KeyValueBuffer, DeleteKeyBuffer>;
+        using Item = std::variant<KeyValue, DeleteKey>;
+        using EncodedItem = std::variant<KeyValueBuffer, DeleteKeyBuffer>;
 
-        tbb::parallel_pipeline(std::thread::hardware_concurrency() * 10,
-            tbb::make_filter<void, PipelineItem>(tbb::filter_mode::serial_in_order,
+        ::rocksdb::WriteBatch writeBatch;
+        tbb::parallel_pipeline(std::thread::hardware_concurrency(),
+            tbb::make_filter<void, Item>(tbb::filter_mode::serial_in_order,
                 [&](tbb::flow_control& control) {
-                    PipelineItem output;
-                    task::syncWait([&]() -> task::Task<void> {
+                    return task::syncWait([&]() -> task::Task<Item> {
                         if (!co_await it.next())
                         {
                             control.stop();
-                            co_return;
+                            co_return Item{};
                         }
 
                         if (co_await it.hasValue())
                         {
-                            output.template emplace<KeyValue>(
-                                refToPointer(co_await it.key()), refToPointer(co_await it.value()));
+                            co_return Item{KeyValue(refToPointer(co_await it.key()),
+                                refToPointer(co_await it.value()))};
                         }
                         else
                         {
-                            output.template emplace<DeleteKey>(refToPointer(co_await it.key()));
+                            co_return Item{DeleteKey(refToPointer(co_await it.key()))};
                         }
                     }());
-                    return output;
                 }) &
-                tbb::make_filter<PipelineItem, PipelineItem>(tbb::filter_mode::parallel,
-                    [&](PipelineItem&& input) {
-                        PipelineItem output;
-                        std::visit(
-                            [&](auto& item) {
-                                using ItemType = std::remove_cvref_t<decltype(item)>;
-                                if constexpr (std::is_same_v<std::monostate, ItemType>)
-                                {
-                                    return;
-                                }
-                                else if constexpr (std::is_same_v<KeyValue, ItemType>)
-                                {
-                                    auto& [key, value] = item;
-                                    output.template emplace<KeyValueBuffer>(
-                                        m_keyResolver.encode(pointerToRef(key)),
-                                        m_valueResolver.encode(pointerToRef(value)));
-                                }
-                                else if constexpr (std::is_same_v<DeleteKey, ItemType>)
-                                {
-                                    output.template emplace<DeleteKeyBuffer>(
-                                        m_keyResolver.encode(pointerToRef(item)));
-                                }
-                                else
-                                {
-                                    BOOST_THROW_EXCEPTION(UnexpectedItemType{});
-                                }
-                            },
+                tbb::make_filter<Item, EncodedItem>(tbb::filter_mode::parallel,
+                    [&](Item input) -> EncodedItem {
+                        return std::visit(
+                            bcos::overloaded{[&](KeyValue& keyValue) {
+                                                 auto& [key, value] = keyValue;
+                                                 return EncodedItem{KeyValueBuffer(
+                                                     m_keyResolver.encode(pointerToRef(key)),
+                                                     m_valueResolver.encode(pointerToRef(value)))};
+                                             },
+                                [&](DeleteKey& deleteKey) {
+                                    return EncodedItem{DeleteKeyBuffer(
+                                        m_keyResolver.encode(pointerToRef(deleteKey)))};
+                                }},
                             input);
-                        return output;
                     }) &
-                tbb::make_filter<PipelineItem, void>(
-                    tbb::filter_mode::serial_out_of_order, [&](PipelineItem&& input) {
-                        std::visit(
-                            [&](auto& item) {
-                                using ItemType = std::remove_cvref_t<decltype(item)>;
-                                if constexpr (std::is_same_v<std::monostate, ItemType>)
-                                {
-                                    return;
-                                }
-                                else if constexpr (std::is_same_v<KeyValueBuffer, ItemType>)
-                                {
-                                    auto& [keyBuffer, valueBuffer] = item;
-                                    writeBatch.Put(::rocksdb::Slice(RANGES::data(keyBuffer),
-                                                       RANGES::size(keyBuffer)),
-                                        ::rocksdb::Slice(
-                                            RANGES::data(valueBuffer), RANGES::size(valueBuffer)));
-                                }
-                                else if constexpr (std::is_same_v<DeleteKeyBuffer, ItemType>)
-                                {
-                                    writeBatch.Delete(
-                                        ::rocksdb::Slice(RANGES::data(item), RANGES::size(item)));
-                                }
-                                else
-                                {
-                                    BOOST_THROW_EXCEPTION(UnexpectedItemType{});
-                                }
-                            },
+                tbb::make_filter<EncodedItem, void>(
+                    tbb::filter_mode::serial_out_of_order, [&](EncodedItem input) {
+                        std::visit(bcos::overloaded{
+                                       [&](KeyValueBuffer& keyValueBuffer) {
+                                           auto& [keyBuffer, valueBuffer] = keyValueBuffer;
+                                           writeBatch.Put(::rocksdb::Slice(RANGES::data(keyBuffer),
+                                                              RANGES::size(keyBuffer)),
+                                               ::rocksdb::Slice(RANGES::data(valueBuffer),
+                                                   RANGES::size(valueBuffer)));
+                                       },
+                                       [&](DeleteKeyBuffer& deleteKeyBuffer) {
+                                           writeBatch.Delete(
+                                               ::rocksdb::Slice(RANGES::data(deleteKeyBuffer),
+                                                   RANGES::size(deleteKeyBuffer)));
+                                       }},
                             input);
                     }));
         ::rocksdb::WriteOptions options;
