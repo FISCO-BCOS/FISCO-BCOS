@@ -46,7 +46,7 @@ public:
     void updateNotifyRotateFlag(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
 
     void setShouldRotateSealers(bool _shouldRotateSealers);
-    bool shouldRotateSealers() const;
+    bool shouldRotateSealers(protocol::BlockNumber) const;
 
 private:
     // the node index in working consensus node list

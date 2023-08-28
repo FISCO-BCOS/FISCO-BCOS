@@ -50,7 +50,9 @@ public:
     void resetConfig(
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock = false) override;
 
-    bool shouldRotateSealers() const override;
+    bool shouldRotateSealers(protocol::BlockNumber _number) const override;
+
+    RPBFTConfigTools::Ptr rpbftConfigTools() const noexcept override { return m_configTools; }
 
 private:
     RPBFTConfigTools::Ptr m_configTools;

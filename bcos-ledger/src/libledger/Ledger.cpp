@@ -1011,8 +1011,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
                     // set
                     if (error)
                     {
-                        LEDGER_LOG(DEBUG)
-                            << "GetSystemConfigByKey, " << boost::diagnostic_information(*error);
+                        LEDGER_LOG(DEBUG) << "GetSystemConfigByKey, " << error->errorMessage();
                         callback(std::move(error), "", -1);
                         return;
                     }
@@ -1442,7 +1441,7 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
 
         table->asyncGetRow(key, [this, key, callback = std::move(callback)](
                                     auto&& error, std::optional<Entry>&& entry) {
-            auto entryError = checkEntryValid(std::move(error), entry, key);
+            auto entryError = checkEntryValid(std::forward<decltype(error)>(error), entry, key);
             if (entryError)
             {
                 callback(std::move(entryError), {});
