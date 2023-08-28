@@ -11,7 +11,7 @@ SHELL_FOLDER=$(
     pwd
 )
 
-check_script="clang-format-9"
+check_script="clang-format"
 commit_limit=6
 file_limit=35
 insert_limit=300

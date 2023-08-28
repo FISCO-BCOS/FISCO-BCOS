@@ -401,7 +401,7 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
                 {
                     SERVICE_LOG(INFO)
                         << LOG_BADGE("Write-filter") << LOG_DESC("ignore observer amop request")
-                        << LOG_KV("nodeID", nodeID.abridged())
+                        << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("nodeID", nodeID.hex())
                         << LOG_KV("protocolID", dev::eth::ProtocolID::AMOP)
                         << LOG_KV("messageSize", p2pMessage->length());
                     return;
@@ -416,7 +416,8 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
                         SERVICE_LOG(INFO)
                             << LOG_BADGE("Write-filter")
                             << LOG_DESC("ignore unregistered node request")
-                            << LOG_KV("nodeID", nodeID.abridged()) << LOG_KV("groupID", groupID)
+                            << LOG_KV("endpoint", nodeIPEndpoint)
+                            << LOG_KV("nodeID", nodeID.hex()) << LOG_KV("groupID", groupID)
                             << LOG_KV("protocolID", ret.second)
                             << LOG_KV("messageSize", p2pMessage->length());
                         return;
@@ -433,19 +434,13 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
                         SERVICE_LOG(INFO)
                             << LOG_BADGE("Write-filter")
                             << LOG_DESC("ignore observer consensus request")
-                            << LOG_KV("nodeID", nodeID.abridged()) << LOG_KV("groupID", groupID)
+                            << LOG_KV("endpoint", nodeIPEndpoint)
+                            << LOG_KV("nodeID", nodeID.hex()) << LOG_KV("groupID", groupID)
                             << LOG_KV("protocolID", ret.second)
                             << LOG_KV("messageSize", p2pMessage->length());
                         return;
                     }
                 }
-            }
-            else
-            {
-                SERVICE_LOG(INFO) << LOG_BADGE("Write-filter") << LOG_DESC("receive request")
-                                  << LOG_KV("nodeID", nodeID.abridged())
-                                  << LOG_KV("groupID", ret.first) << LOG_KV("protocolID", ret.second)
-                                  << LOG_KV("messageSize", p2pMessage->length());
             }
             CallbackFuncWithSession callback;
             {

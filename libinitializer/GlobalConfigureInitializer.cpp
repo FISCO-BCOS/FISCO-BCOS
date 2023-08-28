@@ -250,4 +250,5 @@ void dev::version()
               << FISCO_BCOS_BUILD_TYPE << std::endl;
     std::cout << "Git Branch         : " << FISCO_BCOS_BUILD_BRANCH << std::endl;
     std::cout << "Git Commit Hash    : " << FISCO_BCOS_COMMIT_HASH << std::endl;
+    std::cout << "Compile Options    : " << FISCO_BCOS_COMPILE_OPTIONS << std::endl;
 }

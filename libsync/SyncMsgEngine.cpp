@@ -121,13 +121,6 @@ bool SyncMsgEngine::interpret(
                 }
             }
         }
-        else
-        {
-            SYNC_ENGINE_LOG(INFO)
-                        << LOG_BADGE("Write-filter") << LOG_DESC("receive sync request")
-                        << LOG_KV("fromNodeId", _packet->nodeId.abridged())
-                        << LOG_KV("packetType", int(_packet->packetType));
-        }
         switch (_packet->packetType)
         {
         case StatusPacket:
