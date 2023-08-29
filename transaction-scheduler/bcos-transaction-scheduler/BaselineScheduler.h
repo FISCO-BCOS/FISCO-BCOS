@@ -336,7 +336,7 @@ private:
                             submitResult->setStatus(receipt->status());
                             submitResult->setTxHash(result.m_block->transactionHash(index));
                             submitResult->setBlockHash(blockHeader->hash());
-                            submitResult->setTransactionIndex(index);
+                            submitResult->setTransactionIndex(static_cast<int64_t>(index));
                             submitResult->setNonce(transaction->nonce());
                             submitResult->setTransactionReceipt(std::move(receipt));
                             submitResult->setSender(std::string(transaction->sender()));
