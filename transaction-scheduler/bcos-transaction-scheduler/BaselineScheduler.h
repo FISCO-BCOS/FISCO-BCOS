@@ -258,6 +258,120 @@ private:
         }
     }
 
+    task::Task<std::tuple<Error::Ptr, ledger::LedgerConfig::Ptr>> coCommitBlock(
+        protocol::BlockHeader::Ptr header)
+    {
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+            ittapi::ITT_DOMAINS::instance().COMMIT_BLOCK);
+        try
+        {
+            BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << header->number();
+
+            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
+            if (!commitLock.owns_lock())
+            {
+                auto message =
+                    fmt::format("Another block:{} is committing!", m_lastcommittedBlockNumber);
+                BASELINE_SCHEDULER_LOG(INFO) << message;
+
+                co_return std::make_tuple(
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr);
+            }
+
+            if (m_lastcommittedBlockNumber != -1 &&
+                header->number() - m_lastcommittedBlockNumber != 1)
+            {
+                auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
+                    header->number(), m_lastcommittedBlockNumber + 1);
+
+                BASELINE_SCHEDULER_LOG(INFO) << message;
+                co_return std::make_tuple(
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr);
+            }
+
+            std::unique_lock resultsLock(m_resultsMutex);
+            if (m_results.empty())
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected empty results!"));
+            }
+
+            auto result = std::move(m_results.back());
+            m_results.pop_back();
+            resultsLock.unlock();
+
+            if (header->number() != 0)
+            {
+                result.m_block->setBlockHeader(header);
+                co_await m_schedulerImpl.commit(m_ledger, *(result.m_block), result.m_transactions);
+            }
+            else
+            {
+                BASELINE_SCHEDULER_LOG(INFO) << "Ignore commit block header: 0";
+                co_await m_schedulerImpl.commit();
+            }
+
+            // Write states
+            auto ledgerConfig =
+                std::make_shared<ledger::LedgerConfig>(co_await m_ledger.getConfig());
+            ledgerConfig->setHash(header->hash());
+            BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number();
+            commitLock.unlock();
+
+            m_notifyGroup.run([this, result = std::move(result)]() {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
+
+                auto blockHeader = result.m_block->blockHeaderConst();
+                auto submitResults =
+                    RANGES::views::iota(0LU, result.m_block->receiptsSize()) |
+                    RANGES::views::transform(
+                        [&, this](uint64_t index) -> protocol::TransactionSubmitResult::Ptr {
+                            auto& transaction = result.m_transactions[index];
+                            auto receipt = result.m_block->receipt(index);
+
+                            auto submitResult =
+                                m_transactionSubmitResultFactory.createTxSubmitResult();
+                            submitResult->setStatus(receipt->status());
+                            submitResult->setTxHash(result.m_block->transactionHash(index));
+                            submitResult->setBlockHash(blockHeader->hash());
+                            submitResult->setTransactionIndex(static_cast<int64_t>(index));
+                            submitResult->setNonce(transaction->nonce());
+                            submitResult->setTransactionReceipt(std::move(receipt));
+                            submitResult->setSender(std::string(transaction->sender()));
+                            submitResult->setTo(std::string(transaction->to()));
+
+                            return submitResult;
+                        }) |
+                    RANGES::to<std::vector<protocol::TransactionSubmitResult::Ptr>>();
+
+                auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
+                    std::move(submitResults));
+                m_blockNumberNotifier(blockHeader->number());
+                m_transactionNotifier(blockHeader->number(), std::move(submitResultsPtr),
+                    [](const Error::Ptr& error) {
+                        if (error)
+                        {
+                            BASELINE_SCHEDULER_LOG(WARNING)
+                                << "Push block notify error!"
+                                << boost::diagnostic_information(*error);
+                        }
+                    });
+            });
+
+            co_return std::make_tuple(Error::Ptr{}, std::move(ledgerConfig));
+        }
+        catch (std::exception& e)
+        {
+            auto message = fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
+            BASELINE_SCHEDULER_LOG(ERROR) << message;
+
+            co_return std::make_tuple(
+                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message), nullptr);
+        }
+    }
+
 public:
     BaselineScheduler(SchedulerImpl& schedulerImpl, protocol::BlockHeaderFactory& blockFactory,
         Ledger& ledger, txpool::TxPoolInterface& txPool,
@@ -291,128 +405,7 @@ public:
     {
         task::wait([](decltype(this) self, protocol::BlockHeader::Ptr blockHeader,
                        decltype(callback) callback) -> task::Task<void> {
-            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
-                ittapi::ITT_DOMAINS::instance().COMMIT_BLOCK);
-            try
-            {
-                BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << blockHeader->number();
-
-                std::unique_lock commitLock(self->m_commitMutex, std::try_to_lock);
-                if (!commitLock.owns_lock())
-                {
-                    auto message = fmt::format(
-                        "Another block:{} is committing!", self->m_lastcommittedBlockNumber);
-                    BASELINE_SCHEDULER_LOG(INFO) << message;
-
-                    report.release();
-                    callback(
-                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                        nullptr);
-
-                    co_return;
-                }
-
-                if (self->m_lastcommittedBlockNumber != -1 &&
-                    blockHeader->number() - self->m_lastcommittedBlockNumber != 1)
-                {
-                    auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
-                        blockHeader->number(), self->m_lastcommittedBlockNumber + 1);
-
-                    commitLock.unlock();
-                    BASELINE_SCHEDULER_LOG(INFO) << message;
-
-                    report.release();
-                    callback(BCOS_ERROR_UNIQUE_PTR(
-                                 scheduler::SchedulerError::InvalidBlockNumber, message),
-                        nullptr);
-                    co_return;
-                }
-
-                std::unique_lock resultsLock(self->m_resultsMutex);
-                if (self->m_results.empty())
-                {
-                    BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected empty results!"));
-                }
-
-                auto result = std::move(self->m_results.back());
-                self->m_results.pop_back();
-                resultsLock.unlock();
-
-                if (blockHeader->number() != 0)
-                {
-                    result.m_block->setBlockHeader(blockHeader);
-                    co_await self->m_schedulerImpl.commit(
-                        self->m_ledger, *(result.m_block), result.m_transactions);
-                }
-                else
-                {
-                    BASELINE_SCHEDULER_LOG(INFO) << "Ignore commit block header: 0";
-                    co_await self->m_schedulerImpl.commit();
-                }
-
-                // Write states
-                auto ledgerConfig =
-                    std::make_shared<ledger::LedgerConfig>(co_await self->m_ledger.getConfig());
-                ledgerConfig->setHash(blockHeader->hash());
-                BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << blockHeader->number();
-                commitLock.unlock();
-
-                self->m_notifyGroup.run([self = self, result = std::move(result)]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
-                        ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
-
-                    auto blockHeader = result.m_block->blockHeaderConst();
-                    auto submitResults =
-                        RANGES::views::iota(0LU, result.m_block->receiptsSize()) |
-                        RANGES::views::transform(
-                            [&](uint64_t index) -> protocol::TransactionSubmitResult::Ptr {
-                                auto& transaction = result.m_transactions[index];
-                                auto receipt = result.m_block->receipt(index);
-
-                                auto submitResult =
-                                    self->m_transactionSubmitResultFactory.createTxSubmitResult();
-                                submitResult->setStatus(receipt->status());
-                                submitResult->setTxHash(result.m_block->transactionHash(index));
-                                submitResult->setBlockHash(blockHeader->hash());
-                                submitResult->setTransactionIndex(index);
-                                submitResult->setNonce(transaction->nonce());
-                                submitResult->setTransactionReceipt(std::move(receipt));
-                                submitResult->setSender(std::string(transaction->sender()));
-                                submitResult->setTo(std::string(transaction->to()));
-
-                                return submitResult;
-                            }) |
-                        RANGES::to<std::vector<protocol::TransactionSubmitResult::Ptr>>();
-
-                    auto submitResultsPtr =
-                        std::make_shared<bcos::protocol::TransactionSubmitResults>(
-                            std::move(submitResults));
-                    self->m_blockNumberNotifier(blockHeader->number());
-                    self->m_transactionNotifier(blockHeader->number(), std::move(submitResultsPtr),
-                        [](const Error::Ptr& error) {
-                            if (error)
-                            {
-                                BASELINE_SCHEDULER_LOG(WARNING)
-                                    << "Push block notify error!"
-                                    << boost::diagnostic_information(*error);
-                            }
-                        });
-                });
-
-                report.release();
-                callback(nullptr, std::move(ledgerConfig));
-                co_return;
-            }
-            catch (std::exception& e)
-            {
-                auto message =
-                    fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
-                BASELINE_SCHEDULER_LOG(ERROR) << message;
-
-                report.release();
-                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
-                    nullptr);
-            }
+            std::apply(callback, co_await self->coCommitBlock(std::move(blockHeader)));
         }(this, std::move(header), std::move(callback)));
     }
 
