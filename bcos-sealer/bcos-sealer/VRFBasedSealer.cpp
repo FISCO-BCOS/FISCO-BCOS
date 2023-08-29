@@ -34,7 +34,8 @@ bool VRFBasedSealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
 {
     const auto& consensusConfig = dynamic_cast<consensus::ConsensusConfig const&>(
         *m_sealerConfig->consensus()->consensusConfig());
-    if (!consensusConfig.shouldRotateSealers())
+    if (!consensusConfig.shouldRotateSealers(
+            _block == nullptr ? -1 : _block->blockHeader()->number()))
     {
         return true;
     }
@@ -111,7 +112,8 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
         SEAL_LOG(INFO) << LOG_DESC("generateTransactionForRotating succ")
                        << LOG_KV("nodeIdx", _sealerConfig->consensus()->nodeIndex())
                        << LOG_KV("blkNum", blockNumber) << LOG_KV("hash", blockHash.abridged())
-                       << LOG_KV("nodeId", keyPair->publicKey()->hex());
+                       << LOG_KV("nodeId", keyPair->publicKey()->hex())
+                       << LOG_KV("address", address.hex());
     }
     catch (const std::exception& e)
     {

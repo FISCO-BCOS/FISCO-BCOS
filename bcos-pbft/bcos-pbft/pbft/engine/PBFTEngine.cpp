@@ -801,19 +801,19 @@ bool PBFTEngine::checkRotateTransactionValid(
 
     // Note: if the block contains rotatingTx when m_shouldRotateSealers is false
     //       the rotatingTx will be reverted by the ordinary node when executing
-    if (!shouldRotateSealers()) [[unlikely]]
+    if (!shouldRotateSealers(_proposal->index())) [[unlikely]]
     {
         return true;
     }
 
     auto block = m_config->blockFactory()->createBlock(_proposal->consensusProposal()->data());
 
-    PBFT_LOG(DEBUG) << LOG_DESC("checkRotateTransactionValid")
-                    << LOG_KV("reqIndex", _proposal->index())
-                    << LOG_KV("reqHash", _proposal->hash().abridged())
-                    << LOG_KV("leaderIdx", _proposal->generatedFrom())
-                    << LOG_KV("nodeIdx", m_config->nodeIndex())
-                    << LOG_KV("txSize", block->transactionsSize());
+    PBFT_LOG(INFO) << LOG_DESC("checkRotateTransactionValid")
+                   << LOG_KV("reqIndex", _proposal->index())
+                   << LOG_KV("reqHash", _proposal->hash().abridged())
+                   << LOG_KV("leaderIdx", _proposal->generatedFrom())
+                   << LOG_KV("nodeIdx", m_config->nodeIndex())
+                   << LOG_KV("txSize", block->transactionsSize());
 
     auto rotatingTx = block->transactionMetaData(0);
     if (rotatingTx->to() != bcos::precompiled::CONSENSUS_ADDRESS &&
@@ -839,6 +839,7 @@ bool PBFTEngine::checkRotateTransactionValid(
                       << LOG_KV("reqHash", _proposal->hash().abridged())
                       << LOG_KV("fromIdx", _proposal->generatedFrom())
                       << LOG_KV("leader", _leaderInfo->nodeID()->hex())
+                      << LOG_KV("leaderAddress", leaderAddress.hex())
                       << LOG_KV("sender", rotatingTx->source());
     return false;
 }

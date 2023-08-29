@@ -103,14 +103,14 @@ public:
     {
         m_ledgerFetcher = std::move(_ledgerFetcher);
     }
-    bool shouldRotateSealers() const
+    bool shouldRotateSealers(protocol::BlockNumber _number) const
     {
-        if (m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE &&
+        if (m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE ||
             m_config->rpbftConfigTools() == nullptr)
         {
             return false;
         }
-        return m_config->rpbftConfigTools()->shouldRotateSealers();
+        return m_config->rpbftConfigTools()->shouldRotateSealers(_number);
     }
 
 protected:
