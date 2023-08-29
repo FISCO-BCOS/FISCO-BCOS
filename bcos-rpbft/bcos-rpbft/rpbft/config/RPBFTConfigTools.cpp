@@ -97,7 +97,7 @@ void RPBFTConfigTools::updateShouldRotateSealers(
     const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig)
 {
     // reset shouldRotateSealers
-    if (shouldRotateSealers())
+    if (shouldRotateSealers(-1))
     {
         setShouldRotateSealers(false);
     }
@@ -143,7 +143,7 @@ void RPBFTConfigTools::updateShouldRotateSealers(
         setShouldRotateSealers(true);
     }
     RPBFT_LOG(INFO) << LOG_DESC("resetConfig") << LOG_KV("blkNum", _ledgerConfig->blockNumber())
-                    << LOG_KV("shouldRotateConsensus", shouldRotateSealers())
+                    << LOG_KV("shouldRotateConsensus", shouldRotateSealers(-1))
                     << LOG_KV("workingConsensusNum", m_workingSealerNodeNum)
                     << LOG_KV("rotateInterval", m_epochBlockNum)
                     << LOG_KV("configuredEpochSealerNum", m_epochSealerNum);
@@ -175,8 +175,15 @@ void RPBFTConfigTools::updateNotifyRotateFlag(const bcos::ledger::LedgerConfig::
     m_notifyRotateFlag = _ledgerConfig->notifyRotateFlagInfo();
 }
 
-bool RPBFTConfigTools::shouldRotateSealers() const
+bool RPBFTConfigTools::shouldRotateSealers(protocol::BlockNumber _number) const
 {
+    if (!m_shouldRotateWorkingSealer && _number != -1)
+    {
+        if ((_number + 1 - m_epochBlockNumEnableNumber) % m_epochBlockNum == 0)
+        {
+            return true;
+        }
+    }
     return m_shouldRotateWorkingSealer;
 }
 

@@ -172,10 +172,13 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
         //       here must use noteChange for this function will notify updating the txsCache
         if (_handleBlockHook(block))
         {
-            if (block->transactionsSize() > 0)
+            if (block->transactionsMetaDataSize() > 0 || block->transactionsSize() > 0)
             {
                 containSysTxs = true;
-                txsSize--;
+                if (txsSize == m_maxTxsPerBlock)
+                {
+                    txsSize--;
+                }
             }
         }
     }
