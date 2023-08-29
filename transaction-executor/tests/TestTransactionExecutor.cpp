@@ -30,14 +30,13 @@ BOOST_AUTO_TEST_CASE(execute)
 {
     task::syncWait([this]() mutable -> task::Task<void> {
         memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
-        TableNamePool tableNamePool;
 
         auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
             bcos::transaction_executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);
         bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory(cryptoSuite);
 
         bcos::transaction_executor::TransactionExecutorImpl executor(
-            storage, receiptFactory, tableNamePool, *precompiledManager);
+            storage, receiptFactory, *precompiledManager);
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);

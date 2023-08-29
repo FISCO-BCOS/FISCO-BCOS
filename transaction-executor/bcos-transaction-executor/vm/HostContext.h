@@ -26,7 +26,6 @@
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
 #include "bcos-framework/protocol/LogEntry.h"
-#include "bcos-framework/storage2/StringPool.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -70,7 +69,6 @@ class HostContext : public evmc_host_context
 private:
     VMFactory& m_vmFactory;
     Storage& m_rollbackableStorage;
-    TableNamePool& m_tableNamePool;
     protocol::BlockHeader const& m_blockHeader;
     const evmc_message& m_message;
     const evmc_address& m_origin;
@@ -78,25 +76,22 @@ private:
     int64_t& m_seq;
     PrecompiledManager const& m_precompiledManager;
 
-    TableNameID m_myContractTable;
-    TableNameID m_codeTable;
-    TableNameID m_abiTable;
+    SmallString m_myContractTable;
     evmc_address m_newContractAddress;  // Set by getMyContractTable, not need initialize value!
     std::vector<protocol::LogEntry> m_logs;
 
-    TableNameID getTableNameID(const evmc_address& address)
+    SmallString getTableName(const evmc_address& address)
     {
-        std::array<char, USER_APPS_PREFIX.size() + sizeof(address)> tableName;
-        std::uninitialized_copy_n(
-            USER_APPS_PREFIX.data(), USER_APPS_PREFIX.size(), tableName.data());
-        std::uninitialized_copy_n((const char*)address.bytes, sizeof(address),
-            tableName.data() + USER_APPS_PREFIX.size());
+        SmallString tableName;
+        tableName.reserve(USER_APPS_PREFIX.size() + sizeof(address));
+        tableName.insert(tableName.end(), USER_APPS_PREFIX.begin(), USER_APPS_PREFIX.end());
+        tableName.insert(tableName.end(), (const char*)address.bytes,
+            (const char*)address.bytes + sizeof(address));
 
-        return storage2::string_pool::makeStringID(
-            m_tableNamePool, std::string_view(tableName.data(), tableName.size()));
+        return tableName;
     }
 
-    TableNameID getMyContractTable(
+    SmallString getMyContractTable(
         const protocol::BlockHeader& blockHeader, const evmc_message& message)
     {
         switch (message.kind)
@@ -108,7 +103,7 @@ private:
             std::uninitialized_copy_n(
                 hash.data(), sizeof(m_newContractAddress.bytes), m_newContractAddress.bytes);
 
-            return getTableNameID(m_newContractAddress);
+            return getTableName(m_newContractAddress);
         }
         case EVMC_CREATE2:
         {
@@ -119,15 +114,14 @@ private:
         {
             // CALL OR DELEGATECALL
             m_newContractAddress = {};
-            return getTableNameID(message.recipient);
+            return getTableName(message.recipient);
         }
         }
     }
 
 public:
-    HostContext(VMFactory& vmFactory, Storage& storage, TableNamePool& tableNamePool,
-        protocol::BlockHeader const& blockHeader, const evmc_message& message,
-        const evmc_address& origin, int contextID, int64_t& seq,
+    HostContext(VMFactory& vmFactory, Storage& storage, protocol::BlockHeader const& blockHeader,
+        const evmc_message& message, const evmc_address& origin, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager)
       : evmc_host_context{.interface = getHostInterface<HostContext>(),
             .wasm_interface = nullptr,
@@ -138,16 +132,13 @@ public:
             .metrics = &ethMetrics},
         m_vmFactory(vmFactory),
         m_rollbackableStorage(storage),
-        m_tableNamePool(tableNamePool),
         m_blockHeader(blockHeader),
         m_message(message),
         m_origin(origin),
         m_contextID(contextID),
         m_seq(seq),
         m_precompiledManager(precompiledManager),
-        m_myContractTable(getMyContractTable(blockHeader, message)),
-        m_codeTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CODE_BINARY)),
-        m_abiTable(storage2::string_pool::makeStringID(m_tableNamePool, ledger::SYS_CONTRACT_ABI))
+        m_myContractTable(getMyContractTable(blockHeader, message))
     {}
     ~HostContext() noexcept = default;
 
@@ -159,7 +150,7 @@ public:
     task::Task<evmc_bytes32> get(const evmc_bytes32* key)
     {
         auto it =
-            co_await m_rollbackableStorage.read(RANGES::single_view<StateKey>(RANGES::in_place,
+            co_await m_rollbackableStorage.read(RANGES::single_view<StateKeyView>(RANGES::in_place,
                 m_myContractTable, std::string_view((const char*)key->bytes, sizeof(key->bytes))));
         co_await it.next();
 
@@ -187,7 +178,7 @@ public:
 
         co_await m_rollbackableStorage.write(
             RANGES::single_view<StateKey>(RANGES::in_place, m_myContractTable,
-                SmallKey{bytesConstRef(key->bytes, sizeof(key->bytes))}),
+                SmallString{bytesConstRef(key->bytes, sizeof(key->bytes))}),
             RANGES::single_view<storage::Entry>(std::move(entry)));
     }
 
@@ -195,14 +186,14 @@ public:
     {
         // Need block version >= 3.1
         auto codeHashIt = co_await m_rollbackableStorage.read(RANGES::single_view<StateKey>(
-            RANGES::in_place, getTableNameID(address), ACCOUNT_CODE_HASH));
+            RANGES::in_place, getTableName(address), ACCOUNT_CODE_HASH));
         co_await codeHashIt.next();
         if (co_await codeHashIt.hasValue())
         {
             auto&& codeHashEntry = co_await codeHashIt.value();
 
-            auto codeIt = co_await m_rollbackableStorage.read(
-                RANGES::single_view(StateKey{m_codeTable, codeHashEntry.get()}));
+            auto codeIt = co_await m_rollbackableStorage.read(RANGES::single_view<StateKeyView>(
+                RANGES::in_place, ledger::SYS_CODE_BINARY, codeHashEntry.get()));
 
             co_await codeIt.next();
             if (co_await codeIt.hasValue())
@@ -222,12 +213,12 @@ public:
         // Need block version >= 3.1
         // Query the code table first
         if (!co_await storage2::existsOne(
-                m_rollbackableStorage, StateKey{m_codeTable, codeHashEntry.get()}))
+                m_rollbackableStorage, StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()}))
         {
             storage::Entry codeEntry;
             codeEntry.set(code.toBytes());
-            co_await m_rollbackableStorage.write(
-                RANGES::single_view<StateKey>(RANGES::in_place, m_codeTable, codeHashEntry.get()),
+            co_await m_rollbackableStorage.write(RANGES::single_view<StateKey>(RANGES::in_place,
+                                                     ledger::SYS_CODE_BINARY, codeHashEntry.get()),
                 RANGES::single_view(std::move(codeEntry)));
         }
         co_await m_rollbackableStorage.write(
@@ -250,14 +241,15 @@ public:
 
         storage::Entry abiEntry;
         abiEntry.set(std::move(abi));
-        auto abiIt = co_await m_rollbackableStorage.read(
-            RANGES::single_view(StateKey{m_abiTable, codeHashView}));
+        auto abiIt = co_await m_rollbackableStorage.read(RANGES::single_view<StateKeyView>(
+            RANGES::in_place, ledger::SYS_CONTRACT_ABI, codeHashView));
         co_await abiIt.next();
         if (!co_await abiIt.hasValue())
         {
-            co_await m_rollbackableStorage.write(m_abiTable,
-                RANGES::single_view(StateKey{m_abiTable, codeHashView}),
-                RANGES::single_view(abiEntry));
+            co_await m_rollbackableStorage.write(ledger::SYS_CONTRACT_ABI,
+                RANGES::single_view<StateKey>(
+                    RANGES::in_place, ledger::SYS_CONTRACT_ABI, codeHashView),
+                RANGES::single_view(std::move(abiEntry)));
         }
         co_return;
     }
@@ -277,7 +269,7 @@ public:
     {
         // TODO: check is precompiled
         auto it = co_await m_rollbackableStorage.read(
-            RANGES::single_view(StateKey{getTableNameID(address), ACCOUNT_CODE_HASH}));
+            RANGES::single_view(StateKey{getTableName(address), ACCOUNT_CODE_HASH}));
         co_await it.next();
         if (co_await it.hasValue())
         {
@@ -373,7 +365,8 @@ public:
         {
             BOOST_THROW_EXCEPTION(NotFoundCodeError{} << bcos::Error::ErrorMessage(
                                       std::string("Not found contract code: ")
-                                          .append(toHexStringWithPrefix(*m_myContractTable))));
+                                          .append(toHexStringWithPrefix(
+                                              static_cast<std::string_view>(m_myContractTable)))));
         }
         auto code = codeEntry->get();
         auto mode = toRevision(vmSchedule());
@@ -427,8 +420,8 @@ public:
             messagePtr = std::addressof(*messageWithSender);
         }
 
-        HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_tableNamePool, m_blockHeader,
-            *messagePtr, m_origin, m_contextID, m_seq, m_precompiledManager);
+        HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_blockHeader, *messagePtr,
+            m_origin, m_contextID, m_seq, m_precompiledManager);
 
         auto result = co_await hostcontext.execute();
         auto& logs = hostcontext.logs();

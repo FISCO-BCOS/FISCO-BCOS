@@ -33,15 +33,13 @@ private:
     VMFactory vmFactory;
     Storage& m_storage;
     protocol::TransactionReceiptFactory& m_receiptFactory;
-    TableNamePool& m_tableNamePool;
     PrecompiledManager const& m_precompiledManager;
 
 public:
     TransactionExecutorImpl(Storage& storage, protocol::TransactionReceiptFactory& receiptFactory,
-        TableNamePool& tableNamePool, PrecompiledManager const& precompiledManager)
+        PrecompiledManager const& precompiledManager)
       : m_storage(storage),
         m_receiptFactory(receiptFactory),
-        m_tableNamePool(tableNamePool),
         m_precompiledManager(precompiledManager)
     {}
 
@@ -80,8 +78,8 @@ public:
                 .code_address = toAddress};
 
             int64_t seq = 0;
-            HostContext hostContext(vmFactory, rollbackableStorage, m_tableNamePool, blockHeader,
-                evmcMessage, evmcMessage.sender, contextID, seq, m_precompiledManager);
+            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, evmcMessage,
+                evmcMessage.sender, contextID, seq, m_precompiledManager);
             auto evmcResult = co_await hostContext.execute();
 
             bcos::bytesConstRef output;
