@@ -33,7 +33,7 @@ void RPBFTConfig::resetConfig(bcos::ledger::LedgerConfig::Ptr _ledgerConfig, boo
     m_configTools->resetConfig(_ledgerConfig);
 }
 
-bool RPBFTConfig::shouldRotateSealers() const
+bool RPBFTConfig::shouldRotateSealers(protocol::BlockNumber _number) const
 {
-    return m_configTools->shouldRotateSealers();
+    return m_configTools->shouldRotateSealers(_number);
 }

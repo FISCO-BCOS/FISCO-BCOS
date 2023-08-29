@@ -410,7 +410,7 @@ public:
     {
         m_rpbftConfigTools = std::move(_config);
     }
-    RPBFTConfigTools::Ptr rpbftConfigTools() const noexcept { return m_rpbftConfigTools; }
+    virtual RPBFTConfigTools::Ptr rpbftConfigTools() const noexcept { return m_rpbftConfigTools; }
 
 protected:
     void updateQuorum() override;

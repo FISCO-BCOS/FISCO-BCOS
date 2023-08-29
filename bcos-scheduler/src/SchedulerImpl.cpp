@@ -1158,6 +1158,10 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             protocol::BlockNumber _number) mutable {
                             if (error)
                             {
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Get " << ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM
+                                    << " failed, use default value"
+                                    << LOG_KV("defaultValue", ledger::DEFAULT_EPOCH_SEALER_NUM);
                                 collector(nullptr,
                                     std::tuple{ConfigType::EpochSealerNum,
                                         std::to_string(ledger::DEFAULT_EPOCH_SEALER_NUM), 0});
@@ -1172,6 +1176,10 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             protocol::BlockNumber _number) mutable {
                             if (error)
                             {
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Get " << ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM
+                                    << " failed, use default value"
+                                    << LOG_KV("defaultValue", ledger::DEFAULT_EPOCH_BLOCK_NUM);
                                 collector(nullptr,
                                     std::tuple{ConfigType::EpochBlockNum,
                                         std::to_string(ledger::DEFAULT_EPOCH_BLOCK_NUM), 0});
@@ -1186,6 +1194,10 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             protocol::BlockNumber _number) mutable {
                             if (error)
                             {
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Get " << ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE
+                                    << " failed, use default value"
+                                    << LOG_KV("defaultValue", ledger::DEFAULT_INTERNAL_NOTIFY_FLAG);
                                 collector(nullptr,
                                     std::tuple{ConfigType::NotifyRotateFlag,
                                         std::to_string(ledger::DEFAULT_INTERNAL_NOTIFY_FLAG), 0});

@@ -69,9 +69,10 @@ wait_and_start()
 generate_auth_account()
 {
   local account_script="get_account.sh"
-#  if ${sm_mode}; then
-#      account_script="get_gm_account.sh"
-#  fi
+  local use_sm="${1}"
+  if [ "${use_sm}" == "true" ]; then
+      account_script="get_gm_account.sh"
+  fi
 
   if [ ! -f ${account_script} ]; then
         local get_account_link="https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/${account_script}"
@@ -82,16 +83,16 @@ generate_auth_account()
   LOG_INFO "Admin account: ${auth_admin_account}"
 }
 
-init() 
+init()
 {
-    sm_option="${1}"
+    local use_sm="${1}"
     cd ${current_path}
     local sed_cmd="sed -i"
     if [ "$(uname)" == "Darwin" ];then
         sed_cmd="sed -i .bkp"
     fi
     echo "===>> ${current_path}"
-    generate_auth_account
+    generate_auth_account ${use_sm}
 
     rm -rf BcosBuilder/pro/binary/
 
@@ -110,8 +111,19 @@ init()
     pip3 --version
     sudo pip3 install -r BcosBuilder/requirements.txt
 
+    local not_use_sm="true"
+    if [ "${use_sm}" == "true" ]; then
+          not_use_sm="false"
+    fi
+    local rpc_sm_ssl="rpc_sm_ssl=${use_sm}"
+    local gateway_sm_ssl="gateway_sm_ssl=${use_sm}"
+    local sm_crypto="sm_crypto=${use_sm}"
+
     cd BcosBuilder/pro/
     ${sed_cmd} "s/init_auth_address=\"\"/init_auth_address=\"${auth_admin_account}\"/g" conf/config-build-example.toml
+    ${sed_cmd} "s/rpc_sm_ssl=${not_use_sm}/${rpc_sm_ssl}/g" conf/config-build-example.toml
+    ${sed_cmd} "s/gateway_sm_ssl=${not_use_sm}/${gateway_sm_ssl}/g" conf/config-build-example.toml
+    ${sed_cmd} "s/sm_crypto=${not_use_sm}/${sm_crypto}/g" conf/config-build-example.toml
     python3  build_chain.py build -c conf/config-build-example.toml -O ${current_path}/${output_dir}
     cd ${current_path}
 
@@ -187,7 +199,7 @@ fi
 
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
-init ""
+init "false"
 expand_node
 pwd
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/${output_dir}/127.0.0.1/rpc_20200/conf"
@@ -206,14 +218,18 @@ if [[ ${?} == "0" ]]; then
 fi
 stop_node
 clear_node
-# LOG_INFO "======== check non-sm success ========"
+LOG_INFO "======== check non-sm success ========"
 
-# TODO: support sm test
-# LOG_INFO "======== check sm case ========"
-# init "-s"
-# check_consensus
-# config_console "true"
-# send_transactions ${txs_num}
-# check_sync ${txs_num}
-# stop_node
-# LOG_INFO "======== check sm case success ========"
+
+LOG_INFO "======== check sm case ========"
+init "true"
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/${output_dir}/127.0.0.1/rpc_20200/conf"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "console_integrationTest success"
+    else
+        echo "console_integrationTest error"
+        exit 1
+fi
+stop_node
+clear_node
+LOG_INFO "======== check sm case success ========"

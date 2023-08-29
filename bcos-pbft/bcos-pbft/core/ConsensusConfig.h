@@ -130,11 +130,13 @@ public:
 
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
 
-    virtual bool shouldRotateSealers() const { return false; }
-    static bool compareConsensusNode(ConsensusNodeList const& _left, ConsensusNodeList const& _right);
+    virtual bool shouldRotateSealers(protocol::BlockNumber) const { return false; }
+    static bool compareConsensusNode(
+        ConsensusNodeList const& _left, ConsensusNodeList const& _right);
 
 protected:
-    static bool isNodeExist(ConsensusNodeInterface::Ptr const& _node, ConsensusNodeList const& _nodeList);
+    static bool isNodeExist(
+        ConsensusNodeInterface::Ptr const& _node, ConsensusNodeList const& _nodeList);
 
 protected:
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
