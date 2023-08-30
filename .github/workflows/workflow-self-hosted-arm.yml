@@ -74,6 +74,66 @@ jobs:
       - name: Test
         run:
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+        
+      - name: tar fisco-bcos for Arm
+        run: mkdir -p bin && mv build/fisco-bcos-air/fisco-bcos bin && mv build/lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode
+      - name: Upload fisco-bcos binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/fisco-bcos.tar.gz
+          asset_name: fisco-bcos-linux-aarch64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload fisco-bcos-lightnode binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/lightnode.tar.gz
+          asset_name: fisco-bcos-lightnode-linux-aarch64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosNodeService.tgz
+          asset_name: BcosNodeService-linux-aarch64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosRpcService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosRpcService.tgz
+          asset_name: BcosRpcService-linux-aarch64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosGatewayService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosGatewayService.tgz
+          asset_name: BcosGatewayService-linux-aarch64.tgz
+          tag: ${{ github.ref }}
+          verwrite: true
+      - name: Upload BcosMaxNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+          asset_name: BcosMaxNodeService-linux-aarch64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosExecutorService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosExecutorService.tgz
+          asset_name: BcosExecutorService-linux-aarch64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+
 
       - name: prepare RPCAPI Tests
         run: cd tools && bash .ci/rpcapi_ci_prepare.sh
