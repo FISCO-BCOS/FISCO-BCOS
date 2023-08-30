@@ -109,14 +109,14 @@ bool SyncMsgEngine::interpret(
             if (_packet->packetType == TxsRequestPacket || _packet->packetType == TxsStatusPacket ||
                 _packet->packetType == TransactionsPacket)
             {
-                std::lock_guard<std::mutex> lock(x_observerList);
-                auto it = std::find(m_observerList.begin(), m_observerList.end(), _packet->nodeId);
-                if (it != m_observerList.end())
+                std::lock_guard<std::mutex> lock(x_sealerList);
+                auto it = std::find(m_sealerList.begin(), m_sealerList.end(), _packet->nodeId);
+                if (it == m_sealerList.end())
                 {
-                    SYNC_ENGINE_LOG(INFO)
-                        << LOG_BADGE("Write-filter") << LOG_DESC("Drop observer write request")
-                        << LOG_KV("fromNodeId", _packet->nodeId.abridged())
-                        << LOG_KV("packetType", int(_packet->packetType));
+                    SYNC_ENGINE_LOG(INFO) << LOG_BADGE("Write-filter")
+                                          << LOG_DESC("Drop write request not from sealer")
+                                          << LOG_KV("fromNodeId", _packet->nodeId.abridged())
+                                          << LOG_KV("packetType", int(_packet->packetType));
                     return true;
                 }
             }

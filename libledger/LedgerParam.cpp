@@ -558,6 +558,7 @@ void LedgerParam::initSyncConfig(ptree const& pt)
                                   "txs_gossip_max_peers_num must be no smaller than zero"));
     }
     mutableSyncParam().maxQueueSizeForBlockSync *= 1024 * 1024;
+    mutableSyncParam().enableFreeNodeRead = pt.get<bool>("sync.free_node_read", false);
 
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initSyncConfig")
@@ -566,7 +567,8 @@ void LedgerParam::initSyncConfig(ptree const& pt)
         << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
         << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth)
         << LOG_KV("maxQueueSizeForBlockSync", mutableSyncParam().maxQueueSizeForBlockSync)
-        << LOG_KV("txsStatusGossipMaxPeers", mutableSyncParam().txsStatusGossipMaxPeers);
+        << LOG_KV("txsStatusGossipMaxPeers", mutableSyncParam().txsStatusGossipMaxPeers)
+        << LOG_KV("freeNodeRead", mutableSyncParam().enableFreeNodeRead);
 }
 
 std::string LedgerParam::uriEncode(const std::string& keyWord)

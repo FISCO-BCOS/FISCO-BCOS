@@ -101,10 +101,10 @@ public:
 
     NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }
 
-    void setObserverList(dev::h512s observerList)
+    void setSealerList(dev::h512s sealerList)
     {
-        std::lock_guard<std::mutex> lock(x_observerList);
-        m_observerList = std::move(observerList);
+        std::lock_guard<std::mutex> lock(x_sealerList);
+        m_sealerList = std::move(sealerList);
     }
 
 private:
@@ -152,8 +152,8 @@ protected:
 
     // factory used to create sync related packet
     SyncMsgPacketFactory::Ptr m_syncMsgPacketFactory;
-    std::mutex x_observerList;
-    dev::h512s m_observerList;
+    std::mutex x_sealerList;
+    dev::h512s m_sealerList;
 };
 
 class DownloadBlocksContainer
