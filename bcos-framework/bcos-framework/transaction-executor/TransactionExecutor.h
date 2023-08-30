@@ -6,6 +6,7 @@
 #include "../protocol/TransactionReceiptFactory.h"
 #include "../storage/Entry.h"
 #include "../storage2/Storage.h"
+#include "bcos-utilities/ThreeWay4StringView.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-task/Trait.h>
 #include <boost/container/small_vector.hpp>
@@ -17,7 +18,6 @@
 namespace bcos::transaction_executor
 {
 constexpr static size_t MOSTLY_LENGTH = 32;
-
 class SmallString : public boost::container::small_vector<char, MOSTLY_LENGTH>
 {
 public:
