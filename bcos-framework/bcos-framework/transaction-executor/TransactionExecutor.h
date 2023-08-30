@@ -22,6 +22,7 @@ class SmallString : public boost::container::small_vector<char, MOSTLY_LENGTH>
 {
 public:
     using boost::container::small_vector<char, MOSTLY_LENGTH>::small_vector;
+    SmallString(const char* str) { assign(str, str + strlen(str)); }
     SmallString(concepts::bytebuffer::ByteBuffer auto const& bytes)
     {
         assign(RANGES::begin(bytes), RANGES::end(bytes));
@@ -69,35 +70,42 @@ struct std::less<bcos::transaction_executor::StateKey>
     auto operator()(bcos::transaction_executor::StateKey const& left,
         bcos::transaction_executor::StateKeyView const& right) const -> bool
     {
-        auto const& [leftTable, leftKey] = left;
-        auto const& [rightTable, rightKey] = right;
-
-        auto tableEqual = leftTable <=> rightTable;
-        if (tableEqual != std::weak_ordering::equivalent)
-        {
-            return leftKey < rightKey;
-        }
-
-        return tableEqual == std::weak_ordering::less;
+        auto leftView = static_cast<bcos::transaction_executor::StateKeyView>(left);
+        return leftView < right;
     }
     auto operator()(bcos::transaction_executor::StateKeyView const& left,
         bcos::transaction_executor::StateKey const& right) const -> bool
     {
-        return !(*this)(right, left);
+        auto rightView = static_cast<bcos::transaction_executor::StateKeyView>(right);
+        return left < rightView;
     }
     auto operator()(bcos::transaction_executor::StateKey const& left,
         bcos::transaction_executor::StateKey const& right) const -> bool
     {
-        auto const& [leftTable, leftKey] = left;
-        auto const& [rightTable, rightKey] = right;
+        auto leftView = static_cast<bcos::transaction_executor::StateKeyView>(left);
+        auto rightView = static_cast<bcos::transaction_executor::StateKeyView>(right);
+        return leftView < rightView;
+    }
+};
 
-        auto tableEqual = leftTable <=> rightTable;
-        if (tableEqual != std::weak_ordering::equivalent)
-        {
-            return leftKey < rightKey;
-        }
 
-        return tableEqual == std::weak_ordering::less;
+template <>
+struct std::hash<bcos::transaction_executor::StateKeyView>
+{
+    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const
+    {
+        auto const& [table, key] = stateKeyView;
+        auto hash = std::hash<std::string_view>{}(table);
+        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
+        return hash;
+    }
+};
+template <>
+struct boost::hash<bcos::transaction_executor::StateKeyView>
+{
+    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const
+    {
+        return std::hash<bcos::transaction_executor::StateKeyView>{}(stateKeyView);
     }
 };
 
@@ -106,10 +114,8 @@ struct std::hash<bcos::transaction_executor::StateKey>
 {
     size_t operator()(const bcos::transaction_executor::StateKey& stateKey) const
     {
-        auto const& [table, key] = stateKey;
-        auto hash = std::hash<std::string_view>{}(table);
-        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
-        return hash;
+        auto view = static_cast<bcos::transaction_executor::StateKeyView>(stateKey);
+        return std::hash<bcos::transaction_executor::StateKeyView>{}(view);
     }
 };
 
@@ -121,7 +127,6 @@ struct boost::hash<bcos::transaction_executor::StateKey>
         return std::hash<bcos::transaction_executor::StateKey>{}(stateKey);
     }
 };
-
 inline std::ostream& operator<<(
     std::ostream& stream, const bcos::transaction_executor::SmallString& smallString)
 {

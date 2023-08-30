@@ -26,7 +26,6 @@ template <class Storage, class PrecompiledManager>
 struct MockExecutor
 {
     MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
-        [[maybe_unused]] auto&& tableNamePool,
         [[maybe_unused]] PrecompiledManager const& precompiledManager)
     {}
 
@@ -53,7 +52,6 @@ public:
         multiLayerStorage(backendStorage)
     {}
 
-    TableNamePool tableNamePool;
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
@@ -68,7 +66,7 @@ BOOST_AUTO_TEST_CASE(simple)
     task::syncWait([&, this]() -> task::Task<void> {
         MockPrecompiledManager percompiledManager;
         SchedulerParallelImpl<decltype(multiLayerStorage), MockExecutor, MockPrecompiledManager>
-            scheduler(multiLayerStorage, receiptFactory, tableNamePool, percompiledManager);
+            scheduler(multiLayerStorage, receiptFactory, percompiledManager);
 
         scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
@@ -95,8 +93,8 @@ template <StateStorage Storage, class PrecompiledManager>
 struct MockConflictExecutor
 {
     MockConflictExecutor(Storage& storage, [[maybe_unused]] auto&& receiptFactory,
-        TableNamePool& tableNamePool, [[maybe_unused]] PrecompiledManager const& percompiledManager)
-      : m_storage(storage), m_tableNamePool(tableNamePool)
+        [[maybe_unused]] PrecompiledManager const& percompiledManager)
+      : m_storage(storage)
     {}
 
     task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(auto&& blockHeader,
@@ -110,14 +108,14 @@ struct MockConflictExecutor
         auto toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
 
         // Read fromKey and -1
-        StateKey fromKey{makeStringID(m_tableNamePool, "t_test"), fromAddress};
+        StateKey fromKey{"t_test", fromAddress};
         auto fromEntry = co_await storage2::readOne(m_storage, fromKey);
         fromEntry->set(
             boost::lexical_cast<std::string>(boost::lexical_cast<int>(fromEntry->get()) - 1));
         co_await storage2::writeOne(m_storage, fromKey, *fromEntry);
 
         // Read toKey and +1
-        StateKey toKey{makeStringID(m_tableNamePool, "t_test"), toAddress};
+        StateKey toKey{"t_test", toAddress};
         auto toEntry = co_await storage2::readOne(m_storage, toKey);
         toEntry->set(
             boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
@@ -127,7 +125,6 @@ struct MockConflictExecutor
     }
 
     Storage& m_storage;
-    TableNamePool& m_tableNamePool;
 };
 
 BOOST_AUTO_TEST_CASE(conflict)
@@ -136,7 +133,7 @@ BOOST_AUTO_TEST_CASE(conflict)
         MockPrecompiledManager percompiledManager;
         SchedulerParallelImpl<decltype(multiLayerStorage), MockConflictExecutor,
             MockPrecompiledManager>
-            scheduler(multiLayerStorage, receiptFactory, tableNamePool, percompiledManager);
+            scheduler(multiLayerStorage, receiptFactory, percompiledManager);
         scheduler.setChunkSize(1);
         scheduler.setMaxToken(std::thread::hardware_concurrency());
         scheduler.start();
@@ -144,8 +141,7 @@ BOOST_AUTO_TEST_CASE(conflict)
         constexpr static int INITIAL_VALUE = 100000;
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {
-            StateKey key{
-                makeStringID(tableNamePool, "t_test"), boost::lexical_cast<std::string>(i)};
+            StateKey key{"t_test", boost::lexical_cast<std::string>(i)};
             storage::Entry entry;
             entry.set(boost::lexical_cast<std::string>(INITIAL_VALUE));
             co_await storage2::writeOne(multiLayerStorage.mutableStorage(), key, std::move(entry));
@@ -171,8 +167,7 @@ BOOST_AUTO_TEST_CASE(conflict)
 
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {
-            StateKey key{
-                makeStringID(tableNamePool, "t_test"), boost::lexical_cast<std::string>(i)};
+            StateKey key{"t_test", boost::lexical_cast<std::string>(i)};
             auto entry = co_await storage2::readOne(multiLayerStorage.mutableStorage(), key);
             BOOST_CHECK_EQUAL(boost::lexical_cast<int>(entry->get()), INITIAL_VALUE);
         }

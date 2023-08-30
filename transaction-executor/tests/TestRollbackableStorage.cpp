@@ -3,8 +3,10 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
-#include <boost/test/unit_test.hpp>
+#include <iostream>
 #include <range/v3/view/transform.hpp>
+
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -45,8 +47,10 @@ BOOST_AUTO_TEST_CASE(addRollback)
         {
             BOOST_REQUIRE(co_await it.hasValue());
             auto&& key = co_await it.key();
-            BOOST_CHECK_EQUAL(std::get<0>(key), tableID);
-            BOOST_CHECK_EQUAL(std::get<0>(key), "table1"sv);
+            BOOST_CHECK_EQUAL(
+                static_cast<std::string>(static_cast<std::string>(std::get<0>(key))), tableID);
+            BOOST_CHECK_EQUAL(
+                static_cast<std::string>(static_cast<std::string>(std::get<0>(key))), "table1"sv);
             ++count;
         }
         BOOST_CHECK_EQUAL(count, 2);
@@ -92,8 +96,8 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         {
             BOOST_REQUIRE(co_await it.hasValue());
             auto&& key = co_await it.key();
-            BOOST_CHECK_EQUAL(std::get<0>(key), tableID);
-            BOOST_CHECK_EQUAL(std::get<0>(key), "table1"sv);
+            BOOST_CHECK_EQUAL(static_cast<std::string>(std::get<0>(key)), tableID);
+            BOOST_CHECK_EQUAL(static_cast<std::string>(std::get<0>(key)), "table1"sv);
             ++count;
         }
         BOOST_CHECK_EQUAL(count, 2);
@@ -141,7 +145,7 @@ BOOST_AUTO_TEST_CASE(equal)
             auto& value = co_await it.value();
             auto view = std::get<1>(key);
             auto str = boost::lexical_cast<std::string>(i);
-            BOOST_CHECK_EQUAL(view, std::string_view(str));
+            BOOST_CHECK_EQUAL(static_cast<std::string>(view), std::string_view(str));
             BOOST_CHECK_EQUAL(value, i);
             ++i;
         }

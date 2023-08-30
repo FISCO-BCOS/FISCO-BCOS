@@ -39,7 +39,6 @@ private:
     std::shared_ptr<txpool::TxPoolInterface> m_txpool;
     std::shared_ptr<protocol::TransactionSubmitResultFactory> m_transactionSubmitResultFactory;
 
-    transaction_executor::TableNamePool m_tableNamePool;
     CacheStorage m_cacheStorage;
     storage2::rocksdb::RocksDBStorage2<transaction_executor::StateKey,
         transaction_executor::StateValue, storage2::rocksdb::StateKeyResolver,
@@ -67,12 +66,11 @@ public:
       : m_blockFactory(std::move(blockFactory)),
         m_txpool(std::move(txpool)),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
-        m_rocksDBStorage(rocksDB, storage2::rocksdb::StateKeyResolver{m_tableNamePool},
+        m_rocksDBStorage(rocksDB, storage2::rocksdb::StateKeyResolver{},
             storage2::rocksdb::StateValueResolver{}),
-        m_ledger(m_rocksDBStorage, *m_blockFactory, m_tableNamePool),
+        m_ledger(m_rocksDBStorage, *m_blockFactory),
         m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
-        m_scheduler(m_multiLayerStorage, *m_blockFactory->receiptFactory(), m_tableNamePool,
-            m_precompiledManager)
+        m_scheduler(m_multiLayerStorage, *m_blockFactory->receiptFactory(), m_precompiledManager)
     {}
 
     auto buildScheduler()

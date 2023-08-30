@@ -23,17 +23,14 @@ class SchedulerBaseImpl
 private:
     MultiLayerStorage& m_multiLayerStorage;
     protocol::TransactionReceiptFactory& m_receiptFactory;
-    transaction_executor::TableNamePool& m_tableNamePool;
     PrecompiledManager const& m_precompiledManager;
 
 public:
     SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage,
         protocol::TransactionReceiptFactory& receiptFactory,
-        transaction_executor::TableNamePool& tableNamePool,
         PrecompiledManager const& precompiledManager)
       : m_multiLayerStorage(multiLayerStorage),
         m_receiptFactory(receiptFactory),
-        m_tableNamePool(tableNamePool),
         m_precompiledManager(precompiledManager)
     {}
 
@@ -59,19 +56,17 @@ public:
                 {
                     auto& [key, entry] = keyValue;
                     auto& [tableName, keyName] = *key;
-                    auto tableNameView = *tableName;
-                    auto keyView = keyName.toStringView();
                     if (entry)
                     {
                         entryHash ^=
-                            entry->hash(tableNameView, keyView, hashImpl, blockHeader.version());
+                            entry->hash(tableName, keyName, hashImpl, blockHeader.version());
                     }
                     else
                     {
                         storage::Entry deleteEntry;
                         deleteEntry.setStatus(storage::Entry::DELETED);
-                        entryHash ^= deleteEntry.hash(
-                            tableNameView, keyView, hashImpl, blockHeader.version());
+                        entryHash ^=
+                            deleteEntry.hash(tableName, keyName, hashImpl, blockHeader.version());
                     }
                 }
             });
@@ -124,13 +119,12 @@ public:
         view.newTemporaryMutable();
 
         Executor<decltype(view), PrecompiledManager> executor(
-            view, m_receiptFactory, m_tableNamePool, m_precompiledManager);
+            view, m_receiptFactory, m_precompiledManager);
         co_return co_await executor.execute(blockHeader, transaction, 0);
     }
 
     MultiLayerStorage& multiLayerStorage() & { return m_multiLayerStorage; }
     decltype(m_receiptFactory)& receiptFactory() & { return m_receiptFactory; }
-    transaction_executor::TableNamePool& tableNamePool() & { return m_tableNamePool; }
     PrecompiledManager const& precompiledManager() const& { return m_precompiledManager; }
 };
 

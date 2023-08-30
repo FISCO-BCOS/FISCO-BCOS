@@ -1,12 +1,10 @@
-#include <bcos-tars-protocol/impl/TarsHashable.h>
-
 #include "bcos-concepts/Serialize.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-framework/storage2/StringPool.h"
 #include "bcos-ledger/src/libledger/LedgerImpl2.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockImpl.h>
 #include <bcos-task/Wait.h>
@@ -31,12 +29,11 @@ BOOST_AUTO_TEST_CASE(commitBlock)
         auto cryptoSuite = std::make_shared<crypto::CryptoSuite>(
             std::make_shared<crypto::Keccak256>(), nullptr, nullptr);
         bcostars::protocol::BlockFactoryImpl blockFactory(cryptoSuite, nullptr, nullptr, nullptr);
-        transaction_executor::TableNamePool tableNamePool;
         storage2::memory_storage::MemoryStorage<transaction_executor::StateKey, storage::Entry,
             bcos::storage2::memory_storage::ORDERED>
             storage;
 
-        LedgerImpl2<decltype(storage)> ledger(storage, blockFactory, tableNamePool);
+        LedgerImpl2<decltype(storage)> ledger(storage, blockFactory);
 
         bcostars::protocol::BlockImpl block;
         auto blockHeader = block.blockHeader();
@@ -48,9 +45,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
             storage, block);
 
         auto blockHeaderEntry = co_await storage2::readOne(storage,
-            transaction_executor::StateKey{
-                storage2::string_pool::makeStringID(tableNamePool, SYS_NUMBER_2_BLOCK_HEADER),
-                std::string_view("100786")});
+            transaction_executor::StateKey{SYS_NUMBER_2_BLOCK_HEADER, std::string_view("100786")});
         BOOST_REQUIRE(blockHeaderEntry);
 
         bcostars::protocol::BlockHeaderImpl gotBlockHeader(

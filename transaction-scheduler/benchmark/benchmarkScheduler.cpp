@@ -2,7 +2,6 @@
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-framework/storage2/StringPool.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
@@ -64,13 +63,13 @@ struct Fixture
         {
             m_scheduler.template emplace<SchedulerParallelImpl<MultiLayerStorageType,
                 TransactionExecutorImpl, PrecompiledManager>>(
-                m_multiLayerStorage, *m_receiptFactory, m_tableNamePool, m_precompiledManager);
+                m_multiLayerStorage, *m_receiptFactory, m_precompiledManager);
         }
         else
         {
             m_scheduler.template emplace<SchedulerSerialImpl<MultiLayerStorageType,
                 TransactionExecutorImpl, PrecompiledManager>>(
-                m_multiLayerStorage, *m_receiptFactory, m_tableNamePool, m_precompiledManager);
+                m_multiLayerStorage, *m_receiptFactory, m_precompiledManager);
         }
     }
 
@@ -281,7 +280,6 @@ struct Fixture
     BackendStorage m_backendStorage;
     MultiLayerStorageType m_multiLayerStorage;
 
-    TableNamePool m_tableNamePool;
     bcos::bytes m_helloworldBytecodeBinary;
 
     PrecompiledManager m_precompiledManager;

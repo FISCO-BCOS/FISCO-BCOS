@@ -185,7 +185,7 @@ public:
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
     {
         // Need block version >= 3.1
-        auto codeHashIt = co_await m_rollbackableStorage.read(RANGES::single_view<StateKey>(
+        auto codeHashIt = co_await m_rollbackableStorage.read(RANGES::single_view<StateKeyView>(
             RANGES::in_place, getTableName(address), ACCOUNT_CODE_HASH));
         co_await codeHashIt.next();
         if (co_await codeHashIt.hasValue())

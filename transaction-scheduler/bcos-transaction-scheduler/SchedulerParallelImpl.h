@@ -77,13 +77,13 @@ private:
         auto& readWriteSetStorage() & { return m_readWriteSetStorage; }
 
         task::Task<void> execute(protocol::BlockHeader const& blockHeader, auto& receiptFactory,
-            auto& tableNamePool, PrecompiledManager const& precompiledManager)
+            PrecompiledManager const& precompiledManager)
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
             Executor<decltype(m_readWriteSetStorage), PrecompiledManager> executor(
-                m_readWriteSetStorage, receiptFactory, tableNamePool, precompiledManager);
+                m_readWriteSetStorage, receiptFactory, precompiledManager);
             for (auto&& [contextID, transaction, receipt] : m_transactionAndReceiptsRange)
             {
                 if (m_chunkIndex >= *m_lastChunkIndex)
@@ -100,7 +100,6 @@ private:
 
 public:
     using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::receiptFactory;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::tableNamePool;
     using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::precompiledManager;
 
     SchedulerParallelImpl(const SchedulerParallelImpl&) = delete;
@@ -109,10 +108,9 @@ public:
     SchedulerParallelImpl& operator=(SchedulerParallelImpl&&) noexcept = default;
     SchedulerParallelImpl(MultiLayerStorage& multiLayerStorage,
         protocol::TransactionReceiptFactory& receiptFactory,
-        transaction_executor::TableNamePool& tableNamePool,
         PrecompiledManager const& precompiledManager)
       : SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>(
-            multiLayerStorage, receiptFactory, tableNamePool, precompiledManager),
+            multiLayerStorage, receiptFactory, precompiledManager),
         m_asyncTaskGroup(std::make_unique<tbb::task_group>())
     {}
     ~SchedulerParallelImpl() noexcept { m_asyncTaskGroup->wait(); }
@@ -170,8 +168,8 @@ public:
                             {
                                 return chunk;
                             }
-                            task::syncWait(chunk->execute(blockHeader, receiptFactory(),
-                                tableNamePool(), precompiledManager()));
+                            task::syncWait(chunk->execute(
+                                blockHeader, receiptFactory(), precompiledManager()));
 
                             return chunk;
                         }) &
