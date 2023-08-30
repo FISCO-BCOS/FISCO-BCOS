@@ -47,8 +47,7 @@ endif()
 EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
 
 macro(configure_project)
-     set(NAME ${PROJECT_NAME})
-
+    set(NAME ${PROJECT_NAME})
     # Default to RelWithDebInfo configuration if no configuration is explicitly specified.
     if (NOT CMAKE_BUILD_TYPE)
         set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING
@@ -69,6 +68,7 @@ macro(configure_project)
             set(MARCH_TYPE "-march=native -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
             set(USE_LD_GOLD OFF)
         endif()
+        set(COMPILE_OPTIONS "native")
     endif()
 
     # unit tests
@@ -86,6 +86,11 @@ macro(configure_project)
             message(FATAL "${CMAKE_SYSTEM_NAME} ${ARCHITECTURE} does not support by hardware secure module")
         endif()
         add_definitions(-DFISCO_SDF)
+        if(NOT DEFINED COMPILE_OPTIONS)
+            set(COMPILE_OPTIONS "hsm_sdf")
+        else()
+            set(COMPILE_OPTIONS "${COMPILE_OPTIONS},hsm_sdf")
+        endif()
     endif()
 
     #debug
@@ -107,6 +112,11 @@ macro(configure_project)
     endforeach()
     if(DISABLE_OBSERVER_WRITE_REQUEST)
         add_definitions(-DDISABLE_OBSERVER_WRITE_REQUEST)
+        if(NOT DEFINED COMPILE_OPTIONS)
+            set(COMPILE_OPTIONS "disable_observer_write_request")
+        else()
+            set(COMPILE_OPTIONS "${COMPILE_OPTIONS},disable_observer_write_request")
+        endif()
     endif()
 
     # CI Builds should provide (for user builds this is totally optional)
