@@ -28,6 +28,7 @@
 #include "bcos-pbft/pbft/interfaces/PBFTMessageFactory.h"
 #include "bcos-pbft/pbft/interfaces/PBFTStorage.h"
 #include "bcos-pbft/pbft/utilities/Common.h"
+#include "bcos-rpbft/bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
@@ -284,7 +285,8 @@ public:
         m_sealProposalNotifier = std::move(_sealProposalNotifier);
     }
 
-    void registerStateNotifier(std::function<void(bcos::protocol::BlockNumber)> _stateNotifier)
+    void registerStateNotifier(
+        std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&)> _stateNotifier)
     {
         m_stateNotifier = std::move(_stateNotifier);
     }
@@ -405,6 +407,12 @@ public:
 
     bcos::protocol::BlockFactory::Ptr blockFactory() const noexcept { return m_blockFactory; }
 
+    void setRPBFTConfigTools(RPBFTConfigTools::Ptr _config)
+    {
+        m_rpbftConfigTools = std::move(_config);
+    }
+    virtual RPBFTConfigTools::Ptr rpbftConfigTools() const noexcept { return m_rpbftConfigTools; }
+
 protected:
     void updateQuorum() override;
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
@@ -438,7 +446,7 @@ protected:
     std::function<void(std::function<void(Error::Ptr)>)> m_sealerResetNotifier;
 
     // notify the sealer the latest blockNumber
-    std::function<void(bcos::protocol::BlockNumber)> m_stateNotifier;
+    std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&)> m_stateNotifier;
     // the sync module notify the consensus module the new block
     std::function<void(bcos::ledger::LedgerConfig::Ptr, std::function<void(Error::Ptr)>)>
         m_newBlockNotifier;
@@ -485,5 +493,6 @@ protected:
     std::function<void()> m_txsStatusSyncHandler;
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    [[no_unique_address]] RPBFTConfigTools::Ptr m_rpbftConfigTools = nullptr;
 };
 }  // namespace bcos::consensus

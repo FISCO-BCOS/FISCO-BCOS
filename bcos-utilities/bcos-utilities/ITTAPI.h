@@ -72,14 +72,18 @@ struct ITT_DOMAINS
     __itt_string_handle* COMMIT_BLOCK = __itt_string_handle_create("commitBlock");
     __itt_string_handle* NOTIFY_RESULTS = __itt_string_handle_create("notifyResults");
 
+    const __itt_domain* const BASE_SCHEDULER = __itt_domain_create("baseScheduler");
+    __itt_string_handle* SET_BLOCK = __itt_string_handle_create("setBlock");
+    __itt_string_handle* MERGE_STATE = __itt_string_handle_create("mergeState");
+
     const __itt_domain* const PARALLEL_SCHEDULER = __itt_domain_create("parallelScheduler");
     __itt_string_handle* PARALLEL_EXECUTE = __itt_string_handle_create("parallelExecute");
     __itt_string_handle* SINGLE_PASS = __itt_string_handle_create("singlePass");
     __itt_string_handle* DETECT_RAW = __itt_string_handle_create("detectRAW");
-    __itt_string_handle* CHUNK_EXECUTE = __itt_string_handle_create("chunkExecute");
-    __itt_string_handle* PIPELINE_MERGE_STORAGE =
-        __itt_string_handle_create("pipelineMergeStorage");
-    __itt_string_handle* FINAL_MERGE_STORAGE = __itt_string_handle_create("finalMergeStorage");
+    __itt_string_handle* EXECUTE_CHUNK = __itt_string_handle_create("executeChunk");
+    __itt_string_handle* MERGE_RWSET = __itt_string_handle_create("mergeRWSet");
+    __itt_string_handle* MERGE_CHUNK = __itt_string_handle_create("mergeChunk");
+    __itt_string_handle* MERGE_LAST_CHUNK = __itt_string_handle_create("mergeLastChunk");
 
     const __itt_domain* const TRANSACTION_POOL = __itt_domain_create("transactionPool");
     __itt_string_handle* SUBMIT_TRANSACTION = __itt_string_handle_create("submitTransaction");

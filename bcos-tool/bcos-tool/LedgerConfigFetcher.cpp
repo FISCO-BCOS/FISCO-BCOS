@@ -49,7 +49,7 @@ void LedgerConfigFetcher::fetchAll()
     fetchNotifyRotateFlagInfo();
 }
 
-void LedgerConfigFetcher::fetchBlockNumberAndHash()
+void LedgerConfigFetcher::fetchBlockNumber()
 {
     std::promise<std::pair<Error::Ptr, BlockNumber>> blockNumberPromise;
     m_ledger->asyncGetBlockNumber([&blockNumberPromise](Error::Ptr _error, BlockNumber _number) {
@@ -69,6 +69,12 @@ void LedgerConfigFetcher::fetchBlockNumberAndHash()
     m_ledgerConfig->setBlockNumber(blockNumber);
     TOOL_LOG(INFO) << LOG_DESC("LedgerConfigFetcher: fetchBlockNumber success")
                    << LOG_KV("blockNumber", blockNumber);
+}
+
+void LedgerConfigFetcher::fetchBlockNumberAndHash()
+{
+    fetchBlockNumber();
+    auto blockNumber = m_ledgerConfig->blockNumber();
     // fetch blockHash
     auto hash = fetchBlockHash(blockNumber);
     TOOL_LOG(INFO) << LOG_DESC("LedgerConfigFetcher: fetchBlockHash success")
@@ -138,8 +144,9 @@ bcos::ledger::SystemConfigEntry LedgerConfigFetcher::fetchSystemConfigNoExceptio
     auto error = std::get<0>(ret);
     if (error)
     {
-        TOOL_LOG(INFO) << LOG_DESC("fetchSystemConfig failed") << LOG_KV("code", error->errorCode())
-                       << LOG_KV("msg", error->errorMessage()) << LOG_KV("key", _key);
+        TOOL_LOG(INFO) << LOG_DESC("fetchSystemConfig failed, use default value")
+                       << LOG_KV("code", error->errorCode()) << LOG_KV("msg", error->errorMessage())
+                       << LOG_KV("key", _key) << LOG_KV("defaultValue", std::get<0>(_defaultValue));
         return _defaultValue;
     }
     return std::get<SystemConfigEntry>(ret);
@@ -274,9 +281,10 @@ void LedgerConfigFetcher::fetchAuthCheckStatus()
     }
     try
     {
-        auto ret = fetchSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS);
-        TOOL_LOG(INFO) << LOG_DESC("fetchAuthCheckStatus success") << LOG_KV("value", ret);
-        m_ledgerConfig->setAuthCheckStatus(boost::lexical_cast<uint32_t>(ret));
+        auto ret = fetchSystemConfigNoException(SYSTEM_KEY_AUTH_CHECK_STATUS, {"0", 0});
+        TOOL_LOG(INFO) << LOG_DESC("fetchAuthCheckStatus success")
+                       << LOG_KV("value", std::get<0>(ret));
+        m_ledgerConfig->setAuthCheckStatus(boost::lexical_cast<uint32_t>(std::get<0>(ret)));
     }
     catch (...)
     {

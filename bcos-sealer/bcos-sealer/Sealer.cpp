@@ -193,7 +193,8 @@ void Sealer::asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse)
 
 bool Sealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
 {
-    if (!m_sealerConfig->consensus()->shouldRotateSealers())
+    if (!m_sealerConfig->consensus()->shouldRotateSealers(
+            _block == nullptr ? -1 : _block->blockHeader()->number()))
     {
         return true;
     }

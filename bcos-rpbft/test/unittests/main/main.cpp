@@ -1,4 +1,4 @@
-/**
+/*
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,27 +13,12 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief config for RPBFT
- * @file RPBFTConfig.cpp
- * @author: chuwen
- * @date 2023-04-19
+ * @file main.cpp
+ * @author: yujiechen, jimmyshi
+ * @date 2021-02-24
  */
+#define BOOST_TEST_MODULE FISCO_BCOS_Tests
+#define BOOST_TEST_MAIN
 
-#include "RPBFTConfig.h"
-
-#include "../utilities/Common.h"
-#include <bcos-crypto/KeyCompareTools.h>
-
-using namespace bcos;
-using namespace bcos::consensus;
-
-void RPBFTConfig::resetConfig(bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
-{
-    PBFTConfig::resetConfig(_ledgerConfig, _syncedBlock);
-    m_configTools->resetConfig(_ledgerConfig);
-}
-
-bool RPBFTConfig::shouldRotateSealers(protocol::BlockNumber _number) const
-{
-    return m_configTools->shouldRotateSealers(_number);
-}
+#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>

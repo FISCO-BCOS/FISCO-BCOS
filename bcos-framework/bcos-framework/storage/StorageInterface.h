@@ -137,6 +137,43 @@ public:
         };
         return Awaitable{.m_self = this, .m_table = table, .m_key = key, .m_result = {}};
     };
+
+    auto coSetRow(std::string_view table, std::string_view key, Entry entry)
+    {
+        struct Awaitable
+        {
+            StorageInterface* m_self;
+            std::string_view m_table;
+            std::string_view m_key;
+            Entry m_entry;
+            std::variant<std::monostate, std::exception_ptr> m_result;
+
+            constexpr static bool await_ready() noexcept { return false; }
+            void await_suspend(CO_STD::coroutine_handle<> handle)
+            {
+                m_self->asyncSetRow(m_table, m_key, std::move(m_entry),
+                    [this, handle](Error::UniquePtr error) mutable {
+                        if (error)
+                        {
+                            m_result.emplace<std::exception_ptr>(std::make_exception_ptr(*error));
+                        }
+                        handle.resume();
+                    });
+            }
+            void await_resume()
+            {
+                if (std::holds_alternative<std::exception_ptr>(m_result))
+                {
+                    std::rethrow_exception(std::get<std::exception_ptr>(m_result));
+                }
+            }
+        };
+        return Awaitable{.m_self = this,
+            .m_table = table,
+            .m_key = key,
+            .m_entry = std::move(entry),
+            .m_result = {}};
+    };
     virtual void stop(){};
 };
 

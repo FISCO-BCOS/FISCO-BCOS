@@ -41,6 +41,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     add_compile_options(-Wno-error=unknown-pragmas)
     add_compile_options(-Wno-error=deprecated-declarations)
     add_compile_options(-fno-omit-frame-pointer)
+    add_compile_options(-Wno-error=strict-aliasing)
 
     if(NOT APPLE)
         set(CMAKE_CXX_VISIBILITY_PRESET hidden)

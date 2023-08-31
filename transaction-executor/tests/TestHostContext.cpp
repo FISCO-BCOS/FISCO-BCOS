@@ -4,7 +4,6 @@
 #include "TestBytecode.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
-#include "bcos-framework/storage2/StringPool.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -55,8 +54,8 @@ public:
                 .code_address = {}};
             evmc_address origin = {};
 
-            HostContext hostContext(vmFactory, rollbackableStorage, tableNamePool, blockHeader,
-                message, origin, 0, seq, *precompiledManager);
+            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
+                seq, *precompiledManager);
             auto result = co_await hostContext.execute();
 
             BOOST_REQUIRE_EQUAL(result.status_code, 0);
@@ -91,14 +90,13 @@ public:
             .code_address = helloworldAddress};
         evmc_address origin = {};
 
-        HostContext hostContext(vmFactory, rollbackableStorage, tableNamePool, blockHeader, message,
-            origin, 0, seq, *precompiledManager);
+        HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
+            seq, *precompiledManager);
         auto result = co_await hostContext.execute();
 
         co_return result;
     }
 
-    TableNamePool tableNamePool;
     memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
     Rollbackable<decltype(storage)> rollbackableStorage;
     evmc_address helloworldAddress;

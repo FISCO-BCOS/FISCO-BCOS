@@ -2175,7 +2175,6 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
     bool isStaticCall)
 {
-    EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
     bcos::RecursiveGuard lock(x_executiveFlowLock);
     ExecutiveFlowInterface::Ptr executiveFlow = blockContext->getExecutiveFlow(codeAddress);
     if (executiveFlow == nullptr)
@@ -2184,12 +2183,16 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
             *blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
         if (!useCoroutine)
         {
+            EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress)
+                                     << LOG_KV("type", "ExecutiveSerialFlow");
             executiveFlow = std::make_shared<ExecutiveSerialFlow>(executiveFactory);
             executiveFlow->setThreadPool(m_threadPool);
             blockContext->setExecutiveFlow(codeAddress, executiveFlow);
         }
         else
         {
+            EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress)
+                                     << LOG_KV("type", "ExecutiveStackFlow");
             executiveFlow = std::make_shared<ExecutiveStackFlow>(executiveFactory);
             executiveFlow->setThreadPool(m_threadPool);
             blockContext->setExecutiveFlow(codeAddress, executiveFlow);
@@ -2205,7 +2208,7 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
         callback)
 {
     ExecuteOutputs::Ptr allOutputs = std::make_shared<ExecuteOutputs>();
-    EXECUTOR_NAME_LOG(DEBUG) << "asyncExecuteExecutiveFlow start";
+    EXECUTOR_NAME_LOG(DEBUG) << "asyncExecuteExecutiveFlow start" << LOG_KV("blockNumber", m_blockContext->number());
     executiveFlow->asyncRun(
         // onTxReturn
         [this, allOutputs, callback](CallParameters::UniquePtr output) {

@@ -501,7 +501,7 @@ void Session::start()
             m_lastWriteTime.store(utcSteadyTime());
             m_lastReadTime.store(utcSteadyTime());
             server->asioInterface()->strandPost(
-                boost::bind(&Session::doRead, shared_from_this()));  // doRead();
+                [session = shared_from_this()] { session->doRead(); });
         }
     }
 

@@ -74,9 +74,6 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
     EXECUTIVE_LOG(TRACE) << "Execute start\t" << input->toFullString();
 
     auto& callParameters = input;
-    m_storageWrapper = std::make_shared<StorageWrapper>(m_blockContext.storage(), m_recoder);
-    m_storageWrapper->setCodeCache(m_blockContext.getCodeCache());
-    m_storageWrapper->setCodeHashCache(m_blockContext.getCodeHashCache());
 
     auto message = execute(std::move(callParameters));
 
@@ -598,7 +595,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
             auto leftGas = hostContext.gas();
 
-            evmc_message evmcMessage;
+            evmc_message evmcMessage{};
             evmcMessage.kind = kind;
             evmcMessage.flags = flags;
             evmcMessage.depth = 0;  // depth own by scheduler

@@ -65,8 +65,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
         return;
     }
 
-    m_features =
-        task::syncWait(ledger::Features::readFeaturesFromStorage(*m_storage, m_blockNumber));
+    task::syncWait(m_features.readFromStorage(*m_storage, m_blockNumber));
 }
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,

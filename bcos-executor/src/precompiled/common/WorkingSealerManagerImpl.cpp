@@ -73,27 +73,39 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
     auto [insertedWorkingSealerNum, removedWorkingSealerNum] = calNodeRotatingInfo();
     if (removedWorkingSealerNum > 0)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_DESC(
-                                      "rotateWorkingSealer: rotate workingSealers into sealers")
-                               << LOG_KV("rotatedCount", removedWorkingSealerNum);
         // select working sealers to be removed
-        // Note: Since m_workingSealerList will not be used afterwards,
-        //       after updating the node type, it is not updated
+
         auto workingSealersToRemove = selectNodesFromList(m_workingSealer, removedWorkingSealerNum);
-        // update node type from workingSealer to sealer
+        std::stringstream nodesStr;
+        for (const auto& node : (*workingSealersToRemove))
+        {
+            nodesStr << node << ", ";
+        }
+        PRECOMPILED_LOG(INFO) << LOG_DESC("rotateWorkingSealer: rotate workingSealers into sealers")
+                              << LOG_KV("rotatedCount", removedWorkingSealerNum)
+                              << LOG_KV("rmNodes", nodesStr.str());
+        // Note: Since m_workingSealerList will not be used afterward,
+        //       after updating the node type, it is not updated
+
+        // update the node type from workingSealer to sealer
         updateNodeListType(
             std::move(workingSealersToRemove), std::string(CONSENSUS_SEALER), _executive);
     }
 
     if (insertedWorkingSealerNum > 0)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_DESC(
-                                      "rotateWorkingSealer: rotate sealers into workingSealers")
-                               << LOG_KV("rotatedCount", insertedWorkingSealerNum);
         // select working sealers to be inserted
         auto workingSealersToInsert =
             selectNodesFromList(m_pendingSealer, insertedWorkingSealerNum);
-        // Note: Since m_pendingSealerList will not be used afterwards,
+        std::stringstream nodesStr;
+        for (const auto& node : (*workingSealersToInsert))
+        {
+            nodesStr << node << ", ";
+        }
+        PRECOMPILED_LOG(INFO) << LOG_DESC("rotateWorkingSealer: rotate sealers into workingSealers")
+                              << LOG_KV("rotatedCount", insertedWorkingSealerNum)
+                              << LOG_KV("insertNodes", nodesStr.str());
+        // Note: Since m_pendingSealerList will not be used afterward,
         //       after updating the node type, it is not updated
         updateNodeListType(
             std::move(workingSealersToInsert), std::string(CONSENSUS_WORKING_SEALER), _executive);
@@ -176,11 +188,11 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     if (featureSwitch)
     {
         auto featureInfo = featureSwitch->getObject<ledger::SystemConfigEntry>();
-        PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: enable feature_rpbft last block")
-                               << LOG_KV("value", std::get<0>(featureInfo))
-                               << LOG_KV("enableBlk", std::get<1>(featureInfo));
         if (std::get<1>(featureInfo) == blockContext.number())
         {
+            PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: enable feature_rpbft last block")
+                                   << LOG_KV("value", std::get<0>(featureInfo))
+                                   << LOG_KV("enableBlk", std::get<1>(featureInfo));
             return true;
         }
     }
@@ -319,6 +331,11 @@ std::tuple<uint32_t, uint32_t> WorkingSealerManagerImpl::calNodeRotatingInfo()
 std::unique_ptr<std::vector<std::string>> WorkingSealerManagerImpl::selectNodesFromList(
     std::vector<std::string>& _nodeList, uint32_t _selectNum)
 {
+    auto selectedNodeList = std::make_unique<std::vector<std::string>>();
+    if (_nodeList.empty()) [[unlikely]]
+    {
+        return selectedNodeList;
+    }
     std::sort(_nodeList.begin(), _nodeList.end());
 
     auto proofHashValue = u256(m_vrfInfo->getHashFromProof());
@@ -332,7 +349,6 @@ std::unique_ptr<std::vector<std::string>> WorkingSealerManagerImpl::selectNodesF
         proofHashValue = u256(GlobalHashImpl::g_hashImpl->hash(std::to_string(selectedIdx)));
     }
     // get the selected node list from the shuffled _nodeList
-    auto selectedNodeList = std::make_unique<std::vector<std::string>>();
     selectedNodeList->reserve(_selectNum);
     for (uint32_t i = 0; i < _selectNum; ++i)
     {

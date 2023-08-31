@@ -66,11 +66,15 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
 
     if (blockContext.isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("sender is not from sys")
-                               << LOG_KV("sender", _callParameters->m_sender);
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
-        return _callParameters;
+        if (!blockContext.features().get(Features::Flag::feature_rpbft) ||
+            func != name2Selector[WSM_METHOD_ROTATE_STR])
+        {
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("sender is not from sys")
+                << LOG_KV("sender", _callParameters->m_sender);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
+            return _callParameters;
+        }
     }
 
     int result = 0;

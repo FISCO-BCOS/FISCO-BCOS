@@ -17,7 +17,6 @@ public:
     using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::SchedulerBaseImpl;
     using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::multiLayerStorage;
     using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::receiptFactory;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::tableNamePool;
     using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::precompiledManager;
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
@@ -32,7 +31,7 @@ public:
 
         int contextID = 0;
         Executor<decltype(view), PrecompiledManager> executor(
-            view, receiptFactory(), tableNamePool(), precompiledManager());
+            view, receiptFactory(), precompiledManager());
         for (auto const& transaction : transactions)
         {
             receipts.emplace_back(co_await executor.execute(blockHeader, transaction, contextID++));

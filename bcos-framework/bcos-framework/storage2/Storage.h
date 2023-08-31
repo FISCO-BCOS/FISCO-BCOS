@@ -82,14 +82,6 @@ struct SeekIteratorTrait
 template <storage2::SeekableStorage Storage>
 using SeekIteratorType = typename SeekIteratorTrait<Storage>::type;
 
-template <class Iterator>
-concept RangeableIterator = requires(Iterator&& iterator) {
-                                requires storage2::ReadIterator<Iterator>;
-                                {
-                                    iterator.range()
-                                    } -> RANGES::range;
-                            };
-
 inline auto singleView(auto&& value)
 {
     using ValueType = decltype(value);
@@ -157,7 +149,7 @@ concept HasMemberMergeMethod =
         requires SeekableStorage<FromStorage>;
         requires task::IsAwaitable<decltype(toStorage.merge(fromStorage))>;
     };
-struct merge
+struct Merge
 {
     template <class ToStorage>
         requires WriteableStorage<ToStorage> && ErasableStorage<ToStorage>
@@ -187,6 +179,6 @@ struct merge
     }
 };
 }  // namespace detail
-constexpr inline detail::merge merge{};
+constexpr inline detail::Merge merge{};
 
 }  // namespace bcos::storage2

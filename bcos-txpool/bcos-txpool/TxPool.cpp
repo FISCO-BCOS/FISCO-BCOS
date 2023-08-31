@@ -600,6 +600,21 @@ void TxPool::initSendResponseHandler()
 void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
 {
     auto blockHeader = _block->blockHeader();
+
+    // return if block has been committed
+    auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_config->ledger());
+    TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock fetch block number from LedgerConfig");
+    ledgerConfigFetcher->fetchBlockNumber();
+    auto committedBlockNumber = ledgerConfigFetcher->ledgerConfig()->blockNumber();
+    if (blockHeader->number() <= committedBlockNumber)
+    {
+        TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock, block already committed")
+                         << LOG_KV("consNum", blockHeader->number())
+                         << LOG_KV("hash", blockHeader->hash().abridged())
+                         << LOG_KV("committedNum", committedBlockNumber);
+        return;
+    }
+
     TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock") << LOG_KV("consNum", blockHeader->number())
                      << LOG_KV("hash", blockHeader->hash().abridged())
                      << LOG_KV("txsSize", _block->transactionsHashSize());

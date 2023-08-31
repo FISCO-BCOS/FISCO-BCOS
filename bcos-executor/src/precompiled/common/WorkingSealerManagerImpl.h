@@ -68,6 +68,6 @@ private:
     bool m_consensusChangeFlag = false;
     ledger::ConsensusNodeList m_consensusNodes = {};
     bool m_notifyNextLeaderRotateSet = false;
-    uint32_t m_configuredEpochSealersSize;
+    uint32_t m_configuredEpochSealersSize = 4;
 };
 }  // namespace bcos::precompiled
