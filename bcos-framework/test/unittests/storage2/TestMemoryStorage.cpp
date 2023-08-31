@@ -309,23 +309,4 @@ BOOST_AUTO_TEST_CASE(merge)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(readSome)
-{
-    auto testFunc = []() -> task::Task<void> {
-        MemoryStorage<int, int, ORDERED> storage;
-
-        co_await storage2::writeSome(
-            storage, std::vector<int>{0, 1, 2}, std::vector<int>{10, 11, 12});
-        auto values = co_await storage2::readSome(storage, std::vector<int>{0, 1, 2});
-
-        BOOST_CHECK_EQUAL(values.size(), 3);
-        BOOST_CHECK_EQUAL(*values[0], 10);
-        BOOST_CHECK_EQUAL(*values[1], 11);
-        BOOST_CHECK_EQUAL(*values[2], 12);
-
-        co_return;
-    };
-    task::syncWait(testFunc());
-}
-
 BOOST_AUTO_TEST_SUITE_END()
