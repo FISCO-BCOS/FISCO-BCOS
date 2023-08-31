@@ -311,7 +311,7 @@ BOOST_AUTO_TEST_CASE(merge)
 
 BOOST_AUTO_TEST_CASE(readSome)
 {
-    task::syncWait([]() -> task::Task<void> {
+    auto testFunc = []() -> task::Task<void> {
         MemoryStorage<int, int, ORDERED> storage;
 
         co_await storage2::writeSome(
@@ -324,7 +324,8 @@ BOOST_AUTO_TEST_CASE(readSome)
         BOOST_CHECK_EQUAL(*values[2], 12);
 
         co_return;
-    }());
+    };
+    task::syncWait(testFunc());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
