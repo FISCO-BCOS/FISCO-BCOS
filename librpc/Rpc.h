@@ -78,7 +78,7 @@ class Rpc : public RpcFace
 {
 public:
     Rpc(dev::initializer::LedgerInitializer::Ptr _ledgerInitializer,
-        std::shared_ptr<dev::p2p::P2PInterface> _service);
+        std::shared_ptr<dev::p2p::P2PInterface> _service, bool _rawGroupInfo = false);
 
     RPCModules implementedModules() const override
     {
@@ -247,6 +247,7 @@ private:
         m_currentTransactionCallback;
     boost::thread_specific_ptr<std::function<uint32_t()>> m_transactionCallbackVersion;
 
+    bool m_uncheckGroupMember;
     void checkRequest(int _groupID);
     void checkSyncStatus(int _groupID);
 

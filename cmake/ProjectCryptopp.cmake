@@ -35,8 +35,8 @@ ExternalProject_Add(cryptopp
     # https://github.com/weidai11/cryptopp/commit/903b8feaa70199eb39a313b32a71268745ddb600
     DOWNLOAD_NAME cryptopp_bccc6443.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/abdes/cryptopp-cmake/archive/206aab4cb1e6e78b8460b8c0fe08449c280e321e.tar.gz
-    URL_HASH SHA256=57e62aae31ddec35d601875280c13546c221e7be3f2ef80aed68c7ffa056d509
+    URL https://github.com/abdes/cryptopp-cmake/archive/f857b775bcb4ff24e4993d85cce811587f8b0616.tar.gz
+    URL_HASH SHA256=e8e350cddc1fdabe3cdd734348686850c66223d77d9d16f71aa7e5c51a57bf72
     PATCH_COMMAND ${CMAKE_COMMAND} -E remove
         3way.cpp
         adler32.cpp
@@ -144,6 +144,7 @@ ExternalProject_Add(cryptopp
         # Build static lib but suitable to be included in a shared lib.
         -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
         -DBUILD_SHARED=OFF
+        -DCRYPTOPP_BUILD_TESTING=off
         -DBUILD_TESTING=OFF
         -DCMAKE_C_FLAGS='${MARCH_TYPE}'
         -DCMAKE_CXX_FLAGS='${MARCH_TYPE}'
