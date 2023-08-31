@@ -1,5 +1,4 @@
 #include "bcos-framework/storage/Entry.h"
-#include "storage2/StringPool.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>

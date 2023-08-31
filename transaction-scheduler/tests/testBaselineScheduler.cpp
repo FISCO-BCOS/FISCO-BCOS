@@ -145,7 +145,6 @@ public:
             *transactionSubmitResultFactory, *hashImpl)
     {}
 
-    TableNamePool tableNamePool;
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> blockHeaderFactory;
