@@ -1,7 +1,7 @@
 #pragma once
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/storage2/StorageDef.h"
+#include "bcos-framework/storage2/StorageMethods.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
