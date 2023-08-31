@@ -237,7 +237,7 @@ public:
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
 protected:
-    virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
+    virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId, bool _fromGenesis);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayConfig(boost::property_tree::ptree const& _pt);
     virtual void loadCertConfig(boost::property_tree::ptree const& _pt);

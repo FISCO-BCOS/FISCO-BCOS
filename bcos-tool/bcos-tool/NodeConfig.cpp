@@ -63,7 +63,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
         (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
             m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
-        loadChainConfig(_pt, _enforceGroupId);
+        loadChainConfig(_pt, _enforceGroupId, false);
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
@@ -87,7 +87,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        loadChainConfig(_genesisConfig, true);
+        loadChainConfig(_genesisConfig, true, true);
     }
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
@@ -512,7 +512,7 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("enableTxSyncWorker", m_enableTxSyncWorker);
 }
 
-void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId)
+void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId, bool _fromGenesis)
 {
     try
     {
@@ -525,8 +525,9 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     }
     catch (std::exception const& e)
     {
+        std::string configFileName = _fromGenesis ? "config.genesis" : "config.ini";
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "config.genesis chain.sm_crypto/chain.group_id/chain.chain_id is "
+                                  configFileName + " chain.sm_crypto/chain.group_id/chain.chain_id is "
                                   "null, please set it!"));
     }
     if (!isalNumStr(m_chainId))
