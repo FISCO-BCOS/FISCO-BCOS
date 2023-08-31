@@ -268,23 +268,25 @@ void PBFTInitializer::registerHandlers()
         });
 
     // the consensus module notify the latest blockNumber to the sealer
-    m_pbft->registerStateNotifier([weakedSealer](bcos::protocol::BlockNumber _blockNumber) {
-        try
-        {
-            auto sealer = weakedSealer.lock();
-            if (!sealer)
+    m_pbft->registerStateNotifier(
+        [weakedSealer](bcos::protocol::BlockNumber _blockNumber, crypto::HashType const& _hash) {
+            try
             {
-                return;
+                auto sealer = weakedSealer.lock();
+                if (!sealer)
+                {
+                    return;
+                }
+                sealer->asyncNoteLatestBlockNumber(_blockNumber);
+                sealer->asyncNoteLatestBlockHash(_hash);
             }
-            sealer->asyncNoteLatestBlockNumber(_blockNumber);
-        }
-        catch (std::exception const& e)
-        {
-            INITIALIZER_LOG(WARNING)
-                << LOG_DESC("call notify the latest block number to the sealer exception")
-                << LOG_KV("message", boost::diagnostic_information(e));
-        }
-    });
+            catch (std::exception const& e)
+            {
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("call notify the latest block number to the sealer exception")
+                    << LOG_KV("message", boost::diagnostic_information(e));
+            }
+        });
 
     // the consensus moudle notify new block to the sync module
     std::weak_ptr<BlockSyncInterface> weakedSync = m_blockSync;
@@ -299,8 +301,7 @@ void PBFTInitializer::registerHandlers()
                 {
                     return;
                 }
-                sync->asyncNotifyNewBlock(_ledgerConfig, _onRecv);
-                sealer->asyncNoteLatestBlockHash(_ledgerConfig->hash());
+                sync->asyncNotifyNewBlock(std::move(_ledgerConfig), std::move(_onRecv));
             }
             catch (std::exception const& e)
             {
@@ -379,7 +380,8 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
             }
             INITIALIZER_LOG(WARNING)
                 << LOG_DESC("Election versionInfoNotification failed")
-                << LOG_KV("version", _version) << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+                << LOG_KV("version", _version) << LOG_KV("code", _error->errorCode())
+                << LOG_KV("msg", _error->errorMessage());
         });
         onGroupInfoChanged();
     });

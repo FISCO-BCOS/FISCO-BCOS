@@ -1445,10 +1445,10 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
 void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
     RecursiveGuard l(m_mutex);
-    // resetConfig after submit the block to ledger
-    m_config->resetConfig(_ledgerConfig, _syncedBlock);
     // try to switch rpbft
     switchToRPBFT(_ledgerConfig);
+    // resetConfig after submit the block to ledger
+    m_config->resetConfig(_ledgerConfig, _syncedBlock);
     m_cacheProcessor->checkAndCommitStableCheckPoint();
     m_cacheProcessor->tryToApplyCommitQueue();
     // tried to commit the stable checkpoint
