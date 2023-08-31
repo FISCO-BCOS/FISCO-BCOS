@@ -285,7 +285,8 @@ public:
         m_sealProposalNotifier = std::move(_sealProposalNotifier);
     }
 
-    void registerStateNotifier(std::function<void(bcos::protocol::BlockNumber)> _stateNotifier)
+    void registerStateNotifier(
+        std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&)> _stateNotifier)
     {
         m_stateNotifier = std::move(_stateNotifier);
     }
@@ -445,7 +446,7 @@ protected:
     std::function<void(std::function<void(Error::Ptr)>)> m_sealerResetNotifier;
 
     // notify the sealer the latest blockNumber
-    std::function<void(bcos::protocol::BlockNumber)> m_stateNotifier;
+    std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&)> m_stateNotifier;
     // the sync module notify the consensus module the new block
     std::function<void(bcos::ledger::LedgerConfig::Ptr, std::function<void(Error::Ptr)>)>
         m_newBlockNotifier;

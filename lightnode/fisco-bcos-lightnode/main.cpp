@@ -20,6 +20,7 @@
  * @date 2022-07-04
  */
 
+#include "bcos-utilities/Common.h"
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 
 #include "RPCInitializer.h"
@@ -36,6 +37,9 @@
 #include <exception>
 #include <memory>
 #include <thread>
+struct StartLightNodeException : public bcos::error::Exception
+{
+};
 
 static auto newStorage(const std::string& path)
 {
@@ -156,7 +160,18 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
     LIGHTNODE_LOG(INFO) << "Init lightnode rpc...";
     auto wsService = bcos::lightnode::initRPC(
         nodeConfig, nodeID, gateway, keyFactory, ledger, remoteLedger, transactionPool, scheduler);
-    wsService->start();
+    try
+    {
+        wsService->start();
+    }
+    catch (std::exception const& e)
+    {
+        std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+        std::cout << "start fisco-bcos-lightnode failed, error:" << boost::diagnostic_information(e)
+                  << std::endl;
+        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::error::ErrorMessage{
+                                  "start lightnode failed, " + boost::diagnostic_information(e)});
+    }
 
     LIGHTNODE_LOG(INFO) << "Init lightnode block syner...";
     auto stopToken = std::make_shared<std::atomic_bool>(false);
@@ -199,7 +214,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
         protocolInitializer.keyPair()->publicKey(), bcos::protocol::NodeType::LIGHT_NODE, front,
         protocolInfo);
-    gateway->start();
+    try
+    {
+        gateway->start();
+    }
+    catch (std::exception const& e)
+    {
+        std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+        std::cout << "start fisco-bcos-lightnode failed, error:" << boost::diagnostic_information(e)
+                  << std::endl;
+        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::error::ErrorMessage{
+                                  "start lightnode failed, " + boost::diagnostic_information(e)});
+    }
+
 
     // front
     front->setMessageFactory(std::make_shared<bcos::front::FrontMessageFactory>());

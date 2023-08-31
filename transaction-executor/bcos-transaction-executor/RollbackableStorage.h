@@ -84,7 +84,8 @@ public:
             auto keyIt = RANGES::begin(keys);
             while (co_await storageIt->next())
             {
-                auto& record = m_records.emplace_back(Record{.key = *(keyIt++), .oldValue = {}});
+                auto& record =
+                    m_records.emplace_back(Record{.key = StateKey{*(keyIt++)}, .oldValue = {}});
                 if (co_await storageIt->hasValue())
                 {
                     // Update exists value, store the old value

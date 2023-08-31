@@ -1,5 +1,5 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/MultiLayerStorage.h>
 #include <fmt/format.h>
@@ -17,7 +17,7 @@ struct TableNameHash
     size_t operator()(const bcos::transaction_executor::StateKey& key) const
     {
         auto const& tableID = std::get<0>(key);
-        return std::hash<bcos::transaction_executor::TableNameID>{}(tableID);
+        return std::hash<std::string_view>{}(tableID);
     }
 };
 
@@ -32,7 +32,6 @@ public:
 
     TestMultiLayerStorageFixture() : multiLayerStorage(backendStorage) {}
 
-    TableNamePool tableNamePool;
     BackendStorage backendStorage;
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
 
@@ -48,10 +47,7 @@ BOOST_AUTO_TEST_CASE(noMutable)
         auto view = multiLayerStorage.fork(true);
         storage::Entry entry;
         BOOST_CHECK_THROW(
-            co_await storage2::writeOne(view,
-                StateKey{
-                    storage2::string_pool::makeStringID(tableNamePool, "test_table"), "test_key"},
-                std::move(entry)),
+            co_await storage2::writeOne(view, StateKey{"test_table", "test_key"}, std::move(entry)),
             NotExistsMutableStorageError);
 
         co_return;
@@ -66,7 +62,7 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
 
         multiLayerStorage.newMutable();
         auto view = std::make_optional(multiLayerStorage.fork(true));
-        StateKey key{storage2::string_pool::makeStringID(tableNamePool, "test_table"), "test_key"};
+        StateKey key{"test_table", "test_key"};
 
         storage::Entry entry;
         entry.set("Hello world!");
@@ -97,9 +93,8 @@ BOOST_AUTO_TEST_CASE(merge)
 
         multiLayerStorage.newMutable();
         auto view = std::make_optional(multiLayerStorage.fork(true));
-        auto toKey = RANGES::views::transform([tableNamePool = &tableNamePool](int num) {
-            return StateKey{storage2::string_pool::makeStringID(*tableNamePool, "test_table"),
-                fmt::format("key: {}", num)};
+        auto toKey = RANGES::views::transform([](int num) {
+            return StateKey{"test_table", fmt::format("key: {}", num)};
         });
         auto toValue = RANGES::views::transform([](int num) {
             storage::Entry entry;

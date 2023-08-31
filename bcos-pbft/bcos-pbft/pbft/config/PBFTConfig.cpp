@@ -113,12 +113,12 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // notify the latest block number to the sealer
     if (m_stateNotifier)
     {
-        m_stateNotifier(_ledgerConfig->blockNumber());
+        m_stateNotifier(_ledgerConfig->blockNumber(), _ledgerConfig->hash());
     }
     // notify the latest block to the sync module
     if (m_newBlockNotifier && !_syncedBlock)
     {
-        m_newBlockNotifier(_ledgerConfig, [_ledgerConfig](Error::Ptr _error) {
+        m_newBlockNotifier(_ledgerConfig, [_ledgerConfig](auto&& _error) {
             if (_error)
             {
                 PBFT_LOG(WARNING) << LOG_DESC("asyncNotifyNewBlock to sync module failed")

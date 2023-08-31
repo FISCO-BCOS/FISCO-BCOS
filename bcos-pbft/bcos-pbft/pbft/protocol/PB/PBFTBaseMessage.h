@@ -38,7 +38,9 @@ public:
     {}
 
     explicit PBFTBaseMessage(std::shared_ptr<BaseMessage> _baseMessage)
-      : m_baseMessage(_baseMessage), m_signatureData(std::make_shared<bytes>())
+      : m_baseMessage(_baseMessage),
+        m_signatureData(std::make_shared<bytes>()),
+        m_createTime(bcos::utcTime())
     {
         PBFTBaseMessage::deserializeToObject();
     }
@@ -152,7 +154,7 @@ protected:
     bytesPointer m_signatureData;
 
     bcos::crypto::PublicPtr m_from;
-    uint64_t m_createTime;
+    uint64_t m_createTime = 0;
 };
 }  // namespace consensus
 }  // namespace bcos
