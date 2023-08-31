@@ -1,11 +1,13 @@
 #pragma once
 
+#include "StorageDef.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-task/Coroutine.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Trait.h>
 #include <bcos-utilities/Ranges.h>
+#include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <optional>
@@ -109,32 +111,6 @@ inline task::Task<bool> existsOne(ReadableStorage auto& storage, auto const& key
     co_return co_await it.hasValue();
 }
 
-inline auto readOne(ReadableStorage auto& storage, auto const& key)
-    -> task::Task<std::optional<std::remove_cvref_t<typename task::AwaitableReturnType<
-        decltype(storage.read(storage2::singleView(key)))>::Value>>>
-{
-    using ValueType = std::remove_cvref_t<typename task::AwaitableReturnType<decltype(storage.read(
-        storage2::singleView(key)))>::Value>;
-    static_assert(std::is_copy_assignable_v<ValueType>);
-
-    auto it = co_await storage.read(storage2::singleView(key));
-    co_await it.next();
-    std::optional<ValueType> result;
-    if (co_await it.hasValue())
-    {
-        result.emplace(co_await it.value());
-    }
-
-    co_return result;
-}
-
-inline task::Task<void> writeOne(WriteableStorage auto& storage, auto const& key, auto&& value)
-{
-    co_await storage.write(
-        storage2::singleView(key), storage2::singleView(std::forward<decltype(value)>(value)));
-    co_return;
-}
-
 inline task::Task<void> removeOne(ErasableStorage auto& storage, auto const& key)
 {
     co_await storage.remove(storage2::singleView(key));
@@ -180,5 +156,46 @@ struct Merge
 };
 }  // namespace detail
 constexpr inline detail::Merge merge{};
+
+template <ReadableStorage Storage>
+auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, Storage& storage,
+    RANGES::input_range auto const& keys)
+    -> task::Task<boost::container::small_vector<
+        std::optional<std::remove_cvref_t<
+            typename task::AwaitableReturnType<decltype(storage.read(keys))>::Value>>,
+        1>>
+{
+    using ValueType = std::remove_cvref_t<
+        typename task::AwaitableReturnType<decltype(storage.read(keys))>::Value>;
+    static_assert(std::is_copy_assignable_v<ValueType>);
+
+    boost::container::small_vector<std::optional<ValueType>, 1> values;
+    if constexpr (RANGES::sized_range<decltype(keys)>)
+    {
+        values.reserve(RANGES::size(keys));
+    }
+    auto it = co_await storage.read(keys);
+    while (co_await it.next())
+    {
+        if (co_await it.hasValue())
+        {
+            values.emplace_back(co_await it.value());
+        }
+        else
+        {
+            values.emplace_back();
+        }
+    }
+
+    co_return values;
+}
+
+task::Task<void> tag_invoke(bcos::storage2::tag_t<writeSome> /*unused*/,
+    WriteableStorage auto& storage, RANGES::input_range auto const& keys,
+    RANGES::input_range auto&& values)
+{
+    co_await storage.write(keys, std::forward<decltype(values)>(values));
+    co_return;
+}
 
 }  // namespace bcos::storage2

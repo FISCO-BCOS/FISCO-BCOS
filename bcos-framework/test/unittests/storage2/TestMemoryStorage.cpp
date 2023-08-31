@@ -1,6 +1,6 @@
 #include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage2/Storage.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
@@ -305,6 +305,24 @@ BOOST_AUTO_TEST_CASE(merge)
             ++i;
         }
         BOOST_CHECK_EQUAL(i, 19);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(readSome)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MemoryStorage<int, int, ORDERED> storage;
+
+        co_await storage2::writeSome(
+            storage, std::vector<int>{0, 1, 2}, std::vector<int>{10, 11, 12});
+        auto values = co_await storage2::readSome(storage, std::vector<int>{0, 1, 2});
+
+        BOOST_CHECK_EQUAL(values.size(), 3);
+        BOOST_CHECK_EQUAL(*values[0], 10);
+        BOOST_CHECK_EQUAL(*values[1], 11);
+        BOOST_CHECK_EQUAL(*values[2], 12);
+
+        co_return;
     }());
 }
 
