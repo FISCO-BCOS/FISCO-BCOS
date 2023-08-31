@@ -4,7 +4,6 @@
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/view/transform.hpp>
 #include <type_traits>
 
 using namespace bcos;

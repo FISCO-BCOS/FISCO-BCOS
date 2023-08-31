@@ -38,18 +38,13 @@ struct StateKeyResolver
     using DBKey = boost::container::small_vector<char, SMALL>;
     constexpr static char TABLE_KEY_SPLIT = ':';
 
-    string_pool::StringPool& m_stringPool;
-
-    StateKeyResolver(string_pool::StringPool& stringPool) : m_stringPool(stringPool) {}
-
     static DBKey encode(auto const& stateKey)
     {
         auto& [tableName, key] = stateKey;
-        auto tableNameView = *tableName;
 
         DBKey buffer;
-        buffer.reserve(tableNameView.size() + 1 + key.size());
-        buffer.insert(buffer.end(), RANGES::begin(tableNameView), RANGES::end(tableNameView));
+        buffer.reserve(tableName.size() + 1 + key.size());
+        buffer.insert(buffer.end(), RANGES::begin(tableName), RANGES::end(tableName));
         buffer.emplace_back(TABLE_KEY_SPLIT);
         buffer.insert(buffer.end(), RANGES::begin(key), RANGES::end(key));
         return buffer;
@@ -74,13 +69,10 @@ struct StateKeyResolver
                                       fmt::format("Empty table or key!", buffer)));
         }
 
-        transaction_executor::SmallKey key(
-            std::string_view(RANGES::data(keyRange), RANGES::size(keyRange)));
-
-        auto stateKey = std::make_tuple(
-            makeStringID(
-                m_stringPool, std::string_view(RANGES::data(tableRange), RANGES::size(tableRange))),
-            key);
+        auto stateKey = std::make_tuple(transaction_executor::SmallString(std::string_view(
+                                            RANGES::data(tableRange), RANGES::size(tableRange))),
+            transaction_executor::SmallString(
+                std::string_view(RANGES::data(keyRange), RANGES::size(keyRange))));
         return stateKey;
     }
 };

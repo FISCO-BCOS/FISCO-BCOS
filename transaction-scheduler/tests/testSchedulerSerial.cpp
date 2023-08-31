@@ -24,7 +24,6 @@ template <class Storage, class PrecompiledManager>
 struct MockExecutor
 {
     MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
-        [[maybe_unused]] auto&& tableNamePool,
         [[maybe_unused]] PrecompiledManager const& precompiledManager)
     {}
 
@@ -49,10 +48,9 @@ public:
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
         multiLayerStorage(backendStorage),
-        scheduler(multiLayerStorage, receiptFactory, tableNamePool, precompiledManager)
+        scheduler(multiLayerStorage, receiptFactory, precompiledManager)
     {}
 
-    TableNamePool tableNamePool;
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;

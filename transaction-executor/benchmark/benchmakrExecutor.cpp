@@ -28,7 +28,7 @@ struct Fixture
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         m_receiptFactory(m_cryptoSuite),
-        executor(backendStorage, m_receiptFactory, m_tableNamePool, m_precompiledManager),
+        executor(backendStorage, m_receiptFactory, m_precompiledManager),
         blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
@@ -55,7 +55,6 @@ struct Fixture
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     MutableStorage backendStorage;
     ReceiptFactory m_receiptFactory;
-    TableNamePool m_tableNamePool;
     PrecompiledManager m_precompiledManager;
     bcos::transaction_executor::TransactionExecutorImpl<MutableStorage, PrecompiledManager>
         executor;
@@ -73,6 +72,7 @@ static void create(benchmark::State& state)
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
     transaction.mutableInner().data.input.assign(
         fixture.m_helloworldBytecodeBinary.begin(), fixture.m_helloworldBytecodeBinary.end());
+    transaction.mutableInner().dataHash.resize(1);
 
     task::syncWait([&fixture](benchmark::State& state,
                        decltype(transaction)& transaction) -> task::Task<void> {
@@ -104,6 +104,7 @@ static void call_setInt(benchmark::State& state)
             auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(contextID));
             transaction.mutableInner().data.input.assign(input.begin(), input.end());
             transaction.mutableInner().data.to = contractAddress;
+            transaction.mutableInner().dataHash.resize(1);
 
             ++contextID;
             [[maybe_unused]] auto receipt =
@@ -131,6 +132,7 @@ static void call_setString(benchmark::State& state)
                 "setString(string)", fmt::format("Hello world, fisco-bcos! {}", contextID));
             transaction.mutableInner().data.input.assign(input.begin(), input.end());
             transaction.mutableInner().data.to = contractAddress;
+            transaction.mutableInner().dataHash.resize(1);
             ++contextID;
             [[maybe_unused]] auto receipt =
                 co_await fixture.executor.execute(fixture.blockHeader, transaction, contextID);
@@ -150,6 +152,7 @@ static void call_delegateCall(benchmark::State& state)
     auto input = abiCodec.abiIn("delegateCall()");
     transaction1.mutableInner().data.input.assign(input.begin(), input.end());
     transaction1.mutableInner().data.to = contractAddress;
+    transaction1.mutableInner().dataHash.resize(1);
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         int contextID = 0;
@@ -174,6 +177,7 @@ static void call_deployAndCall(benchmark::State& state)
     auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(999));
     transaction1.mutableInner().data.input.assign(input.begin(), input.end());
     transaction1.mutableInner().data.to = contractAddress;
+    transaction1.mutableInner().dataHash.resize(1);
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         int contextID = 0;
