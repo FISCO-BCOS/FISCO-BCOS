@@ -105,8 +105,7 @@ public:
     }
     bool shouldRotateSealers(protocol::BlockNumber _number) const
     {
-        if (m_config->consensusType() == ledger::ConsensusType::PBFT_TYPE ||
-            m_config->rpbftConfigTools() == nullptr)
+        if (m_config->rpbftConfigTools() == nullptr)
         {
             return false;
         }
