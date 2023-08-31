@@ -58,7 +58,6 @@ int main(int argc, const char* argv[])
         auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         initializer->init(param.configFilePath, param.genesisFilePath);
         bcos::initializer::showNodeVersionMetric();
-        initializer->start();
     }
     catch (std::exception const& e)
     {
@@ -69,19 +68,17 @@ int main(int argc, const char* argv[])
         return -1;
     }
 
+    bcos::initializer::printVersion();
+    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+    std::cout << "The fisco-bcos is running..." << std::endl;
+    initializer->start();
     // get datetime and output welcome info
     ExitHandler exitHandler;
     signal(SIGTERM, &ExitHandler::exitHandler);
     signal(SIGABRT, &ExitHandler::exitHandler);
     signal(SIGINT, &ExitHandler::exitHandler);
-    
-    bcos::initializer::printVersion();
-    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
-    std::cout << "The fisco-bcos is running..." << std::endl;
-    while (!exitHandler.shouldExit())
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
+
+    ExitHandler::c_shouldExit.wait(false);
     initializer.reset();
     std::cout << "[" << bcos::getCurrentDateTime() << "] ";
     std::cout << "fisco-bcos program exit normally." << std::endl;
