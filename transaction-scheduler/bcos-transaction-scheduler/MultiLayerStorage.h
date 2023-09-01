@@ -26,11 +26,9 @@ struct NotExistsImmutableStorageError : public bcos::Error {};
 struct UnsupportedMethod : public bcos::Error {};
 // clang-format on
 
-template <transaction_executor::StateStorage MutableStorageType, class CachedStorage,
-    transaction_executor::StateStorage BackendStorage>
-    requires(
-        (std::is_void_v<CachedStorage> || (transaction_executor::StateStorage<CachedStorage>)) &&
-        storage2::SeekableStorage<MutableStorageType>)
+template <class MutableStorageType, class CachedStorage, class BackendStorage>
+    requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>)) &&
+             storage2::SeekableStorage<MutableStorageType>)
 class MultiLayerStorage
 {
 private:

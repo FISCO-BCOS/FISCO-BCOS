@@ -14,21 +14,12 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-class Precompiled;
-struct MockPrecompiledManager
-{
-    Precompiled const* getPrecompiled(unsigned long contractAddress) const { return nullptr; }
-};
-
-template <class Storage, class PrecompiledManager>
 struct MockExecutor
 {
-    MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
-        [[maybe_unused]] PrecompiledManager const& precompiledManager)
-    {}
-
-    task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(
-        auto&& blockHeader, auto&& transaction, [[maybe_unused]] int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID)
     {
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
@@ -48,18 +39,15 @@ public:
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
         multiLayerStorage(backendStorage),
-        scheduler(multiLayerStorage, receiptFactory, precompiledManager)
+        scheduler(multiLayerStorage, executor)
     {}
 
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    MockPrecompiledManager precompiledManager;
-
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
-
-    SchedulerSerialImpl<decltype(multiLayerStorage), MockExecutor, MockPrecompiledManager>
-        scheduler;
+    MockExecutor executor;
+    SchedulerSerialImpl<decltype(multiLayerStorage), MockExecutor> scheduler;
 
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 };

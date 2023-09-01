@@ -51,7 +51,8 @@ struct Fixture
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(m_cryptoSuite)),
         m_blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             m_cryptoSuite, m_blockHeaderFactory, m_transactionFactory, m_receiptFactory)),
-        m_multiLayerStorage(m_backendStorage)
+        m_multiLayerStorage(m_backendStorage),
+        m_executor(*m_receiptFactory, m_precompiledManager)
     {
         boost::log::core::get()->set_logging_enabled(false);
 
@@ -62,14 +63,12 @@ struct Fixture
         if constexpr (parallel)
         {
             m_scheduler.template emplace<SchedulerParallelImpl<MultiLayerStorageType,
-                TransactionExecutorImpl, PrecompiledManager>>(
-                m_multiLayerStorage, *m_receiptFactory, m_precompiledManager);
+                TransactionExecutorImpl<PrecompiledManager>>>(m_multiLayerStorage, m_executor);
         }
         else
         {
             m_scheduler.template emplace<SchedulerSerialImpl<MultiLayerStorageType,
-                TransactionExecutorImpl, PrecompiledManager>>(
-                m_multiLayerStorage, *m_receiptFactory, m_precompiledManager);
+                TransactionExecutorImpl<PrecompiledManager>>>(m_multiLayerStorage, m_executor);
         }
     }
 
@@ -279,13 +278,13 @@ struct Fixture
 
     BackendStorage m_backendStorage;
     MultiLayerStorageType m_multiLayerStorage;
-
     bcos::bytes m_helloworldBytecodeBinary;
 
     PrecompiledManager m_precompiledManager;
+    TransactionExecutorImpl<PrecompiledManager> m_executor;
     std::variant<std::monostate,
-        SchedulerSerialImpl<MultiLayerStorageType, TransactionExecutorImpl, PrecompiledManager>,
-        SchedulerParallelImpl<MultiLayerStorageType, TransactionExecutorImpl, PrecompiledManager>>
+        SchedulerSerialImpl<MultiLayerStorageType, TransactionExecutorImpl<PrecompiledManager>>,
+        SchedulerParallelImpl<MultiLayerStorageType, TransactionExecutorImpl<PrecompiledManager>>>
         m_scheduler;
 
     std::string m_contractAddress;

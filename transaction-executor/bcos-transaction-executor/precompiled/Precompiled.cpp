@@ -1,6 +1,6 @@
 #include "Precompiled.h"
+#include "StorageWrapper.h"
 #include "bcos-utilities/Overloaded.h"
-#include <gsl/pointers>
 
 struct UnsupportedPrecompiledException : public bcos::Exception
 {

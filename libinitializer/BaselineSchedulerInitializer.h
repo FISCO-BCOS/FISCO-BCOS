@@ -48,15 +48,14 @@ private:
 
     MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)> m_multiLayerStorage;
     transaction_executor::PrecompiledManager m_precompiledManager;
-
-    std::conditional_t<enableParallel,
+    transaction_executor::TransactionExecutorImpl<transaction_executor::PrecompiledManager>
+        m_transactionExecutor;
+    std::conditional_t < enableParallel,
         SchedulerParallelImpl<decltype(m_multiLayerStorage),
-            transaction_executor::TransactionExecutorImpl,
-            transaction_executor::PrecompiledManager>,
+            transaction_executor::TransactionExecutorImpl>,
         SchedulerSerialImpl<decltype(m_multiLayerStorage),
-            transaction_executor::TransactionExecutorImpl,
-            transaction_executor::PrecompiledManager>>
-        m_scheduler;
+            transaction_executor::TransactionExecutorImpl>
+            m_scheduler;
 
 public:
     BaselineSchedulerInitializer(::rocksdb::DB& rocksDB,
@@ -70,7 +69,8 @@ public:
             storage2::rocksdb::StateValueResolver{}),
         m_ledger(m_rocksDBStorage, *m_blockFactory),
         m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
-        m_scheduler(m_multiLayerStorage, *m_blockFactory->receiptFactory(), m_precompiledManager)
+        m_transactionExecutor(*m_blockFactory->receiptFactory(), m_precompiledManager),
+        m_scheduler(m_multiLayerStorage, m_transactionExecutor)
     {}
 
     auto buildScheduler()

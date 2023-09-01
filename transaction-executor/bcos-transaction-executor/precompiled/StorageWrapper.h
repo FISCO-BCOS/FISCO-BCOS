@@ -8,7 +8,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include <exception>
-#include <range/v3/view/transform.hpp>
 
 namespace bcos::transaction_executor
 {

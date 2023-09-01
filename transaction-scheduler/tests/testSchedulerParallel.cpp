@@ -16,21 +16,12 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-class Precompiled;
-struct MockPrecompiledManager
-{
-    Precompiled const* getPrecompiled(unsigned long contractAddress) const { return nullptr; }
-};
-
-template <class Storage, class PrecompiledManager>
 struct MockExecutor
 {
-    MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
-        [[maybe_unused]] PrecompiledManager const& precompiledManager)
-    {}
-
-    task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(
-        auto&& blockHeader, auto&& transaction, [[maybe_unused]] int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID)
     {
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
@@ -64,9 +55,8 @@ BOOST_FIXTURE_TEST_SUITE(TestSchedulerParallel, TestSchedulerParallelFixture)
 BOOST_AUTO_TEST_CASE(simple)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        MockPrecompiledManager percompiledManager;
-        SchedulerParallelImpl<decltype(multiLayerStorage), MockExecutor, MockPrecompiledManager>
-            scheduler(multiLayerStorage, receiptFactory, percompiledManager);
+        MockExecutor executor;
+        SchedulerParallelImpl scheduler(multiLayerStorage, executor);
 
         scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
@@ -89,16 +79,12 @@ BOOST_AUTO_TEST_CASE(simple)
 }
 
 constexpr static size_t MOCK_USER_COUNT = 1000;
-template <StateStorage Storage, class PrecompiledManager>
 struct MockConflictExecutor
 {
-    MockConflictExecutor(Storage& storage, [[maybe_unused]] auto&& receiptFactory,
-        [[maybe_unused]] PrecompiledManager const& percompiledManager)
-      : m_storage(storage)
-    {}
-
-    task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(auto&& blockHeader,
-        protocol::Transaction const& transaction, [[maybe_unused]] int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        MockConflictExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID)
     {
         auto input = transaction.input();
         auto inputNum =
@@ -109,31 +95,27 @@ struct MockConflictExecutor
 
         // Read fromKey and -1
         StateKey fromKey{"t_test", fromAddress};
-        auto fromEntry = co_await storage2::readOne(m_storage, fromKey);
+        auto fromEntry = co_await storage2::readOne(storage, fromKey);
         fromEntry->set(
             boost::lexical_cast<std::string>(boost::lexical_cast<int>(fromEntry->get()) - 1));
-        co_await storage2::writeOne(m_storage, fromKey, *fromEntry);
+        co_await storage2::writeOne(storage, fromKey, *fromEntry);
 
         // Read toKey and +1
         StateKey toKey{"t_test", toAddress};
-        auto toEntry = co_await storage2::readOne(m_storage, toKey);
+        auto toEntry = co_await storage2::readOne(storage, toKey);
         toEntry->set(
             boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
-        co_await storage2::writeOne(m_storage, toKey, *toEntry);
+        co_await storage2::writeOne(storage, toKey, *toEntry);
 
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
-
-    Storage& m_storage;
 };
 
 BOOST_AUTO_TEST_CASE(conflict)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        MockPrecompiledManager percompiledManager;
-        SchedulerParallelImpl<decltype(multiLayerStorage), MockConflictExecutor,
-            MockPrecompiledManager>
-            scheduler(multiLayerStorage, receiptFactory, percompiledManager);
+        MockConflictExecutor executor;
+        SchedulerParallelImpl scheduler(multiLayerStorage, executor);
         scheduler.setChunkSize(1);
         scheduler.setMaxToken(std::thread::hardware_concurrency());
         scheduler.start();

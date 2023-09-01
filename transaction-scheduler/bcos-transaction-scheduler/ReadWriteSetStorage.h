@@ -9,7 +9,7 @@
 namespace bcos::transaction_scheduler
 {
 
-template <transaction_executor::StateStorage Storage>
+template <class Storage>
 class ReadWriteSetStorage
 {
 private:

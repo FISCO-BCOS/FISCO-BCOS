@@ -16,22 +16,16 @@
 namespace bcos::transaction_scheduler
 {
 
-template <class MultiLayerStorage, template <typename, typename> class Executor,
-    class PrecompiledManager>
+template <class MultiLayerStorage, class Executor>
 class SchedulerBaseImpl
 {
 private:
     MultiLayerStorage& m_multiLayerStorage;
-    protocol::TransactionReceiptFactory& m_receiptFactory;
-    PrecompiledManager const& m_precompiledManager;
+    Executor& m_executor;
 
 public:
-    SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage,
-        protocol::TransactionReceiptFactory& receiptFactory,
-        PrecompiledManager const& precompiledManager)
-      : m_multiLayerStorage(multiLayerStorage),
-        m_receiptFactory(receiptFactory),
-        m_precompiledManager(precompiledManager)
+    SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage, Executor& executor)
+      : m_multiLayerStorage(multiLayerStorage), m_executor(executor)
     {}
 
     void start() { m_multiLayerStorage.newMutable(); }
@@ -117,15 +111,12 @@ public:
     {
         auto view = m_multiLayerStorage.fork(false);
         view.newTemporaryMutable();
-
-        Executor<decltype(view), PrecompiledManager> executor(
-            view, m_receiptFactory, m_precompiledManager);
-        co_return co_await executor.execute(blockHeader, transaction, 0);
+        co_return co_await transaction_executor::execute(
+            m_executor, view, blockHeader, transaction, 0);
     }
 
-    MultiLayerStorage& multiLayerStorage() & { return m_multiLayerStorage; }
-    decltype(m_receiptFactory)& receiptFactory() & { return m_receiptFactory; }
-    PrecompiledManager const& precompiledManager() const& { return m_precompiledManager; }
+    MultiLayerStorage& multiLayerStorage() const& { return m_multiLayerStorage; }
+    Executor& executor() const& { return m_executor; }
 };
 
 }  // namespace bcos::transaction_scheduler

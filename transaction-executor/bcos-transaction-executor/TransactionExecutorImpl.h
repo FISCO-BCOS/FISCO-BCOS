@@ -26,24 +26,22 @@ evmc_address unhexAddress(std::string_view view);
 struct InvalidArgumentsError: public bcos::Error {};
 // clang-format on
 
-template <StateStorage Storage, class PrecompiledManager>
+template <class PrecompiledManager>
 class TransactionExecutorImpl
 {
 private:
-    VMFactory vmFactory;
-    Storage& m_storage;
-    protocol::TransactionReceiptFactory& m_receiptFactory;
+    VMFactory m_vmFactory;
+    protocol::TransactionReceiptFactory const& m_receiptFactory;
     PrecompiledManager const& m_precompiledManager;
 
 public:
-    TransactionExecutorImpl(Storage& storage, protocol::TransactionReceiptFactory& receiptFactory,
+    TransactionExecutorImpl(protocol::TransactionReceiptFactory const& receiptFactory,
         PrecompiledManager const& precompiledManager)
-      : m_storage(storage),
-        m_receiptFactory(receiptFactory),
-        m_precompiledManager(precompiledManager)
+      : m_receiptFactory(receiptFactory), m_precompiledManager(precompiledManager)
     {}
 
-    task::Task<protocol::TransactionReceipt::Ptr> execute(protocol::BlockHeader const& blockHeader,
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(tag_t<execute> /*unused*/,
+        TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID)
     {
         try
@@ -54,8 +52,7 @@ public:
                     << "Execte transaction: " << transaction.hash().hex();
             }
 
-            Rollbackable<std::remove_reference_t<decltype(m_storage)>> rollbackableStorage(
-                m_storage);
+            Rollbackable<std::remove_reference_t<decltype(storage)>> rollbackableStorage(storage);
 
             auto toAddress = unhexAddress(transaction.to());
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
@@ -78,8 +75,8 @@ public:
                 .code_address = toAddress};
 
             int64_t seq = 0;
-            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, evmcMessage,
-                evmcMessage.sender, contextID, seq, m_precompiledManager);
+            HostContext hostContext(executor.m_vmFactory, rollbackableStorage, blockHeader,
+                evmcMessage, evmcMessage.sender, contextID, seq, executor.m_precompiledManager);
             auto evmcResult = co_await hostContext.execute();
 
             bcos::bytesConstRef output;
@@ -102,9 +99,9 @@ public:
             }
 
             auto const& logEntries = hostContext.logs();
-            auto receipt =
-                m_receiptFactory.createReceipt(evmcResult.gas_left, std::move(newContractAddress),
-                    logEntries, evmcResult.status_code, output, blockHeader.number());
+            auto receipt = executor.m_receiptFactory.createReceipt(evmcResult.gas_left,
+                std::move(newContractAddress), logEntries, evmcResult.status_code, output,
+                blockHeader.number());
 
             co_return receipt;
         }
@@ -113,7 +110,7 @@ public:
             TRANSACTION_EXECUTOR_LOG(DEBUG)
                 << "Execute exception: " << boost::diagnostic_information(e);
 
-            auto receipt = m_receiptFactory.createReceipt(
+            auto receipt = executor.m_receiptFactory.createReceipt(
                 0, {}, {}, EVMC_INTERNAL_ERROR, {}, blockHeader.number());
             receipt->setMessage(boost::diagnostic_information(e));
             co_return receipt;

@@ -63,7 +63,7 @@ inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
         GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-template <StateStorage Storage, class PrecompiledManager>
+template <class Storage, class PrecompiledManager>
 class HostContext : public evmc_host_context
 {
 private:
