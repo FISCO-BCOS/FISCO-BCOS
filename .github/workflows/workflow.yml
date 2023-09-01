@@ -142,7 +142,7 @@ jobs:
       - name: configure
         run: cmake . -DBUILD_STATIC=ON
       - name: compile
-        run: make -j2 || cat /home/runner/work/FISCO-BCOS/FISCO-BCOS/deps/src/cryptopp-stamp/cryptopp-configure-*.log
+        run: make -j2
       - name: run integration testing
         run: cd tools && bash ci/ci_check.sh
       - name: tar fisco-bcos for Linux

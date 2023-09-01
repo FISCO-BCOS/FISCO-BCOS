@@ -398,16 +398,17 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             if (g_BCOSConfig.enableIgnoreObserverWriteRequest())
             {
                 if (isAMOPMessage)
-                {
+                {  // filter all amop request
                     SERVICE_LOG(INFO)
-                        << LOG_BADGE("Write-filter") << LOG_DESC("ignore observer amop request")
+                        << LOG_BADGE("Write-filter") << LOG_DESC("ignore amop request")
                         << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("nodeID", nodeID.hex())
                         << LOG_KV("protocolID", dev::eth::ProtocolID::AMOP)
                         << LOG_KV("messageSize", p2pMessage->length());
                     return;
                 }
                 auto groupID = ret.first;
-                {
+                if (ret.second != dev::eth::ProtocolID::BlockSync)
+                {  // filter all non-blockSync request from node not in group
                     RecursiveGuard guard(x_nodeList);
                     auto& nodes = m_groupID2NodeList[groupID];
                     auto it = std::find(nodes.begin(), nodes.end(), nodeID);
@@ -416,9 +417,8 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
                         SERVICE_LOG(INFO)
                             << LOG_BADGE("Write-filter")
                             << LOG_DESC("ignore unregistered node request")
-                            << LOG_KV("endpoint", nodeIPEndpoint)
-                            << LOG_KV("nodeID", nodeID.hex()) << LOG_KV("groupID", groupID)
-                            << LOG_KV("protocolID", ret.second)
+                            << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("nodeID", nodeID.hex())
+                            << LOG_KV("groupID", groupID) << LOG_KV("protocolID", ret.second)
                             << LOG_KV("messageSize", p2pMessage->length());
                         return;
                     }
@@ -427,16 +427,15 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
                 auto& observers = m_groupID2ObserverList[groupID];
                 auto it = std::find(observers.begin(), observers.end(), nodeID);
                 if (it != observers.end())
-                {
+                {  // filter all observer consensus request
                     if (ret.second == dev::eth::ProtocolID::PBFT ||
                         ret.second == dev::eth::ProtocolID::Raft)
                     {
                         SERVICE_LOG(INFO)
                             << LOG_BADGE("Write-filter")
                             << LOG_DESC("ignore observer consensus request")
-                            << LOG_KV("endpoint", nodeIPEndpoint)
-                            << LOG_KV("nodeID", nodeID.hex()) << LOG_KV("groupID", groupID)
-                            << LOG_KV("protocolID", ret.second)
+                            << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("nodeID", nodeID.hex())
+                            << LOG_KV("groupID", groupID) << LOG_KV("protocolID", ret.second)
                             << LOG_KV("messageSize", p2pMessage->length());
                         return;
                     }

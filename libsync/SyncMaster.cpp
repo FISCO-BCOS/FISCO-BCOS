@@ -563,14 +563,6 @@ bool SyncMaster::maintainDownloadingQueue()
 
 void SyncMaster::maintainPeersConnection()
 {
-    // Get active peers
-    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
-    set<NodeID> activePeers;
-    for (auto const& session : sessions)
-    {
-        activePeers.insert(session.nodeID());
-    }
-
     // Get sealers and observer
     NodeIDs sealers = m_blockChain->sealerList();
     NodeIDs sealerOrObserver = sealers + m_blockChain->observerList();
@@ -578,14 +570,34 @@ void SyncMaster::maintainPeersConnection()
     // member set is [(sealer || observer) && activePeer && not myself]
     set<NodeID> memberSet;
     bool hasMyself = false;
-    for (auto const& member : sealerOrObserver)
+    if (!m_enableFreeNodeRead)
     {
-        /// find active peers
-        if (activePeers.find(member) != activePeers.end() && member != m_nodeId)
+        // Get active peers
+        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+        set<NodeID> activePeers;
+        for (auto const& session : sessions)
         {
-            memberSet.insert(member);
+            activePeers.insert(session.nodeID());
         }
-        hasMyself |= (member == m_nodeId);
+        for (auto const& member : sealerOrObserver)
+        {
+            /// find active peers
+            if (activePeers.find(member) != activePeers.end() && member != m_nodeId)
+            {
+                memberSet.insert(member);
+            }
+            hasMyself |= (member == m_nodeId);
+        }
+    }
+    else
+    {
+        // Get active peers
+        auto sessions = m_service->sessionInfos();
+        for (auto& session : sessions)
+        {
+            memberSet.insert(session.nodeID());
+            hasMyself |= (session.nodeID() == m_nodeId);
+        }
     }
 
     // Delete uncorrelated peers
@@ -639,7 +651,7 @@ void SyncMaster::maintainPeersConnection()
         }
     }
 
-    m_msgEngine->setObserverList(m_blockChain->observerList());
+    m_msgEngine->setSealerList(sealers);
     // Update sync sealer status
     set<NodeID> sealerSet;
     for (auto sealer : sealers)
