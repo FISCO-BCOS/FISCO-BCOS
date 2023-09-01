@@ -14,7 +14,6 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <mutex>
-#include <range/v3/view/transform.hpp>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -404,8 +403,7 @@ public:
     task::AwaitableValue<void> write(
         RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, value] : RANGES::views::zip(
-                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
+        for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
             auto [bucket, lock] = getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
