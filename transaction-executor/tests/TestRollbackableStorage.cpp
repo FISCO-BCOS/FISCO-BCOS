@@ -32,12 +32,12 @@ BOOST_AUTO_TEST_CASE(addRollback)
         storage::Entry entry;
         entry.set("OK!");
         co_await rollbackableStorage.write(
-            singleView(StateKeyView{tableID, "Key1"}), singleView(entry));
+            RANGES::views::single(StateKeyView{tableID, "Key1"}), RANGES::views::single(entry));
 
         storage::Entry entry2;
         entry2.set("OK2!");
         co_await rollbackableStorage.write(
-            singleView(StateKeyView{tableID, "Key2"}), singleView(entry2));
+            RANGES::views::single(StateKeyView{tableID, "Key2"}), RANGES::views::single(entry2));
 
         // Check the entry exists
         std::vector<StateKey> keys{StateKey{tableID, "Key1"}, StateKey{"table1", "Key2"}};
@@ -81,12 +81,12 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         storage::Entry entry;
         entry.set("OK!");
         co_await rollbackableStorage.write(
-            singleView(StateKey{tableID, "Key1"sv}), singleView(entry));
+            RANGES::views::single(StateKey{tableID, "Key1"sv}), RANGES::views::single(entry));
 
         storage::Entry entry2;
         entry2.set("OK2!");
         co_await rollbackableStorage.write(
-            singleView(StateKey{tableID, "Key2"sv}), singleView(entry2));
+            RANGES::views::single(StateKey{tableID, "Key2"sv}), RANGES::views::single(entry2));
 
         // Check the entry exists
         std::vector<StateKey> keys{StateKey{tableID, "Key1"}, StateKey{"table1", "Key2"}};
