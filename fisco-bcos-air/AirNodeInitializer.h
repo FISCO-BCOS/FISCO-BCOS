@@ -26,6 +26,8 @@
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-utilities/ObjectAllocatorMonitor.h>
 
+#include <utility>
+
 
 namespace bcos::node
 {
@@ -33,6 +35,10 @@ class AirNodeInitializer
 {
 public:
     AirNodeInitializer() = default;
+    AirNodeInitializer(const AirNodeInitializer&) = delete;
+    AirNodeInitializer(AirNodeInitializer&&) = delete;
+    AirNodeInitializer& operator=(const AirNodeInitializer&) = delete;
+    AirNodeInitializer& operator=(AirNodeInitializer&&) = delete;
     virtual ~AirNodeInitializer() { stop(); }
 
     virtual void init(std::string const& _configFilePath, std::string const& _genesisFile);
@@ -45,7 +51,7 @@ protected:
     {
         m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
         m_nodeInitializer->initAirNode(
-            _configFilePath, _genesisFile, _gateway, m_logInitializer->logPath());
+            _configFilePath, _genesisFile, std::move(_gateway), m_logInitializer->logPath());
     }
 
 private:
@@ -56,7 +62,8 @@ private:
     bcos::rpc::RPCInterface::Ptr m_rpc;
     bcos::ObjectAllocatorMonitor::Ptr m_objMonitor;
 
-    std::optional<rpc::RPCApplication> m_rpcApplication;
-    std::optional<std::thread> m_rpcThread;
+    std::optional<rpc::RPCApplication> m_tarsApplication;
+    std::optional<std::string> m_tarsConfig;
+    std::optional<std::thread> m_tarsThread;
 };
 }  // namespace bcos::node

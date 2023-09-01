@@ -1,6 +1,7 @@
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/storage2/StorageMethods.h"
 #include "storage/Entry.h"
 #include <bcos-concepts/Basic.h>
-#include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/AwaitableValue.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
