@@ -73,7 +73,7 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     PrecompiledExecResult::Ptr _callParameters)
 {
     uint32_t func = getParamFunc(_callParameters->input());
-    uint32_t version = _executive->blockContextReference().blockVersion();
+    uint32_t version = _executive->blockContext().blockVersion();
 
     if (func == name2Selector[FILE_SYSTEM_METHOD_LIST])
     {
@@ -196,7 +196,7 @@ void BFSPrecompiled::makeDir(const std::shared_ptr<executor::TransactionExecutiv
 {
     // mkdir(string)
     std::string absolutePath;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), absolutePath);
 
@@ -220,7 +220,7 @@ void BFSPrecompiled::makeDirImpl(const std::string& _absolutePath,
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr const& _callParameters)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BFSPrecompiled")
@@ -254,7 +254,7 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
 {
     // list(string)
     std::string absolutePath;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), absolutePath);
     std::vector<BfsTuple> files = {};
@@ -386,7 +386,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
     std::string absolutePath;
     u256 offset = 0;
     u256 count = 0;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), absolutePath, offset, count);
     std::vector<BfsTuple> files = {};
@@ -497,7 +497,7 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     std::string absolutePath, contractAddress, contractAbi;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), absolutePath, contractAddress, contractAbi);
 
@@ -521,7 +521,7 @@ void BFSPrecompiled::linkImpl(const std::string& _absolutePath, const std::strin
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr const& _callParameters)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     std::string contractAddress = _contractAddress;
@@ -588,7 +588,7 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     std::string contractName, contractVersion, contractAddress, contractAbi;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(
         _callParameters->params(), contractName, contractVersion, contractAddress, contractAbi);
@@ -667,7 +667,7 @@ void BFSPrecompiled::readLink(const std::shared_ptr<executor::TransactionExecuti
 {
     // readlink(string)
     std::string absolutePath;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), absolutePath);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("readLink path")
@@ -730,7 +730,7 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     // touch(string absolute, string type)
     std::string absolutePath;
     std::string type;
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), absolutePath, type);
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BFSPrecompiled")
@@ -810,7 +810,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
     const PrecompiledExecResult::Ptr& _callParameters)
 {
     PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("initBfs");
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto table = _executive->storage().openTable(tool::FS_ROOT);
     if (table.has_value())
     {
@@ -844,7 +844,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
 void BFSPrecompiled::rebuildBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (_callParameters->m_sender != precompiled::SYS_CONFIG_ADDRESS &&
         _callParameters->m_sender != precompiled::SYS_CONFIG_NAME)
@@ -988,7 +988,7 @@ void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecut
 void BFSPrecompiled::rebuildBfs310(
     const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
-    const auto& blockContext = _executive->blockContextReference();
+    const auto& blockContext = _executive->blockContext();
     auto keyPageIgnoreTables = blockContext.keyPageIgnoreTables();
     // child, parent, all absolute path
     std::queue<std::pair<std::string, std::string>> rebuildQ;
@@ -1103,7 +1103,7 @@ bool BFSPrecompiled::recursiveBuildDir(
     boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
     std::string root = "/";
 
-    auto version = _executive->blockContextReference().blockVersion();
+    auto version = _executive->blockContext().blockVersion();
     for (const auto& dir : dirList)
     {
         auto table = _executive->storage().openTable(root);
