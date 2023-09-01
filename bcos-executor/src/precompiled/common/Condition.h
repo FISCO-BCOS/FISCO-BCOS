@@ -30,7 +30,40 @@ public:
         {
             m_conditions[idx] = std::make_shared<storage::Condition>();
         }
-        m_conditions[idx]->m_conditions.emplace_back(covertComparator(cmp), value);
+        
+        auto& condition = m_conditions[idx];
+        switch (covertComparator(cmp))
+        {
+        case storage::Condition::Comparator::EQ:
+            condition->EQ(value);
+            break;
+        case storage::Condition::Comparator::NE:
+            condition->NE(value);
+            break;
+        case storage::Condition::Comparator::GT:
+            condition->GT(value);
+            break;
+        case storage::Condition::Comparator::GE:
+            condition->GE(value);
+            break;
+        case storage::Condition::Comparator::LT:
+            condition->LT(value);
+            break;
+        case storage::Condition::Comparator::LE:
+            condition->LE(value);
+            break;
+        case storage::Condition::Comparator::STARTS_WITH:
+            condition->startsWith(value);
+            break;
+        case storage::Condition::Comparator::ENDS_WITH:
+            condition->endsWith(value);
+            break;
+        case storage::Condition::Comparator::CONTAINS:
+            condition->contains(value);
+            break;
+        default:
+            break;
+        }
     }
 
     inline void insert(uint32_t key, std::shared_ptr<storage::Condition> cond)
