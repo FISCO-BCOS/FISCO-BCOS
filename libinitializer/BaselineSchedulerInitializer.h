@@ -4,19 +4,19 @@
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-storage/RocksDBStorage2.h"
+#include "bcos-storage/StateKVResolver.h"
 #include "bcos-storage/bcos-storage/StateKVResolver.h"
+#include "bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
+#include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
+#include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "transaction-executor/bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-ledger/src/libledger/LedgerImpl2.h>
-#include <bcos-storage/RocksDBStorage2.h>
-#include <bcos-storage/StateKVResolver.h>
-#include <bcos-transaction-executor/TransactionExecutorImpl.h>
-#include <bcos-transaction-scheduler/BaselineScheduler.h>
-#include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
-#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 
 namespace bcos::transaction_scheduler
 {
@@ -50,12 +50,10 @@ private:
     transaction_executor::PrecompiledManager m_precompiledManager;
     transaction_executor::TransactionExecutorImpl<transaction_executor::PrecompiledManager>
         m_transactionExecutor;
-    std::conditional_t < enableParallel,
-        SchedulerParallelImpl<decltype(m_multiLayerStorage),
-            transaction_executor::TransactionExecutorImpl>,
-        SchedulerSerialImpl<decltype(m_multiLayerStorage),
-            transaction_executor::TransactionExecutorImpl>
-            m_scheduler;
+    std::conditional_t<enableParallel,
+        SchedulerParallelImpl<decltype(m_multiLayerStorage), decltype(m_transactionExecutor)>,
+        SchedulerSerialImpl<decltype(m_multiLayerStorage), decltype(m_transactionExecutor)>>
+        m_scheduler;
 
 public:
     BaselineSchedulerInitializer(::rocksdb::DB& rocksDB,
