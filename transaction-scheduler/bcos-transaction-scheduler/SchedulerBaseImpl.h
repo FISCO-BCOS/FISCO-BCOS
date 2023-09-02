@@ -1,14 +1,14 @@
 #pragma once
 #include "MultiLayerStorage.h"
+#include "bcos-concepts/ledger/Ledger.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include <bcos-concepts/ledger/Ledger.h>
-#include <bcos-framework/protocol/Block.h>
-#include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-framework/protocol/TransactionReceiptFactory.h>
-#include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
-#include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
-#include <bcos-task/Task.h>
+#include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
+#include "bcos-task/Task.h"
 #include <oneapi/tbb/combinable.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/parallel_pipeline.h>
@@ -22,6 +22,10 @@ class SchedulerBaseImpl
 private:
     MultiLayerStorage& m_multiLayerStorage;
     Executor& m_executor;
+
+protected:
+    MultiLayerStorage& multiLayerStorage() const& { return m_multiLayerStorage; }
+    Executor& executor() const& { return m_executor; }
 
 public:
     SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage, Executor& executor)
@@ -114,9 +118,6 @@ public:
         co_return co_await transaction_executor::execute(
             m_executor, view, blockHeader, transaction, 0);
     }
-
-    MultiLayerStorage& multiLayerStorage() const& { return m_multiLayerStorage; }
-    Executor& executor() const& { return m_executor; }
 };
 
 }  // namespace bcos::transaction_scheduler

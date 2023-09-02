@@ -1,3 +1,4 @@
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-scheduler/test/mock/MockLedger.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
@@ -20,8 +21,9 @@ using namespace bcos::transaction_scheduler;
 struct MockScheduler
 {
     void start() {}
-    task::Task<std::vector<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>>> execute(
-        auto&& blockHeader, auto&& transactions)
+    friend task::Task<std::vector<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>>>
+    tag_invoke(transaction_scheduler::tag_t<transaction_scheduler::execute> /*unused*/,
+        MockScheduler& /*unused*/, auto&& blockHeader, auto&& transactions)
     {
         auto receipts =
             RANGES::iota_view<size_t, size_t>(0, RANGES::size(transactions)) |

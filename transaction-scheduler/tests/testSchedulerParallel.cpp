@@ -1,4 +1,5 @@
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
@@ -68,7 +69,7 @@ BOOST_AUTO_TEST_CASE(simple)
             }) |
             RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-        auto receipts = co_await scheduler.execute(blockHeader,
+        auto receipts = co_await bcos::transaction_scheduler::execute(scheduler, blockHeader,
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
         co_await scheduler.finish(blockHeader, *hashImpl);
         co_await scheduler.commit();
@@ -145,7 +146,8 @@ BOOST_AUTO_TEST_CASE(conflict)
 
         auto transactionRefs =
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; });
-        auto receipts = co_await scheduler.execute(blockHeader, transactionRefs);
+        auto receipts =
+            co_await bcos::transaction_scheduler::execute(scheduler, blockHeader, transactionRefs);
 
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {

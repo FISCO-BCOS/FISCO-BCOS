@@ -210,7 +210,7 @@ private:
 
             m_schedulerImpl.start();
             auto transactions = co_await getTransactions(*block);
-            auto receipts = co_await m_schedulerImpl.execute(*blockHeader,
+            auto receipts = co_await execute(m_schedulerImpl, *blockHeader,
                 transactions |
                     RANGES::views::transform(
                         [](protocol::Transaction::ConstPtr const& transactionPtr)

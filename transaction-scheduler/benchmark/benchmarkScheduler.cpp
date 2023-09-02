@@ -102,8 +102,8 @@ struct Fixture
                             RANGES::single_view(std::addressof(createTransaction)) |
                             RANGES::views::transform([](auto* ptr) -> auto const& { return *ptr; });
                         scheduler.start();
-                        auto receipts =
-                            co_await scheduler.execute(*block->blockHeaderConst(), transactions);
+                        auto receipts = co_await transaction_scheduler::execute(
+                            scheduler, *block->blockHeaderConst(), transactions);
                         if (receipts[0]->status() != 0)
                         {
                             fmt::print("deployContract unexpected receipt status: {}, {}\n",
@@ -241,10 +241,10 @@ struct Fixture
                             std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
                     scheduler.start();
-                    auto receipts = co_await scheduler.execute(
-                        blockHeader, checkTransactions | RANGES::views::transform([
+                    auto receipts = co_await transaction_scheduler::execute(scheduler, blockHeader,
+                        checkTransactions | RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
-                                                                                      -> auto& {
+                                                                         -> auto& {
                             return *transaction;
                         }));
                     co_await scheduler.finish(blockHeader, *(m_cryptoSuite->hashImpl()));
@@ -323,7 +323,8 @@ static void issue(benchmark::State& state)
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
                         scheduler.start();
-                        [[maybe_unused]] auto receipts = co_await scheduler.execute(blockHeader,
+                        [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
+                            scheduler, blockHeader,
                             fixture.m_transactions |
                                 RANGES::views::transform(
                                     [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
@@ -379,7 +380,8 @@ static void transfer(benchmark::State& state)
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
                     scheduler.start();
-                    [[maybe_unused]] auto receipts = co_await scheduler.execute(blockHeader,
+                    [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
+                        scheduler, blockHeader,
                         fixture.m_transactions | RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                                                                               -> auto& {
@@ -403,7 +405,8 @@ static void transfer(benchmark::State& state)
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
                         scheduler.start();
-                        [[maybe_unused]] auto receipts = co_await scheduler.execute(blockHeader,
+                        [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
+                            scheduler, blockHeader,
                             fixture.m_transactions |
                                 RANGES::views::transform(
                                     [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
@@ -568,7 +571,8 @@ static void conflictTransfer(benchmark::State& state)
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
                     scheduler.start();
-                    [[maybe_unused]] auto receipts = co_await scheduler.execute(blockHeader,
+                    [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
+                        scheduler, blockHeader,
                         fixture.m_transactions | RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                                                                               -> auto& {
@@ -592,7 +596,8 @@ static void conflictTransfer(benchmark::State& state)
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
                         scheduler.start();
-                        [[maybe_unused]] auto receipts = co_await scheduler.execute(blockHeader,
+                        [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
+                            scheduler, blockHeader,
                             fixture.m_transactions |
                                 RANGES::views::transform(
                                     [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
