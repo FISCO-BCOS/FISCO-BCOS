@@ -112,7 +112,7 @@ struct Fixture
                         }
 
                         co_await scheduler.finish(*blockHeader, *(m_cryptoSuite->hashImpl()));
-                        co_await scheduler.commit();
+                        co_await transaction_scheduler::commit(scheduler);
 
                         m_contractAddress = receipts[0]->contractAddress();
                     }());

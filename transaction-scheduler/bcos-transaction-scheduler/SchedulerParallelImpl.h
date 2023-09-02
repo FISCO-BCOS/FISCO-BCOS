@@ -27,22 +27,17 @@ namespace bcos::transaction_scheduler
 
 #define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
 
-template <class MultiLayerStorage, class Executor>
-class SchedulerParallelImpl : public SchedulerBaseImpl<MultiLayerStorage, Executor>
+class SchedulerParallelImpl
 {
 private:
     std::unique_ptr<tbb::task_group> m_asyncTaskGroup;
-    using ChunkLocalStorage =
-        transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
-            decltype(std::declval<MultiLayerStorage>().fork(true))>;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor>::multiLayerStorage;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor>::executor;
+
     constexpr static size_t MIN_CHUNK_SIZE = 32;
 
     size_t m_chunkSize = MIN_CHUNK_SIZE;
     size_t m_maxToken = 0;
 
-    template <class Range>
+    template <class Storage, class Executor, class Range>
     class ChunkStatus
     {
     private:
@@ -57,8 +52,8 @@ private:
         std::atomic_int64_t* m_lastChunkIndex = nullptr;
         Range m_transactionAndReceiptsRange;
         Executor& m_executor;
-        ChunkLocalStorage m_localStorage;
-        decltype(std::declval<ChunkLocalStorage>().fork(true)) m_localStorageView;
+        MultiLayerStorage<Storage, void, Storage> m_localStorage;
+        decltype(m_localStorage.fork(true)) m_localStorageView;
         ReadWriteSetStorage<decltype(m_localStorageView)> m_readWriteSetStorage;
 
     public:
@@ -75,7 +70,7 @@ private:
 
         int64_t chunkIndex() { return m_chunkIndex; }
         auto count() { return RANGES::size(m_transactionAndReceiptsRange); }
-        ChunkLocalStorage& localStorage() & { return m_localStorage; }
+        decltype(m_localStorage)& localStorage() & { return m_localStorage; }
         auto& readWriteSetStorage() & { return m_readWriteSetStorage; }
 
         task::Task<void> execute(protocol::BlockHeader const& blockHeader)
@@ -104,19 +99,16 @@ public:
     SchedulerParallelImpl& operator=(const SchedulerParallelImpl&) = delete;
     SchedulerParallelImpl& operator=(SchedulerParallelImpl&&) noexcept = default;
 
-    SchedulerParallelImpl(MultiLayerStorage& multiLayerStorage, Executor& executor)
-      : SchedulerBaseImpl<MultiLayerStorage, Executor>(multiLayerStorage, executor),
-        m_asyncTaskGroup(std::make_unique<tbb::task_group>())
-    {}
+    SchedulerParallelImpl() : m_asyncTaskGroup(std::make_unique<tbb::task_group>()) {}
     ~SchedulerParallelImpl() noexcept { m_asyncTaskGroup->wait(); }
 
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
-        tag_t<execute> /*unused*/, SchedulerParallelImpl& scheduler,
+        tag_t<execute> /*unused*/, SchedulerParallelImpl& scheduler, auto& storage, auto& executor,
         protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
-        auto storageView = scheduler.multiLayerStorage().fork(true);
+        auto& storageView = storage;
         std::vector<protocol::TransactionReceipt::Ptr> receipts(RANGES::size(transactions));
 
         size_t offset = 0;
@@ -134,11 +126,12 @@ public:
                 });
             std::atomic_int64_t lastChunkIndex{std::numeric_limits<int64_t>::max()};
             int64_t chunkIndex = 0;
-            typename MultiLayerStorage::MutableStorage lastStorage;
-            ReadWriteSetStorage<typename MultiLayerStorage::MutableStorage> writeSet(lastStorage);
+            decltype(storage) lastStorage;
+            ReadWriteSetStorage<decltype(lastStorage)> writeSet(lastStorage);
             auto chunks =
                 currentTransactionAndReceipts | RANGES::views::chunk(scheduler.m_chunkSize);
-            using Chunk = ChunkStatus<RANGES::range_value_t<decltype(chunks)>>;
+            using Chunk = SchedulerParallelImpl::ChunkStatus<std::decay_t<decltype(executor)>,
+                std::decay_t<decltype(storage)>, RANGES::range_value_t<decltype(chunks)>>;
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing... " << offset << " | "
                                           << RANGES::size(currentTransactionAndReceipts);
@@ -152,8 +145,8 @@ public:
                             return {};
                         }
                         PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk: " << chunkIndex;
-                        auto chunk = std::make_unique<Chunk>(chunkIndex, lastChunkIndex,
-                            chunks[chunkIndex], scheduler.executor(), storageView);
+                        auto chunk = std::make_unique<Chunk>(
+                            chunkIndex, lastChunkIndex, chunks[chunkIndex], executor, storageView);
                         ++chunkIndex;
                         return chunk;
                     }) &

@@ -16,108 +16,51 @@
 namespace bcos::transaction_scheduler
 {
 
-template <class MultiLayerStorage, class Executor>
-class SchedulerBaseImpl
+task::Task<void> tag_invoke(tag_t<commit> /*unused*/, auto& scheduler, auto& storage,
+    concepts::ledger::IsLedger auto& ledger, protocol::Block& block,
+    std::vector<protocol::Transaction::ConstPtr> const& transactions)
 {
-private:
-    MultiLayerStorage& m_multiLayerStorage;
-    Executor& m_executor;
-
-protected:
-    MultiLayerStorage& multiLayerStorage() const& { return m_multiLayerStorage; }
-    Executor& executor() const& { return m_executor; }
-
-public:
-    SchedulerBaseImpl(MultiLayerStorage& multiLayerStorage, Executor& executor)
-      : m_multiLayerStorage(multiLayerStorage), m_executor(executor)
-    {}
-
-    void start() { m_multiLayerStorage.newMutable(); }
-    task::Task<bcos::h256> finish(
-        protocol::BlockHeader const& blockHeader, crypto::Hash const& hashImpl)
+    if (block.blockHeaderConst()->number() != 0)
     {
-        auto& mutableStorage = m_multiLayerStorage.mutableStorage();
-        auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+            ittapi::ITT_DOMAINS::instance().SET_BLOCK);
 
-        static constexpr int HASH_CHUNK_SIZE = 32;
-        auto range = it.range() | RANGES::views::chunk(HASH_CHUNK_SIZE);
+        auto& lastImmutable = storage;
+        co_await ledger
+            .template setBlock<concepts::ledger::HEADER, concepts::ledger::TRANSACTIONS_METADATA,
+                concepts::ledger::RECEIPTS, concepts::ledger::NONCES>(*lastImmutable, block);
 
-        tbb::combinable<bcos::h256> combinableHash;
-        tbb::task_group taskGroup;
-        for (auto&& subrange : range)
-        {
-            taskGroup.run([subrange = std::forward<decltype(subrange)>(subrange), &combinableHash,
-                              &blockHeader, &hashImpl]() {
-                auto& entryHash = combinableHash.local();
-
-                for (auto const& keyValue : subrange)
+        std::vector<bcos::h256> hashes(RANGES::size(transactions));
+        std::vector<std::vector<bcos::byte>> buffers(RANGES::size(transactions));
+        tbb::parallel_for(
+            tbb::blocked_range(0LU, RANGES::size(transactions)), [&](auto const& range) {
+                for (auto i = range.begin(); i != range.end(); ++i)
                 {
-                    auto& [key, entry] = keyValue;
-                    auto& [tableName, keyName] = *key;
-                    if (entry)
-                    {
-                        entryHash ^=
-                            entry->hash(tableName, keyName, hashImpl, blockHeader.version());
-                    }
-                    else
-                    {
-                        storage::Entry deleteEntry;
-                        deleteEntry.setStatus(storage::Entry::DELETED);
-                        entryHash ^=
-                            deleteEntry.hash(tableName, keyName, hashImpl, blockHeader.version());
-                    }
+                    auto& transaction = transactions[i];
+                    hashes[i] = transaction->hash();
+                    bcos::concepts::serialize::encode(*transaction, buffers[i]);
                 }
             });
-        }
-        taskGroup.wait();
-        m_multiLayerStorage.pushMutableToImmutableFront();
 
-        co_return combinableHash.combine(
-            [](const bcos::h256& lhs, const bcos::h256& rhs) -> bcos::h256 { return lhs ^ rhs; });
+        co_await ledger.template setTransactions<true>(
+            *lastImmutable, std::move(hashes), std::move(buffers));
     }
-    task::Task<void> commit(concepts::ledger::IsLedger auto& ledger, protocol::Block& block,
-        std::vector<protocol::Transaction::ConstPtr> const& transactions)
+
     {
-        {
-            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-
-            auto lastImmutable = m_multiLayerStorage.lastImmutableStorage();
-            co_await ledger.template setBlock<concepts::ledger::HEADER,
-                concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
-                concepts::ledger::NONCES>(*lastImmutable, block);
-
-            std::vector<bcos::h256> hashes(RANGES::size(transactions));
-            std::vector<std::vector<bcos::byte>> buffers(RANGES::size(transactions));
-            tbb::parallel_for(
-                tbb::blocked_range(0LU, RANGES::size(transactions)), [&](auto const& range) {
-                    for (auto i = range.begin(); i != range.end(); ++i)
-                    {
-                        auto& transaction = transactions[i];
-                        hashes[i] = transaction->hash();
-                        bcos::concepts::serialize::encode(*transaction, buffers[i]);
-                    }
-                });
-
-            co_await ledger.template setTransactions<true>(
-                *lastImmutable, std::move(hashes), std::move(buffers));
-        }
-        {
-            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-            co_await m_multiLayerStorage.mergeAndPopImmutableBack();
-        }
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+            ittapi::ITT_DOMAINS::instance().MERGE_STATE);
+        // co_await scheduler.multiLayerStorage().mergeAndPopImmutableBack(); //TODO: Move to
+        // baseline scheduler
     }
-    task::Task<void> commit() { co_await m_multiLayerStorage.mergeAndPopImmutableBack(); }
+}
 
-    task::Task<protocol::TransactionReceipt::Ptr> call(
-        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction)
-    {
-        auto view = m_multiLayerStorage.fork(false);
-        view.newTemporaryMutable();
-        co_return co_await transaction_executor::execute(
-            m_executor, view, blockHeader, transaction, 0);
-    }
-};
+// task::Task<protocol::TransactionReceipt::Ptr> call(
+//     protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction)
+// {
+//     auto view = m_multiLayerStorage.fork(false);
+//     view.newTemporaryMutable();
+//     co_return co_await transaction_executor::execute(
+//         m_executor, view, blockHeader, transaction, 0);
+// }
 
 }  // namespace bcos::transaction_scheduler

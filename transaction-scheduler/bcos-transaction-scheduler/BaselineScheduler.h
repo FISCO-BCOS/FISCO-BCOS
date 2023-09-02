@@ -36,10 +36,13 @@ namespace bcos::transaction_scheduler
 struct NotFoundTransactionError: public bcos::Error {};
 // clang-format on
 
-template <class SchedulerImpl, concepts::ledger::IsLedger Ledger>
+template <class MultiLayerStorage, class Executor, class SchedulerImpl,
+    concepts::ledger::IsLedger Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
+    MultiLayerStorage& m_multiLayerStorage;
+    Executor& m_executor;
     SchedulerImpl& m_schedulerImpl;
     protocol::BlockHeaderFactory& m_blockHeaderFactory;
     Ledger& m_ledger;
@@ -85,6 +88,49 @@ private:
             RANGES::views::transform(
                 [&block](uint64_t index) { return block.transactionHash(index); })) |
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
+    }
+
+    task::Task<bcos::h256> finish(
+        protocol::BlockHeader const& blockHeader, crypto::Hash const& hashImpl)
+    {
+        auto& mutableStorage = m_multiLayerStorage.mutableStorage();
+        auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
+
+        static constexpr int HASH_CHUNK_SIZE = 32;
+        auto range = it.range() | RANGES::views::chunk(HASH_CHUNK_SIZE);
+
+        tbb::combinable<bcos::h256> combinableHash;
+        tbb::task_group taskGroup;
+        for (auto&& subrange : range)
+        {
+            taskGroup.run([subrange = std::forward<decltype(subrange)>(subrange), &combinableHash,
+                              &blockHeader, &hashImpl]() {
+                auto& entryHash = combinableHash.local();
+
+                for (auto const& keyValue : subrange)
+                {
+                    auto& [key, entry] = keyValue;
+                    auto& [tableName, keyName] = *key;
+                    if (entry)
+                    {
+                        entryHash ^=
+                            entry->hash(tableName, keyName, hashImpl, blockHeader.version());
+                    }
+                    else
+                    {
+                        storage::Entry deleteEntry;
+                        deleteEntry.setStatus(storage::Entry::DELETED);
+                        entryHash ^=
+                            deleteEntry.hash(tableName, keyName, hashImpl, blockHeader.version());
+                    }
+                }
+            });
+        }
+        taskGroup.wait();
+        m_multiLayerStorage.pushMutableToImmutableFront();
+
+        co_return combinableHash.combine(
+            [](const bcos::h256& lhs, const bcos::h256& rhs) -> bcos::h256 { return lhs ^ rhs; });
     }
 
     void finishExecute(RANGES::range auto const& receipts, protocol::BlockHeader const& blockHeader,
@@ -208,9 +254,10 @@ private:
                 }
             });
 
-            m_schedulerImpl.start();
+            m_multiLayerStorage.newMutable();
+            auto view = m_multiLayerStorage.fork();
             auto transactions = co_await getTransactions(*block);
-            auto receipts = co_await execute(m_schedulerImpl, *blockHeader,
+            auto receipts = co_await execute(m_schedulerImpl, view, m_executor, *blockHeader,
                 transactions |
                     RANGES::views::transform(
                         [](protocol::Transaction::ConstPtr const& transactionPtr)
@@ -301,16 +348,8 @@ private:
             m_results.pop_back();
             resultsLock.unlock();
 
-            if (header->number() != 0)
-            {
-                result.m_block->setBlockHeader(header);
-                co_await m_schedulerImpl.commit(m_ledger, *(result.m_block), result.m_transactions);
-            }
-            else
-            {
-                BASELINE_SCHEDULER_LOG(INFO) << "Ignore commit block header: 0";
-                co_await m_schedulerImpl.commit();
-            }
+            result.m_block->setBlockHeader(header);
+            co_await commit(m_schedulerImpl, m_ledger, *(result.m_block), result.m_transactions);
 
             // Write states
             auto ledgerConfig =
