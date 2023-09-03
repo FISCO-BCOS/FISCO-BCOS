@@ -454,6 +454,9 @@ static void conflictTransfer(benchmark::State& state)
             else
             {
                 int i = 0;
+                fixture.m_multiLayerStorage.newMutable();
+                auto view = fixture.m_multiLayerStorage.fork(true);
+
                 task::syncWait([&](benchmark::State& state) -> task::Task<void> {
                     // First issue
                     bcostars::protocol::BlockHeaderImpl blockHeader(
@@ -463,8 +466,6 @@ static void conflictTransfer(benchmark::State& state)
                     blockHeader.setNumber(0);
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-                    fixture.m_multiLayerStorage.newMutable();
-                    auto view = fixture.m_multiLayerStorage.fork(true);
                     [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
                         scheduler, view, fixture.m_executor, blockHeader,
                         fixture.m_transactions | RANGES::views::transform([
@@ -496,6 +497,7 @@ static void conflictTransfer(benchmark::State& state)
                     }
 
                     // Check
+                    view.release();
                     auto balances = co_await fixture.balances();
                     for (auto&& [balance, index] :
                         RANGES::views::zip(balances, RANGES::views::iota(0LU)))
