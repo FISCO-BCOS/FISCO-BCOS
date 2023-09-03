@@ -12,7 +12,10 @@
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
+#include "transaction-executor/bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "transaction-executor/bcos-transaction-executor/precompiled/PrecompiledManager.h"
+#include "transaction-scheduler/bcos-transaction-scheduler/SchedulerParallelImpl.h"
+#include "transaction-scheduler/bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
@@ -50,10 +53,7 @@ private:
     transaction_executor::PrecompiledManager m_precompiledManager;
     transaction_executor::TransactionExecutorImpl<transaction_executor::PrecompiledManager>
         m_transactionExecutor;
-    std::conditional_t<enableParallel,
-        SchedulerParallelImpl<decltype(m_multiLayerStorage), decltype(m_transactionExecutor)>,
-        SchedulerSerialImpl<decltype(m_multiLayerStorage), decltype(m_transactionExecutor)>>
-        m_scheduler;
+    std::conditional_t<enableParallel, SchedulerParallelImpl, SchedulerSerialImpl> m_scheduler;
 
 public:
     BaselineSchedulerInitializer(::rocksdb::DB& rocksDB,
@@ -67,16 +67,16 @@ public:
             storage2::rocksdb::StateValueResolver{}),
         m_ledger(m_rocksDBStorage, *m_blockFactory),
         m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
-        m_transactionExecutor(*m_blockFactory->receiptFactory(), m_precompiledManager),
-        m_scheduler(m_multiLayerStorage, m_transactionExecutor)
+        m_transactionExecutor(*m_blockFactory->receiptFactory(), m_precompiledManager)
     {}
 
     auto buildScheduler()
     {
-        auto baselineScheduler =
-            std::make_shared<BaselineScheduler<decltype(m_scheduler), decltype(m_ledger)>>(
-                m_scheduler, *m_blockFactory->blockHeaderFactory(), m_ledger, *m_txpool,
-                *m_transactionSubmitResultFactory, *m_blockFactory->cryptoSuite()->hashImpl());
+        auto baselineScheduler = std::make_shared<BaselineScheduler<decltype(m_multiLayerStorage),
+            decltype(m_transactionExecutor), decltype(m_scheduler), decltype(m_ledger)>>(
+            m_multiLayerStorage, m_scheduler, m_transactionExecutor,
+            *m_blockFactory->blockHeaderFactory(), m_ledger, *m_txpool,
+            *m_transactionSubmitResultFactory, *m_blockFactory->cryptoSuite()->hashImpl());
         return baselineScheduler;
     }
 };

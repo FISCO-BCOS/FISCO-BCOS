@@ -7,6 +7,7 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/merkle/Merkle.h>
@@ -293,7 +294,8 @@ private:
             m_multiLayerStorage.newMutable();
             auto view = m_multiLayerStorage.fork(true);
             auto transactions = co_await getTransactions(*block);
-            auto receipts = co_await execute(m_schedulerImpl, view, m_executor, *blockHeader,
+            auto receipts = co_await transaction_scheduler::execute(m_schedulerImpl, view,
+                m_executor, *blockHeader,
                 transactions |
                     RANGES::views::transform(
                         [](protocol::Transaction::ConstPtr const& transactionPtr)
