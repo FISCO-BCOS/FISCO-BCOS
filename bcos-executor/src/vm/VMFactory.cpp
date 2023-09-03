@@ -60,10 +60,11 @@ VMInstance VMFactory::create(VMKind kind, evmc_revision revision, const crypto::
         std::shared_ptr<evmoneCodeAnalysis> analysis{get(codeHash, revision)};
         if (!analysis)
         {
-            analysis =
-                std::make_shared<evmoneCodeAnalysis>(evmone::advanced::analyze(revision, code));
-            // analysis = std::make_shared<evmoneCodeAnalysis>(
-            //     evmone::baseline::analyze(revision, code));
+            // analysis =
+            //     std::make_shared<evmoneCodeAnalysis>(evmone::advanced::analyze(revision, code));
+
+            analysis = std::make_shared<evmoneCodeAnalysis>(
+                evmone::baseline::analyze(revision, code));  // baseline
             put(codeHash, analysis, revision);
         }
         return VMInstance{analysis, revision, code};

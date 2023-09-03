@@ -5,6 +5,8 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-storage/bcos-storage/StateKVResolver.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
+#include "transaction-executor/bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
@@ -37,7 +39,6 @@ private:
     std::shared_ptr<txpool::TxPoolInterface> m_txpool;
     std::shared_ptr<protocol::TransactionSubmitResultFactory> m_transactionSubmitResultFactory;
 
-    transaction_executor::TableNamePool m_tableNamePool;
     CacheStorage m_cacheStorage;
     storage2::rocksdb::RocksDBStorage2<transaction_executor::StateKey,
         transaction_executor::StateValue, storage2::rocksdb::StateKeyResolver,
@@ -46,12 +47,15 @@ private:
     bcos::ledger::LedgerImpl2<decltype(m_rocksDBStorage)> m_ledger;
 
     MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)> m_multiLayerStorage;
+    transaction_executor::PrecompiledManager m_precompiledManager;
 
     std::conditional_t<enableParallel,
         SchedulerParallelImpl<decltype(m_multiLayerStorage),
-            transaction_executor::TransactionExecutorImpl>,
+            transaction_executor::TransactionExecutorImpl,
+            transaction_executor::PrecompiledManager>,
         SchedulerSerialImpl<decltype(m_multiLayerStorage),
-            transaction_executor::TransactionExecutorImpl>>
+            transaction_executor::TransactionExecutorImpl,
+            transaction_executor::PrecompiledManager>>
         m_scheduler;
 
 public:
@@ -62,11 +66,11 @@ public:
       : m_blockFactory(std::move(blockFactory)),
         m_txpool(std::move(txpool)),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
-        m_rocksDBStorage(rocksDB, storage2::rocksdb::StateKeyResolver{m_tableNamePool},
+        m_rocksDBStorage(rocksDB, storage2::rocksdb::StateKeyResolver{},
             storage2::rocksdb::StateValueResolver{}),
-        m_ledger(m_rocksDBStorage, *m_blockFactory, m_tableNamePool),
+        m_ledger(m_rocksDBStorage, *m_blockFactory),
         m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
-        m_scheduler(m_multiLayerStorage, *m_blockFactory->receiptFactory(), m_tableNamePool)
+        m_scheduler(m_multiLayerStorage, *m_blockFactory->receiptFactory(), m_precompiledManager)
     {}
 
     auto buildScheduler()

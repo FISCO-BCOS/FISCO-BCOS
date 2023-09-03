@@ -103,7 +103,7 @@ public:
                 for (auto const& c : *criticals)
                 {
                     auto [it, success] = dependencies.try_emplace(c, id);
-                    if (!success)
+                    if (!success && it->second != id)
                     {
                         auto pId = it->second;
                         pIds.insert(pId);
@@ -117,9 +117,12 @@ public:
                 }
                 else
                 {
-                    for (ID pId : pIds)
+                    for (ID pId : pIds)  // ignore conflict like: [a, b, a]
                     {
-                        _onConflict(pId, id);
+                        if (pId != id) [[likely]]
+                        {
+                            _onConflict(pId, id);
+                        }
                     }
                 }
             }

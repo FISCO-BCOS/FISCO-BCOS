@@ -137,6 +137,7 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
     nodeInfo->setIniConfig(_tarsNodeInfo.iniConfig);
     nodeInfo->setMicroService(_tarsNodeInfo.microService);
     nodeInfo->setNodeType((bcos::protocol::NodeType)_tarsNodeInfo.nodeType);
+    nodeInfo->setSmCryptoType(_tarsNodeInfo.nodeCryptoType == bcos::group::NodeCryptoType::SM_NODE);
     for (auto const& it : _tarsNodeInfo.serviceInfo)
     {
         nodeInfo->appendServiceInfo((bcos::protocol::ServiceType)it.first, it.second);
@@ -162,10 +163,17 @@ inline bcos::group::GroupInfo::Ptr toBcosGroupInfo(
     groupInfo->setGroupID(_tarsGroupInfo.groupID);
     groupInfo->setGenesisConfig(_tarsGroupInfo.genesisConfig);
     groupInfo->setIniConfig(_tarsGroupInfo.iniConfig);
-    groupInfo->setWasm(_tarsGroupInfo.isWasm);
+    groupInfo->setWasm(_tarsGroupInfo.isWasm != 0);
+    bool isFirst = true;
     for (auto const& tarsNodeInfo : _tarsGroupInfo.nodeList)
     {
-        groupInfo->appendNodeInfo(toBcosChainNodeInfo(_nodeFactory, tarsNodeInfo));
+        auto nodeInfo = toBcosChainNodeInfo(_nodeFactory, tarsNodeInfo);
+        if (isFirst)
+        {
+            groupInfo->setSmCryptoType(nodeInfo->smCryptoType());
+            isFirst = false;
+        }
+        groupInfo->appendNodeInfo(std::move(nodeInfo));
     }
     return groupInfo;
 }

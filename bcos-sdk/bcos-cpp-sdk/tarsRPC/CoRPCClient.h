@@ -8,36 +8,31 @@
 namespace bcos::sdk
 {
 
-template <class Future>
+template <class Handle>
 class Awaitable
 {
 private:
-    std::function<Future(CO_STD::coroutine_handle<>)> m_applyCall;
-    Future m_future;
+    std::function<Handle(CO_STD::coroutine_handle<>)> m_applyCall;
+    std::optional<Handle> m_handle;
 
 public:
     Awaitable(decltype(m_applyCall) applyCall) : m_applyCall(std::move(applyCall)) {}
 
     constexpr bool await_ready() const { return false; }
-    void await_suspend(CO_STD::coroutine_handle<> handle) { m_future = m_applyCall(handle); }
-    Future await_resume() { return std::move(m_future); }
+    void await_suspend(CO_STD::coroutine_handle<> handle) { m_handle.emplace(m_applyCall(handle)); }
+    Handle await_resume() { return std::move(*m_handle); }
 };
 
 class CoRPCClient
 {
 private:
     RPCClient& m_rpcClient;
-    struct CoCompletionQueue : public bcos::sdk::CompletionQueue
-    {
-        void notify(std::any tag) override;
-    };
-    CoCompletionQueue m_coCompletionQueue;
 
 public:
     CoRPCClient(RPCClient& rpcClient);
 
-    Awaitable<Future<bcos::protocol::TransactionReceipt::Ptr>> sendTransaction(
-        const bcos::protocol::Transaction& transaction);
-    Awaitable<Future<long>> blockNumber();
+    Awaitable<SendTransaction> sendTransaction(const bcos::protocol::Transaction& transaction);
+    Awaitable<Call> call(const bcos::protocol::Transaction& transaction);
+    Awaitable<BlockNumber> blockNumber();
 };
 }  // namespace bcos::sdk

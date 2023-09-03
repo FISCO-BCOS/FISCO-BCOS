@@ -163,6 +163,8 @@ protected:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag);
 
+    virtual void printPendingTxs() override;
+
     TxPoolConfig::Ptr m_config;
 
     using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,

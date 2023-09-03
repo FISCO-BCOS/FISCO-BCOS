@@ -302,6 +302,9 @@ void PBFTCache::resetCache(ViewType _curView)
 {
     m_submitted = false;
     m_precommitted = false;
+    PBFT_LOG(INFO) << LOG_DESC("resetCache") << LOG_KV("precommit", m_precommit ? "true" : "false")
+                   << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
+                   << LOG_KV("curView", _curView);
     if (!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
         m_prePrepare->view() < _curView)
     {
@@ -312,6 +315,30 @@ void PBFTCache::resetCache(ViewType _curView)
         // reset the exceptioned txs to unsealed
         m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
         m_prePrepare = nullptr;
+        m_exceptionPrePrepare = nullptr;
+    }
+    if (m_exceptionPrePrepare)
+    {
+        auto validPrePrepare = (m_precommit || (m_prePrepare && m_prePrepare->consensusProposal() &&
+                                                   m_prePrepare->view() >= _curView));
+        if (validPrePrepare &&
+            (m_prePrepare && m_prePrepare->hash() == m_exceptionPrePrepare->hash()))
+        {
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                PBFT_LOG(TRACE) << LOG_DESC("resetCache : exceptionPrePrepare but finally be valid")
+                                << printPBFTProposal(m_exceptionPrePrepare->consensusProposal());
+            }
+        }
+        else
+        {
+            PBFT_LOG(INFO) << LOG_DESC("resetCache : asyncResetTxsFlag exceptionPrePrepare")
+                           << printPBFTProposal(m_exceptionPrePrepare->consensusProposal());
+            m_config->validator()->asyncResetTxsFlag(
+                m_exceptionPrePrepare->consensusProposal()->data(), false);
+            m_prePrepare = nullptr;
+            m_exceptionPrePrepare = nullptr;
+        }
     }
     // clear the expired prepare cache
     resetCacheAfterViewChange(m_prepareCacheList, _curView);

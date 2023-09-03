@@ -113,9 +113,9 @@ task::Task<void> storage2MultiThreadWrite(auto& storage, RANGES::range auto cons
             for (auto i = range.begin(); i != range.end(); ++i)
             {
                 auto const& item = dataSet[i];
-                (void)storage.write(storage2::singleView(std::get<0>(item)),
-                    storage2::singleView(std::get<1>(item)));  // Here is valid because storage
-                                                               // returns AwaitableValue
+                (void)storage.write(RANGES::views::single(std::get<0>(item)),
+                    RANGES::views::single(std::get<1>(item)));  // Here is valid because storage
+                                                                // returns AwaitableValue
             }
         });
     auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(

@@ -3,6 +3,7 @@
 #include "Common.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -84,8 +85,8 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
                 if (error)
                 {
                     SCHEDULER_LOG(ERROR) << LOG_DESC("failed to get ledger config")
-                                         << LOG_KV("error", error->errorCode())
-                                         << LOG_KV("errorMessage", error->errorMessage());
+                                         << LOG_KV("code", error->errorCode())
+                                         << LOG_KV("message", error->errorMessage());
                     promise.set_exception(std::make_exception_ptr(*error));
                     return;
                 }
@@ -264,7 +265,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
                         << LOG_KV("metaTxCount", block->transactionsMetaDataSize())
                         << LOG_KV("version", (bcos::protocol::BlockVersion)(block->version()))
                         << LOG_KV("waitT", waitT);
-
+    auto start = utcTime();
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](bcos::Error::Ptr&& error,
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber)
@@ -397,7 +398,8 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
     };
 
     // to execute the block
-    auto whenQueueBack = [this, &executeLock, &blockExecutive, callback, requestBlockNumber]() {
+    auto whenQueueBack = [this, start, &executeLock, &blockExecutive, callback,
+                             requestBlockNumber]() {
         if (!executeLock)
         {
             // if not acquire the lock, return error
@@ -410,7 +412,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
         }
 
         SCHEDULER_LOG(INFO) << BLOCK_NUMBER(requestBlockNumber) << LOG_BADGE("BlockTrace")
-                            << "ExecuteBlock start";
+                            << "ExecuteBlock start" << LOG_KV("time(ms)", utcTime() - start);
         auto startTime = utcTime();
         blockExecutive->asyncExecute(
             [this, startTime, requestBlockNumber, callback = std::move(callback), executeLock](
@@ -1093,12 +1095,10 @@ void SchedulerImpl::asyncGetLedgerConfig(
                 return;
             }
 
-            // Set feature_shareding if version between 3.3 and 3.4
-            if (ledgerConfig->compatibilityVersion() >= protocol::BlockVersion::V3_3_VERSION &&
-                ledgerConfig->compatibilityVersion() <= protocol::BlockVersion::V3_4_VERSION)
+            if (ledgerConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)
             {
                 auto features = ledgerConfig->features();
-                features.set(ledger::Features::Flag::feature_sharding);
+                features.set(ledger::Features::Flag::feature_rpbft);
                 ledgerConfig->setFeatures(features);
             }
 
@@ -1158,6 +1158,10 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             protocol::BlockNumber _number) mutable {
                             if (error)
                             {
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Get " << ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM
+                                    << " failed, use default value"
+                                    << LOG_KV("defaultValue", ledger::DEFAULT_EPOCH_SEALER_NUM);
                                 collector(nullptr,
                                     std::tuple{ConfigType::EpochSealerNum,
                                         std::to_string(ledger::DEFAULT_EPOCH_SEALER_NUM), 0});
@@ -1172,6 +1176,10 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             protocol::BlockNumber _number) mutable {
                             if (error)
                             {
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Get " << ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM
+                                    << " failed, use default value"
+                                    << LOG_KV("defaultValue", ledger::DEFAULT_EPOCH_BLOCK_NUM);
                                 collector(nullptr,
                                     std::tuple{ConfigType::EpochBlockNum,
                                         std::to_string(ledger::DEFAULT_EPOCH_BLOCK_NUM), 0});
@@ -1186,6 +1194,10 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             protocol::BlockNumber _number) mutable {
                             if (error)
                             {
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Get " << ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE
+                                    << " failed, use default value"
+                                    << LOG_KV("defaultValue", ledger::DEFAULT_INTERNAL_NOTIFY_FLAG);
                                 collector(nullptr,
                                     std::tuple{ConfigType::NotifyRotateFlag,
                                         std::to_string(ledger::DEFAULT_INTERNAL_NOTIFY_FLAG), 0});
@@ -1237,8 +1249,8 @@ void SchedulerImpl::asyncGetLedgerConfig(
                        decltype(collector) collector) -> task::Task<void> {
             try
             {
-                auto features =
-                    co_await ledger::Features::readFeaturesFromStorage(*self->m_storage, number);
+                ledger::Features features;
+                co_await features.readFromStorage(*self->m_storage, number);
                 collector({}, features);
             }
             catch (Error& error)

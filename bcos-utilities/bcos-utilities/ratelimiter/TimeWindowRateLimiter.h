@@ -22,15 +22,12 @@
  */
 #pragma once
 
-#include "bcos-gateway/Common.h"
-#include <bcos-gateway/libratelimit/RateLimiterInterface.h>
+#include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ObjectCounter.h>
 #include <mutex>
 
 namespace bcos
-{
-namespace gateway
 {
 namespace ratelimiter
 {
@@ -111,5 +108,4 @@ private:
 };
 
 }  // namespace ratelimiter
-}  // namespace gateway
 }  // namespace bcos

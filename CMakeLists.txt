@@ -6,7 +6,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(VERSION "3.4.0")
+set(VERSION "3.5.0")
 set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
@@ -107,7 +107,7 @@ if(COVERAGE)
         set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
         set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
     endif()
-    config_coverage("cov" "")
+    config_coverage("coverage" "")
 endif()
 
 print_config("FISCO BCOS")

@@ -7,6 +7,7 @@
 #include <bcos-concepts/Exception.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/archive/binary_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <bitset>
@@ -75,18 +76,22 @@ public:
         set(*value);
     }
 
+    void setToShardingDefault(protocol::BlockVersion version)
+    {
+        if (version >= protocol::BlockVersion::V3_3_VERSION &&
+            version <= protocol::BlockVersion::V3_4_VERSION)
+        {
+            set(Flag::feature_sharding);
+        }
+    }
+
     void setToDefault(protocol::BlockVersion version)
     {
         if (version >= protocol::BlockVersion::V3_2_VERSION)
         {
             set(Flag::bugfix_revert);
         }
-
-        if (version >= protocol::BlockVersion::V3_3_VERSION &&
-            version <= protocol::BlockVersion::V3_4_VERSION)
-        {
-            set(Flag::feature_sharding);
-        }
+        setToShardingDefault(version);
     }
 
     auto flags() const
@@ -107,10 +112,8 @@ public:
                });
     }
 
-    static task::Task<Features> readFeaturesFromStorage(
-        storage::StorageInterface& storage, long blockNumber)
+    task::Task<void> readFromStorage(storage::StorageInterface& storage, long blockNumber)
     {
-        Features features;
         for (auto key : bcos::ledger::Features::featureKeys())
         {
             auto entry = co_await storage.coGetRow(ledger::SYS_CONFIG, key);
@@ -119,11 +122,23 @@ public:
                 auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
                 if (blockNumber >= enableNumber)
                 {
-                    features.set(key);
+                    set(key);
                 }
             }
         }
-        co_return features;
+    }
+
+    task::Task<void> writeToStorage(storage::StorageInterface& storage, long blockNumber) const
+    {
+        for (auto [flag, name, value] : flags())
+        {
+            if (value)
+            {
+                storage::Entry entry;
+                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
+                co_await storage.coSetRow(ledger::SYS_CONFIG, name, std::move(entry));
+            }
+        }
     }
 };
 

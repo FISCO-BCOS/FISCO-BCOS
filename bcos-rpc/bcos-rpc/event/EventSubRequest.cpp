@@ -92,14 +92,13 @@ bool EventSubUnsubRequest::fromJson(const std::string& _request)
         } while (0);
 
         EVENT_REQUEST(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid event sub request")
-                             << LOG_KV("request", _request) << LOG_KV("errorMessage", errorMessage);
+                             << LOG_KV("request", _request) << LOG_KV("message", errorMessage);
     }
     catch (const std::exception& e)
     {
         EVENT_REQUEST(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid json object")
 
-                             << LOG_KV("request", _request)
-                             << LOG_KV("error", std::string(e.what()));
+                             << LOG_KV("request", _request) << LOG_KV("msg", std::string(e.what()));
     }
 
     return false;
@@ -282,14 +281,13 @@ bool EventSubRequest::fromJson(const std::string& _request)
         } while (0);
 
         EVENT_REQUEST(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid event sub request")
-                             << LOG_KV("request", _request) << LOG_KV("errorMessage", errorMessage);
+                             << LOG_KV("request", _request) << LOG_KV("message", errorMessage);
     }
     catch (const std::exception& e)
     {
         EVENT_REQUEST(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid json object")
 
-                             << LOG_KV("request", _request)
-                             << LOG_KV("error", std::string(e.what()));
+                             << LOG_KV("request", _request) << LOG_KV("msg", std::string(e.what()));
     }
 
     return false;

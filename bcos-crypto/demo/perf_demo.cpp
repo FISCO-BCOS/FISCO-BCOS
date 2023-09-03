@@ -33,6 +33,7 @@
 #include <bcos-utilities/Common.h>
 #include <boost/core/ignore_unused.hpp>
 #include <cassert>
+#include <ethash/keccak.hpp>
 #include <span>
 
 using namespace bcos;
@@ -77,6 +78,29 @@ std::vector<bcos::h256> hashPerf(
     return result;
 }
 
+std::vector<bcos::h256> ethashPerf(std::string_view _inputData, size_t _count)
+{
+    std::vector<bcos::h256> result(_count);
+    auto _hashName = "ethash keccak256 perf";
+    std::cout << std::endl;
+    std::cout << "----------- " << _hashName << " perf start -----------" << std::endl;
+    auto startT = utcTime();
+    for (size_t i = 0; i < _count; i++)
+    {
+        auto ret = ethash::keccak256((const uint8_t*)_inputData.data(), _inputData.size());
+        memcpy(result[i].data(), ret.bytes, 32);
+    }
+    std::cout << "input data size: " << (double)_inputData.size() / 1000.0
+              << "KB, loops: " << _count << ", timeCost: " << utcTime() - startT << std::endl;
+    std::cout << "TPS of " << _hashName << ": "
+              << getTPS(utcTime(), startT, _count) * (double)_inputData.size() / (1024 * 1024)
+              << " MB/s" << std::endl;
+    std::cout << "----------- " << _hashName << " perf end -----------" << std::endl;
+    std::cout << std::endl;
+
+    return result;
+}
+
 std::vector<bcos::h256> hashingPerf(
     bcos::crypto::hasher::Hasher auto& hasher, std::string_view _inputData, size_t _count)
 {
@@ -107,17 +131,19 @@ std::vector<bcos::h256> hashingPerf(
 void stTest(std::string_view inputData, size_t _count)
 {
     // keccak256 perf
-    // auto hashImpl = std::make_shared<Keccak256>();
-    // auto keccak256Old = hashPerf(hashImpl, "Keccak256", inputData, _count);
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto keccak256Old = hashPerf(hashImpl, "Keccak256", inputData, _count);
 
-    // hasher::openssl::OpenSSL_Keccak256_Hasher hasherKeccak256;
-    // auto keccak256New = hashingPerf(hasherKeccak256, inputData, _count);
-    // if (keccak256Old[0] != keccak256New[0])
-    // {
-    //     std::cout << "Wrong keccak256 hash result! old: " << keccak256Old[0]
-    //               << " new: " << keccak256New[0] << std::endl;
-    // }
+    hasher::openssl::OpenSSL_Keccak256_Hasher hasherKeccak256;
+    auto keccak256New = hashingPerf(hasherKeccak256, inputData, _count);
+    if (keccak256Old[0] != keccak256New[0])
+    {
+        std::cout << "Wrong keccak256 hash result! old: " << keccak256Old[0]
+                  << " new: " << keccak256New[0] << std::endl;
+    }
 
+    // ethash keccak256 perf
+    ethashPerf(inputData, _count);
     // sha3 perf
     auto hashImpl2 = std::make_shared<class Sha3>();
     auto sha3Old = hashPerf(hashImpl2, "SHA3", inputData, _count);

@@ -1,7 +1,7 @@
 #include "bcos-framework/storage/Entry.h"
-#include "storage2/StringPool.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/storage2/StorageMethods.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
@@ -68,11 +68,11 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
         storage::Entry newEntry;
         newEntry.set("Hello map!");
         co_await storage.write(
-            storage2::singleView(std::tuple<std::string, std::string>("table", "key:5")),
-            storage2::singleView(std::move(newEntry)));
+            RANGES::views::single(std::tuple<std::string, std::string>("table", "key:5")),
+            RANGES::views::single(std::move(newEntry)));
 
         auto result = co_await storage.read(
-            storage2::singleView(std::tuple<std::string, std::string>("table", "key:5")));
+            RANGES::views::single(std::tuple<std::string, std::string>("table", "key:5")));
         co_await result.next();
         BOOST_REQUIRE(co_await result.hasValue());
         BOOST_CHECK_EQUAL((co_await result.value()).get(), "Hello map!");
@@ -150,8 +150,8 @@ BOOST_AUTO_TEST_CASE(mru)
         it.release();
 
         // ensure 0 is erased
-        co_await storage.write(storage2::singleView(10), storage2::singleView(entry));
-        auto notExists = co_await storage.read(storage2::singleView(0));
+        co_await storage.write(RANGES::views::single(10), RANGES::views::single(entry));
+        auto notExists = co_await storage.read(RANGES::views::single(0));
         co_await notExists.next();
         BOOST_REQUIRE(!co_await notExists.hasValue());
         notExists.release();

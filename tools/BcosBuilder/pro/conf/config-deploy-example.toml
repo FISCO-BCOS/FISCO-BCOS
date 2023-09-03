@@ -31,12 +31,12 @@ init_auth_address=""
 leader_period = 1
 # the max number of transactions of a block
 block_tx_count_limit = 1000
-# consensus algorithm now support PBFT(consensus_type=pbft)
+# consensus algorithm now support PBFT(consensus_type=pbft), rPBFT(consensus_type=rpbft)
 consensus_type = "pbft"
 # transaction gas limit
 gas_limit = "3000000000"
 # compatible version, can be dynamically upgraded through setSystemConfig
-compatibility_version="3.4.0"
+compatibility_version="3.5.0"
 
 [[agency]]
 name = "agencyA"

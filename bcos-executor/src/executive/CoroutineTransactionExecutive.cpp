@@ -12,19 +12,10 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::start(CallParameters::U
 
         auto callParameters = std::unique_ptr<CallParameters>(inputPtr);
 
-        m_syncStorageWrapper = std::make_unique<SyncStorageWrapper>(m_blockContext.storage(),
-            std::bind(&CoroutineTransactionExecutive::externalAcquireKeyLocks, this,
-                std::placeholders::_1),
-            m_recoder);
-
-        m_storageWrapper = m_syncStorageWrapper;  // must set to base class
-        m_storageWrapper->setCodeCache(m_blockContext.getCodeCache());
-        m_storageWrapper->setCodeHashCache(m_blockContext.getCodeHashCache());
-
 
         if (!callParameters->keyLocks.empty())
         {
-            m_syncStorageWrapper->importExistsKeyLocks(callParameters->keyLocks);
+            m_syncStorageWrapper.importExistsKeyLocks(callParameters->keyLocks);
         }
 
         m_exchangeMessage = execute(std::move(callParameters));
@@ -75,7 +66,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
 CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     CallParameters::UniquePtr input)
 {
-    input->keyLocks = m_syncStorageWrapper->exportKeyLocks();
+    input->keyLocks = m_syncStorageWrapper.exportKeyLocks();
 
     spawnAndCall([this, inputPtr = input.release()](
                      ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
@@ -103,10 +94,10 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     }
 
     // After coroutine switch, set the recoder
-    m_syncStorageWrapper->setRecoder(m_recoder);
+    m_syncStorageWrapper.setRecoder(m_recoder);
 
     // Set the keyLocks
-    m_syncStorageWrapper->importExistsKeyLocks(output->keyLocks);
+    m_syncStorageWrapper.importExistsKeyLocks(output->keyLocks);
 
     return output;
 }
@@ -117,14 +108,14 @@ void CoroutineTransactionExecutive::externalAcquireKeyLocks(std::string acquireK
 
     auto callParameters = std::make_unique<CallParameters>(CallParameters::KEY_LOCK);
     callParameters->senderAddress = m_contractAddress;
-    callParameters->keyLocks = m_syncStorageWrapper->exportKeyLocks();
+    callParameters->keyLocks = m_syncStorageWrapper.exportKeyLocks();
     callParameters->acquireKeyLock = std::move(acquireKeyLock);
 
     spawnAndCall([this, inputPtr = callParameters.release()](
                      ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
 
     // After coroutine switch, set the recoder, before the exception throw
-    m_syncStorageWrapper->setRecoder(m_recoder);
+    m_syncStorageWrapper.setRecoder(m_recoder);
 
     auto output = std::move(m_exchangeMessage);
     if (output->type == CallParameters::REVERT)
@@ -136,7 +127,7 @@ void CoroutineTransactionExecutive::externalAcquireKeyLocks(std::string acquireK
     }
 
     // Set the keyLocks
-    m_syncStorageWrapper->importExistsKeyLocks(output->keyLocks);
+    m_syncStorageWrapper.importExistsKeyLocks(output->keyLocks);
 }
 
 void CoroutineTransactionExecutive::spawnAndCall(std::function<void(ResumeHandler)> function)

@@ -77,8 +77,7 @@ void ServiceV2::onReceivePeersRouterTable(
     if (_error.errorCode() != 0)
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onReceivePeersRouterTable")
-                              << LOG_KV("errorCode", _error.errorCode())
-                              << LOG_KV("errorMsg", _error.what());
+                              << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what());
         return;
     }
     auto routerTable = m_routerTableFactory->createRouterTable(ref(*(_message->payload())));
@@ -132,8 +131,7 @@ void ServiceV2::onReceiveRouterTableRequest(
     if (_error.errorCode() != 0)
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterTableRequest")
-                              << LOG_KV("errorCode", _error.errorCode())
-                              << LOG_KV("msg", _error.what());
+                              << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what());
         return;
     }
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceiveRouterTableRequest")
@@ -167,7 +165,7 @@ void ServiceV2::onReceiveRouterSeq(
     if (_error.errorCode() != 0)
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterSeq")
-                              << LOG_KV("errorCode", _error.errorCode())
+                              << LOG_KV("code", _error.errorCode())
                               << LOG_KV("message", _error.what());
         return;
     }
@@ -285,8 +283,8 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
 {
     if (_error.errorCode() != 0)
     {
-        SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_KV("errorCode", _error.errorCode())
-                              << LOG_KV("errorMsg", _error.what());
+        SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_KV("code", _error.errorCode())
+                              << LOG_KV("msg", _error.what());
         // calls onMessage of Service to trigger disconnectHandler
         Service::onMessage(_error, _session, _message, _p2pSessionWeakPtr);
         return;

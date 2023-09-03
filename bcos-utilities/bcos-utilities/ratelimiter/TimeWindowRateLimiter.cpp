@@ -20,16 +20,14 @@
  * @author: octopuswang
  * @date: 2023-01-30
  */
-#include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
-#include <bcos-gateway/libratelimit/TimeWindowRateLimiter.h>
+#include <bcos-utilities/ratelimiter/TimeWindowRateLimiter.h>
 #include <chrono>
 #include <thread>
 #include <utility>
 
 using namespace bcos;
-using namespace bcos::gateway;
-using namespace bcos::gateway::ratelimiter;
+using namespace bcos::ratelimiter;
 
 bool TimeWindowRateLimiter::tryAcquire(int64_t _requiredPermits)
 {

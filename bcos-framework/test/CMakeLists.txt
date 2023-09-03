@@ -21,7 +21,6 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 set(TEST_BINARY_NAME test-bcos-framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-#target_include_directories(${TEST_BINARY_NAME} PRIVATE bcos-framework)
 
 find_package(Boost REQUIRED serialization unit_test_framework)
 find_package(fmt REQUIRED)

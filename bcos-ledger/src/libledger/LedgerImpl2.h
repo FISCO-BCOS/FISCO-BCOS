@@ -3,7 +3,6 @@
 #include "LedgerImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/storage2/StringPool.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -23,7 +22,6 @@ class LedgerImpl2
 private:
     Storage& m_storage;
     protocol::BlockFactory& m_blockFactory;
-    transaction_executor::TableNamePool& m_tableNamePool;
 
     decltype(m_blockFactory.transactionFactory()) m_transactionFactory;
     decltype(m_blockFactory.receiptFactory()) m_receiptFactory;
@@ -31,7 +29,7 @@ private:
 
     template <std::same_as<bcos::concepts::ledger::HEADER>>
     task::Task<void> setBlockData(
-        std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData header: " << blockNumberKey;
         auto blockHeader = block.blockHeaderConst();
@@ -41,37 +39,30 @@ private:
         std::vector<bcos::byte> number2HeaderBuffer;
         bcos::concepts::serialize::encode(*blockHeader, number2HeaderBuffer);
         number2HeaderEntry.set(std::move(number2HeaderBuffer));
-        co_await storage2::writeOne(m_storage,
-            transaction_executor::StateKey{
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_NUMBER_2_BLOCK_HEADER),
-                blockNumberKey},
+        co_await storage2::writeOne(storage,
+            transaction_executor::StateKey{SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey},
             std::move(number2HeaderEntry));
 
         // number 2 block hash
         bcos::storage::Entry hashEntry;
         hashEntry.set(concepts::bytebuffer::toView(blockHeader->hash()));
-        co_await storage2::writeOne(m_storage,
-            transaction_executor::StateKey{
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_NUMBER_2_HASH),
-                blockNumberKey},
+        co_await storage2::writeOne(storage,
+            transaction_executor::StateKey{SYS_NUMBER_2_HASH, blockNumberKey},
             std::move(hashEntry));
 
         // block hash 2 number
         bcos::storage::Entry hash2NumberEntry;
         hash2NumberEntry.set(blockNumberKey);
-        co_await storage2::writeOne(m_storage,
+        co_await storage2::writeOne(storage,
             transaction_executor::StateKey{
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_NUMBER),
-                concepts::bytebuffer::toView(block.blockHeaderConst()->hash())},
+                SYS_HASH_2_NUMBER, concepts::bytebuffer::toView(block.blockHeaderConst()->hash())},
             std::move(hash2NumberEntry));
 
         // current number
         bcos::storage::Entry numberEntry;
         numberEntry.set(blockNumberKey);
-        co_await storage2::writeOne(m_storage,
-            transaction_executor::StateKey{
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_CURRENT_STATE),
-                SYS_KEY_CURRENT_NUMBER},
+        co_await storage2::writeOne(storage,
+            transaction_executor::StateKey{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER},
             std::move(numberEntry));
 
         co_return;
@@ -79,7 +70,7 @@ private:
 
     template <std::same_as<concepts::ledger::NONCES>>
     task::Task<void> setBlockData(
-        std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData nonce " << blockNumberKey;
 
@@ -90,10 +81,8 @@ private:
         bcos::concepts::serialize::encode(*blockNonceList, number2NonceBuffer);
         number2NonceEntry.set(std::move(number2NonceBuffer));
 
-        co_await storage2::writeOne(m_storage,
-            transaction_executor::StateKey{
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_BLOCK_NUMBER_2_NONCES),
-                blockNumberKey},
+        co_await storage2::writeOne(storage,
+            transaction_executor::StateKey{SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey},
             std::move(number2NonceEntry));
 
         co_return;
@@ -101,7 +90,7 @@ private:
 
     template <std::same_as<concepts::ledger::TRANSACTIONS_METADATA>>
     task::Task<void> setBlockData(
-        std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::IsBlock auto const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData transaction metadata: " << blockNumberKey;
 
@@ -111,10 +100,9 @@ private:
             for (size_t i = 0; i < block.transactionsMetaDataSize(); ++i)
             {
                 auto originTransactionMetaData = block.transactionMetaData(i);
-                auto transactionMetaData =
+                transactionsBlock->appendTransactionMetaData(
                     m_blockFactory.createTransactionMetaData(originTransactionMetaData->hash(),
-                        std::string(originTransactionMetaData->to()));
-                transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
+                        std::string(originTransactionMetaData->to())));
             }
         }
         else if (block.transactionsSize() > 0)
@@ -122,9 +110,9 @@ private:
             for (size_t i = 0; i < block.transactionsSize(); ++i)
             {
                 auto transaction = block.transaction(i);
-                auto transactionMetaData = m_blockFactory.createTransactionMetaData(
-                    transaction->hash(), std::string(transaction->to()));
-                transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
+                transactionsBlock->appendTransactionMetaData(
+                    m_blockFactory.createTransactionMetaData(
+                        transaction->hash(), std::string(transaction->to())));
             }
         }
 
@@ -140,10 +128,8 @@ private:
 
         bcos::storage::Entry number2TransactionHashesEntry;
         number2TransactionHashesEntry.set(std::move(number2TransactionHashesBuffer));
-        co_await storage2::writeOne(m_storage,
-            transaction_executor::StateKey{
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_NUMBER_2_TXS),
-                blockNumberKey},
+        co_await storage2::writeOne(storage,
+            transaction_executor::StateKey{SYS_NUMBER_2_TXS, blockNumberKey},
             std::move(number2TransactionHashesEntry));
 
         co_return;
@@ -151,76 +137,66 @@ private:
 
     template <std::same_as<concepts::ledger::TRANSACTIONS>>
     task::Task<void> setBlockData(
-        std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData transactions: " << blockNumberKey;
-
-        if (block.transactionsMetaDataSize() == 0)
-        {
-            LEDGER2_LOG(INFO) << "SetBlockData TRANSACTIONS not found transaction meta data!";
-            co_return;
-        }
-
-        if (block.transactionsMetaDataSize() != block.transactionsSize())
-        {
-            LEDGER2_LOG(INFO)
-                << "SetBlockData TRANSACTIONS not equal transaction metas and transactions!";
-            co_return;
-        }
 
         auto availableTransactions =
             RANGES::iota_view<size_t, size_t>(0LU, block.transactionsSize()) |
             RANGES::views::transform([&block](uint64_t index) { return block.transaction(index); });
 
-        auto hashes = availableTransactions | RANGES::views::transform([](auto& transaction) {
-            return transaction->hash();
-        });
-        auto buffers = availableTransactions | RANGES::views::transform([](auto& transaction) {
-            std::vector<bcos::byte> buffer;
-            bcos::concepts::serialize::encode(*transaction, buffer);
-            return buffer;
-        });
-        co_await setTransactions<true>(hashes, buffers);
+        std::vector<bcos::h256> hashes(block.transactionsSize());
+        std::vector<std::vector<bcos::byte>> buffers(block.transactionsSize());
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0LU, block.transactionsSize()), [&](auto const& range) {
+                for (auto i = range.begin(); i != range.end(); ++i)
+                {
+                    auto transaction = block.transaction(i);
+                    hashes[i] = transaction->hash();
+                    bcos::concepts::serialize::encode(*transaction, buffers[i]);
+                }
+            });
+
+        co_await setTransactions<true>(storage, hashes, buffers);
     }
 
     template <std::same_as<concepts::ledger::RECEIPTS>>
     task::Task<void> setBlockData(
-        std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData receipts: " << blockNumberKey;
 
-        if (block.transactionsMetaDataSize() == 0)
+        std::atomic_size_t totalTransactionCount = 0;
+        std::atomic_size_t failedTransactionCount = 0;
+        std::vector<bcos::h256> hashes(block.receiptsSize());
+        std::vector<std::vector<bcos::byte>> buffers(block.receiptsSize());
+
+        auto setData = [&](auto getHashFunc) {
+            tbb::parallel_for(
+                tbb::blocked_range<size_t>(0LU, block.receiptsSize()), [&](auto const& range) {
+                    for (auto i = range.begin(); i != range.end(); ++i)
+                    {
+                        hashes[i] = getHashFunc(i);
+                        auto receipt = block.receipt(i);
+                        bcos::concepts::serialize::encode(*receipt, buffers[i]);
+
+                        if (receipt->status() != 0)
+                        {
+                            ++failedTransactionCount;
+                        }
+                        ++totalTransactionCount;
+                    }
+                });
+        };
+        if (block.transactionsMetaDataSize() == block.receiptsSize())
         {
-            LEDGER2_LOG(INFO) << "SetBlockData RECEIPTS not found transaction meta data!";
-            co_return;
+            setData([&](size_t index) { return block.transactionMetaData(index)->hash(); });
         }
-
-        size_t totalTransactionCount = 0;
-        size_t failedTransactionCount = 0;
-        for (uint64_t i = 0; i < block.receiptsSize(); ++i)
+        else
         {
-            auto receipt = block.receipt(i);
-            if (receipt->status() != 0)
-            {
-                ++failedTransactionCount;
-            }
-            ++totalTransactionCount;
+            setData([&](size_t index) { return block.transaction(index)->hash(); });
         }
-
-        auto hashes = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
-                      RANGES::views::transform([&block](uint64_t index) {
-                          auto metaData = block.transactionMetaData(index);
-                          return metaData->hash();
-                      });
-        auto buffers = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
-                       RANGES::views::transform([&block](uint64_t index) {
-                           auto receipt = block.receipt(index);
-                           std::vector<bcos::byte> buffer;
-                           bcos::concepts::serialize::encode(*receipt, buffer);
-                           return buffer;
-                       });
-
-        co_await setTransactions<false>(hashes, buffers);
+        co_await setTransactions<false>(storage, hashes, buffers);
 
         LEDGER2_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                            << LOG_KV("number", blockNumberKey)
@@ -233,20 +209,16 @@ private:
 
         bcos::storage::Entry totalEntry;
         totalEntry.set(boost::lexical_cast<std::string>(transactionCount.total));
-        co_await storage2::writeOne(m_storage,
-            transaction_executor::StateKey{
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_CURRENT_STATE),
-                SYS_KEY_TOTAL_TRANSACTION_COUNT},
+        co_await storage2::writeOne(storage,
+            transaction_executor::StateKey{SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT},
             std::move(totalEntry));
 
         if (transactionCount.failed > 0)
         {
             bcos::storage::Entry failedEntry;
             failedEntry.set(boost::lexical_cast<std::string>(transactionCount.failed));
-            co_await storage2::writeOne(m_storage,
-                transaction_executor::StateKey{
-                    storage2::string_pool::makeStringID(m_tableNamePool, SYS_CURRENT_STATE),
-                    SYS_KEY_TOTAL_FAILED_TRANSACTION},
+            co_await storage2::writeOne(storage,
+                transaction_executor::StateKey{SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION},
                 std::move(failedEntry));
         }
 
@@ -260,7 +232,7 @@ private:
 
     template <std::same_as<concepts::ledger::ALL>>
     task::Task<void> setBlockData(
-        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+        Storage& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData all: " << blockNumberKey;
 
@@ -272,29 +244,27 @@ private:
     }
 
 public:
-    LedgerImpl2(Storage& storage, protocol::BlockFactory& blockFactory,
-        transaction_executor::TableNamePool& tableNamePool)
+    LedgerImpl2(Storage& storage, protocol::BlockFactory& blockFactory)
       : m_storage(storage),
         m_blockFactory(blockFactory),
-        m_tableNamePool(tableNamePool),
         m_transactionFactory(m_blockFactory.transactionFactory()),
         m_receiptFactory(m_blockFactory.receiptFactory()),
         m_keyFactory(m_blockFactory.cryptoSuite()->keyFactory())
     {}
 
     template <bcos::concepts::ledger::DataFlag... Flags>
-    task::Task<void> setBlock(protocol::IsBlock auto const& block)
+    task::Task<void> setBlock(auto& storage, protocol::IsBlock auto const& block)
     {
         LEDGER2_LOG(INFO) << "setBlock: " << block.blockHeaderConst()->number();
 
         auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeaderConst()->number());
-        (co_await setBlockData<Flags>(blockNumberStr, block), ...);
+        (co_await setBlockData<Flags>(storage, blockNumberStr, block), ...);
         co_return;
     }
 
     task::Task<ledger::LedgerConfig> getConfig()
     {
-        auto sysConsensusID = storage2::string_pool::makeStringID(m_tableNamePool, SYS_CONSENSUS);
+        auto sysConsensusID = SYS_CONSENSUS;
 
         // NodeList
         auto entry = co_await storage2::readOne(
@@ -332,15 +302,10 @@ public:
         constexpr static auto systemConfigKeys =
             std::to_array({SYSTEM_KEY_TX_COUNT_LIMIT, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
                 SYSTEM_KEY_TX_GAS_LIMIT, SYSTEM_KEY_COMPATIBILITY_VERSION});
-        auto systemConfigTableID = storage2::string_pool::makeStringID(m_tableNamePool, SYS_CONFIG);
-        auto it = co_await m_storage.read(
-            systemConfigKeys |
-            RANGES::views::transform(
-                [&systemConfigTableID](
-                    auto& key) -> std::tuple<transaction_executor::TableNameID, std::string_view> {
-                    return std::tuple<transaction_executor::TableNameID, std::string_view>{
-                        systemConfigTableID, key};
-                }));
+        auto it =
+            co_await m_storage.read(systemConfigKeys | RANGES::views::transform([](auto& key) {
+                return transaction_executor::StateKeyView{SYS_CONFIG, key};
+            }));
         int index = 0;
         while (co_await it.next())
         {
@@ -395,10 +360,9 @@ public:
         constexpr static auto statusKeys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
             SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
 
-        auto sysCurrentID = storage2::string_pool::makeStringID(m_tableNamePool, SYS_CURRENT_STATE);
-        auto it = co_await m_storage.read(
-            statusKeys | RANGES::views::transform([&sysCurrentID](std::string_view key) {
-                return transaction_executor::StateKey{sysCurrentID, key};
+        auto it =
+            co_await m_storage.read(statusKeys | RANGES::views::transform([](std::string_view key) {
+                return transaction_executor::StateKeyView{SYS_CURRENT_STATE, key};
             }));
 
         bcos::concepts::ledger::Status status;
@@ -440,16 +404,12 @@ public:
         std::declval<bytesConstRef>(), false, false))>>
     getTransactions(RANGES::input_range auto const& hashes)
     {
-        auto tableNameID =
-            isTransaction ?
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_TX) :
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_RECEIPT);
-
-        LEDGER2_LOG(INFO) << "getTransactions: " << *tableNameID;
+        auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
+        LEDGER2_LOG(INFO) << "getTransactions: " << tableName;
 
         auto it =
-            co_await m_storage.read(hashes | RANGES::views::transform([&tableNameID](auto& hash) {
-                return std::tuple{tableNameID,
+            co_await m_storage.read(hashes | RANGES::views::transform([&tableName](auto& hash) {
+                return transaction_executor::StateKeyView{tableName,
                     std::string_view((const char*)RANGES::data(hash), RANGES::size(hash))};
             }));
 
@@ -480,26 +440,22 @@ public:
     }
 
     template <bool isTransaction>
-    task::Task<void> setTransactions(RANGES::range auto&& hashes, RANGES::range auto&& buffers)
+    task::Task<void> setTransactions(
+        auto& storage, RANGES::range auto&& hashes, RANGES::range auto&& buffers)
     {
         if (RANGES::size(buffers) != RANGES::size(hashes))
         {
             BOOST_THROW_EXCEPTION(
                 MismatchTransactionCount{} << bcos::error::ErrorMessage{"No match count!"});
         }
-        auto tableNameID =
-            isTransaction ?
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_TX) :
-                storage2::string_pool::makeStringID(m_tableNamePool, SYS_HASH_2_RECEIPT);
-
-        LEDGER2_LOG(INFO) << "setTransactionBuffers: " << *tableNameID << " "
+        auto tableNameID = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
+        LEDGER2_LOG(INFO) << "setTransactionBuffers: " << tableNameID << " "
                           << RANGES::size(hashes);
 
-        co_await m_storage.write(
-            hashes | RANGES::views::transform([&tableNameID](auto const& hash) {
-                return transaction_executor::StateKey{tableNameID,
-                    std::string_view((const char*)RANGES::data(hash), RANGES::size(hash))};
-            }),
+        co_await storage.write(hashes | RANGES::views::transform([&tableNameID](auto const& hash) {
+            return transaction_executor::StateKey{
+                tableNameID, std::string_view((const char*)RANGES::data(hash), RANGES::size(hash))};
+        }),
             buffers | RANGES::views::transform([](auto&& buffer) {
                 storage::Entry entry;
                 entry.set(std::forward<decltype(buffer)>(buffer));

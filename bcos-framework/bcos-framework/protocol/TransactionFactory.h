@@ -41,17 +41,17 @@ public:
         bytesConstRef txData, bool checkSig = true, bool checkHash = false) = 0;
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bytes const& _input, std::string const& _nonce, int64_t blockLimit, std::string _chainId,
-        std::string _groupId, int64_t _importTime) = 0;
+        std::string _groupId, int64_t _importTime, std::string _abi = "") = 0;
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bytes const& _input, std::string const& _nonce, int64_t _blockLimit, std::string _chainId,
         std::string _groupId, int64_t _importTime,
-        const bcos::crypto::KeyPairInterface& keyPair) = 0;
+        const bcos::crypto::KeyPairInterface& keyPair, std::string _abi = "") = 0;
     Transaction::Ptr createTransaction(int32_t _version, std::string _to, bytes const& _input,
         std::string const& _nonce, int64_t _blockLimit, std::string _chainId, std::string _groupId,
-        int64_t _importTime, const bcos::crypto::KeyPairInterface::Ptr& keyPair)
+        int64_t _importTime, const bcos::crypto::KeyPairInterface::Ptr& keyPair, std::string _abi = "")
     {
         return createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
-            std::move(_chainId), std::move(_groupId), _importTime, *keyPair);
+            std::move(_chainId), std::move(_groupId), _importTime, *keyPair, std::move(_abi));
     }
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() = 0;
 };

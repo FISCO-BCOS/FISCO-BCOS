@@ -1,6 +1,6 @@
 {
   "name": "fiscobcos",
-  "version-string": "3.4.0",
+  "version-string": "3.5.0",
   "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
   "description": "FISCO BCOS",
   "dependencies": [
@@ -27,7 +27,7 @@
     "boost-iostreams",
     "boost-thread",
     "boost-test",
-    "boost-timer",
+    "indicators",
     "boost-compute",
     "boost-multiprecision",
     "boost-program-options",
@@ -75,11 +75,11 @@
       "dependencies": [
         {
           "name": "evmone",
-          "version>=": "0.9.1"
+          "version>=": "0.10.0"
         },
         {
           "name": "evmc",
-          "version>=": "10.0.0"
+          "version>=": "10.1.0"
         },
         "boost-coroutine2",
         {
@@ -133,6 +133,12 @@
       "dependencies": [
         "mimalloc"
       ]
+    },
+    "jthread": {
+      "description": "jthread dependencies",
+      "dependencies": [
+        "josuttis-jthread"
+      ]
     }
   },
   "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139",
@@ -156,6 +162,10 @@
     {
       "name": "boost-context",
       "version": "1.79.0-m1"
+    },
+    {
+      "name": "intx",
+      "version": "0.10.1"
     }
   ]
 }

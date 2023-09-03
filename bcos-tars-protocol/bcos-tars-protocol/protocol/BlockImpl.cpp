@@ -58,6 +58,7 @@ bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) co
         [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
 }
 
+// TODO: return struct instead of pointer
 bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
 {
     return std::make_shared<const bcostars::protocol::TransactionReceiptImpl>(
@@ -105,6 +106,7 @@ RANGES::any_view<std::string> BlockImpl::nonceList() const
     return m_inner->nonceList;
 }
 
+// TODO: return struct instead of pointer
 bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const
 {
     if (_index >= transactionsMetaDataSize())
@@ -116,6 +118,17 @@ bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uin
         [inner = m_inner, _index]() { return &inner->transactionsMetaData[_index]; });
 
     return txMetaData;
+}
+
+TransactionMetaDataImpl BlockImpl::transactionMetaDataImpl(uint64_t _index) const
+{
+    if (_index >= transactionsMetaDataSize())
+    {
+        return bcostars::protocol::TransactionMetaDataImpl([] { return nullptr; });
+    }
+
+    return bcostars::protocol::TransactionMetaDataImpl(
+        [inner = m_inner, _index]() { return &inner->transactionsMetaData[_index]; });
 }
 
 void BlockImpl::appendTransactionMetaData(bcos::protocol::TransactionMetaData::Ptr _txMetaData)

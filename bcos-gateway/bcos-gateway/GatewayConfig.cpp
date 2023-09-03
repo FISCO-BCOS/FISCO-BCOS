@@ -88,7 +88,7 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     boost::asio::ip::address ip_address = boost::asio::ip::make_address(ip, ec);
     if (ec.value() != 0)
     {
-        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("the host is invalid, make_address error")
+        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("the host is invalid, make_address failed")
                                   << LOG_KV("host", _host);
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment(
@@ -178,7 +178,7 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
 
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment("initConfig: currentPath:" + full_path.string() +
-                                                  " ,error:" + boost::diagnostic_information(e)));
+                                                  " ,message:" + boost::diagnostic_information(e)));
     }
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initConfig ok!") << LOG_KV("configPath", _configPath)

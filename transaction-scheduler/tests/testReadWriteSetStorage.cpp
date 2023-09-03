@@ -4,7 +4,6 @@
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/view/transform.hpp>
 #include <type_traits>
 
 using namespace bcos;
@@ -42,6 +41,7 @@ BOOST_AUTO_TEST_CASE(readWriteSet)
 
         co_await storage2::readOne(secondStorage, 200);
         BOOST_CHECK(firstStorage.hasRAWIntersection(secondStorage));
+
         co_return;
     }());
 }

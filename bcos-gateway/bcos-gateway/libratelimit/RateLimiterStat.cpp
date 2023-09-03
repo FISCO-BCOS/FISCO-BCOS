@@ -65,7 +65,7 @@ void RateLimiterStat::start()
 {
     if (m_running)
     {
-        RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat")
+        GATEWAY_LOG(INFO) << LOG_BADGE("RateLimiterStat")
                             << LOG_DESC("ratelimiter stat is running");
         return;
     }
@@ -92,7 +92,7 @@ void RateLimiterStat::start()
 
     m_statTimer->start();
 
-    RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat start ok")
+    GATEWAY_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat start ok")
                         << LOG_KV("statInterval", statInterval)
                         << LOG_KV("enableConnectDebugInfo", m_enableConnectDebugInfo);
 }
@@ -101,7 +101,7 @@ void RateLimiterStat::stop()
 {
     if (!m_running)
     {
-        RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat")
+        GATEWAY_LOG(INFO) << LOG_BADGE("RateLimiterStat")
                             << LOG_DESC("ratelimiter stat has been stopped");
         return;
     }
@@ -112,7 +112,7 @@ void RateLimiterStat::stop()
         m_statTimer->stop();
     }
 
-    RATELIMIT_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat stop end");
+    GATEWAY_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat stop end");
 }
 
 // ---------------- statistics on inbound and outbound begin -------------------
@@ -127,7 +127,7 @@ void RateLimiterStat::updateInComing0(
     std::string epKey = toEndpointKey(_endpoint);
     std::string totalKey = TOTAL_OUTGOING;
 
-    // RATELIMIT_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("endpoint", _endpoint)
+    // GATEWAY_LOG(DEBUG) << LOG_BADGE("updateInComing") << LOG_KV("endpoint", _endpoint)
     //                     << LOG_KV("dataSize", _dataSize);
 
     {

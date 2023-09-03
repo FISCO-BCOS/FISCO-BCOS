@@ -56,12 +56,16 @@ public:
     };
 
 
-    CoroutineTransactionExecutive(const BlockContext& blockContext,
-        std::string contractAddress, int64_t contextID, int64_t seq,
-        const wasm::GasInjector& gasInjector)
+    CoroutineTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
+        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
       : TransactionExecutive(
-            std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector)
-    {}
+            std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector),
+        m_syncStorageWrapper(m_blockContext.storage(),
+            [this](auto && PH1) { externalAcquireKeyLocks(std::forward<decltype(PH1)>(PH1)); },
+            m_recoder)
+    {
+        m_storageWrapper = &m_syncStorageWrapper;
+    }
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;  // start a new
     // coroutine to
@@ -113,7 +117,7 @@ private:
     CallParameters::UniquePtr dispatcher();
     void spawnAndCall(std::function<void(ResumeHandler)> function);
 
-    std::shared_ptr<SyncStorageWrapper> m_syncStorageWrapper;
+    SyncStorageWrapper m_syncStorageWrapper;
 
     std::optional<Coroutine::pull_type> m_pullMessage;
     std::optional<Coroutine::push_type> m_pushMessage;

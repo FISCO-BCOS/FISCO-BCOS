@@ -406,13 +406,13 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                     }
                     // convert json to transaction
                     int32_t version = jsonValue["version"].asInt();
-                    auto nonce = jsonValue["nonce"].asString();
+                    auto nonce = asString(fromHex(jsonValue["nonce"].asString()));
                     auto input = fromHexWithPrefix(jsonValue["input"].asString());
                     auto signature = fromHexWithPrefix(jsonValue["signature"].asString());
                     auto tx = transactionFactory->createTransaction(version,
                         jsonValue["to"].asString(), input, nonce, jsonValue["blockLimit"].asInt64(),
                         jsonValue["chainID"].asString(), jsonValue["groupID"].asString(),
-                        jsonValue["importTime"].asInt64());
+                        jsonValue["importTime"].asInt64(), jsonValue["abi"].asString());
                     dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx)->setSignatureData(
                         signature);
                     tx->encode(txs[i]);

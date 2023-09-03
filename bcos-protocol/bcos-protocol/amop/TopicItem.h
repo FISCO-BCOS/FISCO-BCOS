@@ -80,7 +80,7 @@ inline bool parseSubTopicsJson(const std::string& _json, TopicItems& _topicItems
     catch (const std::exception& e)
     {
         BCOS_LOG(ERROR) << LOG_BADGE("parseSubTopicsJson")
-                        << LOG_KV("error", boost::diagnostic_information(e))
+                        << LOG_KV("message", boost::diagnostic_information(e))
                         << LOG_KV("json:", _json);
         return false;
     }

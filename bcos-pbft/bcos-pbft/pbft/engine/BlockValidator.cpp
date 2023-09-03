@@ -71,7 +71,7 @@ void BlockValidator::asyncCheckBlock(
         catch (std::exception const& e)
         {
             PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock exception")
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("message", boost::diagnostic_information(e));
             _onVerifyFinish(nullptr, false);
         }
     });

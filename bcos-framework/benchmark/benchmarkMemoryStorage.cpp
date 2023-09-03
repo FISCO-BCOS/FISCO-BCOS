@@ -1,7 +1,6 @@
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-framework/storage2/StringPool.h>
 #include <bcos-task/Wait.h>
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
@@ -17,7 +16,6 @@ using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_executor;
-using namespace bcos::storage2::string_pool;
 using namespace bcos::storage2::any_storage;
 
 using Key = StateKey;
@@ -34,7 +32,7 @@ struct Fixture
         {
             auto tableName = fmt::format("Table-{}", i % 1000);  // All 1000 tables
             auto key = fmt::format("Key-{}", i);
-            allKeys.emplace_back(makeStringID(stringPool, tableName), key);
+            allKeys.emplace_back(tableName, key);
 
             storage::Entry entry;
             entry.set(fmt::format("value is {}", i));
@@ -44,7 +42,6 @@ struct Fixture
 
     std::vector<Key> allKeys;
     std::vector<storage::Entry> allValues;
-    FixedStringPool stringPool;
 };
 
 void setCapacityForMRU(auto& storage)
@@ -98,7 +95,7 @@ static void read(benchmark::State& state)
                 int i = (state.range(0) / state.threads()) * state.thread_index();
                 for (auto const& it : state)
                 {
-                    auto itAwaitable = co_await storage.read(storage2::singleView(
+                    auto itAwaitable = co_await storage.read(RANGES::views::single(
                         fixture.allKeys[(i + fixture.allKeys.size()) % fixture.allKeys.size()]));
                     co_await itAwaitable.next();
                     [[maybe_unused]] auto& value = co_await itAwaitable.value();
@@ -138,7 +135,7 @@ static void readAny(benchmark::State& state)
         int i = (state.range(0) / state.threads()) * state.thread_index();
         for (auto const& it : state)
         {
-            auto itAwaitable = co_await anyStorageView->read(storage2::singleView(
+            auto itAwaitable = co_await anyStorageView->read(RANGES::views::single(
                 fixture.allKeys[(i + fixture.allKeys.size()) % fixture.allKeys.size()]));
             co_await itAwaitable.next();
             [[maybe_unused]] auto value = co_await itAwaitable.value();
@@ -168,8 +165,8 @@ static void write(benchmark::State& state)
                 for (auto const& it : state)
                 {
                     auto index = (i + fixture.allKeys.size()) % fixture.allKeys.size();
-                    co_await storage.write(storage2::singleView(fixture.allKeys[index]),
-                        storage2::singleView(fixture.allValues[index]));
+                    co_await storage.write(RANGES::views::single(fixture.allKeys[index]),
+                        RANGES::views::single(fixture.allValues[index]));
                     ++i;
                 }
                 co_return;
