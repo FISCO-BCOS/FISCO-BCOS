@@ -62,13 +62,11 @@ struct Fixture
 
         if constexpr (parallel)
         {
-            m_scheduler.template emplace<SchedulerParallelImpl<MultiLayerStorageType,
-                TransactionExecutorImpl<PrecompiledManager>>>(m_multiLayerStorage, m_executor);
+            m_scheduler.emplace<SchedulerParallelImpl>();
         }
         else
         {
-            m_scheduler.template emplace<SchedulerSerialImpl<MultiLayerStorageType,
-                TransactionExecutorImpl<PrecompiledManager>>>(m_multiLayerStorage, m_executor);
+            m_scheduler.emplace<SchedulerSerialImpl>();
         }
     }
 
@@ -101,18 +99,19 @@ struct Fixture
                         auto transactions =
                             RANGES::single_view(std::addressof(createTransaction)) |
                             RANGES::views::transform([](auto* ptr) -> auto const& { return *ptr; });
-                        scheduler.start();
+
+                        m_multiLayerStorage.newMutable();
+                        auto view = m_multiLayerStorage.fork(true);
                         auto receipts = co_await transaction_scheduler::execute(
-                            scheduler, *block->blockHeaderConst(), transactions);
+                            scheduler, view, m_executor, *block->blockHeaderConst(), transactions);
                         if (receipts[0]->status() != 0)
                         {
                             fmt::print("deployContract unexpected receipt status: {}, {}\n",
                                 receipts[0]->status(), receipts[0]->message());
                             co_return;
                         }
-
-                        co_await scheduler.finish(*blockHeader, *(m_cryptoSuite->hashImpl()));
-                        co_await transaction_scheduler::commit(scheduler);
+                        m_multiLayerStorage.pushMutableToImmutableFront();
+                        co_await m_multiLayerStorage.mergeAndPopImmutableBack();
 
                         m_contractAddress = receipts[0]->contractAddress();
                     }());
@@ -240,14 +239,14 @@ struct Fixture
                         RANGES::to<
                             std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-                    scheduler.start();
-                    auto receipts = co_await transaction_scheduler::execute(scheduler, blockHeader,
+                    auto view = m_multiLayerStorage.fork(true);
+                    auto receipts = co_await transaction_scheduler::execute(scheduler, view,
+                        m_executor, blockHeader,
                         checkTransactions | RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                                                                          -> auto& {
                             return *transaction;
                         }));
-                    co_await scheduler.finish(blockHeader, *(m_cryptoSuite->hashImpl()));
 
                     auto balances = receipts |
                                     RANGES::views::transform([&abiCodec](auto const& receipt) {
@@ -282,10 +281,7 @@ struct Fixture
 
     PrecompiledManager m_precompiledManager;
     TransactionExecutorImpl<PrecompiledManager> m_executor;
-    std::variant<std::monostate,
-        SchedulerSerialImpl<MultiLayerStorageType, TransactionExecutorImpl<PrecompiledManager>>,
-        SchedulerParallelImpl<MultiLayerStorageType, TransactionExecutorImpl<PrecompiledManager>>>
-        m_scheduler;
+    std::variant<std::monostate, SchedulerSerialImpl, SchedulerParallelImpl> m_scheduler;
 
     std::string m_contractAddress;
     std::vector<Address> m_addresses;
@@ -312,6 +308,8 @@ static void issue(benchmark::State& state)
             else
             {
                 task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+                    fixture.m_multiLayerStorage.newMutable(true);
+                    auto view = fixture.m_multiLayerStorage.fork(true);
                     for (auto const& it : state)
                     {
                         bcostars::protocol::BlockHeaderImpl blockHeader(
@@ -322,19 +320,15 @@ static void issue(benchmark::State& state)
                         blockHeader.setVersion(
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-                        scheduler.start();
                         [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
-                            scheduler, blockHeader,
+                            scheduler, view, fixture.m_executor, blockHeader,
                             fixture.m_transactions |
                                 RANGES::views::transform(
                                     [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
                                             transaction) -> auto& { return *transaction; }));
-
-                        co_await scheduler.finish(
-                            blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
-                        co_await scheduler.commit();
                     }
 
+                    view.release();
                     auto balances = co_await fixture.balances();
                     for (auto& balance : balances)
                     {
@@ -379,16 +373,15 @@ static void transfer(benchmark::State& state)
                     blockHeader.setNumber(0);
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-                    scheduler.start();
+                    fixture.m_multiLayerStorage.newMutable();
+                    auto view = fixture.m_multiLayerStorage.fork(true);
                     [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
-                        scheduler, blockHeader,
+                        scheduler, view, fixture.m_executor, blockHeader,
                         fixture.m_transactions | RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                                                                               -> auto& {
                             return *transaction;
                         }));
-                    co_await scheduler.finish(blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
-                    co_await scheduler.commit();
 
                     fixture.m_transactions.clear();
                     fixture.prepareTransfer(count);
@@ -404,19 +397,16 @@ static void transfer(benchmark::State& state)
                         blockHeader.setVersion(
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-                        scheduler.start();
                         [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
-                            scheduler, blockHeader,
+                            scheduler, view, fixture.m_executor, blockHeader,
                             fixture.m_transactions |
                                 RANGES::views::transform(
                                     [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
                                             transaction) -> auto& { return *transaction; }));
-                        co_await scheduler.finish(
-                            blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
-                        co_await scheduler.commit();
                     }
 
                     // Check
+                    view.release();
                     auto balances = co_await fixture.balances();
                     for (auto&& range : balances | RANGES::views::chunk(2))
                     {
@@ -441,103 +431,6 @@ static void transfer(benchmark::State& state)
                     co_return;
                 }(state));
             }
-        },
-        fixture.m_scheduler);
-}
-
-template <bool parallel>
-static void transfer1000User(benchmark::State& state)
-{
-    Fixture<parallel> fixture;
-    fixture.deployContract();
-
-    auto count = state.range(0) * 2;
-    fixture.prepareAddresses(count);
-    fixture.prepareIssue(count);
-
-    std::visit(
-        [&](auto& scheduler) {
-            int i = 0;
-            task::syncWait([&](benchmark::State& state) -> task::Task<void> {
-                // First issue
-                bcostars::protocol::BlockHeaderImpl blockHeader(
-                    [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-                blockHeader.setNumber(0);
-                blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-
-                scheduler.start();
-                [[maybe_unused]] auto receipts = co_await scheduler.execute(blockHeader,
-                    fixture.m_transactions |
-                        RANGES::views::transform([
-                        ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
-                                                     -> auto& { return *transaction; }));
-                co_await scheduler.template finish<decltype(blockHeader)>(
-                    blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
-                co_await scheduler.commit();
-
-                fixture.m_transactions.clear();
-                fixture.prepareConflictTransfer(count);
-
-                // Start transfer
-                for (auto const& it : state)
-                {
-                    bcostars::protocol::BlockHeaderImpl blockHeader(
-                        [inner = bcostars::BlockHeader()]() mutable {
-                            return std::addressof(inner);
-                        });
-                    blockHeader.setNumber((i++) + 1);
-                    blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-
-                    scheduler.start();
-                    [[maybe_unused]] auto receipts = co_await scheduler.execute(blockHeader,
-                        fixture.m_transactions | RANGES::views::transform([
-                        ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
-                                                                              -> auto& {
-                            return *transaction;
-                        }));
-                    auto stateRoot = co_await scheduler.template finish<decltype(blockHeader)>(
-                        blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
-                    if (stateRoot == bcos::h256{})
-                    {
-                        BOOST_THROW_EXCEPTION(std::runtime_error("Empty state root!"));
-                    }
-                    co_await scheduler.commit();
-                }
-
-                // Check
-                auto balances = co_await fixture.balances();
-                for (auto&& [balance, index] :
-                    RANGES::views::zip(balances, RANGES::views::iota(0LU)))
-                {
-                    if (index == 0)
-                    {
-                        if (balance != singleIssue - i * singleTransfer)
-                        {
-                            BOOST_THROW_EXCEPTION(std::runtime_error(
-                                fmt::format("Start balance not equal to expected! {} {}", index,
-                                    balance.template convert_to<std::string>())));
-                        }
-                    }
-                    else if (index == balances.size() - 1)
-                    {
-                        if (balance != singleIssue + i * singleTransfer)
-                        {
-                            BOOST_THROW_EXCEPTION(std::runtime_error(
-                                fmt::format("End balance not equal to expected! {} {}", index,
-                                    balance.template convert_to<std::string>())));
-                        }
-                    }
-                    else
-                    {
-                        if (balance != singleIssue)
-                        {
-                            BOOST_THROW_EXCEPTION(std::runtime_error(
-                                fmt::format("Balance not equal to expected! {} {}", index,
-                                    balance.template convert_to<std::string>())));
-                        }
-                    }
-                }
-            }(state));
         },
         fixture.m_scheduler);
 }
@@ -570,16 +463,15 @@ static void conflictTransfer(benchmark::State& state)
                     blockHeader.setNumber(0);
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-                    scheduler.start();
+                    fixture.m_multiLayerStorage.newMutable();
+                    auto view = fixture.m_multiLayerStorage.fork(true);
                     [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
-                        scheduler, blockHeader,
+                        scheduler, view, fixture.m_executor, blockHeader,
                         fixture.m_transactions | RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                                                                               -> auto& {
                             return *transaction;
                         }));
-                    co_await scheduler.finish(blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
-                    co_await scheduler.commit();
 
                     fixture.m_transactions.clear();
                     fixture.prepareConflictTransfer(count);
@@ -595,20 +487,12 @@ static void conflictTransfer(benchmark::State& state)
                         blockHeader.setVersion(
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-                        scheduler.start();
                         [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
-                            scheduler, blockHeader,
+                            scheduler, view, fixture.m_executor, blockHeader,
                             fixture.m_transactions |
                                 RANGES::views::transform(
                                     [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
                                             transaction) -> auto& { return *transaction; }));
-                        auto stateRoot = co_await scheduler.finish(
-                            blockHeader, *(fixture.m_cryptoSuite->hashImpl()));
-                        if (stateRoot == bcos::h256{})
-                        {
-                            BOOST_THROW_EXCEPTION(std::runtime_error("Empty state root!"));
-                        }
-                        co_await scheduler.commit();
                     }
 
                     // Check
