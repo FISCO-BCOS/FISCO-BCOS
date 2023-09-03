@@ -1,7 +1,8 @@
 #pragma once
 
-#include "SchedulerBaseImpl.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 
 namespace bcos::transaction_scheduler
 {

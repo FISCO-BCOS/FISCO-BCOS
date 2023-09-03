@@ -1,3 +1,4 @@
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -10,7 +11,6 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <mutex>
-#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -57,9 +57,8 @@ BOOST_AUTO_TEST_CASE(simple)
 {
     task::syncWait([&, this]() -> task::Task<void> {
         MockExecutor executor;
-        SchedulerParallelImpl scheduler(multiLayerStorage, executor);
+        SchedulerParallelImpl scheduler;
 
-        scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         auto transactions =
@@ -69,10 +68,12 @@ BOOST_AUTO_TEST_CASE(simple)
             }) |
             RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-        auto receipts = co_await bcos::transaction_scheduler::execute(scheduler, blockHeader,
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
-        co_await scheduler.finish(blockHeader, *hashImpl);
-        co_await scheduler.commit();
+        multiLayerStorage.newMutable();
+        auto view = multiLayerStorage.fork(true);
+        auto receipts =
+            co_await bcos::transaction_scheduler::execute(scheduler, view, executor, blockHeader,
+                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
+        BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;
     }());
@@ -116,11 +117,11 @@ BOOST_AUTO_TEST_CASE(conflict)
 {
     task::syncWait([&, this]() -> task::Task<void> {
         MockConflictExecutor executor;
-        SchedulerParallelImpl scheduler(multiLayerStorage, executor);
+        SchedulerParallelImpl scheduler;
         scheduler.setChunkSize(1);
         scheduler.setMaxToken(std::thread::hardware_concurrency());
-        scheduler.start();
 
+        multiLayerStorage.newMutable();
         constexpr static int INITIAL_VALUE = 100000;
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {
@@ -146,8 +147,9 @@ BOOST_AUTO_TEST_CASE(conflict)
 
         auto transactionRefs =
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; });
-        auto receipts =
-            co_await bcos::transaction_scheduler::execute(scheduler, blockHeader, transactionRefs);
+        auto view = multiLayerStorage.fork(true);
+        auto receipts = co_await bcos::transaction_scheduler::execute(
+            scheduler, view, executor, blockHeader, transactionRefs);
 
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {

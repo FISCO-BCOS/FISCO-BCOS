@@ -5,6 +5,7 @@
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Ranges.h"
 #include <oneapi/tbb/task_group.h>
+#include <concepts>
 
 namespace bcos::transaction_scheduler
 {
@@ -28,18 +29,6 @@ struct Execute
     }
 };
 inline constexpr Execute execute{};
-struct Commit
-{
-    auto operator()(auto& scheduler, auto& ledger, auto& blockHeader, auto const& transactions,
-        auto const& receipts) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
-            *this, scheduler, ledger, blockHeader, transactions, receipts))>>
-    {
-        co_return co_await tag_invoke(
-            *this, scheduler, ledger, blockHeader, transactions, receipts);
-    }
-};
-inline constexpr Commit commit{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

@@ -1,3 +1,4 @@
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
@@ -39,16 +40,14 @@ public:
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
-        multiLayerStorage(backendStorage),
-        scheduler(multiLayerStorage, executor)
+        multiLayerStorage(backendStorage)
     {}
 
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
-    MockExecutor executor;
-    SchedulerSerialImpl<decltype(multiLayerStorage), MockExecutor> scheduler;
+    SchedulerSerialImpl scheduler;
 
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 };
@@ -58,7 +57,6 @@ BOOST_FIXTURE_TEST_SUITE(TestSchedulerSerial, TestSchedulerSerialFixture)
 BOOST_AUTO_TEST_CASE(executeBlock)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         auto transactions =
@@ -68,10 +66,12 @@ BOOST_AUTO_TEST_CASE(executeBlock)
             }) |
             RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-        auto receipts = co_await bcos::transaction_scheduler::execute(scheduler, blockHeader,
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
-        co_await scheduler.finish(blockHeader, *hashImpl);
-        co_await scheduler.commit();
+        MockExecutor executor;
+        auto view = multiLayerStorage.fork(true);
+        auto receipts =
+            co_await bcos::transaction_scheduler::execute(scheduler, view, executor, blockHeader,
+                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
+        BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;
     }());

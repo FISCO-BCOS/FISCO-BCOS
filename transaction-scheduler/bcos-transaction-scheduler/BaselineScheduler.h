@@ -1,11 +1,12 @@
 #pragma once
 
-#include "SchedulerBaseImpl.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/merkle/Merkle.h>
@@ -18,6 +19,7 @@
 #include <bcos-utilities/ITTAPI.h>
 #include <fmt/format.h>
 #include <ittnotify.h>
+#include <oneapi/tbb/combinable.h>
 #include <oneapi/tbb/parallel_invoke.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -42,8 +44,8 @@ class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
     MultiLayerStorage& m_multiLayerStorage;
-    Executor& m_executor;
     SchedulerImpl& m_schedulerImpl;
+    Executor& m_executor;
     protocol::BlockHeaderFactory& m_blockHeaderFactory;
     Ledger& m_ledger;
     txpool::TxPoolInterface& m_txpool;
@@ -59,7 +61,7 @@ private:
     std::mutex m_commitMutex;
 
     tbb::task_group m_notifyGroup;
-    tbb::task_group m_transactionMerkleGroup;
+    tbb::task_group m_transactionRootGroup;
 
     struct ExecuteResult
     {
@@ -90,11 +92,65 @@ private:
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
     }
 
-    task::Task<bcos::h256> finish(
-        protocol::BlockHeader const& blockHeader, crypto::Hash const& hashImpl)
+    task::Task<void> writeBlockAndTransactions(auto& storage,
+        concepts::ledger::IsLedger auto& ledger, protocol::Block& block,
+        std::vector<protocol::Transaction::ConstPtr> const& transactions)
     {
-        auto& mutableStorage = m_multiLayerStorage.mutableStorage();
-        auto it = co_await mutableStorage.seek(storage2::STORAGE_BEGIN);
+        if (block.blockHeaderConst()->number() != 0)
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+
+            co_await ledger.template setBlock<concepts::ledger::HEADER,
+                concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
+                concepts::ledger::NONCES>(storage, block);
+
+            std::vector<bcos::h256> hashes(RANGES::size(transactions));
+            std::vector<std::vector<bcos::byte>> buffers(RANGES::size(transactions));
+            tbb::parallel_for(
+                tbb::blocked_range(0LU, RANGES::size(transactions)), [&](auto const& range) {
+                    for (auto i = range.begin(); i != range.end(); ++i)
+                    {
+                        auto& transaction = transactions[i];
+                        hashes[i] = transaction->hash();
+                        bcos::concepts::serialize::encode(*transaction, buffers[i]);
+                    }
+                });
+
+            co_await ledger.template setTransactions<true>(
+                storage, std::move(hashes), std::move(buffers));
+        }
+    }
+
+    bcos::h256 calcauteTransactionRoot(protocol::Block const& block)
+    {
+        auto hasher = m_hashImpl.hasher();
+        bcos::crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
+            hasher.clone());
+        std::vector<bcos::h256> merkleTrie;
+        if (block.transactionsSize() > 0)
+        {
+            auto hashes = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsSize()) |
+                          RANGES::views::transform([&block](uint64_t index) {
+                              return block.transaction(index)->hash();
+                          });
+            merkle.generateMerkle(hashes, merkleTrie);
+        }
+        else
+        {
+            auto hashes = RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
+                          RANGES::views::transform(
+                              [&block](uint64_t index) { return block.transactionHash(index); });
+            merkle.generateMerkle(hashes, merkleTrie);
+        }
+        // TODO: write merkle into storage
+        return *RANGES::rbegin(merkleTrie);
+    }
+
+    task::Task<bcos::h256> calcauteStateRoot(
+        auto& storage, protocol::BlockHeader const& blockHeader, crypto::Hash const& hashImpl)
+    {
+        auto it = co_await storage.seek(storage2::STORAGE_BEGIN);
 
         static constexpr int HASH_CHUNK_SIZE = 32;
         auto range = it.range() | RANGES::views::chunk(HASH_CHUNK_SIZE);
@@ -133,35 +189,39 @@ private:
             [](const bcos::h256& lhs, const bcos::h256& rhs) -> bcos::h256 { return lhs ^ rhs; });
     }
 
-    void finishExecute(RANGES::range auto const& receipts, protocol::BlockHeader const& blockHeader,
-        protocol::BlockHeader& newBlockHeader, protocol::Block& block)
+    void finishExecute(auto& storage, RANGES::range auto const& receipts,
+        protocol::BlockHeader const& blockHeader, protocol::BlockHeader& newBlockHeader,
+        protocol::Block& newBlock)
     {
         ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
 
         tbb::parallel_invoke(
             [&]() {
+                // Append receipts
                 bcos::u256 totalGas = 0;
                 for (auto&& [receipt, index] :
                     RANGES::views::zip(receipts, RANGES::views::iota(0UL)))
                 {
                     totalGas += receipt->gasUsed();
-                    if (index < block.receiptsSize())
+                    if (index < newBlock.receiptsSize())
                     {
-                        block.setReceipt(index, receipt);
+                        newBlock.setReceipt(index, receipt);
                     }
                     else
                     {
-                        block.appendReceipt(receipt);
+                        newBlock.appendReceipt(receipt);
                     }
                 }
                 newBlockHeader.setGasUsed(totalGas);
             },
             [&]() {
+                // Calcaute state root
                 newBlockHeader.setStateRoot(
-                    task::syncWait(m_schedulerImpl.finish(blockHeader, m_hashImpl)));
+                    task::syncWait(calcauteStateRoot(storage, blockHeader, m_hashImpl)));
             },
             [&]() {
+                // Calcaute receipts root
                 bcos::crypto::merkle::Merkle merkle(m_hashImpl.hasher());
                 auto hashesRange = receipts | RANGES::views::transform([](const auto& receipt) {
                     return receipt->hash();
@@ -219,34 +279,10 @@ private:
             // start calucate transaction root
             std::promise<bcos::h256> transactionRootPromise;
             auto transactionRootFuture = transactionRootPromise.get_future();
-            m_transactionMerkleGroup.run([&]() {
-                auto hasher = m_hashImpl.hasher();
-
+            m_transactionRootGroup.run([&]() {
                 try
                 {
-                    bcos::crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
-                        hasher.clone());
-                    std::vector<bcos::h256> merkleTrie;
-                    if (block->transactionsSize() > 0)
-                    {
-                        auto hashes =
-                            RANGES::iota_view<size_t, size_t>(0LU, block->transactionsSize()) |
-                            RANGES::views::transform([&block](uint64_t index) {
-                                return block->transaction(index)->hash();
-                            });
-                        merkle.generateMerkle(hashes, merkleTrie);
-                    }
-                    else
-                    {
-                        auto hashes = RANGES::iota_view<size_t, size_t>(
-                                          0LU, block->transactionsMetaDataSize()) |
-                                      RANGES::views::transform([&block](uint64_t index) {
-                                          return block->transactionHash(index);
-                                      });
-                        merkle.generateMerkle(hashes, merkleTrie);
-                    }
-                    // TODO: write merkle into storage
-                    transactionRootPromise.set_value(*RANGES::rbegin(merkleTrie));
+                    transactionRootPromise.set_value(calcauteTransactionRoot(*block));
                 }
                 catch (...)
                 {
@@ -255,7 +291,7 @@ private:
             });
 
             m_multiLayerStorage.newMutable();
-            auto view = m_multiLayerStorage.fork();
+            auto view = m_multiLayerStorage.fork(true);
             auto transactions = co_await getTransactions(*block);
             auto receipts = co_await execute(m_schedulerImpl, view, m_executor, *blockHeader,
                 transactions |
@@ -264,7 +300,8 @@ private:
                             -> protocol::Transaction const& { return *transactionPtr; }));
 
             auto newBlockHeader = m_blockHeaderFactory.populateBlockHeader(blockHeader);
-            finishExecute(receipts, *blockHeader, *newBlockHeader, *block);
+            finishExecute(m_multiLayerStorage.mutableStorage(), receipts, *blockHeader,
+                *newBlockHeader, *block);
             newBlockHeader->setTxsRoot(transactionRootFuture.get());
             newBlockHeader->calculateHash(m_hashImpl);
 
@@ -349,7 +386,10 @@ private:
             resultsLock.unlock();
 
             result.m_block->setBlockHeader(header);
-            co_await commit(m_schedulerImpl, m_ledger, *(result.m_block), result.m_transactions);
+            auto lastStorage = m_multiLayerStorage.lastImmutableStorage();
+            co_await writeBlockAndTransactions(
+                *lastStorage, m_ledger, *(result.m_block), result.m_transactions);
+            co_await m_multiLayerStorage.mergeAndPopImmutableBack();
 
             // Write states
             auto ledgerConfig =
@@ -412,11 +452,14 @@ private:
     }
 
 public:
-    BaselineScheduler(SchedulerImpl& schedulerImpl, protocol::BlockHeaderFactory& blockFactory,
-        Ledger& ledger, txpool::TxPoolInterface& txPool,
+    BaselineScheduler(MultiLayerStorage& multiLayerStorage, SchedulerImpl& schedulerImpl,
+        Executor& executor, protocol::BlockHeaderFactory& blockFactory, Ledger& ledger,
+        txpool::TxPoolInterface& txPool,
         protocol::TransactionSubmitResultFactory& transactionSubmitResultFactory,
         crypto::Hash const& hashImpl)
-      : m_schedulerImpl(schedulerImpl),
+      : m_multiLayerStorage(multiLayerStorage),
+        m_schedulerImpl(schedulerImpl),
+        m_executor(executor),
         m_blockHeaderFactory(blockFactory),
         m_ledger(ledger),
         m_txpool(txPool),
@@ -463,7 +506,10 @@ public:
             // TODO: Use real block number and storage block header version
             auto blockHeader = self->m_blockHeaderFactory.createBlockHeader();
             blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_3_VERSION);
-            auto receipt = co_await self->m_schedulerImpl.call(*blockHeader, *transaction);
+            auto view = self->m_multiLayerStorage.fork(false);
+            view.newTemporaryMutable();
+            auto receipt = co_await transaction_executor::execute(
+                self->m_executor, view, *blockHeader, *transaction, 0);
 
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));

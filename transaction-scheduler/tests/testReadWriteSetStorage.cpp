@@ -1,4 +1,6 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/storage2/StorageMethods.h"
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
@@ -24,10 +26,10 @@ BOOST_AUTO_TEST_CASE(readWriteSet)
 {
     task::syncWait([]() -> task::Task<void> {
         Storage lhsStorage;
-        ReadWriteSetStorage firstStorage(lhsStorage);
+        ReadWriteSetStorage<decltype(lhsStorage), int> firstStorage(lhsStorage);
 
         Storage rhsStorage;
-        ReadWriteSetStorage secondStorage(rhsStorage);
+        ReadWriteSetStorage<decltype(rhsStorage), int> secondStorage(rhsStorage);
 
         co_await storage2::writeOne(firstStorage, 100, 1);
         co_await storage2::writeOne(firstStorage, 200, 1);
