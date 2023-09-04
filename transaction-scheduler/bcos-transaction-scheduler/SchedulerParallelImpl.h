@@ -30,7 +30,6 @@ namespace bcos::transaction_scheduler
 
 class SchedulerParallelImpl
 {
-private:
     using ChunkStorage = storage2::memory_storage::MemoryStorage<transaction_executor::StateKey,
         transaction_executor::StateValue,
         storage2::memory_storage::Attribute(
@@ -106,6 +105,10 @@ public:
     SchedulerParallelImpl() : m_asyncTaskGroup(std::make_unique<tbb::task_group>()) {}
     ~SchedulerParallelImpl() noexcept { m_asyncTaskGroup->wait(); }
 
+    void setChunkSize(size_t chunkSize) { m_chunkSize = chunkSize; }
+    void setMaxToken(size_t maxToken) { m_maxToken = maxToken; }
+
+private:
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         tag_t<execute> /*unused*/, SchedulerParallelImpl& scheduler, auto& storage, auto& executor,
         protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
@@ -225,8 +228,5 @@ public:
 
         co_return receipts;
     }
-
-    void setChunkSize(size_t chunkSize) { m_chunkSize = chunkSize; }
-    void setMaxToken(size_t maxToken) { m_maxToken = maxToken; }
 };
 }  // namespace bcos::transaction_scheduler

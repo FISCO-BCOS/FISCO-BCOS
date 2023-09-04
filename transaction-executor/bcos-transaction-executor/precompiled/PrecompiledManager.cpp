@@ -1,7 +1,27 @@
 #include "PrecompiledManager.h"
+#include "bcos-executor/src/precompiled/BFSPrecompiled.h"
+#include "bcos-executor/src/precompiled/CastPrecompiled.h"
+#include "bcos-executor/src/precompiled/ConsensusPrecompiled.h"
+#include "bcos-executor/src/precompiled/CryptoPrecompiled.h"
+#include "bcos-executor/src/precompiled/KVTablePrecompiled.h"
+#include "bcos-executor/src/precompiled/ShardingPrecompiled.h"
+#include "bcos-executor/src/precompiled/SystemConfigPrecompiled.h"
+#include "bcos-executor/src/precompiled/TableManagerPrecompiled.h"
+#include "bcos-executor/src/precompiled/TablePrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/AuthManagerPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/ContractAuthMgrPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/DagTransferPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/GroupSigPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/PaillierPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/RingSigPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/ZkpPrecompiled.h"
 #include <memory>
 
-bcos::transaction_executor::PrecompiledManager::PrecompiledManager()
+
+bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hashImpl)
+  : m_hashImpl(std::move(hashImpl))
 {
     m_address2Precompiled.emplace_back(
         1, executor::PrecompiledContract(
@@ -29,6 +49,43 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager()
     m_address2Precompiled.emplace_back(9,
         executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("blake2_compression"),
             executor::PrecompiledRegistrar::executor("blake2_compression")));
+
+    m_address2Precompiled.emplace_back(
+        0x1000, std::make_shared<precompiled::SystemConfigPrecompiled>());
+    m_address2Precompiled.emplace_back(
+        0x1003, std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x1002, std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x1009, std::make_shared<precompiled::KVTablePrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x1001, std::make_shared<precompiled::TablePrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x100c, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x100a, std::make_shared<precompiled::CryptoPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x100e, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x5003, std::make_shared<precompiled::PaillierPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x5004, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x5005, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x5100, std::make_shared<precompiled::ZkpPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x1005, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, false));
+    m_address2Precompiled.emplace_back(
+        0x10002, std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, false));
+    m_address2Precompiled.emplace_back(
+        0x1010, std::make_shared<precompiled::ShardingPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x100f, std::make_shared<precompiled::CastPrecompiled>(GlobalHashImpl::g_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x10003, std::make_shared<precompiled::AccountManagerPrecompiled>());
+    m_address2Precompiled.emplace_back(
+        0x10004, std::make_shared<precompiled::AccountPrecompiled>());
 
     std::sort(m_address2Precompiled.begin(), m_address2Precompiled.end(),
         [](const auto& lhs, const auto& rhs) { return std::get<0>(lhs) < std::get<0>(rhs); });

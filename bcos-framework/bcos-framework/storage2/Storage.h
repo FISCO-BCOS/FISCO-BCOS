@@ -102,6 +102,7 @@ struct Merge
 /******************************************************************/
 // Basic methods without default implementation
 /******************************************************************/
+
 inline constexpr ReadSome readSome{};
 inline constexpr WriteSome writeSome{};
 inline constexpr RemoveSome removeSome{};
@@ -109,6 +110,7 @@ inline constexpr RemoveSome removeSome{};
 /******************************************************************/
 // Advance methods with default implementation, depends on basic methods
 /******************************************************************/
+
 inline constexpr ReadOne readOne{};
 inline constexpr WriteOne writeOne{};
 inline constexpr RemoveOne removeOne{};

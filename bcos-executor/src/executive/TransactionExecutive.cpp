@@ -284,7 +284,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
 CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     CallParameters::UniquePtr callParameters)
 {
-    auto precompiledCallParams = std::make_shared<PrecompiledExecResult>(callParameters);
+    auto precompiledCallParams = std::make_shared<PrecompiledExecResult>(*callParameters);
     bytes data{};
     if (callParameters->internalCall)
     {

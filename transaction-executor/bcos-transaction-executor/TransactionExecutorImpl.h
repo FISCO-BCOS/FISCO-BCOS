@@ -29,16 +29,16 @@ struct InvalidArgumentsError: public bcos::Error {};
 template <class PrecompiledManager>
 class TransactionExecutorImpl
 {
-private:
-    VMFactory m_vmFactory;
-    protocol::TransactionReceiptFactory const& m_receiptFactory;
-    PrecompiledManager const& m_precompiledManager;
-
 public:
     TransactionExecutorImpl(protocol::TransactionReceiptFactory const& receiptFactory,
         PrecompiledManager const& precompiledManager)
       : m_receiptFactory(receiptFactory), m_precompiledManager(precompiledManager)
     {}
+
+private:
+    VMFactory m_vmFactory;
+    protocol::TransactionReceiptFactory const& m_receiptFactory;
+    PrecompiledManager const& m_precompiledManager;
 
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(tag_t<execute> /*unused*/,
         TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,

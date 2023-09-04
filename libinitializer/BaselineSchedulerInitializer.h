@@ -50,8 +50,8 @@ private:
     bcos::ledger::LedgerImpl2<decltype(m_rocksDBStorage)> m_ledger;
 
     MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)> m_multiLayerStorage;
-    transaction_executor::PrecompiledManager m_precompiledManager;
-    transaction_executor::TransactionExecutorImpl<transaction_executor::PrecompiledManager>
+    transaction_executor::PrecompiledExecutor m_precompiledManager;
+    transaction_executor::TransactionExecutorImpl<transaction_executor::PrecompiledExecutor>
         m_transactionExecutor;
     std::conditional_t<enableParallel, SchedulerParallelImpl, SchedulerSerialImpl> m_scheduler;
 
