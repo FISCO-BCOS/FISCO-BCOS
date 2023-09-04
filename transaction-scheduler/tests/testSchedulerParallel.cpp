@@ -1,4 +1,6 @@
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
@@ -9,28 +11,18 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <mutex>
-#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-class Precompiled;
-struct MockPrecompiledManager
-{
-    Precompiled const* getPrecompiled(unsigned long contractAddress) const { return nullptr; }
-};
-
-template <class Storage, class PrecompiledManager>
 struct MockExecutor
 {
-    MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
-        [[maybe_unused]] PrecompiledManager const& precompiledManager)
-    {}
-
-    task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(
-        auto&& blockHeader, auto&& transaction, [[maybe_unused]] int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID)
     {
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
@@ -64,11 +56,9 @@ BOOST_FIXTURE_TEST_SUITE(TestSchedulerParallel, TestSchedulerParallelFixture)
 BOOST_AUTO_TEST_CASE(simple)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        MockPrecompiledManager percompiledManager;
-        SchedulerParallelImpl<decltype(multiLayerStorage), MockExecutor, MockPrecompiledManager>
-            scheduler(multiLayerStorage, receiptFactory, percompiledManager);
+        MockExecutor executor;
+        SchedulerParallelImpl scheduler;
 
-        scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         auto transactions =
@@ -78,10 +68,12 @@ BOOST_AUTO_TEST_CASE(simple)
             }) |
             RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-        auto receipts = co_await scheduler.execute(blockHeader,
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
-        co_await scheduler.finish(blockHeader, *hashImpl);
-        co_await scheduler.commit();
+        multiLayerStorage.newMutable();
+        auto view = multiLayerStorage.fork(true);
+        auto receipts =
+            co_await bcos::transaction_scheduler::execute(scheduler, view, executor, blockHeader,
+                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
+        BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;
     }());
@@ -89,16 +81,12 @@ BOOST_AUTO_TEST_CASE(simple)
 }
 
 constexpr static size_t MOCK_USER_COUNT = 1000;
-template <StateStorage Storage, class PrecompiledManager>
 struct MockConflictExecutor
 {
-    MockConflictExecutor(Storage& storage, [[maybe_unused]] auto&& receiptFactory,
-        [[maybe_unused]] PrecompiledManager const& percompiledManager)
-      : m_storage(storage)
-    {}
-
-    task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(auto&& blockHeader,
-        protocol::Transaction const& transaction, [[maybe_unused]] int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        MockConflictExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID)
     {
         auto input = transaction.input();
         auto inputNum =
@@ -109,35 +97,31 @@ struct MockConflictExecutor
 
         // Read fromKey and -1
         StateKey fromKey{"t_test", fromAddress};
-        auto fromEntry = co_await storage2::readOne(m_storage, fromKey);
+        auto fromEntry = co_await storage2::readOne(storage, fromKey);
         fromEntry->set(
             boost::lexical_cast<std::string>(boost::lexical_cast<int>(fromEntry->get()) - 1));
-        co_await storage2::writeOne(m_storage, fromKey, *fromEntry);
+        co_await storage2::writeOne(storage, fromKey, *fromEntry);
 
         // Read toKey and +1
         StateKey toKey{"t_test", toAddress};
-        auto toEntry = co_await storage2::readOne(m_storage, toKey);
+        auto toEntry = co_await storage2::readOne(storage, toKey);
         toEntry->set(
             boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
-        co_await storage2::writeOne(m_storage, toKey, *toEntry);
+        co_await storage2::writeOne(storage, toKey, *toEntry);
 
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
-
-    Storage& m_storage;
 };
 
 BOOST_AUTO_TEST_CASE(conflict)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        MockPrecompiledManager percompiledManager;
-        SchedulerParallelImpl<decltype(multiLayerStorage), MockConflictExecutor,
-            MockPrecompiledManager>
-            scheduler(multiLayerStorage, receiptFactory, percompiledManager);
+        MockConflictExecutor executor;
+        SchedulerParallelImpl scheduler;
         scheduler.setChunkSize(1);
         scheduler.setMaxToken(std::thread::hardware_concurrency());
-        scheduler.start();
 
+        multiLayerStorage.newMutable();
         constexpr static int INITIAL_VALUE = 100000;
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {
@@ -163,7 +147,9 @@ BOOST_AUTO_TEST_CASE(conflict)
 
         auto transactionRefs =
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; });
-        auto receipts = co_await scheduler.execute(blockHeader, transactionRefs);
+        auto view = multiLayerStorage.fork(true);
+        auto receipts = co_await bcos::transaction_scheduler::execute(
+            scheduler, view, executor, blockHeader, transactionRefs);
 
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {

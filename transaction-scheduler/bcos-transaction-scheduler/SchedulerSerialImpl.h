@@ -1,28 +1,22 @@
 #pragma once
 
-#include "SchedulerBaseImpl.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 
 namespace bcos::transaction_scheduler
 {
 
 #define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
 
-template <class MultiLayerStorage, template <typename, typename> class Executor,
-    class PrecompiledManager>
 class SchedulerSerialImpl
-  : public SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>
 {
 public:
-    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::SchedulerBaseImpl;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::multiLayerStorage;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::receiptFactory;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::precompiledManager;
-
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
+    friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
+        tag_t<execute> /*unused*/, SchedulerSerialImpl& /*unused*/, auto& storage, auto& executor,
         protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
     {
-        auto view = multiLayerStorage().fork(true);
+        auto& view = storage;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)
         {
@@ -30,11 +24,10 @@ public:
         }
 
         int contextID = 0;
-        Executor<decltype(view), PrecompiledManager> executor(
-            view, receiptFactory(), precompiledManager());
         for (auto const& transaction : transactions)
         {
-            receipts.emplace_back(co_await executor.execute(blockHeader, transaction, contextID++));
+            receipts.emplace_back(co_await transaction_executor::execute(
+                executor, view, blockHeader, transaction, contextID++));
         }
 
         co_return receipts;

@@ -9,7 +9,7 @@
 namespace bcos::transaction_scheduler
 {
 
-template <transaction_executor::StateStorage Storage>
+template <class Storage, class KeyType>
 class ReadWriteSetStorage
 {
 private:
@@ -19,7 +19,7 @@ private:
         bool read = false;
         bool write = false;
     };
-    std::unordered_map<typename Storage::Key, ReadWriteFlag> m_readWriteSet;
+    std::unordered_map<KeyType, ReadWriteFlag> m_readWriteSet;
 
     void putSet(bool write, auto const& key)
     {
@@ -33,8 +33,10 @@ private:
     }
 
 public:
-    using Key = typename Storage::Key;
-    using Value = typename Storage::Value;
+    using Key = KeyType;
+    using Value = typename task::AwaitableReturnType<decltype(storage2::readOne(
+        m_storage, std::declval<KeyType>()))>::value_type;
+
     ReadWriteSetStorage(Storage& storage) : m_storage(storage) {}
 
     auto& readWriteSet() { return m_readWriteSet; }

@@ -17,7 +17,7 @@ concept HasReadDirectly =
             std::declval<std::vector<typename Storage::Key>>(), true))>>;
     };
 
-template <StateStorage Storage>
+template <class Storage>
 class Rollbackable
 {
 private:

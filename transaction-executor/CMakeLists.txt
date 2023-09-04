@@ -9,6 +9,7 @@ find_package(fmt REQUIRED)
 add_library(transaction-executor
     bcos-transaction-executor/TransactionExecutorImpl.cpp
     bcos-transaction-executor/precompiled/PrecompiledManager.cpp
+    bcos-transaction-executor/precompiled/Precompiled.cpp
     bcos-transaction-executor/vm/VMInstance.cpp
 )
 target_include_directories(transaction-executor PUBLIC

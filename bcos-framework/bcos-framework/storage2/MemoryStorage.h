@@ -56,8 +56,6 @@ private:
 
     constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
-    constexpr static int MOSTLY_CACHELINE_SIZE = 64;
-
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 4 * 1024 * 1024;  // For mru
@@ -79,7 +77,7 @@ private:
         boost::multi_index_container<Data,
             boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
-    struct alignas(MOSTLY_CACHELINE_SIZE) Bucket
+    struct Bucket
     {
         Container container;
         [[no_unique_address]] BucketMutex mutex;  // For concurrent
@@ -150,19 +148,12 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MemoryStorage()
-        requires(!withConcurrent)
-    {
-        if constexpr (withMRU)
-        {
-            m_maxCapacity = DEFAULT_CAPACITY;
-        }
-    }
-
     explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT)
-        requires(withConcurrent)
-      : m_buckets(std::min(buckets, getBucketSize()))
     {
+        if constexpr (withConcurrent)
+        {
+            m_buckets = decltype(m_buckets)(std::min(buckets, getBucketSize()));
+        }
         if constexpr (withMRU)
         {
             m_maxCapacity = DEFAULT_CAPACITY;

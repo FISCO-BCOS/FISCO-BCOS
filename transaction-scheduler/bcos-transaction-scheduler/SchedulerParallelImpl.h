@@ -2,11 +2,14 @@
 
 #include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
-#include "SchedulerBaseImpl.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-utilities/Exceptions.h"
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/ITTAPI.h>
@@ -18,7 +21,6 @@
 #include <cstddef>
 #include <iterator>
 #include <limits>
-#include <range/v3/view/transform.hpp>
 #include <stdexcept>
 
 namespace bcos::transaction_scheduler
@@ -26,23 +28,19 @@ namespace bcos::transaction_scheduler
 
 #define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
 
-template <class MultiLayerStorage, template <typename, typename> class Executor,
-    class PrecompiledManager>
 class SchedulerParallelImpl
-  : public SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>
 {
 private:
+    using ChunkStorage = storage2::memory_storage::MemoryStorage<transaction_executor::StateKey,
+        transaction_executor::StateValue,
+        storage2::memory_storage::Attribute(
+            storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION)>;
     std::unique_ptr<tbb::task_group> m_asyncTaskGroup;
-    using ChunkLocalStorage =
-        transaction_scheduler::MultiLayerStorage<typename MultiLayerStorage::MutableStorage, void,
-            decltype(std::declval<MultiLayerStorage>().fork(true))>;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::multiLayerStorage;
     constexpr static size_t MIN_CHUNK_SIZE = 32;
-
     size_t m_chunkSize = MIN_CHUNK_SIZE;
     size_t m_maxToken = 0;
 
-    template <class Range>
+    template <class Storage, class Executor, class Range>
     class ChunkStatus
     {
     private:
@@ -56,34 +54,34 @@ private:
         int64_t m_chunkIndex = 0;
         std::atomic_int64_t* m_lastChunkIndex = nullptr;
         Range m_transactionAndReceiptsRange;
-        ChunkLocalStorage m_localStorage;
-        decltype(std::declval<ChunkLocalStorage>().fork(true)) m_localStorageView;
-        ReadWriteSetStorage<decltype(m_localStorageView)> m_readWriteSetStorage;
+        Executor& m_executor;
+        MultiLayerStorage<ChunkStorage, void, Storage> m_localStorage;
+        decltype(m_localStorage.fork(true)) m_localStorageView;
+        ReadWriteSetStorage<decltype(m_localStorageView), transaction_executor::StateKey>
+            m_localReadWriteSetStorage;
 
     public:
         ChunkStatus(int64_t chunkIndex, std::atomic_int64_t& lastChunkIndex,
-            Range transactionAndReceiptsRange, auto& storage)
+            Range transactionAndReceiptsRange, Executor& executor, auto& storage)
           : m_chunkIndex(chunkIndex),
             m_lastChunkIndex(std::addressof(lastChunkIndex)),
             m_transactionAndReceiptsRange(transactionAndReceiptsRange),
+            m_executor(executor),
             m_localStorage(storage),
             m_localStorageView(forkAndMutable(m_localStorage)),
-            m_readWriteSetStorage(m_localStorageView)
+            m_localReadWriteSetStorage(m_localStorageView)
         {}
 
         int64_t chunkIndex() { return m_chunkIndex; }
         auto count() { return RANGES::size(m_transactionAndReceiptsRange); }
-        ChunkLocalStorage& localStorage() & { return m_localStorage; }
-        auto& readWriteSetStorage() & { return m_readWriteSetStorage; }
+        decltype(m_localStorage)& localStorage() & { return m_localStorage; }
+        auto& readWriteSetStorage() & { return m_localReadWriteSetStorage; }
 
-        task::Task<void> execute(protocol::BlockHeader const& blockHeader, auto& receiptFactory,
-            PrecompiledManager const& precompiledManager)
+        task::Task<void> execute(protocol::BlockHeader const& blockHeader)
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
-            Executor<decltype(m_readWriteSetStorage), PrecompiledManager> executor(
-                m_readWriteSetStorage, receiptFactory, precompiledManager);
             for (auto&& [contextID, transaction, receipt] : m_transactionAndReceiptsRange)
             {
                 if (m_chunkIndex >= *m_lastChunkIndex)
@@ -91,7 +89,8 @@ private:
                     PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute aborted";
                     co_return;
                 }
-                *receipt = co_await executor.execute(blockHeader, *transaction, contextID);
+                *receipt = co_await transaction_executor::execute(
+                    m_executor, m_localReadWriteSetStorage, blockHeader, *transaction, contextID);
             }
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";
@@ -99,28 +98,20 @@ private:
     };
 
 public:
-    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::receiptFactory;
-    using SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>::precompiledManager;
-
     SchedulerParallelImpl(const SchedulerParallelImpl&) = delete;
     SchedulerParallelImpl(SchedulerParallelImpl&&) noexcept = default;
     SchedulerParallelImpl& operator=(const SchedulerParallelImpl&) = delete;
     SchedulerParallelImpl& operator=(SchedulerParallelImpl&&) noexcept = default;
-    SchedulerParallelImpl(MultiLayerStorage& multiLayerStorage,
-        protocol::TransactionReceiptFactory& receiptFactory,
-        PrecompiledManager const& precompiledManager)
-      : SchedulerBaseImpl<MultiLayerStorage, Executor, PrecompiledManager>(
-            multiLayerStorage, receiptFactory, precompiledManager),
-        m_asyncTaskGroup(std::make_unique<tbb::task_group>())
-    {}
+
+    SchedulerParallelImpl() : m_asyncTaskGroup(std::make_unique<tbb::task_group>()) {}
     ~SchedulerParallelImpl() noexcept { m_asyncTaskGroup->wait(); }
 
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
+    friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
+        tag_t<execute> /*unused*/, SchedulerParallelImpl& scheduler, auto& storage, auto& executor,
         protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
-        auto storageView = multiLayerStorage().fork(true);
         std::vector<protocol::TransactionReceipt::Ptr> receipts(RANGES::size(transactions));
 
         size_t offset = 0;
@@ -138,15 +129,18 @@ public:
                 });
             std::atomic_int64_t lastChunkIndex{std::numeric_limits<int64_t>::max()};
             int64_t chunkIndex = 0;
-            typename MultiLayerStorage::MutableStorage lastStorage;
-            ReadWriteSetStorage<typename MultiLayerStorage::MutableStorage> writeSet(lastStorage);
-            auto chunks = currentTransactionAndReceipts | RANGES::views::chunk(m_chunkSize);
-            using Chunk = ChunkStatus<RANGES::range_value_t<decltype(chunks)>>;
+            ReadWriteSetStorage<decltype(storage), transaction_executor::StateKey> writeSet(
+                storage);
+            auto chunks =
+                currentTransactionAndReceipts | RANGES::views::chunk(scheduler.m_chunkSize);
+            using Chunk = SchedulerParallelImpl::ChunkStatus<std::decay_t<decltype(storage)>,
+                std::decay_t<decltype(executor)>, RANGES::range_value_t<decltype(chunks)>>;
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing... " << offset << " | "
                                           << RANGES::size(currentTransactionAndReceipts);
-            tbb::parallel_pipeline(
-                m_maxToken == 0 ? std::thread::hardware_concurrency() : m_maxToken,
+            ChunkStorage lastStorage;
+            tbb::parallel_pipeline(scheduler.m_maxToken == 0 ? std::thread::hardware_concurrency() :
+                                                               scheduler.m_maxToken,
                 tbb::make_filter<void, std::unique_ptr<Chunk>>(tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control) -> std::unique_ptr<Chunk> {
                         if (chunkIndex >= RANGES::size(chunks))
@@ -156,7 +150,7 @@ public:
                         }
                         PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk: " << chunkIndex;
                         auto chunk = std::make_unique<Chunk>(
-                            chunkIndex, lastChunkIndex, chunks[chunkIndex], storageView);
+                            chunkIndex, lastChunkIndex, chunks[chunkIndex], executor, storage);
                         ++chunkIndex;
                         return chunk;
                     }) &
@@ -168,8 +162,7 @@ public:
                             {
                                 return chunk;
                             }
-                            task::syncWait(chunk->execute(
-                                blockHeader, receiptFactory(), precompiledManager()));
+                            task::syncWait(chunk->execute(blockHeader));
 
                             return chunk;
                         }) &
@@ -191,7 +184,8 @@ public:
                                     PARALLEL_SCHEDULER_LOG(DEBUG)
                                         << "Detected RAW Intersection:" << index;
                                     lastChunkIndex = index;
-                                    m_asyncTaskGroup->run([chunk = std::move(chunk)]() {});
+                                    scheduler.m_asyncTaskGroup->run(
+                                        [chunk = std::move(chunk)]() {});
                                     return;
                                 }
                             }
@@ -213,31 +207,21 @@ public:
                                     task::syncWait(storage2::merge(
                                         chunk->localStorage().mutableStorage(), lastStorage));
                                 });
-                            m_asyncTaskGroup->run([chunk = std::move(chunk)]() {});
+                            scheduler.m_asyncTaskGroup->run([chunk = std::move(chunk)]() {});
                         }));
 
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_LAST_CHUNK);
-            if (storageView.mutableStorage().empty())
-            {
-                PARALLEL_SCHEDULER_LOG(DEBUG) << "Final swap lastStorage";
-                storageView.mutableStorage().swap(lastStorage);
-            }
-            else
-            {
-                PARALLEL_SCHEDULER_LOG(DEBUG) << "Final merge lastStorage";
-                co_await storage2::merge(lastStorage, storageView.mutableStorage());
-            }
+            PARALLEL_SCHEDULER_LOG(DEBUG) << "Final merge lastStorage";
+            co_await storage2::merge(lastStorage, storage);
 
-            m_asyncTaskGroup->run(
+            scheduler.m_asyncTaskGroup->run(
                 [lastStorage = std::move(lastStorage), readWriteSet = std::move(writeSet)]() {});
             ++retryCount;
         }
 
         PARALLEL_SCHEDULER_LOG(INFO)
             << "Parallel scheduler execute finished, retry counts: " << retryCount;
-        storageView.release();
-        m_asyncTaskGroup->run([storageView = std::move(storageView)]() {});
 
         co_return receipts;
     }

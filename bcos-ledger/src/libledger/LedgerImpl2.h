@@ -16,7 +16,7 @@ namespace bcos::ledger
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
 
-template <bcos::transaction_executor::StateStorage Storage>
+template <class Storage>
 class LedgerImpl2
 {
 private:

@@ -28,7 +28,7 @@ struct Fixture
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         m_receiptFactory(m_cryptoSuite),
-        executor(backendStorage, m_receiptFactory, m_precompiledManager),
+        m_executor(m_receiptFactory, m_precompiledManager),
         blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
@@ -45,7 +45,8 @@ struct Fixture
                 [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             createTransaction.mutableInner().data.input.assign(
                 m_helloworldBytecodeBinary.begin(), m_helloworldBytecodeBinary.end());
-            auto receipt = co_await executor.execute(blockHeader, createTransaction, 0);
+            auto receipt = co_await bcos::transaction_executor::execute(
+                m_executor, m_backendStorage, blockHeader, createTransaction, 0);
             contractAddress = receipt->contractAddress();
         }());
 
@@ -53,11 +54,10 @@ struct Fixture
     }
 
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-    MutableStorage backendStorage;
+    MutableStorage m_backendStorage;
     ReceiptFactory m_receiptFactory;
     PrecompiledManager m_precompiledManager;
-    bcos::transaction_executor::TransactionExecutorImpl<MutableStorage, PrecompiledManager>
-        executor;
+    bcos::transaction_executor::TransactionExecutorImpl<PrecompiledManager> m_executor;
     bcos::bytes m_helloworldBytecodeBinary;
 
     bcostars::BlockHeader tarsBlockHeader;
@@ -81,7 +81,8 @@ static void create(benchmark::State& state)
         {
             ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction, contextID);
+                co_await bcos::transaction_executor::execute(fixture.m_executor,
+                    fixture.m_backendStorage, fixture.blockHeader, transaction, contextID);
         }
     }(state, transaction));
 }
@@ -108,7 +109,8 @@ static void call_setInt(benchmark::State& state)
 
             ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction, contextID);
+                co_await bcos::transaction_executor::execute(fixture.m_executor,
+                    fixture.m_backendStorage, fixture.blockHeader, transaction, contextID);
         }
     }(state));
 }
@@ -135,7 +137,8 @@ static void call_setString(benchmark::State& state)
             transaction.mutableInner().dataHash.resize(1);
             ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction, contextID);
+                co_await bcos::transaction_executor::execute(fixture.m_executor,
+                    fixture.m_backendStorage, fixture.blockHeader, transaction, contextID);
         }
     }(state));
 }
@@ -160,7 +163,8 @@ static void call_delegateCall(benchmark::State& state)
         {
             ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction1, contextID);
+                co_await bcos::transaction_executor::execute(fixture.m_executor,
+                    fixture.m_backendStorage, fixture.blockHeader, transaction1, contextID);
         }
     }(state));
 }
@@ -185,7 +189,8 @@ static void call_deployAndCall(benchmark::State& state)
         {
             ++contextID;
             [[maybe_unused]] auto receipt =
-                co_await fixture.executor.execute(fixture.blockHeader, transaction1, contextID);
+                co_await bcos::transaction_executor::execute(fixture.m_executor,
+                    fixture.m_backendStorage, fixture.blockHeader, transaction1, contextID);
         }
     }(state));
 }

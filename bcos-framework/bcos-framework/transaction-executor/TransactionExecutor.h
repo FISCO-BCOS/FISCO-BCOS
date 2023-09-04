@@ -46,23 +46,20 @@ using StateKeyView = std::tuple<std::string_view, std::string_view>;
 using StateKey = std::tuple<SmallString, SmallString>;
 using StateValue = storage::Entry;
 
-template <class StorageType>
-concept StateStorage = requires() {
-                           requires storage2::ReadableStorage<StorageType>;
-                           requires storage2::WriteableStorage<StorageType>;
-                       };
+struct Execute
+{
+    auto operator()(auto& executor, auto& storage, const protocol::BlockHeader& blockHeader,
+        const protocol::Transaction& transaction, auto&&... args) const
+        -> task::Task<protocol::TransactionReceipt::Ptr>
+    {
+        co_return co_await tag_invoke(*this, executor, storage, blockHeader, transaction,
+            std::forward<decltype(args)>(args)...);
+    }
+};
+inline constexpr Execute execute{};
 
-template <class TransactionExecutorType, class Storage, class ReceiptFactory>
-concept TransactionExecutor =
-    requires(TransactionExecutorType executor, const protocol::BlockHeader& blockHeader,
-        Storage& storage, ReceiptFactory& receiptFactory) {
-        requires StateStorage<Storage>;
-        requires protocol::IsTransactionReceiptFactory<ReceiptFactory>;
-
-        requires std::same_as<task::AwaitableReturnType<decltype(executor.execute(
-                                  blockHeader, std::declval<protocol::Transaction>(), 0))>,
-            protocol::TransactionReceipt::Ptr>;
-    };
+template <auto& Tag>
+using tag_t = std::decay_t<decltype(Tag)>;
 }  // namespace bcos::transaction_executor
 
 template <>
@@ -88,7 +85,6 @@ struct std::less<bcos::transaction_executor::StateKey>
         return leftView < rightView;
     }
 };
-
 
 template <>
 struct std::hash<bcos::transaction_executor::StateKeyView>
