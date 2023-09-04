@@ -59,8 +59,7 @@ MemoryStorage::MemoryStorage(
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
                      << LOG_KV("txsExpirationTime", m_txsExpirationTime)
-                     << LOG_KV("poolLimit", m_config->poolLimit())
-                     << LOG_KV("CPU_CORES", CPU_CORES);
+                     << LOG_KV("poolLimit", m_config->poolLimit()) << LOG_KV("cpuCores", CPU_CORES);
 }
 
 void MemoryStorage::start()
@@ -761,12 +760,13 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     if (_avoidDuplicate)
     {
         size_t eachBucketTxsLimit = 0;
-        if (_txsLimit / BUCKET_SIZE == 0 || m_txsTable.size() < _txsLimit)
+        if (_txsLimit < BUCKET_SIZE || m_txsTable.size() < _txsLimit)
         {
             eachBucketTxsLimit = _txsLimit;
         }
         else
         {
+            // After performance testing, 0.25 had the best performance.
             eachBucketTxsLimit = _txsLimit / (0.25 * CPU_CORES);
         }
         TXPOOL_LOG(TRACE) << LOG_DESC("batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())

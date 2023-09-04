@@ -32,17 +32,6 @@ public:
     MultiIndexTxContainer& operator=(const MultiIndexTxContainer&) = default;
     MultiIndexTxContainer& operator=(MultiIndexTxContainer&&) noexcept = default;
 
-    //    using Container = boost::multi_index::multi_index_container<
-    //            TransactionData,
-    //            boost::multi_index::indexed_by<
-    //                    boost::multi_index::hashed_unique<
-    //                            boost::multi_index::member<TransactionData,
-    //                            bcos::crypto::HashType, &TransactionData::txHash>>,
-    //                    boost::multi_index::ordered_non_unique<
-    //                            boost::multi_index::member<TransactionData, std::int64_t,
-    //                            &TransactionData::timeStamp>>
-    //         >>;
-
 
     using Container = boost::multi_index::multi_index_container<TransactionData,
         boost::multi_index::indexed_by<
