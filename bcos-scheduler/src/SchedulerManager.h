@@ -139,7 +139,7 @@ public:
 private:
     void updateScheduler(int64_t schedulerTermId);
     void switchTerm(int64_t schedulerSeq);
-    void selfSwitchTerm();
+    void selfSwitchTerm(bool needCheckSwitching = true);
     void asyncSelfSwitchTerm();
     void onSwitchTermNotify();
 

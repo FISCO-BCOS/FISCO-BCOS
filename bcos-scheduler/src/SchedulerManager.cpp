@@ -373,20 +373,21 @@ void SchedulerManager::switchTerm(int64_t schedulerSeq)
     }
 }
 
-void SchedulerManager::selfSwitchTerm()
+void SchedulerManager::selfSwitchTerm(bool needCheckSwitching)
 {
     if (m_status == STOPPED)
     {
         return;
     }
 
-    if (m_status == SWITCHING)
+    auto status = m_status.exchange(SWITCHING);
+
+    if (needCheckSwitching && status == SWITCHING)
     {
         // is self-switching, just return
         return;
     }
 
-    m_status.store(SWITCHING);
     try
     {
         auto newTerm = m_schedulerTerm.next();
@@ -408,7 +409,14 @@ void SchedulerManager::selfSwitchTerm()
 
 void SchedulerManager::asyncSelfSwitchTerm()
 {
-    m_pool.enqueue([this]() { selfSwitchTerm(); });
+    auto status = m_status.exchange(SWITCHING);
+    if (status == SWITCHING)
+    {
+        // already just return
+        return;
+    }
+
+    m_pool.enqueue([this]() { selfSwitchTerm(false); });
 }
 
 void SchedulerManager::onSwitchTermNotify()
