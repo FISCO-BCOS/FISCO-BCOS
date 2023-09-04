@@ -27,8 +27,12 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
+#include <thread>
 #include <tuple>
 #include <variant>
+
+#define CPU_CORES std::thread::hardware_concurrency()
+#define BUCKET_SIZE 4 * CPU_CORES
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -38,9 +42,9 @@ using namespace bcos::protocol;
 MemoryStorage::MemoryStorage(
     TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)),
-    m_txsTable(256),
-    m_invalidTxs(256),
-    m_missedTxs(32),
+    m_txsTable(BUCKET_SIZE),
+    m_invalidTxs(BUCKET_SIZE),
+    m_missedTxs(CPU_CORES),
     m_txsExpirationTime(_txsExpirationTime),
     m_inRateCollector("tx_pool_in", 1000),
     m_sealRateCollector("tx_pool_seal", 1000),
@@ -56,7 +60,7 @@ MemoryStorage::MemoryStorage(
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
                      << LOG_KV("txsExpirationTime", m_txsExpirationTime)
-                     << LOG_KV("poolLimit", m_config->poolLimit());
+                     << LOG_KV("poolLimit", m_config->poolLimit()) << LOG_KV("cpuCores", CPU_CORES);
 }
 
 void MemoryStorage::start()
@@ -756,12 +760,24 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
 
     if (_avoidDuplicate)
     {
-        m_txsTable.forEach<TxsMap::ReadAccessor>(
-            m_knownLatestSealedTxHash, [&](TxsMap::ReadAccessor::Ptr accessor) {
+        size_t eachBucketTxsLimit = 0;
+        if (_txsLimit < BUCKET_SIZE || m_txsTable.size() < _txsLimit)
+        {
+            eachBucketTxsLimit = _txsLimit;
+        }
+        else
+        {
+            // After performance testing, 0.25 had the best performance.
+            eachBucketTxsLimit = _txsLimit / (0.25 * CPU_CORES);
+        }
+        TXPOOL_LOG(TRACE) << LOG_DESC("batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
+                          << LOG_KV("limit", _txsLimit)
+                          << LOG_KV("eachBucketTxsLimit", eachBucketTxsLimit);
+        m_txsTable.forEach<TxsMap::ReadAccessor>(m_knownLatestSealedTxHash, eachBucketTxsLimit,
+            _txsLimit, [&](TxsMap::ReadAccessor::Ptr accessor) {
                 const auto& tx = accessor->value();
                 handleTx(tx);
-                return (_txsList->transactionsMetaDataSize() +
-                           _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
+                return true;
             });
     }
     else
