@@ -31,16 +31,17 @@ class TransactionReceiptFactory
 public:
     using Ptr = std::shared_ptr<TransactionReceiptFactory>;
     TransactionReceiptFactory() = default;
-    virtual ~TransactionReceiptFactory() = default;
-    virtual TransactionReceipt::Ptr createReceipt(bytesConstRef _receiptData) = 0;
-    virtual TransactionReceipt::Ptr createReceipt(bytes const& _receiptData) = 0;
+    TransactionReceiptFactory(const TransactionReceiptFactory&) = default;
+    TransactionReceiptFactory(TransactionReceiptFactory&&) = default;
+    TransactionReceiptFactory& operator=(const TransactionReceiptFactory&) = default;
+    TransactionReceiptFactory& operator=(TransactionReceiptFactory&&) = default;
 
+    virtual ~TransactionReceiptFactory() = default;
+    virtual TransactionReceipt::Ptr createReceipt(bytesConstRef _receiptData) const = 0;
+    virtual TransactionReceipt::Ptr createReceipt(bytes const& _receiptData) const = 0;
     virtual TransactionReceipt::Ptr createReceipt(u256 const& gasUsed, std::string contractAddress,
         const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
-        BlockNumber blockNumber) = 0;
+        BlockNumber blockNumber) const = 0;
 };
 
-template <class T>
-concept IsTransactionReceiptFactory =
-    std::derived_from<T, TransactionReceiptFactory> || std::same_as<T, TransactionReceiptFactory>;
 }  // namespace bcos::protocol

@@ -1,5 +1,6 @@
 #pragma once
 #include "bcos-concepts/Exception.h"
+#include "bcos-framework/storage2/StorageMethods.h"
 #include "bcos-utilities/Overloaded.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/storage2/Storage.h>

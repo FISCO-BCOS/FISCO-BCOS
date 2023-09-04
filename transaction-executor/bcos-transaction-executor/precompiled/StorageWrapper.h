@@ -1,4 +1,5 @@
 #pragma once
+#include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/storage2/StorageMethods.h"
@@ -7,7 +8,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include <exception>
-#include <range/v3/view/transform.hpp>
 
 namespace bcos::transaction_executor
 {
@@ -24,20 +24,10 @@ public:
     explicit StorageWrapper(Storage& m_storage) : m_storage(m_storage) {}
 
     void asyncGetPrimaryKeys(std::string_view table,
-        const std::optional<storage::Condition const>& _condition,
+        const std::optional<storage::Condition const>& condition,
         std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override
     {
-        task::wait([](decltype(this) self, decltype(table) table, decltype(_condition) _condition,
-                       decltype(_callback) _callback) -> task::Task<void> {
-            try
-            {
-                auto keys = co_await self->m_storage.seek();
-            }
-            catch (std::exception& e)
-            {
-                _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "asyncGetPrimaryKeys error!", e), {});
-            }
-        }(table, _condition, std::move(_callback)));
+        _callback(BCOS_ERROR_UNIQUE_PTR(-1, "asyncGetPrimaryKeys error!"), {});
     }
 
     void asyncGetRow(std::string_view table, std::string_view key,
