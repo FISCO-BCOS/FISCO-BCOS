@@ -813,13 +813,13 @@ bool PBFTEngine::checkRotateTransactionValid(
                    << LOG_KV("reqHash", _proposal->hash().abridged())
                    << LOG_KV("leaderIdx", _proposal->generatedFrom())
                    << LOG_KV("nodeIdx", m_config->nodeIndex())
-                   << LOG_KV("txSize", block->transactionsSize());
+                   << LOG_KV("txSize", block->transactionsMetaDataSize());
 
     auto rotatingTx = block->transactionMetaData(0);
     if (rotatingTx->to() != bcos::precompiled::CONSENSUS_ADDRESS &&
         rotatingTx->to() != bcos::precompiled::CONSENSUS_TABLE_NAME) [[unlikely]]
     {
-        PBFT_LOG(WARNING) << LOG_DESC("checkRotateTransactionValid failed")
+        PBFT_LOG(WARNING) << LOG_DESC("checkRotateTransactionValid failed for wrong tx")
                           << LOG_KV("reqIndex", _proposal->index())
                           << LOG_KV("reqHash", _proposal->hash().abridged())
                           << LOG_KV("fromIdx", _proposal->generatedFrom())
@@ -834,7 +834,7 @@ bool PBFTEngine::checkRotateTransactionValid(
         return true;
     }
 
-    PBFT_LOG(WARNING) << LOG_DESC("checkRotateTransactionValid failed")
+    PBFT_LOG(WARNING) << LOG_DESC("checkRotateTransactionValid failed for wrong leader")
                       << LOG_KV("reqIndex", _proposal->index())
                       << LOG_KV("reqHash", _proposal->hash().abridged())
                       << LOG_KV("fromIdx", _proposal->generatedFrom())
