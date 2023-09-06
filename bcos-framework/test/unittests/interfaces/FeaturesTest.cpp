@@ -29,7 +29,7 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(features2.get("bugfix_revert"), true);
 
     Features features3;
-    features3.setToDefault(bcos::protocol::BlockVersion::V3_2_VERSION);
+    features3.setToDefault(bcos::protocol::BlockVersion::V3_2_3_VERSION);
     auto flags = features3.flags();
     auto [flag, name, value] = flags[0];
     BOOST_CHECK_EQUAL(flag, Features::Flag::bugfix_revert);
