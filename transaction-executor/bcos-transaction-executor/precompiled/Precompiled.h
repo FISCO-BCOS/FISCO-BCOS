@@ -11,7 +11,7 @@
 #include <type_traits>
 
 #ifdef WITH_WASM
-#include "bcos-executor/vm/gas_meter/GasInjector.h"
+#include "bcos-executor/src/vm/gas_meter/GasInjector.h"
 #else
 class bcos::wasm::GasInjector
 {
