@@ -22,8 +22,6 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/storage/StorageInvokes.h"
-#include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
