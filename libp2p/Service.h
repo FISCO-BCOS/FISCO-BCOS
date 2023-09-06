@@ -128,10 +128,10 @@ public:
         RecursiveGuard l(x_nodeList);
         m_groupID2NodeList[_groupID] = _nodeList;
     }
-    void setObserverListByGroupID(GROUP_ID _groupID, const h512s& _observerList) override
+    void setSealerListByGroupID(GROUP_ID _groupID, const dev::h512s& _sealerList) override
     {
-        RecursiveGuard guard(x_observerList);
-        m_groupID2ObserverList[_groupID] = _observerList;
+        RecursiveGuard guard(x_sealerList);
+        m_groupID2SealerList[_groupID] = _sealerList;
     }
 
     virtual uint32_t topicSeq() { return m_topicSeq; }
@@ -261,8 +261,8 @@ private:
     mutable RecursiveMutex x_nodeList;
     std::map<GROUP_ID, h512s> m_groupID2NodeList;
 
-    mutable RecursiveMutex x_observerList;
-    std::map<GROUP_ID, h512s> m_groupID2ObserverList;
+    mutable RecursiveMutex x_sealerList;
+    std::map<GROUP_ID, h512s> m_groupID2SealerList;
 
     std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
     RecursiveMutex x_protocolID2Handler;

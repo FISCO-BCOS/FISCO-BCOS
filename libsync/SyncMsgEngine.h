@@ -107,6 +107,12 @@ public:
         m_sealerList = std::move(sealerList);
     }
 
+    void setGroupNodeList(dev::h512s groupNodeList)
+    {
+        std::lock_guard<std::mutex> lock(x_groupNodeList);
+        m_groupNodeList = std::move(groupNodeList);
+    }
+
 private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
     bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
@@ -154,6 +160,8 @@ protected:
     SyncMsgPacketFactory::Ptr m_syncMsgPacketFactory;
     std::mutex x_sealerList;
     dev::h512s m_sealerList;
+    std::mutex x_groupNodeList;
+    dev::h512s m_groupNodeList;
 };
 
 class DownloadBlocksContainer
