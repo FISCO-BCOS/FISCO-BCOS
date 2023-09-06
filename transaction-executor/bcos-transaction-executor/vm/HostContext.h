@@ -351,8 +351,10 @@ public:
 
             if (precompiled)
             {
-                co_return precompiled->call(
-                    m_rollbackableStorage, m_blockHeader, m_message, m_origin);
+                co_return precompiled->call(m_rollbackableStorage, m_blockHeader, m_message,
+                    m_origin, [this](const evmc_message& message) {
+                        return task::syncWait(externalCall(message));
+                    });
             }
         }
 
@@ -391,7 +393,6 @@ public:
         }
         ++m_seq;
 
-        // Contract create inside contract create, the message's sender will be empty, sure?
         const auto* messagePtr = std::addressof(message);
         std::optional<evmc_message> messageWithSender;
         if (message.kind == EVMC_CREATE && RANGES::equal(message.sender.bytes, EMPTY_ADDRESS.bytes))

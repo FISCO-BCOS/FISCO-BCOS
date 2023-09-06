@@ -1,5 +1,6 @@
 #pragma once
 #include "../Common.h"
+#include "ExecutiveWrapper.h"
 #include "StorageWrapper.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
@@ -7,6 +8,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-utilities/Overloaded.h"
+#include <type_traits>
 
 #ifdef WITH_WASM
 #include "bcos-executor/vm/gas_meter/GasInjector.h"
@@ -25,13 +27,10 @@ private:
     std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>
         m_precompiled;
 
-    static std::string addressBytesStr2String(std::string_view receiveAddressBytes);
-    static std::string evmAddress2String(const evmc_address& address);
-
 public:
     Precompiled(decltype(m_precompiled) precompiled) : m_precompiled(std::move(precompiled)) {}
     EVMCResult call(auto& storage, protocol::BlockHeader const& blockHeader,
-        evmc_message const& message, evmc_address const& origin) const
+        evmc_message const& message, evmc_address const& origin, auto externalCaller) const
     {
         return std::visit(
             bcos::overloaded{
@@ -64,19 +63,21 @@ public:
                     auto storageWrapper =
                         std::make_shared<StorageWrapper<std::decay_t<decltype(storage)>>>(storage);
                     auto stateStorage = std::make_shared<storage::StateStorage>(storageWrapper);
-                    std::shared_ptr<storage::StateStorageInterface> interface = stateStorage;
 
-                    executor::BlockContext blockContext(interface, nullptr,
+                    executor::BlockContext blockContext(stateStorage, nullptr,
                         GlobalHashImpl::g_hashImpl, blockHeader.number(), blockHeader.hash(),
                         blockHeader.timestamp(), blockHeader.version(),
                         bcos::executor::VMSchedule{}, false, false);
                     wasm::GasInjector gasInjector;
-                    auto executive = std::make_shared<executor::TransactionExecutive>(
-                        blockContext, "", 0, 0, gasInjector);
+
+                    auto contractAddress = evmAddress2String(message.code_address);
+                    auto executive =
+                        std::make_shared<ExecutiveWrapper<decltype(externalCaller)>>(blockContext,
+                            contractAddress, 0, 0, gasInjector, std::move(externalCaller));
 
                     auto params = std::make_shared<precompiled::PrecompiledExecResult>();
                     params->m_sender = evmAddress2String(message.sender);
-                    params->m_codeAddress = evmAddress2String(message.code_address);
+                    params->m_codeAddress = std::move(contractAddress);
                     params->m_precompiledAddress = evmAddress2String(message.recipient);
                     params->m_origin = evmAddress2String(origin);
                     params->m_input = {message.input_data, message.input_size};

@@ -118,8 +118,6 @@ constexpr static std::string_view FS_TYPE_DIR = "directory";
 constexpr static std::string_view FS_TYPE_CONTRACT = "contract";
 constexpr static std::string_view FS_TYPE_LINK = "link";
 
-#define EXECUTIVE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR]"
-
 struct GlobalHashImpl
 {
     static bcos::crypto::Hash::Ptr g_hashImpl;
@@ -299,4 +297,43 @@ inline std::string getContractTableName(const std::string_view& address)
 
     return out;
 }
+
+inline std::string addressBytesStr2String(std::string_view receiveAddressBytes)
+{
+    std::string strAddress;
+    strAddress.reserve(receiveAddressBytes.size() * 2);
+    boost::algorithm::hex_lower(
+        receiveAddressBytes.begin(), receiveAddressBytes.end(), std::back_inserter(strAddress));
+    return strAddress;
+}
+
+inline std::string evmAddress2String(const evmc_address& address)
+{
+    auto receiveAddressBytes = fromEvmC(address);
+    return addressBytesStr2String(receiveAddressBytes);
+}
+
+inline evmc_address unhexAddress(std::string_view view)
+{
+    if (view.empty())
+    {
+        return {};
+    }
+    if (view.starts_with("0x"))
+    {
+        view = view.substr(2);
+    }
+
+    evmc_address address;
+    if (view.empty())
+    {
+        std::uninitialized_fill(address.bytes, address.bytes + sizeof(address.bytes), 0);
+    }
+    else
+    {
+        boost::algorithm::unhex(view, address.bytes);
+    }
+    return address;
+}
+
 }  // namespace bcos::transaction_executor
