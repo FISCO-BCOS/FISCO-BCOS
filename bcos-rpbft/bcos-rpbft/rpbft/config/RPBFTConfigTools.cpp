@@ -183,7 +183,7 @@ bool RPBFTConfigTools::shouldRotateSealers(protocol::BlockNumber _number) const
         {
             return false;
         }
-        if ((_number + 1 - m_epochBlockNumEnableNumber) % m_epochBlockNum == 0)
+        if ((_number - m_epochBlockNumEnableNumber) % m_epochBlockNum == 0)
         {
             return true;
         }

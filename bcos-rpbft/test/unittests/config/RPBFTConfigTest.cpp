@@ -164,6 +164,10 @@ BOOST_AUTO_TEST_CASE(testRPBFTConfig)
 
         ledgerConfig->setBlockNumber(numer++);
         m_rpbftConfig->resetConfig(ledgerConfig);
+        BOOST_CHECK(!m_rpbftConfig->shouldRotateSealers(numer));
+
+        ledgerConfig->setBlockNumber(numer++);
+        m_rpbftConfig->resetConfig(ledgerConfig);
         BOOST_CHECK(m_rpbftConfig->shouldRotateSealers(numer));
     }
 

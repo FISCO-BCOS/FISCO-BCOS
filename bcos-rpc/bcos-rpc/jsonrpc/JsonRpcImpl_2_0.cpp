@@ -590,8 +590,8 @@ void JsonRpcImpl_2_0::getTransaction(std::string_view _groupID, std::string_view
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getTransaction") << LOG_KV("txHash", m_txHash)
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getTransaction failed") << LOG_KV("txHash", m_txHash)
                     << LOG_KV("requireProof", _requireProof)
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
@@ -640,8 +640,8 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
             Json::Value jResp;
             if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getTransactionReceipt") << LOG_KV("txHash", m_txHash)
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getTransactionReceipt failed") << LOG_KV("txHash", m_txHash)
                     << LOG_KV("requireProof", _requireProof)
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
@@ -716,8 +716,8 @@ void JsonRpcImpl_2_0::getBlockByHash(std::string_view _groupID, std::string_view
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getBlockByHash") << LOG_KV("blockHash", m_blockHash)
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getBlockByHash failed") << LOG_KV("blockHash", m_blockHash)
                     << LOG_KV("onlyHeader", _onlyHeader) << LOG_KV("onlyTxHash", _onlyTxHash)
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
@@ -747,8 +747,8 @@ void JsonRpcImpl_2_0::getBlockByNumber(std::string_view _groupID, std::string_vi
             Json::Value jResp;
             if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getBlockByNumber") << LOG_KV("blockNumber", _blockNumber)
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getBlockByNumber failed") << LOG_KV("blockNumber", _blockNumber)
                     << LOG_KV("onlyHeader", _onlyHeader) << LOG_KV("onlyTxHash", _onlyTxHash)
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
@@ -781,8 +781,8 @@ void JsonRpcImpl_2_0::getBlockHashByNumber(
         [m_respFunc = std::move(_respFunc)](Error::Ptr _error, crypto::HashType const& _hashValue) {
             if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getBlockHashByNumber")
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getBlockHashByNumber failed")
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
             }
@@ -805,8 +805,8 @@ void JsonRpcImpl_2_0::getBlockNumber(
         [m_respFunc = std::move(_respFunc)](Error::Ptr _error, protocol::BlockNumber _blockNumber) {
             if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getBlockNumber")
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getBlockNumber failed")
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success")
                     << LOG_KV("blockNumber", _blockNumber);
@@ -855,8 +855,8 @@ void JsonRpcImpl_2_0::getCode(std::string_view _groupID, std::string_view _nodeN
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getCode") << LOG_KV("code", _error ? _error->errorCode() : 0)
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getCode failed") << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success")
                     << LOG_KV("contractAddress", lowerAddress);
             }
@@ -896,8 +896,8 @@ void JsonRpcImpl_2_0::getABI(std::string_view _groupID, std::string_view _nodeNa
         [lowerAddress, callback = std::move(_callback)](Error::Ptr _error, std::string _abi) {
             if (_error)
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getABI") << LOG_KV("code", _error ? _error->errorCode() : 0)
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getABI failed") << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success")
                     << LOG_KV("contractAddress", lowerAddress);
             }
@@ -934,8 +934,8 @@ void JsonRpcImpl_2_0::getSealerList(
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getSealerList")
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getSealerList failed")
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
             }
@@ -969,8 +969,8 @@ void JsonRpcImpl_2_0::getObserverList(
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getObserverList")
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getObserverList failed")
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
             }
@@ -997,7 +997,7 @@ void JsonRpcImpl_2_0::getPbftView(
         }
         else
         {
-            RPC_IMPL_LOG(ERROR) << LOG_BADGE("getPbftView")
+            RPC_IMPL_LOG(INFO) << LOG_BADGE("getPbftView failed")
                                 << LOG_KV("code", _error ? _error->errorCode() : 0)
                                 << LOG_KV("message", _error ? _error->errorMessage() : "success");
         }
@@ -1024,8 +1024,8 @@ void JsonRpcImpl_2_0::getPendingTxSize(
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getPendingTxSize")
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getPendingTxSize failed")
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
             }
@@ -1052,8 +1052,8 @@ void JsonRpcImpl_2_0::getSyncStatus(
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getSyncStatus")
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getSyncStatus failed")
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
             }
@@ -1079,8 +1079,8 @@ void JsonRpcImpl_2_0::getConsensusStatus(
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getConsensusStatus")
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getConsensusStatus failed")
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
             }
@@ -1108,7 +1108,7 @@ void JsonRpcImpl_2_0::getSystemConfigByKey(std::string_view _groupID, std::strin
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
+                RPC_IMPL_LOG(INFO)
                     << LOG_BADGE("asyncGetSystemConfigByKey")
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
@@ -1139,8 +1139,8 @@ void JsonRpcImpl_2_0::getTotalTransactionCount(
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("getTotalTransactionCount")
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getTotalTransactionCount failed")
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
             }
@@ -1167,7 +1167,7 @@ void JsonRpcImpl_2_0::getPeers(RespFunc _respFunc)
         }
         else
         {
-            RPC_IMPL_LOG(ERROR) << LOG_BADGE("getPeers")
+            RPC_IMPL_LOG(INFO) << LOG_BADGE("getPeers failed")
                                 << LOG_KV("code", _error ? _error->errorCode() : 0)
                                 << LOG_KV("message", _error ? _error->errorMessage() : "success");
         }
@@ -1354,7 +1354,7 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
         Json::Value jResp(Json::arrayValue);
         if (_error)
         {
-            RPC_IMPL_LOG(ERROR) << LOG_BADGE("getGroupPeers") << LOG_KV("code", _error->errorCode())
+            RPC_IMPL_LOG(INFO) << LOG_BADGE("getGroupPeers failed") << LOG_KV("code", _error->errorCode())
                                 << LOG_KV("message", _error->errorMessage());
             _respFunc(_error, jResp);
             return;
@@ -1384,8 +1384,8 @@ void JsonRpcImpl_2_0::execCall(
             }
             else
             {
-                RPC_IMPL_LOG(ERROR)
-                    << LOG_BADGE("call") << LOG_KV("to", m_to)
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("call failed") << LOG_KV("to", m_to)
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
                     << LOG_KV("message", _error ? _error->errorMessage() : "success");
             }
