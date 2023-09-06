@@ -343,18 +343,18 @@ void SystemConfigPrecompiled::upgradeChain(
     // Write default features when data version changes
     if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_VERSION))
     {
-        Features features;
-        features.setToDefault(protocol::BlockVersion(toVersion));
-        task::syncWait(features.writeToStorage(
+        Features bugfixFeatures;
+        bugfixFeatures.setToDefault(protocol::BlockVersion(toVersion));
+        task::syncWait(bugfixFeatures.writeToStorage(
             *_executive->blockContext().storage(), _executive->blockContext().number()));
 
-        // From 3.3 or 3.4, enable the feature_sharding
-        if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION &&
-                toVersion >= BlockVersion::V3_5_VERSION) ||
+        // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
+        if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
             (toVersion >= BlockVersion::V3_3_VERSION && toVersion <= BlockVersion::V3_4_VERSION))
         {
-            features.set(ledger::Features::Flag::feature_sharding);
-            task::syncWait(features.writeToStorage(
+            Features shardingFeatures;
+            shardingFeatures.set(ledger::Features::Flag::feature_sharding);
+            task::syncWait(shardingFeatures.writeToStorage(
                 *_executive->blockContext().backendStorage(), _executive->blockContext().number()));
         }
     }
