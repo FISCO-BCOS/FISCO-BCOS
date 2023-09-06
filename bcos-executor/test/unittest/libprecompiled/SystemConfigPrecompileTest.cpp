@@ -1,7 +1,10 @@
 #include "../mock/MockLedger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Exceptions.h"
+#include "bcos-framework/storage/StorageInvokes.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-task/Wait.h"
 #include "executor/TransactionExecutor.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/SystemConfigPrecompiled.h"
@@ -41,11 +44,12 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
     std::shared_ptr<LedgerCache> ledgerCache =
         std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
     std::shared_ptr<wasm::GasInjector> gasInjector;
-    std::shared_ptr<StateStorage> stateStorage = std::make_shared<StateStorage>(nullptr);
+    std::shared_ptr<StateStorage> backendStorage = std::make_shared<StateStorage>(nullptr);
+    std::shared_ptr<StateStorage> stateStorage = std::make_shared<StateStorage>(backendStorage);
     std::shared_ptr<BlockContext> blockContext =
         std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
             static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), FiscoBcosSchedule, false,
-            false);
+            false, backendStorage);
     std::shared_ptr<MockTransactionExecutive> executive =
         std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0, *gasInjector);
 };
@@ -89,37 +93,65 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
 
 BOOST_AUTO_TEST_CASE(upgradeVersion)
 {
-    SystemConfigPrecompiled systemConfigPrecompiled;
-    auto setParameters = std::make_shared<PrecompiledExecResult>();
+    task::syncWait([this]() -> task::Task<void> {
+        SystemConfigPrecompiled systemConfigPrecompiled;
+        auto setParameters = std::make_shared<PrecompiledExecResult>();
 
-    CodecWrapper codec(hashImpl, false);
-    auto setInput = codec.encodeWithSig("setValueByKey(string,string)",
-        std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.1.3"));
-    setParameters->m_input = bcos::ref(setInput);
-    auto result = systemConfigPrecompiled.call(executive, setParameters);
-    bcos::s256 code = -1;
-    codec.decode(bcos::ref(result->execResult()), code);
-    BOOST_CHECK_EQUAL(code, 0);
+        CodecWrapper codec(hashImpl, false);
+        auto setInput = codec.encodeWithSig("setValueByKey(string,string)",
+            std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.1.3"));
+        setParameters->m_input = bcos::ref(setInput);
+        auto result = systemConfigPrecompiled.call(executive, setParameters);
+        bcos::s256 code = -1;
+        codec.decode(bcos::ref(result->execResult()), code);
+        BOOST_CHECK_EQUAL(code, 0);
 
-    auto getParameters = std::make_shared<PrecompiledExecResult>();
-    auto getInput = codec.encodeWithSig("getValueByKey(string)", std::string("bugfix_revert"));
-    getParameters->m_input = bcos::ref(getInput);
-    result = systemConfigPrecompiled.call(executive, getParameters);
-    std::string value;
-    codec.decode(bcos::ref(result->execResult()), value);
-    BOOST_CHECK_EQUAL(value, "");
+        auto getRevertParameters = std::make_shared<PrecompiledExecResult>();
+        auto getInput = codec.encodeWithSig("getValueByKey(string)", std::string("bugfix_revert"));
+        getRevertParameters->m_input = bcos::ref(getInput);
+        result = systemConfigPrecompiled.call(executive, getRevertParameters);
+        std::string value;
+        codec.decode(bcos::ref(result->execResult()), value);
+        BOOST_CHECK_EQUAL(value, "");
 
-    setInput = codec.encodeWithSig("setValueByKey(string,string)",
-        std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.2.0"));
-    setParameters->m_input = bcos::ref(setInput);
-    result = systemConfigPrecompiled.call(executive, setParameters);
-    code = -1;
-    codec.decode(bcos::ref(result->execResult()), code);
-    BOOST_CHECK_EQUAL(code, 0);
+        setInput = codec.encodeWithSig("setValueByKey(string,string)",
+            std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.2.3"));
+        setParameters->m_input = bcos::ref(setInput);
+        result = systemConfigPrecompiled.call(executive, setParameters);
+        code = -1;
+        codec.decode(bcos::ref(result->execResult()), code);
+        BOOST_CHECK_EQUAL(code, 0);
 
-    result = systemConfigPrecompiled.call(executive, getParameters);
-    codec.decode(bcos::ref(result->execResult()), value);
-    BOOST_CHECK_EQUAL(value, "1");
+        auto entry = co_await storage2::readOne(
+            *backendStorage, std::make_tuple(ledger::SYS_CONFIG, "bugfix_revert"));
+        BOOST_CHECK(!entry);
+
+        result = systemConfigPrecompiled.call(executive, getRevertParameters);
+        codec.decode(bcos::ref(result->execResult()), value);
+        BOOST_CHECK_EQUAL(value, "1");
+
+        // Check if set feature_sharding to backend storage
+        setInput = codec.encodeWithSig("setValueByKey(string,string)",
+            std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.3.0"));
+        setParameters->m_input = bcos::ref(setInput);
+        result = systemConfigPrecompiled.call(executive, setParameters);
+        code = -1;
+        codec.decode(bcos::ref(result->execResult()), code);
+        BOOST_CHECK_EQUAL(code, 0);
+
+        entry = co_await storage2::readOne(
+            *backendStorage, std::make_tuple(ledger::SYS_CONFIG, "feature_sharding"));
+        BOOST_CHECK(entry);
+
+        auto getShardingParameters = std::make_shared<PrecompiledExecResult>();
+        auto getShardingInput =
+            codec.encodeWithSig("getValueByKey(string)", std::string("feature_sharding"));
+        getShardingParameters->m_input = bcos::ref(getInput);
+
+        result = systemConfigPrecompiled.call(executive, getRevertParameters);
+        codec.decode(bcos::ref(result->execResult()), value);
+        BOOST_CHECK_EQUAL(value, "1");
+    }());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

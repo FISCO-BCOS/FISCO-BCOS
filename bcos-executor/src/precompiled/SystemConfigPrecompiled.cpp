@@ -22,6 +22,9 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/storage/StorageInvokes.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -344,22 +347,17 @@ void SystemConfigPrecompiled::upgradeChain(
     {
         Features features;
         features.setToDefault(protocol::BlockVersion(toVersion));
+        task::syncWait(features.writeToStorage(
+            *_executive->blockContext().storage(), _executive->blockContext().number()));
 
         // From 3.3 or 3.4, enable the feature_sharding
-        if (version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION &&
-            toVersion >= BlockVersion::V3_5_VERSION)
+        if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION &&
+                toVersion >= BlockVersion::V3_5_VERSION) ||
+            (toVersion >= BlockVersion::V3_3_VERSION && toVersion <= BlockVersion::V3_4_VERSION))
         {
             features.set(ledger::Features::Flag::feature_sharding);
-        }
-
-        for (auto [flag, name, value] : features.flags())
-        {
-            if (value)
-            {
-                Entry entry;
-                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
-                _executive->storage().setRow(SYS_CONFIG, name, std::move(entry));
-            }
+            task::syncWait(features.writeToStorage(
+                *_executive->blockContext().backendStorage(), _executive->blockContext().number()));
         }
     }
 }
