@@ -2208,8 +2208,8 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
         callback)
 {
     ExecuteOutputs::Ptr allOutputs = std::make_shared<ExecuteOutputs>();
-    EXECUTOR_NAME_LOG(DEBUG) << "asyncExecuteExecutiveFlow start"
-                             << LOG_KV("blockNumber", m_blockContext->number());
+
+    EXECUTOR_NAME_LOG(DEBUG) << "asyncExecuteExecutiveFlow start";
     executiveFlow->asyncRun(
         // onTxReturn
         [this, allOutputs, callback](CallParameters::UniquePtr output) {
@@ -2232,7 +2232,11 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
                 EXECUTOR_NAME_LOG(WARNING)
                     << "ExecutiveFlow asyncRun failed: " << LOG_KV("code", error->errorCode())
                     << LOG_KV("message", error->errorMessage());
-                m_blockContext->clear();
+                if (m_blockContext)
+                {
+                    m_blockContext->clear();
+                }
+
                 callback(std::move(error), std::vector<protocol::ExecutionMessage::UniquePtr>());
             }
             else
