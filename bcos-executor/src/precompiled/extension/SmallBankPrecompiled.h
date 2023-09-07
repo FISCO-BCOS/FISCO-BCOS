@@ -85,8 +85,8 @@ public:
             std::string _tableName = std::to_string(id);
             _tableName = path + _tableName;
             std::string&& address = getAddress(id);
-            registeredMap->insert(std::move(address),
-                std::make_shared<SmallBankPrecompiled>(std::move(hashImpl), _tableName));
+            registeredMap->insert(
+                std::move(address), std::make_shared<SmallBankPrecompiled>(hashImpl, _tableName));
         }
         BCOS_LOG(TRACE) << LOG_BADGE("SmallBank") << "Register SmallBankPrecompiled complete"
                         << LOG_KV("addressFrom", getAddress(0))

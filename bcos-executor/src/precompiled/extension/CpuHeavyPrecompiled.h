@@ -63,7 +63,7 @@ public:
         {
             std::string&& address = getAddress(id);
             registeredMap->insert(
-                address, std::make_shared<precompiled::CpuHeavyPrecompiled>(std::move(hashImpl)));
+                address, std::make_shared<precompiled::CpuHeavyPrecompiled>(hashImpl));
         }
         BCOS_LOG(TRACE) << LOG_BADGE("CpuHeavy") << "Register CpuHeavyPrecompiled complete"
                         << LOG_KV("addressFrom", getAddress(0))
