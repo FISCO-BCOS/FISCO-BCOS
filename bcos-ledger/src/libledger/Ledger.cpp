@@ -23,6 +23,7 @@
 
 #include "Ledger.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/storage/StorageInvokes.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
 #include "utilities/Common.h"
@@ -1655,10 +1656,10 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
 
             // Before return, make sure sharding flag is placed
             task::syncWait([&]() -> task::Task<void> {
-                auto versionEntry =
-                    co_await m_storage->coGetRow(SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION);
-                auto blockNumberEntry =
-                    co_await m_storage->coGetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER);
+                auto versionEntry = co_await storage2::readOne(
+                    *m_storage, std::make_tuple(SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
+                auto blockNumberEntry = co_await storage2::readOne(
+                    *m_storage, std::make_tuple(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
                 if (versionEntry && blockNumberEntry)
                 {
                     auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();

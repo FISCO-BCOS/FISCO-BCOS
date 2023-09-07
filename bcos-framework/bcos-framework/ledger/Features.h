@@ -2,6 +2,8 @@
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
 #include "../storage/StorageInterface.h"
+#include "../storage/StorageInvokes.h"
+#include "../storage2/Storage.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-task/Task.h"
 #include <bcos-concepts/Exception.h>
@@ -87,7 +89,7 @@ public:
 
     void setToDefault(protocol::BlockVersion version)
     {
-        if (version >= protocol::BlockVersion::V3_2_VERSION)
+        if (version >= protocol::BlockVersion::V3_2_3_VERSION)
         {
             set(Flag::bugfix_revert);
         }
@@ -116,7 +118,8 @@ public:
     {
         for (auto key : bcos::ledger::Features::featureKeys())
         {
-            auto entry = co_await storage.coGetRow(ledger::SYS_CONFIG, key);
+            auto entry =
+                co_await storage2::readOne(storage, std::make_tuple(ledger::SYS_CONFIG, key));
             if (entry)
             {
                 auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
@@ -136,7 +139,8 @@ public:
             {
                 storage::Entry entry;
                 entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
-                co_await storage.coSetRow(ledger::SYS_CONFIG, name, std::move(entry));
+                co_await storage2::writeOne(
+                    storage, std::make_tuple(ledger::SYS_CONFIG, name), std::move(entry));
             }
         }
     }

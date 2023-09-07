@@ -22,6 +22,7 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -342,24 +343,19 @@ void SystemConfigPrecompiled::upgradeChain(
     // Write default features when data version changes
     if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_VERSION))
     {
-        Features features;
-        features.setToDefault(protocol::BlockVersion(toVersion));
+        Features bugfixFeatures;
+        bugfixFeatures.setToDefault(protocol::BlockVersion(toVersion));
+        task::syncWait(bugfixFeatures.writeToStorage(
+            *_executive->blockContext().storage(), _executive->blockContext().number()));
 
-        // From 3.3 or 3.4, enable the feature_sharding
-        if (version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION &&
-            toVersion >= BlockVersion::V3_5_VERSION)
+        // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
+        if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
+            (toVersion >= BlockVersion::V3_3_VERSION && toVersion <= BlockVersion::V3_4_VERSION))
         {
-            features.set(ledger::Features::Flag::feature_sharding);
-        }
-
-        for (auto [flag, name, value] : features.flags())
-        {
-            if (value)
-            {
-                Entry entry;
-                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
-                _executive->storage().setRow(SYS_CONFIG, name, std::move(entry));
-            }
+            Features shardingFeatures;
+            shardingFeatures.set(ledger::Features::Flag::feature_sharding);
+            task::syncWait(shardingFeatures.writeToStorage(
+                *_executive->blockContext().backendStorage(), _executive->blockContext().number()));
         }
     }
 }
