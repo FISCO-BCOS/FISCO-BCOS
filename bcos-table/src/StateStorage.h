@@ -418,7 +418,7 @@ public:
                                 entryHash = entry.hash(it.table, it.key, hashImpl, m_blockVersion);
                             }
                             else
-                            {  // v3.0.0
+                            {  // v3.0.0-v3.2.0 use this which will make it not compatible with v3.1.0 keyPageStorage
                                 entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
                                             entry.hash(it.table, it.key, hashImpl, m_blockVersion);
                             }
@@ -512,8 +512,14 @@ public:
         }
     }
 
-    void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
-    void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
+    void setEnableTraverse(bool enableTraverse)
+    {
+        m_enableTraverse = enableTraverse;
+    }
+    void setMaxCapacity(ssize_t capacity)
+    {
+        m_maxCapacity = capacity;
+    }
 
 private:
     Entry importExistingEntry(std::string_view table, std::string_view key, Entry entry)
