@@ -4,8 +4,11 @@
 #include "TestBytecode.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-executor/src/Common.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -14,6 +17,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iterator>
+#include <memory>
 
 using namespace bcos::task;
 using namespace bcos::storage2;
@@ -26,7 +30,8 @@ public:
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             std::make_shared<bcos::crypto::Keccak256>();
-        precompiledManager.emplace();
+        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+        precompiledManager.emplace(std::make_shared<bcos::crypto::Keccak256>());
 
         // deploy the hello world contract
         syncWait([this]() -> Task<void> {
@@ -254,5 +259,52 @@ BOOST_AUTO_TEST_CASE(log)
     //     co_return;
     // }());
 }
+
+#if 0
+BOOST_AUTO_TEST_CASE(precompiled)
+{
+    syncWait([this]() -> Task<void> {
+        bcos::codec::abi::ContractABICodec abiCodec(
+            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+        auto input = abiCodec.abiIn(std::string("makeShard(string)"), std::string("shared1"));
+
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.mutableInner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
+        blockHeader.calculateHash(*bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+
+        auto address = bcos::Address(0x1010);
+        evmc_address callAddress{};
+        std::uninitialized_copy(address.begin(), address.end(), callAddress.bytes);
+        evmc_message message = {.kind = EVMC_CALL,
+            .flags = 0,
+            .depth = 0,
+            .gas = 1000000,
+            .recipient = callAddress,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender = {},
+            .sender_ptr = nullptr,
+            .sender_len = 0,
+            .input_data = input.data(),
+            .input_size = input.size(),
+            .value = {},
+            .create2_salt = {},
+            .code_address = callAddress};
+        evmc_address origin = {};
+
+        HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
+            seq, *precompiledManager);
+        auto result = co_await hostContext.execute();
+
+        BOOST_CHECK_EQUAL(result.status_code, 0);
+        bcos::s256 getIntResult = -1;
+        abiCodec.abiOut(bcos::bytesConstRef(result.output_data, result.output_size), getIntResult);
+        BOOST_CHECK_EQUAL(getIntResult, 0);
+
+        co_return;
+    }());
+}
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()

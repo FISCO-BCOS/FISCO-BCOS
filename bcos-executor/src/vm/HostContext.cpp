@@ -269,7 +269,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
         try
         {
             auto precompiledCallParams =
-                std::make_shared<precompiled::PrecompiledExecResult>(_request);
+                std::make_shared<precompiled::PrecompiledExecResult>(*_request);
             precompiledCallParams = m_executive->execPrecompiled(precompiledCallParams);
             callResults->gas = precompiledCallParams->m_gasLeft;
             resultCode = (int32_t)TransactionStatus::None;

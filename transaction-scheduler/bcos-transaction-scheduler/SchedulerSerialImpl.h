@@ -11,7 +11,7 @@ namespace bcos::transaction_scheduler
 
 class SchedulerSerialImpl
 {
-public:
+private:
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         tag_t<execute> /*unused*/, SchedulerSerialImpl& /*unused*/, auto& storage, auto& executor,
         protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)

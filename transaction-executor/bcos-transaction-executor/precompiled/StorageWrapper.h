@@ -8,13 +8,12 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include <exception>
+#include <iterator>
 
 namespace bcos::transaction_executor
 {
 
 template <class Storage>
-    requires storage2::ReadableStorage<Storage> && storage2::WriteableStorage<Storage> &&
-             storage2::ErasableStorage<Storage> && storage2::SeekableStorage<Storage>
 class StorageWrapper : public bcos::storage::StorageInterface
 {
 private:
@@ -44,7 +43,7 @@ public:
             {
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "asyncGetRow error!", e), {});
             }
-        }(table, key, std::move(callback)));
+        }(this, table, key, std::move(callback)));
     }
 
     void asyncGetRows(std::string_view table,
@@ -58,17 +57,20 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto value = co_await storage2::readSome(
-                    self->m_storage, keys | RANGES::views::transform([&table](auto&& key) -> auto& {
-                        return StateKeyView{table, key};
-                    }));
-                callback(nullptr, std::move(value));
+                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto{
+                    return StateKeyView{table, std::forward<decltype(key)>(key)};
+                }) | RANGES::to<boost::container::small_vector<StateKeyView, 1>>();
+                auto values = co_await storage2::readSome(self->m_storage, stateKeys);
+
+                std::vector<std::optional<storage::Entry>> vectorValues(
+                    std::make_move_iterator(values.begin()), std::make_move_iterator(values.end()));
+                callback(nullptr, std::move(vectorValues));
             }
             catch (std::exception& e)
             {
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "asyncGetRows error!", e), {});
             }
-        }(table, std::move(keys), std::move(callback)));
+        }(this, table, std::move(keys), std::move(callback)));
     }
 
     void asyncSetRow(std::string_view table, std::string_view key, storage::Entry entry,
@@ -78,14 +80,15 @@ public:
                        decltype(entry) entry, decltype(callback) callback) -> task::Task<void> {
             try
             {
-                co_await storage2::writeOne(self->m_storage, key, std::move(entry));
+                co_await storage2::writeOne(
+                    self->m_storage, StateKey{table, key}, std::move(entry));
                 callback(nullptr);
             }
             catch (std::exception& e)
             {
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "asyncSetRow error!", e));
             }
-        }(table, key, std::move(entry), std::move(callback)));
+        }(this, table, key, std::move(entry), std::move(callback)));
     }
 };
 

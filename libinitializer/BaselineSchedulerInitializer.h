@@ -67,6 +67,7 @@ public:
             storage2::rocksdb::StateValueResolver{}),
         m_ledger(m_rocksDBStorage, *m_blockFactory),
         m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
+        m_precompiledManager(m_blockFactory->cryptoSuite()->hashImpl()),
         m_transactionExecutor(*m_blockFactory->receiptFactory(), m_precompiledManager)
     {}
 

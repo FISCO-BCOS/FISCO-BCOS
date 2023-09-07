@@ -18,7 +18,7 @@ public:
     {
         bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
             std::make_shared<bcos::crypto::Keccak256>();
-        precompiledManager.emplace();
+        precompiledManager.emplace(std::make_shared<bcos::crypto::Keccak256>());
     }
 
     std::optional<PrecompiledManager> precompiledManager;
