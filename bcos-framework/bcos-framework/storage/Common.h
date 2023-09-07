@@ -249,9 +249,95 @@ struct Condition
         m_repeatableConditions.emplace_back(Comparator::CONTAINS, value);
     }
 
+    std::optional<Condition> getLeftCond() const
+    {   
+        auto iter1 = m_conditions.find(Comparator::GT);
+        auto iter2 = m_conditions.find(Comparator::GE);
+
+        auto ret = std::make_optional<Condition>();
+        ret->limit(m_limit.first, m_limit.second);
+        
+        if (iter1 == m_conditions.end() && iter2 == m_conditions.end())
+        {
+            return ret;
+        }
+
+        if (iter1 != m_conditions.end() && iter2 != m_conditions.end())
+        {
+            // 1. x > a && x >= b && a >= b => x > a
+            // 2. x > a && x >= b && a < b => x >= b
+            if (iter2->second > iter1->second)
+            {
+                ret->GE(iter2->second);
+            }
+            else
+            {
+                ret->GT(iter1->second);
+            }
+        }
+        else if (iter1 != m_conditions.end())
+        {
+            ret->GT(iter1->second);
+        }
+        else
+        {
+            ret->GE(iter2->second);
+        }
+        return ret;
+    }
+
+    std::optional<Condition> getRightCond() const
+    {
+        auto iter1 = m_conditions.find(Comparator::LT);
+        auto iter2 = m_conditions.find(Comparator::LE);
+        auto iter3 = m_conditions.find(Comparator::STARTS_WITH);
+
+        auto ret = std::make_optional<Condition>();
+        if (iter3 != m_conditions.end())
+        {
+            ret->startsWith(iter3->second, false);
+        }
+        
+        if (iter1 == m_conditions.end() && iter2 == m_conditions.end())
+        {
+            return iter3 != m_conditions.end() ? ret : std::nullopt;
+        }
+
+        if (iter1 != m_conditions.end() && iter2 != m_conditions.end())
+        {
+            // 1. x < a && x <= b && a > b => x <= b
+            // 2. x < a && x <= b && a <= b => x < a
+            if (iter2->second < iter1->second)
+            {
+                ret->LE(iter2->second);
+            }
+            else
+            {
+                ret->LT(iter1->second);
+            }
+        } 
+        else if (iter1 != m_conditions.end())
+        {
+            ret->LT(iter1->second);
+        }
+        else
+        {
+            ret->LE(iter2->second);
+        }
+        return ret;
+    }
+
+    bool hasConflictCond() const { return m_hasConflictCond; }
+
     void limit(size_t start, size_t count) { m_limit = std::pair<size_t, size_t>(start, count); }
 
     std::pair<size_t, size_t> getLimit() const { return m_limit; }
+
+    std::optional<std::string> getGT() const { return get(Comparator::GT); }
+
+    std::optional<std::string> getGE() const { return get(Comparator::GE); }
+
+    bool empty() const { return m_conditions.empty() && m_repeatableConditions.empty(); }
 
     template<typename Container>
     static bool isValid(const std::string_view& key, const Container& conds)
@@ -345,6 +431,16 @@ struct Condition
         ENDS_WITH = 7,
         CONTAINS = 8
     };
+
+    std::optional<std::string> get(Comparator cmp) const
+    {
+        auto iter = m_conditions.find(cmp);
+        if (iter == m_conditions.end())
+        {
+            return std::nullopt;
+        }
+        return std::make_optional(iter->second);
+    }
     
     static std::string toString(const std::pair<Comparator, std::string>& cond)
     {
