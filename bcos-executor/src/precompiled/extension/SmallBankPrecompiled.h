@@ -35,7 +35,7 @@ class SmallBankPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<SmallBankPrecompiled>;
 
-    SmallBankPrecompiled(std::string _tableName);
+    SmallBankPrecompiled(crypto::Hash::Ptr hashImpl, std::string _tableName);
 
     ~SmallBankPrecompiled() override{};
 
@@ -76,7 +76,8 @@ public:
         }
     }
 
-    static void registerPrecompiled(executor::PrecompiledMap::Ptr const& registeredMap)
+    static void registerPrecompiled(
+        executor::PrecompiledMap::Ptr const& registeredMap, crypto::Hash::Ptr hashImpl)
     {
         std::string path = std::string{bcos::ledger::SMALLBANK_TRANSFER};
         for (int id = 0; id < SMALLBANK_CONTRACT_NUM; id++)
@@ -84,8 +85,8 @@ public:
             std::string _tableName = std::to_string(id);
             _tableName = path + _tableName;
             std::string&& address = getAddress(id);
-            registeredMap->insert(
-                std::move(address), std::make_shared<SmallBankPrecompiled>(_tableName));
+            registeredMap->insert(std::move(address),
+                std::make_shared<SmallBankPrecompiled>(std::move(hashImpl), _tableName));
         }
         BCOS_LOG(TRACE) << LOG_BADGE("SmallBank") << "Register SmallBankPrecompiled complete"
                         << LOG_KV("addressFrom", getAddress(0))

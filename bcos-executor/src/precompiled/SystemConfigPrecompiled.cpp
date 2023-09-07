@@ -41,12 +41,10 @@ using namespace bcos::protocol;
 const char* const SYSCONFIG_METHOD_SET_STR = "setValueByKey(string,string)";
 const char* const SYSCONFIG_METHOD_GET_STR = "getValueByKey(string)";
 
-SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl::g_hashImpl)
+SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : Precompiled(hashImpl)
 {
-    name2Selector[SYSCONFIG_METHOD_SET_STR] =
-        getFuncSelector(SYSCONFIG_METHOD_SET_STR, GlobalHashImpl::g_hashImpl);
-    name2Selector[SYSCONFIG_METHOD_GET_STR] =
-        getFuncSelector(SYSCONFIG_METHOD_GET_STR, GlobalHashImpl::g_hashImpl);
+    name2Selector[SYSCONFIG_METHOD_SET_STR] = getFuncSelector(SYSCONFIG_METHOD_SET_STR, hashImpl);
+    name2Selector[SYSCONFIG_METHOD_GET_STR] = getFuncSelector(SYSCONFIG_METHOD_GET_STR, hashImpl);
     auto defaultCmp = [](std::string_view _key, int64_t _value, int64_t _minValue, uint32_t version,
                           BlockVersion minVersion = BlockVersion::V3_0_VERSION) {
         if (versionCompareTo(version, minVersion) < 0) [[unlikely]]

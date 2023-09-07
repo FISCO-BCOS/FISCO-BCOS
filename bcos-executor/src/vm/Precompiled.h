@@ -175,7 +175,8 @@ protected:
     void registerFunc(std::string const& _funcName, PrecompiledParams _func,
         protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
     {
-        selector2Func.insert({getFuncSelector(_funcName), {_minVersion, std::move(_func)}});
+        selector2Func.insert(
+            {getFuncSelector(_funcName, m_hashImpl), {_minVersion, std::move(_func)}});
     }
 
     template <class F>
