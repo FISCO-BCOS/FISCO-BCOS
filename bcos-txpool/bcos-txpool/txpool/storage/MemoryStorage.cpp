@@ -770,9 +770,13 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             // After performance testing, 0.25 had the best performance.
             eachBucketTxsLimit = _txsLimit / (0.25 * CPU_CORES);
         }
-        TXPOOL_LOG(TRACE) << LOG_DESC("batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
-                          << LOG_KV("limit", _txsLimit)
-                          << LOG_KV("eachBucketTxsLimit", eachBucketTxsLimit);
+        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+        {
+            TXPOOL_LOG(TRACE) << LOG_DESC("batchFetchTxs")
+                              << LOG_KV("pendingTxs", m_txsTable.size())
+                              << LOG_KV("limit", _txsLimit)
+                              << LOG_KV("eachBucketTxsLimit", eachBucketTxsLimit);
+        }
         m_txsTable.forEach<TxsMap::ReadAccessor>(m_knownLatestSealedTxHash, eachBucketTxsLimit,
             _txsLimit, [&](TxsMap::ReadAccessor::Ptr accessor) {
                 const auto& tx = accessor->value();
