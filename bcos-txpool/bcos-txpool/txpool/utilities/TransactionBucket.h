@@ -81,12 +81,12 @@ public:
         auto it = multiIndexMap.get<0>().find(key);
         if (it != multiIndexMap.get<0>().end())
         {
-            TXPOOL_LOG(DEBUG) << LOG_KV("txHash:", it->txHash)
+            TXPOOL_LOG(TRACE) << LOG_KV("txHash:", it->txHash)
                               << LOG_KV("timestamp:", it->timeStamp);
         }
         else
         {
-            TXPOOL_LOG(DEBUG) << "bucket not found the transaction,txHash: " << key;
+            TXPOOL_LOG(TRACE) << "bucket not found the transaction,txHash: " << key;
         }
 
         return std::make_shared<IteratorImpl>(it);
