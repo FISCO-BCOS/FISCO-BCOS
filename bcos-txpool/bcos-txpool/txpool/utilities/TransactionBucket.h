@@ -68,7 +68,7 @@ public:
         Container::nth_index<0>::type::iterator getIterator() const { return m_iterator; }
 
         const bcos::crypto::HashType& first;
-        const bcos::protocol::Transaction::Ptr& second;
+        bcos::protocol::Transaction::Ptr second;
 
     private:
         typename Container::nth_index<0>::type::iterator m_iterator;
