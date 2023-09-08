@@ -339,7 +339,7 @@ void SystemConfigPrecompiled::upgradeChain(
     }
 
     // Write default features when data version changes
-    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_VERSION))
+    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_3_VERSION))
     {
         Features bugfixFeatures;
         bugfixFeatures.setToDefault(protocol::BlockVersion(toVersion));
