@@ -161,9 +161,9 @@ inline std::ostream& operator<<(std::ostream& out, bcos::protocol::BlockVersion 
     }
 
     auto versionNumber = static_cast<uint32_t>(version);
-    constexpr uint32_t num1 = (0x03020400 >> 24) & (0xff);
-    constexpr uint32_t num2 = (0x03020400 >> 16) & (0xff);
-    constexpr uint32_t num3 = (0x03020400 >> 8) & (0xff);
+    auto num1 = (versionNumber >> 24) & (0xff);
+    auto num2 = (versionNumber >> 16) & (0xff);
+    auto num3 = (versionNumber >> 8) & (0xff);
 
     out << fmt::format(FMT_COMPILE("{}.{}.{}"), num1, num2, num3);
     return out;
