@@ -41,7 +41,7 @@ class LedgerInterface
 public:
     using Ptr = std::shared_ptr<LedgerInterface>;
     LedgerInterface() = default;
-    virtual ~LedgerInterface() {}
+    virtual ~LedgerInterface() = default;
 
     /**
      * @brief async prewrite a block in scheduler module
@@ -170,6 +170,4 @@ public:
         std::function<void(Error::UniquePtr&&)> _callback) = 0;
 };
 
-template <class T>
-concept IsLedger = std::derived_from<T, LedgerInterface> || std::same_as<T, LedgerInterface>;
 }  // namespace bcos::ledger
