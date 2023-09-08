@@ -306,7 +306,7 @@ void SystemConfigPrecompiled::upgradeChain(
     }
 
     // Write default features when data version changes
-    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_VERSION))
+    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_3_VERSION))
     {
         Features features;
         features.setToDefault(protocol::BlockVersion(toVersion));
@@ -315,7 +315,8 @@ void SystemConfigPrecompiled::upgradeChain(
             if (value)
             {
                 Entry entry;
-                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
+                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value),
+                    _executive->blockContext().lock()->number()});
                 _executive->storage().setRow(SYS_CONFIG, name, std::move(entry));
             }
         }
