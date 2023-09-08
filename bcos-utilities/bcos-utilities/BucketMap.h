@@ -493,9 +493,12 @@ public:
                         }
                         txsCount++;
                         totalTxLimit--;
-                        BCOS_LOG(DEBUG) << LOG_KV("txsCount:", txsCount)
-                                        << LOG_KV("eachBucketTxsLimit:", eachBucketTxsLimit)
-                                        << LOG_KV("totalTxLimit:", totalTxLimit);
+                        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+                        {
+                            BCOS_LOG(TRACE) << LOG_KV("txsCount:", txsCount)
+                                            << LOG_KV("eachBucketTxsLimit:", eachBucketTxsLimit)
+                                            << LOG_KV("totalTxLimit:", totalTxLimit);
+                        }
                         return handler(accessor);
                     },
                     accessor);
