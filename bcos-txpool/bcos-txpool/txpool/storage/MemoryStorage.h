@@ -137,7 +137,8 @@ protected:
         bcos::protocol::Transaction::Ptr _tx);
     size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(
-        const bcos::protocol::Transaction& transaction);
+        const bcos::protocol::Transaction& transaction,
+        protocol::TxSubmitCallback& txSubmitCallback);
 
     void onTxRemoved(const bcos::protocol::Transaction::Ptr& _tx, bool needNotifyUnsealedTxsSize);
 

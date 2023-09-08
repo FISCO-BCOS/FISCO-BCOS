@@ -189,14 +189,23 @@ std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     return transactions;
 }
 
-TransactionStatus MemoryStorage::txpoolStorageCheck(const Transaction& transaction)
+TransactionStatus MemoryStorage::txpoolStorageCheck(
+    const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
     auto txHash = transaction.hash();
     TxsMap::ReadAccessor::Ptr accessor;
     auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash);
     if (has)
     {
-        return TransactionStatus::AlreadyInTxPool;
+        if (txSubmitCallback && !accessor->value()->submitCallback())
+        {
+            accessor->value()->setSubmitCallback(std::move(txSubmitCallback));
+            return TransactionStatus::AlreadyInTxPoolAndAccept;
+        }
+        else
+        {
+            return TransactionStatus::AlreadyInTxPool;
+        }
     }
     return TransactionStatus::None;
 }
@@ -296,7 +305,14 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
 {
     size_t txsSize = m_txsTable.size();
 
-    auto result = txpoolStorageCheck(*transaction);
+    auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
+    if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
+    {
+        // Note: if rpc is slower than p2p tx sync, we also need to accept this tx and record
+        // callback
+        return TransactionStatus::None;
+    }
+
     if (result != TransactionStatus::None)
     {
         return result;
@@ -366,6 +382,11 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
         auto inserted = m_txsTable.insert(accessor, {transaction->hash(), transaction});
         if (!inserted)
         {
+            if (transaction->submitCallback() && !accessor->value()->submitCallback())
+            {
+                accessor->value()->setSubmitCallback(std::move(transaction->submitCallback()));
+                return TransactionStatus::None;
+            }
             return TransactionStatus::AlreadyInTxPool;
         }
     }
@@ -588,9 +609,8 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
         return tx != nullptr;
     }) | RANGES::views::values;
 
-    tbb::parallel_for_each(txs2Notify.begin(), txs2Notify.end(), [&](auto& _result) {
-        notifyTxResult(*_result.first, std::move(_result.second));
-    });
+    tbb::parallel_for_each(txs2Notify.begin(), txs2Notify.end(),
+        [&](auto& _result) { notifyTxResult(*_result.first, std::move(_result.second)); });
     // for (auto& [tx, txResult] : txs2Notify)
     // {
     //     notifyTxResult(*tx, std::move(txResult));
