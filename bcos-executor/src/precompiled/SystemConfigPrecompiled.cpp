@@ -343,8 +343,7 @@ void SystemConfigPrecompiled::upgradeChain(
     {
         Features bugfixFeatures;
         bugfixFeatures.setToDefault(protocol::BlockVersion(toVersion));
-        task::syncWait(bugfixFeatures.writeToStorage(
-            *_executive->blockContext().storage(), _executive->blockContext().number()));
+        task::syncWait(bugfixFeatures.writeToStorage(*_executive->blockContext().storage(), 0));
 
         // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
         if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
@@ -352,8 +351,8 @@ void SystemConfigPrecompiled::upgradeChain(
         {
             Features shardingFeatures;
             shardingFeatures.set(ledger::Features::Flag::feature_sharding);
-            task::syncWait(shardingFeatures.writeToStorage(
-                *_executive->blockContext().backendStorage(), _executive->blockContext().number()));
+            task::syncWait(
+                shardingFeatures.writeToStorage(*_executive->blockContext().backendStorage(), 0));
         }
     }
 }
