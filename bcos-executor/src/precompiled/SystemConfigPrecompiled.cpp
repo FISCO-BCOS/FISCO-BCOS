@@ -315,8 +315,7 @@ void SystemConfigPrecompiled::upgradeChain(
             if (value)
             {
                 Entry entry;
-                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value),
-                    _executive->blockContext().lock()->number()});
+                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
                 _executive->storage().setRow(SYS_CONFIG, name, std::move(entry));
             }
         }
