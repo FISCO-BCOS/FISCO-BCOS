@@ -81,6 +81,7 @@ check_file_and_clear_cache vcpkg-configuration.json ${BUILD_DIR}
 
 # Second: check dir change
 check_and_clear_cache .github/workflows ${BUILD_DIR}
+check_and_clear_cache bcos-framework/bcos-framework ${BUILD_DIR}
 check_and_clear_cache bcos-tars-protocol/bcos-tars-protocol ${BUILD_DIR}/generated
 check_and_clear_cache bcos-sync/bcos-sync/protocol/proto ${BUILD_DIR}/bcos-sync
 check_and_clear_cache bcos-protocol/bcos-protocol ${BUILD_DIR}/bcos-protocol
