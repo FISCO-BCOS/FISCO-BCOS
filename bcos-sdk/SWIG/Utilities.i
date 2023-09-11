@@ -5,6 +5,7 @@
 %include <stdint.i>
 %include <std_vector.i>
 %include <std_string.i>
+%include "../bcos-cpp-sdk/tarsRPC/Handle.h"
 %include "Helper.h"
 
 using bcos::byte = uint8_t;

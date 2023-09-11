@@ -1,9 +1,11 @@
 #pragma once
 
+#include "bcos-cpp-sdk/tarsRPC/Handle.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <oneapi/tbb/concurrent_queue.h>
+#include <memory>
 #include <string_view>
-
 namespace bcos::sdk::swig
 {
 
@@ -75,5 +77,31 @@ void fillBytes(Buffer const& input, char* STRING, size_t LENGTH)
 {
     std::copy(input.data(), input.data() + LENGTH, STRING);
 }
+
+class ConcurrentQueue
+{
+private:
+    oneapi::tbb::concurrent_bounded_queue<int> m_queue;
+
+public:
+    void push(int seq) { m_queue.push(seq); }
+    int pop()
+    {
+        int seq{};
+        m_queue.pop(seq);
+        return seq;
+    }
+};
+
+class ConcurrentQueueCallback : public bcos::sdk::Callback
+{
+private:
+    ConcurrentQueue& m_queue;
+    int m_seq;
+
+public:
+    ConcurrentQueueCallback(ConcurrentQueue& queue, int seq) : m_queue(queue), m_seq(seq) {}
+    void onMessage() override { m_queue.push(m_seq); }
+};
 
 }  // namespace bcos::sdk::swig
