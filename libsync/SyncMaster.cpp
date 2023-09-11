@@ -652,6 +652,7 @@ void SyncMaster::maintainPeersConnection()
     }
 
     m_msgEngine->setSealerList(sealers);
+    m_msgEngine->setGroupNodeList(sealerOrObserver);
     // Update sync sealer status
     set<NodeID> sealerSet;
     for (auto sealer : sealers)
@@ -787,6 +788,7 @@ bool SyncMaster::isNextBlock(BlockPtr _block)
     // check block sealerlist sig
     if (fp_isConsensusOk && !(fp_isConsensusOk)(*_block))
     {
+        // if signature check failed, the block will be pop out
         SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                           << LOG_DESC("Ignore illegal block")
                           << LOG_KV("reason", "consensus check failed")

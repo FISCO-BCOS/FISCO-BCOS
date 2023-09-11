@@ -213,7 +213,7 @@ void ConsensusEngineBase::updateConsensusNodeList()
                 }
             }
             m_service->setNodeListByGroupID(m_groupId, nodeList);
-            m_service->setObserverListByGroupID(m_groupId, observerList);
+            m_service->setSealerListByGroupID(m_groupId, observerList);
 
             m_lastNodeList = s2.str();
         }

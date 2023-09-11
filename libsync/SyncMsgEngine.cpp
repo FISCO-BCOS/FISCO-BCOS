@@ -102,24 +102,55 @@ bool SyncMsgEngine::interpret(
         SYNC_ENGINE_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                                << LOG_DESC("interpret packet type")
                                << LOG_KV("type", int(_packet->packetType));
-
+        if (_packet->packetType == TxsRequestPacket || _packet->packetType == TxsStatusPacket ||
+            _packet->packetType == TransactionsPacket)
+        {
+            std::lock_guard<std::mutex> lock(x_groupNodeList);
+            auto it = std::find(m_groupNodeList.begin(), m_groupNodeList.end(), _packet->nodeId);
+            if (it == m_groupNodeList.end())
+            {
+                SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("recvStatus")
+                                         << LOG_DESC("Ignore sync packet not from node in group")
+                                         << LOG_KV("fromNodeId", _packet->nodeId.abridged())
+                                         << LOG_KV("packetType", int(_packet->packetType));
+                return true;
+            }
+        }
         auto self = std::weak_ptr<SyncMsgEngine>(shared_from_this());
         if (g_BCOSConfig.enableIgnoreObserverWriteRequest())
         {
             if (_packet->packetType == TxsRequestPacket || _packet->packetType == TxsStatusPacket ||
                 _packet->packetType == TransactionsPacket)
-            {
+            {  // only tx request from sealer is permitted
                 std::lock_guard<std::mutex> lock(x_sealerList);
                 auto it = std::find(m_sealerList.begin(), m_sealerList.end(), _packet->nodeId);
                 if (it == m_sealerList.end())
                 {
-                    SYNC_ENGINE_LOG(INFO) << LOG_BADGE("Write-filter")
-                                          << LOG_DESC("Drop write request not from sealer")
-                                          << LOG_KV("fromNodeId", _packet->nodeId.abridged())
-                                          << LOG_KV("packetType", int(_packet->packetType));
+                    SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Write-filter")
+                                             << LOG_DESC("Drop write request not from sealer")
+                                             << LOG_KV("fromNodeId", _packet->nodeId.abridged())
+                                             << LOG_KV("packetType", int(_packet->packetType));
                     return true;
                 }
             }
+#if 0
+            // the observer is not in group node list at start-up
+            if (_packet->packetType == StatusPacket || _packet->packetType == BlocksPacket)
+            {  // only from group nodes is permitted
+                std::lock_guard<std::mutex> lock(x_groupNodeList);
+                auto it =
+                    std::find(m_groupNodeList.begin(), m_groupNodeList.end(), _packet->nodeId);
+                if (it == m_groupNodeList.end())
+                {
+                    SYNC_ENGINE_LOG(WARNING)
+                        << LOG_BADGE("Write-filter")
+                        << LOG_DESC("Ignore sync packet not from node in group")
+                        << LOG_KV("fromNodeId", _packet->nodeId.abridged())
+                        << LOG_KV("packetType", int(_packet->packetType));
+                    return true;
+                }
+            }
+#endif
         }
         switch (_packet->packetType)
         {
@@ -256,11 +287,18 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket::Ptr _packet, dev::p2p::P2P
     try
     {
         // Note: checkGroupPacket degrade the speed of receiving transactions
-        if (!checkGroupPacket(*_packet))
-        {
-            SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Drop unknown peer transactions")
-                                   << LOG_KV("fromNodeId", _packet->nodeId.abridged());
-            return;
+        {  // only from group nodes is permitted
+            std::lock_guard<std::mutex> lock(x_groupNodeList);
+            auto it = std::find(m_groupNodeList.begin(), m_groupNodeList.end(), _packet->nodeId);
+            if (it == m_groupNodeList.end())
+            {
+                SYNC_ENGINE_LOG(WARNING)
+                    << LOG_BADGE("Tx") << LOG_DESC("Drop unknown peer transactions")
+                    << LOG_DESC("Ignore sync packet not from node in group")
+                    << LOG_KV("fromNodeId", _packet->nodeId.abridged())
+                    << LOG_KV("packetType", int(_packet->packetType));
+                return;
+            }
         }
         m_txQueue->push(_packet, _msg, _packet->nodeId);
         if (m_onNotifySyncTrans)
@@ -281,7 +319,8 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
 
     SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                            << LOG_DESC("Receive peer block packet")
-                           << LOG_KV("packetSize(B)", rlps.data().size());
+                           << LOG_KV("packetSize(B)", rlps.data().size())
+                           << LOG_KV("fromNodeId", _packet.nodeId.abridged());
 
     m_syncStatus->bq().push(rlps);
     // notify sync master to solve DownloadingQueue
