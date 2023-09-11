@@ -33,7 +33,7 @@ class SystemConfigPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<SystemConfigPrecompiled>;
 
-    SystemConfigPrecompiled();
+    SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl);
     SystemConfigPrecompiled(const SystemConfigPrecompiled&) = default;
     SystemConfigPrecompiled& operator=(const SystemConfigPrecompiled&) = delete;
     SystemConfigPrecompiled(SystemConfigPrecompiled&&) = default;

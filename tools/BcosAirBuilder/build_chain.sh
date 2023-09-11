@@ -851,7 +851,7 @@ generate_node_scripts() {
     local stop_cmd="kill \${node_pid}"
     local pid="pid"
     local log_cmd="tail -n20  nohup.out"
-    local check_success="\$(${log_cmd} | grep running)"
+    local check_success="\$(${log_cmd} | grep -e running -e \"initialize server\")"
     if [ -n "${docker_mode}" ];then
         ps_cmd="\$(docker ps |grep \${SHELL_FOLDER//\//} | grep -v grep|awk '{print \$1}')"
         start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data fiscoorg/fiscobcos:${docker_tag} -c config.ini -g config.genesis"

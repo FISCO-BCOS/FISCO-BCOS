@@ -41,12 +41,10 @@ using namespace bcos::protocol;
 const char* const SYSCONFIG_METHOD_SET_STR = "setValueByKey(string,string)";
 const char* const SYSCONFIG_METHOD_GET_STR = "getValueByKey(string)";
 
-SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl::g_hashImpl)
+SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : Precompiled(hashImpl)
 {
-    name2Selector[SYSCONFIG_METHOD_SET_STR] =
-        getFuncSelector(SYSCONFIG_METHOD_SET_STR, GlobalHashImpl::g_hashImpl);
-    name2Selector[SYSCONFIG_METHOD_GET_STR] =
-        getFuncSelector(SYSCONFIG_METHOD_GET_STR, GlobalHashImpl::g_hashImpl);
+    name2Selector[SYSCONFIG_METHOD_SET_STR] = getFuncSelector(SYSCONFIG_METHOD_SET_STR, hashImpl);
+    name2Selector[SYSCONFIG_METHOD_GET_STR] = getFuncSelector(SYSCONFIG_METHOD_GET_STR, hashImpl);
     auto defaultCmp = [](std::string_view _key, int64_t _value, int64_t _minValue, uint32_t version,
                           BlockVersion minVersion = BlockVersion::V3_0_VERSION) {
         if (versionCompareTo(version, minVersion) < 0) [[unlikely]]
@@ -341,12 +339,11 @@ void SystemConfigPrecompiled::upgradeChain(
     }
 
     // Write default features when data version changes
-    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_VERSION))
+    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_3_VERSION))
     {
         Features bugfixFeatures;
         bugfixFeatures.setToDefault(protocol::BlockVersion(toVersion));
-        task::syncWait(bugfixFeatures.writeToStorage(
-            *_executive->blockContext().storage(), _executive->blockContext().number()));
+        task::syncWait(bugfixFeatures.writeToStorage(*_executive->blockContext().storage(), 0));
 
         // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
         if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
@@ -354,8 +351,8 @@ void SystemConfigPrecompiled::upgradeChain(
         {
             Features shardingFeatures;
             shardingFeatures.set(ledger::Features::Flag::feature_sharding);
-            task::syncWait(shardingFeatures.writeToStorage(
-                *_executive->blockContext().backendStorage(), _executive->blockContext().number()));
+            task::syncWait(
+                shardingFeatures.writeToStorage(*_executive->blockContext().backendStorage(), 0));
         }
     }
 }
