@@ -63,7 +63,7 @@ public:
         void setValue(typename MapType::iterator it) { m_it = it; };
 
         const KeyType& key() { return m_it->first; }
-        ValueType& value() { return const_cast<ValueType&>(m_it->second); }
+        ValueType& value() { return m_it->second; }
 
     private:
         typename Bucket::Ptr m_bucket;
