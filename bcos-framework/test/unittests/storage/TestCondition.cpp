@@ -1,6 +1,6 @@
 #include "bcos-framework/storage/Common.h"
-#include <fmt/format.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
 #include <sstream>
 
@@ -134,18 +134,55 @@ public:
     Condition() = default;
     ~Condition() = default;
 
-    void EQ(const std::string& value) { m_condition1.EQ(value); m_condition2.EQ(value); }
-    void NE(const std::string& value) { m_condition1.NE(value); m_condition2.NE(value); }
-    void GT(const std::string& value) { m_condition1.GT(value); m_condition2.GT(value); }
-    void GE(const std::string& value) { m_condition1.GE(value); m_condition2.GE(value); }
-    void LT(const std::string& value) { m_condition1.LT(value); m_condition2.LT(value); }
-    void LE(const std::string& value) { m_condition1.LE(value); m_condition2.LE(value); }
-    void startsWith(const std::string& value) { m_condition1.startsWith(value); m_condition2.startsWith(value); }
-    void endsWith(const std::string& value) { m_condition1.endsWith(value); m_condition2.endsWith(value); }
-    void contains(const std::string& value) { m_condition1.contains(value); m_condition2.contains(value); }
+    void EQ(const std::string& value)
+    {
+        m_condition1.EQ(value);
+        m_condition2.EQ(value);
+    }
+    void NE(const std::string& value)
+    {
+        m_condition1.NE(value);
+        m_condition2.NE(value);
+    }
+    void GT(const std::string& value)
+    {
+        m_condition1.GT(value);
+        m_condition2.GT(value);
+    }
+    void GE(const std::string& value)
+    {
+        m_condition1.GE(value);
+        m_condition2.GE(value);
+    }
+    void LT(const std::string& value)
+    {
+        m_condition1.LT(value);
+        m_condition2.LT(value);
+    }
+    void LE(const std::string& value)
+    {
+        m_condition1.LE(value);
+        m_condition2.LE(value);
+    }
+    void startsWith(const std::string& value)
+    {
+        m_condition1.startsWith(value);
+        m_condition2.startsWith(value);
+    }
+    void endsWith(const std::string& value)
+    {
+        m_condition1.endsWith(value);
+        m_condition2.endsWith(value);
+    }
+    void contains(const std::string& value)
+    {
+        m_condition1.contains(value);
+        m_condition2.contains(value);
+    }
 
-    template<typename TypeCond>
-    static std::vector<std::string> getKeys(const std::vector<std::string>& keys, const TypeCond& cond)
+    template <typename TypeCond>
+    static std::vector<std::string> getKeys(
+        const std::vector<std::string>& keys, const TypeCond& cond)
     {
         std::vector<std::string> ret;
         for (auto& key : keys)
@@ -164,15 +201,12 @@ public:
         auto ret2 = getKeys(data, m_condition2);
         if (emptyRes)
         {
-            return  ret1 == ret2 && ret1.empty();
+            return ret1 == ret2 && ret1.empty();
         }
-        return  ret1 == ret2;
+        return ret1 == ret2;
     }
 
-    bcos::storage::Condition getCondition() const 
-    {
-        return m_condition1;
-    }
+    bcos::storage::Condition getCondition() const { return m_condition1; }
 
 private:
     bcos::storage::Condition m_condition1;
@@ -184,7 +218,7 @@ static std::string fillZero(int _num)
     std::stringstream stream;
     stream << std::setfill('0') << std::setw(10) << std::right << _num;
     return stream.str();
-};
+}
 
 static std::vector<std::string> generateData(int start, int end)
 {
@@ -201,7 +235,7 @@ BOOST_FIXTURE_TEST_SUITE(TestCondition, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testGE)
 {
     auto testData = generateData(0, 20);
-    
+
     // no conflict condition
     {
         Condition cond;
@@ -601,7 +635,7 @@ BOOST_AUTO_TEST_CASE(testLE)
 }
 
 BOOST_AUTO_TEST_CASE(testNE)
-{   
+{
     auto testData = generateData(0, 20);
     {
         Condition cond;
@@ -621,7 +655,7 @@ BOOST_AUTO_TEST_CASE(testNE)
 }
 
 BOOST_AUTO_TEST_CASE(testEQ)
-{   
+{
     auto testData = generateData(0, 20);
     {
         Condition cond;
@@ -731,5 +765,5 @@ BOOST_AUTO_TEST_CASE(testENDS_WITH)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-}
-}
+}  // namespace test
+}  // namespace bcos

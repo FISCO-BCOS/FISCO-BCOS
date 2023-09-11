@@ -30,7 +30,7 @@ class CpuHeavyPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<CpuHeavyPrecompiled>;
 
-    CpuHeavyPrecompiled();
+    CpuHeavyPrecompiled(crypto::Hash::Ptr hashImpl);
 
     ~CpuHeavyPrecompiled() override = default;
 
@@ -39,9 +39,9 @@ public:
         PrecompiledExecResult::Ptr _callParameters) override;
 
     // is this precompiled need parallel processing, default false.
-    virtual bool isParallelPrecompiled() override { return true; }
+    bool isParallelPrecompiled() override { return true; }
 
-    virtual std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override
+    std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override
     {
         (void)param;
         (void)_isWasm;
@@ -56,12 +56,14 @@ public:
         return addressBytes.hex();
     }
 
-    static void registerPrecompiled(executor::PrecompiledMap::Ptr const& registeredMap)
+    static void registerPrecompiled(
+        executor::PrecompiledMap::Ptr const& registeredMap, crypto::Hash::Ptr hashImpl)
     {
         for (int id = 0; id < CPU_HEAVY_CONTRACT_NUM; id++)
         {
             std::string&& address = getAddress(id);
-            registeredMap->insert(address, std::make_shared<precompiled::CpuHeavyPrecompiled>());
+            registeredMap->insert(
+                address, std::make_shared<precompiled::CpuHeavyPrecompiled>(hashImpl));
         }
         BCOS_LOG(TRACE) << LOG_BADGE("CpuHeavy") << "Register CpuHeavyPrecompiled complete"
                         << LOG_KV("addressFrom", getAddress(0))

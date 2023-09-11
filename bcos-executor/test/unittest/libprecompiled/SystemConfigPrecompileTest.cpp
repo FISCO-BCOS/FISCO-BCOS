@@ -58,7 +58,7 @@ BOOST_FIXTURE_TEST_SUITE(SystemConfigPrecompiledTest, SystemConfigPrecompiledFix
 
 BOOST_AUTO_TEST_CASE(getAndSetFeature)
 {
-    SystemConfigPrecompiled systemConfigPrecompiled;
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
     auto setParameters = std::make_shared<PrecompiledExecResult>();
 
     CodecWrapper codec(hashImpl, false);
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
 BOOST_AUTO_TEST_CASE(upgradeVersion)
 {
     task::syncWait([this]() -> task::Task<void> {
-        SystemConfigPrecompiled systemConfigPrecompiled;
+        SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
         auto setParameters = std::make_shared<PrecompiledExecResult>();
 
         CodecWrapper codec(hashImpl, false);

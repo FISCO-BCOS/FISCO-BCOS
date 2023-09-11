@@ -432,13 +432,13 @@ void AuthManagerPrecompiled::setContractStatus(
     auto func = getParamFunc(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    if (func == getFuncSelector(AUTH_METHOD_SET_CONTRACT))
+    if (func == getFuncSelector(AUTH_METHOD_SET_CONTRACT, m_hashImpl))
     {
         Address contractAddress;
         codec.decode(data, contractAddress, isFreeze);
         address = contractAddress.hex();
     }
-    else if (func == getFuncSelector(AUTH_METHOD_SET_CONTRACT_32))
+    else if (func == getFuncSelector(AUTH_METHOD_SET_CONTRACT_32, m_hashImpl))
     {
         Address contractAddress;
         codec.decode(data, contractAddress, status);

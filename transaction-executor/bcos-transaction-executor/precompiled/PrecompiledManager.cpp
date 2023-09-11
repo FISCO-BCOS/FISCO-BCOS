@@ -51,7 +51,7 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
             executor::PrecompiledRegistrar::executor("blake2_compression")));
 
     m_address2Precompiled.emplace_back(
-        0x1000, std::make_shared<precompiled::SystemConfigPrecompiled>());
+        0x1000, std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
         0x1003, std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
@@ -83,9 +83,9 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
     m_address2Precompiled.emplace_back(
         0x100f, std::make_shared<precompiled::CastPrecompiled>(GlobalHashImpl::g_hashImpl));
     m_address2Precompiled.emplace_back(
-        0x10003, std::make_shared<precompiled::AccountManagerPrecompiled>());
+        0x10003, std::make_shared<precompiled::AccountManagerPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
-        0x10004, std::make_shared<precompiled::AccountPrecompiled>());
+        0x10004, std::make_shared<precompiled::AccountPrecompiled>(m_hashImpl));
 
     std::sort(m_address2Precompiled.begin(), m_address2Precompiled.end(),
         [](const auto& lhs, const auto& rhs) { return std::get<0>(lhs) < std::get<0>(rhs); });

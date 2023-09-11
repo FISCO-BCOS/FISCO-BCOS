@@ -64,7 +64,7 @@ BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashI
     name2Selector[FILE_SYSTEM_METHOD_INIT] = getFuncSelector(FILE_SYSTEM_METHOD_INIT, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_REBUILD] =
         getFuncSelector(FILE_SYSTEM_METHOD_REBUILD, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_FIX] = getFuncSelector(FILE_SYSTEM_METHOD_FIX);
+    name2Selector[FILE_SYSTEM_METHOD_FIX] = getFuncSelector(FILE_SYSTEM_METHOD_FIX, _hashImpl);
     BfsTypeSet = {FS_TYPE_DIR, FS_TYPE_CONTRACT, FS_TYPE_LINK};
 }
 

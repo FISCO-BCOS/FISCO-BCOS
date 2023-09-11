@@ -245,7 +245,7 @@ void TransactionExecutor::initEvmEnvironment()
         make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("blake2_compression"),
             PrecompiledRegistrar::executor("blake2_compression"))});
 
-    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>();
+    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     auto tableManagerPrecompiled =
         std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
@@ -288,10 +288,10 @@ void TransactionExecutor::initEvmEnvironment()
         });
     m_precompiled->insert(CAST_ADDRESS,
         std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl), BlockVersion::V3_2_VERSION);
-    m_precompiled->insert(ACCOUNT_MGR_ADDRESS, std::make_shared<AccountManagerPrecompiled>(),
+    m_precompiled->insert(ACCOUNT_MGR_ADDRESS,
+        std::make_shared<AccountManagerPrecompiled>(m_hashImpl), BlockVersion::V3_1_VERSION);
+    m_precompiled->insert(ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(m_hashImpl),
         BlockVersion::V3_1_VERSION);
-    m_precompiled->insert(
-        ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(), BlockVersion::V3_1_VERSION);
 
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS, CAST_ADDRESS};
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
@@ -302,8 +302,8 @@ void TransactionExecutor::initEvmEnvironment()
     }
     else
     {
-        CpuHeavyPrecompiled::registerPrecompiled(m_precompiled);
-        SmallBankPrecompiled::registerPrecompiled(m_precompiled);
+        CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
+        SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
     }
 }
 
@@ -311,7 +311,7 @@ void TransactionExecutor::initWasmEnvironment()
 {
     m_precompiled = std::make_shared<PrecompiledMap>();
 
-    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>();
+    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     auto tableManagerPrecompiled =
         std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
@@ -344,10 +344,10 @@ void TransactionExecutor::initWasmEnvironment()
 
     m_precompiled->insert(CAST_NAME, std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl),
         BlockVersion::V3_2_VERSION);
-    m_precompiled->insert(ACCOUNT_MANAGER_NAME, std::make_shared<AccountManagerPrecompiled>(),
+    m_precompiled->insert(ACCOUNT_MANAGER_NAME,
+        std::make_shared<AccountManagerPrecompiled>(m_hashImpl), BlockVersion::V3_1_VERSION);
+    m_precompiled->insert(ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(m_hashImpl),
         BlockVersion::V3_1_VERSION);
-    m_precompiled->insert(
-        ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(), BlockVersion::V3_1_VERSION);
 
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS, CAST_ADDRESS};
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
@@ -359,8 +359,8 @@ void TransactionExecutor::initWasmEnvironment()
     }
     else
     {
-        CpuHeavyPrecompiled::registerPrecompiled(m_precompiled);
-        SmallBankPrecompiled::registerPrecompiled(m_precompiled);
+        CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
+        SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
     }
 }
 
@@ -502,8 +502,8 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 {
                     // Only 3.1 goes here,for compat with the bug:
                     // 3.1 only init these two precompiled in genesis block
-                    CpuHeavyPrecompiled::registerPrecompiled(m_precompiled);
-                    SmallBankPrecompiled::registerPrecompiled(m_precompiled);
+                    CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
+                    SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
                 }
 
                 initTestPrecompiledTable(stateStorage);
@@ -2208,7 +2208,8 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
         callback)
 {
     ExecuteOutputs::Ptr allOutputs = std::make_shared<ExecuteOutputs>();
-    EXECUTOR_NAME_LOG(DEBUG) << "asyncExecuteExecutiveFlow start" << LOG_KV("blockNumber", m_blockContext->number());
+    EXECUTOR_NAME_LOG(DEBUG) << "asyncExecuteExecutiveFlow start"
+                             << LOG_KV("blockNumber", m_blockContext->number());
     executiveFlow->asyncRun(
         // onTxReturn
         [this, allOutputs, callback](CallParameters::UniquePtr output) {

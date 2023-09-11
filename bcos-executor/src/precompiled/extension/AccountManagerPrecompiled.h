@@ -30,7 +30,7 @@ class AccountManagerPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<AccountManagerPrecompiled>;
-    AccountManagerPrecompiled();
+    AccountManagerPrecompiled(crypto::Hash::Ptr hashImpl);
     ~AccountManagerPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
