@@ -54,9 +54,6 @@ MemoryStorage::MemoryStorage(
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer = std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer");
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
-    m_inRateCollector.start();
-    m_sealRateCollector.start();
-    m_removeRateCollector.start();
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
                      << LOG_KV("txsExpirationTime", m_txsExpirationTime)
@@ -69,6 +66,10 @@ void MemoryStorage::start()
     {
         m_cleanUpTimer->start();
     }
+
+    m_inRateCollector.start();
+    m_sealRateCollector.start();
+    m_removeRateCollector.start();
 }
 
 void MemoryStorage::stop()
