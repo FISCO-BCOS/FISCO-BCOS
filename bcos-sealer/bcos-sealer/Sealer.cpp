@@ -115,8 +115,8 @@ void Sealer::executeWorker()
     // try to generateProposal
     if (m_sealingManager->shouldGenerateProposal())
     {
-        auto ret =
-            m_sealingManager->generateProposal([this](bcos::protocol::Block::Ptr _block) -> bool {
+        auto ret = m_sealingManager->generateProposal(
+            [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
                 return hookWhenSealBlock(std::move(_block));
             });
         auto proposal = ret.second;
@@ -191,12 +191,12 @@ void Sealer::asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse)
     }
 }
 
-bool Sealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
+uint16_t Sealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
 {
     if (!m_sealerConfig->consensus()->shouldRotateSealers(
             _block == nullptr ? -1 : _block->blockHeader()->number()))
     {
-        return true;
+        return SealBlockResult::SUCCESS;
     }
     return VRFBasedSealer::generateTransactionForRotating(
         _block, m_sealerConfig, m_sealingManager, m_hashImpl);

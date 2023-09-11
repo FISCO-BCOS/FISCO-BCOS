@@ -617,7 +617,6 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
             }
             // new precommit proposal
             preparedProposals[proposal->index()] = proposal;
-            proposal->setGeneratedFrom(viewChangeReq->generatedFrom());
         }
     }
     // generate prepareMsg from maxCommittedIndex to  maxPrecommitIndex
