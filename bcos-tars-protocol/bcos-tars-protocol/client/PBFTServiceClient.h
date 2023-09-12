@@ -161,7 +161,7 @@ public:
         throw std::runtime_error("PBFTServiceClient: asyncResetSealing: unimplemented interface!");
     }
 
-    bool hookWhenSealBlock(bcos::protocol::Block::Ptr) override
+    uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr) override
     {
         throw std::runtime_error("PBFTServiceClient: hookWhenSealBlock: unimplemented interface!");
     }

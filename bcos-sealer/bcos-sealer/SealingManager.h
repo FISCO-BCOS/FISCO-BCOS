@@ -54,7 +54,7 @@ public:
     virtual bool shouldFetchTransaction();
 
     std::pair<bool, bcos::protocol::Block::Ptr> generateProposal(
-        std::function<bool(bcos::protocol::Block::Ptr)> = nullptr);
+        std::function<uint16_t(bcos::protocol::Block::Ptr)> = nullptr);
     virtual void setUnsealedTxsSize(size_t _unsealedTxsSize)
     {
         m_unsealedTxsSize = _unsealedTxsSize;

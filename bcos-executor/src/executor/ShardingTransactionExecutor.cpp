@@ -307,7 +307,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
 
                     if (error)
                     {
-                        auto errorMessage = "[" + m_name + "] asyncFillBlock failed";
+                        auto errorMessage = "[" + m_name + "] asyncFillBlock failed ";
                         EXECUTOR_NAME_LOG(ERROR)
                             << BLOCK_NUMBER(blockNumber) << errorMessage << error->errorMessage();
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(

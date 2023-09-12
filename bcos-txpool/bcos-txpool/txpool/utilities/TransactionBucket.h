@@ -21,7 +21,7 @@ public:
 
         TransactionData(bcos::protocol::Transaction::Ptr _transaction)
           : txHash(_transaction->hash()),
-            timeStamp(_transaction->importTime()),
+            timeStamp(_transaction->importTime() * 1000000 + utcTimeUs() % 1000000),
             transaction(_transaction)
         {}
     };
@@ -45,12 +45,18 @@ public:
     {
     public:
         IteratorImpl(typename Container::nth_index<0>::type::iterator& it)
-          : first(it->txHash), second(it->transaction), m_iterator(it)
+          : first(it->txHash),
+            // we assume that _transaction is not indexed so we can cast it to non-const
+            second(const_cast<bcos::protocol::Transaction::Ptr&>(it->transaction)),
+            m_iterator(it)
         {}
 
         IteratorImpl(const bcos::crypto::HashType& _first,
             const bcos::protocol::Transaction::Ptr& _transaction)
-          : first(_first), second(_transaction), m_iterator()
+          : first(_first),
+            // we assume that _transaction is not indexed so we can cast it to non-const
+            second(const_cast<bcos::protocol::Transaction::Ptr&>(_transaction)),
+            m_iterator()
         {}
 
         friend bool operator==(
@@ -68,7 +74,7 @@ public:
         Container::nth_index<0>::type::iterator getIterator() const { return m_iterator; }
 
         const bcos::crypto::HashType& first;
-        const bcos::protocol::Transaction::Ptr& second;
+        bcos::protocol::Transaction::Ptr& second;
 
     private:
         typename Container::nth_index<0>::type::iterator m_iterator;

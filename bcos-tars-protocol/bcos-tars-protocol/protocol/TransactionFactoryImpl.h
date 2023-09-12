@@ -71,6 +71,9 @@ public:
 
         if (checkSig)
         {
+            transaction->mutableInner().sender.clear();  // Bugfix: User will fake a illegal sender,
+            // must clear sender given by rpc
+
             transaction->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
         }
         return transaction;
