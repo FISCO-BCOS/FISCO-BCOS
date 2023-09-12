@@ -85,6 +85,9 @@ public:
     void getObserverList(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override;
 
+    void getNodeListByType(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _nodeType, RespFunc _respFunc) override;
+
     void getPbftView(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override;
 
