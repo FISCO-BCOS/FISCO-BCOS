@@ -96,7 +96,8 @@ void testTransactionBucket()
     {
         txsTimeStamp.emplace_back(tx->hash(), tx->importTime());
         std::cout << "#### test ####" << txsTimeStamp.size() << "#### txhash: " << tx->hash()
-                  << "#### timeStamp: " << tx->importTime() << std::endl;
+                  << "#### timeStamp: " << tx->importTime() * 1000000 + utcTimeUs() % 1000000
+                  << std::endl;
     }
     //    std::sort(txsTimeStamp.begin(), txsTimeStamp.end(), []
     //        (const std::pair<bcos::crypto::HashType, int64_t>& a, const

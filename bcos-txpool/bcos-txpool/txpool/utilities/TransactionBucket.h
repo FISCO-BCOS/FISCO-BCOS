@@ -21,7 +21,7 @@ public:
 
         TransactionData(bcos::protocol::Transaction::Ptr _transaction)
           : txHash(_transaction->hash()),
-            timeStamp(_transaction->importTime()),
+            timeStamp(_transaction->importTime() * 1000000 + utcTimeUs() % 1000000),
             transaction(_transaction)
         {}
     };
