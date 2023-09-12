@@ -30,25 +30,34 @@
 namespace bcos::sealer
 {
 
-bool VRFBasedSealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
+uint16_t VRFBasedSealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
 {
     const auto& consensusConfig = dynamic_cast<consensus::ConsensusConfig const&>(
         *m_sealerConfig->consensus()->consensusConfig());
     if (!consensusConfig.shouldRotateSealers(
             _block == nullptr ? -1 : _block->blockHeader()->number()))
     {
-        return true;
+        return SealBlockResult::SUCCESS;
     }
     return generateTransactionForRotating(_block, m_sealerConfig, m_sealingManager, m_hashImpl);
 }
 
-bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,
+uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,
     SealerConfig::Ptr const& _sealerConfig, SealingManager::ConstPtr const& _sealingManager,
     crypto::Hash::Ptr const& _hashImpl)
 {
     try
     {
         auto blockNumber = _block->blockHeader()->number();
+        if (_sealingManager->latestNumber() < blockNumber)
+        {
+            SEAL_LOG(INFO) << LOG_DESC(
+                                  "generateTransactionForRotating: interrupt pipeline for waiting "
+                                  "latest block commit")
+                           << LOG_KV("latestNumber", _sealingManager->latestNumber())
+                           << LOG_KV("sealingNumber", blockNumber);
+            return SealBlockResult::WAIT_FOR_LATEST_BLOCK;
+        }
         auto blockHash = _sealingManager->latestHash();
         auto keyPair = _sealerConfig->keyPair();
         CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
@@ -70,7 +79,7 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
             SEAL_LOG(WARNING) << LOG_DESC(
                                      "generateTransactionForRotating: generate vrf-proof failed")
                               << LOG_KV("inputData", blockHash.hex());
-            return false;
+            return SealBlockResult::FAILED;
         }
 
         std::string interface = precompiled::WSM_METHOD_ROTATE_STR;
@@ -95,7 +104,7 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
             SEAL_LOG(WARNING) << LOG_DESC("generateTransactionForRotating failed for txpool submit")
                               << LOG_KV("nodeIdx", _sealerConfig->consensus()->nodeIndex())
                               << LOG_KV("submitResult", submitResult);
-            return false;
+            return SealBlockResult::FAILED;
         }
 
         // put the generated transaction into the 0th position of the block transactions
@@ -120,8 +129,8 @@ bool VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& 
         SEAL_LOG(INFO) << LOG_DESC("generateTransactionForRotating failed")
                        << LOG_KV("nodeIdx", _sealerConfig->consensus()->nodeIndex())
                        << LOG_KV("exception", boost::diagnostic_information(e));
-        return false;
+        return SealBlockResult::FAILED;
     }
-    return true;
+    return SealBlockResult::SUCCESS;
 }
 }  // namespace bcos::sealer

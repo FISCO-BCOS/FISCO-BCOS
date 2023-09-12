@@ -148,7 +148,7 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
     }
     if (HashType(m_vrfInfo->vrfInput()) != parentHash)
     {
-        PRECOMPILED_LOG(ERROR)
+        PRECOMPILED_LOG(WARNING)
             << LOG_DESC("checkVRFInfos: Invalid VRFInput, must be the parent block hash")
             << LOG_KV("parentHash", parentHash.abridged())
             << LOG_KV("vrfInput", toHex(m_vrfInfo->vrfInput())) << LOG_KV("origin", origin);
@@ -157,15 +157,15 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
     // check vrf public key: must be valid
     if (!m_vrfInfo->isValidVRFPublicKey())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("checkVRFInfos: Invalid VRF public key")
-                               << LOG_KV("publicKey", toHex(m_vrfInfo->vrfPublicKey()));
+        PRECOMPILED_LOG(WARNING) << LOG_DESC("checkVRFInfos: Invalid VRF public key")
+                                 << LOG_KV("publicKey", toHex(m_vrfInfo->vrfPublicKey()));
         BOOST_THROW_EXCEPTION(PrecompiledError("Invalid VRF Public Key!"));
     }
     // verify vrf proof
     if (!m_vrfInfo->verifyProof())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("checkVRFInfos: VRF proof verify failed")
-                               << LOG_KV("origin", origin);
+        PRECOMPILED_LOG(WARNING) << LOG_DESC("checkVRFInfos: VRF proof verify failed")
+                                 << LOG_KV("origin", origin);
         BOOST_THROW_EXCEPTION(PrecompiledError("Verify VRF proof failed!"));
     }
 }

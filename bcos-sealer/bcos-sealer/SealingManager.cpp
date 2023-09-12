@@ -18,6 +18,7 @@
  * @date: 2021-05-14
  */
 #include "SealingManager.h"
+#include "Sealer.h"
 using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::crypto;
@@ -60,11 +61,7 @@ bool SealingManager::shouldGenerateProposal()
     }
     // check the txs size
     auto txsSize = pendingTxsSize();
-    if (txsSize >= m_maxTxsPerBlock || reachMinSealTimeCondition())
-    {
-        return true;
-    }
-    return false;
+    return txsSize >= m_maxTxsPerBlock || reachMinSealTimeCondition();
 }
 
 void SealingManager::clearPendingTxs()
@@ -138,7 +135,7 @@ void SealingManager::notifyResetProposal(bcos::protocol::Block::Ptr _block)
 }
 
 std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
-    std::function<bool(bcos::protocol::Block::Ptr)> _handleBlockHook)
+    std::function<uint16_t(bcos::protocol::Block::Ptr)> _handleBlockHook)
 {
     if (!shouldGenerateProposal())
     {
@@ -170,7 +167,8 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
         // Note: must set generatedTx into the first transaction for other transactions may change
         //       the _sys_config_ and _sys_consensus_
         //       here must use noteChange for this function will notify updating the txsCache
-        if (_handleBlockHook(block))
+        auto handleRet = _handleBlockHook(block);
+        if (handleRet == Sealer::SealBlockResult::SUCCESS)
         {
             if (block->transactionsMetaDataSize() > 0 || block->transactionsSize() > 0)
             {
@@ -180,6 +178,14 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
                     txsSize--;
                 }
             }
+        }
+        else if (handleRet == Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK)
+        {
+            SEAL_LOG(INFO) << LOG_DESC("seal the rotate transactions, but not update latest block")
+                           << LOG_KV("sealNextBlockUntil", m_waitUntil)
+                           << LOG_KV("curNum", m_latestNumber);
+            m_waitUntil.store(m_sealingNumber - 1);
+            return {false, nullptr};
         }
     }
     for (size_t i = 0; i < systemTxsSize; i++)
