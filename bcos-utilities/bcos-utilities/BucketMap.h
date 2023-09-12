@@ -290,21 +290,23 @@ public:
     void batchFind(
         const auto& keys, std::function<bool(const KeyType&, typename AccessorType::Ptr)> handler)
     {
-        forEach<AccessorType>(keys, [handler = std::move(handler)](const KeyType& key,
+        forEach<AccessorType>(
+            keys, [handler = std::move(handler)](const KeyType& key,
                       typename BucketType::Ptr bucket, typename AccessorType::Ptr accessor) {
-            bool has = bucket->template find<AccessorType>(accessor, key);
-            return handler(key, has ? accessor : nullptr);
-        });
+                bool has = bucket->template find<AccessorType>(accessor, key);
+                return handler(key, has ? accessor : nullptr);
+            });
     }
 
     void batchInsert(const auto& kvs,
         std::function<void(bool, const KeyType&, typename WriteAccessor::Ptr)> onInsert)
     {
-        forEach<WriteAccessor>(kvs, [onInsert = std::move(onInsert)](decltype(kvs.front()) kv,
+        forEach<WriteAccessor>(
+            kvs, [onInsert = std::move(onInsert)](decltype(kvs.front()) kv,
                      typename BucketType::Ptr bucket, typename WriteAccessor::Ptr accessor) {
-            bucket->insert(accessor, kv);
-            return true;
-        });
+                bucket->insert(accessor, kv);
+                return true;
+            });
     }
 
     void batchInsert(const auto& kvs)
@@ -315,12 +317,13 @@ public:
     void batchRemove(
         const auto& keys, std::function<void(bool, const KeyType&, const ValueType&)> onRemove)
     {
-        forEach<WriteAccessor>(keys, [onRemove = std::move(onRemove)](const KeyType& key,
+        forEach<WriteAccessor>(
+            keys, [onRemove = std::move(onRemove)](const KeyType& key,
                       typename BucketType::Ptr bucket, typename WriteAccessor::Ptr accessor) {
-            auto [success, value] = bucket->remove(accessor, key);
-            onRemove(success, key, value);
-            return true;
-        });
+                auto [success, value] = bucket->remove(accessor, key);
+                onRemove(success, key, value);
+                return true;
+            });
     }
 
     void batchRemove(const auto& keys)
@@ -515,7 +518,8 @@ public:
             RANGES::iota_view<size_t, size_t>{startIdx, startIdx + bucketsSize} |
             RANGES::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
 
-        forEachBucket<AccessorType>(indexes, [handler = std::move(handler)](size_t, typename BucketType::Ptr bucket,
+        forEachBucket<AccessorType>(
+            indexes, [handler = std::move(handler)](size_t, typename BucketType::Ptr bucket,
                          typename AccessorType::Ptr accessor) {
                 return bucket->template forEach<AccessorType>(handler, accessor);
             });

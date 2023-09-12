@@ -42,10 +42,10 @@ public:
     VRFBasedSealer(VRFBasedSealer&&) = delete;
     VRFBasedSealer& operator=(VRFBasedSealer&&) = delete;
 
-    bool hookWhenSealBlock(bcos::protocol::Block::Ptr _block) override;
+    uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr _block) override;
 
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
-    static bool generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,
+    static uint16_t generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,
         SealerConfig::Ptr const&, SealingManager::ConstPtr const&, crypto::Hash::Ptr const&);
 };
 }  // namespace bcos::sealer

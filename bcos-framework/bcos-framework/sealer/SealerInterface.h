@@ -50,7 +50,7 @@ public:
     // interface for the consensus module to notify reset the sealing transactions
     virtual void asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
-    virtual bool hookWhenSealBlock(bcos::protocol::Block::Ptr) = 0;
+    virtual uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr) = 0;
 };
 }  // namespace sealer
 }  // namespace bcos

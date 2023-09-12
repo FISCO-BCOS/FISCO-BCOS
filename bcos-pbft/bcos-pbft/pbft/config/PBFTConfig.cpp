@@ -476,6 +476,10 @@ std::string PBFTConfig::printCurrentState()
                  << LOG_KV("waitResealUntil", m_waitResealUntil)
                  << LOG_KV("consensusTimeout", m_consensusTimeout.load())
                  << LOG_KV("nodeId", nodeID()->shortHex());
+    if (c_fileLogLevel <= DEBUG)
+    {
+        stringstream << LOG_KV("nodeAddr", cryptoSuite()->calculateAddress(nodeID())).hex();
+    }
     return stringstream.str();
 }
 
