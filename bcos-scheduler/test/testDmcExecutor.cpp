@@ -2,13 +2,13 @@
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/ExecutiveState.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
 #include "bcos-scheduler/src/GraphKeyLocks.h"
-#include "bcos-tars-protocol/testutil/FakeBlock.h"
-#include "bcos-tars-protocol/testutil/FakeBlockHeader.h"
 #include "mock/MockDmcExecutor.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>

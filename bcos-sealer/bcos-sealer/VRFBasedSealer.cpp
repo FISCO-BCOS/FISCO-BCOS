@@ -49,7 +49,7 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
     try
     {
         auto blockNumber = _block->blockHeader()->number();
-        if (_sealingManager->latestNumber() < blockNumber)
+        if (_sealingManager->latestNumber() < blockNumber - 1)
         {
             SEAL_LOG(INFO) << LOG_DESC(
                                   "generateTransactionForRotating: interrupt pipeline for waiting "
@@ -74,7 +74,7 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
         vrfProof.resize(curve25519VRFProofSize);
         COutputBuffer proof{(char*)vrfProof.data(), curve25519VRFProofSize};
         auto vrfProve = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
-        if (vrfProve != WEDPR_SUCCESS || pubkeyDerive != WEDPR_SUCCESS)
+        if (vrfProve != WEDPR_SUCCESS || pubkeyDerive != WEDPR_SUCCESS) [[unlikely]]
         {
             SEAL_LOG(WARNING) << LOG_DESC(
                                      "generateTransactionForRotating: generate vrf-proof failed")

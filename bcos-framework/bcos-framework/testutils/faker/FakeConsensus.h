@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-pbft/pbft/config/PBFTConfig.h>
 #include <bcos-utilities/ThreadPool.h>
 using namespace bcos;
 using namespace bcos::consensus;
@@ -32,11 +33,26 @@ namespace bcos
 {
 namespace test
 {
+class FakeConsensusConfig : public ConsensusConfig
+{
+public:
+    explicit FakeConsensusConfig(bcos::crypto::KeyPairInterface::Ptr _key)
+      : ConsensusConfig(_key){};
+    bool shouldRotateSealers(protocol::BlockNumber) const override {
+        return true;
+    }
+    virtual void updateQuorum() override {}
+    uint64_t minRequiredQuorum() const override { return 0; }
+};
 class FakeConsensus : public ConsensusInterface
 {
 public:
     using Ptr = std::shared_ptr<FakeConsensus>;
     FakeConsensus() { m_taskPool = std::make_shared<ThreadPool>("task", 1); }
+    FakeConsensus(bcos::crypto::KeyPairInterface::Ptr _keyPair) : FakeConsensus()
+    {
+        m_kp = _keyPair;
+    }
     ~FakeConsensus() override {}
 
 
@@ -85,10 +101,16 @@ public:
         bcos::crypto::NodeIDSet const&, std::function<void(Error::Ptr)>) override
     {}
 
+    virtual consensus::ConsensusConfigInterface::ConstPtr consensusConfig() const override
+    {
+        return std::make_shared<FakeConsensusConfig>(m_kp);
+    };
+
 private:
     std::atomic_bool m_checkBlockResult = {true};
     LedgerConfig::Ptr m_ledgerConfig;
     ThreadPool::Ptr m_taskPool;
+    bcos::crypto::KeyPairInterface::Ptr m_kp;
 };
 }  // namespace test
 }  // namespace bcos

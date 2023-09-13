@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,11 +18,12 @@
  * @date: 2021-03-16
  */
 #pragma once
+#include "bcos-crypto/bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/bcos-crypto/hash/SM3.h"
+#include "bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-protocol/Common.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
-#include <bcos-framework/protocol/Exceptions.h>
-#include <bcos-utilities/Common.h>
+#include "bcos-utilities/bcos-utilities/Common.h"
 #include <tbb/parallel_invoke.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -124,6 +125,7 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
     blockHeader->setConsensusWeights(weights);
 
     BOOST_CHECK(blockHeaderImpl->inner().dataHash.empty());
+    blockHeader->calculateHash(*_cryptoSuite->hashImpl());
 
     if (_check)
     {
@@ -145,25 +147,18 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
             std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(decodedBlockHeader);
 
         BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
+        decodedBlockHeader->calculateHash(*_cryptoSuite->hashImpl());
 #if 0
     std::cout << "### PBBlockHeaderTest: encodedData:" << *toHexString(*encodedData) << std::endl;
 #endif
-        // Same tested in tars
-        // check the data of decodedBlockHeader
-        // checkBlockHeader(blockHeader, decodedBlockHeader);
-        // test encode exception
-        // (*encodedData)[0] += 1;
-        // bcostars::protocol::BlockHeaderImpl decodedBlock(_cryptoSuite);
-        // BOOST_CHECK_THROW(
-        //     std::make_shared<bcostars::protocol::BlockHeaderImpl>(_cryptoSuite, *encodedData),
-        //     PBObjectDecodeException);
-
         // update the hash data field
         blockHeader->setNumber(_number + 1);
+        blockHeader->calculateHash(*_cryptoSuite->hashImpl());
         BOOST_CHECK(blockHeader->hash() != decodedBlockHeader->hash());
         BOOST_CHECK(blockHeader->number() == decodedBlockHeader->number() + 1);
         // recover the hash field
         blockHeader->setNumber(_number);
+        blockHeader->calculateHash(*_cryptoSuite->hashImpl());
         BOOST_CHECK(blockHeader->hash() == decodedBlockHeader->hash());
         BOOST_CHECK(decodedBlockHeader->consensusWeights().size() == 1);
         BOOST_CHECK(decodedBlockHeader->consensusWeights()[0] == 0);
@@ -213,17 +208,18 @@ inline SignatureList fakeSignatureList(SignatureCrypto::Ptr _signImpl,
     return signatureList;
 }
 
-inline BlockHeader::Ptr testPBBlockHeader(CryptoSuite::Ptr _cryptoSuite)
+inline BlockHeader::Ptr testPBBlockHeader(
+    CryptoSuite::Ptr _cryptoSuite, BlockNumber _blockNumber, bool _isCheck = false)
 {
     auto hashImpl = _cryptoSuite->hashImpl();
     auto signImpl = _cryptoSuite->signatureImpl();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
     int version = 10;
-    auto parentInfo = fakeParentInfo(hashImpl, 3);
+    auto parentInfo = fakeParentInfo(hashImpl, 1);
     auto txsRoot = hashImpl->hash((std::string) "txsRoot");
     auto receiptsRoot = hashImpl->hash((std::string) "receiptsRoot");
     auto stateRoot = hashImpl->hash((std::string) "stateRoot");
-    int64_t number = 12312312412;
+    int64_t number = _blockNumber;
     u256 gasUsed = 3453456346534;
     int64_t timestamp = 9234234234;
     int64_t sealer = 100;
@@ -234,19 +230,7 @@ inline BlockHeader::Ptr testPBBlockHeader(CryptoSuite::Ptr _cryptoSuite)
 
     auto blockHeader =
         fakeAndTestBlockHeader(cryptoSuite, version, parentInfo, txsRoot, receiptsRoot, stateRoot,
-            number, gasUsed, timestamp, sealer, sealerList, extraData, signatureList);
-
-    // test verifySignatureList
-    signatureList = fakeSignatureList(signImpl, keyPairVec, blockHeader->hash());
-    blockHeader->setSignatureList(signatureList);
-    blockHeader->verifySignatureList(*hashImpl, *signImpl);
-
-    auto invalidSignatureList = fakeSignatureList(signImpl, keyPairVec, receiptsRoot);
-    blockHeader->setSignatureList(invalidSignatureList);
-    BOOST_CHECK_THROW(blockHeader->verifySignatureList(*hashImpl, *signImpl), InvalidSignatureList);
-
-    blockHeader->setSignatureList(signatureList);
-    blockHeader->verifySignatureList(*hashImpl, *signImpl);
+            number, gasUsed, timestamp, sealer, sealerList, extraData, signatureList, _isCheck);
     return blockHeader;
 }
 }  // namespace test

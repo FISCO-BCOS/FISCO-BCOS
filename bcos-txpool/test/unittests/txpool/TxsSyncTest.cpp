@@ -18,14 +18,14 @@
  * @author: yujiechen
  * @date 2021-05-26
  */
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
-#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <tbb/blocked_range.h>

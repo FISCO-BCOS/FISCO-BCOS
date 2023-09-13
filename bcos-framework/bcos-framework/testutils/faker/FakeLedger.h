@@ -22,7 +22,7 @@
 #include "../../ledger/LedgerConfig.h"
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
-#include "bcos-tars-protocol/testutil/FakeBlock.h"
+#include "FakeBlock.h"
 #include <bcos-utilities/ThreadPool.h>
 
 #include <utility>
@@ -100,8 +100,8 @@ public:
     Block::Ptr init(BlockHeader::Ptr _parentBlockHeader, bool _withHeader, BlockNumber _blockNumber,
         size_t _txsSize, int64_t _timestamp = utcTime())
     {
-        auto block = fakeAndCheckBlock(
-            m_blockFactory->cryptoSuite(), m_blockFactory, false, _txsSize, 0, false);
+        auto block = fakeAndCheckBlock(m_blockFactory->cryptoSuite(), m_blockFactory, _txsSize,
+            _txsSize, _blockNumber, true, false);
         if (!_withHeader)
         {
             return block;

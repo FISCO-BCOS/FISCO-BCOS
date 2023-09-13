@@ -19,9 +19,9 @@
  * @date 2021-05-25
  */
 #pragma once
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include <bcos-tars-protocol/testutil/FakeBlock.h>
-#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
 
 #include "bcos-tool/TreeTopology.h"
 #include "bcos-txpool/TxPoolConfig.h"

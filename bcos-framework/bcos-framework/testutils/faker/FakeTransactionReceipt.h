@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,14 +18,17 @@
  * @date: 2021-03-16
  */
 #pragma once
-#include "../protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-crypto/bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/bcos-crypto/hash/SM3.h"
+#include "bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-utilities/Common.h>
+#include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-utilities/bcos-utilities/Common.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
+using namespace bcos::protocol;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
@@ -33,9 +36,9 @@ namespace bcos
 {
 namespace test
 {
-inline protocol::LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
+inline LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
 {
-    auto logEntries = std::make_shared<protocol::LogEntries>();
+    LogEntriesPtr logEntries = std::make_shared<LogEntries>();
     for (size_t i = 0; i < _size; i++)
     {
         auto topic = _hashImpl->hash(std::to_string(i));
@@ -43,7 +46,7 @@ inline protocol::LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
         topics.push_back(topic);
         auto address = right160(topic).asBytes();
         bytes output = topic.asBytes();
-        protocol::LogEntry logEntry(address, topics, output);
+        LogEntry logEntry(address, topics, output);
         logEntries->push_back(logEntry);
     }
     return logEntries;
@@ -71,22 +74,23 @@ inline void checkReceipts(Hash::Ptr hashImpl, bcos::protocol::TransactionReceipt
 }
 
 inline TransactionReceipt::Ptr testPBTransactionReceipt(
-    CryptoSuite::Ptr _cryptoSuite, bool _check = true)
+    CryptoSuite::Ptr _cryptoSuite, BlockNumber _blockNumber, bool _check = true)
 {
     auto hashImpl = _cryptoSuite->hashImpl();
-    u256 gasUsed = 12343242342;
-    auto contractAddress = std::string("5fe3c4c3e2079879a0dba1937aca95ac16e68f0f");
+    u256 gasUsed = 12343242342 + random();
+    auto contractAddress = "5fe3c4c3e2079879a0dba1937aca95ac16e68f0f";
     auto logEntries = fakeLogEntries(hashImpl, 2);
     TransactionStatus status = TransactionStatus::BadJumpDestination;
-    bytes output = toAddress(contractAddress).asBytes();
-    for (int i = 0; i < 10; i++)
+    auto contractAddressBytes = toAddress(contractAddress);
+    bytes output = contractAddressBytes.asBytes();
+    for (int i = 0; i < (random() % 9); i++)
     {
-        output += toAddress(contractAddress).asBytes();
+        output += contractAddressBytes.asBytes();
     }
     auto factory =
         std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(_cryptoSuite);
-    auto receipt = factory->createReceipt(gasUsed, std::string((char*)contractAddress.data(), 20),
-        *logEntries, (int32_t)status, bcos::ref(output), 0);
+    auto receipt = factory->createReceipt(
+        gasUsed, contractAddress, *logEntries, (int32_t)status, bcos::ref(output), _blockNumber);
     if (!_check)
     {
         return receipt;
@@ -129,6 +133,21 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
 #endif
     checkReceipts(hashImpl, receipt, decodedReceipt);
     return decodedReceipt;
+}
+
+
+inline ReceiptsPtr fakeReceipts(int _size)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+
+    ReceiptsPtr receipts = std::make_shared<Receipts>();
+    for (int i = 0; i < _size; ++i)
+    {
+        receipts->emplace_back(testPBTransactionReceipt(cryptoSuite, i + 1, false));
+    }
+    return receipts;
 }
 }  // namespace test
 }  // namespace bcos

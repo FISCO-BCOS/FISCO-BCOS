@@ -21,6 +21,7 @@
 #include "FakeTxsSyncMsg.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/signature/sm2/SM2Crypto.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -28,7 +29,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
