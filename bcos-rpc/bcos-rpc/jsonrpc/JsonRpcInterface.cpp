@@ -37,6 +37,8 @@ void JsonRpcInterface::initMethod()
         &JsonRpcInterface::getSealerListI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getObserverList"] = std::bind(
         &JsonRpcInterface::getObserverListI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getNodeListByType"] = std::bind(
+        &JsonRpcInterface::getNodeListByTypeI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getPbftView"] = std::bind(
         &JsonRpcInterface::getPbftViewI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getPendingTxSize"] = std::bind(

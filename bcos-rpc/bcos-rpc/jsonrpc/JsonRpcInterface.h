@@ -85,6 +85,9 @@ public:
     virtual void getObserverList(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
+    virtual void getNodeListByType(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _nodeType, RespFunc _respFunc) = 0;
+
     virtual void getPbftView(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
 
@@ -212,6 +215,11 @@ private:
     void getObserverListI(const Json::Value& req, RespFunc _respFunc)
     {
         getObserverList(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
+    }
+
+    void getNodeListByTypeI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getNodeListByType(toView(req[0u]), toView(req[1u]), toView(req[2u]), std::move(_respFunc));
     }
 
     void getPbftViewI(const Json::Value& req, RespFunc _respFunc)
