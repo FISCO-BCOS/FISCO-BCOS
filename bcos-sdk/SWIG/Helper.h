@@ -1,9 +1,11 @@
 #pragma once
 
+#include "bcos-cpp-sdk/tarsRPC/Handle.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <oneapi/tbb/concurrent_queue.h>
+#include <memory>
 #include <string_view>
-
 namespace bcos::sdk::swig
 {
 
@@ -19,12 +21,6 @@ bcos::bytes toBytes(Buffer const& input)
     return {(const bcos::byte*)input.data(), (const bcos::byte*)input.data() + input.size()};
 }
 bcos::bytes toBytes(char* STRING, size_t LENGTH);
-
-template <class Buffer>
-h256 toH256(Buffer const& input)
-{
-    return {input};
-}
 
 template <class Input>
 concept HasMemberConvertTo = requires(Input&& input) {
@@ -68,6 +64,12 @@ std::string toHex(Input const& input)
     {
         return bcos::toHex(input);
     }
+}
+
+template <class Input>
+bcos::bytes fromHex(Input const& input)
+{
+    return bcos::fromHex(input);
 }
 
 template <class Buffer>

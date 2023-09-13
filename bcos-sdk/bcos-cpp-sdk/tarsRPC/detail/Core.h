@@ -17,10 +17,13 @@ class TarsCallback : public bcostars::RPCPrxCallback
 private:
     std::shared_ptr<Callback> m_callback;
     std::promise<tars::ReqMessagePtr> m_promise;
+    int m_seq;
+
     std::variant<long, protocol::TransactionReceipt::Ptr> m_response;
 
 public:
-    TarsCallback(std::shared_ptr<Callback> callback, std::promise<tars::ReqMessagePtr> promise);
+    TarsCallback(
+        std::shared_ptr<Callback> callback, std::promise<tars::ReqMessagePtr> promise, int seq);
     TarsCallback(TarsCallback const&) = delete;
     TarsCallback& operator=(TarsCallback const&) = delete;
     TarsCallback(TarsCallback&&) noexcept = default;
@@ -35,6 +38,8 @@ public:
     {
         return std::move(std::get<Response>(m_response));
     }
+
+    int seq() const;
 
     void callback_sendTransaction(
         bcostars::Error const& error, bcostars::TransactionReceipt const& response) override;

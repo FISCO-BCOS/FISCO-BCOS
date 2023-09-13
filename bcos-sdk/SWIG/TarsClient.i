@@ -1,5 +1,6 @@
 %{
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
+#include "bcos-cpp-sdk/tarsRPC/Handle.h"
 %}
 
 %include <std_vector.i>
