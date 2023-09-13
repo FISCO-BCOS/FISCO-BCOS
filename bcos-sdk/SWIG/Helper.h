@@ -22,12 +22,6 @@ bcos::bytes toBytes(Buffer const& input)
 }
 bcos::bytes toBytes(char* STRING, size_t LENGTH);
 
-template <class Buffer>
-h256 toH256(Buffer const& input)
-{
-    return {input};
-}
-
 template <class Input>
 concept HasMemberConvertTo = requires(Input&& input) {
                                  {
@@ -72,36 +66,16 @@ std::string toHex(Input const& input)
     }
 }
 
+template <class Input>
+bcos::bytes fromHex(Input const& input)
+{
+    return bcos::fromHex(input);
+}
+
 template <class Buffer>
 void fillBytes(Buffer const& input, char* STRING, size_t LENGTH)
 {
     std::copy(input.data(), input.data() + LENGTH, STRING);
 }
-
-class ConcurrentQueue
-{
-private:
-    oneapi::tbb::concurrent_bounded_queue<int> m_queue;
-
-public:
-    void push(int seq) { m_queue.push(seq); }
-    int pop()
-    {
-        int seq{};
-        m_queue.pop(seq);
-        return seq;
-    }
-};
-
-class ConcurrentQueueCallback : public bcos::sdk::Callback
-{
-private:
-    ConcurrentQueue& m_queue;
-    int m_seq;
-
-public:
-    ConcurrentQueueCallback(ConcurrentQueue& queue, int seq) : m_queue(queue), m_seq(seq) {}
-    void onMessage() override { m_queue.push(m_seq); }
-};
 
 }  // namespace bcos::sdk::swig

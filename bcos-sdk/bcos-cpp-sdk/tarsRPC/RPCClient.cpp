@@ -2,6 +2,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-utilities/Exceptions.h"
 #include <boost/throw_exception.hpp>
+#include <iterator>
 
 struct InvalidHostPortStringError : public bcos::Exception
 {
@@ -36,7 +37,7 @@ void bcos::sdk::RPCClient::onMessage(tars::ReqMessagePtr message)
 
     if (callbackBase.callback() != nullptr)
     {
-        callbackBase.callback()->onMessage();
+        callbackBase.callback()->onMessage(callbackBase.seq());
     }
 }
 bcos::sdk::RPCClient::RPCClient(bcos::sdk::Config const& config)
@@ -48,7 +49,7 @@ bcos::sdk::RPCClient::RPCClient(bcos::sdk::Config const& config)
 }
 std::string bcos::sdk::RPCClient::generateNonce()
 {
-    struct NoncePrefix
+    struct NonceStruct
     {
         uint32_t rand1;
         uint32_t rand2;
@@ -59,13 +60,16 @@ std::string bcos::sdk::RPCClient::generateNonce()
     static unsigned rand2 = std::random_device{}();
     static thread_local std::mt19937 randomDevice{std::random_device{}()};
 
+    NonceStruct nonceStruct{.rand1 = rand1,
+        .rand2 = rand2,
+        .rand3 = static_cast<uint32_t>(randomDevice()),
+        .requestid = m_rpcProxy->tars_gen_requestid()};
+
     std::string nonce;
-    nonce.resize(sizeof(NoncePrefix));
-    auto* noncePtr = reinterpret_cast<NoncePrefix*>(nonce.data());
-    noncePtr->rand1 = rand1;
-    noncePtr->rand2 = rand2;
-    noncePtr->rand3 = randomDevice();
-    noncePtr->requestid = m_rpcProxy->tars_gen_requestid();
+    nonce.reserve(sizeof(NonceStruct) * 2);
+    boost::algorithm::hex_lower(reinterpret_cast<char const*>(&nonceStruct),
+        reinterpret_cast<char const*>(&nonceStruct) + sizeof(NonceStruct),
+        std::back_inserter(nonce));
 
     return nonce;
 }
@@ -80,7 +84,8 @@ bcos::sdk::SendTransaction& bcos::sdk::SendTransaction::send(
     std::promise<tars::ReqMessagePtr> promise;
     setFuture(promise.get_future());
 
-    auto tarsCallback = std::make_unique<detail::TarsCallback>(callback(), std::move(promise));
+    auto tarsCallback =
+        std::make_unique<detail::TarsCallback>(callback(), std::move(promise), seq());
     rpcClient().rpcProxy()->async_sendTransaction(tarsCallback.release(), tarsTransaction.inner());
 
     return *this;
@@ -95,7 +100,8 @@ bcos::sdk::Call& bcos::sdk::Call::send(const protocol::Transaction& transaction)
     std::promise<tars::ReqMessagePtr> promise;
     setFuture(promise.get_future());
 
-    auto tarsCallback = std::make_unique<detail::TarsCallback>(callback(), std::move(promise));
+    auto tarsCallback =
+        std::make_unique<detail::TarsCallback>(callback(), std::move(promise), seq());
     rpcClient().rpcProxy()->async_call(tarsCallback.release(), tarsTransaction.inner());
 
     return *this;
@@ -107,7 +113,8 @@ bcos::sdk::BlockNumber& bcos::sdk::BlockNumber::send()
     std::promise<tars::ReqMessagePtr> promise;
     setFuture(promise.get_future());
 
-    auto tarsCallback = std::make_unique<detail::TarsCallback>(callback(), std::move(promise));
+    auto tarsCallback =
+        std::make_unique<detail::TarsCallback>(callback(), std::move(promise), seq());
     rpcClient().rpcProxy()->async_blockNumber(tarsCallback.release());
 
     return *this;

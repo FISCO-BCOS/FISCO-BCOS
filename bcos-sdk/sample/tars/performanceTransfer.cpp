@@ -43,7 +43,7 @@ public:
       : m_latch(latch), m_collector(collector), m_startTime(bcos::sample::currentTime())
     {}
 
-    void onMessage() override
+    void onMessage([[maybe_unused]] int seq) override
     {
         m_latch.count_down();
         m_collector.receive(true, bcos::sample::currentTime() - m_startTime);

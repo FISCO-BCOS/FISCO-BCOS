@@ -8,7 +8,7 @@ private:
 
 public:
     CoCallback(CO_STD::coroutine_handle<> handle) : m_handle(handle) {}
-    void onMessage() override { m_handle.resume(); }
+    void onMessage([[maybe_unused]] int seq) override { m_handle.resume(); }
 };
 
 bcos::sdk::CoRPCClient::CoRPCClient(RPCClient& rpcClient) : m_rpcClient(rpcClient) {}

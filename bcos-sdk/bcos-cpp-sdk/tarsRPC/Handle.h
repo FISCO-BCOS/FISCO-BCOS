@@ -17,7 +17,7 @@ public:
     Callback& operator=(Callback&&) noexcept = default;
 
     virtual ~Callback() noexcept = default;
-    virtual void onMessage() = 0;
+    virtual void onMessage(int seq) = 0;
 };
 
 template <class Response>
@@ -27,6 +27,7 @@ private:
     RPCClient& m_rpcClient;
     std::future<tars::ReqMessagePtr> m_future;
     std::shared_ptr<Callback> m_callback;
+    int m_seq{};
 
 protected:
     RPCClient& rpcClient() { return m_rpcClient; }
@@ -64,5 +65,7 @@ public:
     {
         m_callback = std::move(callback);
     }
+    void setSeq(int seq) { m_seq = seq; }
+    int seq() const { return m_seq; }
 };
 }  // namespace bcos::sdk

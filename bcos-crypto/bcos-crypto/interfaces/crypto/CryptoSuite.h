@@ -43,8 +43,11 @@ public:
     {}
     virtual ~CryptoSuite() = default;
     Hash::Ptr hashImpl() { return m_hashImpl; }
-    SignatureCrypto::Ptr signatureImpl() { return m_signatureImpl; }
-    SymmetricEncryption::Ptr symmetricEncryptionHandler() { return m_symmetricEncryptionHandler; }
+    std::shared_ptr<SignatureCrypto> signatureImpl() { return m_signatureImpl; }
+    std::shared_ptr<SymmetricEncryption> symmetricEncryptionHandler()
+    {
+        return m_symmetricEncryptionHandler;
+    }
 
     template <typename T>
     HashType hash(T&& _data)
@@ -58,7 +61,7 @@ public:
     }
 
     virtual void setKeyFactory(KeyFactory::Ptr _keyFactory) { m_keyFactory = _keyFactory; }
-    virtual KeyFactory::Ptr keyFactory() { return m_keyFactory; }
+    virtual std::shared_ptr<KeyFactory> keyFactory() { return m_keyFactory; }
 
 private:
     Hash::Ptr m_hashImpl;
