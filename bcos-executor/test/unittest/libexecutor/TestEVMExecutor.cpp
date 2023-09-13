@@ -24,12 +24,13 @@
 #include "../mock/MockTxPool.h"
 // #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
-#include "bcos-tars-protocol/testutil/FakeBlockHeader.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -40,7 +41,6 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <tbb/task_group.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>

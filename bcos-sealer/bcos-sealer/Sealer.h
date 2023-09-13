@@ -66,6 +66,10 @@ public:
 
     uint16_t hookWhenSealBlock([[maybe_unused]] bcos::protocol::Block::Ptr _block) override;
 
+    // only for test
+    SealerConfig::Ptr const sealerConfig() const { return m_sealerConfig; }
+    SealingManager::Ptr const sealingManager() const { return m_sealingManager; }
+
 protected:
     void executeWorker() override;
     virtual void noteGenerateProposal() { m_signalled.notify_all(); }

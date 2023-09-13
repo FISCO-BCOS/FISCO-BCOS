@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,14 +14,20 @@
  *  limitations under the License.
  *
  * @file FakeTransaction.h
- * @author: yujiechen
- * @date: 2021-03-16
+ * @author: kyonRay
+ * @date 2021-05-06
  */
 #pragma once
-#include "../protocol/TransactionImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-#include <bcos-framework/protocol/Exceptions.h>
-#include <bcos-utilities/Common.h>
+#include "bcos-tars-protocol/bcos-tars-protocol/impl/TarsHashable.h"
+
+#include "bcos-concepts/Hash.h"
+#include "bcos-crypto/bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/bcos-crypto/hash/SM3.h"
+#include "bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-utilities/bcos-utilities/Common.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -47,11 +53,13 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     transaction.data.abi = _abi;
     auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+    // set signature
     pbTransaction->calculateHash(_cryptoSuite->hashImpl()->hasher());
 
     auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->setSignatureData(*signData);
     pbTransaction->forceSender(_keyPair->address(_cryptoSuite->hashImpl()).asBytes());
+    pbTransaction->calculateHash(_cryptoSuite->hashImpl()->hasher());
     return pbTransaction;
 }
 
@@ -106,9 +114,23 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     return decodedTransaction;
 }
 
-inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite,
-    const std::string& nonce = "120012323", int64_t blockLimit = 1000023,
-    std::string chainId = "chainId", std::string groupId = "groupId", bytes _to = bytes())
+inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite)
+{
+    bcos::crypto::KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    auto to = *toHexString(keyPair->address(_cryptoSuite->hashImpl()).asBytes());
+    std::string inputStr = "testTransaction";
+    bytes input = asBytes(inputStr);
+    u256 nonce = 120012323;
+    int64_t blockLimit = 1000023;
+    std::string chainId = "chainId";
+    std::string groupId = "groupId";
+    return testTransaction(
+        _cryptoSuite, keyPair, to, input, nonce.str(), blockLimit, chainId, groupId);
+}
+
+inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, const std::string& nonce,
+    int64_t blockLimit = 1000023, std::string chainId = "chainId", std::string groupId = "groupId",
+    bytes _to = bytes())
 {
     KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = keyPair->address(_cryptoSuite->hashImpl()).asBytes();
@@ -120,6 +142,28 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite,
     bytes input = asBytes(inputStr);
     return fakeTransaction(_cryptoSuite, keyPair, std::string_view((char*)_to.data(), _to.size()),
         input, nonce, blockLimit, chainId, groupId);
+}
+inline TransactionsPtr fakeTransactions(int _size)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    bcos::crypto::KeyPairInterface::Ptr keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    auto to = *toHexString(cryptoSuite->calculateAddress(keyPair->publicKey()).asBytes());
+
+    TransactionsPtr txs = std::make_shared<Transactions>();
+    for (int i = 0; i < _size; ++i)
+    {
+        std::string inputStr = "testTransaction" + std::to_string(i);
+        bytes input = asBytes(inputStr);
+        u256 nonce = 120012323 + i;
+        int64_t blockLimit = 1000 + i;
+        std::string chainId = "chainId";
+        std::string groupId = "groupId";
+        txs->emplace_back(testTransaction(
+            cryptoSuite, keyPair, to, input, nonce.str(), blockLimit, chainId, groupId));
+    }
+    return txs;
 }
 }  // namespace test
 }  // namespace bcos

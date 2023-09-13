@@ -17,7 +17,7 @@
  * @author: kyonGuo
  * @date 2023/8/30
  */
-#include <bcos-tars-protocol/testutil/FakeBlock.h>
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
 
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-rpbft/bcos-rpbft/rpbft/config/RPBFTConfig.h"

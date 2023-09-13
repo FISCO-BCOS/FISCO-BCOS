@@ -32,7 +32,6 @@
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "bcos-tool/NodeConfig.h"
-#include "common/FakeBlock.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -41,6 +40,7 @@
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
+#include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -108,7 +108,7 @@ public:
     LedgerFixture()
       : TestPromptFixture(), merkleUtility(crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{})
     {
-        m_blockFactory = createBlockFactory(createCryptoSuite());
+        m_blockFactory = createBlockFactory(createNormalCryptoSuite());
         auto keyFactor = std::make_shared<MockKeyFactory>();
         m_blockFactory->cryptoSuite()->setKeyFactory(keyFactor);
 
@@ -183,11 +183,14 @@ public:
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(0);
 
-        auto result1 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+        auto result1 =
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
         BOOST_CHECK(result1);
-        auto result2 = m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::V3_1_VERSION_STR);
+        auto result2 =
+            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::V3_1_VERSION_STR);
         BOOST_CHECK(!result2);
-        auto result3 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+        auto result3 =
+            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
         BOOST_CHECK(result3);
     }
 

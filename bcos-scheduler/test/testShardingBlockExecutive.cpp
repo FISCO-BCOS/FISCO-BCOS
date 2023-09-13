@@ -1,5 +1,6 @@
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-executor/test/unittest/mock/MockTxPool.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
@@ -32,7 +33,6 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
-#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
