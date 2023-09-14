@@ -192,6 +192,11 @@ public:
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
+            if (c_fileLogLevel == LogLevel::DEBUG) [[unlikely]]
+            {
+                BCOS_LOG(DEBUG) << LOG_DESC("Remove tx, but transaction not found! ")
+                                << LOG_KV("key", key);
+            }
             return {false, {}};
         }
         else

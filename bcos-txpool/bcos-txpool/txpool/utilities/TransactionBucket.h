@@ -95,9 +95,9 @@ public:
         }
         else
         {
-            if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+            if (c_fileLogLevel == LogLevel::DEBUG) [[unlikely]]
             {
-                TXPOOL_LOG(TRACE) << "bucket not found the transaction,txHash: " << key;
+                TXPOOL_LOG(DEBUG) << "bucket not found the transaction,txHash: " << key;
             }
         }
 
