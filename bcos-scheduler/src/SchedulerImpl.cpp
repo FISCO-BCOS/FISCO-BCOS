@@ -995,7 +995,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
             try
             {
                 auto features =
-                    co_await ledger::Features::readFeaturesFromStorage(*self->m_storage, number);
+                    co_await ledger::Features::readFeaturesFromStorage(*self->m_storage, number + 1);
                 collector({}, features);
             }
             catch (Error& error)
