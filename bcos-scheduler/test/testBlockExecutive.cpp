@@ -138,7 +138,8 @@ BOOST_AUTO_TEST_CASE(prepareTest)
         std::string inputStr = "Hello world! request";
         auto tx = blockFactory->transactionFactory()->createTransaction(0,
             "contract" + boost::lexical_cast<std::string>((j + 1) % 10),
-            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500, keyPair);
+            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
+            keyPair);
         auto hash = tx->hash();
         SCHEDULER_LOG(DEBUG) << LOG_KV("hash", hash);
         txPool->hash2Transaction.emplace(hash, tx);
@@ -173,8 +174,8 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest1)
         std::string inputStr = "hello world!";
         bytes input(inputStr.begin(), inputStr.end());
         auto tx = transactionFactory->createTransaction(20,
-            "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, std::to_string(i), 200, "chainID",
-            "groupID", 400, keyPair);
+            "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, std::to_string(i),
+            200, "chainID", "groupID", 400, keyPair);
         // tx->setAttribute(bcos::protocol::Transaction::Attribute::DAG);
         block->appendTransaction(tx);
     }
@@ -206,7 +207,8 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
         std::string inputStr = "Hello world! request";
 
         auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
-            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500, keyPair);
+            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
+            keyPair);
         auto hash = tx->hash();
         txPool->hash2Transaction.emplace(hash, tx);
         block->appendTransaction(std::move(tx));
@@ -241,7 +243,8 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest1)
         std::string inputStr = "Hello world! request";
         auto tx = blockFactory->transactionFactory()->createTransaction(0,
             "contract" + boost::lexical_cast<std::string>((j + 1) % 10),
-            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500, keyPair);
+            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
+            keyPair);
         auto hash = tx->hash();
         txPool->hash2Transaction.emplace(hash, tx);
         block->appendTransaction(std::move(tx));
@@ -279,7 +282,8 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest2)
         std::string inputStr = "Hello world! request";
         auto tx = blockFactory->transactionFactory()->createTransaction(0,
             "contract" + boost::lexical_cast<std::string>((j + 1) % 10),
-            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500, keyPair);
+            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
+            keyPair);
         auto hash = tx->hash();
         txPool->hash2Transaction.emplace(hash, tx);
         block->appendTransaction(std::move(tx));
@@ -315,7 +319,8 @@ BOOST_AUTO_TEST_CASE(asyncNotify)
         std::string inputStr = "Hello world! request";
         auto tx = blockFactory->transactionFactory()->createTransaction(0,
             "contract" + boost::lexical_cast<std::string>((j + 1) % 10),
-            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500, keyPair);
+            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
+            keyPair);
         // auto hash = tx->hash();
         // txPool->hash2Transaction.emplace(hash, tx);
         // auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
@@ -355,7 +360,8 @@ BOOST_AUTO_TEST_CASE(dagTest)
         std::string inputStr = "Hello world! request";
         auto tx = blockFactory->transactionFactory()->createTransaction(0,
             "contract" + boost::lexical_cast<std::string>((j + 1) % 10),
-            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500, keyPair);
+            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
+            keyPair);
         auto hash = tx->hash();
         txPool->hash2Transaction.emplace(hash, tx);
         block->appendTransaction(std::move(tx));
@@ -395,7 +401,8 @@ BOOST_AUTO_TEST_CASE(dagTest2)
     {
         std::string inputStr = "Hello world! request";
         auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
-            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500, keyPair);
+            bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
+            keyPair);
         auto hash = tx->hash();
         txPool->hash2Transaction.emplace(hash, tx);
         block->appendTransaction(std::move(tx));
@@ -436,8 +443,8 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
         std::string inputStr = "hello world!";
         bytes input(inputStr.begin(), inputStr.end());
         auto tx = transactionFactory->createTransaction(20,
-            "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, std::to_string(i), 200, "chainID",
-            "groupID", 400, keyPair);
+            "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, std::to_string(i),
+            200, "chainID", "groupID", 400, keyPair);
         tx->setAttribute(bcos::protocol::Transaction::Attribute::DAG);
         block->appendTransaction(tx);
     }
@@ -464,7 +471,8 @@ BOOST_AUTO_TEST_CASE(callTest)
     bcos::crypto::KeyPairInterface::Ptr keyPair =
         blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
     auto tx = blockFactory->transactionFactory()->createTransaction(0, "address_to",
-        bytes(inputStr.begin(), inputStr.end()), std::to_string(200), 300, "chain", "group", 500, keyPair);
+        bytes(inputStr.begin(), inputStr.end()), std::to_string(200), 300, "chain", "group", 500,
+        keyPair);
     block->appendTransaction(std::move(tx));
     // Add executor
     auto executor1 = std::make_shared<MockDmcExecutor>("executor1");

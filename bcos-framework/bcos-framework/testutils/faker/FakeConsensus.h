@@ -38,9 +38,7 @@ class FakeConsensusConfig : public ConsensusConfig
 public:
     explicit FakeConsensusConfig(bcos::crypto::KeyPairInterface::Ptr _key)
       : ConsensusConfig(_key){};
-    bool shouldRotateSealers(protocol::BlockNumber) const override {
-        return true;
-    }
+    bool shouldRotateSealers(protocol::BlockNumber) const override { return true; }
     virtual void updateQuorum() override {}
     uint64_t minRequiredQuorum() const override { return 0; }
 };
