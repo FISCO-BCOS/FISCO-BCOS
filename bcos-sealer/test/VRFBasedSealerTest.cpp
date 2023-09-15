@@ -26,9 +26,9 @@
 #include "bcos-sealer/SealerFactory.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include "bcos-txpool/TxPoolFactory.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/tools/old/interface.hpp>
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(testVRFSealer)
         block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl);
     BOOST_CHECK(result == sealer::Sealer::SealBlockResult::SUCCESS);
     BOOST_CHECK(block->transactionsMetaDataSize() == 1);
-    BOOST_CHECK(block->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS );
+    BOOST_CHECK(block->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
