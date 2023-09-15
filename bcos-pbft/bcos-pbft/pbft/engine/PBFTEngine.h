@@ -142,8 +142,8 @@ protected:
         IndexType _generatedFrom, PBFTProposalInterface::Ptr _proposal);
 
     virtual CheckResult checkPBFTMsgState(std::shared_ptr<PBFTMessageInterface> _pbftReq) const;
-    virtual bool checkRotateTransactionValid(
-        PBFTMessageInterface::Ptr const& _proposal, ConsensusNodeInterface::Ptr const& _leaderInfo);
+    virtual bool checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _proposal,
+        ConsensusNodeInterface::Ptr const& _leaderInfo, bool needCheckSign);
 
     // When pre-prepare proposal seems ok, then broadcast prepare msg
     virtual void broadcastPrepareMsg(std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg);

@@ -23,9 +23,7 @@
 #include "PBFTBaseMessage.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
 
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTMessage : public PBFTBaseMessage, public PBFTMessageInterface
 {
@@ -39,14 +37,14 @@ public:
 
     explicit PBFTMessage(std::shared_ptr<PBFTRawMessage> _pbftRawMessage) : PBFTBaseMessage()
     {
-        m_pbftRawMessage = _pbftRawMessage;
+        m_pbftRawMessage = std::move(_pbftRawMessage);
         m_proposals = std::make_shared<PBFTProposalList>();
         PBFTMessage::deserializeToObject();
     }
 
     PBFTMessage(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bytesConstRef _data) : PBFTMessage()
     {
-        decodeAndSetSignature(_cryptoSuite, _data);
+        decodeAndSetSignature(std::move(_cryptoSuite), _data);
     }
 
     ~PBFTMessage() override
@@ -119,6 +117,6 @@ private:
     PBFTProposalListPtr m_proposals;
 
     mutable bcos::crypto::HashType m_signatureDataHash;
+    mutable Mutex x_mutex;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus
