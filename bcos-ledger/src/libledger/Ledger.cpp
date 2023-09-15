@@ -1811,27 +1811,25 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     gasLimitEntry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>(_gasLimit), 0});
     sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
 
-    if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
+    if (RPBFT_CONSENSUS_TYPE == _consensusType &&
+        versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
     {
         // rpbft config
-        if (RPBFT_CONSENSUS_TYPE == _consensusType)
-        {
-            features.set(ledger::Features::Flag::feature_rpbft);
+        features.set(ledger::Features::Flag::feature_rpbft);
 
-            Entry epochSealerNumEntry;
-            epochSealerNumEntry.setObject(
-                SystemConfigEntry{boost::lexical_cast<std::string>(_epochSealerNum), 0});
-            sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, std::move(epochSealerNumEntry));
+        Entry epochSealerNumEntry;
+        epochSealerNumEntry.setObject(
+            SystemConfigEntry{boost::lexical_cast<std::string>(_epochSealerNum), 0});
+        sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, std::move(epochSealerNumEntry));
 
-            Entry epochBlockNumEntry;
-            epochBlockNumEntry.setObject(
-                SystemConfigEntry{boost::lexical_cast<std::string>(_epochBlockNum), 0});
-            sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, std::move(epochBlockNumEntry));
+        Entry epochBlockNumEntry;
+        epochBlockNumEntry.setObject(
+            SystemConfigEntry{boost::lexical_cast<std::string>(_epochBlockNum), 0});
+        sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, std::move(epochBlockNumEntry));
 
-            Entry notifyRotateEntry;
-            notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
-            sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
-        }
+        Entry notifyRotateEntry;
+        notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
+        sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
     }
 
     // consensus leader period

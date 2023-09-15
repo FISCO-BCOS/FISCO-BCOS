@@ -138,7 +138,8 @@ public:
             if (value)
             {
                 storage::Entry entry;
-                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
+                entry.setObject(
+                    SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
                 co_await storage2::writeOne(
                     storage, std::make_tuple(ledger::SYS_CONFIG, name), std::move(entry));
             }
