@@ -21,6 +21,7 @@
 #include "PBFTMessage.h"
 #include "PBFTProposal.h"
 #include "bcos-pbft/core/Proposal.h"
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -30,6 +31,7 @@ using namespace bcos::protocol;
 bytesPointer PBFTMessage::encode(
     CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr _keyPair) const
 {
+    std::lock_guard<std::mutex> lock(x_mutex);
     // encode the PBFTBaseMessage
     encodeHashFields();
     generateAndSetSignatureData(_cryptoSuite, _keyPair);
@@ -44,6 +46,7 @@ void PBFTMessage::encodeHashFields() const
 
 void PBFTMessage::decode(bytesConstRef _data)
 {
+    std::lock_guard<std::mutex> lock(x_mutex);
     decodePBObject(m_pbftRawMessage, _data);
     PBFTMessage::deserializeToObject();
 }
@@ -59,7 +62,7 @@ void PBFTMessage::deserializeToObject()
     m_proposals->clear();
     if (m_pbftRawMessage->has_consensusproposal())
     {
-        auto consensusProposal = m_pbftRawMessage->mutable_consensusproposal();
+        auto* consensusProposal = m_pbftRawMessage->mutable_consensusproposal();
         std::shared_ptr<PBFTRawProposal> rawConsensusProposal(consensusProposal);
         m_consensusProposal = std::make_shared<PBFTProposal>(rawConsensusProposal);
     }
@@ -73,7 +76,7 @@ void PBFTMessage::deserializeToObject()
 void PBFTMessage::decodeAndSetSignature(CryptoSuite::Ptr _cryptoSuite, bytesConstRef _data)
 {
     decode(_data);
-    m_signatureDataHash = getHashFieldsDataHash(_cryptoSuite);
+    m_signatureDataHash = getHashFieldsDataHash(std::move(_cryptoSuite));
 }
 
 void PBFTMessage::setConsensusProposal(PBFTProposalInterface::Ptr _consensusProposal)
@@ -108,9 +111,10 @@ void PBFTMessage::generateAndSetSignatureData(
 
 void PBFTMessage::setProposals(PBFTProposalList const& _proposals)
 {
+    std::lock_guard<std::mutex> lock(x_mutex);
     *m_proposals = _proposals;
     m_pbftRawMessage->clear_proposals();
-    for (auto proposal : _proposals)
+    for (const auto& proposal : _proposals)
     {
         auto proposalImpl = std::dynamic_pointer_cast<PBFTProposal>(proposal);
         assert(proposalImpl);

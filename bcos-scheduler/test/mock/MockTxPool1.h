@@ -92,9 +92,8 @@ public:
     //         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
 
     //         // Generate fakeTransaction
-    //         auto tx = fakeTransaction(cryptoSuite, keyPair, "", "", std::to_string(101), 100001, "1", "1");
-    //         auto hash = tx->hash();
-    //         hash2Transaction.emplace(hash, tx);
+    //         auto tx = fakeTransaction(cryptoSuite, keyPair, "", "", std::to_string(101), 100001,
+    //         "1", "1"); auto hash = tx->hash(); hash2Transaction.emplace(hash, tx);
     //         txHashes.emplace_back(hash);
     //     }
     //     return txHashes;

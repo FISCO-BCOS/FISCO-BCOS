@@ -790,8 +790,8 @@ bool PBFTEngine::checkProposalSignature(
         nodeInfo->nodeID(), _proposal->hash(), _proposal->signature());
 }
 
-bool PBFTEngine::checkRotateTransactionValid(
-    PBFTMessageInterface::Ptr const& _proposal, ConsensusNodeInterface::Ptr const& _leaderInfo)
+bool PBFTEngine::checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _proposal,
+    ConsensusNodeInterface::Ptr const& _leaderInfo, bool needCheckSign)
 {
     if (m_config->consensusType() == ConsensusType::PBFT_TYPE &&
         m_config->rpbftConfigTools() == nullptr) [[likely]]
@@ -813,7 +813,8 @@ bool PBFTEngine::checkRotateTransactionValid(
                    << LOG_KV("reqHash", _proposal->hash().abridged())
                    << LOG_KV("leaderIdx", _proposal->generatedFrom())
                    << LOG_KV("nodeIdx", m_config->nodeIndex())
-                   << LOG_KV("txSize", block->transactionsMetaDataSize());
+                   << LOG_KV("txSize", block->transactionsMetaDataSize())
+                   << LOG_KV("needCheckSign", needCheckSign);
 
     auto rotatingTx = block->transactionMetaData(0);
     if (rotatingTx->to() != bcos::precompiled::CONSENSUS_ADDRESS &&
@@ -825,6 +826,11 @@ bool PBFTEngine::checkRotateTransactionValid(
                           << LOG_KV("fromIdx", _proposal->generatedFrom())
                           << LOG_KV("currentTo", rotatingTx->to());
         return false;
+    }
+
+    if (!needCheckSign)
+    {
+        return true;
     }
 
     // FIXME: should not use source
@@ -935,7 +941,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     m_config->validator()->verifyProposal(leaderNodeInfo->nodeID(),
         _prePrepareMsg->consensusProposal(),
-        [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo](
+        [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo, _needCheckSignature](
             auto&& _error, bool _verifyResult) {
             try
             {
@@ -966,8 +972,8 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                     pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
-                auto rotateResult =
-                    pbftEngine->checkRotateTransactionValid(_prePrepareMsg, leaderNodeInfo);
+                auto rotateResult = pbftEngine->checkRotateTransactionValid(
+                    _prePrepareMsg, leaderNodeInfo, _needCheckSignature);
                 // verify failed
                 if (!_verifyResult || !rotateResult)
                 {

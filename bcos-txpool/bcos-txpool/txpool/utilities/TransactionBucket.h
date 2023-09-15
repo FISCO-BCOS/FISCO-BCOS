@@ -37,7 +37,7 @@ public:
         boost::multi_index::indexed_by<
             boost::multi_index::hashed_unique<boost::multi_index::member<TransactionData,
                 bcos::crypto::HashType, &TransactionData::txHash>>,
-            boost::multi_index::ordered_non_unique<boost::multi_index::member<TransactionData,
+            boost::multi_index::ordered_unique<boost::multi_index::member<TransactionData,
                 std::int64_t, &TransactionData::timeStamp>>>>;
 
 
@@ -95,9 +95,9 @@ public:
         }
         else
         {
-            if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+            if (c_fileLogLevel == LogLevel::DEBUG) [[unlikely]]
             {
-                TXPOOL_LOG(TRACE) << "bucket not found the transaction,txHash: " << key;
+                TXPOOL_LOG(DEBUG) << "bucket not found the transaction,txHash: " << key;
             }
         }
 
@@ -121,6 +121,11 @@ public:
     {
         TransactionData newData(value);
         auto result = multiIndexMap.emplace(std::move(newData));
+        if (!result.second)
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC("bucket insert failed") << LOG_KV("txHash", key)
+                                << LOG_KV("timestamp", newData.timeStamp);
+        }
         return {std::make_shared<IteratorImpl>(result.first), result.second};
     }
 

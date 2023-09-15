@@ -1060,7 +1060,7 @@ size_t MemoryStorage::unSealedTxsSize()
 size_t MemoryStorage::unSealedTxsSizeWithoutLock()
 {
     auto txsSize = m_txsTable.size();
-    TXPOOL_LOG(DEBUG) << LOG_DESC("unSealedTxsSize") << LOG_KV("txsSize", txsSize)
+    TXPOOL_LOG(TRACE) << LOG_DESC("unSealedTxsSize") << LOG_KV("txsSize", txsSize)
                       << LOG_KV("sealedTxsSize", m_sealedTxsSize);
 
     if (txsSize < m_sealedTxsSize)
