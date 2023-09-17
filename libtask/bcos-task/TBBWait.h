@@ -1,20 +1,11 @@
 #pragma once
+
 #include "Task.h"
 #include "Trait.h"
-#include <atomic>
-#include <exception>
-#include <future>
-#include <type_traits>
-#include <variant>
+#include <oneapi/tbb/task.h>
 
 namespace bcos::task
 {
-
-void wait(auto&& task)
-    requires std::is_rvalue_reference_v<decltype(task)>
-{
-    task.start();
-}
 
 template <class Task>
 auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
@@ -27,10 +18,13 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
         std::variant<std::monostate, std::exception_ptr>,
         std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
     ReturnVariant result;
-    std::atomic_flag finished;
 
-    auto waitTask = [](Task&& task, decltype(result)& result,
-                        std::atomic_flag& finished) -> task::Task<void> {
+    std::atomic_flag onceFlag;
+    std::atomic<oneapi::tbb::task::suspend_point> suspendPoint;
+
+    auto waitTask =
+        [](Task&& task, decltype(result)& result, std::atomic_flag& onceFlag,
+            std::atomic<oneapi::tbb::task::suspend_point>& suspendPoint) -> task::Task<void> {
         try
         {
             if constexpr (std::is_void_v<ReturnType>)
@@ -54,12 +48,24 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
         {
             result = std::current_exception();
         }
-        finished.test_and_set();
-        finished.notify_one();
-    }(std::forward<Task>(task), result, finished);
+
+        if (!onceFlag.test_and_set())
+        {
+            suspendPoint.wait(oneapi::tbb::task::suspend_point{});
+            tbb::task::resume(suspendPoint.load());
+        }
+    }(std::forward<Task>(task), result, onceFlag, suspendPoint);
     waitTask.start();
 
-    finished.wait(false);
+    if (onceFlag.test_and_set())
+    {
+        tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
+            suspendPoint.store(tag);
+            suspendPoint.notify_one();
+        });
+    }
+
+    onceFlag.wait(false);
     if (std::holds_alternative<std::exception_ptr>(result))
     {
         std::rethrow_exception(std::get<std::exception_ptr>(result));

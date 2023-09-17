@@ -81,7 +81,7 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
     m_address2Precompiled.emplace_back(
         0x1010, std::make_shared<precompiled::ShardingPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
-        0x100f, std::make_shared<precompiled::CastPrecompiled>(GlobalHashImpl::g_hashImpl));
+        0x100f, std::make_shared<precompiled::CastPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
         0x10003, std::make_shared<precompiled::AccountManagerPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
