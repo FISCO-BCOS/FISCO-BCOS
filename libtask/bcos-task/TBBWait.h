@@ -4,7 +4,7 @@
 #include "Trait.h"
 #include <oneapi/tbb/task.h>
 
-namespace bcos::task
+namespace bcos::task::tbb
 {
 
 template <class Task>
@@ -19,8 +19,8 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
         std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
     ReturnVariant result;
 
-    std::atomic_flag onceFlag;
-    std::atomic<oneapi::tbb::task::suspend_point> suspendPoint;
+    std::atomic_flag onceFlag{};
+    std::atomic<oneapi::tbb::task::suspend_point> suspendPoint{};
 
     auto waitTask =
         [](Task&& task, decltype(result)& result, std::atomic_flag& onceFlag,
@@ -49,23 +49,22 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
             result = std::current_exception();
         }
 
-        if (!onceFlag.test_and_set())
+        if (onceFlag.test_and_set())
         {
-            suspendPoint.wait(oneapi::tbb::task::suspend_point{});
-            tbb::task::resume(suspendPoint.load());
+            suspendPoint.wait({});
+            oneapi::tbb::task::resume(suspendPoint.load());
         }
     }(std::forward<Task>(task), result, onceFlag, suspendPoint);
     waitTask.start();
 
-    if (onceFlag.test_and_set())
+    if (!onceFlag.test_and_set())
     {
-        tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
+        oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
             suspendPoint.store(tag);
             suspendPoint.notify_one();
         });
     }
 
-    onceFlag.wait(false);
     if (std::holds_alternative<std::exception_ptr>(result))
     {
         std::rethrow_exception(std::get<std::exception_ptr>(result));
@@ -84,4 +83,4 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
     }
 }
 
-}  // namespace bcos::task
+}  // namespace bcos::task::tbb
