@@ -140,7 +140,7 @@ public:
         {
             _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
         }
-        else if (_type == ledger::CONSENSUS_WORKING_SEALER)
+        else if (_type == ledger::CONSENSUS_CANDIDATE_SEALER)
         {
             _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
         }

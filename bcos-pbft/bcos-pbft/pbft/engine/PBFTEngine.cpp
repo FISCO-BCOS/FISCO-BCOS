@@ -421,12 +421,14 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
 
     // handle the pre-prepare packet
     RecursiveGuard l(m_mutex);
+    auto beginHandleT = utcSteadyTime();
     auto ret = handlePrePrepareMsg(pbftMessage, false, false, false);
     // only broadcast the prePrepareMsg when local handlePrePrepareMsg success
     if (ret) [[likely]]
     {
         PBFT_LOG(INFO) << LOG_DESC("handlePrePrepareMsg success")
-                       << LOG_KV("index", pbftMessage->index());
+                       << LOG_KV("index", pbftMessage->index())
+                       << LOG_KV("costT(ms)", utcSteadyTime() - beginHandleT);
     }
     else
     {
@@ -667,12 +669,12 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
         handleCheckPointMsg(checkPointMsg);
         break;
     }
-        [[unlikely]] case PacketType::RecoverRequest:
-        {
-            auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
-            handleRecoverRequest(request);
-            break;
-        }
+    [[unlikely]] case PacketType::RecoverRequest:
+    {
+        auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+        handleRecoverRequest(request);
+        break;
+    }
     case PacketType::RecoverResponse:
     {
         auto recoverResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);

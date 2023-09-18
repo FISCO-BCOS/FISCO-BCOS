@@ -55,19 +55,8 @@ void BlockSyncConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig)
         return;
     }
     resetBlockInfo(_ledgerConfig->blockNumber(), _ledgerConfig->hash());
-    if (_ledgerConfig->features().get(Features::Flag::feature_rpbft) &&
-        !_ledgerConfig->workingSealerNodeList().empty())
-    {
-        setConsensusNodeList(_ledgerConfig->workingSealerNodeList());
-        auto observers = _ledgerConfig->observerNodeList();
-        auto sealers = _ledgerConfig->consensusNodeList();
-        setObserverList(sealers + observers);
-    }
-    else
-    {
-        setConsensusNodeList(_ledgerConfig->consensusNodeList());
-        setObserverList(_ledgerConfig->observerNodeList());
-    }
+    setConsensusNodeList(_ledgerConfig->consensusNodeList());
+    setObserverList(_ledgerConfig->observerNodeList() + _ledgerConfig->candidateSealerNodeList());
     auto type = determineNodeType();
     if (type != m_nodeType)
     {

@@ -603,7 +603,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
 
     m_storageSecurityKeyCenterIp = values[0];
     m_storageSecurityKeyCenterPort = boost::lexical_cast<unsigned short>(values[1]);
-    if (false == isValidPort(m_storageSecurityKeyCenterPort))
+    if (!isValidPort(m_storageSecurityKeyCenterPort))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
@@ -611,7 +611,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
     }
 
     m_storageSecurityCipherDataKey = _pt.get<std::string>("storage_security.cipher_data_key", "");
-    if (true == m_storageSecurityCipherDataKey.empty())
+    if (m_storageSecurityCipherDataKey.empty())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
@@ -625,6 +625,11 @@ void NodeConfig::loadSyncConfig(const boost::property_tree::ptree& _pt)
     m_enableSendBlockStatusByTree = _pt.get<bool>("sync.sync_block_by_tree", false);
     m_enableSendTxByTree = _pt.get<bool>("sync.send_txs_by_tree", false);
     m_treeWidth = _pt.get<std::uint32_t>("sync.tree_width", 3);
+    if (m_treeWidth == 0 || m_treeWidth > UINT16_MAX)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Please set sync.tree_width in 1~65535"));
+    }
     NodeConfig_LOG(INFO) << LOG_DESC("loadSyncConfig")
                          << LOG_KV("sync_block_by_tree", m_enableSendBlockStatusByTree)
                          << LOG_KV("send_txs_by_tree", m_enableSendTxByTree)

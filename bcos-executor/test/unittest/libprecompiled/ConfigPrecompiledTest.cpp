@@ -888,7 +888,7 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
     auto nodeList = getNodeList();
     BOOST_CHECK(nodeList.size() == 4);
     std::for_each(nodeList.begin(), nodeList.end(), [&](const ledger::ConsensusNode& node) {
-        BOOST_CHECK(node.type == ledger::CONSENSUS_WORKING_SEALER);
+        BOOST_CHECK(node.type == ledger::CONSENSUS_SEALER);
     });
 
     // case2: valid proof, but the origin is not exist in the workingSealers
@@ -935,14 +935,20 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
     BOOST_CHECK(nodeList.size() == 4);
     // only one node is working sealer
     uint16_t workingSealerCount = 0;
+    uint16_t candidateSealerCount = 0;
     for (const auto& node : nodeList)
     {
-        if (node.type == ledger::CONSENSUS_WORKING_SEALER)
+        if (node.type == ledger::CONSENSUS_SEALER)
         {
             workingSealerCount++;
         }
+        if (node.type == ledger::CONSENSUS_CANDIDATE_SEALER)
+        {
+            candidateSealerCount++;
+        }
     }
     BOOST_CHECK(workingSealerCount == 1);
+    BOOST_CHECK(candidateSealerCount == 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -38,7 +38,7 @@ public:
     {}
 
     explicit PBFTBaseMessage(std::shared_ptr<BaseMessage> _baseMessage)
-      : m_baseMessage(_baseMessage),
+      : m_baseMessage(std::move(_baseMessage)),
         m_signatureData(std::make_shared<bytes>()),
         m_createTime(bcos::utcTime())
     {
@@ -124,6 +124,13 @@ public:
     void setFrom(bcos::crypto::PublicPtr _from) override { m_from = _from; }
     bcos::crypto::PublicPtr from() const override { return m_from; }
     uint64_t liveTimeInMilliseconds() const override { return bcos::utcTime() - m_createTime; }
+    std::string toDebugString() const override
+    {
+        std::stringstream stringstream;
+        stringstream << LOG_KV("type", m_packetType)
+                     << LOG_KV("fromNode", m_from ? m_from->shortHex() : "null");
+        return stringstream.str();
+    }
 
 protected:
     virtual void deserializeToObject()

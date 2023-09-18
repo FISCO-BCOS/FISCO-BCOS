@@ -165,7 +165,11 @@ int ConsensusPrecompiled::addSealer(
     {
         // exist
         node->weight = weight;
-        node->type = ledger::CONSENSUS_SEALER;
+        if (!(blockContext.features().get(Features::Flag::feature_rpbft) &&
+                node->type == ledger::CONSENSUS_CANDIDATE_SEALER))
+        {
+            node->type = ledger::CONSENSUS_SEALER;
+        }
         node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
     }
     else
@@ -356,7 +360,7 @@ int ConsensusPrecompiled::setWeight(
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
     if (node != consensusList.end())
     {
-        if (node->type != ledger::CONSENSUS_SEALER)
+        if (node->type == ledger::CONSENSUS_OBSERVER)
         {
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
         }

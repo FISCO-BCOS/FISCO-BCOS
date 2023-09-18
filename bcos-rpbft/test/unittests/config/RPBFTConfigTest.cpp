@@ -75,7 +75,7 @@ public:
     }
 
     LedgerConfig::Ptr buildLedgerConfig(
-        size_t consensusNodeNum, size_t observerNodeNum, size_t workingSealerNodeNum)
+        size_t consensusNodeNum, size_t observerNodeNum, size_t candidateSealerNodeNum)
     {
         auto ledgerConfig = std::make_shared<LedgerConfig>();
 
@@ -93,9 +93,9 @@ public:
                     m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 0));
         }
 
-        for (size_t i = 0; i < workingSealerNodeNum; ++i)
+        for (size_t i = 0; i < candidateSealerNodeNum; ++i)
         {
-            ledgerConfig->mutableWorkingSealerList()->push_back(
+            ledgerConfig->mutableCandidateSealerNodeList()->push_back(
                 std::make_shared<consensus::ConsensusNode>(
                     m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 1));
         }
@@ -142,7 +142,8 @@ BOOST_AUTO_TEST_CASE(testRPBFTConfig)
     // rotate tx
     for (auto i : {0, 1})
     {
-        ledgerConfig->mutableWorkingSealerList()->push_back(ledgerConfig->consensusNodeList()[i]);
+        ledgerConfig->mutableCandidateSealerNodeList()->push_back(
+            ledgerConfig->consensusNodeList()[i]);
     }
     ledgerConfig->mutableConsensusList()->erase(ledgerConfig->mutableConsensusList()->begin(),
         ledgerConfig->mutableConsensusList()->begin() + 1);
@@ -181,7 +182,7 @@ BOOST_AUTO_TEST_CASE(testRPBFTConfig)
     ledgerConfig->setNotifyRotateFlagInfo(0);
     ledgerConfig->setEpochSealerNum({3, 0});
     ledgerConfig->setBlockNumber(numer++);
-    ledgerConfig->mutableWorkingSealerList()->pop_back();
+    ledgerConfig->mutableCandidateSealerNodeList()->pop_back();
     m_rpbftConfig->resetConfig(ledgerConfig);
     BOOST_CHECK(m_rpbftConfig->shouldRotateSealers(numer));
 }

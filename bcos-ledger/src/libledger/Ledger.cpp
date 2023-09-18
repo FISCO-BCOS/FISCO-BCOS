@@ -1880,20 +1880,20 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
             node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_SEALER}, "0");
     }
 
-    // update some node type to CONSENSUS_WORKING_SEALER
+    // update some node type to CONSENSUS_CANDIDATE_SEALER
     if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
         RPBFT_CONSENSUS_TYPE == _consensusType)
     {
         auto workingSealerList = selectWorkingSealer(_ledgerConfig, _epochSealerNum);
-        for (auto workingSealer : *workingSealerList)
+        for (auto& node : consensusNodeList)
         {
-            auto iter = std::find_if(consensusNodeList.begin(), consensusNodeList.end(),
-                [&workingSealer](const ConsensusNode& consensusNode) {
-                    return consensusNode.nodeID == workingSealer->nodeID()->hex();
+            auto iter = std::find_if(
+                workingSealerList->begin(), workingSealerList->end(), [&node](auto&& workingNode) {
+                    return workingNode->nodeID()->hex() == node.nodeID;
                 });
-            if (iter != consensusNodeList.end()) [[likely]]
+            if (iter == workingSealerList->end())
             {
-                iter->type = CONSENSUS_WORKING_SEALER;
+                node.type = CONSENSUS_CANDIDATE_SEALER;
             }
         }
     }
