@@ -97,7 +97,11 @@ public:
             return std::make_shared<bcos::storage::KeyPageStorage>(
                 storage, m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
         }
-        return std::make_shared<bcos::storage::StateStorage>(storage, compatibilityVersion);
+        // return std::make_shared<bcos::storage::StateStorage>(storage, compatibilityVersion);
+        // v3.2.2 and before StateStorage not use right compatibilityVersion to hash state data
+        // if we fix the compatibilityVersion, it will cause inconsistency between v3.2.3 and before
+        // FIXME: this should be fix use feature in next patch version
+        return std::make_shared<bcos::storage::StateStorage>(storage);
     }
 
 private:
