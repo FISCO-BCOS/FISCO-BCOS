@@ -27,6 +27,7 @@ public:
     enum class Flag
     {
         bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
+        feature_dmc2serial,
     };
 
 private:

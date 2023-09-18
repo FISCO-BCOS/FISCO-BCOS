@@ -45,9 +45,31 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(name, "bugfix_revert");
     BOOST_CHECK_EQUAL(value, true);
 
+    BOOST_CHECK_EQUAL(features3.get(Features::Flag::feature_dmc2serial), false);
+    BOOST_CHECK_EQUAL(features3.get("feature_dmc2serial"), false);
+
+
+    Features features4;
+    BOOST_CHECK_EQUAL(features4.get(Features::Flag::feature_dmc2serial), false);
+    BOOST_CHECK_EQUAL(features4.get("feature_dmc2serial"), false);
+
+    features4.set("feature_dmc2serial");
+    BOOST_CHECK_EQUAL(features4.get(Features::Flag::feature_dmc2serial), true);
+    BOOST_CHECK_EQUAL(features4.get("feature_dmc2serial"), true);
+
+    
+    Features features5;
+    BOOST_CHECK_EQUAL(features5.get(Features::Flag::feature_dmc2serial), false);
+    BOOST_CHECK_EQUAL(features5.get("feature_dmc2serial"), false);
+
+    features5.set(Features::Flag::feature_dmc2serial);
+    BOOST_CHECK_EQUAL(features5.get(Features::Flag::feature_dmc2serial), true);
+    BOOST_CHECK_EQUAL(features5.get("feature_dmc2serial"), true);
+
     auto keys = Features::featureKeys();
-    BOOST_CHECK_EQUAL(keys.size(), 1);
+    BOOST_CHECK_EQUAL(keys.size(), 2);
     BOOST_CHECK_EQUAL(keys[0], "bugfix_revert");
+    BOOST_CHECK_EQUAL(keys[1], "feature_dmc2serial");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
