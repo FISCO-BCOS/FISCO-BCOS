@@ -54,17 +54,8 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 
     bcos::consensus::ConsensusNodeList consensusList;
     bcos::consensus::ConsensusNodeList observerList;
-    if (_ledgerConfig->features().get(Features::Flag::feature_rpbft) &&
-        !_ledgerConfig->workingSealerNodeList().empty())
-    {
-        consensusList = _ledgerConfig->workingSealerNodeList();
-        observerList = _ledgerConfig->observerNodeList() + _ledgerConfig->consensusNodeList();
-    }
-    else
-    {
-        consensusList = _ledgerConfig->mutableConsensusNodeList();
-        observerList = _ledgerConfig->observerNodeList();
-    }
+    consensusList = _ledgerConfig->consensusNodeList();
+    observerList = _ledgerConfig->observerNodeList() + _ledgerConfig->candidateSealerNodeList();
     setConsensusNodeList(consensusList);
     setObserverNodeList(observerList);
     // set leader_period

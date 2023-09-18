@@ -716,7 +716,7 @@ void DownloadingQueue::fetchAndUpdateLedgerConfig()
         // Note: must fetchObserverNode here to notify the latest sealerList and observerList to
         // txpool
         m_ledgerFetcher->fetchObserverNodeList();
-        m_ledgerFetcher->fetchWorkingSealerList();
+        m_ledgerFetcher->fetchCandidateSealerList();
         m_ledgerFetcher->fetchBlockTxCountLimit();
         m_ledgerFetcher->fetchConsensusLeaderPeriod();
         auto ledgerConfig = m_ledgerFetcher->ledgerConfig();

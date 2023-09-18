@@ -24,7 +24,7 @@ enum class NodeListType
 {
     ConsensusNodeList,
     ObserverNodeList,
-    WorkingSealerNodeList
+    CandidateSealerNodeList,
 };
 
 enum class ConfigType

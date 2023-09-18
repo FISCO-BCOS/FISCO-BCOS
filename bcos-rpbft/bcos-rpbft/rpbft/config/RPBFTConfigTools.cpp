@@ -38,23 +38,15 @@ void RPBFTConfigTools::resetConfig(const bcos::ledger::LedgerConfig::Ptr& _ledge
 void RPBFTConfigTools::updateWorkingSealerNodeList(
     const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig)
 {
-    if (_ledgerConfig->features().get(ledger::Features::Flag::feature_rpbft) &&
-        !_ledgerConfig->workingSealerNodeList().empty())
-    {
-        *m_consensusNodeList = _ledgerConfig->workingSealerNodeList();
-    }
-    else
-    {
-        *m_consensusNodeList = _ledgerConfig->consensusNodeList();
-    }
+    m_candidateNodeList = _ledgerConfig->candidateSealerNodeList();
 
-    auto workingSealerNodeList = _ledgerConfig->workingSealerNodeList();
+    auto workingSealerNodeList = _ledgerConfig->consensusNodeList();
     // make sure the size of working consensus is non-empty
     // in some scenarios, the number of working consensus will be 0,
     // such as the scenario where the last working consensus is added as consensus
     if (workingSealerNodeList.empty())
     {
-        workingSealerNodeList.emplace_back((*m_consensusNodeList)[0]);
+        workingSealerNodeList.emplace_back((m_candidateNodeList)[0]);
     }
 
     std::sort(
@@ -62,14 +54,14 @@ void RPBFTConfigTools::updateWorkingSealerNodeList(
     // update the consensus list
     // if consensus node list have not been changed
     if (consensus::ConsensusConfig::compareConsensusNode(
-            workingSealerNodeList, *m_workingSealerNodeList))
+            workingSealerNodeList, m_consensusNodeList))
     {
         m_workingSealerNodeListUpdated = false;
         return;
     }
     // consensus node list have been changed
-    *m_workingSealerNodeList = workingSealerNodeList;
-    m_workingSealerNodeNum = m_workingSealerNodeList->size();
+    m_consensusNodeList = workingSealerNodeList;
+    m_workingSealerNodeNum = m_consensusNodeList.size();
     m_workingSealerNodeListUpdated = true;
 
     RPBFT_LOG(INFO) << METRIC << LOG_DESC("updateWorkingConsensusNodeList")
@@ -128,8 +120,8 @@ void RPBFTConfigTools::updateShouldRotateSealers(
 
     // the number of working consensus is smaller than epochSize,
     // trigger rotate in case of the number of working consensus has been decreased to 0
-    std::uint64_t maxWorkingSealerNum =
-        std::min(m_epochSealerNum.load(), static_cast<uint64_t>(m_consensusNodeList->size()));
+    std::uint64_t maxWorkingSealerNum = std::min(m_epochSealerNum.load(),
+        static_cast<uint64_t>(m_consensusNodeList.size() + m_candidateNodeList.size()));
     if (static_cast<std::uint64_t>(m_workingSealerNodeNum) < maxWorkingSealerNum)
     {
         setShouldRotateSealers(true);
@@ -163,8 +155,8 @@ bool RPBFTConfigTools::updateEpochSealerNum(const bcos::ledger::LedgerConfig::Pt
     }
 
     std::uint64_t originEpochSealerNum = m_epochSealerNum;
-    m_epochSealerNum =
-        std::min((size_t)std::get<0>(_ledgerConfig->epochSealerNum()), m_consensusNodeList->size());
+    m_epochSealerNum = std::min((size_t)std::get<0>(_ledgerConfig->epochSealerNum()),
+        (m_consensusNodeList.size() + m_candidateNodeList.size()));
     m_epochSealerNumEnableNumber = std::get<1>(_ledgerConfig->epochSealerNum());
 
     return originEpochSealerNum != m_epochSealerNum;

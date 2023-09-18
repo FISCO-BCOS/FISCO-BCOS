@@ -39,7 +39,7 @@ void LedgerConfigFetcher::fetchAll()
     fetchFeatures();
     fetchConsensusNodeList();
     fetchObserverNodeList();
-    fetchWorkingSealerList();
+    fetchCandidateSealerList();
     fetchBlockTxCountLimit();
     fetchGenesisHash();
     fetchConsensusLeaderPeriod();
@@ -210,16 +210,16 @@ void LedgerConfigFetcher::fetchFeatures()
     m_ledgerConfig->setFeatures(features);
 }
 
-void LedgerConfigFetcher::fetchWorkingSealerList()
+void LedgerConfigFetcher::fetchCandidateSealerList()
 {
     if (m_ledgerConfig->compatibilityVersion() < protocol::BlockVersion::V3_5_VERSION)
     {
         return;
     }
-    auto sealerList = fetchNodeListByNodeType(CONSENSUS_WORKING_SEALER);
-    TOOL_LOG(INFO) << LOG_DESC("fetchWorkingSealerList success")
+    auto sealerList = fetchNodeListByNodeType(CONSENSUS_CANDIDATE_SEALER);
+    TOOL_LOG(INFO) << LOG_DESC("fetchCandidateSealerList success")
                    << LOG_KV("size", sealerList->size());
-    m_ledgerConfig->setWorkingSealerNodeList(*sealerList);
+    m_ledgerConfig->setCandidateSealerNodeList(*sealerList);
 }
 
 void LedgerConfigFetcher::fetchBlockTxCountLimit()

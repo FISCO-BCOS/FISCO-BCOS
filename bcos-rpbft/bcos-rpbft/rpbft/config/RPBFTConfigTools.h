@@ -30,10 +30,7 @@ class RPBFTConfigTools
 public:
     using Ptr = std::shared_ptr<RPBFTConfigTools>;
 
-    RPBFTConfigTools()
-      : m_workingSealerNodeList(std::make_shared<consensus::ConsensusNodeList>()),
-        m_consensusNodeList(std::make_shared<consensus::ConsensusNodeList>())
-    {}
+    RPBFTConfigTools() : m_candidateNodeList({}), m_consensusNodeList({}) {}
 
     void resetConfig(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
 
@@ -54,9 +51,10 @@ private:
     // the number of working consensus nodes
     std::atomic_uint64_t m_workingSealerNodeNum{0};
 
-    // working consensus node list
-    ConsensusNodeListPtr m_workingSealerNodeList;
-    ConsensusNodeListPtr m_consensusNodeList;
+    // working sealer list
+    ConsensusNodeList m_candidateNodeList;
+    // candidate sealer list
+    ConsensusNodeList m_consensusNodeList;
     std::atomic_bool m_workingSealerNodeListUpdated{false};
     std::atomic_bool m_shouldRotateWorkingSealer{false};
 

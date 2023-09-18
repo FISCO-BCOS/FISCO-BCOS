@@ -544,11 +544,12 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
     }
     // print the prepared proposal info
     std::stringstream preparedProposalInfo;
-    preparedProposalInfo << "preparedProposalInfo: ";
+    preparedProposalInfo << " preparedProposalInfo: ";
     for (const auto& proposal : _viewChange->preparedProposals())
     {
         preparedProposalInfo << LOG_KV("propIndex", proposal->index())
                              << LOG_KV("propHash", proposal->hash().abridged())
+                             << LOG_KV("fromIdx", proposal->generatedFrom())
                              << LOG_KV("dataSize", proposal->consensusProposal()->data().size());
     }
     PBFT_LOG(INFO) << LOG_DESC("addViewChangeReq") << printPBFTMsgInfo(_viewChange)
@@ -619,7 +620,7 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
             preparedProposals[proposal->index()] = proposal;
         }
     }
-    // generate prepareMsg from maxCommittedIndex to  maxPrecommitIndex
+    // generate prepareMsg from maxCommittedIndex to maxPrecommitIndex
     PBFTMessageList prePrepareMsgList;
     for (auto i = (maxCommittedIndex + 1); i <= maxPrecommitIndex; i++)
     {

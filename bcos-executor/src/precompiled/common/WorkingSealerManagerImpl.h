@@ -63,8 +63,8 @@ private:
     }
 
     VRFInfo::Ptr m_vrfInfo;
-    std::vector<std::string> m_pendingSealer = {};
-    std::vector<std::string> m_workingSealer = {};
+    std::vector<std::string> m_candidateSealer = {};
+    std::vector<std::string> m_consensusSealer = {};
     bool m_consensusChangeFlag = false;
     ledger::ConsensusNodeList m_consensusNodes = {};
     bool m_notifyNextLeaderRotateSet = false;
