@@ -24,9 +24,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-protocol/Common.h>
 
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 const bcos::protocol::BlockNumber InvalidBlockNumber = -1;
 class Proposal : virtual public ProposalInterface
@@ -39,7 +37,7 @@ public:
     {
         deserializeObject();
     }
-    ~Proposal() override {}
+    ~Proposal() override = default;
 
     // the index of the proposal
     bcos::protocol::BlockNumber index() const override { return m_rawProposal->index(); }
@@ -152,5 +150,4 @@ protected:
     std::shared_ptr<RawProposal> m_rawProposal;
     bcos::crypto::HashType m_hash;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

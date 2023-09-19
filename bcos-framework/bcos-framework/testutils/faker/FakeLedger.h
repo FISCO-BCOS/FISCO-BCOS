@@ -281,10 +281,10 @@ public:
             _onGetNodeList(nullptr, observerNodes);
             return;
         }
-        if (_type == CONSENSUS_WORKING_SEALER)
+        if (_type == CONSENSUS_CANDIDATE_SEALER)
         {
             auto consensusNodes = std::make_shared<ConsensusNodeList>();
-            *consensusNodes = m_ledgerConfig->workingSealerNodeList();
+            *consensusNodes = m_ledgerConfig->candidateSealerNodeList();
             _onGetNodeList(nullptr, consensusNodes);
             return;
         }

@@ -1001,9 +1001,9 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             ledgerConfig->setObserverNodeList(*list);
                             break;
                         }
-                        case NodeListType::WorkingSealerNodeList:
+                        case NodeListType::CandidateSealerNodeList:
                         {
-                            ledgerConfig->setWorkingSealerNodeList(*list);
+                            ledgerConfig->setCandidateSealerNodeList(*list);
                             break;
                         }
                         default:
@@ -1123,7 +1123,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
             {
                 collector(nullptr, std::tuple{ConfigType::ConsensusType,
                                        std::string{ledger::PBFT_CONSENSUS_TYPE}, 0});
-                collector(nullptr, std::tuple{NodeListType::WorkingSealerNodeList,
+                collector(nullptr, std::tuple{NodeListType::CandidateSealerNodeList,
                                        std::make_shared<consensus::ConsensusNodeList>()});
                 collector(nullptr, std::tuple{ConfigType::EpochSealerNum,
                                        std::to_string(ledger::DEFAULT_EPOCH_SEALER_NUM), 0});
@@ -1140,17 +1140,17 @@ void SchedulerImpl::asyncGetLedgerConfig(
                     std::tuple{ConfigType::ConsensusType, std::string(consensusType), _number});
                 if (consensusType == ledger::RPBFT_CONSENSUS_TYPE)
                 {
-                    ledger->asyncGetNodeListByType(ledger::CONSENSUS_WORKING_SEALER,
+                    ledger->asyncGetNodeListByType(ledger::CONSENSUS_CANDIDATE_SEALER,
                         [collector](auto&& error, consensus::ConsensusNodeListPtr list) mutable {
                             if (error)
                             {
                                 collector(
-                                    nullptr, std::tuple{NodeListType::WorkingSealerNodeList,
+                                    nullptr, std::tuple{NodeListType::CandidateSealerNodeList,
                                                  std::make_shared<consensus::ConsensusNodeList>()});
                                 return;
                             }
                             collector(nullptr,
-                                std::tuple{NodeListType::WorkingSealerNodeList, std::move(list)});
+                                std::tuple{NodeListType::CandidateSealerNodeList, std::move(list)});
                         });
 
                     ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
@@ -1209,7 +1209,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
                 }
                 else
                 {
-                    collector(nullptr, std::tuple{NodeListType::WorkingSealerNodeList,
+                    collector(nullptr, std::tuple{NodeListType::CandidateSealerNodeList,
                                            std::make_shared<consensus::ConsensusNodeList>()});
                     collector(nullptr, std::tuple{ConfigType::EpochSealerNum,
                                            std::to_string(ledger::DEFAULT_EPOCH_SEALER_NUM), 0});

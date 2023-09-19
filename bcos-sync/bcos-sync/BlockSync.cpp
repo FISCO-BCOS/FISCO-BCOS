@@ -80,7 +80,7 @@ void BlockSync::init()
     fetcher->fetchFeatures();
     fetcher->fetchConsensusNodeList();
     fetcher->fetchObserverNodeList();
-    fetcher->fetchWorkingSealerList();
+    fetcher->fetchCandidateSealerList();
     fetcher->fetchGenesisHash();
     // set the syncConfig
     auto genesisHash = fetcher->genesisHash();
