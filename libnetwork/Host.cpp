@@ -135,7 +135,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
             {
-                HOST_LOG(ERROR) << LOG_DESC("Get cert failed");
+                HOST_LOG(WARNING) << LOG_DESC("Get cert failed");
                 return preverified;
             }
 
@@ -144,7 +144,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                HOST_LOG(ERROR) << LOG_DESC("Get ca basic failed");
+                HOST_LOG(WARNING) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
             /// ignore ca

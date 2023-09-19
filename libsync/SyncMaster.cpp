@@ -569,7 +569,8 @@ void SyncMaster::maintainPeersConnection()
 
     // member set is [(sealer || observer) && activePeer && not myself]
     set<NodeID> memberSet;
-    bool hasMyself = false;
+    bool hasMyself = (std::find(sealerOrObserver.begin(), sealerOrObserver.end(), m_nodeId) !=
+                      sealerOrObserver.end());
     if (!m_enableFreeNodeRead)
     {
         // Get active peers
@@ -586,7 +587,6 @@ void SyncMaster::maintainPeersConnection()
             {
                 memberSet.insert(member);
             }
-            hasMyself |= (member == m_nodeId);
         }
     }
     else
@@ -596,7 +596,6 @@ void SyncMaster::maintainPeersConnection()
         for (auto& session : sessions)
         {
             memberSet.insert(session.nodeID());
-            hasMyself |= (session.nodeID() == m_nodeId);
         }
     }
 
