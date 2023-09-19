@@ -17,13 +17,13 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
     using ReturnVariant = std::conditional_t<std::is_void_v<ReturnType>,
         std::variant<std::monostate, std::exception_ptr>,
         std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
-    ReturnVariant result;
 
-    std::atomic_flag onceFlag{};
+    ReturnVariant result;
+    std::atomic_flag finished{};
     std::atomic<oneapi::tbb::task::suspend_point> suspendPoint{};
 
     auto waitTask =
-        [](Task&& task, decltype(result)& result, std::atomic_flag& onceFlag,
+        [](Task&& task, decltype(result)& result, std::atomic_flag& finished,
             std::atomic<oneapi::tbb::task::suspend_point>& suspendPoint) -> task::Task<void> {
         try
         {
@@ -49,15 +49,15 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
             result = std::current_exception();
         }
 
-        if (onceFlag.test_and_set())
+        if (finished.test_and_set())
         {
             suspendPoint.wait({});
             oneapi::tbb::task::resume(suspendPoint.load());
         }
-    }(std::forward<Task>(task), result, onceFlag, suspendPoint);
+    }(std::forward<Task>(task), result, finished, suspendPoint);
     waitTask.start();
 
-    if (!onceFlag.test_and_set())
+    if (!finished.test_and_set())
     {
         oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
             suspendPoint.store(tag);
