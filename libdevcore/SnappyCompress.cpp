@@ -50,12 +50,19 @@ size_t SnappyCompress::compress(bytesConstRef inputData, bytes& compressedData)
     return compressLen;
 }
 
-size_t SnappyCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedData)
+size_t SnappyCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedData, size_t maxUncompressedLen)
 {
     size_t uncompressedLen = 0;
     // auto start_t = utcTimeUs();
     snappy::GetUncompressedLength(
         (const char*)compressedData.data(), compressedData.size(), &uncompressedLen);
+
+    if (maxUncompressedLen > 0 && uncompressedLen > maxUncompressedLen) {
+        LOG(ERROR) << LOG_BADGE("SnappyCompress") << LOG_DESC("uncompress size exceeds the limit")
+                   << LOG_KV("uncompressedLen", uncompressedLen) << LOG_KV("maxUncompressedLen", maxUncompressedLen);
+        return 0;
+    }
+
     uncompressedData.resize(uncompressedLen);
     bool status = snappy::RawUncompress(
         (const char*)compressedData.data(), compressedData.size(), (char*)&uncompressedData[0]);
