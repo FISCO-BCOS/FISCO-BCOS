@@ -122,9 +122,8 @@ std::string LedgerConfigFetcher::fetchSystemConfig(std::string_view _key)
     auto error = std::get<0>(ret);
     if (error)
     {
-        TOOL_LOG(WARNING) << LOG_DESC("fetchSystemConfig failed")
-                          << LOG_KV("code", error->errorCode())
-                          << LOG_KV("message", error->errorMessage()) << LOG_KV("key", _key);
+        TOOL_LOG(INFO) << LOG_DESC("fetchSystemConfig failed") << LOG_KV("code", error->errorCode())
+                       << LOG_KV("message", error->errorMessage()) << LOG_KV("key", _key);
         BOOST_THROW_EXCEPTION(
             LedgerConfigFetcherException() << errinfo_comment(
                 "LedgerConfigFetcher: fetchSystemConfig for " + std::string{_key} + " failed"));
@@ -281,10 +280,9 @@ void LedgerConfigFetcher::fetchAuthCheckStatus()
     }
     try
     {
-        auto ret = fetchSystemConfigNoException(SYSTEM_KEY_AUTH_CHECK_STATUS, {"0", 0});
-        TOOL_LOG(INFO) << LOG_DESC("fetchAuthCheckStatus success")
-                       << LOG_KV("value", std::get<0>(ret));
-        m_ledgerConfig->setAuthCheckStatus(boost::lexical_cast<uint32_t>(std::get<0>(ret)));
+        auto ret = fetchSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS);
+        TOOL_LOG(INFO) << LOG_DESC("fetchAuthCheckStatus success") << LOG_KV("value", ret);
+        m_ledgerConfig->setAuthCheckStatus(boost::lexical_cast<uint32_t>(ret));
     }
     catch (...)
     {

@@ -669,12 +669,12 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
         handleCheckPointMsg(checkPointMsg);
         break;
     }
-    [[unlikely]] case PacketType::RecoverRequest:
-    {
-        auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
-        handleRecoverRequest(request);
-        break;
-    }
+        [[unlikely]] case PacketType::RecoverRequest:
+        {
+            auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+            handleRecoverRequest(request);
+            break;
+        }
     case PacketType::RecoverResponse:
     {
         auto recoverResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
@@ -971,6 +971,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                         << printPBFTMsgInfo(_prePrepareMsg) << LOG_KV("code", _error->errorCode())
                         << LOG_KV("msg", _error->errorMessage());
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
+                    RecursiveGuard lock(pbftEngine->m_mutex);
                     pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
@@ -982,6 +983,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                     PBFT_LOG(WARNING)
                         << LOG_DESC("verify proposal failed") << printPBFTMsgInfo(_prePrepareMsg);
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
+                    RecursiveGuard lock(pbftEngine->m_mutex);
                     pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
