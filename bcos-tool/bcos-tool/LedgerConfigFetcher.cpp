@@ -31,7 +31,7 @@ using namespace bcos::consensus;
 using namespace bcos::tool;
 using namespace bcos::ledger;
 
-void LedgerConfigFetcher::fetchBlockNumberAndHash()
+void LedgerConfigFetcher::fetchBlockNumber()
 {
     std::promise<std::pair<Error::Ptr, BlockNumber>> blockNumberPromise;
     m_ledger->asyncGetBlockNumber([&blockNumberPromise](Error::Ptr _error, BlockNumber _number) {
@@ -51,6 +51,12 @@ void LedgerConfigFetcher::fetchBlockNumberAndHash()
     m_ledgerConfig->setBlockNumber(blockNumber);
     TOOL_LOG(INFO) << LOG_DESC("LedgerConfigFetcher: fetchBlockNumber success")
                    << LOG_KV("blockNumber", blockNumber);
+}
+
+void LedgerConfigFetcher::fetchBlockNumberAndHash()
+{
+    fetchBlockNumber();
+    auto blockNumber = m_ledgerConfig->blockNumber();
     // fetch blockHash
     auto hash = fetchBlockHash(blockNumber);
     TOOL_LOG(INFO) << LOG_DESC("LedgerConfigFetcher: fetchBlockHash success")
