@@ -312,7 +312,7 @@ private:
     uint64_t m_lastDownloadingRequestTime = 0;
     int64_t m_lastDownloadingBlockNumber = 0;
     int64_t m_currentSealingNumber = 0;
-    int64_t m_eachBlockDownloadingRequestTimeout = 1000;
+    int64_t m_eachBlockDownloadingRequestTimeout = 500;
 
     // Internal coding variable
     /// mutex to access m_signalled
