@@ -17,9 +17,9 @@ public:
         return false;
     }
     constexpr Value await_resume() noexcept { return std::move(m_value); }
-    const Value& value() const& { return m_value; }
-    Value& value() & { return m_value; }
-    Value toValue() && { return std::move(m_value); }
+    const Value& value() const& noexcept { return m_value; }
+    Value& value() & noexcept { return m_value; }
+    Value toValue() && noexcept { return std::move(m_value); }
 
 private:
     Value m_value;
