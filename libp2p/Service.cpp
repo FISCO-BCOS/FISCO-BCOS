@@ -397,6 +397,7 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             auto ret = dev::eth::getGroupAndProtocol(abs(p2pMessage->protocolID()));
             if (g_BCOSConfig.enableIgnoreObserverWriteRequest())
             {  // only BlockSync message and the other messages from sealer is permitted
+               // all amop message will be filter out
                 auto groupID = ret.first;
                 if (ret.second != dev::eth::ProtocolID::BlockSync)
                 { // filter all request not from sealer

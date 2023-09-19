@@ -620,7 +620,7 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
                 [sslSocket, shutdownTimer](const boost::system::error_code& error) {
                     if (error)
                     {
-                        LOG(WARNING) << "async_shutdown" << LOG_KV("message", error.message());
+                        LOG(INFO) << "async_shutdown" << LOG_KV("message", error.message());
                     }
                     shutdownTimer->cancel();
 

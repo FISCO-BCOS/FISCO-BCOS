@@ -157,7 +157,7 @@ dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdk
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
             {
-                CHANNEL_LOG(ERROR) << LOG_DESC("Get cert failed");
+                CHANNEL_LOG(WARNING) << LOG_DESC("Get cert failed");
                 return preverified;
             }
 
@@ -166,7 +166,7 @@ dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdk
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                CHANNEL_LOG(ERROR) << LOG_DESC("Get ca basic failed");
+                CHANNEL_LOG(WARNING) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
             /// ignore ca
