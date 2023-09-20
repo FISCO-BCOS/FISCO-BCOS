@@ -55,6 +55,5 @@ private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 
     PBFTMessageFactory::Ptr m_pbftMessageFactory;
-    mutable std::mutex x_mutex;
 };
 }  // namespace bcos::consensus

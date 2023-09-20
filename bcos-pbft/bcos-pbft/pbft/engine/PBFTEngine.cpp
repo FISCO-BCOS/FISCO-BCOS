@@ -404,20 +404,19 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                    << LOG_KV("hash", pbftMessage->hash().abridged())
                    << LOG_KV("sysProposal", pbftProposal->systemProposal());
 
-    m_worker->enqueue([self = this, pbftMessage]() {
-        // broadcast the pre-prepare packet
-        auto encodeStart = utcTime();
-        auto encodedData = self->m_config->codec()->encode(pbftMessage);
-        auto encodeEnd = utcTime();
-        // only broadcast pbft message to the consensus nodes
-        self->m_config->frontService()->asyncSendBroadcastMessage(
-            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
-        PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
-                       << LOG_KV("packetSize", encodedData->size())
-                       << LOG_KV("index", pbftMessage->index())
-                       << LOG_KV("encode(ms)", encodeEnd - encodeStart)
-                       << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
-    });
+    // NOTE: must ensure thread safe, should not write any filed while
+    // encoding broadcast the pre-prepare packet
+    auto encodeStart = utcTime();
+    auto encodedData = m_config->codec()->encode(pbftMessage);
+    auto encodeEnd = utcTime();
+    // only broadcast pbft message to the consensus nodes
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+    PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
+                   << LOG_KV("packetSize", encodedData->size())
+                   << LOG_KV("index", pbftMessage->index())
+                   << LOG_KV("encode(ms)", encodeEnd - encodeStart)
+                   << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
 
     // handle the pre-prepare packet
     RecursiveGuard l(m_mutex);
