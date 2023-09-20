@@ -23,16 +23,14 @@
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/interfaces/BlocksMsgInterface.h"
 #include "bcos-sync/utilities/Common.h"
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockSyncMsgFactory
 {
 public:
     using Ptr = std::shared_ptr<BlockSyncMsgFactory>;
     BlockSyncMsgFactory() = default;
-    virtual ~BlockSyncMsgFactory() {}
+    virtual ~BlockSyncMsgFactory() = default;
 
     virtual BlockSyncMsgInterface::Ptr createBlockSyncMsg(bytesConstRef _data) = 0;
     virtual BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(int32_t version = 0) = 0;
@@ -61,5 +59,4 @@ public:
     virtual BlockRequestInterface::Ptr createBlockRequest(bytesConstRef _data) = 0;
     virtual BlockRequestInterface::Ptr createBlockRequest(BlockSyncMsgInterface::Ptr _msg) = 0;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

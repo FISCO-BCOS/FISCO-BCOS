@@ -22,6 +22,8 @@
 
 #include <bcos-utilities/Common.h>
 
+#include <utility>
+
 namespace bcos
 {
 namespace front
@@ -53,16 +55,14 @@ public:
         Response = 0x0001,
     };
 
-public:
     FrontMessage()
     {
         m_uuid = std::make_shared<bytes>();
         m_payload = bytesConstRef();
     }
 
-    virtual ~FrontMessage() {}
+    virtual ~FrontMessage() = default;
 
-public:
     virtual uint16_t moduleID() { return m_moduleID; }
     virtual void setModuleID(uint16_t _moduleID) { m_moduleID = _moduleID; }
 
@@ -70,7 +70,7 @@ public:
     virtual void setExt(uint16_t _ext) { m_ext = _ext; }
 
     virtual std::shared_ptr<bytes> uuid() { return m_uuid; }
-    virtual void setUuid(std::shared_ptr<bytes> _uuid) { m_uuid = _uuid; }
+    virtual void setUuid(std::shared_ptr<bytes> _uuid) { m_uuid = std::move(_uuid); }
 
     virtual bytesConstRef payload() { return m_payload; }
     virtual void setPayload(bytesConstRef _payload) { m_payload = _payload; }
@@ -78,9 +78,10 @@ public:
     virtual void setResponse() { m_ext |= ExtFlag::Response; }
     virtual bool isResponse() { return m_ext & ExtFlag::Response; }
 
-public:
     virtual bool encode(bytes& _buffer);
     virtual ssize_t decode(bytesConstRef _buffer);
+
+    static uint16_t tryDecodeModuleID(bytesConstRef _buffer);
 
 protected:
     uint16_t m_moduleID = 0;
@@ -94,7 +95,7 @@ class FrontMessageFactory
 public:
     using Ptr = std::shared_ptr<FrontMessageFactory>;
 
-    virtual ~FrontMessageFactory() {}
+    virtual ~FrontMessageFactory() = default;
 
     virtual FrontMessage::Ptr buildMessage()
     {

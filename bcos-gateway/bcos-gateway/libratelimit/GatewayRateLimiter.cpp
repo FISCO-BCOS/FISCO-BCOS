@@ -157,5 +157,5 @@ std::pair<bool, std::string> GatewayRateLimiter::checkInComing(
     const std::string& _groupID, uint16_t _moduleID, uint64_t _msgLength)
 {
     m_rateLimiterStat->updateInComing(_groupID, _moduleID, _msgLength);
-    return {true, ""};
+    return {true, {}};
 }

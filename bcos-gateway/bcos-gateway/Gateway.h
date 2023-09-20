@@ -21,6 +21,7 @@
 #pragma once
 
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
+#include "filter/ReadOnlyFilter.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-gateway/Common.h>
@@ -30,25 +31,24 @@
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
 #include <bcos-gateway/libratelimit/RateLimiterStat.h>
 #include <bcos-utilities/BoostLog.h>
+#include <utility>
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gateway>
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;
-    Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
+    Gateway(std::string _chainID, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
         std::string _gatewayServiceName = "localGateway")
-      : m_gatewayServiceName(_gatewayServiceName),
-        m_chainID(_chainID),
-        m_p2pInterface(_p2pInterface),
-        m_gatewayNodeManager(_gatewayNodeManager),
-        m_amop(_amop),
-        m_gatewayRateLimiter(_gatewayRateLimiter)
+      : m_gatewayServiceName(std::move(_gatewayServiceName)),
+        m_chainID(std::move(_chainID)),
+        m_p2pInterface(std::move(_p2pInterface)),
+        m_gatewayNodeManager(std::move(_gatewayNodeManager)),
+        m_amop(std::move(_amop)),
+        m_gatewayRateLimiter(std::move(_gatewayRateLimiter))
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
@@ -180,7 +180,7 @@ public:
 
 protected:
     // for UT
-    Gateway() {}
+    Gateway() = default;
     virtual void onReceiveP2PMessage(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
 
@@ -208,6 +208,6 @@ private:
 
     // For rate limit
     ratelimiter::GatewayRateLimiter::Ptr m_gatewayRateLimiter;
+    std::optional<ReadOnlyFilter> m_readOnlyFilter;
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

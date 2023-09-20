@@ -30,7 +30,7 @@ file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 find_package(tarscpp REQUIRED)
 
 add_library(${GATEWAY_TARGET} ${SRCS})
-target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_static redis++::redis++_static Boost::filesystem bcos-boostssl ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
+target_link_libraries(${GATEWAY_TARGET} PUBLIC ${PROTOCOL_TARGET} jsoncpp_static redis++::redis++_static Boost::filesystem bcos-boostssl ${FRONT_TARGET} ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
 
 if (APPLE)
 # target_compile_options(${GATEWAY_TARGET} PRIVATE -faligned-allocation)
