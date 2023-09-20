@@ -140,7 +140,8 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
         /// uncompress data
         SnappyCompress::uncompress(
             bytesConstRef((const byte*)(&buffer[HEADER_LENGTH]), m_length - HEADER_LENGTH),
-            *m_buffer);
+            *m_buffer,
+            P2PMessage::MAX_MESSAGE_LENGTH);
         // reset version
         m_version &= (~dev::eth::CompressFlag);
     }
