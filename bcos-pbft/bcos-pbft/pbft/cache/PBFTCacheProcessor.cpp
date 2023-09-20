@@ -1037,12 +1037,12 @@ bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _chec
         return false;
     }
     // hit in the local committedProposalList or already been requested
-    if (m_committedProposalList.count(checkPointIndex))
+    if (m_committedProposalList.contains(checkPointIndex))
     {
         return false;
     }
     // the local cache already has the checkPointProposal
-    if (m_caches.count(checkPointIndex) && m_caches[checkPointIndex]->checkPointProposal())
+    if (m_caches.contains(checkPointIndex) && m_caches[checkPointIndex]->checkPointProposal())
     {
         return false;
     }
@@ -1053,7 +1053,7 @@ bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _chec
     }
     // no-timeout
     // has not received any checkPoint message before, wait for generating local checkPoint
-    if (!m_caches.count(checkPointIndex))
+    if (!m_caches.contains(checkPointIndex))
     {
         return false;
     }

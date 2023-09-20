@@ -165,8 +165,11 @@ int ConsensusPrecompiled::addSealer(
     {
         // exist
         node->weight = weight;
-        if (!(blockContext.features().get(Features::Flag::feature_rpbft) &&
-                node->type == ledger::CONSENSUS_CANDIDATE_SEALER))
+        if (blockContext.features().get(Features::Flag::feature_rpbft))
+        {
+            node->type = ledger::CONSENSUS_CANDIDATE_SEALER;
+        }
+        else
         {
             node->type = ledger::CONSENSUS_SEALER;
         }
