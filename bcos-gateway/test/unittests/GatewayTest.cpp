@@ -1,3 +1,4 @@
+#include "bcos-crypto/signature/key/KeyFactoryImpl.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
@@ -50,6 +51,10 @@ struct P2PBaseMock : public P2PInterface
     {}
 };
 
+struct MockGatewayNodeManager : public GatewayNodeManager
+{
+};
+
 struct GatewayTestFixture
 {
 };
@@ -63,12 +68,12 @@ BOOST_AUTO_TEST_CASE(readonly)
         void sendRespMessageBySession(bytesConstRef _payload, P2PMessage::Ptr _p2pMessage,
             std::shared_ptr<P2PSession> _p2pSession) override
         {
-            BOOST_CHECK_EQUAL(_payload.toString(), "4001");
+            BOOST_FAIL("Unexcepted");
         }
     };
-    auto mock = std::make_shared<ExpectFailed>();
+    auto expectFailed = std::make_shared<ExpectFailed>();
     auto gateway = std::make_shared<bcos::gateway::Gateway>(
-        "test_chain", mock, nullptr, nullptr, nullptr, "testGateway");
+        "test_chain", expectFailed, nullptr, nullptr, nullptr, "testGateway");
     gateway->enableReadOnlyMode();
 
     auto factory = std::make_shared<P2PMessageFactoryV2>();
@@ -86,7 +91,6 @@ BOOST_AUTO_TEST_CASE(readonly)
     std::string groupID = "group";
     std::string srcNodeID = "nodeID";
     std::string dstNodeID = "nodeID";
-
     auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
     auto dstNodeIDPtr = std::make_shared<bytes>(dstNodeID.begin(), dstNodeID.end());
 

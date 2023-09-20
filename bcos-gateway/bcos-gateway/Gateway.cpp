@@ -453,10 +453,7 @@ void Gateway::onReceiveP2PMessage(
     {
         GATEWAY_LOG(WARNING) << "P2PMessage moduleID: " << moduleID << " filter by readOnlyFilter";
 
-        auto errorCode = std::to_string((int)protocol::CommonError::ReadOnlyModeError);
-        m_p2pInterface->sendRespMessageBySession(
-            bytesConstRef((const byte*)errorCode.data(), errorCode.size()), _msg,
-            std::move(_session));
+        // Drop the message
         return;
     }
 

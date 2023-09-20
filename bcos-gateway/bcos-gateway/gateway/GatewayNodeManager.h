@@ -28,9 +28,7 @@
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
 #include <bcos-utilities/Timer.h>
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class GatewayNodeManager
 {
@@ -38,7 +36,7 @@ public:
     using Ptr = std::shared_ptr<GatewayNodeManager>;
     GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface);
-    virtual ~GatewayNodeManager() {}
+    virtual ~GatewayNodeManager() = default;
 
     virtual void start() { m_timer->start(); }
     virtual void stop();
@@ -113,5 +111,4 @@ protected:
 
     GatewayNodeStatusFactory::Ptr m_gatewayNodeStatusFactory;
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway
