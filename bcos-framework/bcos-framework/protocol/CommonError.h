@@ -20,9 +20,7 @@
  */
 #pragma once
 #include <stdint.h>
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 enum CommonError : int32_t
 {
@@ -32,6 +30,7 @@ enum CommonError : int32_t
     NotFoundFrontServiceDispatchMsg = 1002,
     GatewaySendMsgFailed = 1003,
     NetworkBandwidthOverFlow = 1004,
+    GatewayQPSOverFlow = 1005,
     TransactionsMissing = 2000,  // for transaction sync
     InconsistentTransactions = 2001,
     TxsSignatureVerifyFailed = 2002,
@@ -43,5 +42,4 @@ enum CommonError : int32_t
     UnSupportedPacketType = 3004,
 };
 
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

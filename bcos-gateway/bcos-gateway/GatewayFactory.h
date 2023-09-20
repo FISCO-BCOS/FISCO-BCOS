@@ -13,7 +13,6 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
-#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 #include <sw/redis++/redis++.h>
 #include <boost/asio/ssl.hpp>
 

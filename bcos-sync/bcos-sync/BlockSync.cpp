@@ -39,9 +39,9 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
     m_downloadBlockProcessor = std::make_shared<bcos::ThreadPool>("Download", 1);
     m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
     m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout(), "downloadTimer");
-    m_downloadingTimer->registerTimeoutHandler(boost::bind(&BlockSync::onDownloadTimeout, this));
+    m_downloadingTimer->registerTimeoutHandler([this]() { onDownloadTimeout(); });
     m_downloadingQueue->registerNewBlockHandler(
-        boost::bind(&BlockSync::onNewBlock, this, boost::placeholders::_1));
+        [this](bcos::ledger::LedgerConfig::Ptr ledger) { onNewBlock(std::move(ledger)); });
     initSendResponseHandler();
 }
 
@@ -101,7 +101,7 @@ void BlockSync::initSendResponseHandler()
     // set the sendResponse callback
     std::weak_ptr<bcos::front::FrontServiceInterface> weakFrontService = m_config->frontService();
     m_sendResponseHandler = [weakFrontService](std::string const& _id, int _moduleID,
-                                NodeIDPtr _dstNode, bytesConstRef _data) {
+                                const NodeIDPtr& _dstNode, bytesConstRef _data) {
         try
         {
             auto frontService = weakFrontService.lock();

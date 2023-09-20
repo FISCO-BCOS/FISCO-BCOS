@@ -12,9 +12,7 @@
 #include <bcos-gateway/libp2p/P2PMessage.h>
 #include <memory>
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class P2PMessage;
 class Service;
@@ -74,5 +72,4 @@ private:
     mutable bcos::SharedMutex x_protocolInfo;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

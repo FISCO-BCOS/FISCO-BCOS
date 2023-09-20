@@ -18,7 +18,9 @@
  * @date 2021-04-19
  */
 
+#include "bcos-front/FrontMessage.h"
 #include "bcos-utilities/BoostLog.h"
+#include "filter/Filter.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
@@ -29,6 +31,7 @@
 #include <json/json.h>
 #include <algorithm>
 #include <random>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -492,8 +495,8 @@ void Gateway::onReceiveP2PMessage(
 
     auto srcNodeID = options->srcNodeID();
     const auto& dstNodeIDs = options->dstNodeIDs();
-    auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID.get());
-    auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0].get());
+    auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID);
+    auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0]);
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
     onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, payload,
         [groupID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](Error::Ptr _error) {
@@ -529,14 +532,50 @@ void Gateway::onReceiveBroadcastMessage(
     }
 
     auto options = _msg->options();
-    auto msgPayload = _msg->payload();
+    auto payload = _msg->payload();
 
     // groupID
     auto groupID = options->groupID();
     // moduleID
     uint16_t moduleID = options->moduleID();
 
-    m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+    // Notice: moduleID not set the previous version, try to decode from front message
+    if (moduleID == 0)
+    {
+        moduleID =
+            front::FrontMessage::tryDecodeModuleID(bytesConstRef(payload->data(), payload->size()));
+    }
+
+    // Check readonly filter
+    if (m_readOnlyFilter && !filter(*m_readOnlyFilter, groupID, moduleID, bytesConstRef{}))
+    {
+        auto errorCode = std::to_string((int)protocol::CommonError::SUCCESS);
+        m_p2pInterface->sendRespMessageBySession(
+            bytesConstRef((const byte*)errorCode.data(), errorCode.size()), _msg,
+            std::move(_session));
+        return;
+    }
+
+    if (moduleID == 0)
+    {
+        GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveBroadcastMessage")
+                           << LOG_DESC("front message module id not found")
+                           << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID)
+                           << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload->size());
+    }
+
+    if (m_gatewayRateLimiter && moduleID != 0)
+    {
+        auto [result, _] = m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
+        if (!result)
+        {
+            auto errorCode = std::to_string((int)protocol::CommonError::SUCCESS);
+            m_p2pInterface->sendRespMessageBySession(
+                bytesConstRef((const byte*)errorCode.data(), errorCode.size()), _msg,
+                std::move(_session));
+            return;
+        }
+    }
 
     auto srcNodeIDPtr =
         m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
