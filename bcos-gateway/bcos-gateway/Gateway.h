@@ -115,20 +115,6 @@ public:
     void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
 
-    /**
-     * @brief: receive p2p message
-     * @param _groupID: groupID
-     * @param _srcNodeID: the sender nodeID
-     * @param _dstNodeID: the receiver nodeID
-     * @param _payload: message content
-     * @param _errorRespFunc: error func
-     * @return void
-     */
-    virtual void onReceiveP2PMessage(const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
-
-
     P2PInterface::Ptr p2pInterface() const { return m_p2pInterface; }
     GatewayNodeManager::Ptr gatewayNodeManager() { return m_gatewayNodeManager; }
     /**
@@ -178,9 +164,8 @@ public:
         return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
     }
 
-protected:
-    // for UT
-    Gateway() = default;
+    void enableReadOnlyMode();
+
     virtual void onReceiveP2PMessage(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
 
@@ -193,6 +178,23 @@ protected:
      */
     virtual void onReceiveBroadcastMessage(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+
+protected:
+    // for UT
+    Gateway() = default;
+
+    /**
+     * @brief: receive p2p message
+     * @param _groupID: groupID
+     * @param _srcNodeID: the sender nodeID
+     * @param _dstNodeID: the receiver nodeID
+     * @param _payload: message content
+     * @param _errorRespFunc: error func
+     * @return void
+     */
+    virtual void onReceiveP2PMessage(const std::string& _groupID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
+        bytesConstRef _payload, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
 
     bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);

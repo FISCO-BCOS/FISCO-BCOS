@@ -24,6 +24,7 @@
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>
+#include <utility>
 #include <vector>
 
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
@@ -56,7 +57,6 @@ public:
     /// groupID length(2) + nodeID length(2) + dst nodeID count(1) + moduleID(2)
     const static size_t OPTIONS_MIN_LENGTH = 7;
 
-public:
     P2PMessageOptions() { m_srcNodeID = std::make_shared<bytes>(); }
 
     virtual ~P2PMessageOptions() = default;
@@ -71,7 +71,6 @@ public:
     bool encode(bytes& _buffer);
     ssize_t decode(bytesConstRef _buffer);
 
-public:
     uint16_t moduleID() const { return m_moduleID; }
     void setModuleID(uint16_t _moduleID) { m_moduleID = _moduleID; }
 
@@ -82,9 +81,9 @@ public:
     void setSrcNodeID(std::shared_ptr<bytes> _srcNodeID) { m_srcNodeID = _srcNodeID; }
 
     std::vector<std::shared_ptr<bytes>>& dstNodeIDs() { return m_dstNodeIDs; }
-    void setDstNodeIDs(const std::vector<std::shared_ptr<bytes>>& _dstNodeIDs)
+    void setDstNodeIDs(std::vector<std::shared_ptr<bytes>> _dstNodeIDs)
     {
-        m_dstNodeIDs = _dstNodeIDs;
+        m_dstNodeIDs = std::move(_dstNodeIDs);
     }
 
 protected:

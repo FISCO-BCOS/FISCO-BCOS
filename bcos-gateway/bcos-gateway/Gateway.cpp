@@ -386,55 +386,6 @@ void Gateway::asyncSendBroadcastMessage(uint16_t _type, const std::string& _grou
         _type, _groupID, _moduleID, message);
 }
 
-/**
- * @brief: receive p2p message from p2p network module
- * @param _groupID: groupID
- * @param _srcNodeID: the sender nodeID
- * @param _dstNodeID: the receiver nodeID
- * @param _payload: message content
- * @param _callback: callback
- * @return void
- */
-void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNodeID,
-    NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc)
-{
-    auto frontService =
-        m_gatewayNodeManager->localRouterTable()->getFrontService(_groupID, _dstNodeID);
-    if (!frontService)
-    {
-        GATEWAY_LOG(ERROR) << LOG_DESC(
-                                  "onReceiveP2PMessage unable to find front "
-                                  "service to dispatch this message")
-                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
-                           << LOG_KV("dstNodeID", _dstNodeID->hex());
-
-        auto errorPtr = std::make_shared<Error>(CommonError::NotFoundFrontServiceDispatchMsg,
-            "unable to find front service dispatch message to "
-            "groupID:" +
-                _groupID + " ,nodeID:" + _dstNodeID->hex());
-
-        if (_errorRespFunc)
-        {
-            _errorRespFunc(errorPtr);
-        }
-        return;
-    }
-
-    frontService->frontService()->onReceiveMessage(_groupID, _srcNodeID, _payload,
-        [_groupID, _srcNodeID, _dstNodeID, _errorRespFunc](Error::Ptr _error) {
-            if (_errorRespFunc)
-            {
-                _errorRespFunc(_error);
-            }
-            GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback")
-                               << LOG_KV("groupID", _groupID)
-                               << LOG_KV("srcNodeID", _srcNodeID->hex())
-                               << LOG_KV("dstNodeID", _dstNodeID->hex())
-                               << LOG_KV("code", (_error ? _error->errorCode() : 0))
-                               << LOG_KV("msg", (_error ? _error->errorMessage() : ""));
-        });
-}
-
 bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
 {
     // check the serviceName
@@ -550,6 +501,46 @@ void Gateway::onReceiveP2PMessage(
         });
 }
 
+void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNodeID,
+    NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc)
+{
+    auto frontService =
+        m_gatewayNodeManager->localRouterTable()->getFrontService(_groupID, _dstNodeID);
+    if (!frontService)
+    {
+        GATEWAY_LOG(ERROR) << LOG_DESC(
+                                  "onReceiveP2PMessage unable to find front "
+                                  "service to dispatch this message")
+                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("dstNodeID", _dstNodeID->hex());
+
+        auto errorPtr = std::make_shared<Error>(CommonError::NotFoundFrontServiceDispatchMsg,
+            "unable to find front service dispatch message to "
+            "groupID:" +
+                _groupID + " ,nodeID:" + _dstNodeID->hex());
+
+        if (_errorRespFunc)
+        {
+            _errorRespFunc(errorPtr);
+        }
+        return;
+    }
+
+    frontService->frontService()->onReceiveMessage(_groupID, _srcNodeID, _payload,
+        [_groupID, _srcNodeID, _dstNodeID, _errorRespFunc](Error::Ptr _error) {
+            if (_errorRespFunc)
+            {
+                _errorRespFunc(_error);
+            }
+            GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback")
+                               << LOG_KV("groupID", _groupID)
+                               << LOG_KV("srcNodeID", _srcNodeID->hex())
+                               << LOG_KV("dstNodeID", _dstNodeID->hex())
+                               << LOG_KV("code", (_error ? _error->errorCode() : 0))
+                               << LOG_KV("msg", (_error ? _error->errorMessage() : ""));
+        });
+}
+
 void Gateway::onReceiveBroadcastMessage(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
 {
@@ -597,4 +588,9 @@ void Gateway::onReceiveBroadcastMessage(
                        << LOG_KV("type", type);
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
         srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+}
+
+void bcos::gateway::Gateway::enableReadOnlyMode()
+{
+    m_readOnlyFilter.emplace();
 }

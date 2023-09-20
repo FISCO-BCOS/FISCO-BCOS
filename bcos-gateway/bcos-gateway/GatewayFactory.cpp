@@ -41,6 +41,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -458,18 +459,9 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
 {
     auto config = std::make_shared<GatewayConfig>();
     // load config
-    if (_airVersion)
-    {
-        // the air mode not require the uuid(use p2pID as uuid by default)
-        config->initConfig(_configPath, false);
-    }
-    else
-    {
-        // the pro mode require the uuid
-        config->initConfig(_configPath, true);
-    }
+    config->initConfig(_configPath, !_airVersion);
     config->loadP2pConnectedNodes();
-    return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
+    return buildGateway(config, _airVersion, std::move(_entryPoint), _gatewayServiceName);
 }
 
 std::shared_ptr<ratelimiter::GatewayRateLimiter> GatewayFactory::buildGatewayRateLimiter(
@@ -665,9 +657,15 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             }
             amop = buildAMOP(service, pubHex);
         }
+
         // init Gateway
         auto gateway = std::make_shared<Gateway>(
             m_chainID, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
+        if (_config->readonly())
+        {
+            gateway->enableReadOnlyMode();
+        }
+
         auto GatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(

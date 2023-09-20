@@ -198,9 +198,10 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       listen_port=30300
       nodes_path=./
       nodes_file=nodes.json
+      readonly=false
       */
     m_uuid = _pt.get<std::string>("p2p.uuid", "");
-    if (_uuidRequired && m_uuid.size() == 0)
+    if (_uuidRequired && m_uuid.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "initP2PConfig: invalid uuid! Must be non-empty!"));
@@ -216,7 +217,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     }
 
     // not set the nodePath, load from the config
-    if (m_nodePath.size() == 0)
+    if (m_nodePath.empty())
     {
         m_nodePath = _pt.get<std::string>("p2p.nodes_path", "./");
     }
@@ -226,11 +227,13 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     m_smSSL = smSSL;
     m_listenIP = listenIP;
     m_listenPort = (uint16_t)listenPort;
+    m_readonly = _pt.get<bool>("p2p.readonly", false);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initP2PConfig ok!") << LOG_KV("listenIP", listenIP)
                              << LOG_KV("listenPort", listenPort) << LOG_KV("smSSL", smSSL)
                              << LOG_KV("nodePath", m_nodePath)
-                             << LOG_KV("nodeFileName", m_nodeFileName);
+                             << LOG_KV("nodeFileName", m_nodeFileName)
+                             << LOG_KV("readonly", m_readonly);
 }
 
 // load p2p connected peers
@@ -679,7 +682,8 @@ void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _
                     GATEWAY_CONFIG_LOG(TRACE) << LOG_BADGE("GatewayConfig")
                                               << LOG_DESC("get certificate rejected by nodeID")
                                               << LOG_KV("nodeID", nodeID);
-                    bool isNodeIDValid = (false == m_smSSL? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
+                    bool isNodeIDValid =
+                        (false == m_smSSL ? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
                     if (true == isNodeIDValid)
                     {
                         m_enableBlacklist = true;
@@ -726,7 +730,8 @@ void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _
                     GATEWAY_CONFIG_LOG(DEBUG) << LOG_BADGE("GatewayConfig")
                                               << LOG_BADGE("get certificate accepted by nodeID")
                                               << LOG_KV("nodeID", nodeID);
-                    bool isNodeIDValid = (false == m_smSSL? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
+                    bool isNodeIDValid =
+                        (false == m_smSSL ? isNodeIDOk<h2048>(nodeID) : isNodeIDOk<h512>(nodeID));
                     if (true == isNodeIDValid)
                     {
                         m_enableWhitelist = true;
