@@ -95,5 +95,5 @@ uint16_t bcos::front::FrontMessage::tryDecodeModuleID(bytesConstRef _buffer)
         return 0;
     }
 
-    return boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[0]));
+    return boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)_buffer.data()));
 }

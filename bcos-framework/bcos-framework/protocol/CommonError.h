@@ -40,6 +40,7 @@ enum CommonError : int32_t
     NotFoundClientByTopicDispatchMsg = 3002,
     AMOPSendMsgFailed = 3003,
     UnSupportedPacketType = 3004,
+    ReadOnlyModeError = 4001,
 };
 
 }  // namespace bcos::protocol
