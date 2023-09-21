@@ -36,7 +36,6 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
     bytesPointer payLoad = {};
     // set payLoad
     {
-        std::lock_guard<std::mutex> lock(x_mutex);
         payLoad = _pbftMessage->encode(m_cryptoSuite, m_keyPair);
     }
     pbMessage->set_payload(payLoad->data(), payLoad->size());
@@ -50,7 +49,6 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
         auto signatureData = m_cryptoSuite->signatureImpl()->sign(*m_keyPair, hash, false);
         pbMessage->set_signaturedata(signatureData->data(), signatureData->size());
         {
-            std::lock_guard<std::mutex> lock(x_mutex);
             _pbftMessage->setSignatureDataHash(hash);
             _pbftMessage->setSignatureData(*signatureData);
         }

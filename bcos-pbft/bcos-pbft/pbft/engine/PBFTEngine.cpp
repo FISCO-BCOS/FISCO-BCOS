@@ -404,20 +404,19 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                    << LOG_KV("hash", pbftMessage->hash().abridged())
                    << LOG_KV("sysProposal", pbftProposal->systemProposal());
 
-    m_worker->enqueue([self = this, pbftMessage]() {
-        // broadcast the pre-prepare packet
-        auto encodeStart = utcTime();
-        auto encodedData = self->m_config->codec()->encode(pbftMessage);
-        auto encodeEnd = utcTime();
-        // only broadcast pbft message to the consensus nodes
-        self->m_config->frontService()->asyncSendBroadcastMessage(
-            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
-        PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
-                       << LOG_KV("packetSize", encodedData->size())
-                       << LOG_KV("index", pbftMessage->index())
-                       << LOG_KV("encode(ms)", encodeEnd - encodeStart)
-                       << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
-    });
+    // NOTE: must ensure thread safe, should not write any filed while
+    // encoding broadcast the pre-prepare packet
+    auto encodeStart = utcTime();
+    auto encodedData = m_config->codec()->encode(pbftMessage);
+    auto encodeEnd = utcTime();
+    // only broadcast pbft message to the consensus nodes
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+    PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
+                   << LOG_KV("packetSize", encodedData->size())
+                   << LOG_KV("index", pbftMessage->index())
+                   << LOG_KV("encode(ms)", encodeEnd - encodeStart)
+                   << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
 
     // handle the pre-prepare packet
     RecursiveGuard l(m_mutex);
@@ -669,12 +668,12 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
         handleCheckPointMsg(checkPointMsg);
         break;
     }
-    [[unlikely]] case PacketType::RecoverRequest:
-    {
-        auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
-        handleRecoverRequest(request);
-        break;
-    }
+        [[unlikely]] case PacketType::RecoverRequest:
+        {
+            auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+            handleRecoverRequest(request);
+            break;
+        }
     case PacketType::RecoverResponse:
     {
         auto recoverResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
@@ -971,6 +970,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                         << printPBFTMsgInfo(_prePrepareMsg) << LOG_KV("code", _error->errorCode())
                         << LOG_KV("msg", _error->errorMessage());
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
+                    RecursiveGuard lock(pbftEngine->m_mutex);
                     pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
@@ -982,6 +982,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                     PBFT_LOG(WARNING)
                         << LOG_DESC("verify proposal failed") << printPBFTMsgInfo(_prePrepareMsg);
                     pbftEngine->m_config->notifySealer(_prePrepareMsg->index(), true);
+                    RecursiveGuard lock(pbftEngine->m_mutex);
                     pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
