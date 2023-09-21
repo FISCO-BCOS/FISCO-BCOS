@@ -22,6 +22,7 @@
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <json/json.h>
 #include <boost/bind/bind.hpp>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -459,7 +460,7 @@ void BlockSync::onPeerStatus(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
 
 void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)
 {
-    auto blockMsg = m_config->msgFactory()->createBlocksMsg(_syncMsg);
+    auto blockMsg = m_config->msgFactory()->createBlocksMsg(std::move(_syncMsg));
     BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                        << LOG_DESC("Receive peer block packet")
                        << LOG_KV("peer", _nodeID->shortHex());
@@ -469,7 +470,7 @@ void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
 
 void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)
 {
-    auto blockRequest = m_config->msgFactory()->createBlockRequest(_syncMsg);
+    auto blockRequest = m_config->msgFactory()->createBlockRequest(std::move(_syncMsg));
     BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("onPeerBlocksRequest")
                       << LOG_DESC("Receive block request") << LOG_KV("peer", _nodeID->shortHex())
                       << LOG_KV("from", blockRequest->number())
@@ -679,7 +680,13 @@ void BlockSync::maintainDownloadingQueue()
                           << LOG_KV("node", m_config->nodeID()->shortHex())
                           << LOG_KV("signatureSize", signature.size())
                           << LOG_KV("txsSize", block->transactionsSize());
-        m_downloadingQueue->applyBlock(block);
+        m_downloadingQueue->applyBlock(block, [self = weak_from_this()]() {
+            auto sync = self.lock();
+            if (sync)
+            {
+                sync->m_signalled.notify_all();
+            }
+        });
     }
 }
 

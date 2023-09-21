@@ -458,7 +458,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
     std::string const& _gatewayServiceName)
 {
     auto config = std::make_shared<GatewayConfig>();
-    // load config
+    // load config, pro & max gateway need uuid
     config->initConfig(_configPath, !_airVersion);
     config->loadP2pConnectedNodes();
     return buildGateway(config, _airVersion, std::move(_entryPoint), _gatewayServiceName);

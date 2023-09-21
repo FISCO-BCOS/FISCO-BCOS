@@ -449,7 +449,7 @@ void Gateway::onReceiveP2PMessage(
     }
 
     // Readonly filter
-    if (m_readOnlyFilter && !filter(*m_readOnlyFilter, groupID, moduleID, bytesConstRef{}))
+    if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, {}))
     {
         GATEWAY_LOG(WARNING) << "P2PMessage moduleID: " << moduleID << " filter by readOnlyFilter";
 
@@ -564,7 +564,7 @@ void Gateway::onReceiveBroadcastMessage(
     }
 
     // Readonly filter
-    if (m_readOnlyFilter && !filter(*m_readOnlyFilter, groupID, moduleID, bytesConstRef{}))
+    if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, bytesConstRef{}))
     {
         GATEWAY_LOG(WARNING) << "BroadcastMessage moduleID: " << moduleID
                              << " filter by readOnlyFilter";
@@ -589,5 +589,5 @@ void Gateway::onReceiveBroadcastMessage(
 
 void bcos::gateway::Gateway::enableReadOnlyMode()
 {
-    m_readOnlyFilter.emplace();
+    m_readonlyFilter.emplace();
 }

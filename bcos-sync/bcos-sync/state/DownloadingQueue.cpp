@@ -257,7 +257,7 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr _header)
 }
 
 
-void DownloadingQueue::applyBlock(Block::Ptr _block)
+void DownloadingQueue::applyBlock(Block::Ptr _block, std::function<void()> onFinished)
 {
     auto blockHeader = _block->blockHeader();
     // check the block number
@@ -279,7 +279,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
     auto startT = utcTime();
     auto self = weak_from_this();
     m_config->scheduler()->executeBlock(_block, true,
-        [self, startT, _block](
+        [self, startT, _block, onFinished = std::move(onFinished)](
             Error::Ptr&& _error, protocol::BlockHeader::Ptr&& _blockHeader, bool _sysBlock) {
             auto orgBlockHeader = _block->blockHeader();
             try
@@ -356,6 +356,10 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 if (!_sysBlock)
                 {
                     config->setExecutedBlock(orgBlockHeader->number());
+                    if (onFinished)
+                    {
+                        onFinished();
+                    }
                 }
                 auto signature = orgBlockHeader->signatureList();
                 BLKSYNC_LOG(INFO) << METRIC << LOG_BADGE("Download")

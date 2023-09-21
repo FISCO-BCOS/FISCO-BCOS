@@ -210,6 +210,6 @@ private:
 
     // For rate limit
     ratelimiter::GatewayRateLimiter::Ptr m_gatewayRateLimiter;
-    std::optional<ReadOnlyFilter> m_readOnlyFilter;
+    std::optional<ReadOnlyFilter> m_readonlyFilter;
 };
 }  // namespace bcos::gateway
