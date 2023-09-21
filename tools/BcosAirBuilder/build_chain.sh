@@ -1661,14 +1661,16 @@ parse_ip_config() {
 
 get_value() {
     local var_name=${1}
-    var_name=var_${var_name//./}
+    var_name="${var_name//./}"
+    var_name="var_${var_name//-/}"
     local res=$(eval echo '$'"${var_name}")
     echo ${res}
 }
 
 set_value() {
     local var_name=${1}
-    var_name=var_${var_name//./}
+    var_name="${var_name//./}"
+    var_name="var_${var_name//-/}"
     local var_value=${2}
     eval "${var_name}=${var_value}"
 }
@@ -1922,19 +1924,20 @@ deploy_nodes()
     generate_chain_cert "${sm_mode}" "${ca_dir}"
 
     for line in ${ip_array[*]}; do
-        if [ -n "$(echo ${line} | grep "\.")" ];then
-            ip=${line%:*}
-            num=${line#*:}
-        else
+        if echo "$line" | grep -E "\[.*\]:[0-9]+" >/dev/null; then
             ip=${line%\]*}
             ip=${ip#*\[}
             num=${line#*\]}
             num=${num#*:}
             use_ipv6="true"
+            if [[ -n "${use_ipv6}" && $ip != "::" && -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]]; then
+                LOG_FATAL "Please check IPv6 address: ${ip}"
+            fi
+        else
+            ip=${line%:*}
+            num=${line#*:}
         fi
-        if [[ -n "${use_ipv6}" && -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]]; then
-            LOG_WARN "Please check IPv6 address: ${ip}, if you use domain name please ignore this."
-        elif [[ -z "${use_ipv6}" && -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]]; then
+        if [[ -z "${use_ipv6}" && -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]]; then
             LOG_WARN "Please check IPv4 address: ${ip}, if you use domain name please ignore this."
         fi
         # echo $num
@@ -1995,19 +1998,20 @@ deploy_nodes()
     local i=0
     local count=0
     for line in ${ip_array[*]}; do
-        if [ -n "$(echo ${line} | grep "\.")" ];then
-            ip=${line%:*}
-            num=${line#*:}
-        else
+        if echo "$line" | grep -E "\[.*\]:[0-9]+" >/dev/null; then
             ip=${line%\]*}
             ip=${ip#*\[}
             num=${line#*\]}
             num=${num#*:}
             use_ipv6="true"
+            if [ -n "${use_ipv6}" ] && [ "$ip" != "::" ] && [ -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]; then
+                LOG_FATAL "Please check IPv6 address: ${ip}"
+            fi
+        else
+            ip=${line%:*}
+            num=${line#*:}
         fi
-        if [[ -n "${use_ipv6}" && -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]]; then
-            LOG_WARN "Please check IPv6 address: ${ip}, if you use domain name please ignore this."
-        elif [[ -z "${use_ipv6}" && -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]]; then
+        if [[ -z "${use_ipv6}" && -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ]]; then
             LOG_WARN "Please check IPv4 address: ${ip}, if you use domain name please ignore this."
         fi
         local ip_var_name=${ip//./_}
