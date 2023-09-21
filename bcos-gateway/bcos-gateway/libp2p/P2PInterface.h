@@ -33,7 +33,7 @@ class P2PInterface
 {
 public:
     using Ptr = std::shared_ptr<P2PInterface>;
-    virtual ~P2PInterface(){};
+    virtual ~P2PInterface() = default;
 
     virtual void start() = 0;
     virtual void stop() = 0;

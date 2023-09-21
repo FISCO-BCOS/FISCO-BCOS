@@ -52,7 +52,7 @@ void Worker::startWorking()
     {
         m_workerState = WorkerState::Starting;
         m_workerStateNotifier.notify_all();
-        m_workerThread.reset(new thread([&]() {
+        m_workerThread = std::make_unique<std::thread>([&]() {
             setThreadName(m_threadName.c_str());
             while (m_workerState != WorkerState::Killing)
             {
@@ -93,7 +93,7 @@ void Worker::startWorking()
                         m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
                 }
             }
-        }));
+        });
     }
 
     while (m_workerState == WorkerState::Starting)

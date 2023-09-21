@@ -27,9 +27,7 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <bcos-utilities/Worker.h>
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockSync : public BlockSyncInterface,
                   public Worker,
@@ -38,7 +36,7 @@ class BlockSync : public BlockSyncInterface,
 public:
     using Ptr = std::shared_ptr<BlockSync>;
     BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs = 200);
-    ~BlockSync() override {}
+    ~BlockSync() override = default;
 
     void start() override;
     void stop() override;
@@ -109,14 +107,12 @@ protected:
 
     virtual void downloadFinish();
 
-protected:
     void requestBlocks(bcos::protocol::BlockNumber _from, bcos::protocol::BlockNumber _to);
     void fetchAndSendBlock(DownloadRequestQueue::Ptr _reqQueue, bcos::crypto::PublicPtr _peer,
         bcos::protocol::BlockNumber _number);
     void printSyncInfo();
     void printBehindPeers();
 
-protected:
     BlockSyncConfig::Ptr m_config;
     SyncPeerStatus::Ptr m_syncStatus;
     DownloadingQueue::Ptr m_downloadingQueue;
@@ -143,5 +139,4 @@ protected:
 
     std::atomic_bool m_masterNode = {false};
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

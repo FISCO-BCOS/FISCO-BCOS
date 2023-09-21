@@ -52,7 +52,7 @@ public:
     {
         m_ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_config->ledger());
     }
-    virtual ~DownloadingQueue() {}
+    virtual ~DownloadingQueue() = default;
 
     virtual void push(BlocksMsgInterface::Ptr _blocksData);
     // Is the queue empty?
@@ -69,7 +69,7 @@ public:
 
     virtual void clearFullQueueIfNotHas(bcos::protocol::BlockNumber _blockNumber);
 
-    virtual void applyBlock(bcos::protocol::Block::Ptr _block);
+    virtual void applyBlock(bcos::protocol::Block::Ptr _block, std::function<void()> onFinished);
     // clear queue and buffer
     virtual void clear();
 

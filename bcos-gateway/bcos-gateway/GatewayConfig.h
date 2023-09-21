@@ -165,14 +165,16 @@ public:
     bool enableBlacklist() const { return m_enableBlacklist; }
     const std::set<std::string>& peerBlacklist() const { return m_certBlacklist; }
     bool enableWhitelist() const { return m_enableWhitelist; }
-    const std::set<std::string>& peerWhitelist() const { return m_certWhitelist;}
+    const std::set<std::string>& peerWhitelist() const { return m_certWhitelist; }
 
     std::string const& uuid() const { return m_uuid; }
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 
-    //NodeIDType: 
-    //h512(true == m_smSSL)
-    //h2048(false == m_smSSL)
+    bool readonly() const { return m_readonly; }
+
+    // NodeIDType:
+    // h512(true == m_smSSL)
+    // h2048(false == m_smSSL)
     template <typename NodeIDType>
     bool isNodeIDOk(const std::string& _nodeID)
     {
@@ -214,10 +216,10 @@ private:
     // p2p connected nodes host list
     std::set<NodeIPEndpoint> m_connectedNodes;
     // peer black list
-    bool m_enableBlacklist{ false };
+    bool m_enableBlacklist{false};
     std::set<std::string> m_certBlacklist;
     // peer white list
-    bool m_enableWhitelist{ false };
+    bool m_enableWhitelist{false};
     std::set<std::string> m_certWhitelist;
     // cert config for ssl connection
     CertConfig m_certConfig;
@@ -229,6 +231,7 @@ private:
     std::string m_certPath;
     std::string m_nodePath;
     std::string m_nodeFileName;
+    bool m_readonly = false;
 };
 
 }  // namespace gateway
