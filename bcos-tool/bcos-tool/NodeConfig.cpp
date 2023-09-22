@@ -492,16 +492,15 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     m_enableTxSyncWorker = _pt.get<bool>("txpool.enable_tx_sync_worker", false);
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
-    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
-        [[unlikely]]
-        {
-            NodeConfig_LOG(WARNING) << LOG_DESC(
-                                           "loadTxPoolConfig: the configured txs_expiration_time "
-                                           "is smaller than default "
-                                           "consensus time, reset to the consensus time")
-                                    << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
-                                    << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
-        }
+    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS) [[unlikely]]
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+                                       "loadTxPoolConfig: the configured txs_expiration_time "
+                                       "is smaller than default "
+                                       "consensus time, reset to the consensus time")
+                                << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
+                                << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
+    }
     m_txsExpirationTime = std::max(
         {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
 
@@ -525,10 +524,11 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     }
     catch (std::exception const& e)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "chain.sm_crypto/chain.group_id/chain.chain_id is null, please set it,"
-                                  " if compatibility_version in genesis block >= 3.1.0,"
-                                  " 'chain' config should appear in config.genesis, else in config.ini."));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "chain.sm_crypto/chain.group_id/chain.chain_id is null, please set it,"
+                " if compatibility_version in genesis block >= 3.1.0,"
+                " 'chain' config should appear in config.genesis, else in config.ini."));
     }
     if (!isalNumStr(m_chainId))
     {
@@ -569,12 +569,14 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 {
     m_minSealTime = checkAndGetValue(_pt, "consensus.min_seal_time", "500");
+    m_allowFreeNode = _pt.get<bool>("sync.allow_free_node", false);
     if (m_minSealTime <= 0 || m_minSealTime > DEFAULT_MAX_SEAL_TIME_MS)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set consensus.min_seal_time between 1 and 600000!"));
     }
-    NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime)
+                         << LOG_KV("allowFreeNodeSync", m_allowFreeNode);
 }
 
 void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _pt)
@@ -692,8 +694,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig")
-                         << LOG_KV("sendTxTimeout", m_sendTxTimeout)
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize);
 }
 

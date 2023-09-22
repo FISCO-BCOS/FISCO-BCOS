@@ -461,8 +461,8 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_compress)
     auto compressData = std::make_shared<bytes>();
     auto r = encodeMsg->tryToCompressPayload(compressData);
     BOOST_CHECK(r);
-    BOOST_CHECK_EQUAL((encodeMsg->ext() & bcos::protocol::MessageExtFieldFlag::Compress),
-        bcos::protocol::MessageExtFieldFlag::Compress);
+    BOOST_CHECK_EQUAL((encodeMsg->ext() & bcos::protocol::MessageExtFieldFlag::COMPRESS),
+        bcos::protocol::MessageExtFieldFlag::COMPRESS);
 
     // uncompress payload that don't compress
     // size of payload smaller than 1kb, so payload don't be compressed

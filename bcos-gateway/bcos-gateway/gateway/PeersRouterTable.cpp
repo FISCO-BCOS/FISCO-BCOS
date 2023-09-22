@@ -197,11 +197,11 @@ PeersRouterTable::Group2NodeIDListType PeersRouterTable::peersNodeIDList(
     {
         auto const& groupNodeIDList = it->nodeIDList();
         auto const& nodeTypeList = it->nodeTypeList();
-        for(size_t i = 0; i < groupNodeIDList.size(); ++i)
+        for (size_t i = 0; i < groupNodeIDList.size(); ++i)
         {
             auto nodeID = groupNodeIDList[i];
-            nodeIDList[it->groupID()][nodeID] = bcos::protocol::NodeType::None;
-            if(nodeTypeList.size() > i)
+            nodeIDList[it->groupID()][nodeID] = bcos::protocol::NodeType::NONE;
+            if (nodeTypeList.size() > i)
             {
                 auto nodeType = nodeTypeList[i];
                 nodeIDList[it->groupID()][nodeID] = nodeType;

@@ -239,13 +239,15 @@ bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& 
     uint16_t _moduleID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
-    if (frontServiceList.size() == 0)
+    if (frontServiceList.empty())
     {
         return false;
     }
+
+    auto sourceNodeHex = _srcNodeID->hex();
     for (auto const& it : frontServiceList)
     {
-        if (it->nodeID() == _srcNodeID->hex())
+        if (it->nodeID() == sourceNodeHex)
         {
             continue;
         }
@@ -255,7 +257,7 @@ bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& 
             continue;
         }
         auto frontService = it->frontService();
-        auto dstNodeID = it->nodeID();
+        const auto& dstNodeID = it->nodeID();
         ROUTER_LOG(TRACE) << LOG_BADGE(
                                  "LocalRouterTable: dispatcher broadcast-type message to node")
                           << LOG_KV("type", _nodeType) << LOG_KV("groupID", _groupID)

@@ -95,9 +95,9 @@ public:
 
     bool isRespPacket() const override
     {
-        return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
+        return (m_ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
     }
-    void setRespPacket() override { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
+    void setRespPacket() override { m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE; }
 
     virtual uint32_t length() const override { return m_length; }
 

@@ -181,8 +181,8 @@ private:
     std::atomic<bcos::protocol::BlockNumber> m_committedProposalNumber = {0};
 
     // TODO: ensure thread-safe
-    bcos::protocol::NodeType m_nodeType = bcos::protocol::NodeType::None;
-    bcos::protocol::NodeType m_notifiedNodeType = bcos::protocol::NodeType::None;
+    bcos::protocol::NodeType m_nodeType = bcos::protocol::NodeType::NONE;
+    bcos::protocol::NodeType m_notifiedNodeType = bcos::protocol::NodeType::NONE;
 
     std::function<void(bcos::protocol::NodeType)> m_nodeTypeChanged;
 
