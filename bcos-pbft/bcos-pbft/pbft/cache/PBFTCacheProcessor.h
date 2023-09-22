@@ -244,6 +244,7 @@ protected:
 protected:
     PBFTCacheFactory::Ptr m_cacheFactory;
     PBFTConfig::Ptr m_config;
+    // FIXME: to make sure PBFTCachesType erase can only be performed serially
     /// map: number => PBFTCache
     PBFTCachesType m_caches;
 

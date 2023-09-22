@@ -31,7 +31,6 @@ using namespace bcos::protocol;
 bytesPointer PBFTMessage::encode(
     CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr _keyPair) const
 {
-    std::lock_guard<std::mutex> lock(x_mutex);
     // encode the PBFTBaseMessage
     encodeHashFields();
     generateAndSetSignatureData(_cryptoSuite, _keyPair);
@@ -46,7 +45,6 @@ void PBFTMessage::encodeHashFields() const
 
 void PBFTMessage::decode(bytesConstRef _data)
 {
-    std::lock_guard<std::mutex> lock(x_mutex);
     decodePBObject(m_pbftRawMessage, _data);
     PBFTMessage::deserializeToObject();
 }
@@ -111,7 +109,6 @@ void PBFTMessage::generateAndSetSignatureData(
 
 void PBFTMessage::setProposals(PBFTProposalList const& _proposals)
 {
-    std::lock_guard<std::mutex> lock(x_mutex);
     *m_proposals = _proposals;
     m_pbftRawMessage->clear_proposals();
     for (const auto& proposal : _proposals)

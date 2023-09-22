@@ -25,6 +25,9 @@
 
 namespace bcos::consensus
 {
+/**
+ * This class is thread-unsafe, should never be writen in multi-thread
+ */
 class PBFTMessage : public PBFTBaseMessage, public PBFTMessageInterface
 {
 public:
@@ -130,6 +133,5 @@ private:
     PBFTProposalListPtr m_proposals;
 
     mutable bcos::crypto::HashType m_signatureDataHash;
-    mutable Mutex x_mutex;
 };
 }  // namespace bcos::consensus
