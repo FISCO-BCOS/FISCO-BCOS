@@ -17,9 +17,9 @@ struct UnsupportedMethodError : public bcos::Error
 enum Attribute : int
 {
     READABLE = 1,
-    WRITEABLE = 2,
-    SEEKABLE = 4,
-    ERASABLE = 8
+    WRITEABLE = 1 << 1,
+    SEEKABLE = 1 << 2,
+    ERASABLE = 1 << 3
 };
 
 template <class KeyType, class ValueType>
