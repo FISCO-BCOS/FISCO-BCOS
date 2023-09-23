@@ -284,42 +284,73 @@ BOOST_AUTO_TEST_CASE(precompiled)
             storageWrapper);
         ledger.buildGenesisBlock(ledgerConfig, 100000, "", "3.5.0");
 
-        bcos::codec::abi::ContractABICodec abiCodec(
-            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
-        auto input = abiCodec.abiIn(std::string("makeShard(string)"), std::string("shared1"));
-
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.mutableInner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
         blockHeader.calculateHash(*bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
 
-        auto address = bcos::Address(0x1010);
-        evmc_address callAddress{};
-        std::uninitialized_copy(address.begin(), address.end(), callAddress.bytes);
-        evmc_message message = {.kind = EVMC_CALL,
-            .flags = 0,
-            .depth = 0,
-            .gas = 1000000,
-            .recipient = callAddress,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
-            .input_data = input.data(),
-            .input_size = input.size(),
-            .value = {},
-            .create2_salt = {},
-            .code_address = callAddress};
-        evmc_address origin = {};
+        bcos::codec::abi::ContractABICodec abiCodec(
+            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+        {
+            auto input = abiCodec.abiIn("initBfs()");
+            auto address = bcos::Address(0x100e);
+            evmc_address callAddress{};
+            std::uninitialized_copy(address.begin(), address.end(), callAddress.bytes);
+            evmc_message message = {.kind = EVMC_CALL,
+                .flags = 0,
+                .depth = 0,
+                .gas = 1000000,
+                .recipient = callAddress,
+                .destination_ptr = nullptr,
+                .destination_len = 0,
+                .sender = {},
+                .sender_ptr = nullptr,
+                .sender_len = 0,
+                .input_data = input.data(),
+                .input_size = input.size(),
+                .value = {},
+                .create2_salt = {},
+                .code_address = callAddress};
+            evmc_address origin = {};
 
-        HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
-            seq, *precompiledManager);
-        auto result = co_await hostContext.execute();
+            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
+                seq, *precompiledManager);
+            auto result = co_await hostContext.execute();
+        }
 
-        BOOST_CHECK_EQUAL(result.status_code, 0);
+        std::optional<EVMCResult> result;
+        {
+            auto input = abiCodec.abiIn(std::string("makeShard(string)"), std::string("shared1"));
+
+            auto address = bcos::Address(0x1010);
+            evmc_address callAddress{};
+            std::uninitialized_copy(address.begin(), address.end(), callAddress.bytes);
+            evmc_message message = {.kind = EVMC_CALL,
+                .flags = 0,
+                .depth = 0,
+                .gas = 1000000,
+                .recipient = callAddress,
+                .destination_ptr = nullptr,
+                .destination_len = 0,
+                .sender = {},
+                .sender_ptr = nullptr,
+                .sender_len = 0,
+                .input_data = input.data(),
+                .input_size = input.size(),
+                .value = {},
+                .create2_salt = {},
+                .code_address = callAddress};
+            evmc_address origin = {};
+
+            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
+                seq, *precompiledManager);
+            result.emplace(co_await hostContext.execute());
+        }
+
+        BOOST_CHECK_EQUAL(result->status_code, 0);
         bcos::s256 getIntResult = -1;
-        abiCodec.abiOut(bcos::bytesConstRef(result.output_data, result.output_size), getIntResult);
+        abiCodec.abiOut(
+            bcos::bytesConstRef(result->output_data, result->output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 0);
 
         co_return;

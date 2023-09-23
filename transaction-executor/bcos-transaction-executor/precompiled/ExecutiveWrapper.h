@@ -50,7 +50,7 @@ public:
         callResult->gas = result.gas_left;
         callResult->data.assign(result.output_data, result.output_data + result.output_size);
 
-        return input;
+        return callResult;
     }
 };
 }  // namespace bcos::transaction_executor

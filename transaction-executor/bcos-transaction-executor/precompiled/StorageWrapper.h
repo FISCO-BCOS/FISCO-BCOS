@@ -4,6 +4,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/storage2/StorageMethods.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
@@ -15,7 +16,7 @@ namespace bcos::transaction_executor
 {
 
 template <class Storage>
-class StorageWrapper : public bcos::storage::StorageInterface
+class StorageWrapper : public virtual bcos::storage::StorageInterface
 {
 private:
     Storage& m_storage;
@@ -122,6 +123,26 @@ public:
                 }
             }(this, tableName, keys, values));
     };
+};
+
+template <class Storage>
+class StateStorageWrapper : public virtual storage::StateStorageInterface,
+                            public virtual StorageWrapper<Storage>
+{
+public:
+    StateStorageWrapper(Storage& m_storage)
+      : StateStorageInterface(nullptr), StorageWrapper<Storage>(m_storage)
+    {}
+
+    void parallelTraverse(bool onlyDirty,
+        std::function<bool(const std::string_view& table, const std::string_view& key,
+            storage::Entry const& entry)>
+            callback) const override
+    {}
+
+    void rollback(const storage::Recoder& recoder) override {}
+
+    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override { return {}; }
 };
 
 }  // namespace bcos::transaction_executor
