@@ -95,7 +95,7 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
         // Note: transactions must be submitted serially, because transaction submissions are
         // transactional, preventing write conflicts
         RecursiveGuard l(m_mutex);
-        auto error = m_storage->setRows(SYS_HASH_2_TX, std::move(keys), std::move(values));
+        auto error = m_storage->setRows(SYS_HASH_2_TX, keys, values);
         LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: store uncommitted txs")
                          << LOG_KV("blockNumber", blockNumber)
                          << LOG_KV("blockTxsSize", blockTxsSize)
@@ -302,8 +302,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             });
 
         auto start = utcTime();
-        auto error = m_storage->setRows(
-            SYS_HASH_2_RECEIPT, std::move(txsHash), std::move(receiptsView));  // only for tikv
+        auto error =
+            m_storage->setRows(SYS_HASH_2_RECEIPT, txsHash, receiptsView);  // only for tikv
         auto writeReceiptsTime = utcTime() - start;
         if (error)
         {
@@ -439,7 +439,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     auto promise = std::make_shared<std::promise<bcos::Error::Ptr>>();
     m_threadPool->enqueue([storage = m_storage, promise, keys = std::move(txsHash),
                               values = std::move(receiptsView)]() mutable {
-        auto err = storage->setRows(SYS_HASH_2_RECEIPT, std::move(keys), std::move(values));
+        auto err = storage->setRows(SYS_HASH_2_RECEIPT, keys, values);
         promise->set_value(err);
     });
     auto txsToStore = std::make_shared<std::vector<bytes>>();
@@ -474,7 +474,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     {
         // asyncPreStoreBlockTxs also write txs to DB, needStoreUnsavedTxs is out of lock, so
         // the transactions may be write twice
-        error = m_storage->setRows(SYS_HASH_2_TX, std::move(keys), std::move(values));
+        error = m_storage->setRows(SYS_HASH_2_TX, keys, values);
         if (error)
         {
             LEDGER_LOG(ERROR) << LOG_DESC("ledger write transactions failed")

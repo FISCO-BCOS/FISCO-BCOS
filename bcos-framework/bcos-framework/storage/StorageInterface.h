@@ -32,6 +32,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <range/v3/view/any_view.hpp>
 #include <string>
 #include <variant>
 
@@ -74,14 +75,17 @@ public:
 
     virtual void asyncGetTableInfo(std::string_view tableName,
         std::function<void(Error::UniquePtr, TableInfo::ConstPtr)> callback);
-    virtual Error::Ptr setRows(std::string_view,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>&,
-        std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>>)
+    virtual Error::Ptr setRows(std::string_view tableName,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            values)
     {
         throw std::invalid_argument("unimplemented method");
         return nullptr;
-    };
+    }
     virtual Error::Ptr deleteRows(
         std::string_view, const std::variant<const gsl::span<std::string_view const>,
                               const gsl::span<std::string const>>&)

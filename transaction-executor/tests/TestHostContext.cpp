@@ -3,10 +3,17 @@
 #include "../bcos-transaction-executor/vm/VMInstance.h"
 #include "TestBytecode.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-ledger/src/libledger/LedgerImpl2.h"
+#include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
+#include "bcos-transaction-executor/precompiled/StorageWrapper.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -260,10 +267,23 @@ BOOST_AUTO_TEST_CASE(log)
     // }());
 }
 
-#if 0
 BOOST_AUTO_TEST_CASE(precompiled)
 {
     syncWait([this]() -> Task<void> {
+        // Use ledger to init storage
+        auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
+        auto storageWrapper =
+            std::make_shared<StorageWrapper<std::decay_t<decltype(storage)>>>(storage);
+        auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+            std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+        bcos::ledger::Ledger ledger(
+            std::make_shared<bcostars::protocol::BlockFactoryImpl>(cryptoSuite,
+                std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite),
+                std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite),
+                std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
+            storageWrapper);
+        ledger.buildGenesisBlock(ledgerConfig, 100000, "", "3.5.0");
+
         bcos::codec::abi::ContractABICodec abiCodec(
             bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
         auto input = abiCodec.abiIn(std::string("makeShard(string)"), std::string("shared1"));
@@ -305,6 +325,5 @@ BOOST_AUTO_TEST_CASE(precompiled)
         co_return;
     }());
 }
-#endif
 
 BOOST_AUTO_TEST_SUITE_END()

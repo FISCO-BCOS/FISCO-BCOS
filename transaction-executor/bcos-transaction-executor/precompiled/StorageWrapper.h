@@ -9,6 +9,7 @@
 #include "bcos-utilities/Error.h"
 #include <exception>
 #include <iterator>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcos::transaction_executor
 {
@@ -90,6 +91,37 @@ public:
             }
         }(this, table, key, std::move(entry), std::move(callback)));
     }
+
+    Error::Ptr setRows(std::string_view tableName,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            values) override
+    {
+        return task::syncWait(
+            [](decltype(this) self, decltype(tableName) tableName, decltype(keys)& keys,
+                decltype(values)& values) -> task::Task<Error::Ptr> {
+                try
+                {
+                    co_await storage2::writeSome(self->m_storage,
+                        keys | RANGES::views::transform([&](std::string_view key) {
+                            return StateKey{tableName, key};
+                        }),
+                        values | RANGES::views::transform([](std::string_view value) -> auto{
+                            storage::Entry entry;
+                            entry.setField(0, value);
+                            return entry;
+                        }));
+                    co_return nullptr;
+                }
+                catch (std::exception& e)
+                {
+                    co_return BCOS_ERROR_WITH_PREV_PTR(-1, "setRows error!", e);
+                }
+            }(this, tableName, keys, values));
+    };
 };
 
 }  // namespace bcos::transaction_executor
