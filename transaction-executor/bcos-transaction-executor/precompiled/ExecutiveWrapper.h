@@ -1,4 +1,5 @@
 #pragma once
+#include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-transaction-executor/Common.h"
 #include <memory>
@@ -40,6 +41,18 @@ public:
             .value = toEvmC(0x0_cppui256),
             .create2_salt = toEvmC(0x0_cppui256),
             .code_address = unhexAddress(input->codeAddress)};
+
+        std::optional<std::tuple<std::string, bcos::bytes>> internalCallParams;
+        if (input->internalCall)
+        {
+            internalCallParams.emplace();
+            auto& [precompiledContract, precompiledInput] = *internalCallParams;
+            CodecWrapper codec(m_blockContext.hashHandler(), m_blockContext.isWasm());
+            codec.decode(ref(input->data), precompiledContract, precompiledInput);
+            evmcMessage.code_address = unhexAddress(precompiledContract);
+            evmcMessage.input_data = precompiledInput.data();
+            evmcMessage.input_size = precompiledInput.size();
+        }
 
         auto result = m_externalCaller(evmcMessage);
 
