@@ -558,7 +558,7 @@ void LedgerParam::initSyncConfig(ptree const& pt)
                                   "txs_gossip_max_peers_num must be no smaller than zero"));
     }
     mutableSyncParam().maxQueueSizeForBlockSync *= 1024 * 1024;
-    mutableSyncParam().enableFreeNodeRead = pt.get<bool>("sync.free_node_read", false);
+    mutableSyncParam().enableFreeNodeRead = pt.get<bool>("sync.allow_free_node", false);
 
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initSyncConfig")

@@ -88,7 +88,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
 
     m_channelRPCServer->setChannelServer(server);
 
-    bool uncheckGroupMember = _pt.get<bool>("rpc.enable_uncheck_group_member", false);
+    bool uncheckGroupMember = _pt.get<bool>("rpc.act_as_group_member", false);
 
     // start channelServer before initialize ledger, because amdb-proxy depends on channel
     bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", false);
@@ -221,7 +221,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     channelRPCServer->asyncPushChannelMessageHandler(_1, _2);
                 }
             });
-        bool uncheckGroupMember = _pt.get<bool>("rpc.enable_uncheck_group_member", false);
+        bool uncheckGroupMember = _pt.get<bool>("rpc.act_as_group_member", false);
 
         // Don't to set destructor, the ModularServer will destruct.
         bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", false);
