@@ -77,11 +77,11 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
             {
                 auto& ledger = bcos::concepts::getRef(toLedger);
 
-                auto syncedBlock =
-                    ~ledger
-                         .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
-                             fromLedger, true);
-                auto currentStatus = ~ledger.getStatus();
+                auto syncedBlock = bcos::task::syncWait(
+                    ledger
+                        .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
+                            fromLedger, true));
+                auto currentStatus = bcos::task::syncWait(ledger.getStatus());
 
                 if (syncedBlock > 0)
                 {
@@ -155,7 +155,7 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
     }
     bcos::concepts::bytebuffer::assignTo(
         nodeConfig->genesisData(), genesisBlock.blockHeader.data.extraData);
-    ~ledger->setupGenesisBlock(std::move(genesisBlock));
+    bcos::task::syncWait(ledger->setupGenesisBlock(std::move(genesisBlock)));
 
     LIGHTNODE_LOG(INFO) << "Init lightnode rpc...";
     auto wsService = bcos::lightnode::initRPC(

@@ -11,6 +11,7 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-utilities/Exceptions.h"
+#include <bcos-task/TBBWait.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <oneapi/tbb/parallel_pipeline.h>
@@ -165,7 +166,7 @@ private:
                             {
                                 return chunk;
                             }
-                            task::syncWait(chunk->execute(blockHeader));
+                            task::tbb::syncWait(chunk->execute(blockHeader));
 
                             return chunk;
                         }) &
@@ -207,7 +208,7 @@ private:
                                     ittapi::Report report(
                                         ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                                         ittapi::ITT_DOMAINS::instance().MERGE_CHUNK);
-                                    task::syncWait(storage2::merge(
+                                    task::tbb::syncWait(storage2::merge(
                                         chunk->localStorage().mutableStorage(), lastStorage));
                                 });
                             scheduler.m_asyncTaskGroup->run([chunk = std::move(chunk)]() {});

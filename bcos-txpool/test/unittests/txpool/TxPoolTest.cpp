@@ -567,7 +567,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     }
     try
     {
-        auto _result = ~txpool->submitTransaction(tx);
+        auto _result = bcos::task::syncWait(txpool->submitTransaction(tx));
     }
     catch (bcos::Error& e)
     {
