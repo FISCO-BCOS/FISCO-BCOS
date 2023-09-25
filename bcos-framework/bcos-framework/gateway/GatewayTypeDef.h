@@ -59,18 +59,13 @@ struct NodeIPEndpoint
 
     virtual ~NodeIPEndpoint() = default;
     NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
-    {
-        m_host = _endpoint.address().to_string();
-        m_port = _endpoint.port();
-        m_ipv6 = _endpoint.address().is_v6();
-    }
+      : m_host(_endpoint.address().to_string()),
+        m_port(_endpoint.port()),
+        m_ipv6(_endpoint.address().is_v6())
+    {}
     bool operator<(const NodeIPEndpoint& rhs) const
     {
-        if (m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port))
-        {
-            return true;
-        }
-        return false;
+        return m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port);
     }
     bool operator==(const NodeIPEndpoint& rhs) const
     {
@@ -78,7 +73,7 @@ struct NodeIPEndpoint
     }
     operator boost::asio::ip::tcp::endpoint() const
     {
-        return boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address(m_host), m_port);
+        return boost::asio::ip::tcp::endpoint{boost::asio::ip::make_address(m_host), m_port};
     }
 
     // Get the port associated with the endpoint.
@@ -104,7 +99,7 @@ struct P2PInfo
 {
     using Ptr = std::shared_ptr<P2PInfo>;
     P2PInfo() = default;
-    ~P2PInfo() {}
+    ~P2PInfo() = default;
     std::string p2pID;
     std::string p2pIDWithoutExtInfo;
     std::string agencyName;
@@ -124,7 +119,7 @@ public:
     {}
     explicit GatewayInfo(P2PInfo const& _p2pInfo) : GatewayInfo() { *m_p2pInfo = _p2pInfo; }
 
-    virtual ~GatewayInfo() {}
+    virtual ~GatewayInfo() = default;
     void setNodeIDInfo(NodeIDInfoType&& _nodeIDInfo)
     {
         WriteGuard l(x_nodeIDInfo);
@@ -133,7 +128,7 @@ public:
     void setP2PInfo(P2PInfo&& _p2pInfo)
     {
         WriteGuard l(x_p2pInfo);
-        *m_p2pInfo = std::move(_p2pInfo);
+        *m_p2pInfo = _p2pInfo;
     }
     // Note: copy here to ensure thread-safe,  use std::move out to ensure performance
     NodeIDInfoType nodeIDInfo()

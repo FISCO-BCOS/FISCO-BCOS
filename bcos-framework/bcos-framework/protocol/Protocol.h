@@ -36,17 +36,15 @@ namespace bcos::protocol
 // Note: both MessageExtFieldFlag and NodeType occupy the ext fields
 enum MessageExtFieldFlag : uint32_t
 {
-    Response = 0x0001,
-    Compress = 0x0010,
+    NONE = 0,
+    RESPONSE = 1,
+    CONSENSUS_NODE = 1 << 1,
+    OBSERVER_NODE = 1 << 2,
+    FREE_NODE = 1 << 3,
+    COMPRESS = 1 << 4,
+    LIGHT_NODE = 1 << 5,
 };
-enum NodeType : uint32_t
-{
-    None = 0x0,
-    LIGHT_NODE = 0x1,
-    CONSENSUS_NODE = 0x2,
-    OBSERVER_NODE = 0x4,
-    NODE_OUTSIDE_GROUP = 0x8,
-};
+using NodeType = MessageExtFieldFlag;
 
 enum NodeArchitectureType
 {
@@ -172,7 +170,7 @@ inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
 {
     switch (_nodeType)
     {
-    case NodeType::None:
+    case NodeType::NONE:
         _out << "None";
         break;
     case NodeType::CONSENSUS_NODE:
@@ -184,7 +182,7 @@ inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
     case NodeType::LIGHT_NODE:
         _out << "LIGHT_NODE";
         break;
-    case NodeType::NODE_OUTSIDE_GROUP:
+    case NodeType::FREE_NODE:
         _out << "NODE_OUTSIDE_GROUP";
         break;
     default:

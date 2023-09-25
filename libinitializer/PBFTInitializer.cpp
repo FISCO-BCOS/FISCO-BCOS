@@ -419,6 +419,7 @@ void PBFTInitializer::createSync()
         m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(), m_ledger,
         m_txpool, m_frontService, m_scheduler, m_pbft, m_nodeTimeMaintenance);
     m_blockSync = blockSyncFactory->createBlockSync();
+    m_blockSync->setAllowFreeNodeSync(m_nodeConfig->allowFreeNodeSync());
 }
 
 std::shared_ptr<bcos::txpool::TxPoolInterface> PBFTInitializer::txpool()

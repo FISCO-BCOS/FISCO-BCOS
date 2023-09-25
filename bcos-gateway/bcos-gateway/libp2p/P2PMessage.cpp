@@ -251,7 +251,7 @@ bool P2PMessage::tryToCompressPayload(std::shared_ptr<bytes> compressData)
         return false;
     }
     // update compress flag
-    m_ext |= bcos::protocol::MessageExtFieldFlag::Compress;
+    m_ext |= bcos::protocol::MessageExtFieldFlag::COMPRESS;
     return true;
 }
 
@@ -329,8 +329,8 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
 
     // uncompress payload
     // payload has been compressed
-    if ((m_ext & bcos::protocol::MessageExtFieldFlag::Compress) ==
-        bcos::protocol::MessageExtFieldFlag::Compress)
+    if ((m_ext & bcos::protocol::MessageExtFieldFlag::COMPRESS) ==
+        bcos::protocol::MessageExtFieldFlag::COMPRESS)
     {
         bool isUncompressSuccess = ZstdCompress::uncompress(ref(*rawData), *m_payload);
         if (!isUncompressSuccess)
@@ -345,7 +345,7 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
                           << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
                           << LOG_KV("rawData", (char*)(rawData->data())) << LOG_KV("seq", m_seq);
         // reset ext
-        m_ext &= (~bcos::protocol::MessageExtFieldFlag::Compress);
+        m_ext &= (~bcos::protocol::MessageExtFieldFlag::COMPRESS);
     }
     else
     {

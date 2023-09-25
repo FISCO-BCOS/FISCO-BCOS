@@ -86,7 +86,6 @@ void Gateway::stop()
         m_gatewayRateLimiter->stop();
     }
     GATEWAY_LOG(INFO) << LOG_DESC("stop end.");
-    return;
 }
 
 void Gateway::asyncGetPeers(
@@ -290,7 +289,6 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
             m_p2pInterface->asyncSendMessageByNodeID(p2pID, m_p2pMessage, callback, Options(10000));
         }
 
-    public:
         std::vector<P2pID> m_p2pIDs;
         NodeIDPtr m_srcNodeID;
         NodeIDPtr m_dstNodeID;
@@ -337,7 +335,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
 void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int _moduleID,
     NodeIDPtr _srcNodeID, const NodeIDs& _dstNodeIDs, bytesConstRef _payload)
 {
-    for (auto dstNodeID : _dstNodeIDs)
+    for (const auto& dstNodeID : _dstNodeIDs)
     {
         asyncSendMessageByNodeID(_groupID, _moduleID, _srcNodeID, dstNodeID, _payload,
             [_groupID, _srcNodeID, dstNodeID](Error::Ptr _error) {
@@ -569,11 +567,6 @@ void Gateway::onReceiveBroadcastMessage(
         GATEWAY_LOG(WARNING) << "BroadcastMessage moduleID: " << moduleID
                              << " filter by readOnlyFilter";
         return;
-    }
-
-    if (m_gatewayRateLimiter)
-    {
-        m_gatewayRateLimiter->checkInComing(groupID, moduleID, _msg->length());
     }
 
     auto srcNodeIDPtr =

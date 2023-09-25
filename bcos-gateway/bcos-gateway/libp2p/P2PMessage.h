@@ -167,12 +167,12 @@ public:
     std::shared_ptr<bytes> payload() const { return m_payload; }
     void setPayload(std::shared_ptr<bytes> _payload) { m_payload = _payload; }
 
-    void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
+    void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE; }
     bool encode(bytes& _buffer) override;
     ssize_t decode(bytesConstRef _buffer) override;
     bool isRespPacket() const override
     {
-        return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
+        return (m_ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
     }
 
     // compress payload if payload need to be compressed

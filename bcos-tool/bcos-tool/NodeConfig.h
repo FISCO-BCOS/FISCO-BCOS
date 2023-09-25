@@ -116,6 +116,7 @@ public:
     std::string const& password() const { return m_password; }
 
     size_t minSealTime() const { return m_minSealTime; }
+    bool allowFreeNodeSync() const { return m_allowFreeNode; }
     size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
 
     std::string const& storagePath() const { return m_storagePath; }
@@ -290,6 +291,7 @@ private:
 
     // sealer configuration
     size_t m_minSealTime = 0;
+    bool m_allowFreeNode = false;
     size_t m_checkPointTimeoutInterval;
 
     // for security

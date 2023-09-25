@@ -22,22 +22,21 @@
 #include "NodeService.h"
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Timer.h>
-namespace bcos
-{
-namespace rpc
+#include <utility>
+namespace bcos::rpc
 {
 class GroupManager : public std::enable_shared_from_this<GroupManager>
 {
 public:
     using Ptr = std::shared_ptr<GroupManager>;
-    GroupManager(std::string _rpcServiceName, std::string const& _chainID,
+    GroupManager(std::string _rpcServiceName, std::string _chainID,
         NodeServiceFactory::Ptr _nodeServiceFactory, bcos::tool::NodeConfig::Ptr _nodeConfig)
-      : m_rpcServiceName(_rpcServiceName),
-        m_chainID(_chainID),
-        m_nodeServiceFactory(_nodeServiceFactory),
-        m_nodeConfig(_nodeConfig)
+      : m_rpcServiceName(std::move(_rpcServiceName)),
+        m_chainID(std::move(_chainID)),
+        m_nodeServiceFactory(std::move(_nodeServiceFactory)),
+        m_nodeConfig(std::move(_nodeConfig))
     {}
-    virtual ~GroupManager() {}
+    virtual ~GroupManager() = default;
     virtual bool updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
     virtual void removeGroupNodeList(bcos::group::GroupInfo::Ptr _groupInfo);
 
@@ -92,6 +91,7 @@ public:
     {
         std::vector<bcos::group::GroupInfo::Ptr> groupList;
         ReadGuard l(x_nodeServiceList);
+        groupList.reserve(m_groupInfos.size());
         for (auto const& it : m_groupInfos)
         {
             groupList.push_back(it.second);
@@ -208,5 +208,4 @@ protected:
     std::function<void(std::string const&, std::string const&, bcos::protocol::BlockNumber)>
         m_blockNumberNotifier;
 };
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc

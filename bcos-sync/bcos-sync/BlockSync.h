@@ -75,10 +75,12 @@ public:
 
     void enableAsMaster(bool _masterNode);
 
+    void setAllowFreeNodeSync(bool flag) { m_allowFreeNode = flag; }
+
 protected:
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, std::function<void(bytesConstRef _respData)> _sendResponse,
-        std::function<void(Error::Ptr _error)> _onRecv);
+        bytesConstRef _data, std::function<void(bytesConstRef)> _sendResponse,
+        std::function<void(Error::Ptr)> _onRecv);
 
     void initSendResponseHandler();
     void executeWorker() override;
@@ -138,5 +140,6 @@ protected:
     size_t m_blockNumLogInterval = 30000;
 
     std::atomic_bool m_masterNode = {false};
+    bool m_allowFreeNode = false;
 };
 }  // namespace bcos::sync
