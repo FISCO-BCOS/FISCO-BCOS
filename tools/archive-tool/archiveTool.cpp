@@ -428,7 +428,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
             });
 
         // write transactions to local storage
-        localStorage->setRows(ledger::SYS_HASH_2_TX, txHashes, std::move(txsView));
+        localStorage->setRows(ledger::SYS_HASH_2_TX, txHashes, txsView);
 
         // get receipts from archive database
         std::promise<std::vector<std::optional<Entry>>> promiseReceipts;
@@ -511,7 +511,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                 }
             });
         // write receipt to local storage
-        localStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, std::move(receiptsView));
+        localStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, receiptsView);
         std::cout << "\r"
                   << "reimport block " << blockNumber << " size: " << txHashes.size() << std::flush;
     }
