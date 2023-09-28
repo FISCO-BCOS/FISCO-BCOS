@@ -81,6 +81,9 @@ proOrmax_port_start=(30300 20200 40400 2379 3901)
 isPortSpecified="false"
 tars_listen_port_space=5
 
+#for pro expand
+expand_pro_dir="expand_pro"
+
 LOG_WARN() {
     local content=${1}
     echo -e "\033[31m[ERROR] ${content}\033[0m"
@@ -619,10 +622,16 @@ deploy pro service e.g
     bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -e ./binary
     bash $0 -p 30300,20200,40400 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -y cdn -v v3.4.0 -r ./binaryPath
 deploy max service e.g
-    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1, -C deploy -V max -o generate -t all
-    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1, -C deploy -V max -o generate -t all -e ./binary -s
-    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1, -C deploy -V max -o generate -y cdn -v v3.4.0 -r ./binaryPath 
+    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -t all
+    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -t all -e ./binary -s
+    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -y cdn -v v3.4.0 -r ./binaryPath 
     bash $0 -c config.toml -C deploy -V max -o generate -t all
+expand pro node e.g
+    bash $0 -C expand_node -V pro -o expand_node -c ./config.toml
+expand pro rpc/gateway e.g
+    bash $0 -C expand_service -V pro -o expand_service -c ./config.toml
+expand pro group e.g
+    bash $0 -C expand_group -V pro -o expand_group -c ./config.toml
 
 EOF
     exit 0
@@ -647,6 +656,7 @@ parse_params() {
         o)
             output_dir="$OPTARG"
             service_output_dir="$OPTARG"
+            expand_pro_dir="$OPTARG"
             ;;
         e)
             use_exist_binary="true"
@@ -2580,7 +2590,7 @@ install_python_package(){
         done < "${BcosBuilder_path}/requirements.txt"
     fi
 }
-
+# deploy pro or max chain service
 deploy_pro_or_max_nodes(){
     dir_must_not_exists "${service_output_dir}"
     mkdir -p "$service_output_dir"
@@ -2609,6 +2619,62 @@ deploy_pro_or_max_nodes(){
     cd "${BcosBuilder_path}/${chain_version}"
     python3 build_chain.py build -t ${service_type} -c ${config_path} -O ${service_output_dir}
     cd ../../
+}
+
+# remove excess files from the results folder
+removeExcessFiles(){
+    local folder_path="$1"
+
+    for file in "$folder_path"/*
+    do
+        filename=$(basename "$file")
+        
+        # Determine if the file name is named with IP
+        if [[ $filename =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            # Keep only group_node files, remove rpc gateway files
+            if [ -d  ${file}/rpc* ]; then
+                rm -rf ${file}/rpc*
+            fi
+            if [ -d ${file}/gateway* ]; then
+                rm -r ${file}/gateway*
+            fi
+        else
+            # If the file name is not named after IP, delete the file
+            rm -r  $file
+        fi
+    done
+}
+
+expand_pro(){
+    dir_must_not_exists "${expand_pro_dir}"
+    mkdir -p "$expand_pro_dir"
+    dir_must_exists "${expand_pro_dir}"
+    BcosBuilder_path=${current_dir}/BcosBuilder
+    if [ ! -d "$BcosBuilder_path" ]; then
+        download_bcos_builder
+    fi
+    install_python_package
+
+    local build_chain_file="${BcosBuilder_path}/${chain_version}/build_chain.py"
+    file_must_exists ${build_chain_file}
+
+    if [[ "$config_path" != "" ]]; then
+        config_path=$(convert_to_absolute_path "$config_path")
+    else
+        config_path=${BcosBuilder_path}/${chain_version}/config.toml
+    fi
+
+    file_must_exists "${config_path}"         
+    # echo ${config_path}
+    expand_pro_dir=$(convert_to_absolute_path "$expand_pro_dir")
+    cd "${BcosBuilder_path}/${chain_version}"
+    python3 build_chain.py build -t all -c ${config_path} -O ${expand_pro_dir}
+
+    cd ../../
+
+    if [[ "${command}" == "expand_node" || "${command}" == "expand_group" ]]; then
+        removeExcessFiles ${expand_pro_dir}
+    fi
 }
 
 main() {
@@ -2651,7 +2717,10 @@ main() {
     elif [[ "${chain_version}" == "pro" ]]; then
         if [[ "${command}" == "deploy" ]]; then
             deploy_pro_or_max_nodes
+        elif [[ "${command}" == "expand_node" || "${command}" == "expand_group" || "${command}" == "expand_service" ]]; then
+            expand_pro
         fi
+
     elif [[ "${chain_version}" == "max" ]]; then
         if [[ "${command}" == "deploy" ]]; then
             deploy_pro_or_max_nodes
