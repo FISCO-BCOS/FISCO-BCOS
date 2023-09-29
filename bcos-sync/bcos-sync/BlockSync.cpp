@@ -477,7 +477,7 @@ void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Pt
                       << LOG_KV("from", blockRequest->number())
                       << LOG_KV("size", blockRequest->size());
     auto peerStatus = m_syncStatus->peerStatus(_nodeID);
-    if (!m_allowFreeNode && !peerStatus && m_config->existsInGroup(_nodeID))
+    if (!peerStatus && (m_config->existsInGroup(_nodeID) || m_allowFreeNode))
     {
         BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("onPeerBlocksRequest")
                           << LOG_DESC(
