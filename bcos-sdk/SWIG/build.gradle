@@ -3,7 +3,6 @@ plugins {
     id 'maven-publish'
     id 'java-library'
     id 'java'
-    id 'org.ajoberstar.grgit' version '4.1.1'
 }
 println("Notice: current gradle version is " + gradle.gradleVersion)
 
@@ -36,6 +35,9 @@ sourceSets {
         java {
             srcDir "bcos_sdk_java"
         }
+        resources {
+            srcDir "jni"
+        }
     }
 }
 
@@ -44,10 +46,14 @@ task sourcesJar(type: Jar) {
     archiveClassifier = 'sources'
 }
 
+def getLocalPlatform() {
+	return System.properties['os.name'].toLowerCase() + '_' + System.properties['os.arch'].toLowerCase();
+}
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId "fisco-bcos-tars-sdk"
+            artifactId "fisco-bcos-tars-sdk-" + getLocalPlatform()
             groupId project.group
             version project.version
 
@@ -97,21 +103,21 @@ publishing {
 }
 
 jar {
-    archiveName "fisco-bcos-tars-sdk" + '-' + project.version + '.jar'
+    archiveFileName = 'fisco-bcos-tars-sdk-' + getLocalPlatform() + '-' + project.version + '.jar'
 
     manifest {
-            def date = new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
-            def branch = "fisco-bcos"
-            def commit = "abcde"
+        def date = new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        def branch = "fisco-bcos"
+        def commit = ""
 
-            attributes(["Implementation-Timestamp": date,
-                        "Git-Branch"              : branch,
-                        "Git-Commit"              : commit
-            ])
+        attributes(["Implementation-Timestamp": date,
+                    "Git-Branch"              : branch,
+                    "Git-Commit"              : commit
+        ])
 
-            logger.info("  Commit : ")
-            logger.info("  => date: {}", date)
-            logger.info("  => branch: {}", branch)
-            logger.info("  => commit: {}", commit)
-        }
+        logger.info("  Commit : ")
+        logger.info("  => date: {}", date)
+        logger.info("  => branch: {}", branch)
+        logger.info("  => commit: {}", commit)
+    }
 }
