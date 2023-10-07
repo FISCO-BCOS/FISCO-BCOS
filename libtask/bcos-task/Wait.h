@@ -1,6 +1,7 @@
 #pragma once
 #include "Task.h"
 #include "Trait.h"
+#include <boost/atomic/atomic_flag.hpp>
 #include <atomic>
 #include <exception>
 #include <future>
@@ -27,10 +28,10 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
         std::variant<std::monostate, std::exception_ptr>,
         std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
     ReturnVariant result;
-    std::atomic_flag finished;
+    boost::atomic_flag finished;
 
     auto waitTask = [](Task&& task, decltype(result)& result,
-                        std::atomic_flag& finished) -> task::Task<void> {
+                        boost::atomic_flag& finished) -> task::Task<void> {
         try
         {
             if constexpr (std::is_void_v<ReturnType>)
