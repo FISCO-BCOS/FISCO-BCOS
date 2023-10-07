@@ -190,5 +190,16 @@ bcos::crypto::NodeIDSetPtr SyncTreeTopology::selectNodesForBlockSync(
     auto recursiveNodeSet =
         recursiveSelectChildNodes(m_consIndex >= 0 ? 0 : nodeIndex, _peers, offset);
     selectedNodeSet->insert(recursiveNodeSet->begin(), recursiveNodeSet->end());
+    if (c_fileLogLevel <= TRACE) [[unlikely]]
+    {
+        std::stringstream nodeList;
+        for (auto const& node : *selectedNodeSet)
+        {
+            nodeList << node->shortHex() << ",";
+        }
+        SYNCTREE_LOG(TRACE) << LOG_DESC("selectNodesForBlockSync")
+                            << LOG_KV("selectSize", selectedNodeSet->size())
+                            << LOG_KV("nodes", nodeList.str());
+    }
     return selectedNodeSet;
 }

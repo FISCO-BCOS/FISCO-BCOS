@@ -215,7 +215,12 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(
     }
     // if the consensus nodes
     auto nodeIndex = getTreeIndex(_consIndex);
-    return recursiveSelectChildNodes(nodeIndex, _peers, _consIndex);
+    auto nodes = recursiveSelectChildNodes(nodeIndex, _peers, _consIndex);
+    if (c_fileLogLevel <= TRACE)
+    {
+        TREE_LOG(TRACE) << LOG_DESC("selectNodes") << LOG_KV("nodeSize", nodes->size());
+    }
+    return nodes;
 }
 
 bcos::crypto::NodeIDSetPtr TreeTopology::selectParent(

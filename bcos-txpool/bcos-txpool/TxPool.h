@@ -154,7 +154,6 @@ private:
     TxPoolConfig::Ptr m_config;
     TxPoolStorageInterface::Ptr m_txpoolStorage;
     bcos::sync::TransactionSyncInterface::Ptr m_transactionSync;
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
     bcos::protocol::TransactionFactory::Ptr m_transactionFactory;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 
