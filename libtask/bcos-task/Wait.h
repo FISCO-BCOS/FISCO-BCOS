@@ -2,7 +2,6 @@
 #include "Task.h"
 #include "Trait.h"
 #include <boost/atomic/atomic_flag.hpp>
-#include <atomic>
 #include <exception>
 #include <future>
 #include <type_traits>
