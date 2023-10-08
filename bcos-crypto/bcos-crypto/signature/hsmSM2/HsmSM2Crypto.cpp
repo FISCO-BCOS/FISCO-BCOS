@@ -24,6 +24,7 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -167,7 +168,7 @@ struct In
 std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input) const
 {
     In in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(in)));
+    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(In)));
     // verify the signature
     auto signatureData = std::make_shared<SignatureDataWithPub>(in.r, in.s, in.pub.ref());
     try
