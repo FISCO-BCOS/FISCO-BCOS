@@ -157,16 +157,17 @@ PublicPtr HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) 
                               _hash.hex() + ", signature:" + *toHexString(_signData)));
 }
 
+struct In
+{
+    HashType hash;
+    h512 pub;
+    h256 r;
+    h256 s;
+};
 std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input) const
 {
-    struct In
-    {
-        HashType hash;
-        h512 pub;
-        h256 r;
-        h256 s;
-    } in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(In)));
+    In in;
+    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(in)));
     // verify the signature
     auto signatureData = std::make_shared<SignatureDataWithPub>(in.r, in.s, in.pub.ref());
     try
