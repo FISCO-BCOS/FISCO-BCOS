@@ -45,18 +45,18 @@ public:
     {
     public:
         IteratorImpl(typename Container::nth_index<0>::type::iterator& it)
-          : first(it->txHash),
+          : m_iterator(it),
+            first(m_iterator->txHash),
             // we assume that _transaction is not indexed so we can cast it to non-const
-            second(const_cast<bcos::protocol::Transaction::Ptr&>(it->transaction)),
-            m_iterator(it)
+            second(const_cast<bcos::protocol::Transaction::Ptr&>(m_iterator->transaction))
         {}
 
         IteratorImpl(const bcos::crypto::HashType& _first,
             const bcos::protocol::Transaction::Ptr& _transaction)
-          : first(_first),
+          : m_iterator(),
+            first(_first),
             // we assume that _transaction is not indexed so we can cast it to non-const
-            second(const_cast<bcos::protocol::Transaction::Ptr&>(_transaction)),
-            m_iterator()
+            second(const_cast<bcos::protocol::Transaction::Ptr&>(_transaction))
         {}
 
         friend bool operator==(
@@ -73,11 +73,13 @@ public:
 
         Container::nth_index<0>::type::iterator getIterator() const { return m_iterator; }
 
-        const bcos::crypto::HashType& first;
-        bcos::protocol::Transaction::Ptr& second;
 
     private:
         typename Container::nth_index<0>::type::iterator m_iterator;
+
+    public:
+        const bcos::crypto::HashType first;
+        bcos::protocol::Transaction::Ptr second;
     };
     using iterator = std::shared_ptr<IteratorImpl>;
 
@@ -87,9 +89,10 @@ public:
         auto it = multiIndexMap.get<0>().find(key);
         if (it != multiIndexMap.get<0>().end())
         {
-            if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+            if (c_fileLogLevel == LogLevel::DEBUG) [[unlikely]]
             {
-                TXPOOL_LOG(TRACE) << LOG_KV("txHash:", it->txHash)
+                TXPOOL_LOG(DEBUG) << LOG_DESC("bucket has find transaction")
+                                  << LOG_KV("txHash:", it->txHash)
                                   << LOG_KV("timestamp:", it->timeStamp);
             }
         }
@@ -100,7 +103,6 @@ public:
                 TXPOOL_LOG(DEBUG) << "bucket not found the transaction,txHash: " << key;
             }
         }
-
         return std::make_shared<IteratorImpl>(it);
     }
 
@@ -126,6 +128,14 @@ public:
             TXPOOL_LOG(WARNING) << LOG_DESC("bucket insert failed") << LOG_KV("txHash", key)
                                 << LOG_KV("timestamp", newData.timeStamp);
         }
+        else
+        {
+            if (c_fileLogLevel == LogLevel::DEBUG) [[unlikely]]
+            {
+                TXPOOL_LOG(DEBUG) << LOG_DESC("bucket insert succeeded") << LOG_KV("txHash", key)
+                                  << LOG_KV("timestamp", newData.timeStamp);
+            }
+        }
         return {std::make_shared<IteratorImpl>(result.first), result.second};
     }
 
@@ -135,7 +145,22 @@ public:
     }
     void erase(std::shared_ptr<IteratorImpl> it_ptr)
     {
-        multiIndexMap.get<0>().erase(it_ptr->getIterator());
+        auto eraseCount = multiIndexMap.get<0>().erase(it_ptr->first);
+        if (eraseCount == 1)
+        {
+            if (c_fileLogLevel == LogLevel::DEBUG) [[unlikely]]
+            {
+                TXPOOL_LOG(DEBUG) << LOG_DESC("erase bucket succeeded")
+                                  << LOG_KV("txHash", it_ptr->first)
+                                  << LOG_KV("eraseCount", eraseCount);
+            }
+        }
+        else
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC("erase bucket failed")
+                                << LOG_KV("txHash", it_ptr->first)
+                                << LOG_KV("eraseCount", eraseCount);
+        }
     }
     size_t size() const { return multiIndexMap.size(); }
     void clear() { multiIndexMap.clear(); }
