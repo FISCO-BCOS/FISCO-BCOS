@@ -30,6 +30,7 @@
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <unistd.h>
+#include <boost/lexical_cast.hpp>
 #include <chrono>
 #include <ctime>
 
@@ -215,8 +216,8 @@ int main(int argc, const char* argv[])
         return 0;
     }
     keyPair = make_shared<KeyPair>(KeyPair::create());
-    int totalUser = atoi(argv[1]);
-    int totalTxs = atoi(argv[2]);
+    auto totalUser = boost::lexical_cast<int>(argv[1]);
+    auto totalTxs = boost::lexical_cast<int>(argv[2]);
     startExecute(totalUser, totalTxs);
     return 0;
 }

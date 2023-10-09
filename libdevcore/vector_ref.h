@@ -201,7 +201,9 @@ public:
         if (overlapsWith(_t))
             memmove(_t.data(), m_data, std::min(_t.size(), m_count) * sizeof(_T));
         else
-            memcpy(_t.data(), m_data, std::min(_t.size(), m_count) * sizeof(_T));
+        {
+            memmove(_t.data(), m_data, std::min(_t.size(), m_count) * sizeof(_T));
+        }
     }
 
     /// Copies the contents of this vector_ref to the contents of _t,

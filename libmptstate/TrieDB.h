@@ -840,7 +840,7 @@ SpecificTrieDB<KeyType, DB>::iterator::at() const
     auto p = Super::at();
     value_type ret;
     assert(p.first.size() == sizeof(KeyType));
-    memcpy(&ret.first, p.first.data(), sizeof(KeyType));
+    memcpyWithCheck(&ret.first, ret.first.size(), p.first.data(), sizeof(KeyType));
     ret.second = p.second;
     return ret;
 }
@@ -1108,8 +1108,7 @@ bytes GenericTrieDB<DB>::deleteAt(RLP const& _orig, NibbleSlice _k)
                                                                // up.
                         return bytes();
                     else
-                    {
-                    }
+                    {}
                 else
                     r << _orig[i];
 
