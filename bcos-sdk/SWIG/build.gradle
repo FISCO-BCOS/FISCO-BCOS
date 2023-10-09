@@ -46,14 +46,10 @@ task sourcesJar(type: Jar) {
     archiveClassifier = 'sources'
 }
 
-def getLocalPlatform() {
-	return System.properties['os.name'].toLowerCase() + '_' + System.properties['os.arch'].toLowerCase();
-}
-
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId "fisco-bcos-tars-sdk-" + getLocalPlatform()
+            artifactId "fisco-bcos-tars-sdk"
             groupId project.group
             version project.version
 
@@ -103,7 +99,7 @@ publishing {
 }
 
 jar {
-    archiveFileName = 'fisco-bcos-tars-sdk-' + getLocalPlatform() + '-' + project.version + '.jar'
+    archiveFileName = 'fisco-bcos-tars-sdk-' + project.version + '.jar'
 
     manifest {
         def date = new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")

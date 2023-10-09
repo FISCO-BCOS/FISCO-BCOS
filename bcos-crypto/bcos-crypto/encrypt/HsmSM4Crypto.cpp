@@ -36,9 +36,9 @@ bcos::bytesPointer HsmSM4Crypto::HsmSM4Encrypt(const unsigned char* _plainData,
     // note: parm _ivDataSize and _keySize wasn't used
     if (!_ivData || _ivDataSize < SM4_IV_DATA_SIZE)
     {
-        CRYPTO_LOG(ERROR) << "[HsmSM4Crypto::HsmSM4Encrypt] invalid iv data or iv data size, iv "
-                             "data should not be NULL and iv data size shouldn't smaller than 16: "
-                          << _ivDataSize;
+        CRYPTO_LOG(ERROR) << "[HsmSM4Crypto::HsmSM4Encrypt] invalid iv data or iv data size, "
+                             "iv data should not be NULL and iv data size shouldn't smaller than 16"
+                          << LOG_KV("_ivDataSize", _ivDataSize);
         BOOST_THROW_EXCEPTION(
             std::runtime_error("Hsm SM4 HsmSM4Encrypt error, invalid iv data or iv data size"));
     }
@@ -73,10 +73,9 @@ bcos::bytesPointer HsmSM4Crypto::HsmSM4Decrypt(const unsigned char* _cipherData,
 {
     if (!_ivData || _ivDataSize < SM4_IV_DATA_SIZE)
     {
-        CRYPTO_LOG(ERROR)
-            << "[HsmSM4Crypto::HsmSM4Decrypt] invalid iv data or iv data size, "
-               "iv data should not be NULL and iv data size shouldn't smaller than 16: "
-            << _ivDataSize;
+        CRYPTO_LOG(ERROR) << "[HsmSM4Crypto::HsmSM4Decrypt] invalid iv data or iv data size, "
+                             "iv data should not be NULL and iv data size shouldn't smaller than 16"
+                          << LOG_KV("_ivDataSize", _ivDataSize);
         BOOST_THROW_EXCEPTION(
             std::runtime_error("Hsm SM4 HsmSM4Decrypt error, invalid iv data or iv data size"));
     }
@@ -104,8 +103,8 @@ bcos::bytesPointer HsmSM4Crypto::symmetricEncryptWithInternalKey(const unsigned 
     {
         CRYPTO_LOG(ERROR)
             << "[HsmSM4Crypto::symmetricEncryptWithInternalKey] invalid iv data or iv data size, "
-               "iv data should not be NULL and iv data size shouldn't smaller than 16: "
-            << _ivDataSize;
+               "iv data should not be NULL and iv data size shouldn't smaller than 16"
+            << LOG_KV("_ivDataSize", _ivDataSize);
         BOOST_THROW_EXCEPTION(std::runtime_error(
             "Hsm SM4 EncryptWithInternalKey error, invalid iv data or iv data size"));
     }
@@ -128,8 +127,8 @@ bcos::bytesPointer HsmSM4Crypto::symmetricEncryptWithInternalKey(const unsigned 
         (unsigned char*)(encryptedData->data()), &size);
     if (encryptCode != SDR_OK)
     {
-        CRYPTO_LOG(ERROR) << "[HsmSM4Crypto::symmetricEncryptWithInternalKey] encrypt ERROR: "
-                          << provider.GetErrorMessage(encryptCode);
+        CRYPTO_LOG(ERROR) << "[HsmSM4Crypto::symmetricEncryptWithInternalKey] encrypt ERROR "
+                          << LOG_KV("error", provider.GetErrorMessage(encryptCode));
         BOOST_THROW_EXCEPTION(std::runtime_error("Hsm SM4 EncryptWithInternalKey error"));
     }
 
@@ -144,8 +143,8 @@ bcos::bytesPointer HsmSM4Crypto::symmetricDecryptWithInternalKey(const unsigned 
     {
         CRYPTO_LOG(ERROR)
             << "[HsmSM4Crypto::symmetricDecryptWithInternalKey] invalid iv data or iv data size, "
-               "iv data should not be NULL and iv data size shouldn't smaller than 16: "
-            << _ivDataSize;
+               "iv data should not be NULL and iv data size shouldn't smaller than 16"
+            << LOG_KV("_ivDataSize", _ivDataSize);
         BOOST_THROW_EXCEPTION(std::runtime_error(
             "Hsm SM4 DecryptWithInternalKey error, invalid iv data or iv data size"));
     }
