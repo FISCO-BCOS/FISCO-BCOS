@@ -38,6 +38,8 @@ struct BoostLogLevelResetHandler
 {
     static void handle(int sig)
     {
+        // std::lock_guard<std::mutex> lock(logLevelMutex);
+        std::unique_lock<std::mutex> lock(logLevelMutex);
         BCOS_LOG(INFO) << LOG_BADGE("BoostLogInitializer::Signal")
                        << LOG_DESC("receive SIGUSE2 sig");
 
@@ -60,9 +62,11 @@ struct BoostLogLevelResetHandler
     }
 
     static std::string configFile;
+    static std::mutex logLevelMutex;
 };
 
 std::string BoostLogLevelResetHandler::configFile;
+std::mutex BoostLogLevelResetHandler::logLevelMutex;
 
 /// handler to solve log rotate
 bool BoostLogInitializer::canRotate(size_t const& _index)
