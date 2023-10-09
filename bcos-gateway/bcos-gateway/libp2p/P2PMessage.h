@@ -68,11 +68,11 @@ public:
     virtual ~P2PMessageOptions() = default;
 
     /// The maximum gateway transport protocol supported groupID length  65535
-    const static size_t MAX_GROUPID_LENGTH = 65535;
+    constexpr static size_t MAX_GROUPID_LENGTH = 65535;
     /// The maximum gateway transport protocol supported nodeID length  65535
-    const static size_t MAX_NODEID_LENGTH = 65535;
+    constexpr static size_t MAX_NODEID_LENGTH = 65535;
     /// The maximum gateway transport protocol supported dst nodeID count  127
-    const static size_t MAX_DST_NODEID_COUNT = 255;
+    constexpr static size_t MAX_DST_NODEID_COUNT = 255;
 
     bool encode(bytes& _buffer);
     int32_t decode(const bytesConstRef& _buffer);
@@ -123,9 +123,15 @@ public:
     using Ptr = std::shared_ptr<P2PMessage>;
 
     /// length(4) + version(2) + packetType(2) + seq(4) + ext(2)
-    const static size_t MESSAGE_HEADER_LENGTH = 14;
-    const static size_t MAX_MESSAGE_LENGTH =
+    constexpr static size_t MESSAGE_HEADER_LENGTH = 14;
+    constexpr static size_t MAX_MESSAGE_LENGTH =
         100 * 1024 * 1024;  ///< The maximum length of data is 100M.
+
+    /// For RSA public key, the prefix length is 18 in hex, used for print log graciously
+    constexpr static size_t RSA_PUBLIC_KEY_PREFIX = 18;
+    constexpr static size_t RSA_PUBLIC_KEY_TRUNC = 8;
+    constexpr static size_t RSA_PUBLIC_KEY_TRUNC_LENGTH = 26;
+
 public:
     P2PMessage()
     {
@@ -207,11 +213,25 @@ public:
     std::string const& srcP2PNodeID() const override { return m_srcP2PNodeID; }
     std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }
 
+    // Note: only for log
+    std::string_view srcP2PNodeIDView() const { return printP2PIDElegantly(m_srcP2PNodeID); }
+    // Note: only for log
+    std::string_view dstP2PNodeIDView() const { return printP2PIDElegantly(m_dstP2PNodeID); }
+
     virtual void setExtAttributes(MessageExtAttributes::Ptr _extAttr)
     {
         m_extAttr = std::move(_extAttr);
     }
     MessageExtAttributes::Ptr extAttributes() override { return m_extAttr; }
+
+    static inline std::string_view printP2PIDElegantly(std::string_view p2pId) noexcept
+    {
+        if (p2pId.length() < RSA_PUBLIC_KEY_TRUNC_LENGTH)
+        {
+            return p2pId;
+        }
+        return p2pId.substr(RSA_PUBLIC_KEY_PREFIX, RSA_PUBLIC_KEY_TRUNC);
+    }
 
 protected:
     virtual int32_t decodeHeader(const bytesConstRef& _buffer);
