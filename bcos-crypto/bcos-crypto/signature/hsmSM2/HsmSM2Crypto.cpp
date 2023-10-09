@@ -160,7 +160,7 @@ PublicPtr HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) 
 
 std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input) const
 {
-    struct In
+    struct
     {
         HashType hash;
         h512 pub;
