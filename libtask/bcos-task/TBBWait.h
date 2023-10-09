@@ -3,6 +3,8 @@
 #include "Task.h"
 #include "Trait.h"
 #include <oneapi/tbb/task.h>
+#include <boost/atomic/atomic.hpp>
+#include <boost/atomic/atomic_flag.hpp>
 
 namespace bcos::task::tbb
 {
@@ -19,12 +21,12 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
         std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
 
     ReturnVariant result;
-    std::atomic_flag finished{};
-    std::atomic<oneapi::tbb::task::suspend_point> suspendPoint{};
+    boost::atomic_flag finished{};
+    boost::atomic<oneapi::tbb::task::suspend_point> suspendPoint{};
 
     auto waitTask =
-        [](Task&& task, decltype(result)& result, std::atomic_flag& finished,
-            std::atomic<oneapi::tbb::task::suspend_point>& suspendPoint) -> task::Task<void> {
+        [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
+            boost::atomic<oneapi::tbb::task::suspend_point>& suspendPoint) -> task::Task<void> {
         try
         {
             if constexpr (std::is_void_v<ReturnType>)
