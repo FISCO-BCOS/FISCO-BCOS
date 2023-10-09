@@ -188,7 +188,7 @@ public:
             accessor =
                 std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
         }
-
+        BCOS_LOG(DEBUG) << LOG_DESC("Remove tx") << LOG_KV("txHash", key);
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
