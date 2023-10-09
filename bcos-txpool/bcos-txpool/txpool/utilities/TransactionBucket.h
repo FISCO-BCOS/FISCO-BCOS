@@ -78,8 +78,8 @@ public:
         typename Container::nth_index<0>::type::iterator m_iterator;
 
     public:
-        const bcos::crypto::HashType first;
-        bcos::protocol::Transaction::Ptr second;
+        const bcos::crypto::HashType& first;
+        bcos::protocol::Transaction::Ptr& second;
     };
     using iterator = std::shared_ptr<IteratorImpl>;
 
