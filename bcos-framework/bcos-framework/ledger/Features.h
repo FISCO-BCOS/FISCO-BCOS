@@ -79,6 +79,10 @@ public:
         {
             set(Flag::bugfix_revert);
         }
+        if (version >= protocol::BlockVersion::V3_2_4_VERSION)
+        {
+            set(Flag::bugfix_statestorage_hash);
+        }
     }
 
     auto flags() const
