@@ -143,7 +143,8 @@ public:
                                               const std::string_view& key, const Entry& entry)>
                                               callback) const override;
 
-    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override;
+    crypto::HashType hash(
+        const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override;
 
     void rollback(const Recoder& recoder) override;
 
