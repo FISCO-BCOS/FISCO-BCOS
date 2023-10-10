@@ -668,7 +668,7 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
         handleCheckPointMsg(checkPointMsg);
         break;
     }
-    [[unlikely]] case PacketType::RecoverRequest:
+    case PacketType::RecoverRequest:
     {
         auto request = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
         handleRecoverRequest(request);

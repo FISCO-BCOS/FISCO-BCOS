@@ -143,7 +143,8 @@ void TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
     }
 }
 
-void TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data, bool isStartNode)
+void TxPool::broadcastTransactionBufferByTree(
+    const bcos::bytesConstRef& _data, bool isStartNode, bcos::crypto::NodeIDPtr fromNode)
 {
     if (m_treeRouter != nullptr)
     {
@@ -167,8 +168,9 @@ void TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data, 
         }
         else [[likely]]
         {
-            auto selectedNode = m_treeRouter->selectNodes(
-                m_transactionSync->config()->connectedGroupNodeList(), m_treeRouter->consIndex());
+            auto selectedNode =
+                m_treeRouter->selectNodes(m_transactionSync->config()->connectedGroupNodeList(),
+                    m_treeRouter->consIndex(), isStartNode, fromNode);
             if (c_fileLogLevel <= TRACE) [[unlikely]]
             {
                 std::stringstream selectedNodeList;
