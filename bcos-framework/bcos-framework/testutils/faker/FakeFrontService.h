@@ -299,6 +299,8 @@ public:
     void stop() override {}
 
     void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _func) override { _func(nullptr, m_groupInfo); }
+
+    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override { return m_groupInfo; }
     // for gateway: useless here
     void onReceiveGroupNodeInfo(
         const std::string&, bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc) override

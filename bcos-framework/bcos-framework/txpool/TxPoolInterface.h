@@ -148,7 +148,7 @@ public:
     // notify to reset the txpool when the consensus module startup
     virtual void asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
-    [[deprecated]] virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
+    virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) = 0;
 
     // determine to clean up txs periodically or not

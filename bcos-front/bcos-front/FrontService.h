@@ -167,6 +167,12 @@ public:
 
     std::shared_ptr<gateway::GatewayInterface> gatewayInterface() { return m_gatewayInterface; }
 
+    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override
+    {
+        Guard guard(x_groupNodeInfo);
+        return m_groupNodeInfo;
+    }
+
     void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface)
     {
         m_gatewayInterface = std::move(_gatewayInterface);
