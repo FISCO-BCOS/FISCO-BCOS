@@ -52,8 +52,8 @@ constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY{
     bcos::storage::StorageInterface::SYS_TABLES,
 };
 constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY_310{bcos::ledger::SYS_CONFIG,
-                                                                         bcos::ledger::SYS_CONSENSUS, bcos::storage::StorageInterface::SYS_TABLES,
-                                                                         bcos::ledger::SYS_CODE_BINARY, bcos::ledger::SYS_CONTRACT_ABI};
+    bcos::ledger::SYS_CONSENSUS, bcos::storage::StorageInterface::SYS_TABLES,
+    bcos::ledger::SYS_CODE_BINARY, bcos::ledger::SYS_CONTRACT_ABI};
 
 class StateStorageFactory
 {
@@ -97,10 +97,8 @@ public:
             return std::make_shared<bcos::storage::KeyPageStorage>(
                 storage, m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
         }
-        // return std::make_shared<bcos::storage::StateStorage>(storage, compatibilityVersion);
-        // v3.2.2 and before StateStorage not use right compatibilityVersion to hash state data
-        // if we fix the compatibilityVersion, it will cause inconsistency between v3.2.3 and before
-        // FIXME: this should be fix use feature in next patch version
+
+        // Pass useHashV310 flag to hash() insted of compatibilityVersion
         return std::make_shared<bcos::storage::StateStorage>(storage);
     }
 

@@ -49,6 +49,7 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+#include "bcos-framework/ledger/Features.h"
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -1032,8 +1033,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         _callback)
 {
-    executeTransactionsInternal(
-        std::move(contractAddress), std::move(inputs), true, std::move(_callback));
+    executeTransactionsInternal(std::move(contractAddress), inputs, true, std::move(_callback));
 }
 
 void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
@@ -1075,11 +1075,12 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     // remove suicides beforehand
     m_blockContext->killSuicides();
 
-    auto hash = last.storage->hash(m_hashImpl);
+    auto hash = last.storage->hash(m_hashImpl,
+        m_blockContext->features().get(ledger::Features::Flag::bugfix_statestorage_hash));
     EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes success"
                             << LOG_KV("hash", hash.hex());
 
-    callback(nullptr, std::move(hash));
+    callback(nullptr, hash);
 }
 
 void TransactionExecutor::dagExecuteTransactions(
