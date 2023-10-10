@@ -49,9 +49,7 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
-    explicit BaseStorage(
-        std::shared_ptr<StorageInterface> prev, [[maybe_unused]] uint32_t _blockVersion = (uint32_t)
-                                                    bcos::protocol::BlockVersion::V3_0_VERSION)
+    explicit BaseStorage(std::shared_ptr<StorageInterface> prev)
       : storage::StateStorageInterface(prev), m_buckets(std::thread::hardware_concurrency())
     {}
 

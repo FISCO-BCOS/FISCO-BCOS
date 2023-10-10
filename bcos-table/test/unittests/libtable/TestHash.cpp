@@ -13,7 +13,7 @@ BOOST_FIXTURE_TEST_SUITE(TestHash, TestHashFixture)
 BOOST_AUTO_TEST_CASE(testTwoHash)
 {
     auto version = (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION;
-    bcos::storage::StateStorage stateStorage(nullptr, version);
+    bcos::storage::StateStorage stateStorage(nullptr);
     bcos::storage::KeyPageStorage keyPageStorage(nullptr, 10240, version);
 
     for (int i = 0; i < 100; i++)
