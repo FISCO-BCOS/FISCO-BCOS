@@ -455,17 +455,18 @@ void MemoryTable2::parallelGenData(
                 {
                     if (isHashField(fieldIt.first))
                     {
-                        memcpy(
-                            &_generatedData[startOffSet], &fieldIt.first[0], fieldIt.first.size());
+                        memcpyWithCheck(&_generatedData[startOffSet],
+                            _generatedData.size() - startOffSet, &fieldIt.first[0],
+                            fieldIt.first.size());
                         startOffSet += fieldIt.first.size();
 
-                        memcpy(&_generatedData[startOffSet], &fieldIt.second[0],
+                        memcpyWithCheck(&_generatedData[startOffSet],_generatedData.size() - startOffSet, &fieldIt.second[0],
                             fieldIt.second.size());
                         startOffSet += fieldIt.second.size();
                     }
                 }
                 char status = (char)entry->getStatus();
-                memcpy(&_generatedData[startOffSet], &status, sizeof(status));
+                memcpyWithCheck(&_generatedData[startOffSet],_generatedData.size() - startOffSet, &status, sizeof(status));
             }
         });
 }

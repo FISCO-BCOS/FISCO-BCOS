@@ -30,6 +30,7 @@
 #include <libdevcrypto/hsm/HSMCrypto.h>
 #include <libdevcrypto/hsm/HSMHash.h>
 #include <libdevcrypto/hsm/HSMSignature.h>
+#include <boost/lexical_cast.hpp>
 using namespace dev::crypto;
 using namespace dev;
 constexpr char hexmap[] = {'0', '1', '2', '3', '4', '5', '6', '7',
@@ -47,7 +48,7 @@ std::string hexStr(unsigned char *data, int len)
 int main(int, const char* argv[])
 {
     std::cout << "#### begin hsm test" << std::endl;
-    size_t loopRound = atoi(argv[1]);
+    auto loopRound = boost::lexical_cast<size_t>(argv[1]);
     initSMCrypto();
     g_BCOSConfig.setUseSMCrypto(true);
     KeyPair keyPair = KeyPair::create();
@@ -113,7 +114,7 @@ int main(int, const char* argv[])
         (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
     cout << "hardware decrypt text: " << hexStr((unsigned char*)hhdedata.data(),hhdedata.size()) << endl;
     cout << "hardware decrypt text len:" << hhdedata.size() <<endl<< endl;
-    
+
     cout << "*** hardware sm4 enc, software decrypt " << endl;
     const std::string sdfendata = SDFSM4Encrypt((const unsigned char*)plainData.data(), plainData.size(),
         (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
@@ -130,7 +131,7 @@ int main(int, const char* argv[])
     std::cout << "*** internal sign result: r = " << sdfInternalSignResult->r.hex()
               << " s = " << sdfInternalSignResult->s.hex() << std::endl;
 
-  
+
     std::cout << "#### begin performance test" << std::endl;
 
     // calculate hash
@@ -200,5 +201,5 @@ int main(int, const char* argv[])
     totalCost = endT - startT;
     std::cout << "##### sdf verfiy totalTimecost:" << totalCost << ", time per verify:" << totalCost/(double)(loopRound) << ", tps:"<< (double)(loopRound)/(totalCost/1000000)<< std::endl << endl;
     std::cout << "#### test end" << std::endl;
-  
+
 }

@@ -25,7 +25,9 @@
 
 #include "Common.h"
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <unordered_set>
@@ -33,6 +35,16 @@
 
 namespace dev
 {
+
+inline void memcpyWithCheck(void* _dst, size_t _dstSize, void const* _src, size_t _srcSize)
+{
+    if (_srcSize > _dstSize)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("memcpy: destination too small"));
+    }
+    memcpy(_dst, _src, _srcSize);
+}
+
 // String conversion functions, mainly to/from hex/nibble/byte representations.
 
 enum class WhenError
@@ -193,8 +205,7 @@ inline bytes toCompactBigEndian(T _val, unsigned _min = 0)
         "only unsigned types or bigint supported");  // bigint does not carry sign bit on shift
     int i = 0;
     for (T v = _val; v; ++i, v >>= 8)
-    {
-    }
+    {}
     bytes ret(std::max<unsigned>(_min, i), 0);
     toBigEndian(_val, ret);
     return ret;
@@ -213,8 +224,7 @@ inline std::string toCompactBigEndianString(T _val, unsigned _min = 0)
         "only unsigned types or bigint supported");  // bigint does not carry sign bit on shift
     int i = 0;
     for (T v = _val; v; ++i, v >>= 8)
-    {
-    }
+    {}
     std::string ret(std::max<unsigned>(_min, i), '\0');
     toBigEndian(_val, ret);
     return ret;
@@ -257,8 +267,7 @@ inline unsigned bytesRequired(T _i)
         "only unsigned types or bigint supported");  // bigint does not carry sign bit on shift
     unsigned i = 0;
     for (; _i != 0; ++i, _i >>= 8)
-    {
-    }
+    {}
     return i;
 }
 
@@ -290,8 +299,8 @@ inline std::vector<T>& operator+=(
     std::vector<T> const& _b)
 {
     auto s = _a.size();
-    _a.resize(_a.size() + _b.size());
-    memcpy(_a.data() + s, _b.data(), _b.size() * sizeof(T));
+    _a.resize(_a.size() + _b.size() * sizeof(T));
+    memcpyWithCheck(_a.data() + s, _a.size() - s, _b.data(), _b.size() * sizeof(T));
     return _a;
 }
 
@@ -416,4 +425,5 @@ bool contains(std::unordered_set<V> const& _set, V const& _v)
 {
     return _set.find(_v) != _set.end();
 }
+
 }  // namespace dev

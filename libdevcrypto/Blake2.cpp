@@ -58,8 +58,8 @@ constexpr uint8_t blake2b_sigma[12][16] =
 
 inline uint64_t load64(const void* src) noexcept
 {
-    uint64_t w;
-    memcpy(&w, src, sizeof w);
+    uint64_t w = 0;
+    memcpyWithCheck(&w, sizeof(w), src, sizeof w);
     return w;
 }
 
@@ -133,7 +133,7 @@ bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesCons
         BOOST_THROW_EXCEPTION(InvalidInputSize());
 
     blake2b_state s{};
-    std::memcpy(&s.h, _stateVector.data(), _stateVector.size());
+    memcpyWithCheck(&s.h, sizeof(s.h), _stateVector.data(), _stateVector.size());
 
     if (_t0.size() != sizeof(s.t[0]) || _t1.size() != sizeof(s.t[1]))
         BOOST_THROW_EXCEPTION(InvalidInputSize());
@@ -151,8 +151,7 @@ bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesCons
     blake2b_compress(_rounds, &s, block);
 
     bytes result(sizeof(s.h));
-    std::memcpy(&result[0], &s.h[0], result.size());
-
+    memcpyWithCheck(result.data(), result.size(), &s.h[0], result.size());
     return result;
 }
 
