@@ -91,10 +91,7 @@ public:
     BlockVersion minSupportedVersion() const { return m_minSupportedVersion; }
     BlockVersion maxSupportedVersion() const { return m_maxSupportedVersion; }
 
-    std::unique_lock<std::mutex> signalMutex() const
-    {
-        return std::unique_lock<std::mutex>(x_signalMutex);
-    }
+    std::mutex& signalMutex() const { return x_signalMutex; }
 
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
