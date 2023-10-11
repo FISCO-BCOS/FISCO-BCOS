@@ -60,8 +60,7 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual void broadcastTransaction(
-        [[maybe_unused]] const protocol::Transaction& transaction)
+    virtual void broadcastTransaction([[maybe_unused]] const protocol::Transaction& transaction)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
@@ -71,8 +70,8 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual void broadcastTransactionBufferByTree(
-        [[maybe_unused]] const bytesConstRef& _data, bool isStartNode = false)
+    virtual void broadcastTransactionBufferByTree([[maybe_unused]] const bytesConstRef& _data,
+        bool isStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
@@ -160,5 +159,5 @@ public:
 
 template <class T>
 concept IsTxPool = std::derived_from<std::remove_cvref_t<T>, TxPoolInterface> ||
-                   std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
+    std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
 }  // namespace bcos::txpool
