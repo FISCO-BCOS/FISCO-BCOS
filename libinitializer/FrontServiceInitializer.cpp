@@ -217,11 +217,9 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                            decltype(data) data, decltype(nodeID) nodeID) -> task::Task<void> {
                 try
                 {
-                    TXPOOL_LOG(DEBUG) << "begin submit transaction with hook from p2p.";
-                    [[maybe_unused]] auto submitResult = co_await txpool->submitTransactionWithHook(
-                        std::move(transaction), [data, txpool, nodeID]() {
-                            txpool->broadcastTransactionBufferByTree(data, false, nodeID);
-                        });
+                    txpool->broadcastTransactionBufferByTree(data, false, nodeID);
+                    [[maybe_unused]] auto submitResult =
+                        co_await txpool->submitTransaction(std::move(transaction));
                 }
                 catch (std::exception& e)
                 {
