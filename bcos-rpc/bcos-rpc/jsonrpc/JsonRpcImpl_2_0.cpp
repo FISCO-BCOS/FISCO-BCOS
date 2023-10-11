@@ -1360,6 +1360,12 @@ void JsonRpcImpl_2_0::getGroupPeers(Json::Value& _response, std::string_view _gr
         for (auto const& nodeIDInfo : groupNodeIDInfo)
         {
             auto groupID = nodeIDInfo.first;
+
+            if (_groupID != groupID)
+            {
+                continue;
+            }
+
             auto nodeInfo = nodeIDInfo.second;
             for (auto const& peerInfo : nodeInfo)
             {
