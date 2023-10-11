@@ -36,10 +36,13 @@ using namespace dev::sync;
 void DownloadingBlockQueue::push(RLP const& _rlps)
 {
     WriteGuard l(x_buffer);
-    if (m_buffer->size() >= c_maxDownloadingBlockQueueBufferSize)
+    if (m_buffer->size() >= c_maxDownloadingBlockQueueBufferSize ||
+        m_blockQueueSize > m_maxBlockQueueSize)
     {
         SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                           << LOG_DESC("DownloadingBlockQueueBuffer is full")
+                          << LOG_KV("blockQueueSize", m_blockQueueSize)
+                          << LOG_KV("maxBlockQueueSize", m_maxBlockQueueSize)
                           << LOG_KV("queueSize", m_buffer->size());
         return;
     }
