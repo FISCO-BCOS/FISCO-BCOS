@@ -100,6 +100,12 @@ public:
         m_blockLimit(_blockLimit),
         m_fakeGateWay(std::move(_fakeGateWay))
     {
+        if (enableTree)
+        {
+            m_nodeId = std::make_shared<KeyImpl>(
+                h256("1110000000000000000000000000000000000000000000000000000000000000").asBytes());
+        }
+        m_nodeId->hex();
         auto blockHeaderFactory =
             std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(_cryptoSuite);
         auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
@@ -112,7 +118,7 @@ public:
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
         m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_COUNT_LIMIT, "1000");
 
-        m_frontService = std::make_shared<FakeFrontService>(_nodeId);
+        m_frontService = std::make_shared<FakeFrontService>(m_nodeId);
         if (enableTree)
         {
             auto protocol = std::make_shared<protocol::ProtocolInfo>();
@@ -122,7 +128,7 @@ public:
             m_frontService->setGroupInfo(gInfo);
         }
         auto txPoolFactory =
-            std::make_shared<TxPoolFactory>(_nodeId, _cryptoSuite, m_txResultFactory,
+            std::make_shared<TxPoolFactory>(m_nodeId, _cryptoSuite, m_txResultFactory,
                 m_blockFactory, m_frontService, m_ledger, m_groupId, m_chainId, m_blockLimit);
         m_txpool = txPoolFactory->createTxPool();
 
@@ -133,30 +139,59 @@ public:
 
         if (enableTree)
         {
-            auto router = std::make_shared<TreeTopology>(_nodeId);
+            auto router = std::make_shared<TreeTopology>(m_nodeId);
             m_txpool->setTreeRouter(std::move(router));
         }
         m_txpool->init();
         m_txpool->start();
 
-        m_fakeGateWay->addTxPool(_nodeId, m_txpool);
+        m_fakeGateWay->addTxPool(m_nodeId, m_txpool);
         m_frontService->setGateWay(m_fakeGateWay);
         bcos::crypto::NodeIDs allNode;
         for (int i = 0; i < 10; ++i)
         {
             auto key = m_cryptoSuite->signatureImpl()->generateKeyPair();
-            auto nodeId = key->publicKey();
-            m_nodeIdList.push_back(nodeId);
+            auto nodeId = std::make_shared<KeyImpl>(
+                h256(std::to_string(i) +
+                     "000000000000000000000000000000000000000000000000000000000000000")
+                    .asBytes());
+            if (enableTree)
+            {
+                m_nodeIdList.push_back(nodeId);
+            }
+            else
+            {
+                m_nodeIdList.push_back(key->publicKey());
+            }
             allNode.push_back(nodeId);
         }
         allNode.push_back(m_nodeId);
         for (const auto& nodeId : m_nodeIdList)
         {
-            auto txpool = txPoolFactory->createTxPool();
+            TxPool::Ptr txpool;
+            if (enableTree)
+            {
+                nodeId->hex();
+                auto frontService = std::make_shared<FakeFrontService>(nodeId);
+                frontService->setGateWay(m_fakeGateWay);
+                auto protocol = std::make_shared<protocol::ProtocolInfo>();
+                protocol->setVersion(V2);
+                auto gInfo = std::make_shared<FakeGroupInfo>();
+                gInfo->appendProtocol(protocol);
+                frontService->setGroupInfo(gInfo);
+                auto txPoolFactoryTemp =
+                    std::make_shared<TxPoolFactory>(nodeId, _cryptoSuite, m_txResultFactory,
+                        m_blockFactory, frontService, m_ledger, m_groupId, m_chainId, m_blockLimit);
+                txpool = txPoolFactoryTemp->createTxPool();
+            }
+            else
+            {
+                txpool = txPoolFactory->createTxPool();
+                auto sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
+                sync = std::make_shared<FakeTransactionSync1>(sync->config());
+                txpool->setTransactionSync(sync);
+            }
 
-            auto sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
-            sync = std::make_shared<FakeTransactionSync1>(sync->config());
-            txpool->setTransactionSync(sync);
 
             if (enableTree)
             {
@@ -212,6 +247,11 @@ public:
         auto consensusNode = std::make_shared<ConsensusNode>(_nodeId);
         m_ledger->ledgerConfig()->mutableConsensusNodeList().emplace_back(consensusNode);
         m_txpool->notifyConsensusNodeList(m_ledger->ledgerConfig()->consensusNodeList(), nullptr);
+        for (const auto& item : m_fakeGateWay->m_nodeId2TxPool)
+        {
+            item.second->notifyConsensusNodeList(
+                m_ledger->ledgerConfig()->consensusNodeList(), nullptr);
+        }
         updateConnectedNodeList();
     }
     void appendObserver(NodeIDPtr _nodeId)
@@ -219,6 +259,11 @@ public:
         auto consensusNode = std::make_shared<ConsensusNode>(_nodeId);
         m_ledger->ledgerConfig()->mutableObserverList()->emplace_back(consensusNode);
         m_txpool->notifyObserverNodeList(m_ledger->ledgerConfig()->observerNodeList(), nullptr);
+        for (const auto& item : m_fakeGateWay->m_nodeId2TxPool)
+        {
+            item.second->notifyObserverNodeList(
+                m_ledger->ledgerConfig()->observerNodeList(), nullptr);
+        }
         updateConnectedNodeList();
     }
     void init()
@@ -260,6 +305,14 @@ private:
         m_txpool->transactionSync()->config()->setConnectedNodeList(nodeIdSet);
         m_txpool->transactionSync()->config()->notifyConnectedNodes(nodeIdSet, nullptr);
         m_frontService->setNodeIDList(nodeIdSet);
+        for (const auto& item : m_fakeGateWay->m_nodeId2TxPool)
+        {
+            item.second->transactionSync()->config()->setConnectedNodeList(nodeIdSet);
+            item.second->transactionSync()->config()->notifyConnectedNodes(nodeIdSet, nullptr);
+            auto fakeFront = std::dynamic_pointer_cast<FakeFrontService>(
+                item.second->transactionSync()->config()->frontService());
+            fakeFront->setNodeIDList(nodeIdSet);
+        }
     }
 
 public:

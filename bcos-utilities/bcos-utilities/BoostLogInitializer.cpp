@@ -136,7 +136,9 @@ void BoostLogInitializer::initLog(
 
     // register SIGUSR2 for reset boost log level
     BoostLogLevelResetHandler::configFile = _configFile;
+#ifndef _WIN32
     signal(BOOST_LOG_RELOAD_LOG_LEVEL, BoostLogLevelResetHandler::handle);
+#endif
 }
 
 void BoostLogInitializer::initStatLog(

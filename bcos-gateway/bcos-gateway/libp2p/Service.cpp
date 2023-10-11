@@ -387,10 +387,15 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
 
         /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-        SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message") << LOG_KV("p2pid", p2pID)
-                           << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("seq", p2pMessage->seq())
-                           << LOG_KV("version", p2pMessage->version())
-                           << LOG_KV("packetType", p2pMessage->packetType());
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message")
+                               << LOG_KV("p2pid", P2PMessage::printP2PIDElegantly(p2pID))
+                               << LOG_KV("endpoint", nodeIPEndpoint)
+                               << LOG_KV("seq", p2pMessage->seq())
+                               << LOG_KV("version", p2pMessage->version())
+                               << LOG_KV("packetType", p2pMessage->packetType());
+        }
 
         auto packetType = p2pMessage->packetType();
         auto ext = p2pMessage->ext();

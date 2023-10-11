@@ -82,21 +82,24 @@ inline void checkTransaction(
 inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     KeyPairInterface::Ptr _keyPair, const std::string_view& _to, bytes const& _input,
     std::string const& _nonce, int64_t _blockLimit, std::string const& _chainId,
-    std::string const& _groupId)
+    std::string const& _groupId, bool isCheck = true)
 {
     auto factory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
     auto pbTransaction = fakeTransaction(
         _cryptoSuite, _keyPair, _to, _input, _nonce, _blockLimit, _chainId, _groupId);
-    if (_to.empty())
-    {
-        BOOST_CHECK(pbTransaction->type() == TransactionType::ContractCreation);
-    }
-    else
-    {
-        BOOST_CHECK(pbTransaction->type() == TransactionType::MessageCall);
-    }
     auto addr = _keyPair->address(_cryptoSuite->hashImpl());
-    BOOST_CHECK(pbTransaction->sender() == std::string_view((char*)addr.data(), 20));
+    if (isCheck)
+    {
+        if (_to.empty())
+        {
+            BOOST_CHECK(pbTransaction->type() == TransactionType::ContractCreation);
+        }
+        else
+        {
+            BOOST_CHECK(pbTransaction->type() == TransactionType::MessageCall);
+        }
+        BOOST_CHECK(pbTransaction->sender() == std::string_view((char*)addr.data(), 20));
+    }
     bcos::bytes encodedData;
     pbTransaction->encode(encodedData);
     // auto encodedDataCache = pbTransaction->encode();
@@ -110,11 +113,14 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
 #endif
     // decode
     auto decodedTransaction = factory->createTransaction(bcos::ref(encodedData), true);
-    checkTransaction(pbTransaction, decodedTransaction);
+    if (isCheck)
+    {
+        checkTransaction(pbTransaction, decodedTransaction);
+    }
     return decodedTransaction;
 }
 
-inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite)
+inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, bool isCheck = true)
 {
     bcos::crypto::KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = *toHexString(keyPair->address(_cryptoSuite->hashImpl()).asBytes());
@@ -125,7 +131,7 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite)
     std::string chainId = "chainId";
     std::string groupId = "groupId";
     return testTransaction(
-        _cryptoSuite, keyPair, to, input, nonce.str(), blockLimit, chainId, groupId);
+        _cryptoSuite, keyPair, to, input, nonce.str(), blockLimit, chainId, groupId, isCheck);
 }
 
 inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, const std::string& nonce,
