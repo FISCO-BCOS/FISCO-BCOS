@@ -169,7 +169,7 @@ private:
 
     // Maintain merkle trees of 100 blocks
     int m_merkleTreeCacheSize;
-    Mutex m_txMerkleMtx;
+    RecursiveMutex m_txMerkleMtx;
     Mutex m_receiptMerkleMtx;
     CacheType m_txProofMerkleCache;
     CacheType m_receiptProofMerkleCache;
