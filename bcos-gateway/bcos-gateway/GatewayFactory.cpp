@@ -51,12 +51,12 @@ struct GatewayP2PReloadHandler
 {
     static GatewayConfig::Ptr config;
     static Service::Ptr service;
-    static std::mutex p2pReloadMutex;
+    // static std::mutex p2pReloadMutex;
 
     static void handle(int sig)
     {
         // std::lock_guard<std::mutex> lock(p2pReloadMutex);
-        std::unique_lock<std::mutex> lock(p2pReloadMutex);
+        std::unique_lock<std::mutex> lock(g_BCOSConfig.signalMutex());
         BCOS_LOG(INFO) << LOG_BADGE("Gateway::Signal") << LOG_DESC("receive SIGUSER1 sig");
 
         if (!config || !service)
@@ -91,7 +91,7 @@ struct GatewayP2PReloadHandler
 
 GatewayConfig::Ptr GatewayP2PReloadHandler::config = nullptr;
 Service::Ptr GatewayP2PReloadHandler::service = nullptr;
-std::mutex GatewayP2PReloadHandler::p2pReloadMutex;
+// std::mutex GatewayP2PReloadHandler::p2pReloadMutex;
 
 // register the function fetch pub hex from the cert
 void GatewayFactory::initCert2PubHexHandler()

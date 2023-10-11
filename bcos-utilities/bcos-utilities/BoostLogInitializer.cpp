@@ -21,6 +21,7 @@
 #include "BoostLogInitializer.h"
 #include "bcos-framework/bcos-framework/Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include <bcos-framework/bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/RateCollector.h>
 #include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -39,7 +40,7 @@ struct BoostLogLevelResetHandler
     static void handle(int sig)
     {
         // std::lock_guard<std::mutex> lock(logLevelMutex);
-        std::unique_lock<std::mutex> lock(logLevelMutex);
+        std::unique_lock<std::mutex> lock(g_BCOSConfig.signalMutex());
         BCOS_LOG(INFO) << LOG_BADGE("BoostLogInitializer::Signal")
                        << LOG_DESC("receive SIGUSE2 sig");
 
@@ -62,11 +63,11 @@ struct BoostLogLevelResetHandler
     }
 
     static std::string configFile;
-    static std::mutex logLevelMutex;
+    // static std::mutex logLevelMutex;
 };
 
 std::string BoostLogLevelResetHandler::configFile;
-std::mutex BoostLogLevelResetHandler::logLevelMutex;
+// std::mutex BoostLogLevelResetHandler::logLevelMutex;
 
 /// handler to solve log rotate
 bool BoostLogInitializer::canRotate(size_t const& _index)
