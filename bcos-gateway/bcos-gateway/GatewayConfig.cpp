@@ -421,6 +421,7 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
 {
     /*
     [flow_control]
+    enable=false
     ; time window for ratelimiter
     time_window_sec=3
     ;
@@ -433,6 +434,8 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     stat_reporter_interval=60000
      */
     // time_window_sec=1
+    m_rateLimiterConfig.enable = _pt.get<bool>("flow_control.enable", false);
+
     int32_t timeWindowSec = _pt.get<int32_t>("flow_control.time_window_sec", 1);
 
     // enable_distributed_ratelimit=false
