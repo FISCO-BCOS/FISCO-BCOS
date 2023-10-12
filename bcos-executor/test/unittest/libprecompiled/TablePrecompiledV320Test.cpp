@@ -660,7 +660,7 @@ public:
         const std::vector<ConditionTupleV320>& keyCond, const LimitTuple& limit,
         const std::string& callAddress)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_5_VERSION);
         bytes in =
             codec->encodeWithSig("remove((uint8,string,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
@@ -919,6 +919,15 @@ static void generateRandomVector(
     {
         res.insert({temp[i], i + offset});
     }
+}
+
+template<typename Int>
+static Int generateRandomNumber(Int min_, Int max_)
+{
+    std::random_device rd;
+    std::mt19937 eng(rd());
+    std::uniform_int_distribution<Int> distr(min_, max_);
+    return distr(eng);
 }
 
 static void countTest(TableFactoryPrecompiledV320Fixture* fixture, const int INSERT_COUNT,
@@ -3693,6 +3702,36 @@ BOOST_AUTO_TEST_CASE(containsTest)
             BOOST_CHECK(count1 == entries1.size());
             BOOST_CHECK(count2 == entries2.size());
             BOOST_CHECK(count3 == entries3.size());
+        }
+    }
+
+    // START_WITHS && LE
+    {
+        LimitTuple limit = {0, 500};
+        {
+            std::string prefix = "abc_";
+            uint32_t number_ = generateRandomNumber(0, 500);
+            ConditionTupleV320 cond1 = {
+                (uint8_t)storage::Condition::Comparator::STARTS_WITH, "id", "abc"};
+            ConditionTupleV320 cond2 = {
+                (uint8_t)storage::Condition::Comparator::LE, "id", "abc_" + _fillZeros(number_)};
+            auto r1 = count(number++, {cond1, cond2}, callAddress);
+            uint32_t countPrefix = 0;
+            codec->decode(r1->data(), countPrefix);
+            BOOST_CHECK(countPrefix == (number_ / 2) + 1);
+
+            auto r4 = selectByCondition(number++, {cond1, cond2}, limit, callAddress);
+            std::vector<EntryTuple> entries1;
+            codec->decode(r4->data(), entries1);
+
+            size_t count1 = 0;
+
+            for (uint32_t j = 0; j <= number_; j += 2)
+            {
+                if (std::get<1>(entries1[j / 2])[0] == _fillZeros(j))
+                    ++count1;
+            }
+            BOOST_CHECK(count1 == entries1.size());
         }
     }
 
