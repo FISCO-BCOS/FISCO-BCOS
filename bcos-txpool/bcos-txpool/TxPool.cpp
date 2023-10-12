@@ -19,6 +19,7 @@
  * @date 2021-05-10
  */
 #include "TxPool.h"
+#include "bcos-front/FrontService.h"
 #include "bcos-utilities/Error.h"
 #include "txpool/validator/LedgerNonceChecker.h"
 #include "txpool/validator/TxValidator.h"
@@ -42,7 +43,6 @@ bcos::txpool::TxPool::TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::P
   : m_config(std::move(config)),
     m_txpoolStorage(std::move(txpoolStorage)),
     m_transactionSync(std::move(transactionSync)),
-    m_frontService(m_transactionSync->config()->frontService()),
     m_transactionFactory(m_config->blockFactory()->transactionFactory()),
     m_ledger(m_config->ledger())
 {
@@ -134,60 +134,60 @@ void TxPool::broadcastTransactionBuffer(const bytesConstRef& _data)
 {
     if (m_treeRouter != nullptr) [[unlikely]]
     {
-        broadcastTransactionBufferByTree(_data);
+        broadcastTransactionBufferByTree(_data, true);
     }
     else [[likely]]
     {
-        m_frontService->asyncSendBroadcastMessage(
+        m_transactionSync->config()->frontService()->asyncSendBroadcastMessage(
             protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
     }
 }
 
-void TxPool::broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data, bool isStartNode)
+void TxPool::broadcastTransactionBufferByTree(
+    const bcos::bytesConstRef& _data, bool isStartNode, bcos::crypto::NodeIDPtr fromNode)
 {
     if (m_treeRouter != nullptr)
     {
-        m_frontService->asyncGetGroupNodeInfo(
-            [this, _data](Error::Ptr const&, const bcos::gateway::GroupNodeInfo::Ptr& groupInfo) {
-                auto protocolList = groupInfo->nodeProtocolList();
-                // NOTE: the protocolList is a vector which sorted by nodeID, and is NOT convenience
-                // for filter whether send new protocol or not. So one-size-fits-all approach, if
-                // protocolList have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default.
-                auto index = std::find_if(
-                    protocolList.begin(), protocolList.end(), [](auto const& protocol) {
-                        return protocol->version() < protocol::ProtocolVersion::V2;
-                    });
-                if (index != protocolList.end()) [[unlikely]]
-                {
-                    TXPOOL_LOG(TRACE)
-                        << LOG_DESC("broadcastTransactionBufferByTree but have lower version node")
-                        << LOG_KV("index", index->get()->version());
-                    // have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default
-                    m_frontService->asyncSendBroadcastMessage(
-                        protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
-                }
-                else [[likely]]
-                {
-                    auto selectedNode = m_treeRouter->selectNodes(
-                        m_transactionSync->config()->connectedGroupNodeList(),
-                        m_treeRouter->consIndex());
-                    if (c_fileLogLevel == TRACE) [[unlikely]]
-                    {
-                        std::stringstream nodeList;
-                        std::for_each(selectedNode->begin(), selectedNode->end(),
-                            [&](const bcos::crypto::NodeIDPtr& item) {
-                                nodeList << item->shortHex() << ",";
-                            });
-                        TXPOOL_LOG(TRACE) << LOG_DESC("broadcastTransactionBufferByTree")
-                                          << LOG_KV("selectedNode", nodeList.str());
-                    }
-                    for (const auto& node : (*selectedNode))
-                    {
-                        m_frontService->asyncSendMessageByNodeID(
-                            protocol::TREE_PUSH_TRANSACTION, node, _data, 0, front::CallbackFunc());
-                    }
-                }
+        auto protocolList =
+            m_transactionSync->config()->frontService()->groupNodeInfo()->nodeProtocolList();
+        // NOTE: the protocolList is a vector which sorted by nodeID, and is NOT convenience
+        // for filter whether send new protocol or not. So one-size-fits-all approach, if
+        // protocolList have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default.
+        auto index =
+            std::find_if(protocolList.begin(), protocolList.end(), [](auto const& protocol) {
+                return protocol->version() < protocol::ProtocolVersion::V2;
             });
+        if (index != protocolList.end()) [[unlikely]]
+        {
+            TXPOOL_LOG(TRACE) << LOG_DESC(
+                                     "broadcastTransactionBufferByTree but have lower version node")
+                              << LOG_KV("index", index->get()->version());
+            // have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default
+            m_transactionSync->config()->frontService()->asyncSendBroadcastMessage(
+                protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, _data);
+        }
+        else [[likely]]
+        {
+            auto selectedNode =
+                m_treeRouter->selectNodes(m_transactionSync->config()->connectedGroupNodeList(),
+                    m_treeRouter->consIndex(), isStartNode, fromNode);
+            if (c_fileLogLevel <= TRACE) [[unlikely]]
+            {
+                std::stringstream selectedNodeList;
+                std::for_each(selectedNode->begin(), selectedNode->end(),
+                    [&](const bcos::crypto::NodeIDPtr& item) {
+                        selectedNodeList << (item ? item->shortHex() : "") << ",";
+                    });
+                TXPOOL_LOG(TRACE) << LOG_DESC("broadcastTransactionBufferByTree")
+                                  << LOG_KV("selectSize", selectedNode->size())
+                                  << LOG_KV("selectedNode", selectedNodeList.str());
+            }
+            for (const auto& node : (*selectedNode))
+            {
+                m_transactionSync->config()->frontService()->asyncSendMessageByNodeID(
+                    protocol::TREE_PUSH_TRANSACTION, node, _data, 0, front::CallbackFunc());
+            }
+        }
     }
 }
 
@@ -318,12 +318,11 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                     // Note: here storeVerifiedBlock will block m_verifier and decrease the
                     // proposal-verify-perf, so we async the storeVerifiedBlock here using
                     // m_txsPreStore
-                    if (!verifyError && verifyRet && block && block->blockHeader())
-                    {
-                        txpool->m_txsPreStore->enqueue(
-                            [txpool, block]() { txpool->storeVerifiedBlock(block); });
-                        // txpool->storeVerifiedBlock(block);
-                    }
+                    // if (!verifyError && verifyRet && block && block->blockHeader())
+                    // {
+                    //     txpool->m_txsPreStore->enqueue(
+                    //         [txpool, block]() { txpool->storeVerifiedBlock(block); });
+                    // }
                 };
 
             if (missedTxs->empty())

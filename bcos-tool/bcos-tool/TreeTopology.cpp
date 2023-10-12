@@ -185,8 +185,8 @@ std::int32_t TreeTopology::getTreeIndex(std::int32_t _consIndex)
     return nodeIndex;
 }
 
-bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(
-    bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex, bool _isTheStartNode)
+bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(bcos::crypto::NodeIDSetPtr const& _peers,
+    std::int32_t _consIndex, bool _isTheStartNode, bcos::crypto::NodeIDPtr fromNode)
 {
     Guard lock(m_mutex);
     // the first node is the  observer nodes or not belong to the group
@@ -213,9 +213,39 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(
         }
         return selectedNodeSet;
     }
+    crypto::NodeIDSetPtr nodes;
     // if the consensus nodes
-    auto nodeIndex = getTreeIndex(_consIndex);
-    return recursiveSelectChildNodes(nodeIndex, _peers, _consIndex);
+
+    if (fromNode != nullptr && !_isTheStartNode)
+    {
+        auto nodeIndexInConsensus = getNodeIndexByNodeId(m_consensusNodes, fromNode);
+        TREE_LOG(DEBUG) << LOG_DESC("selectNodesByOtherNodeView")
+                        << LOG_KV("index", nodeIndexInConsensus)
+                        << LOG_KV("fromNode", fromNode->shortHex());
+        if (nodeIndexInConsensus < 0)
+        {
+            auto nodeIndex = getTreeIndex(_consIndex);
+            nodes = recursiveSelectChildNodes(nodeIndex, _peers, _consIndex);
+        }
+        else
+        {
+            nodes = recursiveSelectChildNodes(m_consIndex, _peers, nodeIndexInConsensus);
+        }
+    }
+    else
+    {
+        auto nodeIndex = getTreeIndex(_consIndex);
+        nodes = recursiveSelectChildNodes(nodeIndex, _peers, _consIndex);
+    }
+    if (c_fileLogLevel <= TRACE)
+    {
+        std::stringstream nodeList;
+        std::for_each((*nodes).begin(), (*nodes).end(),
+            [&](const auto& item) { nodeList << item->shortHex() << ","; });
+        TREE_LOG(TRACE) << LOG_DESC("selectNodes") << LOG_KV("nodeSize", nodes->size())
+                        << LOG_KV("node", nodeList.str());
+    }
+    return nodes;
 }
 
 bcos::crypto::NodeIDSetPtr TreeTopology::selectParent(

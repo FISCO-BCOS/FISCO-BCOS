@@ -19,6 +19,7 @@
  */
 #include "RouterTableImpl.h"
 #include "../Common.h"
+#include "../P2PSession.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include <boost/algorithm/string/join.hpp>
@@ -110,10 +111,14 @@ void RouterTable::updateDistanceForAllRouterEntries(
 bool RouterTable::update(std::set<std::string>& _unreachableNodes,
     std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry)
 {
-    SERVICE_ROUTER_LOG(TRACE) << LOG_BADGE("update") << LOG_DESC("receive entry")
-                              << LOG_KV("dst", _entry->dstNode())
-                              << LOG_KV("distance", _entry->distance())
-                              << LOG_KV("from", _generatedFrom);
+    if (c_fileLogLevel <= TRACE) [[unlikely]]
+    {
+        SERVICE_ROUTER_LOG(TRACE) << LOG_BADGE("update") << LOG_DESC("receive entry")
+                                  << LOG_KV(
+                                         "dst", P2PMessage::printP2PIDElegantly(_entry->dstNode()))
+                                  << LOG_KV("distance", _entry->distance())
+                                  << LOG_KV("from", _generatedFrom);
+    }
     auto ret = updateDstNodeEntry(_generatedFrom, _entry);
     // the dst entry has not been updated
     if (!ret)
@@ -256,11 +261,14 @@ std::set<std::string> RouterTable::getAllReachableNode()
         }
     }
 
-    if (c_fileLogLevel >= LogLevel::TRACE)
+    if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
     {
+        std::stringstream nodes;
+        std::for_each(reachableNodes.begin(), reachableNodes.end(),
+            [&](const auto& item) { nodes << P2PMessage::printP2PIDElegantly(item) << ","; });
         SERVICE_ROUTER_LOG(TRACE) << LOG_BADGE("getAllReachableNode")
                                   << LOG_KV("nodes size", reachableNodes.size())
-                                  << LOG_KV("nodes", boost::algorithm::join(reachableNodes, ","));
+                                  << LOG_KV("nodes", nodes.str());
     }
 
     return reachableNodes;

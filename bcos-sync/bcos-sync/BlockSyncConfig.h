@@ -203,7 +203,7 @@ private:
 
     std::atomic_bool m_masterNode = {false};
 
-    bool m_enableSendBlockStatusByTree;
+    bool m_enableSendBlockStatusByTree = false;
     std::uint32_t m_syncTreeWidth;
 };
 }  // namespace bcos::sync

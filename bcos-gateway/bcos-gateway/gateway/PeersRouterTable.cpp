@@ -293,9 +293,12 @@ void PeersRouterTable::asyncBroadcastMsg(
                       << LOG_KV("peersSize", selectedPeers.size());
     for (auto const& peer : selectedPeers)
     {
-        ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
-                          << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
-                          << LOG_KV("dst", peer);
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
+                              << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
+                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+        }
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }
 }

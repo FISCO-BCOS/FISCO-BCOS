@@ -10,7 +10,10 @@ find_package(unofficial-secp256k1 REQUIRED)
 
 add_library(bcos-crypto STATIC ${ALL_SRCS})
 target_link_libraries(bcos-crypto PUBLIC ${LIB_LIST})
-target_compile_options(bcos-crypto PUBLIC "-Wno-ignored-attributes")
+
+if(NOT WIN32)
+    target_compile_options(bcos-crypto PUBLIC "-Wno-ignored-attributes")
+endif()
 
 if(TESTS)
     enable_testing()

@@ -58,7 +58,7 @@ bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) co
         [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
 }
 
-bcos::protocol::Transaction::Ptr BlockImpl::getTransaction(uint64_t _index) 
+bcos::protocol::Transaction::Ptr BlockImpl::getTransaction(uint64_t _index) const
 {
     return std::make_shared<bcostars::protocol::TransactionImpl>(
         [inner = m_inner, _index]() { return &(inner->transactions[_index]); });

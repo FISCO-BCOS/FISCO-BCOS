@@ -54,6 +54,7 @@ struct GatewayP2PReloadHandler
 
     static void handle(int sig)
     {
+        std::unique_lock<std::mutex> lock(g_BCOSConfig.signalMutex());
         BCOS_LOG(INFO) << LOG_BADGE("Gateway::Signal") << LOG_DESC("receive SIGUSER1 sig");
 
         if (!config || !service)

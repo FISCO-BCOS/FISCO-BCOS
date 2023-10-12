@@ -25,5 +25,5 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 find_package(Boost REQUIRED serialization unit_test_framework)
 find_package(fmt REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} PRIVATE ${TABLE_TARGET} ${UTILITIES_TARGET} bcos-framework Boost::serialization fmt::fmt-header-only Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} PRIVATE ${UTILITIES_TARGET} bcos-framework Boost::serialization fmt::fmt-header-only Boost::unit_test_framework)
 add_test(NAME test-framework WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

@@ -91,6 +91,8 @@ public:
     BlockVersion minSupportedVersion() const { return m_minSupportedVersion; }
     BlockVersion maxSupportedVersion() const { return m_maxSupportedVersion; }
 
+    std::mutex& signalMutex() const { return x_signalMutex; }
+
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
     // the minimum supported version
@@ -101,6 +103,7 @@ private:
     bool m_enableDAG = true;
     bool m_needRetInput = false;  // need add 'input' param in sendTransaction() return value
     bool m_isWasm = false;
+    mutable std::mutex x_signalMutex;
 };
 }  // namespace protocol
 }  // namespace bcos

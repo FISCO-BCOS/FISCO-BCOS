@@ -21,6 +21,7 @@
 #include "BoostLogInitializer.h"
 #include "bcos-framework/bcos-framework/Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include <bcos-framework/bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/RateCollector.h>
 #include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -38,6 +39,7 @@ struct BoostLogLevelResetHandler
 {
     static void handle(int sig)
     {
+        std::unique_lock<std::mutex> lock(g_BCOSConfig.signalMutex());
         BCOS_LOG(INFO) << LOG_BADGE("BoostLogInitializer::Signal")
                        << LOG_DESC("receive SIGUSE2 sig");
 
@@ -134,7 +136,9 @@ void BoostLogInitializer::initLog(
 
     // register SIGUSR2 for reset boost log level
     BoostLogLevelResetHandler::configFile = _configFile;
+#ifndef _WIN32
     signal(BOOST_LOG_RELOAD_LOG_LEVEL, BoostLogLevelResetHandler::handle);
+#endif
 }
 
 void BoostLogInitializer::initStatLog(

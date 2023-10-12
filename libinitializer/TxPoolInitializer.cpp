@@ -48,8 +48,9 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     m_txpool = txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
         m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
 
-    if (m_nodeConfig->enableSendBlockStatusByTree())
+    if (m_nodeConfig->enableSendTxByTree())
     {
+        INITIALIZER_LOG(INFO) << LOG_DESC("enableSendTxByTree");
         auto treeRouter =
             std::make_shared<tool::TreeTopology>(m_protocolInitializer->keyPair()->publicKey());
         m_txpool->setTreeRouter(std::move(treeRouter));

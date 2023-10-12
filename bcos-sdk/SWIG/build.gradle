@@ -3,7 +3,6 @@ plugins {
     id 'maven-publish'
     id 'java-library'
     id 'java'
-    id 'org.ajoberstar.grgit' version '4.1.1'
 }
 println("Notice: current gradle version is " + gradle.gradleVersion)
 
@@ -35,6 +34,9 @@ sourceSets {
     main {
         java {
             srcDir "bcos_sdk_java"
+        }
+        resources {
+            srcDir "jni"
         }
     }
 }
@@ -97,21 +99,21 @@ publishing {
 }
 
 jar {
-    archiveName "fisco-bcos-tars-sdk" + '-' + project.version + '.jar'
+    archiveFileName = 'fisco-bcos-tars-sdk-' + project.version + '.jar'
 
     manifest {
-            def date = new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
-            def branch = "fisco-bcos"
-            def commit = "abcde"
+        def date = new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        def branch = "fisco-bcos"
+        def commit = ""
 
-            attributes(["Implementation-Timestamp": date,
-                        "Git-Branch"              : branch,
-                        "Git-Commit"              : commit
-            ])
+        attributes(["Implementation-Timestamp": date,
+                    "Git-Branch"              : branch,
+                    "Git-Commit"              : commit
+        ])
 
-            logger.info("  Commit : ")
-            logger.info("  => date: {}", date)
-            logger.info("  => branch: {}", branch)
-            logger.info("  => commit: {}", commit)
-        }
+        logger.info("  Commit : ")
+        logger.info("  => date: {}", date)
+        logger.info("  => branch: {}", branch)
+        logger.info("  => commit: {}", commit)
+    }
 }

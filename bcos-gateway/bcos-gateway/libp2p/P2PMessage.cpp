@@ -382,9 +382,12 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
             // invalid packet?
             return MessageDecodeStatus::MESSAGE_ERROR;
         }
-        P2PMSG_LOG(TRACE) << LOG_DESC("zstd uncompress success")
-                          << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
-                          << LOG_KV("rawData", (char*)(data.data())) << LOG_KV("seq", m_seq);
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            P2PMSG_LOG(TRACE) << LOG_DESC("zstd uncompress success")
+                              << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
+                              << LOG_KV("rawDataSize", data.size()) << LOG_KV("seq", m_seq);
+        }
         // reset ext
         m_ext &= (~bcos::protocol::MessageExtFieldFlag::Compress);
     }

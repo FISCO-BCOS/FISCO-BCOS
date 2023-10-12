@@ -63,9 +63,13 @@ void P2PSession::heartBeat()
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->messageFactory()->buildMessage());
             message->setPacketType(GatewayMessageType::Heartbeat);
-            P2PSESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
-                                  << LOG_KV("p2pid", m_p2pInfo->p2pID)
-                                  << LOG_KV("endpoint", m_session->nodeIPEndpoint());
+            if (c_fileLogLevel <= TRACE) [[unlikely]]
+            {
+                P2PSESSION_LOG(TRACE)
+                    << LOG_DESC("P2PSession onHeartBeat")
+                    << LOG_KV("p2pid", P2PMessage::printP2PIDElegantly(m_p2pInfo->p2pID))
+                    << LOG_KV("endpoint", m_session->nodeIPEndpoint());
+            }
 
             m_session->asyncSendMessage(message);
         }

@@ -65,14 +65,24 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTime()));
     bcos::bytes data;
     tx->encode(data);
+    //    txpool.txpoolStorage()->insert(tx);
+    task::wait([](decltype(txpool) txpool, decltype(tx) transaction) -> task::Task<void> {
+        [[maybe_unused]] auto submitResult =
+            co_await txpool.submitTransaction(std::move(transaction));
+    }(txpool, tx));
     txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
     // broadcast to all nodes finally
+    auto totalMsg = m_frontService->totalSendMsgSize();
     for (const auto& item : this->m_nodeIdList)
     {
+        auto fakeFront = std::dynamic_pointer_cast<FakeFrontService>(
+            m_fakeGateWay->m_nodeId2TxPool.at(item)->transactionSync()->config()->frontService());
+        totalMsg += fakeFront->totalSendMsgSize();
         auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
         auto size = nodeTxpool.txpoolStorage()->size();
         BOOST_CHECK(size == 1);
     }
+    BOOST_CHECK(totalMsg <= m_nodeIdList.size());
 }
 
 BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)

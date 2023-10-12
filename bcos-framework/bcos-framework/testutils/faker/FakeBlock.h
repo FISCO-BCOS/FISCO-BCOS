@@ -170,7 +170,7 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     // fake transactions
     for (size_t i = 0; i < _txsNum; i++)
     {
-        auto tx = fakeTransaction(_cryptoSuite);
+        auto tx = fakeTransaction(_cryptoSuite, _check);
         block->appendTransaction(tx);
     }
     auto txRoot = block->calculateTransactionRoot(*_cryptoSuite->hashImpl());

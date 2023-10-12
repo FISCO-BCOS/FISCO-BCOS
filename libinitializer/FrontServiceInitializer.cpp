@@ -171,6 +171,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                 }
                 nodeIdSet.insert(nodeIDPtr);
             }
+            _txpool->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _blockSync->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _pbft->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             FRONTSERVICE_LOG(INFO)
@@ -206,21 +207,26 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
             auto transaction =
                 m_protocolInitializer->blockFactory()->transactionFactory()->createTransaction(
                     data, false);
-            task::wait([data](decltype(txpool) txpool,
-                           decltype(transaction) transaction) -> task::Task<void> {
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << "Receive tree push transaction"
+                                  << LOG_KV("nodeID", nodeID->shortHex())
+                                  << LOG_KV("messageID", messageID);
+            }
+            task::wait([](decltype(txpool) txpool, decltype(transaction) transaction,
+                           decltype(data) data, decltype(nodeID) nodeID) -> task::Task<void> {
                 try
                 {
+                    txpool->broadcastTransactionBufferByTree(data, false, nodeID);
                     [[maybe_unused]] auto submitResult =
-                        txpool->submitTransactionWithHook(std::move(transaction),
-                            [data, txpool]() { txpool->broadcastTransactionBufferByTree(data); });
+                        co_await txpool->submitTransaction(std::move(transaction));
                 }
                 catch (std::exception& e)
                 {
                     TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
                                       << boost::diagnostic_information(e);
                 }
-                co_return;
-            }(txpool, std::move(transaction)));
+            }(txpool, std::move(transaction), data, nodeID));
         });
 }
 

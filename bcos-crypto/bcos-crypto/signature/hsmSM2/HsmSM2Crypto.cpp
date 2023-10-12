@@ -24,6 +24,7 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -166,7 +167,8 @@ std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesCo
         h256 r;
         h256 s;
     } in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(in)));
+    memcpy(&in, _input.data(),
+        std::min<size_t>(_input.size(), sizeof(in)));  // TODO: Fix this! memcpy on non-pod type!
     // verify the signature
     auto signatureData = std::make_shared<SignatureDataWithPub>(in.r, in.s, in.pub.ref());
     try

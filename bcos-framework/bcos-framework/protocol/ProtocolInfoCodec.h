@@ -19,7 +19,7 @@
  * @date 2022-03-22
  */
 #pragma once
-#include "bcos-framework/protocol/ProtocolInfo.h"
+#include "bcos-framework/bcos-framework/protocol/ProtocolInfo.h"
 #include <bcos-utilities/Common.h>
 #include <memory>
 namespace bcos

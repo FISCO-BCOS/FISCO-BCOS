@@ -123,8 +123,10 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
     WeightList weights;
     weights.push_back(0);
     blockHeader->setConsensusWeights(weights);
-
-    BOOST_CHECK(blockHeaderImpl->inner().dataHash.empty());
+    if (_check)
+    {
+        BOOST_CHECK(blockHeaderImpl->inner().dataHash.empty());
+    }
     blockHeader->calculateHash(*_cryptoSuite->hashImpl());
 
     if (_check)

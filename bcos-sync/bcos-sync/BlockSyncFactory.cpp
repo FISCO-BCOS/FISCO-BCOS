@@ -51,6 +51,6 @@ BlockSync::Ptr BlockSyncFactory::createBlockSync()
     auto msgFactory = std::make_shared<BlockSyncMsgFactoryImpl>();
     auto syncConfig = std::make_shared<BlockSyncConfig>(m_nodeId, m_ledger, m_txpool,
         m_blockFactory, m_txResultFactory, m_frontService, m_scheduler, m_consensus, msgFactory,
-        m_nodeTimeMaintenance);
+        m_nodeTimeMaintenance, m_enableSendBlockStatusByTree, m_syncTreeWidth);
     return std::make_shared<BlockSync>(syncConfig);
 }

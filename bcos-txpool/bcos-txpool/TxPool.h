@@ -52,8 +52,8 @@ public:
 
     void broadcastTransaction(const protocol::Transaction& transaction) override;
     void broadcastTransactionBuffer(const bytesConstRef& _data) override;
-    void broadcastTransactionBufferByTree(
-        const bcos::bytesConstRef& _data, bool isStartNode = false) override;
+    void broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data,
+        bool isStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
@@ -154,7 +154,6 @@ private:
     TxPoolConfig::Ptr m_config;
     TxPoolStorageInterface::Ptr m_txpoolStorage;
     bcos::sync::TransactionSyncInterface::Ptr m_transactionSync;
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
     bcos::protocol::TransactionFactory::Ptr m_transactionFactory;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 

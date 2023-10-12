@@ -540,4 +540,8 @@ void TransactionSync::stop()
     {
         m_txsRequester->stop();
     }
+    if (m_config && m_config->frontService())
+    {
+        m_config->frontService()->stop();
+    }
 }

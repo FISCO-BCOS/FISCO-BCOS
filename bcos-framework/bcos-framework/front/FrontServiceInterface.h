@@ -59,6 +59,10 @@ public:
      * @return void
      */
     virtual void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInfo) = 0;
+    virtual bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
     /**
      * @brief: receive nodeIDs from gateway, call by gateway
      * @param _groupID: groupID
