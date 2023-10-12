@@ -23,29 +23,39 @@
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include <bcos-framework/Common.h>
 
+#include <utility>
+
 #define TOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TOOL")
 
-namespace bcos
-{
-namespace tool
+namespace bcos::tool
 {
 class LedgerConfigFetcher : public std::enable_shared_from_this<LedgerConfigFetcher>
 {
 public:
     using Ptr = std::shared_ptr<LedgerConfigFetcher>;
     explicit LedgerConfigFetcher(bcos::ledger::LedgerInterface::Ptr _ledger)
-      : m_ledger(_ledger), m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>())
+      : m_ledger(std::move(_ledger)), m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>())
     {}
 
-    virtual ~LedgerConfigFetcher() {}
+    virtual ~LedgerConfigFetcher() = default;
 
+    virtual void fetchAll();
+    virtual void fetchBlockNumber();
     virtual void fetchBlockNumberAndHash();
     virtual void fetchConsensusNodeList();
     virtual void fetchObserverNodeList();
+    virtual void fetchCandidateSealerList();
     virtual void fetchBlockTxCountLimit();
     virtual void fetchGenesisHash();
     virtual void fetchNonceList(protocol::BlockNumber _startNumber, int64_t _offset);
     virtual void fetchConsensusLeaderPeriod();
+    virtual void fetchFeatures();
+    virtual void fetchCompatibilityVersion();
+    virtual void fetchAuthCheckStatus();
+    virtual void fetchEpochSealerNum();
+    virtual void fetchEpochBlockNum();
+    virtual void fetchNotifyRotateFlagInfo();
+    virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);
 
     // consensus_leader_period
     virtual bcos::ledger::LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }
@@ -53,16 +63,14 @@ public:
     {
         return m_nonceList;
     }
+
     virtual bcos::crypto::HashType const& genesisHash() const { return m_genesisHash; }
 
-    virtual void fetchCompatibilityVersion();
-
-    virtual void fetchAuthCheckStatus();
-
-    virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);
 
 protected:
     virtual std::string fetchSystemConfig(std::string_view _key);
+    virtual ledger::SystemConfigEntry fetchSystemConfigNoException(
+        std::string_view _key, ledger::SystemConfigEntry _defaultValue) noexcept;
     virtual bcos::consensus::ConsensusNodeListPtr fetchNodeListByNodeType(std::string_view _type);
 
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -70,5 +78,4 @@ protected:
     std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr>> m_nonceList;
     bcos::crypto::HashType m_genesisHash;
 };
-}  // namespace tool
-}  // namespace bcos
+}  // namespace bcos::tool

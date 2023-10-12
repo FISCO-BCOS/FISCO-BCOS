@@ -43,6 +43,10 @@ public:
       : m_inner(std::move(inner))
     {}
     ~TransactionImpl() override = default;
+    TransactionImpl& operator=(const TransactionImpl& _tx) = delete;
+    TransactionImpl(const TransactionImpl& _tx) = delete;
+    TransactionImpl& operator=(TransactionImpl&& _tx) = delete;
+    TransactionImpl(TransactionImpl&& _tx) = delete;
 
     friend class TransactionFactoryImpl;
 
@@ -53,7 +57,8 @@ public:
 
     bcos::crypto::HashType hash() const override;
 
-    void calculateHash(bcos::crypto::hasher::Hasher auto&& hasher)
+    template <class Hasher>
+    void calculateHash(Hasher&& hasher)
     {
         bcos::concepts::hash::calculate(
             std::forward<decltype(hasher)>(hasher), *m_inner(), m_inner()->dataHash);
@@ -65,7 +70,7 @@ public:
     int64_t blockLimit() const override;
     const std::string& nonce() const override;
     // only for test
-    void setNonce(std::string _n) override;
+    void setNonce(std::string nonce) override;
     std::string_view to() const override;
     std::string_view abi() const override;
     bcos::bytesConstRef input() const override;

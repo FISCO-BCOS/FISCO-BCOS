@@ -23,6 +23,7 @@
 #pragma once
 #include "Common.h"
 #include <boost/asio.hpp>
+#include <boost/asio/dispatch.hpp>
 #include <boost/thread/thread.hpp>
 #include <iosfwd>
 #include <memory>
@@ -32,26 +33,30 @@ namespace bcos
 class ThreadPool
 {
 public:
-    typedef std::shared_ptr<ThreadPool> Ptr;
+    using Ptr = std::shared_ptr<ThreadPool>;
 
-    explicit ThreadPool(const std::string& threadName, size_t size) : m_work(_ioService)
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool(ThreadPool&&) = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
+    ThreadPool& operator=(ThreadPool&&) = delete;
+
+    explicit ThreadPool(std::string threadName, size_t size, bool dispatch = true)
+      : m_threadName(std::move(threadName)), m_work(m_ioService)
     {
-        _threadName = threadName;
-
         for (size_t i = 0; i < size; ++i)
         {
-            _workers.create_thread([this] {
-                bcos::pthread_setThreadName(_threadName);
-                _ioService.run();
+            m_workers.create_thread([this] {
+                bcos::pthread_setThreadName(m_threadName);
+                m_ioService.run();
             });
         }
     }
     void stop()
     {
-        _ioService.stop();
-        if (!_workers.is_this_thread_in())
+        m_ioService.stop();
+        if (!m_workers.is_this_thread_in())
         {
-            _workers.join_all();
+            m_workers.join_all();
         }
     }
 
@@ -61,15 +66,15 @@ public:
     template <class F>
     void enqueue(F f)
     {
-        _ioService.post(f);
+        boost::asio::post(m_ioService, std::forward<F>(f));
     }
 
-    bool hasStopped() { return _ioService.stopped(); }
+    bool hasStopped() { return m_ioService.stopped(); }
 
 private:
-    std::string _threadName;
-    boost::thread_group _workers;
-    boost::asio::io_service _ioService;
+    std::string m_threadName;
+    boost::thread_group m_workers;
+    boost::asio::io_service m_ioService;
     // m_work ensures that io_service's run() function will not exit while work is underway
     boost::asio::io_service::work m_work;
 };

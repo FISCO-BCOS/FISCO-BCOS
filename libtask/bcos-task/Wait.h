@@ -1,61 +1,81 @@
 #pragma once
 #include "Task.h"
 #include "Trait.h"
+#include <boost/atomic/atomic_flag.hpp>
 #include <exception>
 #include <future>
+#include <type_traits>
+#include <variant>
 
 namespace bcos::task
 {
 
-void wait(auto&& task) requires std::is_rvalue_reference_v<decltype(task)>
+void wait(auto&& task)
+    requires std::is_rvalue_reference_v<decltype(task)>
 {
     task.start();
 }
 
-auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(task)>>
-requires std::is_rvalue_reference_v<decltype(task)>
+template <class Task>
+auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    requires IsAwaitable<Task> && std::is_rvalue_reference_v<decltype(task)>
 {
-    using Task = std::remove_cvref_t<decltype(task)>;
-    std::promise<AwaitableReturnType<Task>> promise;
-    auto future = promise.get_future();
+    using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
+    using ReturnTypeWrap = std::conditional_t<std::is_reference_v<ReturnType>,
+        std::add_pointer_t<ReturnType>, ReturnType>;
+    using ReturnVariant = std::conditional_t<std::is_void_v<ReturnType>,
+        std::variant<std::monostate, std::exception_ptr>,
+        std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
+    ReturnVariant result;
+    boost::atomic_flag finished;
 
-    auto waitTask = [](Task&& task,
-                        std::promise<typename Task::ReturnType>& promise) -> task::Task<void> {
+    auto waitTask = [](Task&& task, decltype(result)& result,
+                        boost::atomic_flag& finished) -> task::Task<void> {
         try
         {
-            if constexpr (std::is_void_v<typename Task::ReturnType>)
+            if constexpr (std::is_void_v<ReturnType>)
             {
                 co_await task;
-                promise.set_value();
             }
             else
             {
-                promise.set_value(co_await task);
+                if constexpr (std::is_reference_v<ReturnType>)
+                {
+                    decltype(auto) ref = co_await task;
+                    result = std::addressof(ref);
+                }
+                else
+                {
+                    result = co_await task;
+                }
             }
         }
         catch (...)
         {
-            promise.set_exception(std::current_exception());
+            result = std::current_exception();
         }
-
-        co_return;
-    }(std::forward<Task>(task), promise);
+        finished.test_and_set();
+        finished.notify_one();
+    }(std::forward<Task>(task), result, finished);
     waitTask.start();
 
-    if constexpr (std::is_void_v<typename Task::ReturnType>)
+    finished.wait(false);
+    if (std::holds_alternative<std::exception_ptr>(result))
     {
-        future.get();
+        std::rethrow_exception(std::get<std::exception_ptr>(result));
     }
-    else
-    {
-        return future.get();
-    }
-}
 
-template <IsAwaitable Task>
-auto operator~(Task&& task)
-{
-    return syncWait(std::forward<Task>(task));
+    if constexpr (!std::is_void_v<ReturnType>)
+    {
+        if constexpr (std::is_reference_v<ReturnType>)
+        {
+            return *(std::get<ReturnTypeWrap>(result));
+        }
+        else
+        {
+            return std::move(std::get<ReturnTypeWrap>(result));
+        }
+    }
 }
 
 }  // namespace bcos::task

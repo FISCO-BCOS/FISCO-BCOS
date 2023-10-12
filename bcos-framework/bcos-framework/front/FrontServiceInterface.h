@@ -25,16 +25,13 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 
-namespace bcos
+namespace bcos::front
 {
-namespace front
-{
-using GetGroupNodeInfoFunc =
-    std::function<void(Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo)>;
-using ReceiveMsgFunc = std::function<void(Error::Ptr _error)>;
-using ResponseFunc = std::function<void(bytesConstRef _respData)>;
-using CallbackFunc = std::function<void(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-    bytesConstRef _data, const std::string& _id, ResponseFunc _respFunc)>;
+using GetGroupNodeInfoFunc = std::function<void(Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr)>;
+using ReceiveMsgFunc = std::function<void(Error::Ptr)>;
+using ResponseFunc = std::function<void(bytesConstRef)>;
+using CallbackFunc = std::function<void(
+    Error::Ptr, bcos::crypto::NodeIDPtr, bytesConstRef, const std::string&, ResponseFunc)>;
 
 /**
  * @brief: the interface provided by the front service
@@ -44,22 +41,28 @@ class FrontServiceInterface
 public:
     using Ptr = std::shared_ptr<FrontServiceInterface>;
     FrontServiceInterface() = default;
-    virtual ~FrontServiceInterface() {}
+    virtual ~FrontServiceInterface() = default;
+    FrontServiceInterface(const FrontServiceInterface&) = default;
+    FrontServiceInterface(FrontServiceInterface&&) = default;
+    FrontServiceInterface& operator=(const FrontServiceInterface&) = delete;
+    FrontServiceInterface& operator=(FrontServiceInterface&&) = delete;
 
-public:
     /**
      * @brief: start/stop service
      */
     virtual void start() = 0;
     virtual void stop() = 0;
 
-public:
     /**
      * @brief: get groupNodeInfo from the gateway
      * @param _getGroupNodeInfoFunc: get groupNodeInfo callback
      * @return void
      */
     virtual void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInfo) = 0;
+    virtual bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
     /**
      * @brief: receive nodeIDs from gateway, call by gateway
      * @param _groupID: groupID
@@ -76,8 +79,9 @@ public:
      * @param _data: received message data
      * @return void
      */
-    virtual void onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
-        bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) = 0;
+    virtual void onReceiveMessage(const std::string& _groupID,
+        const bcos::crypto::NodeIDPtr& _nodeID, bytesConstRef _data,
+        ReceiveMsgFunc _receiveMsgCallback) = 0;
 
     /**
      * @brief: receive broadcast message from gateway, call by gateway
@@ -131,7 +135,13 @@ public:
      * @return void
      */
     virtual void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data) = 0;
+
+
+    /**
+     * @brief: get local protocol info
+     * @return bcos::protocol::ProtocolInfo::ConstPtr
+     */
+    // virtual bcos::protocol::ProtocolInfo::ConstPtr getLocalProtocolInfo() const = 0;
 };
 
-}  // namespace front
-}  // namespace bcos
+}  // namespace bcos::front

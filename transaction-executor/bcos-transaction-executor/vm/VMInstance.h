@@ -34,79 +34,54 @@ namespace bcos::transaction_executor
 {
 
 /// Translate the VMSchedule to VMInstance-C revision.
-inline evmc_revision toRevision(VMSchedule const& _schedule)
-{
-    if (_schedule.enablePairs)
-    {
-        return EVMC_PARIS;
-    }
-    return EVMC_LONDON;
-}
+evmc_revision toRevision(VMSchedule const& _schedule);
 
 /// The RAII wrapper for an VMInstance-C instance.
 class VMInstance
 {
-public:
-    explicit VMInstance(auto instance) noexcept : m_instance(std::move(instance))
+private:
+    struct ReleaseEVMC
     {
-        if (std::holds_alternative<evmc_vm*>(m_instance))
+        void operator()(evmc_vm* ptr) const noexcept;
+    };
+    using EVMC_VM = std::unique_ptr<evmc_vm, ReleaseEVMC>;
+    using EVMC_ANALYSIS_RESULT = std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>;
+    std::variant<EVMC_VM, EVMC_ANALYSIS_RESULT> m_instance;
+
+public:
+    template <class Instance>
+    explicit VMInstance(Instance instance) noexcept
+        requires std::same_as<Instance, evmc_vm*> ||
+                 std::same_as<Instance,
+                     std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>>
+    {
+        if constexpr (std::is_same_v<Instance, evmc_vm*>)
         {
-            auto* instance = std::get<evmc_vm*>(m_instance);
             assert(instance->abi_version == EVMC_ABI_VERSION);
             if (instance->set_option != nullptr)
             {
                 instance->set_option(instance, "advanced", "");
                 instance->set_option(instance, "trace", "");
-                // m_instance->set_option(m_instance, "baseline", "");
+                // instance->set_option(instance, "baseline", "");
             }
+            m_instance.emplace<EVMC_VM>(instance);
         }
-    }
-
-    ~VMInstance() noexcept
-    {
-        if (std::holds_alternative<evmc_vm*>(m_instance))
+        else
         {
-            auto* instance = std::get<evmc_vm*>(m_instance);
-            instance->destroy(instance);
+            m_instance.emplace<EVMC_ANALYSIS_RESULT>(std::move(instance));
         }
     }
+    ~VMInstance() noexcept = default;
+
     VMInstance(VMInstance const&) = delete;
     VMInstance(VMInstance&&) noexcept = default;
-    VMInstance& operator=(VMInstance) = delete;
+    VMInstance& operator=(VMInstance const&) = delete;
     VMInstance& operator=(VMInstance&&) noexcept = default;
 
-    evmc_result execute(const struct evmc_host_interface* host, struct evmc_host_context* context,
-        evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize)
-    {
-        return std::visit(
-            overloaded{[&](evmc_vm* instance) {
-                           return instance->execute(
-                               instance, host, context, rev, msg, code, codeSize);
-                       },
-                [&](std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const> const& instance) {
-                    auto state = evmone::advanced::AdvancedExecutionState(
-                        *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize));
-                    return evmone::advanced::execute(state, *instance);
-                }},
-            m_instance);
-    }
+    EVMCResult execute(const struct evmc_host_interface* host, struct evmc_host_context* context,
+        evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize);
 
-    void enableDebugOutput() {}
-
-private:
-    std::variant<evmc_vm*, std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>>
-        m_instance;
+    void enableDebugOutput();
 };
-
-inline void releaseResult(evmc_result& result)
-{
-    if (result.release)
-    {
-        result.release(std::addressof(result));
-        result.release = nullptr;
-        result.output_data = nullptr;
-        result.output_size = 0;
-    }
-}
 
 }  // namespace bcos::transaction_executor

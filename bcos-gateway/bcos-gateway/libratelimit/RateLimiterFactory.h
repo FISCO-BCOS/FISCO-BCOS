@@ -22,11 +22,11 @@
 
 #pragma once
 
-#include "bcos-gateway/libratelimit/TimeWindowRateLimiter.h"
 #include "bcos-utilities/BoostLog.h"
-#include <bcos-gateway/libratelimit/DistributedRateLimiter.h>
-#include <bcos-gateway/libratelimit/RateLimiterInterface.h>
-#include <bcos-gateway/libratelimit/TokenBucketRateLimiter.h>
+#include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
+#include <bcos-utilities/ratelimiter/DistributedRateLimiter.h>
+#include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
+#include <bcos-utilities/ratelimiter/TokenBucketRateLimiter.h>
 #include <sw/redis++/redis++.h>
 
 namespace bcos
@@ -54,22 +54,22 @@ public:
     }
 
     // time window rate limiter
-    RateLimiterInterface::Ptr buildTimeWindowRateLimiter(
+    bcos::ratelimiter::RateLimiterInterface::Ptr buildTimeWindowRateLimiter(
         int64_t _maxPermits, int32_t _timeWindowMS = 1000, bool _allowExceedMaxPermitSize = false)
     {
-        auto rateLimiter = std::make_shared<TimeWindowRateLimiter>(
+        auto rateLimiter = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(
             _maxPermits, _timeWindowMS, _allowExceedMaxPermitSize);
         return rateLimiter;
     }
 
     // redis distributed rate limiter
-    RateLimiterInterface::Ptr buildDistributedRateLimiter(const std::string& _distributedKey,
-        int64_t _maxPermitsSize, int32_t _intervalSec, bool _allowExceedMaxPermitSize,
-        bool _enableLocalCache, int32_t _localCachePercent)
+    bcos::ratelimiter::RateLimiterInterface::Ptr buildDistributedRateLimiter(
+        const std::string& _distributedKey, int64_t _maxPermitsSize, int32_t _intervalSec,
+        bool _allowExceedMaxPermitSize, bool _enableLocalCache, int32_t _localCachePercent)
     {
-        auto rateLimiter =
-            std::make_shared<DistributedRateLimiter>(m_redis, _distributedKey, _maxPermitsSize,
-                _allowExceedMaxPermitSize, _intervalSec, _enableLocalCache, _localCachePercent);
+        auto rateLimiter = std::make_shared<bcos::ratelimiter::DistributedRateLimiter>(m_redis,
+            _distributedKey, _maxPermitsSize, _allowExceedMaxPermitSize, _intervalSec,
+            _enableLocalCache, _localCachePercent);
         return rateLimiter;
     }
 

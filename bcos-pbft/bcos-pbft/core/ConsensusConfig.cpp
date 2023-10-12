@@ -68,6 +68,18 @@ bool ConsensusConfig::compareConsensusNode(
     return true;
 }
 
+
+bool ConsensusConfig::isNodeExist(
+    ConsensusNodeInterface::Ptr const& _node, ConsensusNodeList const& _nodeList)
+{
+    auto iter = std::find_if(_nodeList.begin(), _nodeList.end(),
+        [_node](const ConsensusNodeInterface::Ptr& _consensusNode) {
+            return _node->nodeID()->data() == _consensusNode->nodeID()->data() &&
+                   _node->weight() == _consensusNode->weight();
+        });
+    return !(_nodeList.end() == iter);
+}
+
 void ConsensusConfig::setObserverNodeList(ConsensusNodeList& _observerNodeList)
 {
     std::sort(_observerNodeList.begin(), _observerNodeList.end(), ConsensusNodeComparator());

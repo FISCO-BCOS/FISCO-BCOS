@@ -36,10 +36,28 @@ public:
     ConfigPrecompiledFixture()
     {
         codec = std::make_shared<CodecWrapper>(hashImpl, false);
-        setIsWasm(false);
+        auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            IGNORED_ARRAY_310.begin(), IGNORED_ARRAY_310.end());
+        setIsWasm(false, false, true, DEFAULT_VERSION);
         consTestAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
         sysTestAddress = Address("0x420f853b41234bd3e9466c85a4cc3428c960dde2").hex();
         paraTestAddress = Address("0x420f853b49838bd3e9412385a4cc3428c960dde2").hex();
+        std::stringstream nodeFactory;
+        nodeFactory << std::setfill('1') << std::setw(128) << 1;
+        node1 = nodeFactory.str();
+        std::stringstream().swap(nodeFactory);
+
+        nodeFactory << std::setfill('2') << std::setw(128) << 2;
+        node2 = nodeFactory.str();
+        std::stringstream().swap(nodeFactory);
+
+        nodeFactory << std::setfill('3') << std::setw(128) << 3;
+        node3 = nodeFactory.str();
+        std::stringstream().swap(nodeFactory);
+
+        nodeFactory << std::setfill('4') << std::setw(128) << 4;
+        node4 = nodeFactory.str();
+        std::stringstream().swap(nodeFactory);
     }
 
     ~ConfigPrecompiledFixture() override = default;
@@ -47,7 +65,8 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(_bin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -98,6 +117,7 @@ public:
         commitBlock(1);
     }
 
+#pragma region
     std::string consTestBin =
         "608060405234801561001057600080fd5b506110036000806101000a81548173ffffffffffffffffffffffffff"
         "ffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550610791806100"
@@ -210,10 +230,281 @@ public:
         "043757600080fd5b505af115801561044b573d6000803e3d6000fd5b505050506040513d602081101561046157"
         "600080fd5b81019080805190602001909291905050509050929150505600a165627a7a72305820fd4857231ba5"
         "7cb17d47d43e38f1370285cfd965b622af793ee1bd9a3e490d270029";
+#pragma endregion
+    ExecutionMessage::UniquePtr rotate(protocol::BlockNumber _number, bcos::bytes const& pk,
+        bcos::bytes const& msg, bcos::bytes const& proof, std::string const& txSender = "",
+        int _errorCode = 0)
+    {
+        nextBlock(_number);
+        bytes in = codec->encodeWithSig(precompiled::WSM_METHOD_ROTATE_STR, pk, msg, proof);
+        auto tx = fakeTransaction(
+            cryptoSuite, keyPair, "", in, std::to_string(utcSteadyTimeUs()), 100001, "1", "1");
+        if (!txSender.empty())
+        {
+            tx->forceSender(Address(txSender).asBytes());
+        }
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params1 = std::make_unique<NativeExecutionMessage>();
+        params1->setTransactionHash(hash);
+        params1->setContextID(_number);
+        params1->setSeq(1000);
+        params1->setDepth(0);
+        params1->setFrom(sender);
+        params1->setTo(precompiled::CONSENSUS_ADDRESS);
+        params1->setOrigin(sender);
+        params1->setStaticCall(false);
+        params1->setGasAvailable(gas);
+        params1->setData(std::move(in));
+        params1->setType(NativeExecutionMessage::TXHASH);
+
+        /// call precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->dmcExecuteTransaction(std::move(params1),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result = executePromise.get_future().get();
+
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
+
+        commitBlock(_number);
+        return result;
+    };
+
+    ExecutionMessage::UniquePtr addSealer(protocol::BlockNumber _number, std::string const& node,
+        u256 weight, std::string const& txSender = "", int _errorCode = 0)
+    {
+        nextBlock(_number);
+        bytes in = codec->encodeWithSig("addSealer(string,uint256)", node, weight);
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        if (!txSender.empty())
+        {
+            tx->forceSender(Address(txSender).asBytes());
+        }
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params1 = std::make_unique<NativeExecutionMessage>();
+        params1->setTransactionHash(hash);
+        params1->setContextID(_number);
+        params1->setSeq(1000);
+        params1->setDepth(0);
+        params1->setFrom(sender);
+        params1->setTo(precompiled::CONSENSUS_ADDRESS);
+        params1->setOrigin(sender);
+        params1->setStaticCall(false);
+        params1->setGasAvailable(gas);
+        params1->setData(std::move(in));
+        params1->setType(NativeExecutionMessage::TXHASH);
+
+        /// call precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->executeTransaction(std::move(params1),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result = executePromise.get_future().get();
+
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
+
+        commitBlock(_number);
+        return result;
+    };
+
+    ExecutionMessage::UniquePtr addObserver(protocol::BlockNumber _number, std::string const& node,
+        std::string const& txSender = "", int _errorCode = 0)
+    {
+        nextBlock(_number);
+        bytes in = codec->encodeWithSig("addObserver(string)", node);
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        if (!txSender.empty())
+        {
+            tx->forceSender(Address(txSender).asBytes());
+        }
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params1 = std::make_unique<NativeExecutionMessage>();
+        params1->setTransactionHash(hash);
+        params1->setContextID(_number);
+        params1->setSeq(1000);
+        params1->setDepth(0);
+        params1->setFrom(sender);
+        params1->setTo(precompiled::CONSENSUS_ADDRESS);
+        params1->setOrigin(sender);
+        params1->setStaticCall(false);
+        params1->setGasAvailable(gas);
+        params1->setData(std::move(in));
+        params1->setType(NativeExecutionMessage::TXHASH);
+
+        /// call precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->executeTransaction(std::move(params1),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result = executePromise.get_future().get();
+
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
+
+        commitBlock(_number);
+        return result;
+    };
+
+    ExecutionMessage::UniquePtr setValueByKey(protocol::BlockNumber _number, std::string const& key,
+        std::string const& value, std::string const& txSender = "", int _errorCode = 0)
+    {
+        nextBlock(_number);
+        bytes in = codec->encodeWithSig("setValueByKey(string,string)", key, value);
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        if (!txSender.empty())
+        {
+            tx->forceSender(Address(txSender).asBytes());
+        }
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params1 = std::make_unique<NativeExecutionMessage>();
+        params1->setTransactionHash(hash);
+        params1->setContextID(_number);
+        params1->setSeq(1000);
+        params1->setDepth(0);
+        params1->setFrom(sender);
+        params1->setTo(precompiled::SYS_CONFIG_ADDRESS);
+        params1->setOrigin(sender);
+        params1->setStaticCall(false);
+        params1->setGasAvailable(gas);
+        params1->setData(std::move(in));
+        params1->setType(NativeExecutionMessage::TXHASH);
+
+        /// call precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->executeTransaction(std::move(params1),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result = executePromise.get_future().get();
+
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
+
+        commitBlock(_number);
+        return result;
+    };
+
+    std::string getValueByKey(protocol::BlockNumber _number, std::string const& key)
+    {
+        nextBlock(_number);
+        bytes in = codec->encodeWithSig("getValueByKey(string)", key);
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params1 = std::make_unique<NativeExecutionMessage>();
+        params1->setTransactionHash(hash);
+        params1->setContextID(_number);
+        params1->setSeq(1000);
+        params1->setDepth(0);
+        params1->setFrom(sender);
+        params1->setTo(precompiled::SYS_CONFIG_ADDRESS);
+        params1->setOrigin(sender);
+        params1->setStaticCall(false);
+        params1->setGasAvailable(gas);
+        params1->setData(std::move(in));
+        params1->setType(NativeExecutionMessage::TXHASH);
+
+        /// call precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->executeTransaction(std::move(params1),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result = executePromise.get_future().get();
+
+        std::string value;
+        codec->decode(result->data(), value);
+
+        commitBlock(_number);
+        return value;
+    };
+
+
+    static std::tuple<bytes, bytes> generateVRFProof(
+        crypto::KeyPairInterface::UniquePtr const& keyPair, HashType const& blockHash)
+    {
+        CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
+            keyPair->secretKey()->size()};
+        bytes vrfPublicKey;
+        vrfPublicKey.resize(32);
+        COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+        auto ret = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
+        BOOST_CHECK_EQUAL(ret, WEDPR_SUCCESS);
+
+        CInputBuffer inputMsg{reinterpret_cast<const char*>(blockHash.data()), blockHash.size()};
+        bytes vrfProof;
+        size_t proofSize = 96;
+        vrfProof.resize(proofSize);
+        COutputBuffer proof{(char*)vrfProof.data(), proofSize};
+        ret = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
+        BOOST_CHECK(ret == WEDPR_SUCCESS);
+
+        return {vrfPublicKey, vrfProof};
+    }
+
+    ledger::ConsensusNodeList getNodeList()
+    {
+        std::promise<storage::Entry> p;
+        storage->asyncGetRow(ledger::SYS_CONSENSUS, "key", [&p](auto&& error, auto&& entry) {
+            BOOST_CHECK(entry.has_value());
+            p.set_value(entry.value());
+        });
+        auto entry = p.get_future().get();
+        auto nodeList = entry.getObject<ledger::ConsensusNodeList>();
+        return nodeList;
+    }
+
+    SystemConfigEntry getSystemConfigByKey(std::string_view _key)
+    {
+        std::promise<storage::Entry> p;
+        storage->asyncGetRow(ledger::SYS_CONFIG, _key, [&p](auto&& error, auto&& entry) {
+            BOOST_CHECK(entry.has_value());
+            p.set_value(entry.value());
+        });
+        auto entry = p.get_future().get();
+        auto systemConfig = entry.getObject<SystemConfigEntry>();
+        return systemConfig;
+    }
+
     std::string consTestAddress;
     std::string sysTestAddress;
     std::string paraTestAddress;
     std::string sender;
+    std::string node1;
+    std::string node2;
+    std::string node3;
+    std::string node4;
     Address contractAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2");
 };
 BOOST_FIXTURE_TEST_SUITE(precompiledConfigTest, ConfigPrecompiledFixture)
@@ -222,14 +513,15 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
 {
     deployTest(sysTestBin, sysTestAddress);
 
-    auto simpleSetFunc = [&](protocol::BlockNumber _number, int _contextId, const std::string& _key,
-                             const std::string& _v,
+    auto simpleSetFunc = [this](protocol::BlockNumber _number, int _contextId,
+                             const std::string& _key, const std::string& _v,
                              bcos::protocol::TransactionStatus _errorCode =
                                  bcos::protocol::TransactionStatus::None,
                              BlockVersion version = protocol::BlockVersion::MAX_VERSION) {
         nextBlock(_number, version);
         bytes in = codec->encodeWithSig("setValueByKeyTest(string,string)", _key, _v);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -280,7 +572,8 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         nextBlock(number++);
         bytes in = codec->encodeWithSig(
             "getValueByKeyTest(string)", std::string(ledger::SYSTEM_KEY_TX_GAS_LIMIT));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -340,7 +633,8 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     {
         nextBlock(number++);
         bytes in = codec->encodeWithSig("getValueByKeyTest(string)", std::string("error"));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -412,7 +706,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
 
     std::string errorNode = node1.substr(0, 127) + "s";
 
-    auto callFunc = [&](protocol::BlockNumber _number, const std::string& method,
+    auto callFunc = [this](protocol::BlockNumber _number, const std::string& method,
                         const std::string& _nodeId, int _w = -1, int _errorCode = 0) {
         BCOS_LOG(DEBUG) << LOG_BADGE("consensus_test") << LOG_KV("method", method)
                         << LOG_KV("_nodeId", _nodeId) << LOG_KV("_w", _w)
@@ -420,7 +714,8 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         nextBlock(_number);
         bytes in = _w < 0 ? codec->encodeWithSig(method, _nodeId) :
                             codec->encodeWithSig(method, _nodeId, u256(_w));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -560,6 +855,100 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         callFunc(number++, "addObserverTest(string)", node3, -1, 0);
         callFunc(number++, "addSealerTest(string,uint256)", node3, 1, 0);
     }
+}
+
+BOOST_AUTO_TEST_CASE(rotateValidTest)
+{
+    auto blockNumber = 1;
+    auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    boost::log::core::get()->set_logging_enabled(false);
+    addObserver(blockNumber++, keyPair->publicKey()->hex());
+    addObserver(blockNumber++, node2);
+    addObserver(blockNumber++, node3);
+    addObserver(blockNumber++, node4);
+    addSealer(blockNumber++, keyPair->publicKey()->hex(), 1);
+    addSealer(blockNumber++, node2, 1);
+    addSealer(blockNumber++, node3, 1);
+    addSealer(blockNumber++, node4, 1);
+    setValueByKey(blockNumber++, std::string(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM), "4");
+    setValueByKey(blockNumber++, std::string(ledger::SYSTEM_KEY_RPBFT_SWITCH), "1");
+    setValueByKey(blockNumber, std::string(ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM),
+        std::to_string(blockNumber + 1));
+    boost::log::core::get()->set_logging_enabled(true);
+    blockNumber++;
+
+    auto blockHash = h256(blockNumber - 1);
+    auto [vrfPublicKey, vrfProof] = generateVRFProof(keyPair, blockHash);
+
+    // case1: valid vrf generated by some sealer
+    auto result = rotate(blockNumber++, vrfPublicKey, blockHash.asBytes(), vrfProof,
+        covertPublicToHexAddress(keyPair->publicKey()));
+    BOOST_CHECK(result->status() == 0);
+
+    auto nodeList = getNodeList();
+    BOOST_CHECK(nodeList.size() == 4);
+    std::for_each(nodeList.begin(), nodeList.end(), [&](const ledger::ConsensusNode& node) {
+        BOOST_CHECK(node.type == ledger::CONSENSUS_SEALER);
+    });
+
+    // case2: valid proof, but the origin is not exist in the workingSealers
+    setValueByKey(blockNumber++, std::string(ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM), "1");
+    setValueByKey(blockNumber++, std::string(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM), "1");
+    blockHash = h256(blockNumber - 1);
+    result = rotate(blockNumber++, vrfPublicKey, blockHash.asBytes(), vrfProof);
+    BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
+    BOOST_CHECK(result->message() == "ConsensusPrecompiled call undefined function!");
+    auto notifyRotate =
+        getValueByKey(blockNumber++, std::string(ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE));
+    // FIXME: here is a bug
+    //    BOOST_CHECK(notifyRotate == "1");
+
+    // case3: invalid input(must be lastest hash)
+    result = rotate(blockNumber++, vrfPublicKey, blockHash.asBytes(), vrfProof,
+        covertPublicToHexAddress(keyPair->publicKey()));
+    BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
+    BOOST_CHECK(result->message() == "Invalid VRFInput, must be the parentHash!");
+
+    // case4: invalid public key(the origin is not one of the sealers)
+    blockHash = h256(blockNumber - 1);
+    result = rotate(blockNumber++, keyPair->publicKey()->data(), blockHash.asBytes(), vrfProof,
+        covertPublicToHexAddress(keyPair->publicKey()));
+    BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
+    BOOST_CHECK(result->message() == "Invalid VRF Public Key!");
+
+    // case5: invalid proof
+    // vrfProof invalid now
+    blockHash = h256(blockNumber - 1);
+    result = rotate(blockNumber++, vrfPublicKey, blockHash.asBytes(), vrfProof,
+        covertPublicToHexAddress(keyPair->publicKey()));
+    BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
+    BOOST_CHECK(result->message() == "Verify VRF proof failed!");
+
+    // case6: valid proof now
+    blockHash = h256(blockNumber - 1);
+    std::tie(vrfPublicKey, vrfProof) = generateVRFProof(keyPair, blockHash);
+    result = rotate(blockNumber++, vrfPublicKey, blockHash.asBytes(), vrfProof,
+        covertPublicToHexAddress(keyPair->publicKey()));
+    BOOST_CHECK(result->status() == 0);
+
+    nodeList = getNodeList();
+    BOOST_CHECK(nodeList.size() == 4);
+    // only one node is working sealer
+    uint16_t workingSealerCount = 0;
+    uint16_t candidateSealerCount = 0;
+    for (const auto& node : nodeList)
+    {
+        if (node.type == ledger::CONSENSUS_SEALER)
+        {
+            workingSealerCount++;
+        }
+        if (node.type == ledger::CONSENSUS_CANDIDATE_SEALER)
+        {
+            candidateSealerCount++;
+        }
+    }
+    BOOST_CHECK(workingSealerCount == 1);
+    BOOST_CHECK(candidateSealerCount == 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

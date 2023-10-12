@@ -54,7 +54,7 @@ void ShardingDmcExecutor::shardGo(std::function<void(bcos::Error::UniquePtr, Sta
         if (!messages)
         {
             DMC_LOG(DEBUG) << LOG_BADGE("Stat")
-                           << "DAGExecute:\t --> Send to executor by preExecute cache\t"
+                           << "ShardingExecute:\t --> Send to executor by preExecute cache\t"
                            << LOG_KV("name", m_name) << LOG_KV("shard", m_contractAddress)
                            << LOG_KV("txNum", messages ? messages->size() : 0)
                            << LOG_KV("blockNumber", m_block && m_block->blockHeader() ?
@@ -65,7 +65,7 @@ void ShardingDmcExecutor::shardGo(std::function<void(bcos::Error::UniquePtr, Sta
         }
         else
         {
-            DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DAGExecute:\t --> Send to executor\t"
+            DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "ShardingExecute:\t --> Send to executor\t"
                            << LOG_KV("name", m_name) << LOG_KV("shard", m_contractAddress)
                            << LOG_KV("txNum", messages ? messages->size() : 0)
                            << LOG_KV("blockNumber", m_block && m_block->blockHeader() ?
@@ -80,7 +80,8 @@ void ShardingDmcExecutor::shardGo(std::function<void(bcos::Error::UniquePtr, Sta
                 bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
                 // update batch
-                DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DAGExecute:\t <-- Receive from executor\t"
+                DMC_LOG(DEBUG) << LOG_BADGE("Stat")
+                               << "ShardingExecute:\t <-- Receive from executor\t"
                                << LOG_KV("name", m_name) << LOG_KV("shard", m_contractAddress)
                                << LOG_KV("txNum", messages ? messages->size() : 0)
                                << LOG_KV("blockNumber", m_block && m_block->blockHeader() ?
@@ -91,7 +92,7 @@ void ShardingDmcExecutor::shardGo(std::function<void(bcos::Error::UniquePtr, Sta
                 if (error)
                 {
                     SCHEDULER_LOG(ERROR)
-                        << "DAGExecute transaction error: " << error->errorMessage();
+                        << "ShardingExecute transaction error: " << error->errorMessage();
 
                     if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                     {
@@ -131,7 +132,7 @@ void ShardingDmcExecutor::handleShardGoOutput(
             dmcMessages.emplace_back(std::move(output));
         }
     }
-    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "DAGExecute: dump output finish";
+    DMC_LOG(DEBUG) << LOG_BADGE("Stat") << "ShardingExecute: dump output finish";
 
     // going to dmc logic
     handleExecutiveOutputs(std::move(dmcMessages));

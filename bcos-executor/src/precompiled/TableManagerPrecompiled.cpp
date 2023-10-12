@@ -47,34 +47,33 @@ constexpr const char* const TABLE_METHOD_CREATE_V320 =
 TableManagerPrecompiled::TableManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
   : Precompiled(_hashImpl)
 {
-    registerFunc(getFuncSelector(TABLE_METHOD_CREATE),
+    registerFunc(getFuncSelector(TABLE_METHOD_CREATE, _hashImpl),
         [this](auto&& executive, auto&& pricer, auto&& params) {
             createTable(executive, pricer, params);
         });
-    registerFunc(getFuncSelector(TABLE_METHOD_APPEND),
+    registerFunc(getFuncSelector(TABLE_METHOD_APPEND, _hashImpl),
         [this](auto&& executive, auto&& pricer, auto&& params) {
             appendColumns(executive, pricer, params);
         });
-    registerFunc(getFuncSelector(TABLE_METHOD_CREATE_KV),
+    registerFunc(getFuncSelector(TABLE_METHOD_CREATE_KV, _hashImpl),
         [this](auto&& executive, auto&& pricer, auto&& params) {
             createKVTable(executive, pricer, params);
         });
-    registerFunc(
-        getFuncSelector(TABLE_METHOD_OPEN), [this](auto&& executive, auto&& pricer, auto&& params) {
+    registerFunc(getFuncSelector(TABLE_METHOD_OPEN, _hashImpl),
+        [this](auto&& executive, auto&& pricer, auto&& params) {
             openTable(executive, pricer, params);
         });
+    registerFunc(getFuncSelector(TABLE_METHOD_DESC, _hashImpl),
+        [this](
+            auto&& executive, auto&& pricer, auto&& params) { desc(executive, pricer, params); });
     registerFunc(
-        getFuncSelector(TABLE_METHOD_DESC), [this](auto&& executive, auto&& pricer, auto&& params) {
-            desc(executive, pricer, params);
-        });
-    registerFunc(
-        getFuncSelector(TABLE_METHOD_DESC_V32),
+        getFuncSelector(TABLE_METHOD_DESC_V32, _hashImpl),
         [this](auto&& executive, auto&& pricer, auto&& params) {
             descWithKeyOrder(executive, pricer, params);
         },
         protocol::BlockVersion::V3_2_VERSION);
     registerFunc(
-        getFuncSelector(TABLE_METHOD_CREATE_V320),
+        getFuncSelector(TABLE_METHOD_CREATE_V320, _hashImpl),
         [this](auto&& executive, auto&& pricer, auto&& params) {
             createTableV32(executive, pricer, params);
         },
@@ -208,7 +207,7 @@ void TableManagerPrecompiled::createKVTable(
     if (response->status != (int32_t)TransactionStatus::None)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
-                              << LOG_DESC("create kv table error")
+                              << LOG_DESC("create kv table failed")
                               << LOG_KV("tableName", newTableName) << LOG_KV("valueField", value);
         BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
     }
@@ -432,7 +431,8 @@ void TableManagerPrecompiled::externalCreateTable(
     if (response->status != (int32_t)TransactionStatus::None)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
-                              << LOG_DESC("create table error") << LOG_KV("tableName", newTableName)
+                              << LOG_DESC("create table failed")
+                              << LOG_KV("tableName", newTableName)
                               << LOG_KV("valueField", valueField);
         BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
     }

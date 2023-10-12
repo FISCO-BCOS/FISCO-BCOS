@@ -30,12 +30,12 @@ using namespace bcos::protocol;
 const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(uint8)";
 const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus()";
 
-AccountPrecompiled::AccountPrecompiled() : Precompiled(GlobalHashImpl::g_hashImpl)
+AccountPrecompiled::AccountPrecompiled(crypto::Hash::Ptr hashImpl) : Precompiled(hashImpl)
 {
     name2Selector[AM_METHOD_SET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, GlobalHashImpl::g_hashImpl);
+        getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, hashImpl);
     name2Selector[AM_METHOD_GET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, GlobalHashImpl::g_hashImpl);
+        getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
@@ -172,8 +172,8 @@ uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
         statusStr = std::string(lastStatusEntry->get());
     }
 
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled")
-                           << BLOCK_NUMBER(blockContext.number()) << LOG_DESC("getAccountStatus")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled") << BLOCK_NUMBER(blockContext.number())
+                           << LOG_DESC("getAccountStatus")
                            << LOG_KV("lastUpdateNumber", lastUpdateNumber)
                            << LOG_KV("status", statusStr);
     auto status = boost::lexical_cast<uint8_t>(statusStr);

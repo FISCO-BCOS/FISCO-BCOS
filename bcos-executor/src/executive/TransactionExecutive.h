@@ -64,10 +64,14 @@ public:
         m_contractAddress(std::move(contractAddress)),
         m_contextID(contextID),
         m_seq(seq),
-        m_gasInjector(gasInjector)
+        m_gasInjector(gasInjector),
+        m_storageWrapperObj(m_blockContext.storage(), m_recoder),
+        m_storageWrapper(&m_storageWrapperObj)
     {
         m_recoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.hashHandler();
+        m_storageWrapperObj.setCodeCache(m_blockContext.getCodeCache());
+        m_storageWrapperObj.setCodeHashCache(m_blockContext.getCodeHashCache());
     }
 
     TransactionExecutive(TransactionExecutive const&) = delete;
@@ -89,13 +93,11 @@ public:
     }
 
     const BlockContext& blockContext() { return m_blockContext; }
-    const BlockContext& blockContextReference() { return m_blockContext; }
-
 
     int64_t contextID() const { return m_contextID; }
     int64_t seq() const { return m_seq; }
 
-    std::string_view contractAddress() { return m_contractAddress; }
+    std::string_view contractAddress() const { return m_contractAddress; }
 
     CallParameters::UniquePtr execute(
         CallParameters::UniquePtr callParameters);  // execute parameters in
@@ -138,7 +140,7 @@ public:
 
     bool isWasm() const { return m_blockContext.isWasm(); }
 
-    bool hasContractTableChanged() { return m_hasContractTableChanged; }
+    bool hasContractTableChanged() const { return m_hasContractTableChanged; }
     void setContractTableChanged() { m_hasContractTableChanged = true; }
 
 protected:
@@ -236,7 +238,8 @@ protected:
     bcos::storage::Recoder::Ptr m_recoder;
     std::vector<TransactionExecutive::Ptr> m_childExecutives;
 
-    std::shared_ptr<storage::StorageWrapper> m_storageWrapper;
+    storage::StorageWrapper m_storageWrapperObj;
+    storage::StorageWrapper* m_storageWrapper;
     bool m_hasContractTableChanged = false;
 };
 

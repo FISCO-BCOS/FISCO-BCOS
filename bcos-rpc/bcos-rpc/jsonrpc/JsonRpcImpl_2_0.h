@@ -40,8 +40,7 @@ public:
     using Ptr = std::shared_ptr<JsonRpcImpl_2_0>;
     JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        std::shared_ptr<boostssl::ws::WsService> _wsService,
-        bcos::crypto::CryptoSuite::Ptr _cryptoSuite);
+        std::shared_ptr<boostssl::ws::WsService> _wsService);
     ~JsonRpcImpl_2_0() override = default;
 
     void setClientID(std::string_view _clientID) { m_clientID = _clientID; }
@@ -85,6 +84,9 @@ public:
 
     void getObserverList(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override;
+
+    void getNodeListByType(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _nodeType, RespFunc _respFunc) override;
 
     void getPbftView(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override;
@@ -168,7 +170,6 @@ private:
     GroupManager::Ptr m_groupManager;
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
-    rpc::CallValidator m_callValidator;
 
     NodeInfo m_nodeInfo;
     // Note: here clientID must non-empty for the rpc will set clientID as source for the tx for

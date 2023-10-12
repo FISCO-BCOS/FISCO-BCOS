@@ -30,6 +30,12 @@ namespace bcos::sealer
 class Sealer : public Worker, public SealerInterface, public std::enable_shared_from_this<Sealer>
 {
 public:
+    enum SealBlockResult : uint16_t
+    {
+        FAILED = 0,
+        SUCCESS = 1,
+        WAIT_FOR_LATEST_BLOCK = 2,
+    };
     using Ptr = std::shared_ptr<Sealer>;
     explicit Sealer(SealerConfig::Ptr _sealerConfig)
       : Worker("Sealer", 0), m_sealerConfig(std::move(_sealerConfig))
@@ -52,10 +58,17 @@ public:
 
     // for sys block
     void asyncNoteLatestBlockNumber(int64_t _blockNumber) override;
+    void asyncNoteLatestBlockHash(crypto::HashType _hash) override;
     // interface for the consensus module to notify reset the sealing transactions
     void asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse) override;
 
     virtual void init(bcos::consensus::ConsensusInterface::Ptr _consensus);
+
+    uint16_t hookWhenSealBlock([[maybe_unused]] bcos::protocol::Block::Ptr _block) override;
+
+    // only for test
+    SealerConfig::Ptr const sealerConfig() const { return m_sealerConfig; }
+    SealingManager::Ptr const sealingManager() const { return m_sealingManager; }
 
 protected:
     void executeWorker() override;

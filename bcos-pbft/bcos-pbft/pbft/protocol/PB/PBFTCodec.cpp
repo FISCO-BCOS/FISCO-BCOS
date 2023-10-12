@@ -33,9 +33,11 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
     // set packetType
     auto packetType = _pbftMessage->packetType();
     pbMessage->set_type((int32_t)packetType);
-
+    bytesPointer payLoad = {};
     // set payLoad
-    auto payLoad = _pbftMessage->encode(m_cryptoSuite, m_keyPair);
+    {
+        payLoad = _pbftMessage->encode(m_cryptoSuite, m_keyPair);
+    }
     pbMessage->set_payload(payLoad->data(), payLoad->size());
 
     // set signature
@@ -46,8 +48,10 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
         // sign for the payload
         auto signatureData = m_cryptoSuite->signatureImpl()->sign(*m_keyPair, hash, false);
         pbMessage->set_signaturedata(signatureData->data(), signatureData->size());
-        _pbftMessage->setSignatureDataHash(hash);
-        _pbftMessage->setSignatureData(*signatureData);
+        {
+            _pbftMessage->setSignatureDataHash(hash);
+            _pbftMessage->setSignatureData(*signatureData);
+        }
     }
     // set version
     pbMessage->set_version(_version);

@@ -20,7 +20,9 @@ if(WITH_TIKV)
 endif()
 
 add_library(${STORAGE_TARGET} ${SRC_LIST})
-target_include_directories(${STORAGE_TARGET} PUBLIC .)
+target_include_directories(${STORAGE_TARGET} PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/bcos-storage>)
 target_link_libraries(${STORAGE_TARGET} PUBLIC ${LIB_LIST})
 
 if(TESTS)

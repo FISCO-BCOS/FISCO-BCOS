@@ -171,6 +171,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                 }
                 nodeIdSet.insert(nodeIDPtr);
             }
+            _txpool->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _blockSync->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _pbft->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             FRONTSERVICE_LOG(INFO)
@@ -198,6 +199,34 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                                           << boost::diagnostic_information(e);
                     }
                 }(txpool, std::move(transaction)));
+        });
+
+    m_front->registerModuleMessageDispatcher(protocol::TREE_PUSH_TRANSACTION,
+        [this, txpool = _txpool](bcos::crypto::NodeIDPtr const& nodeID,
+            const std::string& messageID, bytesConstRef data) {
+            auto transaction =
+                m_protocolInitializer->blockFactory()->transactionFactory()->createTransaction(
+                    data, false);
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << "Receive tree push transaction"
+                                  << LOG_KV("nodeID", nodeID->shortHex())
+                                  << LOG_KV("messageID", messageID);
+            }
+            task::wait([](decltype(txpool) txpool, decltype(transaction) transaction,
+                           decltype(data) data, decltype(nodeID) nodeID) -> task::Task<void> {
+                try
+                {
+                    txpool->broadcastTransactionBufferByTree(data, false, nodeID);
+                    [[maybe_unused]] auto submitResult =
+                        co_await txpool->submitTransaction(std::move(transaction));
+                }
+                catch (std::exception& e)
+                {
+                    TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
+                                      << boost::diagnostic_information(e);
+                }
+            }(txpool, std::move(transaction), data, nodeID));
         });
 }
 

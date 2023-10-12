@@ -99,7 +99,7 @@ class CommandInfo:
     network_add_vxlan = "add-vxlan"
     download_binary = "download_binary"
     download_type = ["cdn", "git"]
-    default_binary_version = "v3.4.0"
+    default_binary_version = "v3.5.0"
     command_list = [gen_config, upload, deploy,
                     upgrade, undeploy, expand, start, stop]
     service_command_list_str = ', '.join(command_list)
@@ -269,6 +269,16 @@ def execute_ansible_with_monitor_command(start_scripts_path, deploy_ip):
                   start_scripts_path)
         sys.exit(-1)
     return True
+
+
+def get_hsm_nodeid(hsm_pem_file_path):
+    obtain_hsm_nodeid_cmd = "bash %s -c %s -p %s" % (
+        ServiceInfo.cert_generationscript_path, "get_hsm_nodeid", hsm_pem_file_path)
+    (ret, output) = execute_command_and_getoutput(obtain_hsm_nodeid_cmd)
+    if ret is False:
+        log_error("%s failed exec" % obtain_hsm_nodeid_cmd)
+        sys.exit(-1)
+    return (ret, output)
 
 
 def generate_private_key(sm_type, outputdir):

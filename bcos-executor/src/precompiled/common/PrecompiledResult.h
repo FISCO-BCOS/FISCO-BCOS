@@ -28,15 +28,15 @@ struct PrecompiledExecResult
 {
     using Ptr = std::shared_ptr<PrecompiledExecResult>;
     PrecompiledExecResult() = default;
-    PrecompiledExecResult(const executor::CallParameters::UniquePtr& _callParameters)
-      : m_sender(_callParameters->senderAddress),
-        m_codeAddress(_callParameters->codeAddress),
-        m_precompiledAddress(_callParameters->receiveAddress),
-        m_origin(_callParameters->origin),
-        m_input(ref(_callParameters->data)),
-        m_gasLeft(_callParameters->gas),
-        m_staticCall(_callParameters->staticCall),
-        m_create(_callParameters->create)
+    PrecompiledExecResult(const executor::CallParameters& _callParameters)
+      : m_sender(_callParameters.senderAddress),
+        m_codeAddress(_callParameters.codeAddress),
+        m_precompiledAddress(_callParameters.receiveAddress),
+        m_origin(_callParameters.origin),
+        m_input(ref(_callParameters.data)),
+        m_gasLeft(_callParameters.gas),
+        m_staticCall(_callParameters.staticCall),
+        m_create(_callParameters.create)
     {}
     ~PrecompiledExecResult() = default;
     PrecompiledExecResult(const PrecompiledExecResult&) = delete;

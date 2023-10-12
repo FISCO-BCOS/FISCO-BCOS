@@ -26,13 +26,17 @@
 using namespace bcos;
 using namespace bcos::sealer;
 
-SealerFactory::SealerFactory(bcos::protocol::BlockFactory::Ptr _blockFactory,
-    bcos::txpool::TxPoolInterface::Ptr _txpool, unsigned _minSealTime,
-    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
-  : m_blockFactory(std::move(_blockFactory)),
+SealerFactory::SealerFactory(bcos::tool::NodeConfig::Ptr _nodeConfig,
+    bcos::protocol::BlockFactory::Ptr _blockFactory, bcos::txpool::TxPoolInterface::Ptr _txpool,
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
+    bcos::crypto::KeyPairInterface::Ptr _key)
+  : m_groupId(_nodeConfig->groupId()),
+    m_chainId(_nodeConfig->chainId()),
+    m_blockFactory(std::move(_blockFactory)),
     m_txpool(std::move(_txpool)),
-    m_minSealTime(_minSealTime),
-    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
+    m_minSealTime(_nodeConfig->minSealTime()),
+    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance)),
+    m_keyPair(std::move(_key))
 {}
 
 Sealer::Ptr SealerFactory::createSealer()
@@ -40,5 +44,19 @@ Sealer::Ptr SealerFactory::createSealer()
     auto sealerConfig =
         std::make_shared<SealerConfig>(m_blockFactory, m_txpool, m_nodeTimeMaintenance);
     sealerConfig->setMinSealTime(m_minSealTime);
+    sealerConfig->setKeyPair(m_keyPair);
+    sealerConfig->setGroupId(m_groupId);
+    sealerConfig->setChainId(m_chainId);
     return std::make_shared<Sealer>(sealerConfig);
+}
+
+VRFBasedSealer::Ptr SealerFactory::createVRFBasedSealer()
+{
+    auto sealerConfig =
+        std::make_shared<SealerConfig>(m_blockFactory, m_txpool, m_nodeTimeMaintenance);
+    sealerConfig->setMinSealTime(m_minSealTime);
+    sealerConfig->setKeyPair(m_keyPair);
+    sealerConfig->setGroupId(m_groupId);
+    sealerConfig->setChainId(m_chainId);
+    return std::make_shared<VRFBasedSealer>(sealerConfig);
 }

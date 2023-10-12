@@ -25,11 +25,12 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
-Session::Session(size_t _recvBufferSize)
+
+Session::Session(size_t _recvBufferSize, bool _forceSize)
   : m_maxRecvBufferSize(_recvBufferSize < MIN_SESSION_RECV_BUFFER_SIZE ?
                             MIN_SESSION_RECV_BUFFER_SIZE :
                             _recvBufferSize),
-    m_recvBuffer(MIN_SESSION_RECV_BUFFER_SIZE)
+    m_recvBuffer(_forceSize ? _recvBufferSize : MIN_SESSION_RECV_BUFFER_SIZE)
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this
                       << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
@@ -152,7 +153,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                 catch (std::exception const& e)
                 {
                     SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("message", boost::diagnostic_information(e));
                 }
             });
             handler->timeoutHandler = timeoutHandler;
@@ -221,12 +222,14 @@ void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
             drop(TCPError);
             return;
         }
+        if (m_writing)
         {
-            if (m_writing)
-            {
-                m_writing = false;
-            }
             m_writeConstBuffer.clear();
+            m_writing = false;
+        }
+        else
+        {
+            SESSION_LOG(ERROR) << LOG_DESC("onWrite wrong state") << LOG_KV("m_writing", m_writing);
         }
 
         write();
@@ -435,9 +438,9 @@ void Session::drop(DisconnectReason _reason)
                 /// drop operation has been aborted
                 if (error == boost::asio::error::operation_aborted)
                 {
-                    SESSION_LOG(DEBUG) << "[drop] operation aborted  by async_shutdown"
-                                       << LOG_KV("errorValue", error.value())
-                                       << LOG_KV("message", error.message());
+                    SESSION_LOG(DEBUG)
+                        << "[drop] operation aborted  by async_shutdown"
+                        << LOG_KV("value", error.value()) << LOG_KV("message", error.message());
                     return;
                 }
                 /// shutdown timer error
@@ -477,6 +480,7 @@ void Session::drop(DisconnectReason _reason)
         }
         catch (...)
         {
+            SESSION_LOG(ERROR) << LOG_DESC("drop error") << LOG_KV("endpoint", nodeIPEndpoint());
         }
     }
 }
@@ -497,7 +501,7 @@ void Session::start()
             m_lastWriteTime.store(utcSteadyTime());
             m_lastReadTime.store(utcSteadyTime());
             server->asioInterface()->strandPost(
-                boost::bind(&Session::doRead, shared_from_this()));  // doRead();
+                [session = shared_from_this()] { session->doRead(); });
         }
     }
 
@@ -556,6 +560,7 @@ void Session::doRead()
                         else if (result == 0)
                         {
                             auto length = message->lengthDirect();
+                            assert(length <= session->allowMaxMsgSize());
                             if (length > session->allowMaxMsgSize())
                             {
                                 SESSION_LOG(ERROR)
@@ -616,7 +621,7 @@ void Session::doRead()
                     catch (std::exception const& e)
                     {
                         SESSION_LOG(ERROR) << LOG_DESC("Decode message exception")
-                                           << LOG_KV("error", boost::diagnostic_information(e));
+                                           << LOG_KV("message", boost::diagnostic_information(e));
                         session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                                "ProtocolError(decode msg exception)"),
                             message);

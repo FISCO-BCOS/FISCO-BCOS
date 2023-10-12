@@ -24,6 +24,7 @@
 #include "bcos-framework/protocol/TransactionMetaData.h"
 #include <bcos-utilities/CallbackCollectionHandler.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <atomic>
 namespace bcos::sealer
 {
 using TxsMetaDataQueue = std::deque<bcos::protocol::TransactionMetaData::Ptr>;
@@ -52,7 +53,8 @@ public:
     virtual bool shouldGenerateProposal();
     virtual bool shouldFetchTransaction();
 
-    std::pair<bool, bcos::protocol::Block::Ptr> generateProposal();
+    std::pair<bool, bcos::protocol::Block::Ptr> generateProposal(
+        std::function<uint16_t(bcos::protocol::Block::Ptr)> = nullptr);
     virtual void setUnsealedTxsSize(size_t _unsealedTxsSize)
     {
         m_unsealedTxsSize = _unsealedTxsSize;
@@ -100,8 +102,13 @@ public:
                        << LOG_KV("unsealedTxs", m_unsealedTxsSize);
     }
 
-    virtual void resetCurrentNumber(int64_t _currentNumber) { m_currentNumber = _currentNumber; }
-    virtual int64_t currentNumber() const { return m_currentNumber; }
+    virtual void resetLatestNumber(int64_t _latestNumber) { m_latestNumber = _latestNumber; }
+    virtual void resetLatestHash(crypto::HashType _latestHash)
+    {
+        m_latestHash = std::move(_latestHash);
+    }
+    virtual int64_t latestNumber() const { return m_latestNumber; }
+    virtual crypto::HashType latestHash() const { return m_latestHash; }
     virtual void fetchTransactions();
 
     template <class T>
@@ -147,6 +154,7 @@ private:
 
     std::atomic_bool m_fetchingTxs = {false};
 
-    std::atomic<ssize_t> m_currentNumber = {0};
+    std::atomic<ssize_t> m_latestNumber = {0};
+    bcos::crypto::HashType m_latestHash = {};
 };
 }  // namespace bcos::sealer

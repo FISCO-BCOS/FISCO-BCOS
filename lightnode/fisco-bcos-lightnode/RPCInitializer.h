@@ -68,7 +68,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             auto groupInfoCodec = std::make_shared<bcos::group::JsonGroupInfoCodec>();
             bcos::cppsdk::service::HandshakeResponse handshakeResponse(std::move(groupInfoCodec));
 
-            auto status = ~bcos::concepts::getRef(localLedger).getStatus();
+            auto status = bcos::task::syncWait(bcos::concepts::getRef(localLedger).getStatus());
 
             handshakeResponse.mutableGroupBlockNumber().insert(
                 std::make_pair(nodeConfig->groupId(), status.blockNumber));
@@ -100,6 +100,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             groupInfo->setGroupID(nodeConfig->groupId());
             groupInfo->setWasm(nodeConfig->isWasm());
             groupInfo->setIniConfig("");
+            groupInfo->setSmCryptoType(nodeConfig->smCryptoType());
 
             auto nodeInfo = std::make_shared<bcos::group::ChainNodeInfo>();
 

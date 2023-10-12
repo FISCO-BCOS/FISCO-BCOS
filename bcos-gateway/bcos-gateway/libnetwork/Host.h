@@ -5,6 +5,7 @@
 #pragma once
 
 #include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-utilities/ThreadPool.h"
 #include <bcos-gateway/libnetwork/Common.h>   // for  NodeIP...
 #include <bcos-gateway/libnetwork/Message.h>  // for Message
 #include <bcos-gateway/libnetwork/PeerBlacklist.h>
@@ -42,6 +43,10 @@ using x509PubHandler = std::function<bool(X509* x509, std::string& pubHex)>;
 class Host : public std::enable_shared_from_this<Host>
 {
 public:
+    Host(const Host&) = delete;
+    Host(Host&&) = delete;
+    Host& operator=(const Host&) = delete;
+    Host& operator=(Host&&) = delete;
     Host(std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
       : m_asioInterface(std::move(_asioInterface)),
@@ -132,7 +137,7 @@ public:
         m_asyncGroup.template run(std::move(f));
     }
 
-private:
+protected:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
     std::string obtainCommonNameFromSubject(std::string const& subject);
@@ -193,7 +198,6 @@ private:
     int m_connectTimeThre = 50000;
     std::set<NodeIPEndpoint> m_pendingConns;
     bcos::Mutex x_pendingConns;
-
     MessageFactory::Ptr m_messageFactory;
 
     std::string m_listenHost;

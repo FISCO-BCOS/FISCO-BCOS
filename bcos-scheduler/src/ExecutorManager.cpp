@@ -168,8 +168,8 @@ std::pair<bool, bcos::protocol::ExecutorStatus::UniquePtr> ExecutorManager::getE
         {
             EXECUTOR_MANAGER_LOG(ERROR)
                 << LOG_BADGE("getExecutorStatus") << "Could not get executor status"
-                << LOG_KV("executorName", _executorName) << LOG_KV("errorCode", error->errorCode())
-                << LOG_KV("errorMessage", error->errorMessage());
+                << LOG_KV("executorName", _executorName) << LOG_KV("code", error->errorCode())
+                << LOG_KV("message", error->errorMessage());
             statusPromise.set_value(nullptr);
         }
         else

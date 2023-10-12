@@ -73,7 +73,7 @@
 #        if: runner.os != 'Windows'
 #        run: |
 #          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
-#          make cov
+#          make coverage
 #      - name: Generate covreage report
 #        if: runner.os == 'Linux'
 #        uses: codecov/codecov-action@v2

@@ -147,6 +147,9 @@ public:
     size_t txGasLimit() const { return m_txGasLimit; }
     std::string const& genesisData() const { return m_genesisData; }
 
+    std::int64_t epochSealerNum() const { return m_epochSealerNum; }
+    std::int64_t epochBlockNum() const { return m_epochBlockNum; }
+
     bool isWasm() const { return m_isWasm; }
     bool isAuthCheck() const { return m_isAuthCheck; }
     bool isSerialExecute() const { return m_isSerialExecute; }
@@ -226,6 +229,10 @@ public:
     unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
+    bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
+    bool enableSendTxByTree() const { return m_enableSendTxByTree; }
+    std::int64_t treeWidth() const { return m_treeWidth; }
+
     int sendTxTimeout() const { return m_sendTxTimeout; }
 
     bool withoutTarsFramework() const { return m_withoutTarsFramework; }
@@ -250,7 +257,9 @@ public:
 
     struct TarsRPCConfig
     {
-        std::string configPath;
+        std::string host;
+        uint16_t port = 0;
+        uint32_t threadCount = 0;
     };
     TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
 
@@ -263,6 +272,7 @@ protected:
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
     virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadSyncConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
@@ -335,6 +345,10 @@ private:
     size_t m_txGasLimit;
     std::string m_genesisData;
 
+    // rpbft
+    std::uint32_t m_epochSealerNum{4};
+    std::uint32_t m_epochBlockNum{1000};
+
     // storage configuration
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
@@ -395,6 +409,11 @@ private:
     bool m_p2pSmSsl;
     std::string m_p2pNodeDir;
     std::string m_p2pNodeFileName;
+
+    // config for sync
+    bool m_enableSendBlockStatusByTree = false;
+    bool m_enableSendTxByTree = false;
+    std::uint32_t m_treeWidth = 3;
 
     // config for cert
     std::string m_certPath;

@@ -23,6 +23,7 @@
 #include "../protocol/Block.h"
 #include "../protocol/Protocol.h"
 #include "../protocol/ProtocolTypeDef.h"
+#include "ConsensusConfigInterface.h"
 #include "ConsensusTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
@@ -71,6 +72,11 @@ public:
     // Note: if separate sealer with the PBFT module, should implement with notify
     virtual ConsensusNodeList consensusNodeList() const { return ConsensusNodeList(); }
     virtual uint64_t nodeIndex() const { return 0; }
+    virtual consensus::ConsensusConfigInterface::ConstPtr consensusConfig() const
+    {
+        return nullptr;
+    };
+    virtual bool shouldRotateSealers(protocol::BlockNumber) const { return false; }
     virtual uint32_t compatibilityVersion() const
     {
         return (uint32_t)(bcos::protocol::DEFAULT_VERSION);

@@ -180,13 +180,23 @@ public:
 
     std::optional<storage::Table> openTable(std::string_view tableName)
     {
+        auto it = m_tableCache.find(std::string(tableName));
+        if ( it != m_tableCache.end())
+        {
+            return it->second;
+        }
+
         auto ret = openTableWithoutException(tableName);
         if (std::get<0>(ret))
         {
             BOOST_THROW_EXCEPTION(*(std::get<0>(ret)));
         }
-
-        return std::get<1>(ret);
+        auto table = std::get<1>(ret);
+        if (table)
+        {
+            m_tableCache.insert(std::make_pair(std::string(tableName), std::get<1>(ret)));
+        }
+        return table;
     }
 
     std::pair<size_t, Error::Ptr> count(const std::string_view& _table)
@@ -216,5 +226,6 @@ private:
 
     EntryCachePtr m_codeCache;
     EntryCachePtr m_codeHashCache;
+    tbb::concurrent_unordered_map<std::string, std::optional<storage::Table>> m_tableCache;
 };
 }  // namespace bcos::storage

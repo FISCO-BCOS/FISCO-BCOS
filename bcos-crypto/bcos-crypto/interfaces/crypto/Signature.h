@@ -24,9 +24,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <memory>
 #include <mutex>
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 class SignatureCrypto
 {
@@ -61,12 +59,11 @@ public:
     }
 
     // generateKeyPair generates keyPair
-    virtual KeyPairInterface::UniquePtr generateKeyPair() const = 0;
+    virtual std::unique_ptr<KeyPairInterface> generateKeyPair() const = 0;
 
     // recoverAddress recovers address from a signature(for precompiled)
     virtual std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) const = 0;
-
-    virtual KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const = 0;
+    virtual std::unique_ptr<KeyPairInterface> createKeyPair(
+        std::shared_ptr<KeyInterface> _secretKey) const = 0;
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

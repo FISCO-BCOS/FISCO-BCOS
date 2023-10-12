@@ -77,9 +77,9 @@ public:
     }
 
     // notify the sealer the latest blockNumber
-    void registerStateNotifier(std::function<void(bcos::protocol::BlockNumber)> _stateNotifier)
+    void registerStateNotifier(std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&)> _stateNotifier)
     {
-        m_pbftEngine->pbftConfig()->registerStateNotifier(_stateNotifier);
+        m_pbftEngine->pbftConfig()->registerStateNotifier(std::move(_stateNotifier));
     }
     // the sync module notify the consensus module the new block
     void registerNewBlockNotifier(
@@ -121,6 +121,10 @@ public:
         return m_pbftEngine->pbftConfig()->consensusNodeList();
     }
     uint64_t nodeIndex() const override { return m_pbftEngine->pbftConfig()->nodeIndex(); }
+    consensus::ConsensusConfigInterface::ConstPtr consensusConfig() const override
+    {
+        return m_pbftEngine->pbftConfig();
+    }
     void asyncGetConsensusStatus(
         std::function<void(Error::Ptr, std::string)> _onGetConsensusStatus) override;
 
@@ -151,6 +155,11 @@ public:
     void clearExceptionProposalState(bcos::protocol::BlockNumber _number) override
     {
         m_pbftEngine->clearExceptionProposalState(_number);
+    }
+
+    bool shouldRotateSealers(protocol::BlockNumber _number) const override
+    {
+        return m_pbftEngine->shouldRotateSealers(_number);
     }
 
 protected:

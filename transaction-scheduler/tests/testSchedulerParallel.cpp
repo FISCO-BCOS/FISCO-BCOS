@@ -1,3 +1,6 @@
+#include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
@@ -8,22 +11,18 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <mutex>
-#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-template <class Storage>
 struct MockExecutor
 {
-    MockExecutor([[maybe_unused]] auto&& storage, [[maybe_unused]] auto&& receiptFactory,
-        [[maybe_unused]] auto&& tableNamePool)
-    {}
-
-    task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(
-        auto&& blockHeader, auto&& transaction, [[maybe_unused]] int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID)
     {
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
@@ -45,7 +44,6 @@ public:
         multiLayerStorage(backendStorage)
     {}
 
-    TableNamePool tableNamePool;
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
@@ -58,10 +56,9 @@ BOOST_FIXTURE_TEST_SUITE(TestSchedulerParallel, TestSchedulerParallelFixture)
 BOOST_AUTO_TEST_CASE(simple)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        SchedulerParallelImpl<decltype(multiLayerStorage), MockExecutor> scheduler(
-            multiLayerStorage, receiptFactory, tableNamePool);
+        MockExecutor executor;
+        SchedulerParallelImpl scheduler;
 
-        scheduler.start();
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         auto transactions =
@@ -71,127 +68,98 @@ BOOST_AUTO_TEST_CASE(simple)
             }) |
             RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-        auto receipts = co_await scheduler.execute(blockHeader,
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
-        co_await scheduler.finish(blockHeader, *hashImpl);
-        co_await scheduler.commit();
+        multiLayerStorage.newMutable();
+        auto view = multiLayerStorage.fork(true);
+        auto receipts =
+            co_await bcos::transaction_scheduler::execute(scheduler, view, executor, blockHeader,
+                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
+        BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;
     }());
     // Wait for tbb
 }
 
-template <StateStorage Storage>
+constexpr static size_t MOCK_USER_COUNT = 1000;
 struct MockConflictExecutor
 {
-    MockConflictExecutor(
-        Storage& storage, [[maybe_unused]] auto&& receiptFactory, TableNamePool& tableNamePool)
-      : m_storage(storage), m_tableNamePool(tableNamePool)
-    {}
-
-    task::Task<std::shared_ptr<bcos::protocol::TransactionReceipt>> execute(auto&& blockHeader,
-        protocol::IsTransaction auto const& transaction, [[maybe_unused]] int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        MockConflictExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID)
     {
         auto input = transaction.input();
         auto inputNum =
             boost::lexical_cast<int>(std::string_view((const char*)input.data(), input.size()));
 
-        StateKey key1{makeStringID(m_tableNamePool, "t_test"), std::string_view("key1")};
-        // Read first and +1
-        auto it = co_await m_storage.read(storage2::singleView(key1));
-        co_await it.next();
+        auto fromAddress = std::to_string(inputNum % MOCK_USER_COUNT);
+        auto toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
 
-        if (co_await it.hasValue())
-        {
-            auto& oldEntry = co_await it.value();
-            auto oldView = oldEntry.get();
-            auto oldNum = boost::lexical_cast<int>(oldView);
+        // Read fromKey and -1
+        StateKey fromKey{"t_test", fromAddress};
+        auto fromEntry = co_await storage2::readOne(storage, fromKey);
+        fromEntry->set(
+            boost::lexical_cast<std::string>(boost::lexical_cast<int>(fromEntry->get()) - 1));
+        co_await storage2::writeOne(storage, fromKey, *fromEntry);
 
-            assert(oldNum <= inputNum);
-        }
-        storage::Entry entry;
-        entry.set(boost::lexical_cast<std::string>(inputNum));
-        co_await m_storage.write(storage2::singleView(key1), storage2::singleView(entry));
-
-        StateKey key2{makeStringID(m_tableNamePool, "t_test"), std::string_view("key2")};
-        auto it2 = co_await m_storage.read(storage2::singleView(key2));
-        co_await it2.next();
-        if (co_await it2.hasValue())
-        {
-            auto& oldEntry = co_await it2.value();
-            auto oldView = oldEntry.get();
-            auto oldNum = boost::lexical_cast<int>(oldView);
-
-            auto newNum = oldNum + 1;
-            storage::Entry entry2;
-            entry2.set(boost::lexical_cast<std::string>(newNum));
-
-            co_await m_storage.write(storage2::singleView(key2), storage2::singleView(entry2));
-        }
-        else
-        {
-            // write 0 into storage
-            storage::Entry entry2;
-            entry2.set(boost::lexical_cast<std::string>(0));
-
-            co_await m_storage.write(storage2::singleView(key2), storage2::singleView(entry2));
-        }
+        // Read toKey and +1
+        StateKey toKey{"t_test", toAddress};
+        auto toEntry = co_await storage2::readOne(storage, toKey);
+        toEntry->set(
+            boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
+        co_await storage2::writeOne(storage, toKey, *toEntry);
 
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
-
-    Storage& m_storage;
-    TableNamePool& m_tableNamePool;
 };
 
 BOOST_AUTO_TEST_CASE(conflict)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        SchedulerParallelImpl<decltype(multiLayerStorage), MockConflictExecutor> scheduler(
-            multiLayerStorage, receiptFactory, tableNamePool);
+        MockConflictExecutor executor;
+        SchedulerParallelImpl scheduler;
         scheduler.setChunkSize(1);
-        scheduler.setMaxToken(4);
-        scheduler.start();
+        scheduler.setMaxToken(std::thread::hardware_concurrency());
+
+        multiLayerStorage.newMutable();
+        constexpr static int INITIAL_VALUE = 100000;
+        for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
+        {
+            StateKey key{"t_test", boost::lexical_cast<std::string>(i)};
+            storage::Entry entry;
+            entry.set(boost::lexical_cast<std::string>(INITIAL_VALUE));
+            co_await storage2::writeOne(multiLayerStorage.mutableStorage(), key, std::move(entry));
+        }
+
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        constexpr static auto TRANSACTION_COUNT = 1000;
+        auto transactions =
+            RANGES::views::iota(0, TRANSACTION_COUNT) | RANGES::views::transform([](int index) {
+                auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
+                    [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+                auto num = boost::lexical_cast<std::string>(index);
+                transaction->mutableInner().data.input.assign(num.begin(), num.end());
 
-        constexpr static auto count = 128;
-        auto transactions = RANGES::views::iota(0, count) | RANGES::views::transform([](int index) {
-            auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
-                [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
-            auto num = boost::lexical_cast<std::string>(index);
-            transaction->mutableInner().data.input.assign(num.begin(), num.end());
+                return transaction;
+            }) |
+            RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-            return transaction;
-        }) | RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+        auto transactionRefs =
+            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; });
+        auto view = multiLayerStorage.fork(true);
+        auto receipts = co_await bcos::transaction_scheduler::execute(
+            scheduler, view, executor, blockHeader, transactionRefs);
 
-        auto receipts = co_await scheduler.execute(blockHeader,
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
-
-        auto& mutableStorage = multiLayerStorage.mutableStorage();
-        StateKey key1{makeStringID(tableNamePool, "t_test"), std::string_view("key1")};
-        StateKey key2{makeStringID(tableNamePool, "t_test"), std::string_view("key2")};
-
-        auto it = co_await mutableStorage.read(storage2::singleView(key1));
-        co_await it.next();
-        BOOST_CHECK(co_await it.hasValue());
-        auto& entry1 = co_await it.value();
-        auto result1 = boost::lexical_cast<int>(entry1.get());
-        BOOST_CHECK_EQUAL(result1, count - 1);
-
-        auto it2 = co_await mutableStorage.read(storage2::singleView(key2));
-        co_await it2.next();
-        BOOST_REQUIRE(co_await it2.hasValue());
-        auto& entry2 = co_await it2.value();
-        auto result2 = boost::lexical_cast<int>(entry2.get());
-        BOOST_CHECK_EQUAL(result2, count - 1);
-
-        // co_await scheduler.finish(blockHeader, *hashImpl);
-        // co_await scheduler.commit();
+        for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
+        {
+            StateKey key{"t_test", boost::lexical_cast<std::string>(i)};
+            auto entry = co_await storage2::readOne(multiLayerStorage.mutableStorage(), key);
+            BOOST_CHECK_EQUAL(boost::lexical_cast<int>(entry->get()), INITIAL_VALUE);
+        }
 
         co_return;
     }());
-    // Wait for tbb
 }
 
 BOOST_AUTO_TEST_SUITE_END()

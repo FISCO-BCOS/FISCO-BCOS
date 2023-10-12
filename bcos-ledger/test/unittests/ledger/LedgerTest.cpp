@@ -31,7 +31,7 @@
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/ConsensusNode.h"
-#include "common/FakeBlock.h"
+#include "bcos-tool/NodeConfig.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -40,6 +40,7 @@
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
+#include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -107,7 +108,7 @@ public:
     LedgerFixture()
       : TestPromptFixture(), merkleUtility(crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{})
     {
-        m_blockFactory = createBlockFactory(createCryptoSuite());
+        m_blockFactory = createBlockFactory(createNormalCryptoSuite());
         auto keyFactor = std::make_shared<MockKeyFactory>();
         m_blockFactory->cryptoSuite()->setKeyFactory(keyFactor);
 

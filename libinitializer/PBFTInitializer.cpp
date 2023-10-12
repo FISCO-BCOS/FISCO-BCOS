@@ -28,6 +28,7 @@
 #endif
 
 #include <bcos-pbft/pbft/PBFTFactory.h>
+#include <bcos-rpbft/bcos-rpbft/rpbft/utilities/RPBFTFactory.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
@@ -74,7 +75,10 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
 {
     m_groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
+    g_BCOSConfig.setIsWasm(m_nodeConfig->isWasm());
+
     createSealer();
+    // TODO: add rpbft create
     createPBFT();
     createSync();
     registerHandlers();
@@ -135,6 +139,7 @@ void PBFTInitializer::initChainNodeInfo(
     m_groupInfo = std::make_shared<GroupInfo>(_nodeConfig->chainId(), _nodeConfig->groupId());
     m_groupInfo->setGenesisConfig(generateGenesisConfig(_nodeConfig));
     m_groupInfo->setWasm(_nodeConfig->isWasm());
+    m_groupInfo->setSmCryptoType(_nodeConfig->smCryptoType());
     int32_t nodeType = bcos::group::NodeCryptoType::NON_SM_NODE;
     if (_nodeConfig->smCryptoType())
     {
@@ -237,7 +242,7 @@ void PBFTInitializer::registerHandlers()
         catch (std::exception const& e)
         {
             INITIALIZER_LOG(WARNING) << LOG_DESC("call asyncResetSealing to the sealer exception")
-                                     << LOG_KV("error", boost::diagnostic_information(e));
+                                     << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 
@@ -258,49 +263,53 @@ void PBFTInitializer::registerHandlers()
             catch (std::exception const& e)
             {
                 INITIALIZER_LOG(WARNING) << LOG_DESC("call notify proposal sealing exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 
     // the consensus module notify the latest blockNumber to the sealer
-    m_pbft->registerStateNotifier([weakedSealer](bcos::protocol::BlockNumber _blockNumber) {
-        try
-        {
-            auto sealer = weakedSealer.lock();
-            if (!sealer)
+    m_pbft->registerStateNotifier(
+        [weakedSealer](bcos::protocol::BlockNumber _blockNumber, crypto::HashType const& _hash) {
+            try
             {
-                return;
+                auto sealer = weakedSealer.lock();
+                if (!sealer)
+                {
+                    return;
+                }
+                sealer->asyncNoteLatestBlockNumber(_blockNumber);
+                sealer->asyncNoteLatestBlockHash(_hash);
             }
-            sealer->asyncNoteLatestBlockNumber(_blockNumber);
-        }
-        catch (std::exception const& e)
-        {
-            INITIALIZER_LOG(WARNING)
-                << LOG_DESC("call notify the latest block number to the sealer exception")
-                << LOG_KV("error", boost::diagnostic_information(e));
-        }
-    });
+            catch (std::exception const& e)
+            {
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("call notify the latest block number to the sealer exception")
+                    << LOG_KV("message", boost::diagnostic_information(e));
+            }
+        });
 
     // the consensus moudle notify new block to the sync module
     std::weak_ptr<BlockSyncInterface> weakedSync = m_blockSync;
-    m_pbft->registerNewBlockNotifier([weakedSync](bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
-                                         std::function<void(Error::Ptr)> _onRecv) {
-        try
-        {
-            auto sync = weakedSync.lock();
-            if (!sync)
+    m_pbft->registerNewBlockNotifier(
+        [weakedSync, weakedSealer](bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
+            std::function<void(Error::Ptr)> _onRecv) {
+            try
             {
-                return;
+                auto sync = weakedSync.lock();
+                auto sealer = weakedSealer.lock();
+                if (!sync || !sealer)
+                {
+                    return;
+                }
+                sync->asyncNotifyNewBlock(std::move(_ledgerConfig), std::move(_onRecv));
             }
-            sync->asyncNotifyNewBlock(_ledgerConfig, _onRecv);
-        }
-        catch (std::exception const& e)
-        {
-            INITIALIZER_LOG(WARNING)
-                << LOG_DESC("call notify the latest block to the sync module exception")
-                << LOG_KV("error", boost::diagnostic_information(e));
-        }
-    });
+            catch (std::exception const& e)
+            {
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("call notify the latest block to the sync module exception")
+                    << LOG_KV("message", boost::diagnostic_information(e));
+            }
+        });
 
     m_pbft->registerFaultyDiscriminator([weakedSync](bcos::crypto::NodeIDPtr _nodeID) -> bool {
         try
@@ -317,7 +326,7 @@ void PBFTInitializer::registerHandlers()
             INITIALIZER_LOG(WARNING)
                 << LOG_DESC("determine the node is faulty or not through the sync module exception")
                 << LOG_KV("node", _nodeID->shortHex())
-                << LOG_KV("error", boost::diagnostic_information(e));
+                << LOG_KV("message", boost::diagnostic_information(e));
         }
         return false;
     });
@@ -339,7 +348,7 @@ void PBFTInitializer::registerHandlers()
                 INITIALIZER_LOG(WARNING) << LOG_DESC(
                                                 "call notify the latest committed proposal index "
                                                 "to the sync module exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
     m_txpool->registerTxsCleanUpSwitch([this]() -> bool {
@@ -370,8 +379,9 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
                 return;
             }
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("Election versionInfoNotification error") << LOG_KV("version", _version)
-                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+                << LOG_DESC("Election versionInfoNotification failed")
+                << LOG_KV("version", _version) << LOG_KV("code", _error->errorCode())
+                << LOG_KV("msg", _error->errorMessage());
         });
         onGroupInfoChanged();
     });
@@ -390,21 +400,40 @@ void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc
 void PBFTInitializer::createSealer()
 {
     // create sealer
-    auto sealerFactory = std::make_shared<SealerFactory>(m_protocolInitializer->blockFactory(),
-        m_txpool, m_nodeConfig->minSealTime(), m_nodeTimeMaintenance);
-    m_sealer = sealerFactory->createSealer();
+    auto sealerFactory = SealerFactory(m_nodeConfig, m_protocolInitializer->blockFactory(),
+        m_txpool, m_nodeTimeMaintenance, m_protocolInitializer->keyPair());
+    // if rpbft sealer, register the sealer to the pbft
+    if (m_nodeConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE) [[unlikely]]
+    {
+        m_sealer = sealerFactory.createVRFBasedSealer();
+    }
+    else [[likely]]
+    {
+        m_sealer = sealerFactory.createSealer();
+    }
 }
 
 void PBFTInitializer::createPBFT()
 {
     auto keyPair = m_protocolInitializer->keyPair();
     auto kvStorage = std::make_shared<bcos::storage::KVStorageHelper>(m_storage);
-    // create pbft
-    auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
-        m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
-        m_txpool, m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory());
+    if (m_nodeConfig->consensusType() == ledger::PBFT_CONSENSUS_TYPE)
+    {
+        auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
+            m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
+            m_txpool, m_protocolInitializer->blockFactory(),
+            m_protocolInitializer->txResultFactory());
+        m_pbft = pbftFactory->createPBFT();
+    }
+    else if (m_nodeConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)
+    {
+        auto rpbftFactory = std::make_shared<RPBFTFactory>(m_protocolInitializer->cryptoSuite(),
+            m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
+            m_txpool, m_protocolInitializer->blockFactory(),
+            m_protocolInitializer->txResultFactory());
+        m_pbft = rpbftFactory->createRPBFT();
+    }
 
-    m_pbft = pbftFactory->createPBFT();
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();
     pbftConfig->setCheckPointTimeoutInterval(m_nodeConfig->checkPointTimeoutInterval());
     pbftConfig->setMinSealTime(m_nodeConfig->minSealTime());
@@ -417,7 +446,8 @@ void PBFTInitializer::createSync()
     auto keyPair = m_protocolInitializer->keyPair();
     auto blockSyncFactory = std::make_shared<BlockSyncFactory>(keyPair->publicKey(),
         m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(), m_ledger,
-        m_txpool, m_frontService, m_scheduler, m_pbft, m_nodeTimeMaintenance);
+        m_txpool, m_frontService, m_scheduler, m_pbft, m_nodeTimeMaintenance,
+        m_nodeConfig->enableSendBlockStatusByTree(), m_nodeConfig->treeWidth());
     m_blockSync = blockSyncFactory->createBlockSync();
     m_blockSync->setFaultyNodeBlockDelta(m_nodeConfig->pipelineSize());
 }
@@ -488,7 +518,7 @@ void PBFTInitializer::syncGroupNodeInfo()
             catch (std::exception const& e)
             {
                 INITIALIZER_LOG(WARNING) << LOG_DESC("asyncGetGroupNodeInfo exception")
-                                         << LOG_KV("error", boost::diagnostic_information(e));
+                                         << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }

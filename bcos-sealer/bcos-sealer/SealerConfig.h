@@ -23,9 +23,7 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-tool/NodeTimeMaintenance.h"
 
-namespace bcos
-{
-namespace sealer
+namespace bcos::sealer
 {
 class SealerConfig
 {
@@ -34,30 +32,42 @@ public:
     SealerConfig(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txpool,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
-      : m_txpool(_txpool), m_blockFactory(_blockFactory),
-        m_nodeTimeMaintenance(_nodeTimeMaintenance)
+      : m_txpool(std::move(_txpool)),
+        m_blockFactory(std::move(_blockFactory)),
+        m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
     {}
-    virtual ~SealerConfig() {}
+    virtual ~SealerConfig() = default;
 
     virtual void setConsensusInterface(bcos::consensus::ConsensusInterface::Ptr _consensus)
     {
-        m_consensus = _consensus;
+        m_consensus = std::move(_consensus);
     }
     virtual bcos::txpool::TxPoolInterface::Ptr txpool() { return m_txpool; }
 
     virtual unsigned minSealTime() const { return m_minSealTime; }
     virtual void setMinSealTime(unsigned _minSealTime) { m_minSealTime = _minSealTime; }
+    virtual void setGroupId(const std::string& _groupId) { m_groupId = _groupId; }
+    virtual void setChainId(const std::string& _chainId) { m_chainId = _chainId; }
+    virtual const std::string& groupId() const { return m_groupId; }
+    virtual const std::string& chainId() const { return m_chainId; }
+    virtual bcos::crypto::KeyPairInterface::Ptr keyPair() const { return m_keyPair; }
+    virtual void setKeyPair(bcos::crypto::KeyPairInterface::Ptr _keyPair)
+    {
+        m_keyPair = std::move(_keyPair);
+    }
 
     bcos::protocol::BlockFactory::Ptr blockFactory() { return m_blockFactory; }
     bcos::consensus::ConsensusInterface::Ptr consensus() { return m_consensus; }
     bcos::tool::NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }
 
 protected:
+    bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
     unsigned m_minSealTime = 500;
+    std::string m_groupId{};
+    std::string m_chainId{};
 };
-}  // namespace sealer
-}  // namespace bcos
+}  // namespace bcos::sealer
