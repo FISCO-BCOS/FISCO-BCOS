@@ -1,3 +1,5 @@
+#include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-scheduler/test/mock/MockLedger.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
@@ -6,6 +8,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-transaction-scheduler/BaselineScheduler.h>
@@ -17,15 +20,26 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
+struct MockExecutor
+{
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID)
+    {
+        co_return std::shared_ptr<protocol::TransactionReceipt>();
+    }
+};
 struct MockScheduler
 {
-    void start() {}
-    task::Task<std::vector<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>>> execute(
-        auto&& blockHeader, auto&& transactions)
+    friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
+        transaction_scheduler::tag_t<transaction_scheduler::execute> /*unused*/,
+        MockScheduler& /*unused*/, auto& storage, auto& executor,
+        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
     {
         auto receipts =
             RANGES::iota_view<size_t, size_t>(0, RANGES::size(transactions)) |
-            RANGES::views::transform([](size_t index) {
+            RANGES::views::transform([](size_t index) -> protocol::TransactionReceipt::Ptr {
                 auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
                     [inner = bcostars::TransactionReceipt()]() mutable {
                         return std::addressof(inner);
@@ -34,24 +48,22 @@ struct MockScheduler
                 receipt->mutableInner().dataHash.assign(str.begin(), str.end());
                 return receipt;
             }) |
-            RANGES::to<std::vector<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>>>();
+            RANGES::to<std::vector<protocol::TransactionReceipt::Ptr>>();
 
         co_return receipts;
-    }
-    task::Task<bcos::h256> finish(auto&& block, auto&& hashImpl) { co_return bcos::h256{}; }
-    task::Task<void> commit() { co_return; }
-
-    task::Task<std::shared_ptr<bcostars::protocol::TransactionReceiptImpl>> call(
-        auto&& block, auto&& transaction)
-    {
-        co_return nullptr;
     }
 };
 
 struct MockLedger
 {
     template <class... Args>
-    task::Task<void> setBlock(auto&& block)
+    task::Task<void> setBlock(auto&& storage, auto&& block)
+    {
+        co_return;
+    }
+
+    template <bool isTransaction>
+    task::Task<void> setTransactions(auto&& storage, auto&& hashes, auto&& buffer)
     {
         co_return;
     }
@@ -119,6 +131,8 @@ struct MockTxPool : public txpool::TxPoolInterface
 class TestBaselineSchedulerFixture
 {
 public:
+    using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
+        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
@@ -136,11 +150,11 @@ public:
             cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory)),
         transactionSubmitResultFactory(
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>()),
-        baselineScheduler(mockScheduler, *blockHeaderFactory, mockLedger, mockTxPool,
-            *transactionSubmitResultFactory, *hashImpl)
+        multiLayerStorage(backendStorage),
+        baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockHeaderFactory,
+            mockLedger, mockTxPool, *transactionSubmitResultFactory, *hashImpl)
     {}
 
-    TableNamePool tableNamePool;
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> blockHeaderFactory;
@@ -154,7 +168,10 @@ public:
     MockScheduler mockScheduler;
     MockLedger mockLedger;
     MockTxPool mockTxPool;
-    BaselineScheduler<MockScheduler, MockLedger> baselineScheduler;
+    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    MockExecutor mockExecutor;
+    BaselineScheduler<decltype(multiLayerStorage), MockExecutor, MockScheduler, MockLedger>
+        baselineScheduler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestBaselineScheduler, TestBaselineSchedulerFixture)

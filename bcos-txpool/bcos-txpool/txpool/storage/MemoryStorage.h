@@ -23,6 +23,7 @@
 #include "bcos-task/Task.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
+#include <bcos-txpool/bcos-txpool/txpool/utilities/TransactionBucket.h>
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/RateCollector.h>
@@ -57,7 +58,7 @@ public:
     // the default txsExpirationTime is 10 minutes
     explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
-    ~MemoryStorage() override = default;
+    ~MemoryStorage() override { stop(); };
 
     // New interfaces =============
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
@@ -67,6 +68,11 @@ public:
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
         override;
     // ============================
+
+    // disassemble submitTransaction
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
+        protocol::Transaction::Ptr transaction,
+        std::function<void()> afterInsertHook = nullptr) override;
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
@@ -120,17 +126,19 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) override;
 
+    bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
+        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
+        bool checkPoolLimit, bool lock);
+
 protected:
     bcos::protocol::TransactionStatus insertWithoutLock(
         bcos::protocol::Transaction::Ptr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
-    bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
-        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
-        bool checkPoolLimit, bool lock);
     size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(
-        const bcos::protocol::Transaction& transaction);
+        const bcos::protocol::Transaction& transaction,
+        protocol::TxSubmitCallback& txSubmitCallback);
 
     void onTxRemoved(const bcos::protocol::Transaction::Ptr& _tx, bool needNotifyUnsealedTxsSize);
 
@@ -156,10 +164,12 @@ protected:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag);
 
+    virtual void printPendingTxs() override;
+
     TxPoolConfig::Ptr m_config;
 
     using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
-        std::hash<bcos::crypto::HashType>>;
+        std::hash<bcos::crypto::HashType>, TransactionBucket>;
     TxsMap m_txsTable, m_invalidTxs;
 
     using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;

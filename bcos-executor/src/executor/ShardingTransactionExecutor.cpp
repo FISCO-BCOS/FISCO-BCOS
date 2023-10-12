@@ -22,6 +22,7 @@
 #include "ShardingTransactionExecutor.h"
 #include "../executive/ExecutiveDagFlow.h"
 #include "../executive/ExecutiveFactory.h"
+#include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/executor/ExecuteError.h>
 
 using namespace std;
@@ -38,10 +39,11 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
     {
         do
         {
-            if (!m_blockContext)
+            if (!m_blockContext ||
+                !m_blockContext->features().get(ledger::Features::Flag::feature_sharding))
             {
                 TransactionExecutor::executeTransactions(
-                    contractAddress, std::move(inputs), std::move(callback));
+                    contractAddress, inputs, std::move(callback));
                 break;
             }
 
@@ -305,7 +307,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
 
                     if (error)
                     {
-                        auto errorMessage = "[" + m_name + "] asyncFillBlock failed";
+                        auto errorMessage = "[" + m_name + "] asyncFillBlock failed ";
                         EXECUTOR_NAME_LOG(ERROR)
                             << BLOCK_NUMBER(blockNumber) << errorMessage << error->errorMessage();
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
@@ -401,7 +403,7 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
     std::shared_ptr<BlockContext> blockContext, std::string codeAddress, bool useCoroutine,
     bool isStaticCall)
 {
-    if (m_blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
+    if (blockContext->features().get(ledger::Features::Flag::feature_sharding))
     {
         EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress);
 
@@ -425,9 +427,7 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
         }
         return executiveFlow;
     }
-    else
-    {
-        return TransactionExecutor::getExecutiveFlow(
-            blockContext, codeAddress, useCoroutine, isStaticCall);
-    }
+
+    return TransactionExecutor::getExecutiveFlow(
+        blockContext, codeAddress, useCoroutine, isStaticCall);
 }

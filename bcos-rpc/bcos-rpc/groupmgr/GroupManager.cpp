@@ -301,7 +301,7 @@ void GroupManager::initNodeInfo(
             {
                 GROUP_LOG(WARNING) << LOG_DESC("initNodeInfo exception")
                                    << LOG_KV("group", _groupID) << LOG_KV("nodeName", _nodeName)
-                                   << LOG_KV("error", boost::diagnostic_information(e));
+                                   << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }

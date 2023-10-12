@@ -66,9 +66,10 @@ public:
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
-        StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage)
+        StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
+        protocol::BlockFactory::Ptr _blockFactory)
       : PBFTConfig(_cryptoSuite, _keyPair, _pbftMessageFactory, _codec, _validator, _frontService,
-            _stateMachine, _storage)
+            _stateMachine, _storage, _blockFactory)
     {}
 
     ~FakePBFTConfig() override {}
@@ -223,7 +224,7 @@ public:
 
         auto pbftConfig = std::make_shared<FakePBFTConfig>(m_cryptoSuite, m_keyPair,
             orgPBFTConfig->pbftMessageFactory(), orgPBFTConfig->codec(), orgPBFTConfig->validator(),
-            orgPBFTConfig->frontService(), stateMachine, pbftStorage);
+            orgPBFTConfig->frontService(), stateMachine, pbftStorage, m_blockFactory);
         PBFT_LOG(DEBUG) << LOG_DESC("create PBFTEngine");
         auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig);
 
@@ -261,6 +262,7 @@ public:
             m_ledger->setSystemConfig(SYSTEM_KEY_TX_COUNT_LIMIT, std::to_string(_txCountLimit));
             m_ledger->setSystemConfig(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::to_string(1));
             m_ledger->setSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS, std::to_string(0));
+            m_ledger->setSystemConfig(SYSTEM_KEY_COMPATIBILITY_VERSION, protocol::DEFAULT_VERSION_STR);
             // m_ledger->ledgerConfig()->setConsensusTimeout(_consensusTimeout * 20);
             m_ledger->ledgerConfig()->setBlockTxCountLimit(_txCountLimit);
         }
@@ -396,6 +398,7 @@ inline std::map<IndexType, PBFTFixture::Ptr> createFakers(CryptoSuite::Ptr _cryp
         fakedLedger->setSystemConfig(SYSTEM_KEY_TX_COUNT_LIMIT, std::to_string(_txCountLimit));
         fakedLedger->setSystemConfig(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::to_string(1));
         fakedLedger->setSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS, std::to_string(0));
+        fakedLedger->setSystemConfig(SYSTEM_KEY_COMPATIBILITY_VERSION, protocol::DEFAULT_VERSION_STR);
         // fakedLedger->ledgerConfig()->setConsensusTimeout(_consensusTimeout * 1000);
         fakedLedger->ledgerConfig()->setBlockTxCountLimit(_txCountLimit);
         auto peerFaker = createPBFTFixture(_cryptoSuite, fakedLedger, _txCountLimit);

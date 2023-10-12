@@ -38,11 +38,7 @@
 #define WEBSOCKET_INITIALIZER(LEVEL) \
     BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[WS][INITIALIZER]"
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 class WsSession;
 
@@ -58,10 +54,8 @@ using VerifyCallback = boost::function<bool(bool, boost::asio::ssl::verify_conte
 struct Options
 {
     Options(uint32_t _timeout) : timeout(_timeout) {}
-    Options() : timeout(0) {}
+    Options() = default;
     uint32_t timeout = 0;  ///< The timeout value of async function, in milliseconds.
 };
 
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

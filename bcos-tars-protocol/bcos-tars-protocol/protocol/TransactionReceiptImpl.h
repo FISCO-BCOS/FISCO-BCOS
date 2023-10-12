@@ -39,6 +39,10 @@ namespace bcostars::protocol
 class TransactionReceiptImpl : public bcos::protocol::TransactionReceipt
 {
 public:
+    TransactionReceiptImpl(const TransactionReceiptImpl&) = default;
+    TransactionReceiptImpl(TransactionReceiptImpl&&) = delete;
+    TransactionReceiptImpl& operator=(const TransactionReceiptImpl&) = default;
+    TransactionReceiptImpl& operator=(TransactionReceiptImpl&&) = delete;
     explicit TransactionReceiptImpl(std::function<bcostars::TransactionReceipt*()> inner)
       : m_inner(std::move(inner))
     {}

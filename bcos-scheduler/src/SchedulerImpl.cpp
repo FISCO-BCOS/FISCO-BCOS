@@ -1,6 +1,9 @@
 #include "SchedulerImpl.h"
 #include "BlockExecutive.h"
 #include "Common.h"
+#include "bcos-framework/ledger/Features.h"
+#include "bcos-task/Wait.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -22,8 +25,6 @@
 
 using namespace bcos::scheduler;
 
-namespace bcos::scheduler
-{
 const __itt_domain* const ITT_DOMAIN_SCHEDULER_EXECUTE = __itt_domain_create("scheduler.execute");
 const __itt_domain* const ITT_DOMAIN_SCHEDULER_COMMIT = __itt_domain_create("scheduler.commit");
 
@@ -35,7 +36,66 @@ const __itt_string_handle* const ITT_STRING_SCHEDULER_COMMIT =
     __itt_string_handle_create("scheduler.commit");
 // __itt_id ITT_SCHEDULER_EXECUTE_ID = 1;
 
-}  // namespace bcos::scheduler
+SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
+    bcos::ledger::LedgerInterface::Ptr ledger,
+    bcos::storage::TransactionalStorageInterface::Ptr storage,
+    bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+    bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
+    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId,
+    size_t keyPageSize)
+  : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory, txPool,
+        transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false, schedulerTermId,
+        keyPageSize)
+{}
+
+SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
+    bcos::ledger::LedgerInterface::Ptr ledger,
+    bcos::storage::TransactionalStorageInterface::Ptr storage,
+    bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+    bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
+    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
+    int64_t schedulerTermId, size_t keyPageSize)
+  : m_executorManager(std::move(executorManager)),
+    m_ledger(std::move(ledger)),
+    m_storage(std::move(storage)),
+    m_executionMessageFactory(std::move(executionMessageFactory)),
+    m_blockExecutiveFactory(
+        std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute, keyPageSize)),
+    m_blockFactory(std::move(blockFactory)),
+    m_txPool(txPool),
+    m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
+    m_hashImpl(std::move(hashImpl)),
+    m_isAuthCheck(isAuthCheck),
+    m_isWasm(isWasm),
+    m_isSerialExecute(isSerialExecute),
+    m_schedulerTermId(schedulerTermId),
+    m_preExeWorker("preExeScheduler", 2),  // assume that preExe is no slower than exe speed/2
+    m_exeWorker("exeScheduler", 1)
+{
+    start();
+
+    if (!m_ledgerConfig)
+    {
+        std::promise<bcos::ledger::LedgerConfig::Ptr> promise;
+        auto future = promise.get_future();
+        asyncGetLedgerConfig(
+            [&promise](Error::Ptr const& error, bcos::ledger::LedgerConfig::Ptr ledgerConfig) {
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR) << LOG_DESC("failed to get ledger config")
+                                         << LOG_KV("code", error->errorCode())
+                                         << LOG_KV("message", error->errorMessage());
+                    promise.set_exception(std::make_exception_ptr(*error));
+                    return;
+                }
+                promise.set_value(std::move(ledgerConfig));
+            });
+
+        m_ledgerConfig = future.get();
+    }
+}
 
 void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
     std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)
@@ -205,7 +265,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
                         << LOG_KV("metaTxCount", block->transactionsMetaDataSize())
                         << LOG_KV("version", (bcos::protocol::BlockVersion)(block->version()))
                         << LOG_KV("waitT", waitT);
-
+    auto start = utcTime();
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](bcos::Error::Ptr&& error,
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber)
@@ -338,7 +398,8 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
     };
 
     // to execute the block
-    auto whenQueueBack = [this, &executeLock, &blockExecutive, callback, requestBlockNumber]() {
+    auto whenQueueBack = [this, start, &executeLock, &blockExecutive, callback,
+                             requestBlockNumber]() {
         if (!executeLock)
         {
             // if not acquire the lock, return error
@@ -351,7 +412,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
         }
 
         SCHEDULER_LOG(INFO) << BLOCK_NUMBER(requestBlockNumber) << LOG_BADGE("BlockTrace")
-                            << "ExecuteBlock start";
+                            << "ExecuteBlock start" << LOG_KV("time(ms)", utcTime() - start);
         auto startTime = utcTime();
         blockExecutive->asyncExecute(
             [this, startTime, requestBlockNumber, callback = std::move(callback), executeLock](
@@ -602,7 +663,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 SCHEDULER_LOG(INFO)
                     << BLOCK_NUMBER(blockNumber) << LOG_BADGE("BlockTrace") << "CommitBlock success"
                     << LOG_KV("gas limit", m_gasLimit) << LOG_KV("timeCost", utcTime() - startTime);
-
+                m_ledgerConfig = ledgerConfig;
                 commitLock->unlock();  // just unlock here
 
 
@@ -768,10 +829,8 @@ BlockExecutive::Ptr SchedulerImpl::getPreparedBlock(
     {
         return m_preparedBlocks[blockNumber][timestamp];
     }
-    else
-    {
-        return nullptr;
-    }
+
+    return nullptr;
 }
 
 
@@ -907,14 +966,14 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
     auto summary =
-        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(8, 0, 0);
+        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(14, 0, 0);
 
     auto collector = [this, summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
-                         std::variant<std::tuple<bool, consensus::ConsensusNodeListPtr>,
-                             std::tuple<int, std::string, bcos::protocol::BlockNumber>,
-                             bcos::protocol::BlockNumber, bcos::crypto::HashType>&&
-                             result) mutable {
+                         std::variant<std::tuple<NodeListType, consensus::ConsensusNodeListPtr>,
+                             std::tuple<ConfigType, std::string, bcos::protocol::BlockNumber>,
+                             bcos::protocol::BlockNumber, bcos::crypto::HashType,
+                             ledger::Features>&& result) mutable {
         auto& [total, success, failed] = *summary;
 
         if (error)
@@ -926,35 +985,53 @@ void SchedulerImpl::asyncGetLedgerConfig(
         {
             std::visit(
                 overloaded{
-                    [&ledgerConfig](std::tuple<bool, consensus::ConsensusNodeListPtr>& nodeList) {
-                        auto& [isSealer, list] = nodeList;
+                    [&ledgerConfig](
+                        std::tuple<NodeListType, consensus::ConsensusNodeListPtr>& nodeList) {
+                        auto& [nodeType, list] = nodeList;
 
-                        if (isSealer)
+                        switch (nodeType)
+                        {
+                        case NodeListType::ConsensusNodeList:
                         {
                             ledgerConfig->setConsensusNodeList(*list);
+                            break;
                         }
-                        else
+                        case NodeListType::ObserverNodeList:
                         {
                             ledgerConfig->setObserverNodeList(*list);
+                            break;
+                        }
+                        case NodeListType::CandidateSealerNodeList:
+                        {
+                            ledgerConfig->setCandidateSealerNodeList(*list);
+                            break;
+                        }
+                        default:
+                        {
+                            BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::UnknownError,
+                                "Unknown node type: " +
+                                    boost::lexical_cast<std::string>(static_cast<int>(nodeType))));
+                        }
                         }
                     },
-                    [&ledgerConfig](std::tuple<int, std::string, protocol::BlockNumber> config) {
+                    [&ledgerConfig](
+                        std::tuple<ConfigType, std::string, protocol::BlockNumber> config) {
                         auto& [type, value, blockNumber] = config;
                         switch (type)
                         {
-                        case 0:
+                        case ConfigType::BlockTxCountLimit:
                             ledgerConfig->setBlockTxCountLimit(
                                 boost::lexical_cast<uint64_t>(value));
                             break;
-                        case 1:
+                        case ConfigType::LeaderSwitchPeriod:
                             ledgerConfig->setLeaderSwitchPeriod(
                                 boost::lexical_cast<uint64_t>(value));
                             break;
-                        case 2:
+                        case ConfigType::GasLimit:
                             ledgerConfig->setGasLimit(
                                 std::make_tuple(boost::lexical_cast<uint64_t>(value), blockNumber));
                             break;
-                        case 3:
+                        case ConfigType::VersionNumber:
                             try
                             {
                                 auto version = bcos::tool::toVersionNumber(value);
@@ -965,15 +1042,33 @@ void SchedulerImpl::asyncGetLedgerConfig(
                                 SCHEDULER_LOG(WARNING) << LOG_DESC("invalidVersionNumber") << value;
                             }
                             break;
+                        case ConfigType::ConsensusType:
+                            ledgerConfig->setConsensusType(value);
+                            break;
+                        case ConfigType::EpochSealerNum:
+                            ledgerConfig->setEpochSealerNum(
+                                std::make_tuple(boost::lexical_cast<uint64_t>(value), blockNumber));
+                            break;
+                        case ConfigType::EpochBlockNum:
+                            ledgerConfig->setEpochBlockNum(
+                                std::make_tuple(boost::lexical_cast<uint64_t>(value), blockNumber));
+                            break;
+                        case ConfigType::NotifyRotateFlag:
+                            ledgerConfig->setNotifyRotateFlagInfo(
+                                boost::lexical_cast<uint64_t>(value));
+                            break;
                         default:
                             BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::UnknownError,
-                                "Unknown type: " + boost::lexical_cast<std::string>(type)));
+                                "Unknown type: " +
+                                    boost::lexical_cast<std::string>(static_cast<int>(type))));
                         }
                     },
                     [&ledgerConfig](bcos::protocol::BlockNumber number) {
                         ledgerConfig->setBlockNumber(number);
                     },
-                    [&ledgerConfig](bcos::crypto::HashType hash) { ledgerConfig->setHash(hash); }},
+                    [&ledgerConfig](bcos::crypto::HashType hash) { ledgerConfig->setHash(hash); },
+                    [&ledgerConfig](
+                        ledger::Features features) { ledgerConfig->setFeatures(features); }},
                 result);
 
             ++success;
@@ -1000,43 +1095,177 @@ void SchedulerImpl::asyncGetLedgerConfig(
                 return;
             }
 
+            if (ledgerConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)
+            {
+                auto features = ledgerConfig->features();
+                features.set(ledger::Features::Flag::feature_rpbft);
+                ledgerConfig->setFeatures(features);
+            }
+
             (*callback)(nullptr, std::move(ledgerConfig));
         }
     };
 
-    m_ledger->asyncGetNodeListByType(ledger::CONSENSUS_SEALER,
-        [collector](Error::Ptr error, consensus::ConsensusNodeListPtr list) mutable {
-            collector(std::move(error), std::tuple{true, std::move(list)});
-        });
-    m_ledger->asyncGetNodeListByType(ledger::CONSENSUS_OBSERVER,
-        [collector](Error::Ptr error, consensus::ConsensusNodeListPtr list) mutable {
-            collector(std::move(error), std::tuple{false, std::move(list)});
+    m_ledger->asyncGetNodeListByType(ledger::CONSENSUS_SEALER, [collector](Error::Ptr error,
+                                                                   consensus::ConsensusNodeListPtr
+                                                                       list) mutable {
+        collector(std::move(error), std::tuple{NodeListType::ConsensusNodeList, std::move(list)});
+    });
+    m_ledger->asyncGetNodeListByType(ledger::CONSENSUS_OBSERVER, [collector](Error::Ptr error,
+                                                                     consensus::ConsensusNodeListPtr
+                                                                         list) mutable {
+        collector(std::move(error), std::tuple{NodeListType::ObserverNodeList, std::move(list)});
+    });
+    m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_RPBFT_SWITCH,
+        [collector, ledger = m_ledger](
+            Error::Ptr error, const std::string& config, protocol::BlockNumber _number) mutable {
+            if (error)
+            {
+                collector(nullptr, std::tuple{ConfigType::ConsensusType,
+                                       std::string{ledger::PBFT_CONSENSUS_TYPE}, 0});
+                collector(nullptr, std::tuple{NodeListType::CandidateSealerNodeList,
+                                       std::make_shared<consensus::ConsensusNodeList>()});
+                collector(nullptr, std::tuple{ConfigType::EpochSealerNum,
+                                       std::to_string(ledger::DEFAULT_EPOCH_SEALER_NUM), 0});
+                collector(nullptr, std::tuple{ConfigType::EpochBlockNum,
+                                       std::to_string(ledger::DEFAULT_EPOCH_BLOCK_NUM), 0});
+                collector(nullptr, std::tuple{ConfigType::NotifyRotateFlag,
+                                       std::to_string(ledger::DEFAULT_INTERNAL_NOTIFY_FLAG), 0});
+            }
+            else
+            {
+                std::string_view consensusType =
+                    (config == "1") ? ledger::RPBFT_CONSENSUS_TYPE : ledger::PBFT_CONSENSUS_TYPE;
+                collector(std::move(error),
+                    std::tuple{ConfigType::ConsensusType, std::string(consensusType), _number});
+                if (consensusType == ledger::RPBFT_CONSENSUS_TYPE)
+                {
+                    ledger->asyncGetNodeListByType(ledger::CONSENSUS_CANDIDATE_SEALER,
+                        [collector](auto&& error, consensus::ConsensusNodeListPtr list) mutable {
+                            if (error)
+                            {
+                                collector(
+                                    nullptr, std::tuple{NodeListType::CandidateSealerNodeList,
+                                                 std::make_shared<consensus::ConsensusNodeList>()});
+                                return;
+                            }
+                            collector(nullptr,
+                                std::tuple{NodeListType::CandidateSealerNodeList, std::move(list)});
+                        });
+
+                    ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
+                        [collector](auto&& error, std::string config,
+                            protocol::BlockNumber _number) mutable {
+                            if (error)
+                            {
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Get " << ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM
+                                    << " failed, use default value"
+                                    << LOG_KV("defaultValue", ledger::DEFAULT_EPOCH_SEALER_NUM);
+                                collector(nullptr,
+                                    std::tuple{ConfigType::EpochSealerNum,
+                                        std::to_string(ledger::DEFAULT_EPOCH_SEALER_NUM), 0});
+                                return;
+                            }
+                            collector(nullptr,
+                                std::tuple{ConfigType::EpochSealerNum, std::move(config), _number});
+                        });
+
+                    ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
+                        [collector](auto&& error, std::string config,
+                            protocol::BlockNumber _number) mutable {
+                            if (error)
+                            {
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Get " << ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM
+                                    << " failed, use default value"
+                                    << LOG_KV("defaultValue", ledger::DEFAULT_EPOCH_BLOCK_NUM);
+                                collector(nullptr,
+                                    std::tuple{ConfigType::EpochBlockNum,
+                                        std::to_string(ledger::DEFAULT_EPOCH_BLOCK_NUM), 0});
+                                return;
+                            }
+                            collector(nullptr,
+                                std::tuple{ConfigType::EpochBlockNum, std::move(config), _number});
+                        });
+
+                    ledger->asyncGetSystemConfigByKey(ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE,
+                        [collector](auto&& error, std::string config,
+                            protocol::BlockNumber _number) mutable {
+                            if (error)
+                            {
+                                SCHEDULER_LOG(DEBUG)
+                                    << "Get " << ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE
+                                    << " failed, use default value"
+                                    << LOG_KV("defaultValue", ledger::DEFAULT_INTERNAL_NOTIFY_FLAG);
+                                collector(nullptr,
+                                    std::tuple{ConfigType::NotifyRotateFlag,
+                                        std::to_string(ledger::DEFAULT_INTERNAL_NOTIFY_FLAG), 0});
+                                return;
+                            }
+                            collector(nullptr, std::tuple{ConfigType::NotifyRotateFlag,
+                                                   std::move(config), _number});
+                        });
+                }
+                else
+                {
+                    collector(nullptr, std::tuple{NodeListType::CandidateSealerNodeList,
+                                           std::make_shared<consensus::ConsensusNodeList>()});
+                    collector(nullptr, std::tuple{ConfigType::EpochSealerNum,
+                                           std::to_string(ledger::DEFAULT_EPOCH_SEALER_NUM), 0});
+                    collector(nullptr, std::tuple{ConfigType::EpochBlockNum,
+                                           std::to_string(ledger::DEFAULT_EPOCH_BLOCK_NUM), 0});
+                    collector(
+                        nullptr, std::tuple{ConfigType::NotifyRotateFlag,
+                                     std::to_string(ledger::DEFAULT_INTERNAL_NOTIFY_FLAG), 0});
+                }
+            }
         });
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
         [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
-            collector(std::move(error), std::tuple{0, std::move(config), _number});
+            collector(std::move(error),
+                std::tuple{ConfigType::BlockTxCountLimit, std::move(config), _number});
         });
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
         [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
-            collector(std::move(error), std::tuple{1, std::move(config), _number});
+            collector(std::move(error),
+                std::tuple{ConfigType::LeaderSwitchPeriod, std::move(config), _number});
         });
-    m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-        [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
-            collector(std::move(error), std::tuple{2, std::move(config), _number});
-        });
-    m_ledger->asyncGetBlockNumber(
-        [collector, ledger = m_ledger](Error::Ptr error, protocol::BlockNumber number) mutable {
-            ledger->asyncGetBlockHashByNumber(
-                number, [collector](Error::Ptr error, const crypto::HashType& hash) mutable {
-                    collector(std::move(error), std::move(hash));
-                });
-            collector(std::move(error), std::move(number));
-        });
+    m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT, [collector](
+                                                                             Error::Ptr error,
+                                                                             std::string config,
+                                                                             protocol::BlockNumber
+                                                                                 _number) mutable {
+        collector(std::move(error), std::tuple{ConfigType::GasLimit, std::move(config), _number});
+    });
+    m_ledger->asyncGetBlockNumber([self = this, collector, ledger = m_ledger](
+                                      Error::Ptr error, protocol::BlockNumber number) mutable {
+        ledger->asyncGetBlockHashByNumber(
+            number, [collector](Error::Ptr error, const crypto::HashType& hash) mutable {
+                collector(std::move(error), std::move(hash));
+            });
+
+        task::wait([](decltype(self) self, decltype(number) number,
+                       decltype(collector) collector) -> task::Task<void> {
+            try
+            {
+                ledger::Features features;
+                co_await features.readFromStorage(*self->m_storage, number);
+                collector({}, features);
+            }
+            catch (Error& error)
+            {
+                collector(std::make_shared<Error>(error), ledger::Features{});
+            }
+        }(self, number, collector));
+        collector(std::move(error), number);
+    });
 
     // Note: The consensus module ensures serial execution and submit of system txs
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION,
         [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
-            collector(std::move(error), std::tuple{3, std::move(config), _number});
+            collector(std::move(error),
+                std::tuple{ConfigType::VersionNumber, std::move(config), _number});
         });
 }
 

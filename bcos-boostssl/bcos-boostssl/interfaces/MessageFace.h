@@ -25,17 +25,19 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <string>
 
-namespace bcos
-{
-namespace boostssl
+namespace bcos::boostssl
 {
 class MessageFace
 {
 public:
     using Ptr = std::shared_ptr<MessageFace>;
 
-public:
-    virtual ~MessageFace() {}
+    MessageFace() = default;
+    MessageFace(const MessageFace&) = default;
+    MessageFace(MessageFace&&) noexcept = default;
+    MessageFace& operator=(const MessageFace&) = default;
+    MessageFace& operator=(MessageFace&&) noexcept = default;
+    virtual ~MessageFace() = default;
 
     virtual uint16_t version() const = 0;
     virtual void setVersion(uint16_t) = 0;
@@ -61,11 +63,15 @@ class MessageFaceFactory
 public:
     using Ptr = std::shared_ptr<MessageFaceFactory>;
 
-public:
-    virtual ~MessageFaceFactory() {}
+    MessageFaceFactory() = default;
+    MessageFaceFactory(const MessageFaceFactory&) = default;
+    MessageFaceFactory(MessageFaceFactory&&) noexcept = default;
+    MessageFaceFactory& operator=(const MessageFaceFactory&) = default;
+    MessageFaceFactory& operator=(MessageFaceFactory&&) noexcept = default;
+    virtual ~MessageFaceFactory() = default;
+
     virtual MessageFace::Ptr buildMessage() = 0;
     virtual std::string newSeq() = 0;
 };
 
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl

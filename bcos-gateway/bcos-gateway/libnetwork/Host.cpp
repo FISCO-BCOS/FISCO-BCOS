@@ -63,7 +63,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                 /// connections
                 auto endpoint = socket->remoteEndpoint();
                 HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
-                /// network acception failed
+                /// network accept failed
                 if (ec || !m_run)
                 {
                     HOST_LOG(ERROR) << "Error: " << ec;
@@ -330,8 +330,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
     if (error)
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake failed")
-                          << LOG_KV("errorValue", error.value())
-                          << LOG_KV("message", error.message())
+                          << LOG_KV("value", error.value()) << LOG_KV("message", error.message())
                           << LOG_KV("endpoint", socket->nodeIPEndpoint());
         socket->close();
         return;
@@ -517,8 +516,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
     if (error)
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed")
-                          << LOG_KV("endpoint", _nodeIPEndpoint)
-                          << LOG_KV("errorValue", error.value())
+                          << LOG_KV("endpoint", _nodeIPEndpoint) << LOG_KV("value", error.value())
                           << LOG_KV("message", error.message());
 
         if (socket->isConnected())
@@ -551,7 +549,9 @@ void Host::stop()
 {
     // ignore if already stopped/stopping
     if (!m_run)
+    {
         return;
+    }
     // signal run() to prepare for shutdown and reset m_timer
     m_run = false;
     if (m_asioInterface)

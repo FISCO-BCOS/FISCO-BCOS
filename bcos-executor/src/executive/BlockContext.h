@@ -25,6 +25,7 @@
 #include "ExecutiveFlowInterface.h"
 #include "LedgerCache.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -38,9 +39,7 @@
 #include <stack>
 #include <string_view>
 
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 class TransactionExecutive;
 class PrecompiledContract;
@@ -48,7 +47,7 @@ class PrecompiledContract;
 class BlockContext : public std::enable_shared_from_this<BlockContext>
 {
 public:
-    typedef std::shared_ptr<BlockContext> Ptr;
+    using Ptr = std::shared_ptr<BlockContext>;
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
@@ -78,6 +77,7 @@ public:
     bool isAuthCheck() const { return m_isAuthCheck; }
     int64_t number() const { return m_blockNumber; }
     h256 hash() const { return m_blockHash; }
+    h256 parentHash() const { return m_parentHash; }
     h256 blockHash(int64_t _number) const { return m_ledgerCache->fetchBlockHash(_number); }
     uint64_t timestamp() const { return m_timeStamp; }
     uint32_t blockVersion() const { return m_blockVersion; }
@@ -132,6 +132,7 @@ public:
 
     auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
 
+    const ledger::Features& features() const;
     storage::EntryCachePtr getCodeCache() const { return m_codeCache; }
     storage::EntryCachePtr getCodeHashCache() const { return m_codeHashCache; }
     auto backendStorage() const { return m_backendStorage; }
@@ -142,6 +143,7 @@ private:
 
     bcos::protocol::BlockNumber m_blockNumber;
     h256 m_blockHash;
+    h256 m_parentHash;
     uint64_t m_timeStamp;
     uint32_t m_blockVersion;
 
@@ -160,8 +162,7 @@ private:
     storage::EntryCachePtr m_codeCache = std::make_shared<storage::EntryCache>();
     storage::EntryCachePtr m_codeHashCache = std::make_shared<storage::EntryCache>();
     bcos::storage::StorageInterface::Ptr m_backendStorage;
+    ledger::Features m_features;
 };
 
-}  // namespace executor
-
-}  // namespace bcos
+}  // namespace bcos::executor

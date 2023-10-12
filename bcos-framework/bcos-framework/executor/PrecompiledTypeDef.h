@@ -43,6 +43,7 @@ constexpr const char* const KV_TABLE_NAME = "/sys/kv_storage";
 constexpr const char* const CRYPTO_NAME = "/sys/crypto_tools";
 constexpr const char* const DAG_TRANSFER_NAME = "/sys/dag_test";
 constexpr const char* const BFS_NAME = "/sys/bfs";
+constexpr const char* const PAILLIER_SIG_NAME = "/sys/paillier";
 constexpr const char* const GROUP_SIG_NAME = "/sys/group_sig";
 constexpr const char* const RING_SIG_NAME = "/sys/ring_sig";
 constexpr const char* const DISCRETE_ZKP_NAME = "/sys/discrete_zkp";
@@ -81,6 +82,7 @@ constexpr std::string_view EVM_PRECOMPILED_PREFIX = "000000000000000000000000000
 constexpr std::string_view EMPTY_ADDRESS = "0000000000000000000000000000000000000000";
 
 // Contract address related to privacy computing
+constexpr const char* const PAILLIER_ADDRESS = "0000000000000000000000000000000000005003";
 constexpr const char* const GROUP_SIG_ADDRESS = "0000000000000000000000000000000000005004";
 constexpr const char* const RING_SIG_ADDRESS = "0000000000000000000000000000000000005005";
 // for zkp
@@ -132,6 +134,8 @@ const int CPU_HEAVY_CONTRACT_NUM = 128;
 // Smallbank test: 0x6200 ~ (0x6200 + 128)
 const char* const SMALLBANK_START_ADDRESS = "0x6200";
 const int SMALLBANK_CONTRACT_NUM = 128;
+
+constexpr const char* const WSM_METHOD_ROTATE_STR = "rotateWorkingSealer(std::string,std::string,std::string)";
 
 }  // namespace precompiled
 }  // namespace bcos

@@ -25,7 +25,6 @@
 #define GATEWAY_FACTORY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Factory]"
 #define NODE_MANAGER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][GatewayNodeManager]"
 #define ROUTER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Router]"
-#define RATELIMIT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][RateLimiter]"
 #define RATELIMIT_MGR_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][RateLimiterManager]"
 
 namespace bcos

@@ -19,8 +19,8 @@
  * @date 2021-06-08
  */
 
-#include <bcos-tars-protocol/testutil/FakeBlock.h>
-#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 
 #include "SyncFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -49,10 +49,10 @@ void testRequestAndDownloadBlock(CryptoSuite::Ptr _cryptoSuite)
     BlockNumber minBlock = 5;
     auto lowerPeer = std::make_shared<SyncFixture>(_cryptoSuite, gateWay, (minBlock + 1));
     std::vector<NodeIDPtr> nodeList;
-    nodeList.push_back(newerPeer->nodeID());
-    nodeList.push_back(lowerPeer->nodeID());
-    newerPeer->setObservers(nodeList);
-    lowerPeer->setObservers(nodeList);
+    nodeList.emplace_back(newerPeer->nodeID());
+    nodeList.emplace_back(lowerPeer->nodeID());
+    newerPeer->setConsensus(nodeList);
+    lowerPeer->setConsensus(nodeList);
 
     newerPeer->init();
     lowerPeer->init();
@@ -60,8 +60,8 @@ void testRequestAndDownloadBlock(CryptoSuite::Ptr _cryptoSuite)
     // maintainPeersConnection
     newerPeer->sync()->executeWorker();
     lowerPeer->sync()->executeWorker();
-    while (!newerPeer->sync()->syncStatus()->hasPeer(lowerPeer->nodeID()) ||
-           !lowerPeer->sync()->syncStatus()->hasPeer(newerPeer->nodeID()))
+    while (!newerPeer->sync()->syncStatus()->peerStatus(lowerPeer->nodeID()) ||
+           !lowerPeer->sync()->syncStatus()->peerStatus(newerPeer->nodeID()))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
@@ -149,7 +149,7 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
     invalidFaker->init();
     for (auto faker : syncPeerList)
     {
-        faker->setObservers(nodeList);
+        faker->setConsensus(nodeList);
         faker->init();
     }
     // maintainPeersConnection

@@ -103,8 +103,8 @@ int main(int argc, char** argv)
             if (_error)
             {
                 // error and exit
-                std::cout << " \t something is wrong" << LOG_KV("error", _error->errorCode())
-                          << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
+                std::cout << " \t something is wrong" << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("message", _error->errorMessage()) << std::endl;
                 std::exit(-1);
             }
             else

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-table/src/StateStorage.h"
 #include "bcos-task/Trait.h"
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <boost/container/small_vector.hpp>
@@ -7,7 +9,15 @@
 namespace bcos::transaction_executor
 {
 
-template <StateStorage Storage>
+template <class Storage>
+concept HasReadDirectly =
+    requires(Storage&& storage) {
+        requires storage2::ReadableStorage<Storage>;
+        requires storage2::ReadIterator<task::AwaitableReturnType<decltype(storage.read(
+            std::declval<std::vector<typename Storage::Key>>(), true))>>;
+    };
+
+template <class Storage>
 class Rollbackable
 {
 private:
@@ -61,15 +71,25 @@ public:
     {
         // Store values to history
         {
-            auto storageIt = co_await m_storage.read(keys);
-            auto keyIt = RANGES::begin(keys);
-            while (co_await storageIt.next())
+            std::optional<task::AwaitableReturnType<decltype(m_storage.read(keys))>> storageIt;
+            if constexpr (HasReadDirectly<Storage>)
             {
-                auto& record = m_records.emplace_back(Record{.key = *(keyIt++), .oldValue = {}});
-                if (co_await storageIt.hasValue())
+                storageIt = co_await m_storage.read(keys, true);
+            }
+            else
+            {
+                storageIt = co_await m_storage.read(keys);
+            }
+
+            auto keyIt = RANGES::begin(keys);
+            while (co_await storageIt->next())
+            {
+                auto& record =
+                    m_records.emplace_back(Record{.key = StateKey{*(keyIt++)}, .oldValue = {}});
+                if (co_await storageIt->hasValue())
                 {
                     // Update exists value, store the old value
-                    record.oldValue.emplace(co_await storageIt.value());
+                    record.oldValue.emplace(co_await storageIt->value());
                 }
             }
         }

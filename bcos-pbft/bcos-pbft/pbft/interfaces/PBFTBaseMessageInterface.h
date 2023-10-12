@@ -68,13 +68,20 @@ public:
 
     virtual void setFrom(bcos::crypto::PublicPtr _from) = 0;
     virtual bcos::crypto::PublicPtr from() const = 0;
+    virtual uint64_t liveTimeInMilliseconds() const = 0;
+    virtual std::string toDebugString() const = 0;
 };
 inline std::string printPBFTMsgInfo(PBFTBaseMessageInterface::Ptr _pbftMsg)
 {
     std::ostringstream stringstream;
     stringstream << LOG_KV("reqHash", _pbftMsg->hash().abridged())
                  << LOG_KV("reqIndex", _pbftMsg->index()) << LOG_KV("reqV", _pbftMsg->view())
-                 << LOG_KV("fromIdx", _pbftMsg->generatedFrom());
+                 << LOG_KV("fromIdx", _pbftMsg->generatedFrom())
+                 << LOG_KV("wait(ms)", _pbftMsg->liveTimeInMilliseconds());
+    if (c_fileLogLevel <= DEBUG)
+    {
+        stringstream << _pbftMsg->toDebugString();
+    }
     return stringstream.str();
 }
 }  // namespace bcos::consensus

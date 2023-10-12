@@ -46,6 +46,15 @@ inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _
     out = _codec.encode(s256(result));
 }
 
+inline std::string covertPublicToHexAddress(std::variant<std::string, crypto::PublicPtr> publicKey)
+{
+    bytes pkData = std::holds_alternative<std::string>(publicKey) ?
+                       fromHex(std::get<std::string>(publicKey)) :
+                       std::get<crypto::PublicPtr>(publicKey)->data();
+    auto address = right160(executor::GlobalHashImpl::g_hashImpl->hash(pkData));
+    return address.hex();
+}
+
 inline std::string getTableName(const std::string_view& _tableName)
 {
     if (_tableName.starts_with(executor::USER_TABLE_PREFIX))
@@ -95,8 +104,7 @@ std::string checkCreateTableParam(const std::string_view& _tableName, std::strin
     const std::variant<std::string, std::vector<std::string>>& _valueField,
     std::optional<uint8_t> keyOrder = std::nullopt);
 
-uint32_t getFuncSelector(std::string const& _functionName,
-    const crypto::Hash::Ptr& _hashImpl = executor::GlobalHashImpl::g_hashImpl);
+uint32_t getFuncSelector(std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl);
 // for ut
 void clearName2SelectCache();
 uint32_t getParamFunc(bytesConstRef _param);

@@ -25,9 +25,7 @@
 #include <bcos-utilities/Exceptions.h>
 #include <tbb/parallel_for.h>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 DERIVE_BCOS_EXCEPTION(PBObjectEncodeException);
 DERIVE_BCOS_EXCEPTION(PBObjectDecodeException);
@@ -40,6 +38,9 @@ bytesPointer encodePBObject(T _pbObject)
     {
         return encodedData;
     }
+    BCOS_LOG(WARNING) << LOG_BADGE("PBFTMessage")
+                      << LOG_DESC("encode PBObject into bytes data failed")
+                      << LOG_KV("PBObjectSize", _pbObject->ByteSizeLong());
     BOOST_THROW_EXCEPTION(
         PBObjectEncodeException() << errinfo_comment("encode PBObject into bytes data failed"));
 }
@@ -85,5 +86,4 @@ inline std::vector<bcos::bytes> encodeToCalculateRoot(
         });
     return encodedList;
 }
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

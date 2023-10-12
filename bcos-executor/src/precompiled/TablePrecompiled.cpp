@@ -180,58 +180,58 @@ static void processEntryByValueCond(
 
 TablePrecompiled::TablePrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
-    registerFunc(getFuncSelector(TABLE_METHOD_SELECT_KEY),
+    registerFunc(getFuncSelector(TABLE_METHOD_SELECT_KEY, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             selectByKey(table, executive, data, pricer, params);
         });
-    registerFunc(getFuncSelector(TABLE_METHOD_SELECT_CON),
+    registerFunc(getFuncSelector(TABLE_METHOD_SELECT_CON, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             selectByCondition(table, executive, data, pricer, params);
         });
-    registerFunc(getFuncSelector(TABLE_METHOD_COUNT),
+    registerFunc(getFuncSelector(TABLE_METHOD_COUNT, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             count(table, executive, data, pricer, params);
         });
-    registerFunc(getFuncSelector(TABLE_METHOD_INSERT),
+    registerFunc(getFuncSelector(TABLE_METHOD_INSERT, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             insert(table, executive, data, pricer, params);
         });
-    registerFunc(getFuncSelector(TABLE_METHOD_UPDATE_KEY),
+    registerFunc(getFuncSelector(TABLE_METHOD_UPDATE_KEY, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             updateByKey(table, executive, data, pricer, params);
         });
-    registerFunc(getFuncSelector(TABLE_METHOD_UPDATE_CON),
+    registerFunc(getFuncSelector(TABLE_METHOD_UPDATE_CON, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             updateByCondition(table, executive, data, pricer, params);
         });
-    registerFunc(getFuncSelector(TABLE_METHOD_REMOVE_KEY),
+    registerFunc(getFuncSelector(TABLE_METHOD_REMOVE_KEY, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             removeByKey(table, executive, data, pricer, params);
         });
-    registerFunc(getFuncSelector(TABLE_METHOD_REMOVE_CON),
+    registerFunc(getFuncSelector(TABLE_METHOD_REMOVE_CON, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             removeByCondition(table, executive, data, pricer, params);
         });
     registerFunc(
-        getFuncSelector(TABLE_METHOD_SELECT_CON_V320),
+        getFuncSelector(TABLE_METHOD_SELECT_CON_V320, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             selectByConditionV32(table, executive, data, pricer, params);
         },
         BlockVersion::V3_2_VERSION);
     registerFunc(
-        getFuncSelector(TABLE_METHOD_COUNT_V320),
+        getFuncSelector(TABLE_METHOD_COUNT_V320, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             countV32(table, executive, data, pricer, params);
         },
         BlockVersion::V3_2_VERSION);
     registerFunc(
-        getFuncSelector(TABLE_METHOD_UPDATE_CON_V320),
+        getFuncSelector(TABLE_METHOD_UPDATE_CON_V320, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             updateByConditionV32(table, executive, data, pricer, params);
         },
         BlockVersion::V3_2_VERSION);
     registerFunc(
-        getFuncSelector(TABLE_METHOD_REMOVE_CON_V320),
+        getFuncSelector(TABLE_METHOD_REMOVE_CON_V320, _hashImpl),
         [this](auto&& table, auto&& executive, auto&& data, auto&& pricer, auto&& params) {
             removeByConditionV32(table, executive, data, pricer, params);
         },

@@ -68,6 +68,11 @@ public:
                        << m_config->printCurrentState();
     }
 
+    void addExceptionPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg)
+    {
+        m_exceptionPrePrepare = std::move(_prePrepareMsg);
+    }
+
     bcos::protocol::BlockNumber index() const { return m_index; }
 
     virtual PBFTMessageInterface::Ptr preCommitCache() { return m_precommit; }
@@ -123,6 +128,7 @@ public:
         m_submitted.store(false);
         m_precommitted.store(false);
         m_checkpointProposal = nullptr;
+        m_checkPointStartTime = 0;
     }
 
 protected:
@@ -209,10 +215,13 @@ protected:
     QuorumRecoderType m_commitReqWeight;
 
     PBFTMessageInterface::Ptr m_prePrepare = nullptr;
+    PBFTMessageInterface::Ptr m_exceptionPrePrepare = nullptr;
     PBFTMessageInterface::Ptr m_precommit = nullptr;
     PBFTMessageInterface::Ptr m_precommitWithoutData = nullptr;
 
     PBFTProposalInterface::Ptr m_checkpointProposal = nullptr;
+    // time record for checkPoint start
+    std::uint64_t m_checkPointStartTime = 0;
 
     CollectionCacheType m_checkpointCacheList;
     QuorumRecoderType m_checkpointCacheWeight;

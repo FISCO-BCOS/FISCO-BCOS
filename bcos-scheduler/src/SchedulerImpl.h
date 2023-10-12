@@ -19,6 +19,26 @@
 
 namespace bcos::scheduler
 {
+
+enum class NodeListType
+{
+    ConsensusNodeList,
+    ObserverNodeList,
+    CandidateSealerNodeList,
+};
+
+enum class ConfigType
+{
+    BlockTxCountLimit,
+    LeaderSwitchPeriod,
+    GasLimit,
+    VersionNumber,
+    ConsensusType,
+    EpochSealerNum,
+    EpochBlockNum,
+    NotifyRotateFlag
+};
+
 class SchedulerImpl : public SchedulerInterface, public std::enable_shared_from_this<SchedulerImpl>
 {
 public:
@@ -30,12 +50,7 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId,
-        size_t keyPageSize)
-      : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory,
-            txPool, transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false,
-            schedulerTermId, keyPageSize)
-    {}
-
+        size_t keyPageSize);
 
     SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
@@ -43,26 +58,7 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
-        int64_t schedulerTermId, size_t keyPageSize)
-      : m_executorManager(std::move(executorManager)),
-        m_ledger(std::move(ledger)),
-        m_storage(std::move(storage)),
-        m_executionMessageFactory(std::move(executionMessageFactory)),
-        m_blockExecutiveFactory(
-            std::make_shared<bcos::scheduler::BlockExecutiveFactory>(isSerialExecute, keyPageSize)),
-        m_blockFactory(std::move(blockFactory)),
-        m_txPool(txPool),
-        m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
-        m_hashImpl(std::move(hashImpl)),
-        m_isAuthCheck(isAuthCheck),
-        m_isWasm(isWasm),
-        m_isSerialExecute(isSerialExecute),
-        m_schedulerTermId(schedulerTermId),
-        m_preExeWorker("preExeScheduler", 2),  // assume that preExe is no slower than exe speed/2
-        m_exeWorker("exeScheduler", 1)
-    {
-        start();
-    }
+        int64_t schedulerTermId, size_t keyPageSize);
 
     SchedulerImpl(const SchedulerImpl&) = delete;
     SchedulerImpl(SchedulerImpl&&) = delete;
@@ -148,6 +144,7 @@ public:
     }
 
     bcos::crypto::Hash::Ptr getHashImpl() { return m_hashImpl; }
+    const ledger::LedgerConfig& ledgerConfig() const { return *m_ledgerConfig; }
 
 private:
     void handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
@@ -229,5 +226,6 @@ private:
 
     bcos::ThreadPool m_preExeWorker;
     bcos::ThreadPool m_exeWorker;
+    ledger::LedgerConfig::Ptr m_ledgerConfig;
 };
 }  // namespace bcos::scheduler

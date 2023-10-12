@@ -18,6 +18,7 @@
  * @date: 2021-05-14
  */
 #include "SealingManager.h"
+#include "Sealer.h"
 using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::crypto;
@@ -54,17 +55,13 @@ bool SealingManager::shouldGenerateProposal()
         return false;
     }
     // should wait the given block submit to the ledger
-    if (m_currentNumber < m_waitUntil)
+    if (m_latestNumber < m_waitUntil)
     {
         return false;
     }
     // check the txs size
     auto txsSize = pendingTxsSize();
-    if (txsSize >= m_maxTxsPerBlock || reachMinSealTimeCondition())
-    {
-        return true;
-    }
-    return false;
+    return txsSize >= m_maxTxsPerBlock || reachMinSealTimeCondition();
 }
 
 void SealingManager::clearPendingTxs()
@@ -102,7 +99,7 @@ void SealingManager::clearPendingTxs()
         {
             SEAL_LOG(WARNING) << LOG_DESC(
                                      "clearPendingTxs: return back the unhandled txs exception")
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
     UpgradeGuard ul(l);
@@ -137,14 +134,15 @@ void SealingManager::notifyResetProposal(bcos::protocol::Block::Ptr _block)
     notifyResetTxsFlag(txsHashList, false);
 }
 
-std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
+std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
+    std::function<uint16_t(bcos::protocol::Block::Ptr)> _handleBlockHook)
 {
     if (!shouldGenerateProposal())
     {
         return std::pair(false, nullptr);
     }
     WriteGuard l(x_pendingTxs);
-    m_sealingNumber = std::max(m_sealingNumber.load(), m_currentNumber.load() + 1);
+    m_sealingNumber = std::max(m_sealingNumber.load(), m_latestNumber.load() + 1);
     auto block = m_config->blockFactory()->createBlock();
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(m_sealingNumber);
@@ -160,9 +158,36 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal()
         m_waitUntil.store(m_sealingNumber);
         SEAL_LOG(INFO) << LOG_DESC("seal the system transactions")
                        << LOG_KV("sealNextBlockUntil", m_waitUntil)
-                       << LOG_KV("curNum", m_currentNumber);
+                       << LOG_KV("curNum", m_latestNumber);
     }
     bool containSysTxs = false;
+    if (_handleBlockHook)
+    {
+        // put the generated transaction into the 0th position of the block transactions
+        // Note: must set generatedTx into the first transaction for other transactions may change
+        //       the _sys_config_ and _sys_consensus_
+        //       here must use noteChange for this function will notify updating the txsCache
+        auto handleRet = _handleBlockHook(block);
+        if (handleRet == Sealer::SealBlockResult::SUCCESS)
+        {
+            if (block->transactionsMetaDataSize() > 0 || block->transactionsSize() > 0)
+            {
+                containSysTxs = true;
+                if (txsSize == m_maxTxsPerBlock)
+                {
+                    txsSize--;
+                }
+            }
+        }
+        else if (handleRet == Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK)
+        {
+            SEAL_LOG(INFO) << LOG_DESC("seal the rotate transactions, but not update latest block")
+                           << LOG_KV("sealNextBlockUntil", m_waitUntil)
+                           << LOG_KV("curNum", m_latestNumber);
+            m_waitUntil.store(m_sealingNumber - 1);
+            return {false, nullptr};
+        }
+    }
     for (size_t i = 0; i < systemTxsSize; i++)
     {
         block->appendTransactionMetaData(std::move(m_pendingSysTxs->front()));
@@ -293,7 +318,7 @@ void SealingManager::fetchTransactions()
             catch (std::exception const& e)
             {
                 SEAL_LOG(WARNING) << LOG_DESC("fetchTransactions: onRecv sealed txs failed")
-                                  << LOG_KV("error", boost::diagnostic_information(e))
+                                  << LOG_KV("message", boost::diagnostic_information(e))
                                   << LOG_KV(
                                          "fetchedTxsSize", _txsHashList->transactionsMetaDataSize())
                                   << LOG_KV(

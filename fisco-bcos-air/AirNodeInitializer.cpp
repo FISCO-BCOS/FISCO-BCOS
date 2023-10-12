@@ -22,7 +22,7 @@
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
-#include "bcos-gateway/libratelimit/DistributedRateLimiter.h"
+#include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -46,8 +46,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 {
     g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
-    boost::property_tree::ptree pt;
-    boost::property_tree::read_ini(_configFilePath, pt);
+    boost::property_tree::ptree ptree;
+    boost::property_tree::read_ini(_configFilePath, ptree);
 
     m_logInitializer = std::make_shared<BoostLogInitializer>();
     m_logInitializer->initLog(_configFilePath);
@@ -84,7 +84,6 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
-        m_nodeInitializer->protocolInitializer()->cryptoSuite(),
         m_nodeInitializer->protocolInitializer()->dataEncryption());
     rpcFactory.setNodeConfig(nodeConfig);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
@@ -99,17 +98,12 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_nodeInitializer->initSysContract();
 
     // tars rpc
-    if (!nodeConfig->tarsRPCConfig().configPath.empty())
+    if (!nodeConfig->tarsRPCConfig().host.empty() && nodeConfig->tarsRPCConfig().port > 0 &&
+        nodeConfig->tarsRPCConfig().threadCount > 0)
     {
-        m_rpcThread.emplace([nodeConfig, nodeService, this]() {
-            m_rpcApplication.emplace(nodeService);
-
-            std::ifstream stream(nodeConfig->tarsRPCConfig().configPath);
-            std::string configContent(
-                (std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
-            m_rpcApplication->main(configContent);
-            m_rpcApplication->waitForShutdown();
-        });
+        m_tarsApplication.emplace(nodeService);
+        m_tarsConfig.emplace(RPCApplication::generateTarsConfig(nodeConfig->tarsRPCConfig().host,
+            nodeConfig->tarsRPCConfig().port, nodeConfig->tarsRPCConfig().threadCount));
     }
 }
 
@@ -143,8 +137,21 @@ void AirNodeInitializer::start()
             bcos::gateway::P2PMessage, bcos::gateway::P2PSession, bcos::gateway::P2PMessageV2,
             bcos::gateway::FrontServiceInfo, bcos::gateway::GatewayNodeStatus,
             bcos::gateway::GatewayStatus, bcos::gateway::ResponseCallback, bcos::gateway::Retry,
-            bcos::gateway::ratelimiter::TimeWindowRateLimiter,
-            bcos::gateway::ratelimiter::DistributedRateLimiter /*gateway end*/>(4);
+            bcos::ratelimiter::TimeWindowRateLimiter,
+            bcos::ratelimiter::DistributedRateLimiter /*gateway end*/>(4);
+    }
+
+    if (m_tarsApplication && m_tarsConfig)
+    {
+        std::atomic_bool started = false;
+        m_tarsThread.emplace([&, this]() {
+            m_tarsApplication->main(*m_tarsConfig);
+            started = true;
+            started.notify_all();
+            m_tarsApplication->waitForShutdown();
+        });
+
+        started.wait(false);
     }
 }
 
@@ -164,10 +171,10 @@ void AirNodeInitializer::stop()
         {
             m_nodeInitializer->stop();
         }
-        if (m_rpcApplication && m_rpcThread)
+        if (m_tarsApplication && m_tarsThread)
         {
-            m_rpcApplication->terminate();
-            m_rpcThread->join();
+            m_tarsApplication->terminate();
+            m_tarsThread->join();
         }
 
         if (m_objMonitor)

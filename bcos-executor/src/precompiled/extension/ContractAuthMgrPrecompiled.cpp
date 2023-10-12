@@ -56,67 +56,69 @@ ContractAuthMgrPrecompiled::ContractAuthMgrPrecompiled(crypto::Hash::Ptr _hashIm
   : bcos::precompiled::Precompiled(std::move(_hashImpl))
 {
     const auto* getAdminStr = _isWasm ? AUTH_METHOD_GET_ADMIN : AUTH_METHOD_GET_ADMIN_ADD;
-    registerFunc(getFuncSelector(getAdminStr), [this](auto&& _executive, auto&& _callParameters) {
-        getAdmin(std::forward<decltype(_executive)>(_executive),
-            std::forward<decltype(_callParameters)>(_callParameters));
-    });
+    registerFunc(
+        getFuncSelector(getAdminStr, _hashImpl), [this](auto&& _executive, auto&& _callParameters) {
+            getAdmin(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
 
     const auto* resetAdminStr = _isWasm ? AUTH_METHOD_SET_ADMIN : AUTH_METHOD_SET_ADMIN_ADD;
-    registerFunc(getFuncSelector(resetAdminStr), [this](auto&& _executive, auto&& _callParameters) {
-        resetAdmin(std::forward<decltype(_executive)>(_executive),
-            std::forward<decltype(_callParameters)>(_callParameters));
-    });
+    registerFunc(getFuncSelector(resetAdminStr, _hashImpl),
+        [this](auto&& _executive, auto&& _callParameters) {
+            resetAdmin(std::forward<decltype(_executive)>(_executive),
+                std::forward<decltype(_callParameters)>(_callParameters));
+        });
 
     const auto* setMethodAuthTypeStr =
         _isWasm ? AUTH_METHOD_SET_AUTH_TYPE : AUTH_METHOD_SET_AUTH_TYPE_ADD;
-    registerFunc(
-        getFuncSelector(setMethodAuthTypeStr), [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(getFuncSelector(setMethodAuthTypeStr, _hashImpl),
+        [this](auto&& _executive, auto&& _callParameters) {
             setMethodAuthType(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* openMethodAuthStr = _isWasm ? AUTH_METHOD_OPEN_AUTH : AUTH_METHOD_OPEN_AUTH_ADD;
-    registerFunc(
-        getFuncSelector(openMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(getFuncSelector(openMethodAuthStr, _hashImpl),
+        [this](auto&& _executive, auto&& _callParameters) {
             openMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* closeMethodAuthStr = _isWasm ? AUTH_METHOD_CLOSE_AUTH : AUTH_METHOD_CLOSE_AUTH_ADD;
-    registerFunc(
-        getFuncSelector(closeMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(getFuncSelector(closeMethodAuthStr, _hashImpl),
+        [this](auto&& _executive, auto&& _callParameters) {
             closeMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* checkMethodAuthStr = _isWasm ? AUTH_METHOD_CHECK_AUTH : AUTH_METHOD_CHECK_AUTH_ADD;
-    registerFunc(
-        getFuncSelector(checkMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(getFuncSelector(checkMethodAuthStr, _hashImpl),
+        [this](auto&& _executive, auto&& _callParameters) {
             checkMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* getMethodAuthStr = _isWasm ? AUTH_METHOD_GET_AUTH : AUTH_METHOD_GET_AUTH_ADD;
-    registerFunc(
-        getFuncSelector(getMethodAuthStr), [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(getFuncSelector(getMethodAuthStr, _hashImpl),
+        [this](auto&& _executive, auto&& _callParameters) {
             getMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     registerFunc(
-        getFuncSelector(AUTH_METHOD_SET_CONTRACT_32),
+        getFuncSelector(AUTH_METHOD_SET_CONTRACT_32, _hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             setContractStatus32(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         },
         protocol::BlockVersion::V3_2_VERSION);
 
-    registerFunc(getFuncSelector(AUTH_METHOD_SET_CONTRACT),
+    registerFunc(getFuncSelector(AUTH_METHOD_SET_CONTRACT, _hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             setContractStatus(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
-    registerFunc(getFuncSelector(AUTH_METHOD_GET_CONTRACT),
+    registerFunc(getFuncSelector(AUTH_METHOD_GET_CONTRACT, _hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             contractAvailable(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
@@ -546,7 +548,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
     else [[unlikely]]
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("error auth type") << LOG_KV("path", path)
+                               << LOG_DESC("invalid auth type") << LOG_KV("path", path)
                                << LOG_KV("type", authType);
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_ERROR_AUTH_TYPE, codec);
         return;
@@ -590,7 +592,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
         catch (...)
         {
             PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                                  << LOG_DESC("auth map parse error") << LOG_KV("path", path);
+                                  << LOG_DESC("auth map parse failed") << LOG_KV("path", path);
             getErrorCodeOut(
                 _callParameters->mutableExecResult(), CODE_TABLE_AUTH_ROW_NOT_EXIST, codec);
             return;
@@ -631,7 +633,7 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
     catch (...)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
-                               << LOG_DESC("decode method type error");
+                               << LOG_DESC("decode method type failed");
         return (int)CODE_TABLE_AUTH_TYPE_DECODE_ERROR;
     }
 }

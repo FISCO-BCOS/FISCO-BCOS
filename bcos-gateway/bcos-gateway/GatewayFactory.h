@@ -13,15 +13,13 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
-#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
 #include <sw/redis++/redis++.h>
 #include <boost/asio/ssl.hpp>
+#include <utility>
 
-namespace bcos
+namespace bcos::gateway
 {
-namespace gateway
-{
-class GatewayFactory : public bcos::ObjectCounter<GatewayFactory>
+class GatewayFactory
 {
 public:
     using Ptr = std::shared_ptr<GatewayFactory>;
@@ -144,5 +142,4 @@ private:
 
     bcos::security::DataEncryptInterface::Ptr m_dataEncrypt{nullptr};
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

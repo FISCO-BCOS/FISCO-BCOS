@@ -91,6 +91,12 @@ public:
         return *m_connectedNodeList;
     }
 
+    virtual bcos::crypto::NodeIDSetPtr connectedNodeSet()
+    {
+        ReadGuard lock(x_connectedNodeList);
+        return m_connectedNodeList;
+    }
+
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet const& _connectedNodeList)
     {
         WriteGuard lock(x_connectedNodeList);
@@ -132,6 +138,16 @@ public:
         return *m_nodeList;
     }
 
+    bcos::crypto::NodeIDSetPtr connectedGroupNodeList()
+    {
+        ReadGuard nlock(x_nodeList);
+        ReadGuard clock(x_connectedNodeList);
+        auto nodeList =  *m_nodeList | RANGES::views::filter([this](bcos::crypto::NodeIDPtr _nodeId) {
+            return m_connectedNodeList->contains(_nodeId);
+        });
+        return std::make_shared<bcos::crypto::NodeIDSet>(nodeList.begin(), nodeList.end());
+    }
+
     virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onRecvResponse)
     {
@@ -157,6 +173,7 @@ private:
 
 protected:
     bcos::crypto::NodeIDPtr m_nodeId;
+
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     mutable SharedMutex x_consensusNodeList;
 

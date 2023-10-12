@@ -34,8 +34,8 @@ using namespace front;
 using namespace protocol;
 
 FrontService::FrontService()
+  : m_localProtocol(g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService))
 {
-    m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this)
                     << LOG_KV("minVersion", m_localProtocol->minVersion())
                     << LOG_KV("maxVersion", m_localProtocol->maxVersion());
@@ -101,9 +101,9 @@ void FrontService::start()
         m_groupID, [self](Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
             if (_error)
             {
-                FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo error")
-                                 << LOG_KV("errorCode", _error->errorCode())
-                                 << LOG_KV("errorMessage", _error->errorMessage());
+                FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo failed")
+                                 << LOG_KV("code", _error->errorCode())
+                                 << LOG_KV("message", _error->errorMessage());
                 return;
             }
             FRONT_LOG(INFO) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo callback")
@@ -128,7 +128,7 @@ void FrontService::start()
             catch (std::exception& e)
             {
                 FRONT_LOG(WARNING)
-                    << LOG_DESC("IOService") << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_DESC("IOService") << LOG_KV("failed", boost::diagnostic_information(e));
             }
 
             if (m_run && m_ioService->stopped())
@@ -188,7 +188,7 @@ void FrontService::stop()
     catch (const std::exception& e)
     {
         FRONT_LOG(ERROR) << LOG_DESC("FrontService stop")
-                         << LOG_KV("error", boost::diagnostic_information(e));
+                         << LOG_KV("failed", boost::diagnostic_information(e));
     }
 
     FRONT_LOG(INFO) << LOG_DESC("FrontService stop")
@@ -209,6 +209,9 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
         groupNodeInfo = m_groupNodeInfo;
     }
 
+    FRONT_LOG(DEBUG) << LOG_DESC("asyncGetGroupNodeInfo")
+                     << LOG_KV("nodeIDs.size()",
+                            (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
     if (_onGetGroupNodeInfo)
     {
         m_asyncGroup.run([_onGetGroupNodeInfo = std::move(_onGetGroupNodeInfo),
@@ -216,10 +219,6 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
             _onGetGroupNodeInfo(nullptr, groupNodeInfo);
         });
     }
-
-    FRONT_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
-                    << LOG_KV("nodeIDs.size()",
-                           (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
 }
 
 /**
@@ -293,7 +292,7 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
     catch (std::exception& e)
     {
         FRONT_LOG(ERROR) << LOG_BADGE("asyncSendMessageByNodeID")
-                         << LOG_KV("error", boost::diagnostic_information(e));
+                         << LOG_KV("failed", boost::diagnostic_information(e));
     }
 }
 
@@ -386,7 +385,7 @@ void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNod
         auto mutableProtocol = std::const_pointer_cast<ProtocolInfo>(protocol);
         // negotiate failed: can't happen unless the code has a bug
         if (mutableProtocol->minVersion() > m_localProtocol->maxVersion() ||
-            mutableProtocol->maxVersion() < m_localProtocol->minVersion())
+            mutableProtocol->maxVersion() < m_localProtocol->minVersion()) [[unlikely]]
         {
             FRONT_LOG(ERROR) << LOG_DESC("protocolNegotiate failed")
                              << LOG_KV("nodeID", nodeIDList.at(i))
@@ -402,6 +401,7 @@ void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNod
         // set the negotiated version
         auto version = std::min(m_localProtocol->maxVersion(), mutableProtocol->maxVersion());
         mutableProtocol->setVersion((ProtocolVersion)version);
+        m_localProtocolVersion = (ProtocolVersion)version;
         FRONT_LOG(INFO) << LOG_DESC("protocolNegotiate success")
                         << LOG_KV("nodeID", nodeIDList.at(i))
                         << LOG_KV("groupID", _groupNodeInfo->groupID())
@@ -451,8 +451,8 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
                     {
                         FRONT_LOG(ERROR)
                             << LOG_BADGE("onReceiveMessage sendMessage callback")
-                            << LOG_KV("uuid", _uuid) << LOG_KV("errorCode", _error->errorCode())
-                            << LOG_KV("errorMessage", _error->errorMessage());
+                            << LOG_KV("uuid", _uuid) << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("message", _error->errorMessage());
                     }
                 });
         }
@@ -531,7 +531,8 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
     }
     catch (const std::exception& e)
     {
-        FRONT_LOG(ERROR) << "onReceiveMessage" << LOG_KV("error", boost::diagnostic_information(e));
+        FRONT_LOG(ERROR) << "onReceiveMessage"
+                         << LOG_KV("failed", boost::diagnostic_information(e));
     }
 
     if (_receiveMsgCallback)
@@ -623,6 +624,6 @@ void FrontService::onMessageTimeout(const boost::system::error_code& _error,
     catch (std::exception& e)
     {
         FRONT_LOG(ERROR) << "onMessageTimeout" << LOG_KV("uuid", _uuid)
-                         << LOG_KV("error", boost::diagnostic_information(e));
+                         << LOG_KV("failed", boost::diagnostic_information(e));
     }
 }

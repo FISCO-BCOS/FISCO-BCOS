@@ -112,7 +112,7 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
             {
                 PBFT_LOG(WARNING) << LOG_DESC("loadAndVerifyProposal exception")
                                   << printPBFTProposal(_proposal)
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("msg", boost::diagnostic_information(e));
             }
         });
 }
@@ -465,7 +465,7 @@ void PBFTCacheProcessor::applyStateMachine(
             catch (std::exception const& e)
             {
                 PBFT_LOG(WARNING) << LOG_DESC("applyStateMachine failed")
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
@@ -493,7 +493,7 @@ void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _propo
                 {
                     PBFT_LOG(WARNING) << LOG_DESC("notifyCommittedProposalIndex error")
                                       << LOG_KV("index", _proposalIndex)
-                                      << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                                      << LOG_KV("msg", boost::diagnostic_information(e));
                 }
             });
     }
@@ -544,11 +544,12 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
     }
     // print the prepared proposal info
     std::stringstream preparedProposalInfo;
-    preparedProposalInfo << "preparedProposalInfo: ";
+    preparedProposalInfo << " preparedProposalInfo: ";
     for (const auto& proposal : _viewChange->preparedProposals())
     {
         preparedProposalInfo << LOG_KV("propIndex", proposal->index())
                              << LOG_KV("propHash", proposal->hash().abridged())
+                             << LOG_KV("fromIdx", proposal->generatedFrom())
                              << LOG_KV("dataSize", proposal->consensusProposal()->data().size());
     }
     PBFT_LOG(INFO) << LOG_DESC("addViewChangeReq") << printPBFTMsgInfo(_viewChange)
@@ -617,10 +618,9 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
             }
             // new precommit proposal
             preparedProposals[proposal->index()] = proposal;
-            proposal->setGeneratedFrom(viewChangeReq->generatedFrom());
         }
     }
-    // generate prepareMsg from maxCommittedIndex to  maxPrecommitIndex
+    // generate prepareMsg from maxCommittedIndex to maxPrecommitIndex
     PBFTMessageList prePrepareMsgList;
     for (auto i = (maxCommittedIndex + 1); i <= maxPrecommitIndex; i++)
     {
@@ -846,6 +846,7 @@ void PBFTCacheProcessor::removeConsensusedCache(
     ViewType _view, bcos::protocol::BlockNumber _consensusedNumber)
 {
     m_proposalsToStableConsensus.erase(_consensusedNumber);
+    uint32_t eraseSize = 0;
     for (auto pcache = m_caches.begin(); pcache != m_caches.end();)
     {
         // Note: can't remove stabledCommitted cache here for need to fetch
@@ -854,11 +855,15 @@ void PBFTCacheProcessor::removeConsensusedCache(
         {
             m_proposalsToStableConsensus.erase(pcache->first);
             pcache = m_caches.erase(pcache);
+            eraseSize++;
             continue;
         }
         pcache++;
     }
     removeInvalidViewChange(_view, _consensusedNumber);
+    PBFT_LOG(INFO) << LOG_DESC("removeConsensusedCache finalizeConsensus") << LOG_KV("view", _view)
+                   << LOG_KV("number", _consensusedNumber) << LOG_KV("eraseSize", eraseSize)
+                   << LOG_KV("cacheSize", m_caches.size());
     m_newViewGenerated = false;
 }
 
@@ -866,6 +871,9 @@ void PBFTCacheProcessor::removeConsensusedCache(
 void PBFTCacheProcessor::resetCacheAfterViewChange(
     ViewType _view, bcos::protocol::BlockNumber _latestCommittedProposal)
 {
+    PBFT_LOG(INFO) << LOG_DESC("resetCacheAfterViewChange") << LOG_KV("view", _view)
+                   << LOG_KV("number", _latestCommittedProposal)
+                   << LOG_KV("cacheSize", m_caches.size());
     for (auto const& it : m_caches)
     {
         it.second->resetCache(_view);
@@ -961,14 +969,14 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
 void PBFTCacheProcessor::checkAndCommitStableCheckPoint()
 {
     std::vector<PBFTCache::Ptr> stabledCacheList;
-    for (auto const& it : m_caches)
+    for (auto const& [_, cache] : m_caches)
     {
-        auto ret = it.second->checkAndCommitStableCheckPoint();
+        auto ret = cache->checkAndCommitStableCheckPoint();
         if (!ret)
         {
             continue;
         }
-        stabledCacheList.emplace_back(it.second);
+        stabledCacheList.emplace_back(cache);
     }
     // Note: since updateStableCheckPointQueue may update m_caches after commitBlock
     // must call it after iterator m_caches
@@ -1029,12 +1037,12 @@ bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _chec
         return false;
     }
     // hit in the local committedProposalList or already been requested
-    if (m_committedProposalList.count(checkPointIndex))
+    if (m_committedProposalList.contains(checkPointIndex))
     {
         return false;
     }
     // the local cache already has the checkPointProposal
-    if (m_caches.count(checkPointIndex) && m_caches[checkPointIndex]->checkPointProposal())
+    if (m_caches.contains(checkPointIndex) && m_caches[checkPointIndex]->checkPointProposal())
     {
         return false;
     }
@@ -1045,7 +1053,7 @@ bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _chec
     }
     // no-timeout
     // has not received any checkPoint message before, wait for generating local checkPoint
-    if (!m_caches.count(checkPointIndex))
+    if (!m_caches.contains(checkPointIndex))
     {
         return false;
     }

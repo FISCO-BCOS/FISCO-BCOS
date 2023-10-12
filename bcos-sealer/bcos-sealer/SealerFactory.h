@@ -20,6 +20,8 @@
 #pragma once
 #include "Sealer.h"
 #include "SealerConfig.h"
+#include "VRFBasedSealer.h"
+#include <bcos-tool/NodeConfig.h>
 namespace bcos
 {
 namespace sealer
@@ -28,18 +30,23 @@ class SealerFactory
 {
 public:
     using Ptr = std::shared_ptr<SealerFactory>;
-    SealerFactory(bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txpool, unsigned _minSealTime,
-        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
+    SealerFactory(bcos::tool::NodeConfig::Ptr _nodeConfig,
+        bcos::protocol::BlockFactory::Ptr _blockFactory, bcos::txpool::TxPoolInterface::Ptr _txpool,
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
+        bcos::crypto::KeyPairInterface::Ptr _key);
 
     virtual ~SealerFactory() = default;
     Sealer::Ptr createSealer();
+    VRFBasedSealer::Ptr createVRFBasedSealer();
 
 protected:
+    std::string m_groupId{};
+    std::string m_chainId{};
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     unsigned m_minSealTime;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
+    bcos::crypto::KeyPairInterface::Ptr m_keyPair;
 };
 }  // namespace sealer
 }  // namespace bcos

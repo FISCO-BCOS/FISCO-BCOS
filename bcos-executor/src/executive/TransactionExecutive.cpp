@@ -30,6 +30,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
 
 #ifdef WITH_WASM
@@ -73,9 +74,6 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
     EXECUTIVE_LOG(TRACE) << "Execute start\t" << input->toFullString();
 
     auto& callParameters = input;
-    m_storageWrapper = std::make_shared<StorageWrapper>(m_blockContext.storage(), m_recoder);
-    m_storageWrapper->setCodeCache(m_blockContext.getCodeCache());
-    m_storageWrapper->setCodeHashCache(m_blockContext.getCodeHashCache());
 
     auto message = execute(std::move(callParameters));
 
@@ -286,7 +284,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
 CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     CallParameters::UniquePtr callParameters)
 {
-    auto precompiledCallParams = std::make_shared<PrecompiledExecResult>(callParameters);
+    auto precompiledCallParams = std::make_shared<PrecompiledExecResult>(*callParameters);
     bytes data{};
     if (callParameters->internalCall)
     {
@@ -317,9 +315,9 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     catch (protocol::PrecompiledError const& e)
     {
         EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "PrecompiledError"
+                            << "PrecompiledFailed"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
-                            << LOG_KV("error", e.what());
+                            << LOG_KV("message", e.what());
         // Note: considering the scenario where the contract calls the contract, the error message
         // still needs to be written to the output
         writeErrInfoToOutput(e.what(), *callParameters);
@@ -332,7 +330,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     {
         EXECUTIVE_LOG(WARNING) << "Exception"
                                << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
-                               << LOG_KV("error", e.what());
+                               << LOG_KV("message", e.what());
         writeErrInfoToOutput(e.what(), *callParameters);
         revert();
         callParameters->type = CallParameters::REVERT;
@@ -343,9 +341,9 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     {
         // Note: Since the information of std::exception may be affected by the version of the c++
         // library, in order to ensure compatibility, the information is not written to output
-        writeErrInfoToOutput("InternalPrecompiledError", *callParameters);
+        writeErrInfoToOutput("InternalPrecompiledFailed", *callParameters);
         EXECUTIVE_LOG(WARNING) << LOG_DESC("callPrecompiled")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
         revert();
         callParameters->type = CallParameters::REVERT;
         callParameters->status = (int32_t)TransactionStatus::Unknown;
@@ -407,7 +405,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
                 m_blockContext.blockVersion());
         }
 
-        if (m_blockContext.blockVersion() >= static_cast<uint32_t>(BlockVersion::V3_3_VERSION))
+        if (m_blockContext.features().get(ledger::Features::Flag::feature_sharding))
         {
             if (callParameters->origin != callParameters->senderAddress)
             {
@@ -597,7 +595,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
             auto leftGas = hostContext.gas();
 
-            evmc_message evmcMessage;
+            evmc_message evmcMessage{};
             evmcMessage.kind = kind;
             evmcMessage.flags = flags;
             evmcMessage.depth = 0;  // depth own by scheduler
@@ -694,7 +692,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             if (callResults->status != (int32_t)TransactionStatus::None)
             {
                 EXECUTIVE_LOG(INFO)
-                    << "Revert transaction: " << LOG_DESC("deploy failed due to status error")
+                    << "Revert transaction: " << LOG_DESC("deploy failed due to status failed")
                     << LOG_KV("status", callResults->status)
                     << LOG_KV("sender", callResults->senderAddress)
                     << LOG_KV("address", callResults->codeAddress);
@@ -832,7 +830,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     writeErrInfoToOutput("Call address error.", *callResult);
                 }
                 EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                                    << LOG_DESC("call address error, maybe address not exist")
+                                    << LOG_DESC("call address failed, maybe address not exist")
                                     << LOG_KV("address", callResult->codeAddress)
                                     << LOG_KV("sender", callResult->senderAddress);
                 return callResult;
@@ -984,7 +982,7 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
         auto execResult = precompiled->call(shared_from_this(), _precompiledParams);
         return execResult;
     }
-    [[unlikely]] EXECUTIVE_LOG(ERROR)
+    [[unlikely]] EXECUTIVE_LOG(WARNING)
         << LOG_DESC("[call]Can't find precompiled address")
         << LOG_KV("address", _precompiledParams->m_precompiledAddress);
     BOOST_THROW_EXCEPTION(PrecompiledError("can't find precompiled address."));
@@ -992,13 +990,14 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
 
 bool TransactionExecutive::isPrecompiled(const std::string& address) const
 {
-    return m_precompiled->at(
-               address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck()) != nullptr;
+    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck(),
+               m_blockContext.features()) != nullptr;
 }
 
 std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const
 {
-    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck());
+    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck(),
+        m_blockContext.features());
 }
 
 std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
@@ -1028,12 +1027,12 @@ void TransactionExecutive::revert()
     EXECUTOR_BLK_LOG(INFO, m_blockContext.number())
         << "Revert transaction" << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
 
-    if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_4_VERSION) >= 0)
+    if (m_blockContext.features().get(ledger::Features::Flag::bugfix_revert))
     {
         // revert child beforehand from back to front
-        for (auto rit = m_childExecutives.rbegin(); rit != m_childExecutives.rend(); ++rit)
+        for (auto& childExecutive : RANGES::views::reverse(m_childExecutives))
         {
-            (*rit)->revert();
+            childExecutive->revert();
         }
     }
 
@@ -1431,7 +1430,7 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
                                                            precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
-            m_blockContext.isAuthCheck()));
+            m_blockContext.isAuthCheck(), m_blockContext.features()));
     EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", callParameters->receiveAddress)
                          << LOG_KV("isCreate", callParameters->create)
                          << LOG_KV("originAddress", callParameters->origin);
@@ -1478,7 +1477,7 @@ int32_t TransactionExecutive::checkContractAvailable(
     }
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
-            m_blockContext.isAuthCheck()));
+            m_blockContext.isAuthCheck(), m_blockContext.features()));
     // if status is normal, then return 0; else if status is abnormal, then return else
     // if return <0, it means status row not exist, check pass by default in this case
     auto status = contractAuthPrecompiled->getContractStatus(
@@ -1496,8 +1495,9 @@ uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::Unique
         return 0;
     }
     AccountPrecompiled::Ptr accountPrecompiled =
-        dynamic_pointer_cast<precompiled::AccountPrecompiled>(m_precompiled->at(
-            ACCOUNT_ADDRESS, m_blockContext.blockVersion(), m_blockContext.isAuthCheck()));
+        dynamic_pointer_cast<precompiled::AccountPrecompiled>(
+            m_precompiled->at(ACCOUNT_ADDRESS, m_blockContext.blockVersion(),
+                m_blockContext.isAuthCheck(), m_blockContext.features()));
 
     return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this());
 }

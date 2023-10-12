@@ -20,11 +20,7 @@
 #pragma once
 #include <bcos-boostssl/httpserver/Common.h>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace http
+namespace bcos::boostssl::http
 {
 // The queue for http request pipeline
 class Queue
@@ -74,6 +70,4 @@ public:
         }
     }
 };
-}  // namespace http
-}  // namespace boostssl
 }  // namespace bcos

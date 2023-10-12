@@ -22,7 +22,10 @@
 #include "../../ledger/LedgerConfig.h"
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
+#include "FakeBlock.h"
 #include <bcos-utilities/ThreadPool.h>
+
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -40,9 +43,9 @@ public:
     FakeLedger() = default;
     FakeLedger(BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t,
         std::vector<bytes> _sealerList)
-      : m_blockFactory(_blockFactory),
+      : m_blockFactory(std::move(_blockFactory)),
         m_ledgerConfig(std::make_shared<LedgerConfig>()),
-        m_sealerList(_sealerList)
+        m_sealerList(std::move(std::move(_sealerList)))
     {
         init(_blockNumber, _txsSize, 0);
         m_worker = std::make_shared<ThreadPool>("ledgerWorker", 1);
@@ -68,7 +71,7 @@ public:
 
     FakeLedger(
         BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t _receiptsSize)
-      : m_blockFactory(_blockFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
+      : m_blockFactory(std::move(_blockFactory)), m_ledgerConfig(std::make_shared<LedgerConfig>())
     {
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
         m_sealerList = fakeSealerList(m_keyPairVec, sigImpl, 4);
@@ -97,8 +100,8 @@ public:
     Block::Ptr init(BlockHeader::Ptr _parentBlockHeader, bool _withHeader, BlockNumber _blockNumber,
         size_t _txsSize, int64_t _timestamp = utcTime())
     {
-        auto block = fakeAndCheckBlock(
-            m_blockFactory->cryptoSuite(), m_blockFactory, false, _txsSize, 0, false);
+        auto block = fakeAndCheckBlock(m_blockFactory->cryptoSuite(), m_blockFactory, _txsSize,
+            _txsSize, _blockNumber, true, false);
         if (!_withHeader)
         {
             return block;
@@ -249,9 +252,14 @@ public:
         std::function<void(Error::Ptr, std::string, BlockNumber)> _onGetConfig) override
     {
         std::string value = "";
-        if (m_systemConfig.count(_key))
+        if (m_systemConfig.contains(_key))
         {
             value = m_systemConfig[std::string{_key}];
+        }
+        else
+        {
+            _onGetConfig(BCOS_ERROR_PTR(-1, "key not found"), "", m_ledgerConfig->blockNumber());
+            return;
         }
         _onGetConfig(nullptr, value, m_ledgerConfig->blockNumber());
     }
@@ -273,6 +281,13 @@ public:
             _onGetNodeList(nullptr, observerNodes);
             return;
         }
+        if (_type == CONSENSUS_CANDIDATE_SEALER)
+        {
+            auto consensusNodes = std::make_shared<ConsensusNodeList>();
+            *consensusNodes = m_ledgerConfig->candidateSealerNodeList();
+            _onGetNodeList(nullptr, consensusNodes);
+            return;
+        }
         _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), nullptr);
     }
 
@@ -290,7 +305,6 @@ public:
         for (auto index = _startNumber; index <= endNumber; index++)
         {
             auto nonces = m_ledger[index]->nonces();
-            std::cout << "Block nonces: " << nonces->size() << std::endl;
             nonceList->insert(std::make_pair(index, nonces));
         }
         _onGetList(nullptr, nonceList);

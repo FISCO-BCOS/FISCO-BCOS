@@ -33,12 +33,16 @@ namespace bcostars::protocol
 class TransactionReceiptFactoryImpl : public bcos::protocol::TransactionReceiptFactory
 {
 public:
+    TransactionReceiptFactoryImpl(const TransactionReceiptFactoryImpl&) = default;
+    TransactionReceiptFactoryImpl(TransactionReceiptFactoryImpl&&) = default;
+    TransactionReceiptFactoryImpl& operator=(const TransactionReceiptFactoryImpl&) = default;
+    TransactionReceiptFactoryImpl& operator=(TransactionReceiptFactoryImpl&&) = default;
     TransactionReceiptFactoryImpl(const bcos::crypto::CryptoSuite::Ptr& cryptoSuite)
       : m_hashImpl(cryptoSuite->hashImpl())
     {}
     ~TransactionReceiptFactoryImpl() override = default;
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::bytesConstRef _receiptData) override
+    TransactionReceiptImpl::Ptr createReceipt(bcos::bytesConstRef _receiptData) const override
     {
         auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
@@ -58,7 +62,7 @@ public:
         return transactionReceipt;
     }
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::bytes const& _receiptData) override
+    TransactionReceiptImpl::Ptr createReceipt(bcos::bytes const& _receiptData) const override
     {
         return createReceipt(bcos::ref(_receiptData));
     }
@@ -66,7 +70,7 @@ public:
     TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& gasUsed,
         std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
         int32_t status, bcos::bytesConstRef output,
-        bcos::protocol::BlockNumber blockNumber) override
+        bcos::protocol::BlockNumber blockNumber) const override
     {
         auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });

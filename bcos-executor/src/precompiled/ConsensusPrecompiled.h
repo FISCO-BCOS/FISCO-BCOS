@@ -22,6 +22,7 @@
 #include "../executive/BlockContext.h"
 #include "../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
+#include "common/WorkingSealerManagerImpl.h"
 #include <bcos-framework/storage/Table.h>
 #include <bcos-tool/ConsensusNode.h>
 #include <boost/core/ignore_unused.hpp>
@@ -51,6 +52,9 @@ private:
 
     [[nodiscard]] int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& _data, const CodecWrapper& codec);
+
+    void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec);
 
     void showConsensusTable(const std::shared_ptr<executor::TransactionExecutive>& _executive);
 };

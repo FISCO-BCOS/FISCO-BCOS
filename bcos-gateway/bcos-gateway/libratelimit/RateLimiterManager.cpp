@@ -42,7 +42,7 @@ void RateLimiterManager::initP2pBasicMsgTypes()
     }
 }
 
-RateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(const std::string& _rateLimiterKey)
+bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(const std::string& _rateLimiterKey)
 {
     std::shared_lock lock(x_rateLimiters);
     auto it = m_rateLimiters.find(_rateLimiterKey);
@@ -54,11 +54,11 @@ RateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(const std::string& 
     return nullptr;
 }
 
-std::pair<bool, RateLimiterInterface::Ptr> RateLimiterManager::registerRateLimiter(
-    const std::string& _rateLimiterKey, RateLimiterInterface::Ptr _rateLimiter)
+std::pair<bool, bcos::ratelimiter::RateLimiterInterface::Ptr> RateLimiterManager::registerRateLimiter(
+    const std::string& _rateLimiterKey, bcos::ratelimiter::RateLimiterInterface::Ptr _rateLimiter)
 {
     bool result = false;
-    RateLimiterInterface::Ptr oldRateLimiter = nullptr;
+    bcos::ratelimiter::RateLimiterInterface::Ptr oldRateLimiter = nullptr;
     {
         std::unique_lock lock(x_rateLimiters);
 
@@ -96,7 +96,7 @@ bool RateLimiterManager::removeRateLimiter(const std::string& _rateLimiterKey)
     return result;
 }
 
-RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::string& _group)
+bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::string& _group)
 {
     if (!m_enableOutGroupRateLimit)
     {
@@ -158,7 +158,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::str
     return rateLimiter;
 }
 
-RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
+bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     const std::string& _connIP, uint16_t _packageType)
 {
     // // TODO:check package valid
@@ -201,7 +201,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     return result.first ? rateLimiter : result.second;
 }
 
-RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
+bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     const std::string& _groupID, uint16_t _moduleID, bool /***/)
 {
     if (!m_enableInRateLimit)
@@ -256,7 +256,7 @@ RateLimiterInterface::Ptr RateLimiterManager::getInRateLimiter(
     return result.first ? rateLimiter : result.second;
 }
 
-RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::string& _connIP)
+bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::string& _connIP)
 {
     if (!m_enableOutConRateLimit)
     {

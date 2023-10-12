@@ -3,7 +3,6 @@
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
 #include <bcos-utilities/NullLock.h>
-#include <oneapi/tbb/parallel_for_each.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -15,7 +14,6 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <mutex>
-#include <range/v3/view/transform.hpp>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -58,8 +56,6 @@ private:
 
     constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
-    constexpr static int MOSTLY_CACHELINE_SIZE = 64;
-
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 4 * 1024 * 1024;  // For mru
@@ -81,7 +77,7 @@ private:
         boost::multi_index_container<Data,
             boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
-    struct alignas(MOSTLY_CACHELINE_SIZE) Bucket
+    struct Bucket
     {
         Container container;
         [[no_unique_address]] BucketMutex mutex;  // For concurrent
@@ -152,19 +148,12 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MemoryStorage()
-        requires(!withConcurrent)
-    {
-        if constexpr (withMRU)
-        {
-            m_maxCapacity = DEFAULT_CAPACITY;
-        }
-    }
-
     explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT)
-        requires(withConcurrent)
-      : m_buckets(std::min(buckets, getBucketSize()))
     {
+        if constexpr (withConcurrent)
+        {
+            m_buckets = decltype(m_buckets)(std::min(buckets, getBucketSize()));
+        }
         if constexpr (withMRU)
         {
             m_maxCapacity = DEFAULT_CAPACITY;
@@ -368,7 +357,6 @@ public:
     }
 
     task::AwaitableValue<SeekIterator> seek(auto const& key)
-        requires(withOrdered)
     {
         auto [bucket, lock] = getBucket(key);
         auto const& index = bucket.get().container.template get<0>();
@@ -381,7 +369,14 @@ public:
         }
         else
         {
-            it = index.lower_bound(key);
+            if constexpr (withOrdered)
+            {
+                it = index.lower_bound(key);
+            }
+            else
+            {
+                it = index.find(key);
+            }
         }
 
         task::AwaitableValue<SeekIterator> output({});
@@ -399,8 +394,7 @@ public:
     task::AwaitableValue<void> write(
         RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, value] : RANGES::views::zip(
-                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
+        for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
             auto [bucket, lock] = getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
@@ -498,27 +492,26 @@ public:
         return {};
     }
 
-    task::Task<void> merge(MemoryStorage& from)
+    task::AwaitableValue<void> merge(MemoryStorage& from)
     {
-        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
+        for (auto&& [bucket, fromBucket] : RANGES::views::zip(m_buckets, from.m_buckets))
         {
-            auto& [bucket, fromBucket] = bucketPair;
             Lock toLock(bucket.mutex);
             Lock fromLock(fromBucket.mutex);
 
-            auto& index = bucket.container.template get<0>();
+            auto& toIndex = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
 
             while (!fromIndex.empty())
             {
-                auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
+                auto [it, merged] = toIndex.merge(fromIndex, fromIndex.begin());
                 if (!merged)
                 {
-                    index.insert(index.erase(it), fromIndex.extract(fromIndex.begin()));
+                    toIndex.insert(toIndex.erase(it), fromIndex.extract(fromIndex.begin()));
                 }
             }
         }
-        co_return;
+        return {};
     }
 
     void swap(MemoryStorage& from)

@@ -3,55 +3,85 @@
 #include "Task.h"
 #include "Trait.h"
 #include <oneapi/tbb/task.h>
-#include <exception>
-#include <optional>
-#include <type_traits>
-#include <variant>
+#include <boost/atomic/atomic.hpp>
+#include <boost/atomic/atomic_flag.hpp>
 
 namespace bcos::task::tbb
 {
 
-// Better using inside tbb task
-auto syncWait(auto&& task) -> AwaitableReturnType<std::remove_cvref_t<decltype(task)>>
-    requires std::is_rvalue_reference_v<decltype(task)>
+template <class Task>
+auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    requires IsAwaitable<Task> && std::is_rvalue_reference_v<decltype(task)>
 {
-    using ReturnType = AwaitableReturnType<std::remove_cvref_t<decltype(task)>>;
-    using Task = std::remove_cvref_t<decltype(task)>;
-    std::conditional_t<std::is_void_v<ReturnType>, std::variant<std::monostate, std::exception_ptr>,
-        std::variant<std::monostate, ReturnType, std::exception_ptr>>
-        value;
+    using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
+    using ReturnTypeWrap = std::conditional_t<std::is_reference_v<ReturnType>,
+        std::add_pointer_t<ReturnType>, ReturnType>;
+    using ReturnVariant = std::conditional_t<std::is_void_v<ReturnType>,
+        std::variant<std::monostate, std::exception_ptr>,
+        std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
 
-    oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
-        auto waitTask = [](Task&& task, decltype(value)& value,
-                            oneapi::tbb::task::suspend_point tag) -> task::Task<void> {
-            try
+    ReturnVariant result;
+    boost::atomic_flag finished{};
+    boost::atomic<oneapi::tbb::task::suspend_point> suspendPoint{};
+
+    auto waitTask =
+        [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
+            boost::atomic<oneapi::tbb::task::suspend_point>& suspendPoint) -> task::Task<void> {
+        try
+        {
+            if constexpr (std::is_void_v<ReturnType>)
             {
-                if constexpr (std::is_void_v<typename Task::ReturnType>)
+                co_await task;
+            }
+            else
+            {
+                if constexpr (std::is_reference_v<ReturnType>)
                 {
-                    co_await task;
+                    decltype(auto) ref = co_await task;
+                    result = std::addressof(ref);
                 }
                 else
                 {
-                    value.template emplace<ReturnType>(co_await task);
+                    result = co_await task;
                 }
             }
-            catch (...)
-            {
-                value.template emplace<std::exception_ptr>(std::current_exception());
-            }
-            oneapi::tbb::task::resume(tag);
-        }(std::forward<Task>(task), value, tag);
-        waitTask.start();
-    });
+        }
+        catch (...)
+        {
+            result = std::current_exception();
+        }
 
-    if (std::holds_alternative<std::exception_ptr>(value))
+        if (finished.test_and_set())
+        {
+            suspendPoint.wait({});
+            oneapi::tbb::task::resume(suspendPoint.load());
+        }
+    }(std::forward<Task>(task), result, finished, suspendPoint);
+    waitTask.start();
+
+    if (!finished.test_and_set())
     {
-        std::rethrow_exception(std::get<std::exception_ptr>(value));
+        oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
+            suspendPoint.store(tag);
+            suspendPoint.notify_one();
+        });
+    }
+
+    if (std::holds_alternative<std::exception_ptr>(result))
+    {
+        std::rethrow_exception(std::get<std::exception_ptr>(result));
     }
 
     if constexpr (!std::is_void_v<ReturnType>)
     {
-        return std::move(std::get<ReturnType>(value));
+        if constexpr (std::is_reference_v<ReturnType>)
+        {
+            return *(std::get<ReturnTypeWrap>(result));
+        }
+        else
+        {
+            return std::move(std::get<ReturnTypeWrap>(result));
+        }
     }
 }
 

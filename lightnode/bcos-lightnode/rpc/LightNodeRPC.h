@@ -307,10 +307,11 @@ public:
                     {
                         // Check transaction merkle
                         crypto::merkle::Merkle<Hasher> merkle(self->m_hasher.clone());
-                        auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
-                        ](const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
-                            return transactionMetaData.hash;
-                        });
+                        auto hashesRange =
+                            block.transactionsMetaData |
+                            RANGES::views::transform(
+                                [](const bcostars::TransactionMetaData& transactionMetaData)
+                                    -> auto& { return transactionMetaData.hash; });
                         std::vector<bcos::bytes> merkles;
                         merkle.generateMerkle(hashesRange, merkles);
 
@@ -481,6 +482,13 @@ public:
 
     void getObserverList(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) override
+    {
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+
+    void getNodeListByType(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _type, RespFunc _respFunc) override
     {
         Json::Value value;
         _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);

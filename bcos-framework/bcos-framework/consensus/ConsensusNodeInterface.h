@@ -21,9 +21,8 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/Common.h>
-namespace bcos
-{
-namespace consensus
+
+namespace bcos::consensus
 {
 class ConsensusNodeInterface
 {
@@ -52,7 +51,8 @@ struct ConsensusNodeComparator
         return (_left->nodeID()->data() < _right->nodeID()->data());
     }
 };
-
+using ConsensusNodeSet = std::set<ConsensusNodeInterface::Ptr, ConsensusNodeComparator>;
+using ConsensusNodeSetPtr = std::shared_ptr<ConsensusNodeSet>;
 inline std::string decsConsensusNodeList(ConsensusNodeList const& _nodeList)
 {
     std::ostringstream stringstream;
@@ -62,5 +62,4 @@ inline std::string decsConsensusNodeList(ConsensusNodeList const& _nodeList)
     }
     return stringstream.str();
 }
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

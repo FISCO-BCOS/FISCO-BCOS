@@ -1,28 +1,18 @@
 #pragma once
 
-#include "bcos-rpc/jsonrpc/Common.h"
-#include <bcos-framework/protocol/Transaction.h>
-#include <bcos-framework/protocol/TransactionReceipt.h>
-#include <bcos-tars-protocol/tars/RPC.h>
-#include <oneapi/tbb/concurrent_queue.h>
-#include <servant/Communicator.h>
-#include <tbb/concurrent_queue.h>
-#include <any>
+#include "Handle.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-tars-protocol/tars/RPC.h"
 
 namespace bcos::sdk
 {
 
-class CompletionQueue
+struct Config
 {
-    friend class RPCClient;
-
-private:
-    tbb::concurrent_bounded_queue<std::any> m_asyncQueue;
-
-public:
-    // Wait for async operation complete, thread safe
-    std::any wait();
-    std::optional<std::any> tryWait();
+    std::string connectionString;
+    long sendQueueSize = 0;
+    int timeoutMs = 60000;
 };
 
 class RPCClient
@@ -31,11 +21,35 @@ private:
     tars::Communicator m_communicator;
     bcostars::RPCPrx m_rpcProxy;
 
-public:
-    RPCClient(const std::string& connectionString);
+    static void onMessage(tars::ReqMessagePtr message);
 
-    std::future<bcos::protocol::TransactionReceipt::Ptr> sendTransaction(
-        const bcos::protocol::Transaction& transaction, CompletionQueue* completionQueue = nullptr,
-        std::any tag = {});
+public:
+    RPCClient(Config const& config);
+    bcostars::RPCPrx& rpcProxy();
+
+    static std::string toConnectionString(const std::vector<std::string>& hostAndPorts);
+    std::string generateNonce();
 };
+
+class SendTransaction : public bcos::sdk::Handle<bcos::protocol::TransactionReceipt::Ptr>
+{
+public:
+    SendTransaction(RPCClient& rpcClient);
+    SendTransaction& send(const bcos::protocol::Transaction& transaction);
+};
+
+class Call : public bcos::sdk::Handle<protocol::TransactionReceipt::Ptr>
+{
+public:
+    Call(RPCClient& rpcClient);
+    Call& send(const protocol::Transaction& transaction);
+};
+
+class BlockNumber : public bcos::sdk::Handle<long>
+{
+public:
+    BlockNumber(RPCClient& rpcClient);
+    BlockNumber& send();
+};
+
 }  // namespace bcos::sdk

@@ -1,7 +1,8 @@
 #include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/storage2/StorageMethods.h"
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>

@@ -208,8 +208,8 @@ int main(int argc, char** argv)
         std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
     bcos::bytes inputData;
     boost::algorithm::unhex(hexBin.begin(), hexBin.end(), std::back_inserter(inputData));
-    auto tx = transactionFactory->createTransaction(0, "to", inputData, std::to_string(100), 200,
-        "chain0", group, 1112, std::shared_ptr<bcos::crypto::KeyPairInterface>(std::move(keyPair)));
+    auto tx = transactionFactory->createTransaction(
+        0, "to", inputData, std::to_string(100), 200, "chain0", group, 1112, *keyPair);
     // auto r =
     //     transactionBuilderService->createSignedTransaction(*keyPair, "", *binBytes.get(), "", 0);
 
@@ -228,9 +228,9 @@ int main(int argc, char** argv)
         [&p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
             if (_error && _error->errorCode() != 0)
             {
-                std::cout << LOG_DESC(" [DeployHello] send transaction response error")
-                          << LOG_KV("errorCode", _error->errorCode())
-                          << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
+                std::cout << LOG_DESC(" [DeployHello] send transaction response failed")
+                          << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("message", _error->errorMessage()) << std::endl;
             }
             else
             {

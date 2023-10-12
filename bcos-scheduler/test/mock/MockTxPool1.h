@@ -1,13 +1,13 @@
 #pragma once
 
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-scheduler/src/Common.h"
-#include "bcos-tars-protocol/testutil/FakeBlockHeader.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <boost/test/unit_test.hpp>
 
 
@@ -92,9 +92,8 @@ public:
     //         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
 
     //         // Generate fakeTransaction
-    //         auto tx = fakeTransaction(cryptoSuite, keyPair, "", "", std::to_string(101), 100001, "1", "1");
-    //         auto hash = tx->hash();
-    //         hash2Transaction.emplace(hash, tx);
+    //         auto tx = fakeTransaction(cryptoSuite, keyPair, "", "", std::to_string(101), 100001,
+    //         "1", "1"); auto hash = tx->hash(); hash2Transaction.emplace(hash, tx);
     //         txHashes.emplace_back(hash);
     //     }
     //     return txHashes;

@@ -25,6 +25,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include "bcos-utilities/FileUtility.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
@@ -78,6 +79,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadFailOverConfig(_pt, _enforceMemberID);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
+    loadSyncConfig(_pt);
     loadOthersConfig(_pt);
 }
 
@@ -601,7 +603,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
 
     m_storageSecurityKeyCenterIp = values[0];
     m_storageSecurityKeyCenterPort = boost::lexical_cast<unsigned short>(values[1]);
-    if (false == isValidPort(m_storageSecurityKeyCenterPort))
+    if (!isValidPort(m_storageSecurityKeyCenterPort))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
@@ -609,13 +611,29 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
     }
 
     m_storageSecurityCipherDataKey = _pt.get<std::string>("storage_security.cipher_data_key", "");
-    if (true == m_storageSecurityCipherDataKey.empty())
+    if (m_storageSecurityCipherDataKey.empty())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageSecurityConfig")
                          << LOG_KV("keyCenterUrl", storageSecurityKeyCenterUrl);
+}
+
+void NodeConfig::loadSyncConfig(const boost::property_tree::ptree& _pt)
+{
+    m_enableSendBlockStatusByTree = _pt.get<bool>("sync.sync_block_by_tree", false);
+    m_enableSendTxByTree = _pt.get<bool>("sync.send_txs_by_tree", false);
+    m_treeWidth = _pt.get<std::uint32_t>("sync.tree_width", 3);
+    if (m_treeWidth == 0 || m_treeWidth > UINT16_MAX)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Please set sync.tree_width in 1~65535"));
+    }
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSyncConfig")
+                         << LOG_KV("sync_block_by_tree", m_enableSendBlockStatusByTree)
+                         << LOG_KV("send_txs_by_tree", m_enableSendTxByTree)
+                         << LOG_KV("tree_width", m_treeWidth);
 }
 
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
@@ -696,12 +714,15 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
     m_enableBaselineScheduler = _pt.get<bool>("executor.baseline_scheduler", false);
     m_baselineSchedulerConfig.chunkSize =
-        _pt.get<int>("executor.baseline_scheduler_chunksize", 1000);
+        _pt.get<int>("executor.baseline_scheduler_chunksize", 100);
     m_baselineSchedulerConfig.maxThread = _pt.get<int>("executor.baseline_scheduler_maxthread", 16);
     m_baselineSchedulerConfig.parallel =
         _pt.get<bool>("executor.baseline_scheduler_parallel", false);
 
-    m_tarsRPCConfig.configPath = _pt.get<std::string>("rpc.tars_rpc_config", "");
+    m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
+    m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
+    m_tarsRPCConfig.threadCount =
+        _pt.get<int>("rpc.tars_rpc_thread_count", std::thread::hardware_concurrency());
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize);
@@ -739,11 +760,19 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     }
     catch (std::exception const& e)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "consensus.consensus_type is null， please set it!"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("consensus.consensus_type is null, please set it!"));
+    }
+    if (m_consensusType != bcos::ledger::PBFT_CONSENSUS_TYPE &&
+        m_consensusType != bcos::ledger::RPBFT_CONSENSUS_TYPE)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.consensus_type is illegal, it must be pbft or rpbft!"));
     }
     // blockTxCountLimit
-    auto blockTxCountLimit = checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
+    auto blockTxCountLimit =
+        checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
     if (blockTxCountLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -761,7 +790,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>("version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
+    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
+        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
@@ -771,6 +801,13 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment("Must set sealerList!"));
     }
     m_ledgerConfig->setConsensusNodeList(*consensusNodeList);
+
+    // rpbft
+    if (m_consensusType == RPBFT_CONSENSUS_TYPE)
+    {
+        m_epochSealerNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_sealer_num", 4);
+        m_epochBlockNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_block_num", 1000);
+    }
 
     // leaderSwitchPeriod
     auto consensusLeaderPeriod = checkAndGetValue(_genesisConfig, "consensus.leader_period", "1");
@@ -853,7 +890,8 @@ void NodeConfig::generateGenesisData()
         auto genesisData = std::make_shared<bcos::ledger::GenesisConfig>(m_smCryptoType, m_chainId,
             m_groupId, m_consensusType, m_ledgerConfig->blockTxCountLimit(),
             m_ledgerConfig->leaderSwitchPeriod(), m_compatibilityVersionStr, m_txGasLimit, m_isWasm,
-            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute);
+            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute, m_epochSealerNum,
+            m_epochBlockNum);
         genesisdata = genesisData->genesisDataOutPut();
         size_t j = 0;
         for (const auto& node : m_ledgerConfig->consensusNodeList())

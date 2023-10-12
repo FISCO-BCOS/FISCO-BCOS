@@ -27,11 +27,13 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "Common.h"
 #include "Entry.h"
+#include "bcos-task/Task.h"
 #include <bcos-utilities/Error.h>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 
 namespace bcos::storage
 {
@@ -98,6 +100,7 @@ public:
         });
         return result;
     };
+
     virtual void stop(){};
 };
 

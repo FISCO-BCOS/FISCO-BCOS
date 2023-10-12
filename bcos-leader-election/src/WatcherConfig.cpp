@@ -95,7 +95,7 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
         ELECTION_LOG(WARNING) << LOG_DESC("updateLeaderInfo exception")
                               << LOG_KV("watchDir", m_watchDir) << LOG_KV("key", _value.key())
                               << LOG_KV("value", _value.as_string())
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 
@@ -126,7 +126,7 @@ void WatcherConfig::callNotificationHandlers(
         {
             ELECTION_LOG(ERROR) << LOG_DESC("callNotificationHandlers exception")
                                 << LOG_KV("key", _key) << LOG_KV("memberID", _member->memberID())
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("message", boost::diagnostic_information(e));
         }
     }
 }
@@ -145,7 +145,7 @@ void WatcherConfig::onMemberDeleted(
         {
             ELECTION_LOG(ERROR) << LOG_DESC("onMemberDeleted exception") << LOG_KV("key", _key)
                                 << LOG_KV("memberID", _member->memberID())
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("message", boost::diagnostic_information(e));
         }
     }
 }

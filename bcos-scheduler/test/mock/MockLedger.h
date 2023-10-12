@@ -107,6 +107,10 @@ public:
         {
             _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
         }
+        else if (_type == ledger::CONSENSUS_CANDIDATE_SEALER)
+        {
+            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(1));
+        }
         else
         {
             BOOST_FAIL("Unknown query type");

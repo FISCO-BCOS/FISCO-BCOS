@@ -59,6 +59,13 @@ public:
                 _pbftCache->addPrepareCache(std::move(_prepareReq));
             });
     }
+    void addExceptionCache(PBFTMessageInterface::Ptr _verifyFailedReq)
+    {
+        addCache(m_caches, std::move(_verifyFailedReq),
+            [](const PBFTCache::Ptr& _pbftCache, PBFTMessageInterface::Ptr _verifyFailedReq) {
+                _pbftCache->addExceptionPrePrepareCache(std::move(_verifyFailedReq));
+            });
+    }
     virtual void addCommitReq(PBFTMessageInterface::Ptr _commitReq)
     {
         addCache(m_caches, std::move(_commitReq),
@@ -237,6 +244,7 @@ protected:
 protected:
     PBFTCacheFactory::Ptr m_cacheFactory;
     PBFTConfig::Ptr m_config;
+    // FIXME: to make sure PBFTCachesType erase can only be performed serially
     /// map: number => PBFTCache
     PBFTCachesType m_caches;
 

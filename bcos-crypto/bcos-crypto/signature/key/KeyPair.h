@@ -43,7 +43,7 @@ public:
         m_type(_type)
     {}
 
-    ~KeyPair() override {}
+    ~KeyPair() override = default;
     KeyPairType keyPairType() const override { return m_type; }
     SecretPtr secretKey() const override { return m_secretKey; }
     PublicPtr publicKey() const override { return m_publicKey; }
@@ -58,4 +58,4 @@ protected:
     SecretPtr m_secretKey;
     KeyPairType m_type;
 };
-}  // namespace bcos
+}  // namespace bcos::crypto

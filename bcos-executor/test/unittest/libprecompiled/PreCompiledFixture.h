@@ -21,6 +21,8 @@
 #pragma once
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
@@ -40,8 +42,6 @@
 #include <bcos-crypto/signature/sm2.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/storage/Table.h>
-#include <bcos-tars-protocol/testutil/FakeBlock.h>
-#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <libinitializer/AuthInitializer.h>
@@ -157,6 +157,10 @@ public:
             entry.setObject(SystemConfigEntry{"3000000", 0});
 
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
+
+            Entry entry2;
+            entry2.setObject(SystemConfigEntry{"1", 0});
+            table->setRow("feature_sharding", entry2);
         }
 
         m_blockVersion = version;
@@ -283,8 +287,9 @@ public:
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
 
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
+        bcos::protocol::ParentInfo p{
+            .blockNumber = blockNumber - 1, .blockHash = h256(blockNumber - 1)};
+        std::vector<bcos::protocol::ParentInfo> parentInfos{p};
         blockHeader->setParentInfo(parentInfos);
 
         blockHeader->setVersion((uint32_t)version);
