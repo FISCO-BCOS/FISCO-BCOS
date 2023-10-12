@@ -125,6 +125,8 @@ std::shared_ptr<std::set<std::string, std::less<>>> getKeyPageIgnoreTables(
             std::string(ledger::SYS_NUMBER_2_TXS),
             std::string(ledger::SYS_HASH_2_TX),
             std::string(ledger::SYS_HASH_2_RECEIPT),
+            std::string(ledger::SYS_TXHASH_2_NUMBER),
+            std::string(ledger::SYS_NUMBER_2_BLOCK_TXS),
             std::string(storage::FS_ROOT),
             std::string(storage::FS_APPS),
             std::string(storage::FS_USER),

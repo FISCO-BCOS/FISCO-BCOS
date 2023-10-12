@@ -58,6 +58,12 @@ bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) co
         [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
 }
 
+bcos::protocol::Transaction::Ptr BlockImpl::getTransaction(uint64_t _index) 
+{
+    return std::make_shared<bcostars::protocol::TransactionImpl>(
+        [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
+}
+
 // TODO: return struct instead of pointer
 bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
 {

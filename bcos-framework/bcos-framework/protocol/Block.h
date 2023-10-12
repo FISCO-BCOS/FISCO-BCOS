@@ -64,6 +64,7 @@ public:
     virtual BlockHeader::Ptr blockHeader() = 0;
     // get transactions
     virtual Transaction::ConstPtr transaction(uint64_t _index) const = 0;
+    virtual Transaction::Ptr getTransaction(uint64_t _index) = 0;
     // get receipts
     virtual TransactionReceipt::ConstPtr receipt(uint64_t _index) const = 0;
     // get transaction metaData

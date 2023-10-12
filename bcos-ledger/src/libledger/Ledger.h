@@ -127,6 +127,9 @@ private:
     void asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
         bcos::protocol::BlockNumber blockNumber, std::function<void(Error::Ptr&&)> callback);
 
+    void asyncGetTransactionByHash(std::string_view hash,
+        std::function<void(Error::Ptr&&, protocol::Transaction::Ptr&&)> callback);
+
     void asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback);
 

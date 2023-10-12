@@ -848,7 +848,7 @@ generate_node_scripts() {
     local docker_tag="${compatibility_version}"
     local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
     local start_cmd="nohup \${fisco_bcos} -c config.ini -g config.genesis >>nohup.out 2>&1 &"
-    local stop_cmd="kill \${node_pid}"
+    local stop_cmd="kill -9 \${node_pid}"
     local pid="pid"
     local log_cmd="tail -n20  nohup.out"
     local check_success="\$(${log_cmd} | grep -e running -e \"initialize server\")"

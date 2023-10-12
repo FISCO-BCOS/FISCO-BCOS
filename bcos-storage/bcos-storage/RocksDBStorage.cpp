@@ -114,6 +114,8 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         {
             if (status.IsNotFound())
             {
+                // STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("not found") << LOG_KV("table", _table)
+                //                                << LOG_KV("key", toHex(_key));
                 if (c_fileLogLevel <= TRACE)
                 {
                     STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("not found") << LOG_KV("table", _table)

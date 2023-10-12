@@ -255,6 +255,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
     auto blockHeader = block->blockHeader();
     TXPOOL_LOG(INFO) << LOG_DESC("begin asyncVerifyBlock")
                      << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
+                     << LOG_KV("_generatedNodeID", _generatedNodeID->hex())
                      << LOG_KV("hash", blockHeader ? blockHeader->hash().abridged() : "null");
     // Note: here must have thread pool for lock in the callback
     // use single thread here to decrease thread competition
@@ -321,6 +322,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                     {
                         txpool->m_txsPreStore->enqueue(
                             [txpool, block]() { txpool->storeVerifiedBlock(block); });
+                        // txpool->storeVerifiedBlock(block);
                     }
                 };
 
@@ -333,7 +335,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                 onVerifyFinishedWrapper(nullptr, true);
                 return;
             }
-            TXPOOL_LOG(DEBUG) << LOG_DESC("asyncVerifyBlock")
+            TXPOOL_LOG(INFO) << LOG_DESC("asyncVerifyBlock")
                               << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
                               << LOG_KV("totalTxs", block->transactionsHashSize())
                               << LOG_KV("missedTxs", missedTxs->size());
