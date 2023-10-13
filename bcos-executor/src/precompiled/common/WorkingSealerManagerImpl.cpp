@@ -38,7 +38,7 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
-    if (getConsensusNodeListFromStorage(_executive))
+    if (!getConsensusNodeListFromStorage(_executive))
     {
         PRECOMPILED_LOG(INFO)
             << "getConsensusNodeListFromStorage detected already rotated, skip this tx.";
