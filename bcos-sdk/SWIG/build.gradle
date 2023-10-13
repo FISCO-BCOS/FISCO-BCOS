@@ -41,9 +41,20 @@ sourceSets {
     }
 }
 
+javadoc {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.addStringOption('encoding', 'UTF-8')
+    options.addStringOption('charSet', 'UTF-8')
+}
+
 task sourcesJar(type: Jar) {
     from sourceSets.main.java
     archiveClassifier = 'sources'
+}
+
+task javadocJar(type: Jar) {
+    from javadoc
+    archiveClassifier = 'javadoc'
 }
 
 publishing {
@@ -55,6 +66,7 @@ publishing {
 
             from components.java
             artifact sourcesJar
+            artifact javadocJar
             pom {
                 name = 'fisco-bcos'
                 description = 'fisco-bcos java-tars sdk'
