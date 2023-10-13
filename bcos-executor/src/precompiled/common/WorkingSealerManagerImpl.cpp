@@ -38,7 +38,12 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
-    getConsensusNodeListFromStorage(_executive);
+    if (getConsensusNodeListFromStorage(_executive))
+    {
+        PRECOMPILED_LOG(INFO)
+            << "getConsensusNodeListFromStorage detected already rotated, skip this tx.";
+        return;
+    }
     if (!shouldRotate(_executive))
     {
         return;
@@ -244,18 +249,29 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     return false;
 }
 
-void WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
+bool WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
     const executor::TransactionExecutive::Ptr& _executive)
 {
     auto const& blockContext = _executive->blockContext();
     auto entry = _executive->storage().getRow(ledger::SYS_CONSENSUS, "key");
     assert(entry.has_value());
     auto consensusNodeList = entry->getObject<ledger::ConsensusNodeList>();
+    bool isConsensusNodeListChanged = false;
+    bool isCandidateSealerChanged = false;
     for (const auto& node : consensusNodeList)
     {
-        if (boost::lexical_cast<BlockNumber>(node.enableNumber) > blockContext.number())
-            [[unlikely]]
+        auto enableNumber = boost::lexical_cast<BlockNumber>(node.enableNumber);
+        if (enableNumber > blockContext.number()) [[unlikely]]
         {
+            if (enableNumber == blockContext.number() + 1 && node.type == ledger::CONSENSUS_SEALER)
+            {
+                isConsensusNodeListChanged = true;
+            }
+            if (enableNumber == blockContext.number() + 1 &&
+                node.type == ledger::CONSENSUS_CANDIDATE_SEALER)
+            {
+                isCandidateSealerChanged = true;
+            }
             continue;
         }
         if (node.type == ledger::CONSENSUS_SEALER)
@@ -268,6 +284,7 @@ void WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
         }
     }
     m_consensusNodes.swap(consensusNodeList);
+    return !isConsensusNodeListChanged && !isCandidateSealerChanged;
 }
 
 void WorkingSealerManagerImpl::setNotifyRotateFlag(

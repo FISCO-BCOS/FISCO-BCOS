@@ -379,8 +379,11 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
             auto codeEntry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
             auto codeHash = codeEntry->getField(0);
 
-            EXECUTOR_LOG(TRACE) << LOG_DESC("set abi") << LOG_KV("codeHash", codeHash)
-                                << LOG_KV("abiSize", abi.size());
+            if (c_fileLogLevel <= TRACE) [[unlikely]]
+            {
+                EXECUTOR_LOG(TRACE) << LOG_DESC("set abi") << LOG_KV("codeHash", toHex(codeHash))
+                                    << LOG_KV("abiSize", abi.size());
+            }
 
             auto abiEntry = m_executive->storage().getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
 
