@@ -82,8 +82,8 @@ void ProPBFTInitializer::scheduledTask()
 void ProPBFTInitializer::reportNodeInfo()
 {
     // notify groupInfo to rpc
-    m_rpc->asyncNotifyGroupInfo(m_groupInfo, [](bcos::Error::Ptr&& _error) {
-        if (_error)
+    m_rpc->asyncNotifyGroupInfo(m_groupInfo, [this](bcos::Error::Ptr&& _error) {
+        if (_error && m_running)
         {
             INITIALIZER_LOG(WARNING)
                 << LOG_DESC("asyncNotifyGroupInfo to rpc failed")
@@ -92,8 +92,8 @@ void ProPBFTInitializer::reportNodeInfo()
     });
 
     // notify groupInfo to gateway
-    m_gateway->asyncNotifyGroupInfo(m_groupInfo, [](bcos::Error::Ptr&& _error) {
-        if (_error)
+    m_gateway->asyncNotifyGroupInfo(m_groupInfo, [this](bcos::Error::Ptr&& _error) {
+        if (_error && m_running)
         {
             INITIALIZER_LOG(WARNING)
                 << LOG_DESC("asyncNotifyGroupInfo to gateway failed")
@@ -109,10 +109,12 @@ void ProPBFTInitializer::start()
     {
         m_timer->start();
     }
+    m_running = true;
 }
 
 void ProPBFTInitializer::stop()
 {
+    m_running = false;
     if (m_timer)
     {
         m_timer->stop();
