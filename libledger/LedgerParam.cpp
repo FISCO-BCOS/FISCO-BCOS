@@ -187,7 +187,16 @@ void LedgerParam::initTxExecuteConfig(ptree const& pt)
 {
     if (dev::stringCmpIgnoreCase(mutableStateParam().type, "storage") == 0)
     {
-        mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
+        // enable parallel since v2.3.0 when stateType is storage
+        if (g_BCOSConfig.version() >= V2_3_0)
+        {
+            mutableTxParam().enableParallel = true;
+        }
+        // can configure enable_parallel before v2.3.0
+        else
+        {
+            mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
+        }
     }
     else
     {
@@ -596,6 +605,7 @@ void LedgerParam::initStorageConfig(ptree const& pt)
 {
     if (g_BCOSConfig.version() > RC2_VERSION)
     {
+        // cout<<"进到这里面了"<<g_BCOSConfig.version()<<"::::"<<RC2_VERSION<<endl;
         mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
         mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
@@ -647,8 +657,6 @@ void LedgerParam::initStorageConfig(ptree const& pt)
     mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
     mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
     mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
-    mutableStorageParam().enableReconfirmCommittee =
-        pt.get<bool>("storage.enable_reconfirm_committee", false);
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initStorageConfig")
                           << LOG_KV("stateType", mutableStateParam().type)
@@ -661,9 +669,19 @@ void LedgerParam::initStorageConfig(ptree const& pt)
                           << LOG_KV("dbcharset", mutableStorageParam().dbCharset)
                           << LOG_KV("initconnections", mutableStorageParam().initConnections)
                           << LOG_KV("maxconnections", mutableStorageParam().maxConnections)
-                          << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold)
-                          << LOG_KV("enableReconfirmCommittee",
-                                 mutableStorageParam().enableReconfirmCommittee);
+                          << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold);
+    cout << LOG_BADGE("initStorageConfig")
+                          << LOG_KV("stateType", mutableStateParam().type)
+                          << LOG_KV("storageDB", mutableStorageParam().type)
+                          << LOG_KV("storagePath", mutableStorageParam().path)
+                          << LOG_KV("baseDir", baseDir())
+                          << LOG_KV("dbtype", mutableStorageParam().dbType)
+                          << LOG_KV("dbip", mutableStorageParam().dbIP)
+                          << LOG_KV("dbport", mutableStorageParam().dbPort)
+                          << LOG_KV("dbcharset", mutableStorageParam().dbCharset)
+                          << LOG_KV("initconnections", mutableStorageParam().initConnections)
+                          << LOG_KV("maxconnections", mutableStorageParam().maxConnections)
+                          << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold)<<endl;
 }
 
 void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt)

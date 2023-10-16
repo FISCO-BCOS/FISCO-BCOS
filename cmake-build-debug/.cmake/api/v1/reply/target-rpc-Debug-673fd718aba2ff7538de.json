@@ -1,0 +1,394 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "librpc/librpc.a"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"add_compile_options",
+			"include",
+			"include_directories",
+			"create_build_info",
+			"configure_project",
+			"target_include_directories",
+			"target_link_libraries"
+		],
+		"files" : 
+		[
+			"librpc/CMakeLists.txt",
+			"cmake/CompilerSettings.cmake",
+			"CMakeLists.txt",
+			"cmake/BuildInfo.cmake",
+			"cmake/Options.cmake"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 6,
+				"parent" : 0
+			},
+			{
+				"file" : 2
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 41,
+				"parent" : 2
+			},
+			{
+				"file" : 1,
+				"parent" : 3
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 36,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 37,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 38,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 39,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 45,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 46,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 48,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 50,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 101,
+				"parent" : 4
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 102,
+				"parent" : 4
+			},
+			{
+				"command" : 5,
+				"file" : 2,
+				"line" : 40,
+				"parent" : 2
+			},
+			{
+				"command" : 4,
+				"file" : 4,
+				"line" : 127,
+				"parent" : 15
+			},
+			{
+				"command" : 3,
+				"file" : 3,
+				"line" : 65,
+				"parent" : 16
+			},
+			{
+				"command" : 3,
+				"file" : 2,
+				"line" : 69,
+				"parent" : 2
+			},
+			{
+				"command" : 6,
+				"file" : 0,
+				"line" : 7,
+				"parent" : 0
+			},
+			{
+				"command" : 7,
+				"file" : 0,
+				"line" : 8,
+				"parent" : 0
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-std=c++11 -pthread -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -fexceptions -march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden -DSTATICLIB -Og -g  -DFISCO_DEBUG -fvisibility=hidden -fdiagnostics-color=always"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-Werror"
+				},
+				{
+					"backtrace" : 6,
+					"fragment" : "-Wall"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-pedantic"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-Wextra"
+				},
+				{
+					"backtrace" : 9,
+					"fragment" : "-Wno-unknown-pragmas"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-fno-omit-frame-pointer"
+				},
+				{
+					"backtrace" : 11,
+					"fragment" : "-DBOOST_SPIRIT_THREADSAFE"
+				},
+				{
+					"backtrace" : 12,
+					"fragment" : "-DTBB_SUPPRESS_DEPRECATED_MESSAGES=1"
+				},
+				{
+					"backtrace" : 13,
+					"fragment" : "-fstack-protector-strong"
+				},
+				{
+					"backtrace" : 14,
+					"fragment" : "-fstack-protector"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 17,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/cmake-build-debug"
+				},
+				{
+					"backtrace" : 18,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1"
+				},
+				{
+					"backtrace" : 19,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/librpc/.."
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/boost"
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/leveldb/include"
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/include"
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/tbb/include"
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/tassl/include"
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/libvrf/include"
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/rocksdb/include"
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/jsonrpccpp/src"
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/mhd/src/include"
+				},
+				{
+					"backtrace" : 20,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/gperftools/include"
+				}
+			],
+			"language" : "CXX",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4
+			]
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"id" : "initializer::@dea06713f99da8470dd8"
+		}
+	],
+	"id" : "rpc::@5d041e3e4d57200e3fd8",
+	"name" : "rpc",
+	"nameOnDisk" : "librpc.a",
+	"paths" : 
+	{
+		"build" : "librpc",
+		"source" : "librpc"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4
+			]
+		},
+		{
+			"name" : "Header Files",
+			"sourceIndexes" : 
+			[
+				5,
+				6,
+				7,
+				8,
+				9,
+				10,
+				11,
+				12
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "librpc/Common.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "librpc/JsonHelper.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "librpc/Rpc.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "librpc/SafeHttpServer.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "librpc/StatisticProtocolServer.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "librpc/Common.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "librpc/HTTPMessage.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "librpc/JsonHelper.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "librpc/ModularServer.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "librpc/Rpc.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "librpc/RpcFace.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "librpc/SafeHttpServer.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "librpc/StatisticProtocolServer.h",
+			"sourceGroupIndex" : 1
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}

@@ -55,7 +55,7 @@ struct MemoryTableFactoryFixture2
     {
         std::shared_ptr<MockAMOPDB> mockAMOPDB = std::make_shared<MockAMOPDB>();
 
-        memoryDBFactory = std::make_shared<dev::storage::MemoryTableFactory2>(false);
+        memoryDBFactory = std::make_shared<dev::storage::MemoryTableFactory2>();
         memoryDBFactory->setStateStorage(mockAMOPDB);
 
         BOOST_TEST_TRUE(memoryDBFactory->stateStorage() == mockAMOPDB);

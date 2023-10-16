@@ -30,11 +30,13 @@
 const static uint32_t maxPlaceHolderCnt = 60000;
 
 #define SQLBasicAccess_LOG(LEVEL) LOG(LEVEL) << "[SQLBasicAccess] "
-
+std::string base64_decode(const std::string& encoded,int size);
+std::string base64_encode(const std::string& encoded);
 namespace dev
 {
 namespace storage
 {
+
 class SQLConnectionPool;
 struct SQLPlaceholderItem
 {
@@ -62,7 +64,7 @@ private:
 
     std::vector<SQLPlaceholderItem> BuildCommitSql(const std::string& _table,
         const std::string& _fieldStr, const std::vector<std::string>& _fieldValue);
-
+    
     std::string BuildCreateTableSql(const Entry::Ptr& _data);
     std::string BuildCreateTableSql(const std::string& _tableName, const std::string& _keyField,
         const std::string& _valueField);
@@ -80,7 +82,7 @@ private:
     bool inline isBlobType(std::string const& _tableName)
     {
         auto fieldType = getFieldType(_tableName);
-        if (fieldType == SQLFieldType::MediumBlobType || fieldType == SQLFieldType::LongBlobType)
+        if (fieldType == SQLFieldType::ClobType)
         {
             return true;
         }

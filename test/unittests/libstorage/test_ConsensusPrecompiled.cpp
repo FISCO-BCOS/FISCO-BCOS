@@ -27,10 +27,10 @@ struct ConsensusPrecompiledFixture
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
         context = std::make_shared<ExecutiveContext>();
-        ExecutiveContextFactory factory(false);
+        ExecutiveContextFactory factory;
         // auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
-        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>(false);
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
         auto memStorage = std::make_shared<MemoryStorage2>();
         cachedStorage = std::make_shared<CachedStorage>();
         cachedStorage->setBackend(memStorage);

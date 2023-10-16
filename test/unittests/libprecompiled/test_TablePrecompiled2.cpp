@@ -52,7 +52,7 @@ struct TablePrecompiledFixture2
     TablePrecompiledFixture2()
     {
         context = std::make_shared<MockPrecompiledEngine>();
-        context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory2>(false));
+        context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory2>());
         tablePrecompiled = std::make_shared<dev::precompiled::TablePrecompiled>();
         m_table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();

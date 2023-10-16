@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/paillier"
+		},
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/paillier.rule"
+		},
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/paillier-complete.rule"
+		},
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/paillier-stamp/paillier-build.rule"
+		},
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/paillier-stamp/paillier-configure.rule"
+		},
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/paillier-stamp/paillier-download.rule"
+		},
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/paillier-stamp/paillier-install.rule"
+		},
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/paillier-stamp/paillier-mkdir.rule"
+		},
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/paillier-stamp/paillier-patch.rule"
+		},
+		{
+			"file" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/paillier-stamp/paillier-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"paillier"
+		],
+		"name" : "paillier"
+	}
+}

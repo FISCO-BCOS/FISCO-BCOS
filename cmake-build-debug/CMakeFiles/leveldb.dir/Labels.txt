@@ -1,0 +1,13 @@
+# Target labels
+ leveldb
+# Source files and their labels
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/leveldb
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/leveldb.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/leveldb-complete.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/leveldb-stamp/leveldb-build.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/leveldb-stamp/leveldb-configure.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/leveldb-stamp/leveldb-download.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/leveldb-stamp/leveldb-install.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/leveldb-stamp/leveldb-mkdir.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/leveldb-stamp/leveldb-patch.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/leveldb-stamp/leveldb-update.rule

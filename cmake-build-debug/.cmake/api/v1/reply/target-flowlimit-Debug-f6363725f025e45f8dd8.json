@@ -1,0 +1,379 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "libflowlimit/libflowlimit.a"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"add_dependencies",
+			"include",
+			"target_link_libraries",
+			"add_compile_options",
+			"include_directories",
+			"create_build_info",
+			"configure_project"
+		],
+		"files" : 
+		[
+			"libflowlimit/CMakeLists.txt",
+			"cmake/ProjectTBB.cmake",
+			"CMakeLists.txt",
+			"cmake/ProjectSnappy.cmake",
+			"cmake/ProjectLevelDB.cmake",
+			"cmake/ProjectBoost.cmake",
+			"cmake/CompilerSettings.cmake",
+			"cmake/BuildInfo.cmake",
+			"cmake/Options.cmake"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 6,
+				"parent" : 0
+			},
+			{
+				"file" : 2
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 45,
+				"parent" : 2
+			},
+			{
+				"file" : 1,
+				"parent" : 3
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 44,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 46,
+				"parent" : 2
+			},
+			{
+				"file" : 3,
+				"parent" : 6
+			},
+			{
+				"command" : 1,
+				"file" : 3,
+				"line" : 40,
+				"parent" : 7
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 47,
+				"parent" : 2
+			},
+			{
+				"file" : 4,
+				"parent" : 9
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 39,
+				"parent" : 10
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 54,
+				"parent" : 2
+			},
+			{
+				"file" : 5,
+				"parent" : 12
+			},
+			{
+				"command" : 1,
+				"file" : 5,
+				"line" : 112,
+				"parent" : 13
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 8,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 41,
+				"parent" : 2
+			},
+			{
+				"file" : 6,
+				"parent" : 16
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 36,
+				"parent" : 17
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 37,
+				"parent" : 17
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 38,
+				"parent" : 17
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 39,
+				"parent" : 17
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 45,
+				"parent" : 17
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 46,
+				"parent" : 17
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 48,
+				"parent" : 17
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 50,
+				"parent" : 17
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 101,
+				"parent" : 17
+			},
+			{
+				"command" : 4,
+				"file" : 6,
+				"line" : 102,
+				"parent" : 17
+			},
+			{
+				"command" : 7,
+				"file" : 2,
+				"line" : 40,
+				"parent" : 2
+			},
+			{
+				"command" : 6,
+				"file" : 8,
+				"line" : 127,
+				"parent" : 28
+			},
+			{
+				"command" : 5,
+				"file" : 7,
+				"line" : 65,
+				"parent" : 29
+			},
+			{
+				"command" : 5,
+				"file" : 2,
+				"line" : 69,
+				"parent" : 2
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-std=c++11 -pthread -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -fexceptions -march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden -DSTATICLIB -Og -g  -DFISCO_DEBUG -fvisibility=hidden -fdiagnostics-color=always"
+				},
+				{
+					"backtrace" : 18,
+					"fragment" : "-Werror"
+				},
+				{
+					"backtrace" : 19,
+					"fragment" : "-Wall"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-pedantic"
+				},
+				{
+					"backtrace" : 21,
+					"fragment" : "-Wextra"
+				},
+				{
+					"backtrace" : 22,
+					"fragment" : "-Wno-unknown-pragmas"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-fno-omit-frame-pointer"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DBOOST_SPIRIT_THREADSAFE"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DTBB_SUPPRESS_DEPRECATED_MESSAGES=1"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-fstack-protector-strong"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-fstack-protector"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 30,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/cmake-build-debug"
+				},
+				{
+					"backtrace" : 31,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1"
+				},
+				{
+					"backtrace" : 15,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/boost"
+				},
+				{
+					"backtrace" : 15,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/leveldb/include"
+				},
+				{
+					"backtrace" : 15,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/include"
+				},
+				{
+					"backtrace" : 15,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/tbb/include"
+				}
+			],
+			"language" : "CXX",
+			"sourceIndexes" : 
+			[
+				0,
+				1
+			]
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 5,
+			"id" : "tbb::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "snappy::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 11,
+			"id" : "leveldb::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 14,
+			"id" : "boost::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 15,
+			"id" : "devcore::@53af244f0c493e8db743"
+		}
+	],
+	"id" : "flowlimit::@51f0205cbc87eaeee448",
+	"name" : "flowlimit",
+	"nameOnDisk" : "libflowlimit.a",
+	"paths" : 
+	{
+		"build" : "libflowlimit",
+		"source" : "libflowlimit"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1
+			]
+		},
+		{
+			"name" : "Header Files",
+			"sourceIndexes" : 
+			[
+				2,
+				3
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "libflowlimit/RPCQPSLimiter.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "libflowlimit/RateLimiter.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libflowlimit/RPCQPSLimiter.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libflowlimit/RateLimiter.h",
+			"sourceGroupIndex" : 1
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}

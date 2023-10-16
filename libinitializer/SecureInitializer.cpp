@@ -279,6 +279,7 @@ ConfigResult initNormalConfig(const boost::property_tree::ptree& pt)
     {
         sectionName = "network_security";
     }
+    //读取config.ini中的network_security中的配置信息
     std::string dataPath = pt.get<std::string>(sectionName + ".data_path", "./conf/");
     std::string key = dataPath + "/" + pt.get<std::string>(sectionName + ".key", "node.key");
     std::string cert = dataPath + "/" + pt.get<std::string>(sectionName + ".cert", "node.crt");

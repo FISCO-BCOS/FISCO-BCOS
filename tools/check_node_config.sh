@@ -21,7 +21,7 @@ help() {
 Usage:
     -p <node path>              Node's path default is ./
     -h Help
-e.g
+e.g 
     $0 -p node0
     $0 -p node_127.0.0.1_30300
 EOF
@@ -37,7 +37,7 @@ check_env() {
     fi
     # check openssl version
     echo "openssl version : $(openssl version)"
-    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep 3.)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
+    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
         LOG_WARN "OpenSSL is too old, please install openssl 1.0.2 or higher!"
     }
     if [ ! -z "$(openssl version | grep reSSL)" ];then
@@ -66,7 +66,7 @@ check_cert() {
     data_path=($(awk -F "=" '/^[[:space:]]*data_path/ {print $2}' ${path}/config.ini | tr -d ' '))
     if [ "${data_path:0:1}" != "/" ]; then
         data_path=${path}/${data_path}
-    fi
+    fi 
     ca_cert=${data_path}/${ca_name}
     node_cert=${data_path}/${node_name}
     agency_start=$(grep -n "BEGIN CERTIFICATE" ${node_cert} | cut -d ":" -f 1 | sed -n "2,1p")

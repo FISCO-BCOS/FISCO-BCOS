@@ -160,7 +160,6 @@ struct StorageParam
     uint32_t initConnections;
     uint32_t maxConnections;
     int maxForwardBlock;
-    bool enableReconfirmCommittee = false;
 };
 struct StateParam
 {

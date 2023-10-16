@@ -47,7 +47,6 @@
 #include <libstorage/ZdbStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/lexical_cast.hpp>
-#include <utility>
 
 using namespace std;
 using namespace dev;
@@ -88,11 +87,16 @@ void DBInitializer::initStorageDB()
     }
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
+        cout<<"使用mysql数据库"<<endl;
+        //需要初始化zdb
         auto storage = initZdbStorage();
+
         initTableFactory2(storage, m_param);
     }
+    //rocksdb相关
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
+        cout<<"使用rocksdb"<<endl;
         auto storage = initRocksDBStorage(m_param);
         initTableFactory2(storage, m_param);
     }
@@ -170,9 +174,8 @@ void DBInitializer::initLevelDBStorage()
 int64_t dev::ledger::getBlockNumberFromStorage(Storage::Ptr _storage)
 {
     int64_t startNum = -1;
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>(false);
-
-    tableFactoryFactory->setStorage(std::move(_storage));
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    tableFactoryFactory->setStorage(_storage);
     auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), startNum);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_CURRENT_STATE, false);
     auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
@@ -266,8 +269,7 @@ void DBInitializer::initTableFactory2(
                                        _param->mutableStorageParam().maxForwardBlock);
     }
 
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>(
-        m_param->mutableStorageParam().enableReconfirmCommittee);
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
     if (_param->mutableStorageParam().binaryLog)
     {
         auto binaryLogStorage = make_shared<BinaryLogStorage>();
@@ -472,8 +474,7 @@ void DBInitializer::createExecutiveContext()
     }
 
     DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext...");
-    m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>(
-        m_param->mutableStorageParam().enableReconfirmCommittee);
+    m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
     /// storage
     m_executiveContextFactory->setStateStorage(m_storage);
     // mpt or storage

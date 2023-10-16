@@ -32,6 +32,7 @@ void Initializer::init(std::string const& _path)
 {
     try
     {
+        //读取config.ini文件
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(_path, pt);
 
@@ -39,6 +40,7 @@ void Initializer::init(std::string const& _path)
         m_logInitializer = std::make_shared<LogInitializer>();
         m_logInitializer->initLog(pt);
         /// init global config. must init before DB, for compatibility
+        //读取config.ini文件，进行全局配置
         initGlobalConfig(pt);
         g_BCOSConfig.setiniDir(_path);
 

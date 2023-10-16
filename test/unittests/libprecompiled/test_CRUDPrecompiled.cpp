@@ -51,7 +51,7 @@ struct CRUDPrecompiledFixture
 
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
-        ExecutiveContextFactory factory(false);
+        ExecutiveContextFactory factory;
         auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);

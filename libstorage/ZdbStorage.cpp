@@ -25,7 +25,9 @@
 #include "Table.h"
 #include <libdevcore/FixedHash.h>
 #include <thread>
-
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <openssl/buffer.h>
 
 using namespace std;
 using namespace dev;
@@ -35,7 +37,7 @@ ZdbStorage::ZdbStorage() {}
 
 Entries::Ptr ZdbStorage::select(
     int64_t _num, TableInfo::Ptr _tableInfo, const std::string& _key, Condition::Ptr _condition)
-{
+{   
     std::vector<std::map<std::string, std::string> > values;
     int ret = 0, i = 0;
     for (i = 0; i < m_maxRetry; ++i)
@@ -62,7 +64,7 @@ Entries::Ptr ZdbStorage::select(
         m_fatalHandler(e);
         BOOST_THROW_EXCEPTION(e);
     }
-
+    ZdbStorage_LOG(INFO)<<"准备打包成Entries";
     Entries::Ptr entries = std::make_shared<Entries>();
     for (auto it : values)
     {
@@ -71,18 +73,22 @@ Entries::Ptr ZdbStorage::select(
         {
             if (it2.first == ID_FIELD)
             {
+                ZdbStorage_LOG(INFO)<<"key==_id_:"<<it2.second;
                 entry->setID(it2.second);
             }
             else if (it2.first == NUM_FIELD)
             {
+                ZdbStorage_LOG(INFO)<<"key==_num_:"<<it2.second;
                 entry->setNum(it2.second);
             }
             else if (it2.first == STATUS)
             {
+                ZdbStorage_LOG(INFO)<<"key==_status_:"<<it2.second;
                 entry->setStatus(it2.second);
             }
             else
             {
+                ZdbStorage_LOG(INFO)<<"其他情况:first:"<<it2.first<<"  second(base64):"<<base64_encode(it2.second);
                 entry->setField(it2.first, it2.second);
             }
         }
@@ -149,8 +155,6 @@ void ZdbStorage::initSysTables()
     createSysConfigTables();
     if (g_BCOSConfig.version() >= V2_6_0)
     {
-        // the compressed table include:
-        // _sys_hash_2_block, _sys_block_2_nonce_ and _sys_hash_2_header_
         m_rowFormat = " ROW_FORMAT=COMPRESSED ";
         m_valueFieldType = "longblob";
     }
@@ -164,180 +168,250 @@ void ZdbStorage::initSysTables()
 std::string ZdbStorage::getCommonFileds()
 {
     string commonFields(
-        " `_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n"
-        " `_num_` BIGINT(11) DEFAULT '0',\n"
-        " `_status_` int(11) DEFAULT '0',\n");
-    if (g_BCOSConfig.version() <= V2_1_0)
-    {
-        commonFields += "`_hash_` varchar(128) DEFAULT NULL,\n";
-    }
+        " \"_id_\" BIGINT IDENTITY(1, 1) NOT NULL,\n"
+        " \"_num_\" BIGINT DEFAULT 0,\n"
+        " \"_status_\" int DEFAULT 0,\n");
+    ZdbStorage_LOG(INFO) << "getCommonFileds:" << commonFields ;
     return commonFields;
 }
-
+//创建系统表的sql语句
+//拆分测试完毕
 void ZdbStorage::createSysTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_TABLES << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_TABLES << "\" (\n";
     ss << getCommonFileds();
-    ss << "`table_name` varchar(128) DEFAULT '',\n";
-    ss << "`key_field` varchar(1024) DEFAULT '',\n";
-    ss << " `value_field` varchar(1024) DEFAULT '',\n";
-    ss << " PRIMARY KEY (`_id_`),\n";
-    ss << " UNIQUE KEY `table_name` (`table_name`)\n";
-    ss << ") ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4;";
+    ss << "\"table_name\" varchar(128) DEFAULT '',\n";
+    ss << "\"key_field\" varchar(1024) DEFAULT '',\n";
+    ss << " \"value_field\" varchar(1024) DEFAULT '',\n";
+    // ss <<"NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    ss << " NOT CLUSTER PRIMARY KEY(\"_id_\"),\n";
+    ss << " UNIQUE(\"table_name\")) STORAGE(ON \"MAIN\",\n";
+    ss << "CLUSTERBTR) ;";
     string sql = ss.str();
+     ZdbStorage_LOG(INFO) << "createSysTables:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
 }
 
 void ZdbStorage::createCnsTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CNS << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_CNS << "\" (\n";
     ss << getCommonFileds();
-    ss << "`name` varchar(128) DEFAULT NULL,\n";
-    ss << "`version` varchar(128) DEFAULT NULL,\n";
-    ss << "`address` varchar(256) DEFAULT NULL,\n";
-    ss << "`abi` " << m_valueFieldType << ",\n";
-    ss << "PRIMARY KEY (`_id_`),\n";
-    ss << "KEY `name` (`name`)\n";
-    ss << ") " << m_rowFormat << " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n";
+    ss << "\"name\" varchar(128) ,\n";
+    ss << "\"version\" varchar(128) ,\n";
+    ss << "\"address\" varchar(256) ,\n";
+    ss << "\"abi\" CLOB,\n";
+    ss <<"NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+    ZdbStorage_LOG(INFO) << "createCnsTables:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+
+    //deal with index
+    stringstream createCnsIndex;
+    createCnsIndex<<"CREATE  INDEX IF NOT EXISTS \"name\" ON \"SYSDBA\".\"_sys_cns_\"(\"name\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    string indexCnsSql=createCnsIndex.str();
+    ZdbStorage_LOG(INFO) << "createCnsTablesIndex:" << indexCnsSql ;
+    m_sqlBasicAcc->ExecuteSql(indexCnsSql);
 }
 void ZdbStorage::createAccessTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_ACCESS_TABLE << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_ACCESS_TABLE << "\" (\n";
     ss << getCommonFileds();
-    ss << " `table_name` varchar(128) DEFAULT NULL,\n";
-    ss << "`address` varchar(128) DEFAULT NULL,\n";
-    ss << " `enable_num` varchar(256) DEFAULT NULL,\n";
-    ss << " PRIMARY KEY (`_id_`),\n";
-    ss << "KEY `table_name` (`table_name`)\n";
-    ss << ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+    ss << " \"table_name\" varchar(128),\n";
+    ss << "\"address\" varchar(128),\n";
+    ss << " \"enable_num\" varchar(256) ,\n";
+    ss << " NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+    ZdbStorage_LOG(INFO) << "createAccessTables:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+
+    //deal with index
+    stringstream createTableAccessIndex;
+    createTableAccessIndex<<"CREATE  INDEX IF NOT EXISTS \"table_name\" ON \"SYSDBA\".\"_sys_table_access_\"(\"table_name\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    string indexTableAccessSql=createTableAccessIndex.str();
+    ZdbStorage_LOG(INFO) << "createAccessTablesIndex:" << indexTableAccessSql ;
+    m_sqlBasicAcc->ExecuteSql(indexTableAccessSql);
 }
 void ZdbStorage::createCurrentStateTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CURRENT_STATE << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_CURRENT_STATE << "\" (\n";
     ss << getCommonFileds();
-    ss << "`key` varchar(128) DEFAULT NULL,\n";
-    ss << "`value` longtext,\n";
-    ss << "PRIMARY KEY (`_id_`),\n";
-    ss << "KEY `key` (`key`)\n";
-    ss << ") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4;\n";
+    ss << "\"key\" varchar(128),\n";
+    ss << "\"value\" CLOB,\n";
+    ss << "NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+    ZdbStorage_LOG(INFO) << "createCurrentStateTables:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+
+    //deal with index
+    // stringstream createIndex;
+    // createIndex<<"CREATE  INDEX IF NOT EXISTS \"INDEX10980172073900\" ON \"SYSDBA\".\"_sys_current_state_\"(\"key\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    // string indexSql=createIndex.str();
+    // ZdbStorage_LOG(INFO) << "createCurrentStateTablesIndex:" << indexSql ;
+    // m_sqlBasicAcc->ExecuteSql(indexSql);
 }
 void ZdbStorage::createNumber2HashTables()
 {
     stringstream ss;
 
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_NUMBER_2_HASH << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_NUMBER_2_HASH << "\" (\n";
     ss << getCommonFileds();
-    ss << " `number` varchar(128) DEFAULT NULL,\n";
-    ss << " `value` longtext,\n";
-    ss << " PRIMARY KEY (`_id_`),\n";
-    ss << " KEY `number` (`number`)\n";
-    ss << ") ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4;";
+    ss << " \"number\" varchar(128) ,\n";
+    ss << " \"value\" CLOB,\n";
+    ss << "NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+    ZdbStorage_LOG(INFO) << "createNumber2HashTables:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+    
+    //deal with index
+    // stringstream createIndex;
+    // createIndex<<"CREATE  INDEX IF NOT EXISTS \"INDEX10980181072600\" ON \"SYSDBA\".\"_sys_number_2_hash_\"(\"number\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    // string indexSql=createIndex.str();
+    // ZdbStorage_LOG(INFO) << "createNumber2HashTablesIndex:" << indexSql ;
+    // m_sqlBasicAcc->ExecuteSql(indexSql);
 }
 void ZdbStorage::createTxHash2BlockTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_TX_HASH_2_BLOCK << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_TX_HASH_2_BLOCK << "\" (\n";
     ss << getCommonFileds();
-    ss << "`hash` varchar(128) DEFAULT NULL,\n";
-    ss << "`value` longtext,\n";
-    ss << "`index` varchar(256) DEFAULT NULL,\n";
-    ss << "PRIMARY KEY (`_id_`),\n";
-    ss << "KEY `hash` (`hash`)\n";
-    ss << ") ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4;";
+    ss << "\"hash\" varchar(128),\n";
+    ss << "\"value\" clob,\n";
+    ss << "\"index\" varchar(256),\n";
+    ss << "NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+     ZdbStorage_LOG(INFO) << "createTxHash2BlockTables:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+
+    //deal with index
+    // stringstream createIndex;
+    // createIndex<<"CREATE  INDEX IF NOT EXISTS \"INDEX10980186641200\" ON \"SYSDBA\".\"_sys_tx_hash_2_block_\"(\"hash\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    // string indexSql=createIndex.str();
+    // ZdbStorage_LOG(INFO) << "createTxHash2BlockTablesIndex:" << indexSql ;
+    // m_sqlBasicAcc->ExecuteSql(indexSql);
+
 }
 void ZdbStorage::createHash2BlockTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_HASH_2_BLOCK << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_HASH_2_BLOCK << "\" (\n";
     ss << getCommonFileds();
-    ss << "`hash` varchar(128) DEFAULT NULL,\n";
-    ss << "`value` " << m_valueFieldType << ",\n";
-    ss << " PRIMARY KEY (`_id_`),\n";
-    ss << "KEY `hash` (`hash`)\n";
-    ss << ") " << m_rowFormat << " ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4;";
+    ss << "\"hash\" varchar(128),\n";
+    ss << "\"value\" clob,\n";
+    ss << "NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+    ZdbStorage_LOG(INFO) << "createHash2BlockTables:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+
+    //deal with index
+    stringstream createHash2BlockIndex;
+    createHash2BlockIndex<<"CREATE  INDEX IF NOT EXISTS \"hash\" ON \"SYSDBA\".\"_sys_hash_2_block_\"(\"hash\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    string indexHash2BlockSql=createHash2BlockIndex.str();
+    ZdbStorage_LOG(INFO) << "createHash2BlockTablesIndex:" << indexHash2BlockSql ;
+    m_sqlBasicAcc->ExecuteSql(indexHash2BlockSql);
+
 }
 
 void ZdbStorage::createBlobSysHash2BlockHeaderTable()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_HASH_2_BLOCKHEADER << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_HASH_2_BLOCKHEADER << "\" (\n";
     ss << getCommonFileds();
-    ss << "`hash` varchar(128) DEFAULT NULL,\n";
-    ss << "`value` longblob,\n";
-    ss << "`sigs` longblob,\n";
-    ss << " PRIMARY KEY (`_id_`),\n";
-    ss << "KEY `hash` (`hash`)\n";
-    ss << ") " << m_rowFormat << " ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4;";
+    ss << "\"hash\" varchar(128) ,\n";
+    ss << "\"value\" clob,\n";
+    ss << "\"sigs\" clob,\n";
+    ss << "NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+    ZdbStorage_LOG(INFO) << "createBlobSysHash2BlockHeaderTable:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+
+    // //deal with index
+    // stringstream createIndex;
+    // createIndex<<"CREATE  INDEX IF NOT EXISTS \"INDEX10980178055300\" ON \"SYSDBA\".\"_sys_hash_2_header_\"(\"hash\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    // string indexSql=createIndex.str();
+    // ZdbStorage_LOG(INFO) << "createBlobSysHash2BlockHeaderTableIndex:" << indexSql ;
+    // m_sqlBasicAcc->ExecuteSql(indexSql);
+
 }
 
 
 void ZdbStorage::createSysConsensus()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CONSENSUS << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_CONSENSUS << "\" (\n";
     ss << getCommonFileds();
-    ss << "`name` varchar(128) DEFAULT 'node',\n";
-    ss << "`type` varchar(128) DEFAULT NULL,\n";
-    ss << "`node_id` varchar(256) DEFAULT NULL,\n";
-    ss << " `enable_num` varchar(256) DEFAULT NULL,\n";
-    ss << " PRIMARY KEY (`_id_`),\n";
-    ss << "KEY `_num_` (`_num_`),\n";
-    ss << "KEY `name` (`name`)\n";
-    ss << ") ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4;";
+    ss << "\"name\" varchar(128) DEFAULT 'node',\n";
+    ss << "\"type\" varchar(128) ,\n";
+    ss << "\"node_id\" varchar(256) ,\n";
+    ss << " \"enable_num\" varchar(256) ,\n";
+    ss << "NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+      ZdbStorage_LOG(INFO) << "createSysConsensus:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+
+    //deal with index
+    stringstream createSysConsensusIndex;
+    createSysConsensusIndex<<"CREATE  INDEX IF NOT EXISTS \"_num_\" ON \"SYSDBA\".\"_sys_consensus_\"(\"_num_\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    string indexSysConsensusSql=createSysConsensusIndex.str();
+    ZdbStorage_LOG(INFO) << "createSysConsensusIndex1:" << indexSysConsensusSql ;
+    m_sqlBasicAcc->ExecuteSql(indexSysConsensusSql);
+
+    // //deal with index
+    // stringstream createIndex;
+    // createIndex<<"CREATE  INDEX IF NOT EXISTS \"INDEX10980169025900\" ON \"SYSDBA\".\"_sys_consensus_\"(\"name\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    // string indexSql=createIndex.str();
+    // ZdbStorage_LOG(INFO) << "createSysConsensusIndex2:" << indexSql ;
+    // m_sqlBasicAcc->ExecuteSql(indexSql);
 }
 void ZdbStorage::createSysConfigTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CONFIG << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_CONFIG << "\" (\n";
     ss << getCommonFileds();
-    ss << "`key` varchar(128) DEFAULT NULL,\n";
-    ss << "`value` longtext,\n";
-    ss << "`enable_num` varchar(256) DEFAULT NULL,\n";
-    ss << " PRIMARY KEY (`_id_`),\n";
-    ss << "KEY `key` (`key`)\n";
-    ss << ") ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4;";
+    ss << "\"key\" varchar(128),\n";
+    ss << "\"value\" clob,\n";
+    ss << "\"enable_num\" varchar(256) ,\n";
+    ss << "NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+     ZdbStorage_LOG(INFO) << "createSysConfigTables:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+
+    //deal with index
+    stringstream createSysConfigIndex;
+    createSysConfigIndex<<"CREATE INDEX IF NOT EXISTS \"key\" ON \"SYSDBA\".\"_sys_config_\"(\"key\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    string indexSysConfigSql=createSysConfigIndex.str();
+    ZdbStorage_LOG(INFO) << "createSysConfigTablesIndex:" << indexSysConfigSql ;
+    m_sqlBasicAcc->ExecuteSql(indexSysConfigSql);
 }
 void ZdbStorage::createSysBlock2NoncesTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_BLOCK_2_NONCES << "` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS \"SYSDBA\".\"" << SYS_BLOCK_2_NONCES << "\" (\n";
     ss << getCommonFileds();
-    ss << "`number` varchar(128) DEFAULT NULL,\n";
-    ss << " `value` " << m_valueFieldType << ",\n";
-    ss << "PRIMARY KEY (`_id_`),";
-    ss << "KEY `number` (`number`)";
-    ss << ") " << m_rowFormat << " ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;";
+    ss << "\"number\" varchar(128)  ,\n";
+    ss << "\"value\" clob,\n";
+    ss << "NOT CLUSTER PRIMARY KEY(\"_id_\")) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
     string sql = ss.str();
+    ZdbStorage_LOG(INFO) << "createSysBlock2NoncesTables:" << sql ;
     m_sqlBasicAcc->ExecuteSql(sql);
+
+    //deal with index
+    stringstream createSysBlock2NoncesIndex;
+    createSysBlock2NoncesIndex<<"CREATE INDEX IF NOT EXISTS \"number\" ON \"SYSDBA\".\"_sys_block_2_nonces_\"(\"number\" ASC) STORAGE(ON \"MAIN\", CLUSTERBTR) ;";
+    string indexSysBlock2NoncesSql=createSysBlock2NoncesIndex.str();
+    ZdbStorage_LOG(INFO) << "createSysBlock2NoncesTablesIndex:" << indexSysBlock2NoncesSql ;
+    m_sqlBasicAcc->ExecuteSql(indexSysBlock2NoncesSql);
 }
 
 void ZdbStorage::insertSysTables()
 {
+    /*+ IGNORE_ROW_ON_DUPKEY_INDEX(_sys_tables_(table_name)) */
     stringstream ss;
-    ss << "insert ignore into  `" << SYS_TABLES
-       << "` ( `table_name` , `key_field`, `value_field`)values \n";
+    ss << "insert /*+ IGNORE_ROW_ON_DUPKEY_INDEX(\"_sys_tables_\"(\"table_name\")) */ into  \"SYSDBA\".\"" << SYS_TABLES
+       << "\" (\"table_name\",\"key_field\",\"value_field\")VALUES\n";
     ss << "	('" << SYS_TABLES << "', 'table_name','key_field,value_field'),\n";
     ss << "	('" << SYS_CONSENSUS << "', 'name','type,node_id,enable_num'),\n";
     ss << "	('" << SYS_ACCESS_TABLE << "', 'table_name','address,enable_num'),\n";
@@ -349,6 +423,9 @@ void ZdbStorage::insertSysTables()
     ss << "	('" << SYS_CONFIG << "', 'key','value,enable_num'),\n";
     ss << "	('" << SYS_BLOCK_2_NONCES << "', 'number','value'),\n";
     ss << "	('" << SYS_HASH_2_BLOCKHEADER << "', 'hash','value,sigs');";
+    ZdbStorage_LOG(INFO) << "insertSysTables:" << ss.str() ;
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
+    string commit="commit;";
+    m_sqlBasicAcc->ExecuteSql(commit);
 }

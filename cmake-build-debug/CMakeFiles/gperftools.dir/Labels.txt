@@ -1,0 +1,13 @@
+# Target labels
+ gperftools
+# Source files and their labels
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/gperftools
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/gperftools.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/gperftools-complete.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/gperftools-stamp/gperftools-build.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/gperftools-stamp/gperftools-configure.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/gperftools-stamp/gperftools-download.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/gperftools-stamp/gperftools-install.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/gperftools-stamp/gperftools-mkdir.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/gperftools-stamp/gperftools-patch.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/gperftools-stamp/gperftools-update.rule

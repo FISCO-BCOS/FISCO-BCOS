@@ -19,6 +19,7 @@
  * @author: yujiechen
  * @date: 2019-06-22
  */
+//本文件的主要目的是实现对rocksDB的访问接口
 
 #pragma once
 #include <libdevcore/Common.h>
@@ -33,16 +34,19 @@
 #include <vector>
 
 #define ROCKSDB_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("ROCKSDB")
+//c++11的特性，指向函数的指针，用于记录不同的消息并加上标签
 #define DecHookFunction std::function<void(std::string&)>
 #define EncHookFunction std::function<void(std::string const&, std::string&)>
-
+//定义了两个钩子函数，对数据库中的数据进行解密和加密
 namespace dev
 {
 namespace storage
 {
+//控制rocksDB的基类
 class BasicRocksDB
 {
 public:
+    //智能指针
     using Ptr = std::shared_ptr<BasicRocksDB>;
     BasicRocksDB() {}
     virtual ~BasicRocksDB() { closeDB(); }
@@ -50,14 +54,23 @@ public:
     // open rocksDB with the given option
     // if rocksDB is opened successfully, return the DB handler
     // if open rocksDB failed, throw exception, and stop the program directly
+    //使用虚函数，方便派生类继承，实现多态
+    /*
+     *虚函数Open，接受一个rocksdb::Options对象和一个数据库名作为参数，并用给定的选项打开数据库。
+     *如果打开失败，它会抛出异常并退出程序；
+     *如果打开成功，返回数据库处理程序
+    */
     virtual void Open(const rocksdb::Options& options, const std::string& dbname);
 
+    // Get虚函数接受一个rocksdb::ReadOptions对象，一个键字符串，和一个值字符串引用作为参数，并从数据库中获取与键相关联的值。
     // get value from rocksDB according to the given key
     // if query successfully, return query status
     // if query failed, throw exception and exit directly
+    //返回值类型为rocksdb::Status对象
     virtual rocksdb::Status Get(
         rocksdb::ReadOptions const& options, std::string const& key, std::string& value);
 
+    // Put虚函数接受一个rocksdb::WriteBatch对象，一个键字符串，和一个值字符串作为参数，并将键值对放入批处理中。
     // common Put interface, put the given (key, value) into batch
     virtual rocksdb::Status Put(
         rocksdb::WriteBatch& batch, std::string const& key, std::string const& value);
@@ -69,7 +82,7 @@ public:
 
     virtual rocksdb::Status Write(
         rocksdb::WriteOptions const& options, rocksdb::WriteBatch& updates);
-
+    
     virtual void setEncryptHandler(EncHookFunction const& encryptHandler)
     {
         m_encryptHandler = encryptHandler;
@@ -89,10 +102,13 @@ protected:
         rocksdb::WriteBatch& batch, std::string const& key, std::string const& value);
 
     std::unique_ptr<rocksdb::DB> m_db;
+    //加密函数处理器指针
     EncHookFunction m_encryptHandler = nullptr;
     DecHookFunction m_decryptHandler = nullptr;
 };
+// 函数 getRocksDBOptions 用于返回一组用于打开RocksDB的默认选项
 rocksdb::Options getRocksDBOptions();
+
 std::function<void(std::string const&, std::string&)> getEncryptHandler(
     const std::vector<uint8_t>& _encryptKey, bool _enableCompress = false);
 std::function<void(std::string&)> getDecryptHandler(

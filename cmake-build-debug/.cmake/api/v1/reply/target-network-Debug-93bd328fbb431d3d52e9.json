@@ -1,0 +1,532 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "libnetwork/libnetwork.a"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"add_dependencies",
+			"include",
+			"target_link_libraries",
+			"add_compile_options",
+			"include_directories",
+			"create_build_info",
+			"configure_project"
+		],
+		"files" : 
+		[
+			"libnetwork/CMakeLists.txt",
+			"cmake/ProjectTBB.cmake",
+			"CMakeLists.txt",
+			"cmake/ProjectSnappy.cmake",
+			"cmake/ProjectLevelDB.cmake",
+			"cmake/ProjectCryptopp.cmake",
+			"cmake/ProjectSecp256k1.cmake",
+			"cmake/ProjectBoost.cmake",
+			"cmake/ProjectMPIR.cmake",
+			"cmake/ProjectLibFF.cmake",
+			"cmake/CompilerSettings.cmake",
+			"cmake/BuildInfo.cmake",
+			"cmake/Options.cmake"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 6,
+				"parent" : 0
+			},
+			{
+				"file" : 2
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 45,
+				"parent" : 2
+			},
+			{
+				"file" : 1,
+				"parent" : 3
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 44,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 46,
+				"parent" : 2
+			},
+			{
+				"file" : 3,
+				"parent" : 6
+			},
+			{
+				"command" : 1,
+				"file" : 3,
+				"line" : 40,
+				"parent" : 7
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 47,
+				"parent" : 2
+			},
+			{
+				"file" : 4,
+				"parent" : 9
+			},
+			{
+				"command" : 1,
+				"file" : 4,
+				"line" : 39,
+				"parent" : 10
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 50,
+				"parent" : 2
+			},
+			{
+				"file" : 5,
+				"parent" : 12
+			},
+			{
+				"command" : 1,
+				"file" : 5,
+				"line" : 169,
+				"parent" : 13
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 51,
+				"parent" : 2
+			},
+			{
+				"file" : 6,
+				"parent" : 15
+			},
+			{
+				"command" : 1,
+				"file" : 6,
+				"line" : 57,
+				"parent" : 16
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 54,
+				"parent" : 2
+			},
+			{
+				"file" : 7,
+				"parent" : 18
+			},
+			{
+				"command" : 1,
+				"file" : 7,
+				"line" : 112,
+				"parent" : 19
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 57,
+				"parent" : 2
+			},
+			{
+				"file" : 9,
+				"parent" : 21
+			},
+			{
+				"command" : 2,
+				"file" : 9,
+				"line" : 4,
+				"parent" : 22
+			},
+			{
+				"file" : 8,
+				"parent" : 23
+			},
+			{
+				"command" : 1,
+				"file" : 8,
+				"line" : 31,
+				"parent" : 24
+			},
+			{
+				"command" : 1,
+				"file" : 9,
+				"line" : 47,
+				"parent" : 22
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 8,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 41,
+				"parent" : 2
+			},
+			{
+				"file" : 10,
+				"parent" : 28
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 36,
+				"parent" : 29
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 37,
+				"parent" : 29
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 38,
+				"parent" : 29
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 39,
+				"parent" : 29
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 45,
+				"parent" : 29
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 46,
+				"parent" : 29
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 48,
+				"parent" : 29
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 50,
+				"parent" : 29
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 101,
+				"parent" : 29
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 102,
+				"parent" : 29
+			},
+			{
+				"command" : 7,
+				"file" : 2,
+				"line" : 40,
+				"parent" : 2
+			},
+			{
+				"command" : 6,
+				"file" : 12,
+				"line" : 127,
+				"parent" : 40
+			},
+			{
+				"command" : 5,
+				"file" : 11,
+				"line" : 65,
+				"parent" : 41
+			},
+			{
+				"command" : 5,
+				"file" : 2,
+				"line" : 69,
+				"parent" : 2
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-std=c++11 -pthread -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -fexceptions -march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden -DSTATICLIB -Og -g  -DFISCO_DEBUG -fvisibility=hidden -fdiagnostics-color=always"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-Werror"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-Wall"
+				},
+				{
+					"backtrace" : 32,
+					"fragment" : "-pedantic"
+				},
+				{
+					"backtrace" : 33,
+					"fragment" : "-Wextra"
+				},
+				{
+					"backtrace" : 34,
+					"fragment" : "-Wno-unknown-pragmas"
+				},
+				{
+					"backtrace" : 35,
+					"fragment" : "-fno-omit-frame-pointer"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DBOOST_SPIRIT_THREADSAFE"
+				},
+				{
+					"backtrace" : 37,
+					"fragment" : "-DTBB_SUPPRESS_DEPRECATED_MESSAGES=1"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-fstack-protector-strong"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-fstack-protector"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 42,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/cmake-build-debug"
+				},
+				{
+					"backtrace" : 43,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1"
+				},
+				{
+					"backtrace" : 27,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/tassl/include"
+				},
+				{
+					"backtrace" : 27,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/boost"
+				},
+				{
+					"backtrace" : 27,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/leveldb/include"
+				},
+				{
+					"backtrace" : 27,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/include"
+				},
+				{
+					"backtrace" : 27,
+					"isSystem" : true,
+					"path" : "/home/dyy/\u4e0b\u8f7d/FISCO-BCOS-2.9.1/deps/src/tbb/include"
+				}
+			],
+			"language" : "CXX",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4
+			]
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 5,
+			"id" : "tbb::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "snappy::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 11,
+			"id" : "leveldb::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 14,
+			"id" : "cryptopp::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 17,
+			"id" : "secp256k1::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 20,
+			"id" : "boost::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 25,
+			"id" : "mpir::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 26,
+			"id" : "libff::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 27,
+			"id" : "devcore::@53af244f0c493e8db743"
+		},
+		{
+			"backtrace" : 27,
+			"id" : "devcrypto::@e58300256fedac60e51a"
+		}
+	],
+	"id" : "network::@77b67a839382420e757e",
+	"name" : "network",
+	"nameOnDisk" : "libnetwork.a",
+	"paths" : 
+	{
+		"build" : "libnetwork",
+		"source" : "libnetwork"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4
+			]
+		},
+		{
+			"name" : "Header Files",
+			"sourceIndexes" : 
+			[
+				5,
+				6,
+				7,
+				8,
+				9,
+				10,
+				11,
+				12
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "libnetwork/ASIOInterface.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "libnetwork/Common.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "libnetwork/Host.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "libnetwork/PeerWhitelist.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "libnetwork/Session.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libnetwork/ASIOInterface.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libnetwork/Common.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libnetwork/Host.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libnetwork/PeerWhitelist.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libnetwork/Session.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libnetwork/SessionFace.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libnetwork/Socket.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libnetwork/SocketFace.h",
+			"sourceGroupIndex" : 1
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}

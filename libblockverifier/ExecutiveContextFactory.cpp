@@ -38,8 +38,6 @@
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
-#include <utility>
-
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::executive;
@@ -48,7 +46,7 @@ using namespace dev::precompiled;
 void ExecutiveContextFactory::setPrecompiledExecResultFactory(
     PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
 {
-    m_precompiledExecResultFactory = std::move(_precompiledExecResultFactory);
+    m_precompiledExecResultFactory = _precompiledExecResultFactory;
 }
 
 void ExecutiveContextFactory::initExecutiveContext(
@@ -114,8 +112,6 @@ void ExecutiveContextFactory::initExecutiveContext(
         context->setAddress2Precompiled(
             GASCHARGEMANAGE_ADDRESS, std::make_shared<GasChargeManagePrecompiled>());
     }
-
-    context->setEnableReconfirmCommittee(m_enableReconfirmCommittee);
 }
 
 void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateStorage)

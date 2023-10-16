@@ -1,0 +1,13 @@
+# Target labels
+ snappy
+# Source files and their labels
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/snappy
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/snappy.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/snappy-complete.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/snappy-stamp/snappy-build.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/snappy-stamp/snappy-configure.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/snappy-stamp/snappy-download.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/snappy-stamp/snappy-install.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/snappy-stamp/snappy-mkdir.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/snappy-stamp/snappy-patch.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/snappy-stamp/snappy-update.rule

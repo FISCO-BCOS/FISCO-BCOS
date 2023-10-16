@@ -26,7 +26,7 @@
 #include <json/json.h>
 
 
-#define ZdbStorage_LOG(LEVEL) LOG(LEVEL) << "[ZdbStorage] "
+#define ZdbStorage_LOG(LEVEL) LOG(LEVEL) << "[ZdbStorage] " //宏指令，用于记录日志
 
 namespace dev
 {
@@ -35,7 +35,7 @@ namespace storage
 class ZdbStorage : public Storage
 {
 public:
-    typedef std::shared_ptr<ZdbStorage> Ptr;
+    typedef std::shared_ptr<ZdbStorage> Ptr;    //构造一个共享指针，指向ZabStorage
 
     ZdbStorage();
     virtual ~ZdbStorage(){};
@@ -78,7 +78,7 @@ private:
     // create blob table
     void createBlobSysHash2BlockHeaderTable();
 
-    int m_maxRetry = 60;
+    int m_maxRetry = 60;                 //默认最大重试次数为60
     std::string m_rowFormat = "";
     std::string m_valueFieldType = "longtext";
 };

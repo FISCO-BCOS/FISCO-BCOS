@@ -1,0 +1,13 @@
+# Target labels
+ boost
+# Source files and their labels
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/boost
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/boost.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/boost-complete.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/boost-stamp/boost-build.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/boost-stamp/boost-configure.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/boost-stamp/boost-download.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/boost-stamp/boost-install.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/boost-stamp/boost-mkdir.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/boost-stamp/boost-patch.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/boost-stamp/boost-update.rule

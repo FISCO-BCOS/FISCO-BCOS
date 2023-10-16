@@ -35,15 +35,16 @@
 
 using namespace dev::storage;
 using namespace std;
-
+//entry构造函数，令m_refCount=1
 Entry::Entry() : m_data(std::make_shared<EntryData>())
 {
     m_data->m_refCount = 1;
     // m_data->m_fields.insert(std::make_pair(STATUS, "0"));
 }
-
+//析构函数
 Entry::~Entry()
 {
+    //只需要加锁，因为是自旋锁，出了作用域自动解锁
     RWMutexScoped lock(m_data->m_mutex, true);
     if (m_data->m_refCount > 0)
     {
@@ -53,6 +54,7 @@ Entry::~Entry()
 
 uint64_t Entry::getID() const
 {
+    //加锁位置为false，说明加的是读锁
     RWMutexScoped lock(m_data->m_mutex, false);
 
     return m_ID;
@@ -66,31 +68,41 @@ void Entry::setID(uint64_t id)
 
     m_dirty = true;
 }
-
+// 在TBB（Intel Threading Building Blocks）库中，tbb::spin_rw_mutex::scoped_lock构造函数的第二个参数用于指定锁的类型。该参数是一个布尔值，用来区分读取锁（shared_lock）和写入锁（exclusive_lock）。这里简要解释一下true和false在这个上下文中的区别：
+//true: 当将第二个参数设置为true时，表示请求的是写入锁（exclusive_lock）。写入锁是一种独占锁，它防止其他线程同时获得读取锁或写入锁。当一个线程持有写入锁时，其他线程无法读取或修改共享数据，直到该线程释放写入锁。
+//false: 当将第二个参数设置为false时，表示请求的是读取锁（shared_lock）。读取锁是一种共享锁，允许多个线程同时获取读取锁，从而允许多个线程同时读取共享数据，但在有线程持有写入锁时，其他线程无法获得写入锁。
+// 总结：
+//true: 请求写入锁（exclusive_lock），独占访问共享数据。
+//false: 请求读取锁（shared_lock），允许多个线程同时读取共享数据。
+// 根据具体的应用场景，选择合适的锁类型可以优化并发访问性能和避免竞争条件。通常，在需要修改共享数据时，使用写入锁，而在只需要读取共享数据时，使用读取锁。这样可以最大程度地提高并发性能。
 void Entry::setID(const std::string& id)
 {
     RWMutexScoped lock(m_data->m_mutex, true);
-
+    //将string转化为uint64_t
     m_ID = boost::lexical_cast<uint64_t>(id);
 
     m_dirty = true;
 }
-
+//后缀const说明该函数不会修改成员变量
+//根据输入的key值，在entryData的map中查找value值
+//返回值是bytesConstRef类型
 dev::bytesConstRef Entry::getFieldConst(const std::string& key) const
 {
     RWMutexScoped lock(m_data->m_mutex, false);
 
     auto it = m_data->m_fields.find(key);
 
+    // STORAGE_LOG(INFO)<<"查询的key为："<<key;
     if (it != m_data->m_fields.end())
     {
+        // STORAGE_LOG(INFO)<<"打印数据:"<<it->first<<"---"<<it->second;
         return dev::bytesConstRef(it->second);
     }
 
     STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
     return dev::bytesConstRef();
 }
-
+//返回的是string类型
 std::string Entry::getField(const std::string& key) const
 {
     RWMutexScoped lock(m_data->m_mutex, false);
@@ -105,12 +117,12 @@ std::string Entry::getField(const std::string& key) const
     STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
     return "";
 }
-
+//判断key值是否存在
 bool Entry::fieldExist(std::string const& _key) const
 {
     return m_data->m_fields.count(_key);
 }
-
+//返回形式是vector<byte>
 vector<byte> Entry::getFieldBytes(const std::string& key) const
 {
     RWMutexScoped lock(m_data->m_mutex, false);
@@ -126,25 +138,30 @@ vector<byte> Entry::getFieldBytes(const std::string& key) const
     STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
     return vector<byte>();
 }
-
+//在设置field中插入数据
 void Entry::setField(const std::string& key, const std::string& value)
 {
+    //确保独享读锁
     auto lock = checkRef();
 
     auto it = m_data->m_fields.find(key);
     ssize_t updatedCapacity = 0;
     if (it != m_data->m_fields.end())
     {
+        //计算原先的值和现在新的大小的差距
         updatedCapacity = value.size() - it->second.size();
         it->second = value;
     }
     else
     {
+        //不允许key为空
         assert(!key.empty());
         m_data->m_fields.insert(std::make_pair(key, value));
+        //记录key和value的总大小
         updatedCapacity = key.size() + value.size();
     }
     m_capacity += updatedCapacity;
+    //检查key是否以下划线开头和结尾
     if (isHashField(key))
     {
         m_capacityOfHashField += updatedCapacity;
@@ -153,7 +170,7 @@ void Entry::setField(const std::string& key, const std::string& value)
     assert(m_capacityOfHashField >= 0);
     m_dirty = true;
 }
-
+//与上一个函数类似,仅仅输入参数类型发生变化
 void Entry::setField(const std::string& key, const byte* value, size_t size)
 {
     auto lock = checkRef();
@@ -193,7 +210,7 @@ void Entry::setTempIndex(size_t index)
 
     m_tempIndex = index;
 }
-
+//针对fields的操作
 std::map<std::string, std::string>::const_iterator Entry::find(const std::string& key) const
 {
     return m_data->m_fields.find(key);
@@ -390,11 +407,13 @@ std::shared_ptr<Entry::RWMutexScoped> Entry::lock(bool write)
 
     return lock;
 }
-
+//根据 m_data->m_refCount 的值来确定是否需要创建一个新的 EntryData 对象，并返回相应的写锁智能指针，以确保并发访问时的数据安全。
+// shared_ptr允许多个指针指向同一个对象
 std::shared_ptr<tbb::spin_rw_mutex::scoped_lock> Entry::checkRef()
 {
+    //创建一个自旋锁
     auto lock = std::make_shared<RWMutexScoped>(m_data->m_mutex, true);
-
+    //当发现EntryData对象被多个指针指向时,需要新建一个一模一样的对象
     if (m_data->m_refCount > 1)
     {
         auto m_oldData = m_data;
@@ -411,7 +430,7 @@ std::shared_ptr<tbb::spin_rw_mutex::scoped_lock> Entry::checkRef()
 
     return lock;
 }
-
+//重载运算符
 bool EntryLessNoLock::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
 {
     if (lhs->getID() != rhs->getID())
@@ -452,7 +471,7 @@ bool EntryLessNoLock::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) c
 
     return false;
 }
-
+//只读的形式返回vector的头部
 Entries::Vector::const_iterator Entries::begin() const
 {
     return m_entries.begin();
@@ -462,7 +481,7 @@ Entries::Vector::const_iterator Entries::end() const
 {
     return m_entries.end();
 }
-
+//可修改的返回vector的头部
 Entries::Vector::iterator Entries::begin()
 {
     return m_entries.begin();
@@ -482,12 +501,12 @@ size_t Entries::size() const
 {
     return m_entries.size();
 }
-
+//用于改变容器的大小
 void Entries::resize(size_t n)
 {
     m_entries.resize(n);
 }
-
+//在entries中返回一个只读的entry
 Entry::ConstPtr Entries::get(size_t i) const
 {
     if (m_entries.size() <= i)
@@ -513,7 +532,7 @@ Entry::Ptr Entries::get(size_t i)
 
     return m_entries[i];
 }
-
+//加入一个entry，返回当前entries的大小
 size_t Entries::addEntry(Entry::Ptr entry)
 {
     size_t index = m_entries.push_back(entry) - m_entries.begin();
@@ -521,7 +540,7 @@ size_t Entries::addEntry(Entry::Ptr entry)
 
     return index;
 }
-
+//删除指定下标的entry
 void Entries::removeEntry(size_t index)
 {
     if (index < m_entries.size())
@@ -530,17 +549,17 @@ void Entries::removeEntry(size_t index)
         m_entries.at(index)->setStatus(1);
     }
 }
-
+//返回m_dirty成员状态
 bool Entries::dirty() const
 {
     return m_dirty;
 }
-
+//设置m_dirty位
 void Entries::setDirty(bool dirty)
 {
     m_dirty = dirty;
 }
-
+//浅拷贝
 void Entries::shallowFrom(Entries::Ptr entries)
 {
     m_entries = entries->m_entries;
@@ -836,21 +855,23 @@ bool Condition::process(Entry::Ptr entry)
 
     return true;
 }
-
+//无条件返回true
 bool Condition::graterThan(Condition::Ptr condition)
 {
     (void)condition;
 
     return true;
 }
-
+//无条件返回false
 bool Condition::related(Condition::Ptr condition)
 {
     (void)condition;
 
     return false;
 }
-
+//tableInfo相关，获取系统表的相关信息
+//入参是表格名称，出参是table结构体
+//和数据库中的表格信息相对应
 TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
 {
     auto tableInfo = make_shared<storage::TableInfo>();

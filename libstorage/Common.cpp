@@ -27,15 +27,15 @@ using namespace dev;
 using namespace dev::storage;
 
 std::map<SQLFieldType, std::string> dev::storage::SQLFieldTypeName{
-    {SQLFieldType::MediumBlobType, "mediumblob"}, {SQLFieldType::LongBlobType, "longblob"},
-    {SQLFieldType::MediumStringType, "mediumtext"}, {SQLFieldType::LongStringType, "longtext"}};
+     {SQLFieldType::ClobType, "CLOB"}
+};
 
 bool dev::storage::isHashField(const std::string& _key)
 {
     if (!_key.empty())
     {
         if (g_BCOSConfig.version() < RC3_VERSION)
-        {
+        {   //检查key是否是下划线开头和结尾
             return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
                     (_key == STATUS));
         }

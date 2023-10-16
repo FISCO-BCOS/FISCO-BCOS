@@ -49,7 +49,7 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.10.0"
+default_version="2.9.0"
 rsa_key_length=2048
 macOS=""
 x86_64_arch="false"
@@ -251,8 +251,8 @@ check_env() {
         macOS="macOS"
     fi
 
-    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep 3.)" ] || {
-        echo "Openssl higher than 1.0.2 is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
+    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
+        echo "Openssl 1.1.0 or 1.0.2 is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
        #echo "download openssl from https://www.openssl.org."
       exit 1
     }
@@ -344,8 +344,7 @@ gen_rsa_chain_cert() {
     dir_must_exists "$chaindir"
 
     openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -config ${cert_conf_path} -out "${chaindir}"/ca.crt  2>/dev/null
-    cp "${cert_conf_path}" "$chaindir"
+    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
 
     LOG_INFO "Generate rsa ca cert successfully!"
 }
@@ -377,7 +376,6 @@ gen_rsa_node_cert() {
 
     mv "$ndpath"/pkcs8_node.key "$ndpath"/"$type".key
     cp "$capath/ca.crt" "$ndpath"
-    cp "${cert_conf_path}" "$ndpath"
 
     # LOG_INFO "Generate ${ndpath} node rsa cert successful!"
 }
@@ -1324,7 +1322,7 @@ while getopts "v:V:f" option;do
     esac
 done
 
-default_version=2.10.0
+default_version=2.9.1
 download_version=\${default_version}
 sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto_channel= | cut -d = -f 2 | head -n 1)
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${download_version}/\${package_name}
@@ -1619,13 +1617,13 @@ download_bin()
 {
     if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ];then exit_with_clean "We only offer x86_64/arm64 precompiled fisco-bcos binary, your OS architecture is not x86_64/arm64. Please compile from source."; fi
     bin_path=${output_dir}/${bcos_bin_name}
-
+    
     if [ -n "${macOS}" ];then
         package_name="fisco-bcos-macOS.tar.gz"
         if [ "${arm64_arch}" == "true" ];then
             package_name="fisco-bcos-macOS-aarch64.tar.gz"
         fi
-    else
+    else 
         package_name="fisco-bcos.tar.gz"
         if [ "${arm64_arch}" == "true" ];then
             package_name="fisco-bcos-aarch64.tar.gz"
@@ -1767,7 +1765,7 @@ fi
 if version_gt "2.9.0" "${compatibility_version}";then
     echo " ${compatibility_version} less than 2.9.0, does not use rsa ssl"
     rsa_crypto_channel="false"
-    LOG_INFO "compatibility_version: ${compatibility_version}, do not use rsa crypto channel"
+    LOG_INFO "compatibility_version: ${compatibility_version}, do not use rsa crypto channel" 
 fi
 
 # download fisco-bcos and check it
@@ -1818,7 +1816,7 @@ for line in ${ip_array[*]};do
         else
             gen_rsa_node_cert "${output_dir}/cert/${agency}/channel" "${sdk_path}" "sdk"
         fi
-
+        
         cd "${output_dir}"
         if [ -n "${guomi_mode}" ];then
             mkdir -p "${sdk_path}/gm"

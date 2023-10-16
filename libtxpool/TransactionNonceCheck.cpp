@@ -31,12 +31,16 @@ namespace dev
 {
 namespace txpool
 {
+//构造函数的实现
+//构造时，会重置m_cache的缓存
 void TransactionNonceCheck::init()
 {
+    //起始和终止都先指向0
     m_startblk = 0;
     m_endblk = 0;
     updateCache(true);
 }
+//输入一笔交易，检查其BlockLimit是否正确
 bool TransactionNonceCheck::isBlockLimitOk(Transaction const& _tx)
 {
     if (_tx.blockLimit() == Invalid256 || m_blockNumber >= _tx.blockLimit() ||
@@ -50,18 +54,21 @@ bool TransactionNonceCheck::isBlockLimitOk(Transaction const& _tx)
     }
     return true;
 }
-
+//验证当前交易
 bool TransactionNonceCheck::ok(Transaction const& _transaction)
 {
     return isBlockLimitOk(_transaction) && isNonceOk(_transaction);
 }
-
+//根据输入块高获取对应块高的nounces值，同时根据输入的参数update来决定是否将此nounces值更新到缓存中
 std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateCache(
     int64_t const& blockNumber, bool const& update)
 {
+    //NonceVec是u256
     std::shared_ptr<NonceVec> nonceVec;
+    //如果map缓存中包含指定的块高
     if (m_blockNonceCache.count(blockNumber))
     {
+        //将对应的nounces集合放入容器中
         nonceVec = m_blockNonceCache[blockNumber];
         NONCECHECKER_LOG(TRACE) << LOG_DESC("updateCache: getNonceAndUpdateCache cache hit ")
                                 << LOG_KV("blockNumber", blockNumber)
@@ -69,11 +76,14 @@ std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateC
                                 << LOG_KV("nonceCacheSize", m_blockNonceCache.size());
     }
     /// block cache hit
+    //如果当前块高和输入的块高相同
     else if (m_blockChain->number() == blockNumber)
     {
+        //根据块高获取一个区块
         std::shared_ptr<Block> pBlock = m_blockChain->getBlockByNumber(blockNumber);
         if (pBlock)
         {
+            //获取所有的nounces值
             nonceVec = pBlock->getAllNonces();
             NONCECHECKER_LOG(TRACE)
                 << LOG_DESC("updateCache: getNonceAndUpdateCache block cache hit ")
@@ -101,22 +111,27 @@ std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateC
 
     return nonceVec;
 }
-
+//传入参数为布尔类型，如果是true那么会清除缓存重建。否则会验证最大的区块限制1000，然后把更新两个缓存
+//一个是m_blockNonceCache，另一个是m_cache
 void TransactionNonceCheck::updateCache(bool _rebuild)
 {
     WriteGuard l(m_lock);
     {
         try
         {
+            //记录开始时间
             auto startT = utcTime();
+            //获取最新块高
             m_blockNumber = m_blockChain->number();
             int64_t lastnumber = m_blockNumber;
             int64_t prestartblk = m_startblk;
             int64_t preendblk = m_endblk;
 
             m_endblk = lastnumber;
+            //如果当前块高大于最大的区块限制
             if (lastnumber > m_maxBlockLimit)
             {
+                //重置起始点
                 m_startblk = lastnumber - m_maxBlockLimit;
             }
             else
@@ -130,7 +145,9 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                 << LOG_KV("prestartBlk", prestartblk) << LOG_KV("preEndBlk", preendblk);
             if (_rebuild)
             {
+                //清除缓存
                 m_cache.clear();
+                //终点为0
                 preendblk = 0;
             }
             else
@@ -139,6 +156,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                 for (auto i = prestartblk; i < m_startblk; i++)
                 {
                     auto nonce_vec = getNonceAndUpdateCache(i, false);
+                    //删除m_cache中的过期缓存
                     if (nonce_vec)
                     {
                         for (auto& nonce : *nonce_vec)
@@ -147,6 +165,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                         }
                     }
                     /// erase the expired nonces from cache since it can't be touched forever
+                    //删除m_blockNonceCache中的过期缓存
                     if (m_blockNonceCache.count(i))
                     {
                         m_blockNonceCache.erase(i);

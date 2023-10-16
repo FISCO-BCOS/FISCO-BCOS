@@ -32,6 +32,7 @@ namespace dev
 {
 namespace storage
 {
+//sql数据库连接池
 struct ConnectionPoolConfig
 {
     std::string dbType;

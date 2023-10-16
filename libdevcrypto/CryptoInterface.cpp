@@ -44,7 +44,7 @@ using namespace dev::crypto;
 
 h256 dev::EmptyHash = keccak256(bytesConstRef());
 h256 dev::EmptyTrie = keccak256(rlp(""));
-
+//static_cast进行类型转换
 std::function<std::string(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
     dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,

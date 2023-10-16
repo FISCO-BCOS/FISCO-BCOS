@@ -92,10 +92,12 @@ const int CODE_TABLE_INVALIDATE_FIELD = -50008;
 
 enum SQLFieldType : int8_t
 {
-    MediumBlobType = 0,
-    LongBlobType = 1,
-    MediumStringType = 2,
-    LongStringType = 3,
+    // BlobType=0,
+    ClobType=1,
+    // MediumBlobType = 0,
+    // LongBlobType = 1,
+    // MediumStringType = 2,
+    // LongStringType = 3,
 };
 extern std::map<SQLFieldType, std::string> SQLFieldTypeName;
 

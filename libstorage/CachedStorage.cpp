@@ -123,6 +123,7 @@ CachedStorage::CachedStorage(dev::GROUP_ID const& _groupID) : m_groupID(_groupID
 
     m_running = std::make_shared<std::atomic<bool>>();
     m_running->store(true);
+    CACHED_STORAGE_LOG(INFO) << "Init flushStorage thread end";
 }
 
 CachedStorage::~CachedStorage()

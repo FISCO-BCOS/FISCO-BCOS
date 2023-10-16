@@ -37,9 +37,8 @@ namespace blockverifier
 class ExecutiveContextFactory : public std::enable_shared_from_this<ExecutiveContextFactory>
 {
 public:
-    using Ptr = std::shared_ptr<ExecutiveContextFactory>;
-    ExecutiveContextFactory(bool enableReconfirmCommittee)
-      : m_enableReconfirmCommittee(enableReconfirmCommittee)
+    typedef std::shared_ptr<ExecutiveContextFactory> Ptr;
+    ExecutiveContextFactory()
     {
         m_precompiledContract.insert(std::make_pair(
             dev::Address(1), dev::eth::PrecompiledContract(
@@ -74,7 +73,7 @@ public:
                     dev::eth::PrecompiledRegistrar::executor("blake2_compression"))});
         }
     };
-    virtual ~ExecutiveContextFactory() = default;
+    virtual ~ExecutiveContextFactory(){};
 
     virtual void initExecutiveContext(
         BlockInfo blockInfo, h256 const& stateRoot, ExecutiveContext::Ptr context);
@@ -94,13 +93,13 @@ public:
             _precompiledExecResultFactory);
 
 private:
+    //成员变量  
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
     dev::storage::Storage::Ptr m_stateStorage;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactoryInterface;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
-
+    
     std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
-    bool m_enableReconfirmCommittee;
 
     void setTxGasLimitToContext(ExecutiveContext::Ptr context);
     void registerUserPrecompiled(ExecutiveContext::Ptr context);

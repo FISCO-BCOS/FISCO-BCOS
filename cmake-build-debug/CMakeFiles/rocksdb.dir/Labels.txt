@@ -1,0 +1,13 @@
+# Target labels
+ rocksdb
+# Source files and their labels
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/rocksdb
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/rocksdb.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/cmake-build-debug/CMakeFiles/rocksdb-complete.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/rocksdb-stamp/rocksdb-build.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/rocksdb-stamp/rocksdb-configure.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/rocksdb-stamp/rocksdb-download.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/rocksdb-stamp/rocksdb-install.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/rocksdb-stamp/rocksdb-mkdir.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/rocksdb-stamp/rocksdb-patch.rule
+/home/dyy/下载/FISCO-BCOS-2.9.1/deps/src/rocksdb-stamp/rocksdb-update.rule

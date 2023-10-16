@@ -57,6 +57,7 @@ public:
 };
 struct transactionCompare
 {
+    //重载运算符()，判断第一笔交易的入队时间是否小于第二笔交易的入队时间
     bool operator()(dev::eth::Transaction::Ptr _first, dev::eth::Transaction::Ptr _second) const
     {
         return _first->importTime() <= _second->importTime();

@@ -37,10 +37,13 @@ namespace dev
 {
 namespace txpool
 {
+//NonceVec是u256的vector
 using NonceVec = std::vector<dev::eth::NonceKeyType>;
+//继承CommonTransactionNonceCheck
 class TransactionNonceCheck : public CommonTransactionNonceCheck
 {
 public:
+    //构造函数
     TransactionNonceCheck(std::shared_ptr<dev::blockchain::BlockChainInterface> const& _blockChain)
       : CommonTransactionNonceCheck(), m_blockChain(_blockChain)
     {
@@ -64,10 +67,12 @@ private:
     /// key: block number
     /// value: all the nonces of a given block
     /// we cache at most m_maxBlockLimit entries(occuppy about 32KB)
+    //map集合，key是块高，value是对应块高的nounce集合
     std::map<int64_t, std::shared_ptr<NonceVec> > m_blockNonceCache;
 
     int64_t m_startblk;
     int64_t m_endblk;
+    //将区块的nounce值从数据库中加载到内存中，key值是区块高度，value是给定区块的所有交易的nounce值。最大获取m_maxBlockLimit个区块，大概占据32KB
     unsigned m_maxBlockLimit = 1000;
     int64_t m_blockNumber;
 };

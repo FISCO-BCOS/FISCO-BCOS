@@ -35,7 +35,7 @@ class ChainGovernancePrecompiled : public dev::precompiled::Precompiled
 public:
     typedef std::shared_ptr<ChainGovernancePrecompiled> Ptr;
     ChainGovernancePrecompiled();
-    ~ChainGovernancePrecompiled() noexcept override = default;
+    virtual ~ChainGovernancePrecompiled(){};
 
     std::string toString() override;
 

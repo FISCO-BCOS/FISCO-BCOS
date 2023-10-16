@@ -32,21 +32,21 @@ using namespace std;
 bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& _dbConfig)
 {
     if (_dbConfig.dbType == "mysql")
-    {
+    {   //用于进行字符串的输入和输出操作
         stringstream ss;
         // Note: [auth-plugin=mysql_native_password] only appliable for mysql-connector with version
         // no smaller than 8.0
         //       in current period, this param is useless since mysql-connector-c has not been
         //       upgraded, we can only configure this option in mysql server and configure ssl=0
         //       when using mysql 8.x
-        ss << "mysql://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort << "/" << _dbConfig.dbName
-           << "?auth-plugin=mysql_native_password&user=" << _dbConfig.dbUsername
-           << "&password=" << _dbConfig.dbPasswd << "&charset=" << _dbConfig.dbCharset
-           << "&useUnicode=yes";
-
+        ss << "oracle://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
+           << "/?user=" << _dbConfig.dbUsername
+           << "&password=" << _dbConfig.dbPasswd;
+        //将ss转换为c风格的然后调用URL_new
         m_url = URL_new(ss.str().c_str());
         if (m_url == NULL)
         {
+            //连接失败抛出异常
             stringstream exitInfo;
             exitInfo << "parse IP[" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
                      << "] error please check";
@@ -92,6 +92,9 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& 
     and returned. If the pool has already handed out maxConnections,
     this call will return NULL
 */
+    // 如果连接池中还有可用的连接，函数将从连接池中获取一个连接并返回。
+    // 如果连接池中没有可用的连接，函数将创建一个新的连接，并将其返回。
+    // 如果连接池已经分配了最大连接数，函数将返回 NULL，表示无法获取更多的连接。
 Connection_T SQLConnectionPool::GetConnection()
 {
     return ConnectionPool_getConnection(m_connectionPool);
@@ -106,31 +109,34 @@ int SQLConnectionPool::ReturnConnection(const Connection_T& _connection)
     return 0;
 }
 
-
+//mysql开启事务
 int SQLConnectionPool::BeginTransaction(const Connection_T& _connection)
 {
     Connection_beginTransaction(_connection);
     return 0;
 }
+//mysql提交事务
 int SQLConnectionPool::Commit(const Connection_T& _connection)
 {
     Connection_commit(_connection);
     return 0;
 }
+//mysql回滚
 int SQLConnectionPool::RollBack(const Connection_T& _connection)
 {
     Connection_rollback(_connection);
     return 0;
 }
-
+//出错退出
 inline void dev::storage::errorExitOut(std::stringstream& _exitInfo)
 {
     SQLConnectionPool_LOG(ERROR) << _exitInfo.str();
-
+// 这行代码通过调用 raise 函数来向当前进程发送 SIGTERM 信号。SIGTERM 是一种常见的信号，通常用于请求进程正常终止。
     raise(SIGTERM);
+    // 使用 Boost 库中的 BOOST_THROW_EXCEPTION 宏，抛出一个名为 StorageException 的异常。异常的构造函数接受两个参数：一个整数值 -1 和 _exitInfo 对象的字符串内容。
     BOOST_THROW_EXCEPTION(StorageException(-1, _exitInfo.str()));
 }
-
+//析构函数
 SQLConnectionPool::~SQLConnectionPool()
 {
     if (m_connectionPool)
@@ -143,21 +149,22 @@ SQLConnectionPool::~SQLConnectionPool()
         URL_free(&m_url);
     }
 }
-
+//获取当前活跃连接
 int SQLConnectionPool::GetActiveConnections()
 {
     return ConnectionPool_active(m_connectionPool);
 }
+//获取最大连接数
 int SQLConnectionPool::GetMaxConnections()
 {
     return ConnectionPool_getMaxConnections(m_connectionPool);
 }
-
+//获取总连接数
 int SQLConnectionPool::GetTotalConnections()
 {
     return ConnectionPool_size(m_connectionPool);
 }
-
+//创建数据库
 void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
 {
     if (_dbConfig.dbType == "mysql")
@@ -168,10 +175,10 @@ void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
         //       in current period, this param is useless since mysql-connector-c has not been
         //       upgraded, we can only configure this option in mysql server and configure ssl=0
         //       when using mysql 8.x
-        ss << "mysql://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
-           << "/information_schema?auth-plugin=mysql_native_password&user=" << _dbConfig.dbUsername
-           << "&password=" << _dbConfig.dbPasswd << "&charset=" << _dbConfig.dbCharset
-           << "&useUnicode=yes";
+        //URL:=oracle://101.201.81.164:5236/?user=SYSDBA&password=Dameng111
+        ss << "oracle://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
+           << "/?user=" << _dbConfig.dbUsername
+           << "&password=" << _dbConfig.dbPasswd;
         URL_T url = URL_new(ss.str().c_str());
         if (url == NULL)
         {
@@ -197,16 +204,16 @@ void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
                 THROW(SQLException, "create database get connection failed");
             }
 
-            string _dbName = _dbConfig.dbName;
-            _dbName = boost::algorithm::replace_all_copy(_dbName, "\\", "\\\\");
-            _dbName = boost::algorithm::replace_all_copy(_dbName, "`", "\\`");
-            string _sql = "CREATE DATABASE IF NOT EXISTS ";
-            _sql.append(_dbName);
-            Connection_execute(_connection, "%s", _sql.c_str());
-            _sql = "set global max_allowed_packet = 1073741824";
-            Connection_execute(_connection, "%s", _sql.c_str());
-            _sql = "SET GLOBAL sql_mode = 'STRICT_TRANS_TABLES'";
-            Connection_execute(_connection, "%s", _sql.c_str());
+            // string _dbName = _dbConfig.dbName;
+            // _dbName = boost::algorithm::replace_all_copy(_dbName, "\\", "\\\\");
+            // _dbName = boost::algorithm::replace_all_copy(_dbName, "`", "\\`");
+            // string _sql = "CREATE DATABASE IF NOT EXISTS ";
+            // _sql.append(_dbName);
+            // Connection_execute(_connection, "%s", _sql.c_str());
+            // _sql = "set global max_allowed_packet = 1073741824";
+            // Connection_execute(_connection, "%s", _sql.c_str());
+            // _sql = "SET GLOBAL sql_mode = 'STRICT_TRANS_TABLES'";
+            // Connection_execute(_connection, "%s", _sql.c_str());
 
             // support ROW_FORMAT=COMPRESSED, please ref to
             // https://mariadb.com/kb/en/innodb-compressed-row-format/
@@ -214,15 +221,15 @@ void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
             // command to see if mysql has table compression enabled
 
             // when mysql version>8, no need to set innodb_file_format
-            stringstream ss;
-            ss << "SET @s = IF(version() < 8 OR version() LIKE '%MariaDB%',"
-               << "'SET GLOBAL innodb_file_per_table = ON,"
-               << "innodb_large_prefix = ON;',"
-               << "'SET GLOBAL innodb_file_per_table = ON;')";
+            // stringstream ss;
+            // ss << "SET @s = IF(version() < 8 OR version() LIKE '%MariaDB%',"
+            //    << "'SET GLOBAL innodb_file_per_table = ON,"
+            //    << "innodb_large_prefix = ON;',"
+            //    << "'SET GLOBAL innodb_file_per_table = ON;')";
 
-            PreparedStatement_T _prepareStatement =
-                Connection_prepareStatement(_connection, "%s", ss.str().c_str());
-            PreparedStatement_execute(_prepareStatement);
+            // PreparedStatement_T _prepareStatement =
+            //     Connection_prepareStatement(_connection, "%s", ss.str().c_str());
+            // PreparedStatement_execute(_prepareStatement);
         }
         CATCH(SQLException)
         {

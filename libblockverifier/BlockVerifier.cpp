@@ -41,6 +41,7 @@ using namespace dev::storage;
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
     // return nullptr prepare to exit when g_BCOSConfig.shouldExit is true
+    BLOCKVERIFIER_LOG(INFO)<<"执行executeBlock";
     if (g_BCOSConfig.shouldExit)
     {
         return nullptr;
@@ -59,10 +60,13 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     {
         if (g_BCOSConfig.version() >= RC2_VERSION && m_enableParallel)
         {
-            context = parallelExecuteBlock(block, parentBlockInfo);
+            BLOCKVERIFIER_LOG(INFO)<<"并行";
+            // context = parallelExecuteBlock(block, parentBlockInfo);
+             context = serialExecuteBlock(block, parentBlockInfo);
         }
         else
         {
+            // BLOCKVERIFIER_LOG(INFO)<<"串行";
             context = serialExecuteBlock(block, parentBlockInfo);
         }
     }
@@ -109,8 +113,9 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
         BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
                               << errinfo_comment("Error during initExecutiveContext"));
     }
-
+    //暂存区块头
     BlockHeader tmpHeader = block.blockHeader();
+    //清除区块的所有回执并重新调整交易的大小
     block.clearAllReceipts();
     block.resizeTransactionReceipt(block.transactions()->size());
 
@@ -121,7 +126,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                              << LOG_KV("num", block.blockHeader().number());
     uint64_t pastTime = utcTime();
 
-    try
+    try 
     {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
@@ -129,12 +134,18 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
         for (size_t i = 0; i < block.transactions()->size(); i++)
         {
             auto& tx = (*block.transactions())[i];
-
+            //执行交易
+            BLOCKVERIFIER_LOG(INFO) << LOG_DESC("执行交易中")
+                            << LOG_KV("index", i);
             TransactionReceipt::Ptr resultReceipt = execute(tx, executiveContext, executive);
+            BLOCKVERIFIER_LOG(INFO) << LOG_DESC("执行完毕")
+                            << LOG_KV("index", i);
             block.setTransactionReceipt(i, resultReceipt);
             executiveContext->getState()->commit();
         }
+        
     }
+   
     catch (exception& e)
     {
         BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock")
@@ -153,6 +164,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                              << LOG_KV("num", block.blockHeader().number());
 
     h256 stateRoot = executiveContext->getState()->rootHash();
+     
     // set stateRoot in receipts
     if (g_BCOSConfig.version() >= V2_2_0)
     {

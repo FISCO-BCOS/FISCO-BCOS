@@ -54,7 +54,7 @@ class BlockVerifier : public BlockVerifierInterface,
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
     typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
-    BlockVerifier(bool _enableParallel)
+    BlockVerifier(bool _enableParallel = false)
       : m_enableParallel(_enableParallel), m_orgEnableParallel(_enableParallel)
     {
         if (_enableParallel)

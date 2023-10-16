@@ -57,6 +57,7 @@ void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initial
 
 int main(int argc, const char* argv[])
 {
+    
     /// set LC_ALL
     setDefaultOrCLocale();
     std::set_terminate([]() {

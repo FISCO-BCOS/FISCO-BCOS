@@ -73,7 +73,7 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
     cachedStorage->setMaxCapacity(32 * 1024 * 1024);
     cachedStorage->setMaxForwardBlock(5);
 
-    auto factoryFactory = std::make_shared<MemoryTableFactoryFactory2>(false);
+    auto factoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
     factoryFactory->setStorage(cachedStorage);
 
     auto createFactory = factoryFactory->newTableFactory(dev::h256(0), 0);

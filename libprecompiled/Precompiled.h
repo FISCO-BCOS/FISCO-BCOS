@@ -44,7 +44,7 @@ class Precompiled : public std::enable_shared_from_this<Precompiled>
 public:
     typedef std::shared_ptr<Precompiled> Ptr;
 
-    virtual ~Precompiled() noexcept = default;
+    virtual ~Precompiled(){};
 
     virtual std::string toString() { return ""; }
     virtual PrecompiledExecResult::Ptr call(
