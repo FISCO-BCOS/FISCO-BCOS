@@ -239,7 +239,7 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo
     }
     if (e.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
+        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
                              << LOG_KV("nodeID", nodeID.abridged())
                              << LOG_KV("nodeName", nodeInfo.nodeName) << LOG_KV("endpoint", peer)
                              << LOG_KV("what", e.what());
