@@ -87,16 +87,11 @@ void DBInitializer::initStorageDB()
     }
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
-        cout<<"使用mysql数据库"<<endl;
-        //需要初始化zdb
         auto storage = initZdbStorage();
-
         initTableFactory2(storage, m_param);
     }
-    //rocksdb相关
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
-        cout<<"使用rocksdb"<<endl;
         auto storage = initRocksDBStorage(m_param);
         initTableFactory2(storage, m_param);
     }

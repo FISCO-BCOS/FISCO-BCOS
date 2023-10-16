@@ -1,3 +1,0 @@
-ToolSet: 1.0 (local)Options: 
-
-Options:-DCMAKE_MAKE_PROGRAM=/dev/shm/clion/clion-2023.1.4/bin/ninja/linux/x64/ninja

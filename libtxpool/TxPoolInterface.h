@@ -42,13 +42,6 @@ public:
      * @brief Remove transaction from the queue
      * @param _txHash: transaction hash
      */
-    //后面加个=0代表这个是纯虚函数
-    //（1）定义一个函数为虚函数，不代表函数为不被实现的函数。
-// （2）定义他为虚函数是为了允许用基类的指针来调用子类的这个函数。
-//（1）定义一个函数为纯虚函数，才代表函数没有被实现。
-// （2）定义纯虚函数是为了实现一个接口，起到一个规范的作用，规范继承这个类的程序员必须实现这个函数。
-// 纯虚函数是在基类中声明的虚函数，它在基类中没有定义，但要求任何派生类都要定义自己的实现方法。在基类中实现纯虚函数的方法是在函数原型后加 =0:
-
     virtual bool drop(h256 const& _txHash) = 0;
     virtual bool dropBlockTrans(std::shared_ptr<dev::eth::Block> block) = 0;
     virtual bool handleBadBlock(dev::eth::Block const& block) = 0;

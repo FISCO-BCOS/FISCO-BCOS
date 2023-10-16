@@ -37,7 +37,7 @@ public:
 
     SQLStorage();
     virtual ~SQLStorage(){};
-    //override表示对基类Storage中的select成员函数的重载
+
     Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override;
     size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override;

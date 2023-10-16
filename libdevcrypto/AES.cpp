@@ -33,7 +33,7 @@
 using namespace std;
 using namespace dev;
 using namespace dev::crypto;
-//aseCBC加密
+
 string dev::crypto::aesCBCEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
 {

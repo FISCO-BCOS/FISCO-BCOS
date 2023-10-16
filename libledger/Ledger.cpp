@@ -68,14 +68,11 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     setSDKAllowList(m_param->mutablePermissionParam().sdkAllowList);
 
     // m_dbInitializer
-    //数据库相关，清关注
     if (!m_dbInitializer)
         return false;
-        //从这里看
     m_dbInitializer->initStorageDB();
     /// init the DB
     bool ret = initBlockChain();
-    // Ledger_LOG(INFO)<<"bool ret = initBlockChain();执行结束,结果："<<ret;
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
@@ -278,7 +275,6 @@ bool Ledger::initBlockChain()
         return false;
     }
     auto currenrBlockNumber = getBlockNumberFromStorage(m_dbInitializer->storage());
-    //  Ledger_LOG(INFO)<<"获取当前的区块数量:"<<currenrBlockNumber;
     bool shouldBuild = true;
     if (currenrBlockNumber != -1)
     {  // -1 means first init
@@ -292,12 +288,12 @@ bool Ledger::initBlockChain()
     {
         if (g_BCOSConfig.version() < V2_6_0)
         {
-            // Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be true");
+            Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be true");
             blockChain->setEnableHexBlock(true);
         }
         // supported_version >= v2.6.0, store block and nonce in bytes in mysql
         else
-         {   //Ledger_LOG(INFO)<<"进入此分支------------------";
+        {
             blockChain->setEnableHexBlock(false);
         }
         Ledger_LOG(INFO) << LOG_DESC("initBlockChain") << LOG_KV("version", g_BCOSConfig.version())
@@ -317,19 +313,12 @@ bool Ledger::initBlockChain()
                          << LOG_KV("version", g_BCOSConfig.version());
         blockChain->setEnableHexBlock(true);
     }
-    //  Ledger_LOG(INFO)<<"进入blockChain->setStateStorage";
+
     blockChain->setStateStorage(m_dbInitializer->storage());
-    // Ledger_LOG(INFO)<<"退出blockChain->setStateStorage";
-
-    // Ledger_LOG(INFO)<<"进入blockChain->setTableFactoryFactory";
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
-    //  Ledger_LOG(INFO)<<"退出blockChain->setTableFactoryFactory";
-     
-    m_blockChain = blockChain;
 
-    //  Ledger_LOG(INFO)<<"进入blockChain->checkAndBuildGenesisBlock";
+    m_blockChain = blockChain;
     m_blockChain->checkAndBuildGenesisBlock(m_param, shouldBuild);
-    // Ledger_LOG(INFO)<<"退出blockChain->checkAndBuildGenesisBlock";
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
     return true;
 }

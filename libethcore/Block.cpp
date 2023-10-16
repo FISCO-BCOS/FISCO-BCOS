@@ -43,7 +43,6 @@ Block::Block(
     m_transactionReceipts(std::make_shared<TransactionReceipts>()),
     m_sigList(nullptr)
 {
-    // BLOCK_LOG(INFO)<<"check point========================";
     m_blockSize = _data.size();
     decode(_data, _option, _withReceipt, _withTxHash);
 }
@@ -412,14 +411,12 @@ void Block::calReceiptRootRC2(bool update) const
 void Block::decode(
     bytesConstRef _block_bytes, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
-    // BLOCK_LOG(INFO)<<"进入解码器，解码block";
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
-        BLOCK_LOG(INFO)<<"g_BCOSConfig.version() >= RC2_VERSION";
         decodeRC2(_block_bytes, _option, _withReceipt, _withTxHash);
         return;
     }
-    BLOCK_LOG(INFO)<<"----------------------";
+
     /// no try-catch to throw exceptions directly
     /// get RLP of block
     RLP block_rlp = BlockHeader::extractBlock(_block_bytes);
@@ -463,23 +460,18 @@ void Block::decodeRC2(
     /// no try-catch to throw exceptions directly
     /// get RLP of block
     RLP block_rlp = BlockHeader::extractBlock(_block_bytes);
-    // BLOCK_LOG(INFO)<<"1111111111111111111111";
     /// get block header
     m_blockHeader.populate(block_rlp[0]);
-    // BLOCK_LOG(INFO)<<"1111111111111111111111";
     /// get transaction list
     RLP transactions_rlp = block_rlp[1];
-    // BLOCK_LOG(INFO)<<"1111111111111111111111";
 
     /// get txsCache
     m_txsCache = transactions_rlp.toBytes();
-    // BLOCK_LOG(INFO)<<"1111111111111111111111";
 
     /// decode transaction
     TxsParallelParser::decode(m_transactions, ref(m_txsCache), _option, _withTxHash);
 
     /// get hash
-    // BLOCK_LOG(INFO)<<"prepare to compare hash value";
     h256 hash = block_rlp[2].toHash<h256>();
     if (hash != m_blockHeader.hash())
     {

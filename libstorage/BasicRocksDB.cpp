@@ -32,11 +32,9 @@ using namespace dev;
 using namespace dev::storage;
 using namespace rocksdb;
 
-// getRocksDBOptions函数用于配置数据库
 rocksdb::Options dev::storage::getRocksDBOptions()
 {
-    // open and init the rocksDB
-    //定义一个变量options
+    /// open and init the rocksDB
     rocksdb::Options options;
 
     // set Parallelism to the hardware concurrency
@@ -50,13 +48,11 @@ rocksdb::Options dev::storage::getRocksDBOptions()
     return options;
 }
 
-//getEncryptHandler函数根据给定的加密密钥和是否启用压缩选项，返回一个加密处理器，用于对数据进行加密。
-//如果_enableCompress为true，则先对数据压缩再加密；为false则直接加密。结果存储在encData中。
+
 std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHandler(
     const std::vector<uint8_t>& _encryptKey, bool _enableCompress)
 {
     // get dataKey according to ciperDataKey from keyCenter
-    //lambda表达式，匿名函数
     return [=](std::string const& data, std::string& encData) {
         try
         {
@@ -71,17 +67,13 @@ std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHa
             std::shared_ptr<bytes> compressedData = std::make_shared<bytes>();
             size_t compressedSize = dev::compress::SnappyCompress::compress(
                 bytesConstRef((const unsigned char*)data.data(), data.length()), *compressedData);
-          //下面为代码是为了解决错误情况
             if (compressedSize == 0)
             {
                 std::string errorInfo =
                     "Compress data for " + toHex(_encryptKey) + " failed for compress failed";
-                //记录错误信息
                 ROCKSDB_LOG(ERROR) << LOG_DESC(errorInfo);
-                //抛出错误
                 BOOST_THROW_EXCEPTION(EncryptFailed() << errinfo_comment(errorInfo));
             }
-                //加密数据并存储
             encData = crypto::SymmetricEncrypt((const unsigned char*)compressedData->data(),
                 compressedData->size(), (const unsigned char*)_encryptKey.data(),
                 _encryptKey.size(), (const unsigned char*)_encryptKey.data());
@@ -96,7 +88,6 @@ std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHa
     };
 }
 
-//数据解密函数
 std::function<void(std::string&)> dev::storage::getDecryptHandler(
     const std::vector<uint8_t>& _decryptKey, bool _enableCompress)
 {
@@ -111,8 +102,7 @@ std::function<void(std::string&)> dev::storage::getDecryptHandler(
             {
                 return;
             }
-            
-            // 如果_enableCompress为true，则对解密后的数据进行解压缩，并将结果存储在data中
+            // uncompress the decrypted data
             std::shared_ptr<bytes> uncompressedData = std::make_shared<bytes>();
             auto uncompressedDataSize = dev::compress::SnappyCompress::uncompress(
                 bytesConstRef((const unsigned char*)data.data(), data.length()), *uncompressedData);
@@ -123,7 +113,7 @@ std::function<void(std::string&)> dev::storage::getDecryptHandler(
                 ROCKSDB_LOG(ERROR) << LOG_DESC(errorInfo);
                 BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(errorInfo));
             }
-            // 调整数据大小并解密
+            // resize and copy the uncompressed data
             data.resize(uncompressedData->size());
             memcpy((void*)data.data(), (const void*)uncompressedData->data(),
                 uncompressedData->size());
@@ -137,9 +127,9 @@ std::function<void(std::string&)> dev::storage::getDecryptHandler(
     };
 }
 
+
 void BasicRocksDB::flush()
 {
-    //如果变量m_db存在，则将数据刷新到磁盘
     if (m_db)
     {
         FlushOptions flushOption;
@@ -151,7 +141,7 @@ void BasicRocksDB::flush()
 void BasicRocksDB::closeDB()
 {
     flush();
-    m_db.reset();        //调用m_db的reset方法关闭数据库
+    m_db.reset();
 }
 /**
  * @brief: open rocksDB
@@ -159,11 +149,6 @@ void BasicRocksDB::closeDB()
  * @param options: options used to open the rocksDB
  * @param dbname: db name
  */
-// boost::filesystem::create_directories(dbname)是一个Boost库中的函数，用于创建目录。
-// 具体来说，create_directories()函数接受一个路径作为参数（在这个例子中是dbname），并尝试创建该路径表示的目录。
-// 如果路径中的目录不存在，则会递归地创建所有缺失的目录。
-// 例如，如果dbname是/path/to/database，但是/path/to目录不存在，那么create_directories()函数将会创建/path/to和/path/to/database这两个目录。
-// 这个函数对于在程序中动态创建目录非常有用，比如在需要创建数据库或存储文件的时候。它可以确保路径中的所有目录都存在，使得文件操作能够正常进行。
 void BasicRocksDB::Open(const Options& options, const std::string& dbname)
 {
     ROCKSDB_LOG(INFO) << LOG_DESC("open rocksDB handler") << LOG_KV("path", dbname);
@@ -171,20 +156,16 @@ void BasicRocksDB::Open(const Options& options, const std::string& dbname)
     DB* db = nullptr;
     auto status = DB::Open(options, dbname, &db);
     checkStatus(status, dbname);
-    // 独占所有权意味着 std::unique_ptr 是唯一拥有对象的指针，不能进行拷贝，但可以进行移动操作。
-    //释放unique_ptr指针
     m_db.reset(db);
 }
 
-
-Status BasicRocksDB::Get(ReadOptions const& options, std::string const& key, std::string& value)  //用于获取键值
+Status BasicRocksDB::Get(ReadOptions const& options, std::string const& key, std::string& value)
 {
     assert(m_db);
     value = "";
     auto status = m_db->Get(options, Slice(std::move(key)), &value);
     checkStatus(status);
     // decrypt value
-    // 如果存在解密处理器并且 value 不为空，则调用解密处理器对 value 进行解密
     if (m_decryptHandler && !value.empty())
     {
         m_decryptHandler(value);
@@ -192,7 +173,7 @@ Status BasicRocksDB::Get(ReadOptions const& options, std::string const& key, std
     return status;
 }
 
-Status BasicRocksDB::BatchPut(WriteBatch& batch, std::string const& key, std::string const& value) //批量处理键值对
+Status BasicRocksDB::BatchPut(WriteBatch& batch, std::string const& key, std::string const& value)
 {
     auto status = batch.Put(Slice(std::move(key)), Slice(value));
     checkStatus(status);
@@ -201,7 +182,6 @@ Status BasicRocksDB::BatchPut(WriteBatch& batch, std::string const& key, std::st
 
 // since rocksDBStorage use put with TBB
 // this function set m_encryptHandler into the parallel field to impove the performance
-// 在加密状态将数据写入数据库，如果定义了加密处理程序，则使用它对值进行加密，然后将加密后的值放入批处理中。否则直接将原始值放入批处理中。
 Status BasicRocksDB::PutWithLock(
     WriteBatch& batch, std::string const& key, std::string const& value, tbb::spin_mutex& mutex)
 {
@@ -222,15 +202,14 @@ Status BasicRocksDB::PutWithLock(
     }
 }
 
-// Put函数用于将数据写入RocksDB数据库
 Status BasicRocksDB::Put(WriteBatch& batch, std::string const& key, std::string const& value)
 {
     // encrypt value
     if (m_encryptHandler)
     {
         std::string encryptValue;
-        m_encryptHandler(value, encryptValue);  // 调用m_encryptHandler函数，将value转换为encryptValue
-        return BatchPut(batch, key, encryptValue);  // 将key和encryptValue写入batch中
+        m_encryptHandler(value, encryptValue);
+        return BatchPut(batch, key, encryptValue);
     }
     else
     {
@@ -238,20 +217,19 @@ Status BasicRocksDB::Put(WriteBatch& batch, std::string const& key, std::string 
         return BatchPut(batch, key, value);
     }
 }
-//检查状态位
+
 void BasicRocksDB::checkStatus(Status const& status, std::string const& path)
 {
-    if (status.ok() || status.IsNotFound())   //状态正常或未找到则直接返回
+    if (status.ok() || status.IsNotFound())
     {
         return;
     }
-    std::string errorInfo = "access rocksDB failed, status: " + status.ToString();   //构造“错误”字符串
-    if (!path.empty())    // 如果path不为空，也加入错误信息中
+    std::string errorInfo = "access rocksDB failed, status: " + status.ToString();
+    if (!path.empty())
     {
         errorInfo = errorInfo + ", path:" + path;
     }
-    
-    // 如果状态是IO错误、数据损坏、空间不足、不支持或者正在关闭中，则为致命异常
+    // fatal exception
     if (status.IsIOError() || status.IsCorruption() || status.IsNoSpace() ||
         status.IsNotSupported() || status.IsShutdownInProgress())
     {

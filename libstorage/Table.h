@@ -35,7 +35,6 @@ namespace dev
 {
 namespace storage
 {
-//通过继承 std::enable_shared_from_this，可以让类的对象在自己的成员函数中调用 shared_from_this() 来获取指向自己的 std::shared_ptr。
 struct TableInfo : public std::enable_shared_from_this<TableInfo>
 {
     typedef std::shared_ptr<TableInfo> Ptr;
@@ -44,7 +43,6 @@ struct TableInfo : public std::enable_shared_from_this<TableInfo>
     std::string key;
     std::vector<std::string> fields;
     std::vector<Address> authorizedAddress;
-    //下标
     std::vector<std::string> indices;
 
     bool enableConsensus = true;
@@ -63,9 +61,7 @@ struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
 class Entry : public std::enable_shared_from_this<Entry>
 {
 private:
-// 自旋读写互斥锁是一种轻量级的互斥锁，适用于在读多写少的场景中
     typedef tbb::spin_rw_mutex RWMutex;
-//通过使用 scoped_lock，可以确保在使用自旋读写互斥锁时不会忘记解锁，并避免由于异常或提前返回等原因导致锁定未被释放而引发的问题。
     typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
 
     struct EntryData
@@ -88,7 +84,6 @@ private:
     bool m_dirty = false;
     bool m_force = false;
     bool m_deleted = false;
-    //用于计算gas值
     ssize_t m_capacity = 0;
     ssize_t m_capacityOfHashField = 0;
 
@@ -173,13 +168,9 @@ private:
 class Entries : public std::enable_shared_from_this<Entries>
 {
 public:
-    //并发安全的vector,支持不加锁直接访问
     typedef tbb::concurrent_vector<Entry::Ptr> Vector;
 
     typedef std::shared_ptr<Entries> Ptr;
-    // const：在 std::shared_ptr 前面的 const 关键字表示智能指针指向的对象是 const，
-    // 即不能通过这个智能指针来修改 const Entries 对象的值。
-    // 智能指针本身是可以变化的（可以指向不同的对象），但是指向的 const Entries 对象不能被修改。
     typedef std::shared_ptr<const Entries> ConstPtr;
     virtual ~Entries(){};
 
@@ -315,7 +306,6 @@ public:
     }
 
     // for memorytable2
-    //用这个
     TableInfo::Ptr info;
     Entries::Ptr dirtyEntries;
     Entries::Ptr newEntries;

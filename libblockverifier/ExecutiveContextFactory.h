@@ -93,12 +93,11 @@ public:
             _precompiledExecResultFactory);
 
 private:
-    //成员变量  
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
     dev::storage::Storage::Ptr m_stateStorage;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactoryInterface;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
-    
+
     std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
 
     void setTxGasLimitToContext(ExecutiveContext::Ptr context);

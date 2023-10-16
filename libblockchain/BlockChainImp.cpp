@@ -182,15 +182,12 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
 {
     /// the future block
     if (_blockNumber > number())
-    {   
+    {
         return nullptr;
     }
-    // BLOCKCHAIN_LOG(INFO)<<"into numberhash";
     auto blockHash = numberHash(_blockNumber);
-    // BLOCKCHAIN_LOG(INFO)<<"out of numberhash";
     if (blockHash != h256(""))
     {
-        // BLOCKCHAIN_LOG(INFO)<<"into blockHash != h256("")";
         return getBlock(blockHash, _blockNumber);
     }
     BLOCKCHAIN_LOG(WARNING) << LOG_DESC("[getBlock]Can't find block")
@@ -200,45 +197,40 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
 
 std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int64_t _blockNumber)
 {
-    // BLOCKCHAIN_LOG(INFO)<<"into getblock";
     auto start_time = utcTime();
     auto record_time = utcTime();
     auto cachedBlock = m_blockCache.get(_blockHash);
     auto getCache_time_cost = utcTime() - record_time;
     record_time = utcTime();
-    // BLOCKCHAIN_LOG(INFO)<<"ready into if";
+
     if (bool(cachedBlock.first))
-    {   
-        BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[#getBlock]Cache hit, read from cache")
+    {
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache hit, read from cache")
                               << LOG_KV("blockNumber", _blockNumber)
                               << LOG_KV("hash", _blockHash.abridged());
         return cachedBlock.first;
     }
     else
     {
-        BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[#getBlock]Cache missed, read from storage")
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache missed, read from storage")
                               << LOG_KV("blockNumber", _blockNumber);
         ;
         Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_HASH_2_BLOCK);
-        // BLOCKCHAIN_LOG(INFO)<<"out of getMemoryTableFactory(_blockNumber)->openTable(SYS_HASH_2_BLOCK)";
         auto openTable_time_cost = utcTime() - record_time;
         record_time = utcTime();
         if (tb)
-        {// {   BLOCKCHAIN_LOG(INFO)<<"into if (tb)";
+        {
             auto entries = tb->select(_blockHash.hex(), tb->newCondition());
-            // BLOCKCHAIN_LOG(INFO)<<"out of tb->select(_blockHash.hex(), tb->newCondition());";
             auto select_time_cost = utcTime() - record_time;
             record_time = utcTime();
             if (entries->size() > 0)
             {
-                // BLOCKCHAIN_LOG(INFO)<<"into entries->size() > 0";
                 auto entry = entries->get(0);
 
                 record_time = utcTime();
                 // use binary block since v2.2.0
-                // BLOCKCHAIN_LOG(INFO)<<"into decodeBlock";
                 auto block = decodeBlock(entry);
-                // BLOCKCHAIN_LOG(INFO)<<"out of decodeBlock";
+
                 auto constructBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
@@ -466,20 +458,14 @@ bytes BlockChainImp::getCode(Address _address)
 h256 BlockChainImp::numberHash(int64_t _i)
 {
     string numberHash = "";
-    // BLOCKCHAIN_LOG(INFO)<<"进入numberHash";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH, false);
-    // BLOCKCHAIN_LOG(INFO)<<"finish getMemoryTableFactory()->openTable";
     if (tb)
-    {//   BLOCKCHAIN_LOG(INFO)<<"into if(tb)";
+    {
         auto entries = tb->select(lexical_cast<std::string>(_i), tb->newCondition());
-        // BLOCKCHAIN_LOG(INFO)<<"tb->select(lexical_cast<std::string>(_i), tb->newCondition());";
         if (entries->size() > 0)
         {
-            // BLOCKCHAIN_LOG(INFO)<<"into entries->size() > 0";
             auto entry = entries->get(0);
-            // BLOCKCHAIN_LOG(INFO)<<"out of entry";
             numberHash = entry->getField(SYS_VALUE);
-            // BLOCKCHAIN_LOG(INFO)<<"out of getfield";
         }
     }
     return h256(numberHash);
@@ -550,17 +536,16 @@ bool BlockChainImp::checkAndBuildGenesisBlock(
 {
     BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#checkAndBuildGenesisBlock]")
                          << LOG_KV("shouldBuild", _shouldBuild);
-    // BLOCKCHAIN_LOG(INFO)<<"0-----------------------------";
     std::shared_ptr<Block> block = getBlockByNumber(0);
-    // BLOCKCHAIN_LOG(INFO)<<"1-----------------------------";
+
     auto groupGenesisMark = _initParam->mutableGenesisMark();
 
     if (block == nullptr && !_shouldBuild)
-    {// {   BLOCKCHAIN_LOG(INFO)<<"if分支";
+    {
         BLOCKCHAIN_LOG(FATAL) << "Can't find the genesis block";
     }
     else if (block == nullptr && _shouldBuild)
-    {// {   BLOCKCHAIN_LOG(INFO)<<"else if分支";
+    {
         block = std::make_shared<Block>();
         /// modification 2019.3.20: set timestamp to block header
         block->setEmptyBlock(_initParam->mutableGenesisParam().timeStamp);
@@ -648,7 +633,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(
         BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#checkAndBuildGenesisBlock]Insert the 0th block");
     }
     else
-    {   BLOCKCHAIN_LOG(INFO)<<"else分支";
+    {
         std::string extraData = asString(block->header().extraData(0));
         /// compare() return 0 means equal!
         /// If not equal, only print warning, willnot kill process.
@@ -943,12 +928,9 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
     {
         return nullptr;
     }
-    // BLOCKCHAIN_LOG(INFO)<<"进入getBlock";
     auto block = getBlock(_i);
-    // BLOCKCHAIN_LOG(INFO)<<"out of getblock function";
     if (bool(block))
     {
-        // BLOCKCHAIN_LOG(INFO)<<"check whether block is true";
         return block;
     }
     else
@@ -1709,16 +1691,12 @@ std::shared_ptr<Block> BlockChainImp::decodeBlock(dev::storage::Entry::ConstPtr 
     std::shared_ptr<Block> block = nullptr;
     // >= v2.2.0
     if (!m_enableHexBlock)
-    {   
-        // BLOCKCHAIN_LOG(INFO)<<"into if (!m_enableHexBlock)";
+    {
         auto bytesBlock = _entry->getFieldConst(SYS_VALUE);
-        // BLOCKCHAIN_LOG(INFO)<<"out of _entry->getFieldConst(SYS_VALUE):---;"<<bytesBlock.toString();
         block = std::make_shared<Block>(bytesBlock, CheckTransaction::None);
-        // BLOCKCHAIN_LOG(INFO)<<"finish";
     }
     else
     {
-        // BLOCKCHAIN_LOG(INFO)<<"into else --------------";
         // < v2.2.0 or use mysql, external
         auto strBlock = _entry->getField(SYS_VALUE);
         block = std::make_shared<Block>(fromHex(strBlock.c_str()), CheckTransaction::None);

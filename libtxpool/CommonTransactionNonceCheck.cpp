@@ -26,8 +26,6 @@ namespace dev
 {
 namespace txpool
 {
-//输入参数为一笔交易和一个是否插入的布尔值
-//首先检查m_cache中是否包含当前的nounce值，如果包含了直接返回false
 bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans, bool needInsert)
 {
     UpgradableGuard l(m_lock);
@@ -51,7 +49,7 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
     /// obtain lock failed
     return false;
 }
-//根据具体的nounce值删除缓存中的key
+
 void CommonTransactionNonceCheck::delCache(dev::eth::NonceKeyType const& key)
 {
     UpgradableGuard l(m_lock);
@@ -64,14 +62,11 @@ void CommonTransactionNonceCheck::delCache(dev::eth::NonceKeyType const& key)
         }
     }
 }
-//删除缓存，输入的参数为transactions,为transaction的集合，使用的是vector
-//删除m_cache中指定的nounce值
-//using Transactions = std::vector<Transaction::Ptr>;
+
 void CommonTransactionNonceCheck::delCache(Transactions const& _transactions)
 {
     UpgradableGuard l(m_lock);
     {
-        //delList是u256类型的vector
         std::vector<dev::eth::NonceKeyType> delList;
         for (unsigned i = 0; i < _transactions.size(); i++)
         {
@@ -92,8 +87,7 @@ void CommonTransactionNonceCheck::delCache(Transactions const& _transactions)
         }
     }
 }
-//插入交易的nounce值
-//nouce值的作用是确保发送的时候两笔相同的交易的哈希值不同
+
 void CommonTransactionNonceCheck::insertCache(dev::eth::Transaction const& _transaction)
 {
     WriteGuard l(m_lock);

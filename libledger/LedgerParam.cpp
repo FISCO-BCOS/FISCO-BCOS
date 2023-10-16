@@ -605,7 +605,6 @@ void LedgerParam::initStorageConfig(ptree const& pt)
 {
     if (g_BCOSConfig.version() > RC2_VERSION)
     {
-        // cout<<"进到这里面了"<<g_BCOSConfig.version()<<"::::"<<RC2_VERSION<<endl;
         mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
         mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
@@ -670,18 +669,6 @@ void LedgerParam::initStorageConfig(ptree const& pt)
                           << LOG_KV("initconnections", mutableStorageParam().initConnections)
                           << LOG_KV("maxconnections", mutableStorageParam().maxConnections)
                           << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold);
-    cout << LOG_BADGE("initStorageConfig")
-                          << LOG_KV("stateType", mutableStateParam().type)
-                          << LOG_KV("storageDB", mutableStorageParam().type)
-                          << LOG_KV("storagePath", mutableStorageParam().path)
-                          << LOG_KV("baseDir", baseDir())
-                          << LOG_KV("dbtype", mutableStorageParam().dbType)
-                          << LOG_KV("dbip", mutableStorageParam().dbIP)
-                          << LOG_KV("dbport", mutableStorageParam().dbPort)
-                          << LOG_KV("dbcharset", mutableStorageParam().dbCharset)
-                          << LOG_KV("initconnections", mutableStorageParam().initConnections)
-                          << LOG_KV("maxconnections", mutableStorageParam().maxConnections)
-                          << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold)<<endl;
 }
 
 void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt)

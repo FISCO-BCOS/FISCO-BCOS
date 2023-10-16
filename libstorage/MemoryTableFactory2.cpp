@@ -83,7 +83,6 @@ Table::Ptr MemoryTableFactory2::openTable(const std::string& _tableName, bool _a
 Table::Ptr MemoryTableFactory2::openTableWithoutLock(
     const std::string& tableName, bool authorityFlag, bool)
 {
-    
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {

@@ -79,7 +79,6 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
                                                                            _groupID,
                                                                        const string&
                                                                            _configFileName) {
-        
             try
             {
                 // skip existing group
@@ -92,6 +91,7 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
                 {
                     return false;
                 }
+
                 bool succ = initLedger(_groupID, m_groupDataDir, _configFileName);
                 if (!succ)
                 {

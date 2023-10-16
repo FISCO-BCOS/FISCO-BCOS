@@ -33,24 +33,18 @@ namespace dev
 {
 namespace txpool
 {
-//通用的交易随机值检查对象
 class CommonTransactionNonceCheck
 {
 public:
-    //构造函数
     CommonTransactionNonceCheck() {}
-    //析构函数,c++ 11的写法
     virtual ~CommonTransactionNonceCheck() = default;
-    //声明成员函数
     virtual void delCache(dev::eth::NonceKeyType const& key);
     virtual void delCache(dev::eth::Transactions const& _transactions);
     virtual void insertCache(dev::eth::Transaction const& _transaction);
     virtual bool isNonceOk(dev::eth::Transaction const& _trans, bool needInsert = false);
 
 protected:
-    //共享锁
     mutable SharedMutex m_lock;
-    //非自动排序的集合
     std::unordered_set<dev::eth::NonceKeyType> m_cache;
 };
 }  // namespace txpool
