@@ -171,6 +171,7 @@ public:
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 
     bool readonly() const { return m_readonly; }
+    bool enableRIPProtocol() const { return m_enableRIPProtocol; }
 
     // NodeIDType:
     // h512(true == m_smSSL)
@@ -231,7 +232,9 @@ private:
     std::string m_certPath;
     std::string m_nodePath;
     std::string m_nodeFileName;
+
     bool m_readonly = false;
+    bool m_enableRIPProtocol = true;
 };
 
 }  // namespace gateway

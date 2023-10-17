@@ -609,8 +609,17 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         host->setSessionCallbackManager(sessionCallbackManager);
 
         // init Service
-        auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        auto service = std::make_shared<ServiceV2>(pubHex, routerTableFactory);
+        Service::Ptr service;
+        if (_config->enableRIPProtocol())
+        {
+            service =
+                std::make_shared<ServiceV2>(pubHex, std::make_shared<RouterTableFactoryImpl>());
+        }
+        else
+        {
+            service = std::make_shared<Service>(pubHex);
+        }
+
         service->setHost(host);
         service->setStaticNodes(_config->connectedNodes());
 
@@ -677,15 +686,19 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                     gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
                 }
             });
-        service->registerUnreachableHandler(
-            [GatewayNodeManagerWeakPtr](std::string const& _unreachableNode) {
-                auto nodeMgr = GatewayNodeManagerWeakPtr.lock();
-                if (!nodeMgr)
-                {
-                    return;
-                }
-                nodeMgr->onRemoveNodeIDs(_unreachableNode);
-            });
+
+        if (_config->enableRIPProtocol())
+        {
+            service->registerUnreachableHandler(
+                [GatewayNodeManagerWeakPtr](std::string const& _unreachableNode) {
+                    auto nodeMgr = GatewayNodeManagerWeakPtr.lock();
+                    if (!nodeMgr)
+                    {
+                        return;
+                    }
+                    nodeMgr->onRemoveNodeIDs(_unreachableNode);
+                });
+        }
 
         service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
                                              Message::Ptr _msg, SessionCallbackFunc _callback) {

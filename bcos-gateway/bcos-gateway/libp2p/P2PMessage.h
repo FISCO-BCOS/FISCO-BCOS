@@ -106,7 +106,7 @@ protected:
 ///       groupID           : bytes
 ///       nodeID length     :2 bytes
 ///       src nodeID        : bytes
-///       src nodeID count  :1 bytes
+///       dst nodeID count  :1 bytes
 ///       dst nodeIDs       : bytes
 ///       moduleID          : 2 bytes
 ///   payload           :X bytes
