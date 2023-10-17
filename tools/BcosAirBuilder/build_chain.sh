@@ -81,8 +81,8 @@ proOrmax_port_start=(30300 20200 40400 2379 3901)
 isPortSpecified="false"
 tars_listen_port_space=5
 
-#for pro expand
-expand_pro_dir="expand_pro"
+#for pro or max expand
+expand_dir="expand"
 
 LOG_WARN() {
     local content=${1}
@@ -632,6 +632,10 @@ expand pro rpc/gateway e.g
     bash $0 -C expand_service -V pro -o expand_service -c ./config.toml
 expand pro group e.g
     bash $0 -C expand_group -V pro -o expand_group -c ./config.toml
+expand max node e.g
+    bash $0 -C expand_node -V max -o expand_node -c ./config.toml
+expand max rpc/gateway e.g
+    bash $0 -C expand_service -V max -o expand_service -c ./config.toml
 
 EOF
     exit 0
@@ -656,7 +660,7 @@ parse_params() {
         o)
             output_dir="$OPTARG"
             service_output_dir="$OPTARG"
-            expand_pro_dir="$OPTARG"
+            expand_dir="$OPTARG"
             ;;
         e)
             use_exist_binary="true"
@@ -2414,6 +2418,7 @@ name = "${agencyName}"
 EOF
 
 if [[ ${chain_version} == "max" ]];then
+        tars_listen_port_space=6
         cat <<EOF >>"${config_path}"
 failover_cluster_url = "${ip}:${tikv_listen_port}"
 EOF
@@ -2453,7 +2458,7 @@ EOF
     local i
     for((i = 0; i < ${num}; i++)); do
         gen_node_template ${i} ${tars_listen_port} ${config_path} ${ip}
-        tars_listen_port=$((tars_listen_port + 5))
+        tars_listen_port=$((tars_listen_port + ${tars_listen_port_space}))
     done
 }
 
@@ -2645,10 +2650,10 @@ removeExcessFiles(){
     done
 }
 
-expand_pro(){
-    dir_must_not_exists "${expand_pro_dir}"
-    mkdir -p "$expand_pro_dir"
-    dir_must_exists "${expand_pro_dir}"
+expand_pro_max(){
+    dir_must_not_exists "${expand_dir}"
+    mkdir -p "$expand_dir"
+    dir_must_exists "${expand_dir}"
     BcosBuilder_path=${current_dir}/BcosBuilder
     if [ ! -d "$BcosBuilder_path" ]; then
         download_bcos_builder
@@ -2666,14 +2671,14 @@ expand_pro(){
 
     file_must_exists "${config_path}"         
     # echo ${config_path}
-    expand_pro_dir=$(convert_to_absolute_path "$expand_pro_dir")
+    expand_dir=$(convert_to_absolute_path "$expand_dir")
     cd "${BcosBuilder_path}/${chain_version}"
-    python3 build_chain.py build -t all -c ${config_path} -O ${expand_pro_dir}
+    python3 build_chain.py build -t all -c ${config_path} -O ${expand_dir}
 
     cd ../../
 
     if [[ "${command}" == "expand_node" || "${command}" == "expand_group" ]]; then
-        removeExcessFiles ${expand_pro_dir}
+        removeExcessFiles ${expand_dir}
     fi
 }
 
@@ -2714,16 +2719,11 @@ main() {
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
     fi
-    elif [[ "${chain_version}" == "pro" ]]; then
+    elif [[ "${chain_version}" == "pro" || "${chain_version}" == "max" ]]; then
         if [[ "${command}" == "deploy" ]]; then
             deploy_pro_or_max_nodes
         elif [[ "${command}" == "expand_node" || "${command}" == "expand_group" || "${command}" == "expand_service" ]]; then
-            expand_pro
-        fi
-
-    elif [[ "${chain_version}" == "max" ]]; then
-        if [[ "${command}" == "deploy" ]]; then
-            deploy_pro_or_max_nodes
+            expand_pro_max
         fi
     fi
 }
