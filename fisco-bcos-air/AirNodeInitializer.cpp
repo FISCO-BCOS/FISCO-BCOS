@@ -143,7 +143,7 @@ void AirNodeInitializer::start()
 
     if (m_tarsApplication && m_tarsConfig)
     {
-        std::atomic_bool started = false;
+        boost::atomic_bool started = false;
         m_tarsThread.emplace([&, this]() {
             m_tarsApplication->main(*m_tarsConfig);
             started = true;
