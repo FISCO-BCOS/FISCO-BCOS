@@ -227,7 +227,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     m_listenIP = listenIP;
     m_listenPort = (uint16_t)listenPort;
     m_readonly = _pt.get<bool>("p2p.readonly", false);
-    m_enableRIPProtocol = _pt.get<bool>("p2p.enable_rip_protocol", true);
+    m_enableRIPProtocol = _pt.get<bool>("p2p.enable_rip_protocol", false);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initP2PConfig ok!") << LOG_KV("listenIP", listenIP)
                              << LOG_KV("listenPort", listenPort) << LOG_KV("smSSL", smSSL)
