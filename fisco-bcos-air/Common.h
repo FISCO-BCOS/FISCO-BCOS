@@ -43,9 +43,9 @@ public:
     }
     bool shouldExit() const { return ExitHandler::c_shouldExit.load(); }
 
-    static std::atomic_bool c_shouldExit;
+    static boost::atomic_bool c_shouldExit;
 };
-std::atomic_bool ExitHandler::c_shouldExit = {false};
+boost::atomic_bool ExitHandler::c_shouldExit = {false};
 
 void setDefaultOrCLocale()
 {
