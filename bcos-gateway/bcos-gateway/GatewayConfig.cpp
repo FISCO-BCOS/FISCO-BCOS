@@ -221,19 +221,20 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     {
         m_nodePath = _pt.get<std::string>("p2p.nodes_path", "./");
     }
-
     m_nodeFileName = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
 
     m_smSSL = smSSL;
     m_listenIP = listenIP;
     m_listenPort = (uint16_t)listenPort;
     m_readonly = _pt.get<bool>("p2p.readonly", false);
+    m_enableRIPProtocol = _pt.get<bool>("p2p.enable_rip_protocol", false);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initP2PConfig ok!") << LOG_KV("listenIP", listenIP)
                              << LOG_KV("listenPort", listenPort) << LOG_KV("smSSL", smSSL)
                              << LOG_KV("nodePath", m_nodePath)
                              << LOG_KV("nodeFileName", m_nodeFileName)
-                             << LOG_KV("readonly", m_readonly);
+                             << LOG_KV("readonly", m_readonly)
+                             << LOG_KV("enableRIPProtocol", m_enableRIPProtocol);
 }
 
 // load p2p connected peers

@@ -14,8 +14,10 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
+#include <boost/throw_exception.hpp>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <unordered_map>
 
 namespace bcos
@@ -171,6 +173,12 @@ public:
     void setOnMessageHandler(std::function<void(SessionFace::Ptr, Message::Ptr)> _handler)
     {
         m_onMessageHandler = _handler;
+    }
+
+    // handlers called when the node is unreachable
+    virtual void registerUnreachableHandler(std::function<void(std::string)> _handler)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplement!"));
     }
 
 protected:
