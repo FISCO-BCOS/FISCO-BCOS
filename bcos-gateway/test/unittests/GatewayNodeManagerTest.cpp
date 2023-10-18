@@ -386,8 +386,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
     BOOST_CHECK(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
                 p2pIDs5.contains(choiceNodeID));
 
-    BOOST_CHECK(
-        gatewayStatus->randomChooseP2PNode(choiceNodeID, NodeType::NODE_OUTSIDE_GROUP, "group3"));
+    BOOST_CHECK(gatewayStatus->randomChooseP2PNode(choiceNodeID, NodeType::FREE_NODE, "group3"));
     BOOST_CHECK(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
                 p2pIDs5.contains(choiceNodeID));
 }

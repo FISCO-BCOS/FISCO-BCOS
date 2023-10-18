@@ -19,8 +19,11 @@
  * @date 2021-04-21
  */
 #pragma once
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Exceptions.h"
+#include <fmt/compile.h>
+#include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/throw_exception.hpp>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -33,17 +36,15 @@ namespace bcos::protocol
 // Note: both MessageExtFieldFlag and NodeType occupy the ext fields
 enum MessageExtFieldFlag : uint32_t
 {
-    Response = 0x0001,
-    Compress = 0x0010,
+    NONE = 0,
+    RESPONSE = 1,
+    CONSENSUS_NODE = 1 << 1,
+    OBSERVER_NODE = 1 << 2,
+    FREE_NODE = 1 << 3,
+    COMPRESS = 1 << 4,
+    LIGHT_NODE = 1 << 5,
 };
-enum NodeType : uint32_t
-{
-    None = 0x0,
-    LIGHT_NODE = 0x1,
-    CONSENSUS_NODE = 0x2,
-    OBSERVER_NODE = 0x4,
-    NODE_OUTSIDE_GROUP = 0x8,
-};
+using NodeType = MessageExtFieldFlag;
 
 enum NodeArchitectureType
 {
@@ -117,6 +118,7 @@ enum class BlockVersion : uint32_t
     V3_5_VERSION = 0x03050000,
     V3_4_VERSION = 0x03040000,
     V3_3_VERSION = 0x03030000,
+    V3_2_4_VERSION = 0x03020400,
     V3_2_3_VERSION = 0x03020300,
     V3_2_VERSION = 0x03020000,
     V3_1_VERSION = 0x03010000,
@@ -181,42 +183,29 @@ constexpr bool operator>=(std::variant<uint32_t, BlockVersion> const& _v1, Block
     return flag;
 }
 
-inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion const& _version)
+inline std::ostream& operator<<(std::ostream& out, bcos::protocol::BlockVersion version)
 {
-    switch (_version)
+    if (version == bcos::protocol::BlockVersion::RC4_VERSION)
     {
-    case bcos::protocol::BlockVersion::RC4_VERSION:
-        _out << RC4_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_0_VERSION:
-        _out << V3_0_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_1_VERSION:
-        _out << V3_1_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_2_VERSION:
-        _out << V3_2_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_3_VERSION:
-        _out << V3_3_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_4_VERSION:
-        _out << V3_4_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_5_VERSION:
-        _out << V3_5_VERSION_STR;
-        break;
-    default:
-        _out << "Unknown";
-        break;
+        out << RC4_VERSION_STR;
+        return out;
     }
-    return _out;
+
+    auto versionNumber = static_cast<uint32_t>(version);
+    auto num1 = (versionNumber >> 24) & (0xff);
+    auto num2 = (versionNumber >> 16) & (0xff);
+    auto num3 = (versionNumber >> 8) & (0xff);
+
+    out << fmt::format(FMT_COMPILE("{}.{}.{}"), num1, num2, num3);
+    return out;
 }
+
+
 inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
 {
     switch (_nodeType)
     {
-    case NodeType::None:
+    case NodeType::NONE:
         _out << "None";
         break;
     case NodeType::CONSENSUS_NODE:
@@ -228,7 +217,7 @@ inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
     case NodeType::LIGHT_NODE:
         _out << "LIGHT_NODE";
         break;
-    case NodeType::NODE_OUTSIDE_GROUP:
+    case NodeType::FREE_NODE:
         _out << "NODE_OUTSIDE_GROUP";
         break;
     default:

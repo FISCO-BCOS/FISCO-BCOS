@@ -196,8 +196,8 @@ private:
     std::atomic<size_t> m_maxShardPerPeer = {2};
     std::atomic<bcos::protocol::BlockNumber> m_committedProposalNumber = {0};
 
-    bcos::protocol::NodeType m_nodeType = bcos::protocol::NodeType::None;
-    bcos::protocol::NodeType m_notifiedNodeType = bcos::protocol::NodeType::None;
+    bcos::protocol::NodeType m_nodeType = bcos::protocol::NodeType::NONE;
+    bcos::protocol::NodeType m_notifiedNodeType = bcos::protocol::NodeType::NONE;
 
     std::function<void(bcos::protocol::NodeType)> m_nodeTypeChanged;
 

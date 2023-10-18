@@ -825,7 +825,7 @@ void BlockSync::fetchAndSendBlock(PublicPtr const& _peer, BlockNumber _number)
 
 void BlockSync::maintainPeersConnection()
 {
-    if (!m_config->existsInGroup())
+    if (!m_allowFreeNode && !m_config->existsInGroup())
     {
         return;
     }
@@ -841,7 +841,8 @@ void BlockSync::maintainPeersConnection()
             peersToDelete.emplace_back(_p->nodeId());
             return true;
         }
-        if (!m_config->existsInGroup(_p->nodeId()) && m_config->blockNumber() >= _p->number())
+        if (!m_allowFreeNode && !m_config->existsInGroup(_p->nodeId()) &&
+            m_config->blockNumber() >= _p->number())
         {
             // Only delete outsider whose number is smaller than myself
             peersToDelete.emplace_back(_p->nodeId());
@@ -903,11 +904,22 @@ void BlockSync::broadcastSyncStatus()
                        << LOG_KV("currentHash", statusMsg->hash().abridged());
     // Note: only send status to the observers/sealers, but the OUTSIDE_GROUP node maybe
     // observer/sealer before sync to the highest here can't use asyncSendBroadcastMessage
-    auto const& groupNodeList = m_config->groupNodeList();
-    for (auto const& nodeID : groupNodeList)
+
+    // Broadcast to all nodes if turn on allow_free_nodes_sync
+    if (m_allowFreeNode)
     {
-        m_config->frontService()->asyncSendMessageByNodeID(
-            ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+        m_config->frontService()->asyncSendBroadcastMessage(
+            LIGHT_NODE | CONSENSUS_NODE | OBSERVER_NODE | FREE_NODE, ModuleID::BlockSync,
+            bcos::ref(*encodedData));
+    }
+    else
+    {
+        auto const& groupNodeList = m_config->groupNodeList();
+        for (auto const& nodeID : groupNodeList)
+        {
+            m_config->frontService()->asyncSendMessageByNodeID(
+                ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+        }
     }
 }
 
