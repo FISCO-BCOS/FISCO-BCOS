@@ -40,7 +40,10 @@ BOOST_AUTO_TEST_CASE(feature)
 
     features3.setToDefault(bcos::protocol::BlockVersion::V3_2_3_VERSION);
     flags = features3.flags();
-    std::tie(flag, name, value) = flags[0];
+    flag = std::get<0>(flags[0]);
+    name = std::get<1>(flags[0]);
+    value = std::get<2>(flags[0]);
+
     BOOST_CHECK_EQUAL(flag, Features::Flag::bugfix_revert);
     BOOST_CHECK_EQUAL(name, "bugfix_revert");
     BOOST_CHECK_EQUAL(value, true);
