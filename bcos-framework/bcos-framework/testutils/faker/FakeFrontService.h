@@ -29,6 +29,7 @@
 #include "bcos-framework/gateway/GatewayInterface.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-task/Wait.h"
+#include "bcos-txpool/TxPool.h"
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 using namespace bcos;
 using namespace bcos::front;
@@ -92,7 +93,7 @@ public:
     FakeGateWay() = default;
     virtual ~FakeGateWay() = default;
 
-    void addTxPool(NodeIDPtr _nodeId, TxPoolInterface::Ptr _txpool)
+    void addTxPool(NodeIDPtr _nodeId, TxPool::Ptr _txpool)
     {
         m_nodeId2TxPool[_nodeId] = std::move(_txpool);
     }
@@ -126,7 +127,6 @@ public:
                           << ", id:" << id << std::endl;
             }
         }
-
         if (_moduleId == ModuleID::TxsSync && m_nodeId2TxPool.contains(_nodeId))
         {
             auto txpool = m_nodeId2TxPool[_nodeId];
@@ -155,12 +155,12 @@ public:
             auto txFactory =
                 std::make_shared<bcostars::protocol::TransactionFactoryImpl>(m_cryptoSuite);
             auto tx = txFactory->createTransaction(_data);
-            bcos::task::wait([](decltype(txpool) txpool, decltype(_data) _data,
-                                 decltype(tx) tx) -> bcos::task::Task<void> {
-                auto submit = co_await txpool->submitTransactionWithHook(
-                    tx, [_data, txpool]() { txpool->broadcastTransactionBufferByTree(_data); });
+            bcos::task::wait([](decltype(txpool) txpool, decltype(_data) _data, decltype(tx) tx,
+                                 decltype(_fromNode) fromNode) -> bcos::task::Task<void> {
+                txpool->broadcastTransactionBufferByTree(_data, false, fromNode);
+                auto submit = co_await txpool->submitTransaction(tx);
                 assert(submit->status() == (uint32_t)TransactionStatus::None);
-            }(txpool, _data, tx));
+            }(txpool, _data, tx, _fromNode));
         }
 
         if (_moduleId == ModuleID::SYNC_PUSH_TRANSACTION && m_nodeId2TxPool.contains(_nodeId))
@@ -205,7 +205,7 @@ public:
     std::map<std::string, CallbackFunc> m_uuidToCallback;
     Mutex m_mutex;
 
-    std::map<NodeIDPtr, TxPoolInterface::Ptr, KeyCompare> m_nodeId2TxPool;
+    std::map<NodeIDPtr, TxPool::Ptr, KeyCompare> m_nodeId2TxPool;
     std::map<NodeIDPtr, ConsensusInterface::Ptr, KeyCompare> m_nodeId2Consensus;
     std::map<NodeIDPtr, BlockSyncInterface::Ptr, KeyCompare> m_nodeId2Sync;
     std::atomic<int64_t> m_uuid = 0;
@@ -222,7 +222,7 @@ public:
     void start() override {}
     void stop() override {}
 
-    void addTxPool(NodeIDPtr _nodeId, TxPoolInterface::Ptr _txpool)
+    void addTxPool(NodeIDPtr _nodeId, TxPool::Ptr _txpool)
     {
         m_gateWay->addTxPool(std::move(_nodeId), std::move(_txpool));
     }
@@ -299,6 +299,8 @@ public:
     void stop() override {}
 
     void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _func) override { _func(nullptr, m_groupInfo); }
+
+    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override { return m_groupInfo; }
     // for gateway: useless here
     void onReceiveGroupNodeInfo(
         const std::string&, bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc) override

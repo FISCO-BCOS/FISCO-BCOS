@@ -35,6 +35,10 @@ public:
         m_cryptoSuite(std::move(_cryptoSuite)),
         m_pbftMessageFactory(std::move(_pbftMessageFactory))
     {}
+    PBFTCodec(PBFTCodec const&) = delete;
+    PBFTCodec& operator=(PBFTCodec const&) = delete;
+    PBFTCodec(PBFTCodec&&) = delete;
+    PBFTCodec& operator=(PBFTCodec&&) = delete;
 
     ~PBFTCodec() override = default;
 

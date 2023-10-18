@@ -790,7 +790,9 @@ node_pid=${ps_cmd}
 ulimit -n 1024
 if [ ! -z \${node_pid} ];then
     kill -USR1 \${node_pid}
+    sleep 0.2
     kill -USR2 \${node_pid}
+    sleep 0.2
     echo " \${node} is running, pid is \$node_pid."
     exit 0
 else
@@ -881,7 +883,9 @@ done
 
 if [ ! -z \${node_pid} ];then
     kill -USR1 \${node_pid}
+    sleep 0.2
     kill -USR2 \${node_pid}
+    sleep 0.2
     echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
 else

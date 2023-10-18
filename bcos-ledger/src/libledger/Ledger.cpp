@@ -1457,12 +1457,12 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
 
 template <typename MerkleType, typename HashRangeType>
 static std::vector<h256> getMerkleTreeFromCache(int64_t blockNumber, Ledger::CacheType& cache,
-    std::mutex& mutex, const std::string& cacheName, const MerkleType& merkle,
+    RecursiveMutex& mutex, const std::string& cacheName, const MerkleType& merkle,
     const HashRangeType& hashesRange)
 {
     std::shared_ptr<std::vector<h256>> merkleTree;
     {
-        UniqueGuard l(mutex);
+        RecursiveGuard l(mutex);
         if (!cache.contains(blockNumber))
         {
             merkleTree = std::make_shared<std::vector<h256>>();

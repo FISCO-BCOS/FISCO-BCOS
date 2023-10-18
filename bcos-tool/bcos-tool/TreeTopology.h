@@ -52,7 +52,7 @@ public:
     // select the nodes by tree topology
     [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectNodes(
         bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex = 0,
-        bool _isTheStartNode = false);
+        bool _isTheStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr);
 
     [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectNodesByNodeID(
         bcos::crypto::NodeIDSetPtr const& _peers, bcos::crypto::NodeIDPtr const& _nodeID,
