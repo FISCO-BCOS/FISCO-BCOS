@@ -51,6 +51,7 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+
 #include <array>
 #include <cstring>
 
@@ -1115,7 +1116,8 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     // remove suicides beforehand
     m_blockContext->killSuicides();
     auto start = utcTime();
-    auto hash = last.storage->hash(m_hashImpl);
+    auto hash = last.storage->hash(m_hashImpl,
+        m_blockContext->features().get(ledger::Features::Flag::bugfix_statestorage_hash));
     auto end = utcTime();
     EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes success"
                             << LOG_KV("hash", hash.hex()) << LOG_KV("time(ms)", (end - start));

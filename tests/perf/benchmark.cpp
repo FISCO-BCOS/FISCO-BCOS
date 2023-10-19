@@ -175,7 +175,7 @@ int main(int argc, const char* argv[])
     for (int i = 0; i < storageChainLength && !onlyWrite; ++i)
     {
         auto s = storages[i];
-        s->hash(hashImpl);
+        s->hash(hashImpl, true);
         TraverseStorageInterface::Ptr t =
             std::dynamic_pointer_cast<bcos::storage::TraverseStorageInterface>(s);
         bcos::protocol::TwoPCParams p;

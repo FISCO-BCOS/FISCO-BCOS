@@ -21,6 +21,7 @@
 #pragma once
 
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
+#include "filter/ReadOnlyFilter.h"
 #include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
@@ -319,6 +320,8 @@ public:
         return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
     }
 
+    void enableReadOnlyMode();
+
 protected:
     // for UT
     Gateway() {}
@@ -349,6 +352,7 @@ private:
 
     // For rate limit
     ratelimiter::GatewayRateLimiter::Ptr m_gatewayRateLimiter;
+    std::optional<ReadOnlyFilter> m_readonlyFilter;
 };
 }  // namespace gateway
 }  // namespace bcos

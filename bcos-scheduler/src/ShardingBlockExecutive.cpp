@@ -266,8 +266,7 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
         }
         else
         {
-            stateStorage = std::make_shared<bcos::storage::StateStorage>(
-                getStorage(), m_block->blockHeaderConst()->version());
+            stateStorage = std::make_shared<bcos::storage::StateStorage>(getStorage());
         }
 
 
