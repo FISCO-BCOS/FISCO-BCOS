@@ -167,7 +167,7 @@ bcos::protocol::NodeType BlockSyncConfig::determineNodeType()
     {
         return bcos::protocol::NodeType::OBSERVER_NODE;
     }
-    return bcos::protocol::NodeType::NODE_OUTSIDE_GROUP;
+    return bcos::protocol::NodeType::FREE_NODE;
 }
 
 bool BlockSyncConfig::existNode(bcos::consensus::ConsensusNodeListPtr const& _nodeList,

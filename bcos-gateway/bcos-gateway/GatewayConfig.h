@@ -245,6 +245,7 @@ public:
     std::string const& uuid() const { return m_uuid; }
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 
+    bool readonly() const { return m_readonly; }
     void setEnableRIPProtocol(bool _enableRIPProtocol) { m_enableRIPProtocol = _enableRIPProtocol; }
     bool enableRIPProtocol() const { return m_enableRIPProtocol; }
 
@@ -341,6 +342,8 @@ private:
     std::string m_nodePath;
     std::string m_nodeFileName;
     std::string m_configFile;
+
+    bool m_readonly = false;
 };
 
 }  // namespace bcos

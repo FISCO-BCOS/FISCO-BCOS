@@ -93,7 +93,7 @@ private:
 
     template <std::same_as<concepts::ledger::TRANSACTIONS_METADATA>>
     task::Task<void> setBlockData(
-        auto& storage, std::string_view blockNumberKey, protocol::IsBlock auto const& block)
+        auto& storage, std::string_view blockNumberKey, protocol::Block const& block)
     {
         LEDGER2_LOG(DEBUG) << "setBlockData transaction metadata: " << blockNumberKey;
 
@@ -256,7 +256,7 @@ public:
     {}
 
     template <bcos::concepts::ledger::DataFlag... Flags>
-    task::Task<void> setBlock(auto& storage, protocol::IsBlock auto const& block)
+    task::Task<void> setBlock(auto& storage, protocol::Block const& block)
     {
         LEDGER2_LOG(INFO) << "setBlock: " << block.blockHeaderConst()->number();
 

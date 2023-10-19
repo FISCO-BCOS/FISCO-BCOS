@@ -80,6 +80,8 @@ public:
 
     void enableAsMaster(bool _masterNode);
 
+    void setAllowFreeNodeSync(bool flag) { m_allowFreeNode = flag; }
+
     void setFaultyNodeBlockDelta(bcos::protocol::BlockNumber _delta)
     {
         c_FaultyNodeBlockDelta = _delta;
@@ -152,6 +154,7 @@ protected:
     bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
 
     std::atomic_bool m_masterNode = {false};
+    bool m_allowFreeNode = false;
 
     SyncTreeTopology::Ptr m_syncTreeTopology{nullptr};
 };

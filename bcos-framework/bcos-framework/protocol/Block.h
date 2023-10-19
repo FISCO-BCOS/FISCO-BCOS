@@ -119,6 +119,4 @@ public:
 using Blocks = std::vector<Block::Ptr>;
 using BlocksPtr = std::shared_ptr<Blocks>;
 
-template <class T>
-concept IsBlock = std::derived_from<T, Block> || std::same_as<T, Block>;
 }  // namespace bcos::protocol
