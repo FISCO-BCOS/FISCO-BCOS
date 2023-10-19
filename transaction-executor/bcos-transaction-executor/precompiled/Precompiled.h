@@ -1,12 +1,11 @@
 #pragma once
 #include "../Common.h"
 #include "ExecutiveWrapper.h"
-#include "StorageWrapper.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/vm/Precompiled.h"
+#include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-table/src/StateStorage.h"
-#include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-utilities/Overloaded.h"
 #include <type_traits>
 
@@ -60,9 +59,9 @@ public:
                     return result;
                 },
                 [&](std::shared_ptr<precompiled::Precompiled> const& precompiled) {
-                    auto storageWrapper =
-                        std::make_shared<StateStorageWrapper<std::decay_t<decltype(storage)>>>(
-                            storage);
+                    auto storageWrapper = std::make_shared<
+                        storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
+                        storage);
 
                     executor::BlockContext blockContext(storageWrapper, nullptr,
                         GlobalHashImpl::g_hashImpl, blockHeader.number(), blockHeader.hash(),

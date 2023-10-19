@@ -47,7 +47,6 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
-#include <tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
@@ -55,8 +54,6 @@
 #include <cstddef>
 #include <future>
 #include <memory>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/transform.hpp>
 #include <utility>
 
 using namespace bcos;

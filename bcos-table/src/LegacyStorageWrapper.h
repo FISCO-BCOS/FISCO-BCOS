@@ -10,19 +10,18 @@
 #include "bcos-utilities/Error.h"
 #include <exception>
 #include <iterator>
-#include <range/v3/view/any_view.hpp>
 
-namespace bcos::transaction_executor
+namespace bcos::storage
 {
 
 template <class Storage>
-class StorageWrapper : public virtual bcos::storage::StorageInterface
+class LegacyStorageWrapper : public virtual bcos::storage::StorageInterface
 {
 private:
     Storage& m_storage;
 
 public:
-    explicit StorageWrapper(Storage& m_storage) : m_storage(m_storage) {}
+    explicit LegacyStorageWrapper(Storage& m_storage) : m_storage(m_storage) {}
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& condition,
@@ -38,7 +37,8 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto value = co_await storage2::readOne(self->m_storage, StateKeyView{table, key});
+                auto value = co_await storage2::readOne(
+                    self->m_storage, transaction_executor::StateKeyView{table, key});
                 callback(nullptr, std::move(value));
             }
             catch (std::exception& e)
@@ -59,9 +59,13 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto{
-                    return StateKeyView{table, std::forward<decltype(key)>(key)};
-                }) | RANGES::to<boost::container::small_vector<StateKeyView, 1>>();
+                auto stateKeys =
+                    keys | RANGES::views::transform([&table](auto&& key) -> auto{
+                        return transaction_executor::StateKeyView{
+                            table, std::forward<decltype(key)>(key)};
+                    }) |
+                    RANGES::to<
+                        boost::container::small_vector<transaction_executor::StateKeyView, 1>>();
                 auto values = co_await storage2::readSome(self->m_storage, stateKeys);
 
                 std::vector<std::optional<storage::Entry>> vectorValues(
@@ -83,7 +87,7 @@ public:
             try
             {
                 co_await storage2::writeOne(
-                    self->m_storage, StateKey{table, key}, std::move(entry));
+                    self->m_storage, transaction_executor::StateKey{table, key}, std::move(entry));
                 callback(nullptr);
             }
             catch (std::exception& e)
@@ -108,7 +112,7 @@ public:
                 {
                     co_await storage2::writeSome(self->m_storage,
                         keys | RANGES::views::transform([&](std::string_view key) {
-                            return StateKey{tableName, key};
+                            return transaction_executor::StateKey{tableName, key};
                         }),
                         values | RANGES::views::transform([](std::string_view value) -> auto{
                             storage::Entry entry;
@@ -126,12 +130,12 @@ public:
 };
 
 template <class Storage>
-class StateStorageWrapper : public virtual storage::StateStorageInterface,
-                            public virtual StorageWrapper<Storage>
+class LegacyStateStorageWrapper : public virtual storage::StateStorageInterface,
+                                  public virtual LegacyStorageWrapper<Storage>
 {
 public:
-    StateStorageWrapper(Storage& m_storage)
-      : StateStorageInterface(nullptr), StorageWrapper<Storage>(m_storage)
+    LegacyStateStorageWrapper(Storage& m_storage)
+      : StateStorageInterface(nullptr), LegacyStorageWrapper<Storage>(m_storage)
     {}
 
     void parallelTraverse(bool onlyDirty,
@@ -149,4 +153,4 @@ public:
     }
 };
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::storage

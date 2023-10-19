@@ -1,6 +1,8 @@
 #pragma once
 
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -9,7 +11,6 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-utilities/Common.h"
-#include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
@@ -39,8 +40,7 @@ namespace bcos::transaction_scheduler
 struct NotFoundTransactionError: public bcos::Error {};
 // clang-format on
 
-template <class MultiLayerStorage, class Executor, class SchedulerImpl,
-    concepts::ledger::IsLedger Ledger>
+template <class MultiLayerStorage, class Executor, class SchedulerImpl>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
@@ -48,7 +48,7 @@ private:
     SchedulerImpl& m_schedulerImpl;
     Executor& m_executor;
     protocol::BlockHeaderFactory& m_blockHeaderFactory;
-    Ledger& m_ledger;
+    ledger::LedgerInterface& m_ledger;
     txpool::TxPoolInterface& m_txpool;
     protocol::TransactionSubmitResultFactory& m_transactionSubmitResultFactory;
     std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
@@ -66,7 +66,7 @@ private:
 
     struct ExecuteResult
     {
-        std::vector<protocol::Transaction::ConstPtr> m_transactions;
+        protocol::TransactionsPtr m_transactions;
         protocol::Block::Ptr m_block;
     };
     std::list<ExecuteResult> m_results;
@@ -91,36 +91,6 @@ private:
             RANGES::views::transform(
                 [&block](uint64_t index) { return block.transactionHash(index); })) |
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
-    }
-
-    task::Task<void> writeBlockAndTransactions(auto& storage,
-        concepts::ledger::IsLedger auto& ledger, protocol::Block& block,
-        std::vector<protocol::Transaction::ConstPtr> const& transactions)
-    {
-        if (block.blockHeaderConst()->number() != 0)
-        {
-            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-
-            co_await ledger.template setBlock<concepts::ledger::HEADER,
-                concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
-                concepts::ledger::NONCES>(storage, block);
-
-            std::vector<bcos::h256> hashes(RANGES::size(transactions));
-            std::vector<std::vector<bcos::byte>> buffers(RANGES::size(transactions));
-            tbb::parallel_for(
-                tbb::blocked_range(0LU, RANGES::size(transactions)), [&](auto const& range) {
-                    for (auto i = range.begin(); i != range.end(); ++i)
-                    {
-                        auto& transaction = transactions[i];
-                        hashes[i] = transaction->hash();
-                        bcos::concepts::serialize::encode(*transaction, buffers[i]);
-                    }
-                });
-
-            co_await ledger.template setTransactions<true>(
-                storage, std::move(hashes), std::move(buffers));
-        }
     }
 
     bcos::h256 calcauteTransactionRoot(protocol::Block const& block)
@@ -321,8 +291,9 @@ private:
             m_lastExecutedBlockNumber = blockHeader->number();
 
             std::unique_lock resultsLock(m_resultsMutex);
-            m_results.push_front(
-                {.m_transactions = std::move(transactions), .m_block = std::move(block)});
+            m_results.push_front({.m_transactions = std::make_shared<decltype(transactions)>(
+                                      std::move(transactions)),
+                .m_block = std::move(block)});
 
             BASELINE_SCHEDULER_LOG(INFO)
                 << "Execute block finished: " << newBlockHeader->number() << " | "
@@ -389,8 +360,14 @@ private:
 
             result.m_block->setBlockHeader(header);
             auto lastStorage = m_multiLayerStorage.lastImmutableStorage();
-            co_await writeBlockAndTransactions(
-                *lastStorage, m_ledger, *(result.m_block), result.m_transactions);
+            if (result.m_block->blockHeaderConst()->number() != 0)
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+
+                co_await ledger::prewriteBlock(
+                    m_ledger, result.m_transactions, result.m_block, *lastStorage, true);
+            }
             co_await m_multiLayerStorage.mergeAndPopImmutableBack();
 
             // Write states
@@ -455,8 +432,8 @@ private:
 
 public:
     BaselineScheduler(MultiLayerStorage& multiLayerStorage, SchedulerImpl& schedulerImpl,
-        Executor& executor, protocol::BlockHeaderFactory& blockFactory, Ledger& ledger,
-        txpool::TxPoolInterface& txPool,
+        Executor& executor, protocol::BlockHeaderFactory& blockFactory,
+        ledger::LedgerInterface& ledger, txpool::TxPoolInterface& txPool,
         protocol::TransactionSubmitResultFactory& transactionSubmitResultFactory,
         crypto::Hash const& hashImpl)
       : m_multiLayerStorage(multiLayerStorage),

@@ -27,12 +27,13 @@ inline constexpr BuildGenesisBlock buildGenesisBlock{};
 
 struct PrewriteBlock
 {
-    auto operator()(auto& ledger, RANGES::range auto const& transactions,
-        bcos::protocol::Block const& block, auto& storage)
+    auto operator()(auto& ledger, bcos::protocol::TransactionsPtr transactions,
+        bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts, auto& storage)
         -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
             *this, ledger, transactions, block, storage))>>
     {
-        co_await tag_invoke(*this, ledger, transactions, block, storage);
+        co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block),
+            withTransactionsAndReceipts, storage);
     }
 };
 inline constexpr PrewriteBlock prewriteBlock{};
