@@ -142,7 +142,11 @@ public:
 
     void rollback(const storage::Recoder& recoder) override {}
 
-    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override { return {}; }
+    crypto::HashType hash(
+        const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override
+    {
+        return {};
+    }
 };
 
 }  // namespace bcos::transaction_executor
