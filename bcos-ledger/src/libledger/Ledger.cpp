@@ -1594,7 +1594,8 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         });
 }
 
-// sync method
+// sync method, to be split
+// FIXME: too long
 bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
     const std::string_view& _genesisData, std::string const& _compatibilityVersion,
     bool _isAuthCheck, std::string const& _consensusType, std::int64_t _epochSealerNum,

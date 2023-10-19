@@ -2,6 +2,7 @@
 
 #include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
+#include "bcos-framework/protocol/Block.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
 #include <type_traits>
@@ -23,6 +24,18 @@ struct BuildGenesisBlock
     }
 };
 inline constexpr BuildGenesisBlock buildGenesisBlock{};
+
+struct PrewriteBlock
+{
+    auto operator()(auto& ledger, RANGES::range auto const& transactions,
+        bcos::protocol::Block const& block, auto& storage)
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
+            *this, ledger, transactions, block, storage))>>
+    {
+        co_await tag_invoke(*this, ledger, transactions, block, storage);
+    }
+};
+inline constexpr PrewriteBlock prewriteBlock{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
