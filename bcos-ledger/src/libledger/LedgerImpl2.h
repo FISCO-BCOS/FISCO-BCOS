@@ -1,8 +1,11 @@
 #pragma once
 
+#include "Ledger.h"
 #include "LedgerImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-task/AwaitableValue.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -466,5 +469,16 @@ public:
         co_return;
     }
 };
+
+inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/,
+    Ledger& ledger, LedgerConfig::Ptr ledgerConfig, size_t gasLimit,
+    const std::string_view& genesisData, std::string const& compatibilityVersion,
+    bool isAuthCheck = false, std::string const& consensusType = "pbft",
+    std::int64_t epochSealerNum = 4, std::int64_t epochBlockNum = 1000)
+{
+    ledger.buildGenesisBlock(std::move(ledgerConfig), gasLimit, genesisData, compatibilityVersion,
+        isAuthCheck, consensusType, epochSealerNum, epochBlockNum);
+    return {};
+}
 
 }  // namespace bcos::ledger

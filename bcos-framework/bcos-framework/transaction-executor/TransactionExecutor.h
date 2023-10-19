@@ -18,15 +18,18 @@
 
 namespace bcos::transaction_executor
 {
-constexpr static size_t MOSTLY_LENGTH = 32;
-class SmallString : public boost::container::small_vector<char, MOSTLY_LENGTH>
+constexpr static size_t CONTRACT_KEY_LENGTH = 32;
+constexpr static size_t CONTRACT_TABLE_LENGTH = std::string_view{"/apps/"}.size() + 20 * 2;
+
+template <size_t length>
+class SmallString : public boost::container::small_vector<char, length>
 {
 public:
-    using boost::container::small_vector<char, MOSTLY_LENGTH>::small_vector;
-    SmallString(const char* str) { assign(str, str + strlen(str)); }
+    using boost::container::small_vector<char, length>::small_vector;
+    SmallString(const char* str) { this->assign(str, str + strlen(str)); }
     SmallString(concepts::bytebuffer::ByteBuffer auto const& bytes)
     {
-        assign(RANGES::begin(bytes), RANGES::end(bytes));
+        this->assign(RANGES::begin(bytes), RANGES::end(bytes));
     }
     auto operator<=>(std::string_view view) const
     {
@@ -40,10 +43,13 @@ public:
     {
         return static_cast<std::string_view>(*this) <=> static_cast<std::string_view>(rhs);
     }
-    operator std::string_view() const& { return {data(), size()}; }
+    operator std::string_view() const& { return {this->data(), this->size()}; }
 };
+using ContractTable = SmallString<CONTRACT_TABLE_LENGTH>;
+using ContractKey = SmallString<CONTRACT_KEY_LENGTH>;
+
 using StateKeyView = std::tuple<std::string_view, std::string_view>;
-using StateKey = std::tuple<SmallString, SmallString>;
+using StateKey = std::tuple<ContractTable, ContractKey>;
 using StateValue = storage::Entry;
 
 struct Execute
@@ -124,8 +130,10 @@ struct boost::hash<bcos::transaction_executor::StateKey>
         return std::hash<bcos::transaction_executor::StateKey>{}(stateKey);
     }
 };
+
+template <size_t N>
 inline std::ostream& operator<<(
-    std::ostream& stream, const bcos::transaction_executor::SmallString& smallString)
+    std::ostream& stream, const bcos::transaction_executor::SmallString<N>& smallString)
 {
     stream << static_cast<std::string_view>(smallString);
     return stream;

@@ -4,17 +4,19 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/storage2/StorageMethods.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include <exception>
 #include <iterator>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcos::transaction_executor
 {
 
 template <class Storage>
-class StorageWrapper : public bcos::storage::StorageInterface
+class StorageWrapper : public virtual bcos::storage::StorageInterface
 {
 private:
     Storage& m_storage;
@@ -89,6 +91,61 @@ public:
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "asyncSetRow error!", e));
             }
         }(this, table, key, std::move(entry), std::move(callback)));
+    }
+
+    Error::Ptr setRows(std::string_view tableName,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            values) override
+    {
+        return task::syncWait(
+            [](decltype(this) self, decltype(tableName) tableName, decltype(keys)& keys,
+                decltype(values)& values) -> task::Task<Error::Ptr> {
+                try
+                {
+                    co_await storage2::writeSome(self->m_storage,
+                        keys | RANGES::views::transform([&](std::string_view key) {
+                            return StateKey{tableName, key};
+                        }),
+                        values | RANGES::views::transform([](std::string_view value) -> auto{
+                            storage::Entry entry;
+                            entry.setField(0, value);
+                            return entry;
+                        }));
+                    co_return nullptr;
+                }
+                catch (std::exception& e)
+                {
+                    co_return BCOS_ERROR_WITH_PREV_PTR(-1, "setRows error!", e);
+                }
+            }(this, tableName, keys, values));
+    };
+};
+
+template <class Storage>
+class StateStorageWrapper : public virtual storage::StateStorageInterface,
+                            public virtual StorageWrapper<Storage>
+{
+public:
+    StateStorageWrapper(Storage& m_storage)
+      : StateStorageInterface(nullptr), StorageWrapper<Storage>(m_storage)
+    {}
+
+    void parallelTraverse(bool onlyDirty,
+        std::function<bool(const std::string_view& table, const std::string_view& key,
+            storage::Entry const& entry)>
+            callback) const override
+    {}
+
+    void rollback(const storage::Recoder& recoder) override {}
+
+    crypto::HashType hash(
+        const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override
+    {
+        return {};
     }
 };
 

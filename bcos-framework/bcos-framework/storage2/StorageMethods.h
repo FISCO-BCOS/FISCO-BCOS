@@ -157,10 +157,11 @@ auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, Storage& storage,
 }
 
 task::Task<void> tag_invoke(bcos::storage2::tag_t<writeSome> /*unused*/,
-    WriteableStorage auto& storage, RANGES::input_range auto const& keys,
+    WriteableStorage auto& storage, RANGES::input_range auto&& keys,
     RANGES::input_range auto&& values)
 {
-    co_await storage.write(keys, std::forward<decltype(values)>(values));
+    co_await storage.write(
+        std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
     co_return;
 }
 

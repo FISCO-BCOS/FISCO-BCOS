@@ -504,82 +504,78 @@ void RocksDBStorage::asyncRollback(
                               << LOG_KV("callback time(ms)", utcSteadyTime() - end);
 }
 
-bcos::Error::Ptr RocksDBStorage::setRows(std::string_view table,
-    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
-        _keys,
-    std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>> _values) noexcept
+bcos::Error::Ptr RocksDBStorage::setRows(std::string_view tableName,
+    RANGES::any_view<std::string_view, RANGES::category::random_access | RANGES::category::sized>
+        keys,
+    RANGES::any_view<std::string_view, RANGES::category::random_access | RANGES::category::sized>
+        values) noexcept
 {
     __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
         const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_SET_ROWS));
     bcos::Error::Ptr err = nullptr;
-    std::visit(
-        [&](auto&& keys, auto&& values) {
-            auto start = utcSteadyTime();
-            if (table.empty())
-            {
-                STORAGE_ROCKSDB_LOG(WARNING)
-                    << LOG_DESC("setRows empty tableName") << LOG_KV("table", table);
-                err = BCOS_ERROR_PTR(TableNotExists, "empty tableName");
-                return;
-            }
-            if (keys.size() != values.size())
-            {
-                STORAGE_ROCKSDB_LOG(WARNING)
-                    << LOG_DESC("setRows values size mismatch keys size")
-                    << LOG_KV("keys", keys.size()) << LOG_KV("values", values.size());
-                err = BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
-                return;
-            }
-            if (keys.empty())
-            {
-                STORAGE_ROCKSDB_LOG(WARNING)
-                    << LOG_DESC("setRows empty keys") << LOG_KV("table", table);
-                return;
-            }
-            std::vector<std::string> realKeys(keys.size());
+    auto start = utcSteadyTime();
+    if (tableName.empty())
+    {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("setRows empty tableName") << LOG_KV("table", tableName);
+        err = BCOS_ERROR_PTR(TableNotExists, "empty tableName");
+        return err;
+    }
+    if (keys.size() != values.size())
+    {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("setRows values size mismatch keys size") << LOG_KV("keys", keys.size())
+            << LOG_KV("values", values.size());
+        err = BCOS_ERROR_PTR(TableNotExists, "setRows values size mismatch keys size");
+        return err;
+    }
+    if (keys.empty())
+    {
+        STORAGE_ROCKSDB_LOG(WARNING)
+            << LOG_DESC("setRows empty keys") << LOG_KV("table", tableName);
+        return err;
+    }
+    std::vector<std::string> realKeys(keys.size());
 
-            std::vector<std::string> encryptedValues;
-            if (m_dataEncryption)
-            {
-                encryptedValues.resize(values.size());
-            }
+    std::vector<std::string> encryptedValues;
+    if (m_dataEncryption)
+    {
+        encryptedValues.resize(values.size());
+    }
 
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size(), 256),
-                [&](const tbb::blocked_range<size_t>& range) {
-                    for (size_t i = range.begin(); i != range.end(); ++i)
-                    {
-                        realKeys[i] = toDBKey(table, keys[i]);
-                        if (m_dataEncryption)
-                        {
-                            encryptedValues[i] =
-                                m_dataEncryption->encrypt(std::string(std::move(values[i])));
-                        }
-                    }
-                });
-            auto writeBatch = WriteBatch();
-            size_t dataSize = 0;
-            for (size_t i = 0; i < keys.size(); ++i)
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size(), 256),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i != range.end(); ++i)
             {
-                // Storage Security
+                realKeys[i] = toDBKey(tableName, keys[i]);
                 if (m_dataEncryption)
                 {
-                    dataSize += realKeys[i].size() + encryptedValues[i].size();
-                    writeBatch.Put(realKeys[i], encryptedValues[i]);
-                }
-                else
-                {
-                    dataSize += realKeys[i].size() + values[i].size();
-                    writeBatch.Put(std::move(realKeys[i]), std::move(values[i]));
+                    encryptedValues[i] = m_dataEncryption->encrypt(std::string(values[i]));
                 }
             }
-            WriteOptions options;
-            auto status = m_db->Write(options, &writeBatch);
-            err = checkStatus(status);
-            STORAGE_ROCKSDB_LOG(INFO)
-                << LOG_DESC("setRows finished") << LOG_KV("put", keys.size())
-                << LOG_KV("dataSize", dataSize) << LOG_KV("time(ms)", utcSteadyTime() - start);
-        },
-        _keys, _values);
+        });
+    auto writeBatch = WriteBatch();
+    size_t dataSize = 0;
+    for (size_t i = 0; i < keys.size(); ++i)
+    {
+        // Storage Security
+        if (m_dataEncryption)
+        {
+            dataSize += realKeys[i].size() + encryptedValues[i].size();
+            writeBatch.Put(realKeys[i], encryptedValues[i]);
+        }
+        else
+        {
+            dataSize += realKeys[i].size() + values[i].size();
+            writeBatch.Put(realKeys[i], values[i]);
+        }
+    }
+    WriteOptions options;
+    auto status = m_db->Write(options, &writeBatch);
+    err = checkStatus(status);
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("setRows finished") << LOG_KV("put", keys.size())
+                              << LOG_KV("dataSize", dataSize)
+                              << LOG_KV("time(ms)", utcSteadyTime() - start);
     __itt_task_end(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE);
     return err;
 }

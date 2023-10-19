@@ -23,13 +23,13 @@
 #include "LedgerConfig.h"
 #include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include "bcos-ledger/src/libledger/Ledger.h"
+#include "bcos-tool/VersionConverter.h"
 #include <sstream>
 #include <string>
+#include <utility>
 
 
-namespace bcos
-{
-namespace ledger
+namespace bcos::ledger
 {
 class GenesisConfig
 {
@@ -38,23 +38,24 @@ public:
     GenesisConfig(bool smcrypto, std::string chainID, std::string groupID,
         std::string consensusType, uint64_t txCountLimit, uint64_t leaderSwitchPeriod,
         std::string compatibilityVersion, uint64_t txGasLimit, bool isWasm, bool isAuthCheck,
-        std::string authAdminAccount, bool isSerialExecute, uint64_t epochSealerNum, uint64_t epochBlockNum)
+        std::string authAdminAccount, bool isSerialExecute, uint64_t epochSealerNum,
+        uint64_t epochBlockNum)
       : m_smCrypto(smcrypto),
-        m_chainID(chainID),
-        m_groupID(groupID),
-        m_consensusType(consensusType),
+        m_chainID(std::move(chainID)),
+        m_groupID(std::move(groupID)),
+        m_consensusType(std::move(consensusType)),
         m_txCountLimit(txCountLimit),
         m_leaderSwitchPeriod(leaderSwitchPeriod),
-        m_compatibilityVersion(compatibilityVersion),
+        m_compatibilityVersion(std::move(compatibilityVersion)),
         m_txGasLimit(txGasLimit),
         m_isWasm(isWasm),
         m_isAuthCheck(isAuthCheck),
-        m_authAdminAccount(authAdminAccount),
+        m_authAdminAccount(std::move(authAdminAccount)),
         m_isSerialExecute(isSerialExecute),
         m_epochSealerNum(epochSealerNum),
         m_epochBlockNum(epochBlockNum)
     {}
-    virtual ~GenesisConfig() {}
+    virtual ~GenesisConfig() = default;
 
     std::string genesisDataOutPut()
     {
@@ -112,5 +113,4 @@ private:
     uint64_t m_epochSealerNum;
     uint64_t m_epochBlockNum;
 };  // namespace genesisConfig
-}  // namespace ledger
-}  // namespace bcos
+}  // namespace bcos::ledger

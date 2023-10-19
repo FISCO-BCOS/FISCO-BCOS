@@ -61,10 +61,10 @@ public:
                 },
                 [&](std::shared_ptr<precompiled::Precompiled> const& precompiled) {
                     auto storageWrapper =
-                        std::make_shared<StorageWrapper<std::decay_t<decltype(storage)>>>(storage);
-                    auto stateStorage = std::make_shared<storage::StateStorage>(storageWrapper);
+                        std::make_shared<StateStorageWrapper<std::decay_t<decltype(storage)>>>(
+                            storage);
 
-                    executor::BlockContext blockContext(stateStorage, nullptr,
+                    executor::BlockContext blockContext(storageWrapper, nullptr,
                         GlobalHashImpl::g_hashImpl, blockHeader.number(), blockHeader.hash(),
                         blockHeader.timestamp(), blockHeader.version(),
                         bcos::executor::VMSchedule{}, false, false);

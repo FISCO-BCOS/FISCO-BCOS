@@ -27,15 +27,9 @@ struct StateValueResolver
 
 struct StateKeyResolver
 {
-    /*
-    Table: "/apps/"(5 byte) + evm address(20 byte), mostly 25byte
-    Key: mostly 32 byte
-    Split: ":" 1byte
-
-    All: 25 + 1 + 32 = 58, expand to 64
-    */
-    constexpr static size_t SMALL = 64;
-    using DBKey = boost::container::small_vector<char, SMALL>;
+    using DBKey = boost::container::small_vector<char,
+        transaction_executor::ContractTable::static_capacity +
+            transaction_executor::ContractKey::static_capacity + 1>;
     constexpr static char TABLE_KEY_SPLIT = ':';
 
     static DBKey encode(auto const& stateKey)
@@ -69,9 +63,9 @@ struct StateKeyResolver
                                       fmt::format("Empty table or key!", buffer)));
         }
 
-        auto stateKey = std::make_tuple(transaction_executor::SmallString(std::string_view(
+        auto stateKey = std::make_tuple(transaction_executor::ContractTable(std::string_view(
                                             RANGES::data(tableRange), RANGES::size(tableRange))),
-            transaction_executor::SmallString(
+            transaction_executor::ContractKey(
                 std::string_view(RANGES::data(keyRange), RANGES::size(keyRange))));
         return stateKey;
     }

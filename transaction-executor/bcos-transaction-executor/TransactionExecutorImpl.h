@@ -20,7 +20,6 @@
 namespace bcos::transaction_executor
 {
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
-evmc_address unhexAddress(std::string_view view);
 
 // clang-format off
 struct InvalidArgumentsError: public bcos::Error {};
