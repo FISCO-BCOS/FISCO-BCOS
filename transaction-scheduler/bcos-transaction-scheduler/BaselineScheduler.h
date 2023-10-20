@@ -41,7 +41,7 @@ namespace bcos::transaction_scheduler
 struct NotFoundTransactionError: public bcos::Error {};
 // clang-format on
 
-template <class MultiLayerStorage, class Executor, class SchedulerImpl>
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
@@ -49,7 +49,7 @@ private:
     SchedulerImpl& m_schedulerImpl;
     Executor& m_executor;
     protocol::BlockHeaderFactory& m_blockHeaderFactory;
-    ledger::LedgerInterface& m_ledger;
+    Ledger& m_ledger;
     txpool::TxPoolInterface& m_txpool;
     protocol::TransactionSubmitResultFactory& m_transactionSubmitResultFactory;
     std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
@@ -264,12 +264,18 @@ private:
 
             m_multiLayerStorage.newMutable();
             auto view = m_multiLayerStorage.fork(true);
-            auto transactions = co_await getTransactions(*block);
+            auto constTransactions = co_await getTransactions(*block);
+            auto transactions =
+                RANGES::views::transform(constTransactions,
+                    [](protocol::Transaction::ConstPtr const& transaction) {
+                        return std::const_pointer_cast<protocol::Transaction>(transaction);
+                    }) |
+                RANGES::to<std::vector<protocol::Transaction::Ptr>>();
             auto receipts = co_await transaction_scheduler::execute(m_schedulerImpl, view,
                 m_executor, *blockHeader,
                 transactions |
                     RANGES::views::transform(
-                        [](protocol::Transaction::ConstPtr const& transactionPtr)
+                        [](protocol::Transaction::Ptr const& transactionPtr)
                             -> protocol::Transaction const& { return *transactionPtr; }));
 
             auto newBlockHeader = m_blockHeaderFactory.populateBlockHeader(blockHeader);
@@ -292,7 +298,7 @@ private:
             m_lastExecutedBlockNumber = blockHeader->number();
 
             std::unique_lock resultsLock(m_resultsMutex);
-            m_results.push_front({.m_transactions = std::make_shared<decltype(transactions)>(
+            m_results.push_front({.m_transactions = std::make_shared<protocol::Transactions>(
                                       std::move(transactions)),
                 .m_block = std::move(block)});
 
@@ -367,7 +373,7 @@ private:
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
 
                 co_await ledger::prewriteBlock(
-                    m_ledger, result.m_transactions, result.m_block, *lastStorage, true);
+                    m_ledger, result.m_transactions, result.m_block, true, *lastStorage);
             }
             co_await m_multiLayerStorage.mergeAndPopImmutableBack();
 
@@ -386,7 +392,7 @@ private:
                     RANGES::views::iota(0LU, result.m_block->receiptsSize()) |
                     RANGES::views::transform(
                         [&, this](uint64_t index) -> protocol::TransactionSubmitResult::Ptr {
-                            auto& transaction = result.m_transactions[index];
+                            auto& transaction = (*result.m_transactions)[index];
                             auto receipt = result.m_block->receipt(index);
 
                             auto submitResult =
@@ -432,8 +438,8 @@ private:
 
 public:
     BaselineScheduler(MultiLayerStorage& multiLayerStorage, SchedulerImpl& schedulerImpl,
-        Executor& executor, protocol::BlockHeaderFactory& blockFactory,
-        ledger::LedgerInterface& ledger, txpool::TxPoolInterface& txPool,
+        Executor& executor, protocol::BlockHeaderFactory& blockFactory, Ledger& ledger,
+        txpool::TxPoolInterface& txPool,
         protocol::TransactionSubmitResultFactory& transactionSubmitResultFactory,
         crypto::Hash const& hashImpl)
       : m_multiLayerStorage(multiLayerStorage),

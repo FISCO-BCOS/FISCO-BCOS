@@ -120,25 +120,6 @@ public:
                });
     }
 
-    task::Task<void> readFromLedger(auto& ledger, long blockNumber)
-    {
-        for (auto key : bcos::ledger::Features::featureKeys())
-        {
-            try
-            {
-                auto [value, enableNumber] = co_await getSystemConfig(ledger, key);
-                if (blockNumber >= enableNumber)
-                {
-                    set(key);
-                }
-            }
-            catch (std::exception& e)
-            {
-                // ignore
-            }
-        }
-    }
-
     task::Task<void> readFromStorage(storage::StorageInterface& storage, long blockNumber)
     {
         for (auto key : bcos::ledger::Features::featureKeys())

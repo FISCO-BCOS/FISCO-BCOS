@@ -7,7 +7,7 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-ledger/src/libledger/LedgerImpl2.h"
+#include "bcos-ledger/src/libledger/Ledger.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"

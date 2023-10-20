@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Ledger.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-task/AwaitableValue.h"
@@ -17,13 +17,13 @@
 #include <type_traits>
 #include <variant>
 
+#define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
+
 namespace bcos::ledger
 {
 
-#define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
-
 inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/,
-    Ledger& ledger, LedgerConfig::Ptr ledgerConfig, size_t gasLimit,
+    auto& ledger, LedgerConfig::Ptr ledgerConfig, size_t gasLimit,
     const std::string_view& genesisData, std::string const& compatibilityVersion,
     bool isAuthCheck = false, std::string const& consensusType = "pbft",
     std::int64_t epochSealerNum = 4, std::int64_t epochBlockNum = 1000)
@@ -41,7 +41,7 @@ inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, Ledg
         std::make_shared<storage::LegacyStorageWrapper<std::decay_t<decltype(storage)>>>(storage);
     struct Awaitable
     {
-        Ledger& m_ledger;
+        LedgerInterface& m_ledger;
         decltype(transactions) m_transactions;
         decltype(block) m_block;
         bool m_withTransactionsAndReceipts{};
@@ -54,11 +54,12 @@ inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, Ledg
         {
             m_ledger.asyncPrewriteBlock(
                 m_storage, std::move(m_transactions), std::move(m_block),
-                [this](Error::Ptr error) {
+                [this, handle](Error::Ptr error) {
                     if (error)
                     {
                         m_error = std::move(error);
                     }
+                    handle.resume();
                 },
                 m_withTransactionsAndReceipts);
         }
@@ -74,8 +75,9 @@ inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, Ledg
     co_await Awaitable{.m_ledger = ledger,
         .m_transactions = std::move(transactions),
         .m_block = std::move(block),
+        .m_withTransactionsAndReceipts = withTransactionsAndReceipts,
         .m_storage = std::move(legacyStorage),
-        .m_withTransactionsAndReceipts = withTransactionsAndReceipts};
+        .m_error = {}};
 }
 
 inline task::Task<TransactionCount> tag_invoke(
@@ -120,6 +122,82 @@ inline task::Task<TransactionCount> tag_invoke(
     co_return co_await Awaitable{.m_ledger = ledger, .m_result = {}};
 }
 
+inline task::Task<protocol::BlockNumber> tag_invoke(
+    ledger::tag_t<getCurrentBlockNumber> /*unused*/, LedgerInterface& ledger)
+{
+    struct Awaitable
+    {
+        LedgerInterface& m_ledger;
+        std::variant<Error::Ptr, protocol::BlockNumber> m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            m_ledger.asyncGetBlockNumber(
+                [this, handle](Error::Ptr error, bcos::protocol::BlockNumber blockNumber) {
+                    if (error)
+                    {
+                        m_result.emplace<Error::Ptr>(std::move(error));
+                    }
+                    else
+                    {
+                        m_result.emplace<protocol::BlockNumber>(blockNumber);
+                    }
+                    handle.resume();
+                });
+        }
+        protocol::BlockNumber await_resume()
+        {
+            if (std::holds_alternative<Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
+            }
+            return std::get<protocol::BlockNumber>(m_result);
+        }
+    };
+
+    co_return co_await Awaitable{.m_ledger = ledger, .m_result = {}};
+}
+
+inline task::Task<crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
+    LedgerInterface& ledger, protocol::BlockNumber blockNumber)
+{
+    struct Awaitable
+    {
+        LedgerInterface& m_ledger;
+        protocol::BlockNumber m_blockNumber;
+
+        std::variant<Error::Ptr, crypto::HashType> m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            m_ledger.asyncGetBlockHashByNumber(
+                m_blockNumber, [this, handle](Error::Ptr error, crypto::HashType hash) {
+                    if (error)
+                    {
+                        m_result.emplace<Error::Ptr>(std::move(error));
+                    }
+                    else
+                    {
+                        m_result.emplace<crypto::HashType>(hash);
+                    }
+                    handle.resume();
+                });
+        }
+        crypto::HashType await_resume()
+        {
+            if (std::holds_alternative<Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
+            }
+            return std::get<crypto::HashType>(m_result);
+        }
+    };
+
+    co_return co_await Awaitable{.m_ledger = ledger, .m_blockNumber = blockNumber, .m_result = {}};
+}
+
 inline task::Task<SystemConfigEntry> tag_invoke(
     ledger::tag_t<getSystemConfig> /*unused*/, LedgerInterface& ledger, std::string_view key)
 {
@@ -160,7 +238,7 @@ inline task::Task<SystemConfigEntry> tag_invoke(
 }
 
 inline task::Task<consensus::ConsensusNodeList> tag_invoke(
-    ledger::tag_t<getNodeList>, LedgerInterface& ledger, std::string_view type)
+    ledger::tag_t<getNodeList> /*unused*/, LedgerInterface& ledger, std::string_view type)
 {
     struct Awaitable
     {
@@ -212,8 +290,8 @@ inline task::Task<std::tuple<uint64_t, protocol::BlockNumber>> getSystemConfigOr
     }
     catch (std::exception& e)
     {
-        LEDGER_LOG(DEBUG) << "Get " << key << " failed, use default value"
-                          << LOG_KV("defaultValue", defaultValue);
+        LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
+                           << LOG_KV("defaultValue", defaultValue);
         co_return std::tuple<uint64_t, protocol::BlockNumber>{defaultValue, 0};
     }
 }
@@ -224,20 +302,26 @@ inline task::Task<LedgerConfig::Ptr> tag_invoke(
     auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
     ledgerConfig->setConsensusNodeList(co_await getNodeList(ledger, ledger::CONSENSUS_SEALER));
     ledgerConfig->setObserverNodeList(co_await getNodeList(ledger, ledger::CONSENSUS_OBSERVER));
-
     ledgerConfig->setBlockTxCountLimit(boost::lexical_cast<uint64_t>(
         std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_TX_COUNT_LIMIT))));
     ledgerConfig->setLeaderSwitchPeriod(boost::lexical_cast<uint64_t>(
         std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))));
     ledgerConfig->setGasLimit(
-        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, 0));
+        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_LIMIT, 0));
+    ledgerConfig->setCompatibilityVersion(std::get<0>(
+        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION, 0)));
 
-    auto transactionCount = co_await getTransactionCount(ledger);
+    auto blockNumber = co_await getCurrentBlockNumber(ledger);
+    auto hash = co_await getBlockHash(ledger, blockNumber);
+    ledgerConfig->setHash(hash);
+
     ledger::Features features;
-    co_await features.readFromLedger(ledger, transactionCount.blockNumber);
+    ledgerConfig->setFeatures(features);
 
     auto enableRPBFT =
-        (std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_RPBFT_SWITCH)) == "1");
+        (std::get<0>(co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_RPBFT_SWITCH, 0)) == 1);
+    ledgerConfig->setConsensusType(
+        std::string(enableRPBFT ? ledger::RPBFT_CONSENSUS_TYPE : ledger::PBFT_CONSENSUS_TYPE));
     if (enableRPBFT)
     {
         ledgerConfig->setCandidateSealerNodeList(

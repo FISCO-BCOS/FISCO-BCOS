@@ -8,6 +8,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "bcos-task/AwaitableValue.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
@@ -56,29 +57,20 @@ struct MockScheduler
 
 struct MockLedger
 {
-    template <class... Args>
-    task::Task<void> setBlock(auto&& storage, auto&& block)
-    {
-        co_return;
-    }
-
-    template <bool isTransaction>
-    task::Task<void> setTransactions(auto&& storage, auto&& hashes, auto&& buffer)
-    {
-        co_return;
-    }
-
-    task::Task<bcos::concepts::ledger::Status> getStatus()
-    {
-        co_return bcos::concepts::ledger::Status{};
-    }
-
-    task::Task<ledger::LedgerConfig> getConfig()
-    {
-        auto ledgerConfig = ledger::LedgerConfig();
-        co_return ledgerConfig;
-    }
 };
+
+inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<bcos::ledger::prewriteBlock> /*unused*/,
+    MockLedger& ledger, bcos::protocol::TransactionsPtr transactions,
+    bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts, auto& storage)
+{
+    return {};
+}
+
+inline task::AwaitableValue<ledger::LedgerConfig::Ptr> tag_invoke(
+    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/, MockLedger& ledger)
+{
+    return {std::make_shared<ledger::LedgerConfig>()};
+}
 
 struct MockTxPool : public txpool::TxPoolInterface
 {
