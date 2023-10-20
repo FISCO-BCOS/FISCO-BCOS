@@ -23,7 +23,6 @@
 
 #include "Ledger.h"
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/storage/StorageInvokes.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
 #include "utilities/Common.h"

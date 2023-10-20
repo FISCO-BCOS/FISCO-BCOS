@@ -10,6 +10,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
+#include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
@@ -371,8 +372,7 @@ private:
             co_await m_multiLayerStorage.mergeAndPopImmutableBack();
 
             // Write states
-            auto ledgerConfig =
-                std::make_shared<ledger::LedgerConfig>(co_await m_ledger.getConfig());
+            auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger);
             ledgerConfig->setHash(header->hash());
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number();
             commitLock.unlock();
