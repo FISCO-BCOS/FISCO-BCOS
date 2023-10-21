@@ -1,7 +1,7 @@
 #pragma once
+#include "../Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
-#include "bcos-transaction-executor/Common.h"
 #include <memory>
 
 namespace bcos::transaction_executor

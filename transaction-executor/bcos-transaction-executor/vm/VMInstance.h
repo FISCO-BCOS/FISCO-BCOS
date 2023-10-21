@@ -23,6 +23,7 @@
 
 #pragma once
 #include "../Common.h"
+#include "bcos-executor/src/Common.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Overloaded.h>
 #include <evmc/evmc.h>
@@ -32,9 +33,6 @@
 
 namespace bcos::transaction_executor
 {
-
-/// Translate the VMSchedule to VMInstance-C revision.
-evmc_revision toRevision(VMSchedule const& _schedule);
 
 /// The RAII wrapper for an VMInstance-C instance.
 class VMInstance

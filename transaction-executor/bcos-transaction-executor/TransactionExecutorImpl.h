@@ -81,7 +81,7 @@ private:
 
             bcos::bytesConstRef output;
             std::string newContractAddress;
-            if (!RANGES::equal(evmcResult.create_address.bytes, EMPTY_ADDRESS.bytes))
+            if (!RANGES::equal(evmcResult.create_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
             {
                 newContractAddress.reserve(sizeof(evmcResult.create_address) * 2);
                 boost::algorithm::hex_lower(evmcResult.create_address.bytes,

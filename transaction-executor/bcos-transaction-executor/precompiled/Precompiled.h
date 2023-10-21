@@ -1,5 +1,4 @@
 #pragma once
-#include "../Common.h"
 #include "ExecutiveWrapper.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
@@ -64,21 +63,21 @@ public:
                         storage);
 
                     executor::BlockContext blockContext(storageWrapper, nullptr,
-                        GlobalHashImpl::g_hashImpl, blockHeader.number(), blockHeader.hash(),
-                        blockHeader.timestamp(), blockHeader.version(),
+                        executor::GlobalHashImpl::g_hashImpl, blockHeader.number(),
+                        blockHeader.hash(), blockHeader.timestamp(), blockHeader.version(),
                         bcos::executor::VMSchedule{}, false, false);
                     wasm::GasInjector gasInjector;
 
-                    auto contractAddress = evmAddress2String(message.code_address);
+                    auto contractAddress = address2HexString(message.code_address);
                     auto executive =
                         std::make_shared<ExecutiveWrapper<decltype(externalCaller)>>(blockContext,
                             contractAddress, 0, 0, gasInjector, std::move(externalCaller));
 
                     auto params = std::make_shared<precompiled::PrecompiledExecResult>();
-                    params->m_sender = evmAddress2String(message.sender);
+                    params->m_sender = address2HexString(message.sender);
                     params->m_codeAddress = std::move(contractAddress);
-                    params->m_precompiledAddress = evmAddress2String(message.recipient);
-                    params->m_origin = evmAddress2String(origin);
+                    params->m_precompiledAddress = address2HexString(message.recipient);
+                    params->m_origin = address2HexString(origin);
                     params->m_input = {message.input_data, message.input_size};
                     params->m_gasLeft = message.gas;
                     params->m_staticCall = (message.kind == EVMC_CALL);

@@ -20,7 +20,7 @@ using namespace bcos::transaction_executor;
 using MutableStorage = MemoryStorage<StateKey, StateValue, ORDERED>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
-bcos::crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
+bcos::crypto::Hash::Ptr bcos::executor::GlobalHashImpl::g_hashImpl;
 
 struct Fixture
 {
@@ -28,12 +28,11 @@ struct Fixture
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         m_receiptFactory(m_cryptoSuite),
-        m_precompiledManager(bcos::transaction_executor::GlobalHashImpl::g_hashImpl),
+        m_precompiledManager(bcos::executor::GlobalHashImpl::g_hashImpl),
         m_executor(m_receiptFactory, m_precompiledManager),
         blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
     {
-        bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
-            std::make_shared<bcos::crypto::Keccak256>();
+        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(m_helloworldBytecodeBinary));
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     }
@@ -96,8 +95,7 @@ static void call_setInt(benchmark::State& state)
     bcostars::protocol::TransactionImpl transaction(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
 
-    bcos::codec::abi::ContractABICodec abiCodec(
-        bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         int contextID = 0;
@@ -124,8 +122,7 @@ static void call_setString(benchmark::State& state)
     bcostars::protocol::TransactionImpl transaction(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
 
-    bcos::codec::abi::ContractABICodec abiCodec(
-        bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         int contextID = 0;
@@ -149,8 +146,7 @@ static void call_delegateCall(benchmark::State& state)
     Fixture fixture;
     std::string contractAddress = fixture.deployContract();
 
-    bcos::codec::abi::ContractABICodec abiCodec(
-        bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
     bcostars::protocol::TransactionImpl transaction1(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
     auto input = abiCodec.abiIn("delegateCall()");
@@ -175,8 +171,7 @@ static void call_deployAndCall(benchmark::State& state)
     Fixture fixture;
     std::string contractAddress = fixture.deployContract();
 
-    bcos::codec::abi::ContractABICodec abiCodec(
-        bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
     bcostars::protocol::TransactionImpl transaction1(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
     auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(999));
