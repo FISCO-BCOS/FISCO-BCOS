@@ -11,6 +11,7 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/src/libledger/LedgerMethods.h"
+#include "bcos-task/TBBWait.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
@@ -119,7 +120,7 @@ private:
         return *RANGES::rbegin(merkleTrie);
     }
 
-    task::Task<bcos::h256> calcauteStateRoot(
+    task::Task<bcos::h256> calculateStateRoot(
         auto& storage, protocol::BlockHeader const& blockHeader, crypto::Hash const& hashImpl)
     {
         auto it = co_await storage.seek(storage2::STORAGE_BEGIN);
@@ -190,7 +191,7 @@ private:
             [&]() {
                 // Calcaute state root
                 newBlockHeader.setStateRoot(
-                    task::syncWait(calcauteStateRoot(storage, blockHeader, m_hashImpl)));
+                    task::syncWait(calculateStateRoot(storage, blockHeader, m_hashImpl)));
             },
             [&]() {
                 // Calcaute receipts root

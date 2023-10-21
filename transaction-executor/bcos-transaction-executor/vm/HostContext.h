@@ -345,9 +345,9 @@ public:
         else
         {
             co_await setCode(bytesConstRef(result.output_data, result.output_size));
+            result.gas_left -= result.output_size * vmSchedule().createDataGas;
             result.create_address = m_newContractAddress;
         }
-
 
         co_return result;
     }
