@@ -13,8 +13,8 @@ template <class Storage>
 concept HasReadDirectly =
     requires(Storage&& storage) {
         requires storage2::ReadableStorage<Storage>;
-        requires storage2::ReadIterator<task::AwaitableReturnType<decltype(storage.read(
-            std::declval<std::vector<typename Storage::Key>>(), true))>>;
+        requires storage2::ReadIterator<task::AwaitableReturnType<decltype(storage.readDirect(
+            std::declval<std::vector<typename Storage::Key>>()))>>;
     };
 
 template <class Storage>
@@ -74,7 +74,7 @@ public:
             std::optional<task::AwaitableReturnType<decltype(m_storage.read(keys))>> storageIt;
             if constexpr (HasReadDirectly<Storage>)
             {
-                storageIt = co_await m_storage.read(keys, true);
+                storageIt = co_await m_storage.readDirect(keys);
             }
             else
             {
