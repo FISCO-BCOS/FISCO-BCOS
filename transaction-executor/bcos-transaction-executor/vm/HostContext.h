@@ -71,6 +71,7 @@ private:
     protocol::BlockHeader const& m_blockHeader;
     const evmc_message& m_message;
     const evmc_address& m_origin;
+    std::string_view m_abi;
     int m_contextID;
     int64_t& m_seq;
     PrecompiledManager const& m_precompiledManager;
@@ -121,8 +122,8 @@ private:
 
 public:
     HostContext(VMFactory& vmFactory, Storage& storage, protocol::BlockHeader const& blockHeader,
-        const evmc_message& message, const evmc_address& origin, int contextID, int64_t& seq,
-        PrecompiledManager const& precompiledManager)
+        const evmc_message& message, const evmc_address& origin, std::string_view abi,
+        int contextID, int64_t& seq, PrecompiledManager const& precompiledManager)
       : evmc_host_context{.interface = getHostInterface<HostContext>(),
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
@@ -135,6 +136,7 @@ public:
         m_blockHeader(blockHeader),
         m_message(message),
         m_origin(origin),
+        m_abi(abi),
         m_contextID(contextID),
         m_seq(seq),
         m_precompiledManager(precompiledManager),
@@ -225,14 +227,17 @@ public:
         auto codeHashView = std::string_view((char*)codeHash.data(), codeHash.size());
         co_await setCode(codeHash, code);
 
-        storage::Entry abiEntry;
-        abiEntry.set(std::move(abi));
-
-        if (!co_await storage2::existsOne(
-                m_rollbackableStorage, StateKeyView{ledger::SYS_CONTRACT_ABI, codeHashView}))
+        if (!abi.empty())
         {
-            co_await storage2::writeOne(m_rollbackableStorage,
-                StateKey{ledger::SYS_CONTRACT_ABI, codeHashView}, std::move(abiEntry));
+            storage::Entry abiEntry;
+            abiEntry.set(std::move(abi));
+
+            if (!co_await storage2::existsOne(
+                    m_rollbackableStorage, StateKeyView{ledger::SYS_CONTRACT_ABI, codeHashView}))
+            {
+                co_await storage2::writeOne(m_rollbackableStorage,
+                    StateKey{ledger::SYS_CONTRACT_ABI, codeHashView}, std::move(abiEntry));
+            }
         }
         co_return;
     }
@@ -344,7 +349,8 @@ public:
         }
         else
         {
-            co_await setCode(bytesConstRef(result.output_data, result.output_size));
+            co_await setCodeAndABI(
+                bytesConstRef(result.output_data, result.output_size), std::string(m_abi));
             result.gas_left -= result.output_size * vmSchedule().createDataGas;
             result.create_address = m_newContractAddress;
         }
@@ -417,7 +423,7 @@ public:
         }
 
         HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_blockHeader, *messagePtr,
-            m_origin, m_contextID, m_seq, m_precompiledManager);
+            m_origin, {}, m_contextID, m_seq, m_precompiledManager);
 
         auto result = co_await hostcontext.execute();
         auto& logs = hostcontext.logs();

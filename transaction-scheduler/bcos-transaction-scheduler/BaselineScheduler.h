@@ -111,6 +111,9 @@ private:
     friend task::Task<bcos::h256> calculateStateRoot(BaselineScheduler& scheduler, auto& storage,
         protocol::BlockHeader const& blockHeader, crypto::Hash const& hashImpl)
     {
+        auto blockVersion = true ? (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION :
+                                   (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION;
+
         auto it = co_await storage.seek(storage2::STORAGE_BEGIN);
 
         static constexpr int HASH_CHUNK_SIZE = 32;
@@ -120,25 +123,30 @@ private:
         tbb::task_group taskGroup;
         for (auto&& subrange : range)
         {
-            taskGroup.run([subrange = std::forward<decltype(subrange)>(subrange), &combinableHash,
-                              &blockHeader, &hashImpl]() {
+            taskGroup.run([&]() {
                 auto& entryHash = combinableHash.local();
 
                 for (auto const& keyValue : subrange)
                 {
-                    auto& [key, entry] = keyValue;
+                    auto [key, entry] = keyValue;
                     auto& [tableName, keyName] = *key;
-                    if (entry)
+
+                    std::optional<storage::Entry> deletedEntry;
+                    if (!entry)
                     {
-                        entryHash ^=
-                            entry->hash(tableName, keyName, hashImpl, blockHeader.version());
+                        deletedEntry.emplace();
+                        deletedEntry->setStatus(storage::Entry::DELETED);
+                        entry = std::addressof(*deletedEntry);
+                    }
+
+                    if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+                    {
+                        entryHash ^= entry->hash(tableName, keyName, hashImpl, blockVersion);
                     }
                     else
                     {
-                        storage::Entry deleteEntry;
-                        deleteEntry.setStatus(storage::Entry::DELETED);
-                        entryHash ^=
-                            deleteEntry.hash(tableName, keyName, hashImpl, blockHeader.version());
+                        entryHash ^= hashImpl.hash(tableName) ^ hashImpl.hash(keyName) ^
+                                     entry->hash(tableName, keyName, hashImpl, blockVersion);
                     }
                 }
             });
