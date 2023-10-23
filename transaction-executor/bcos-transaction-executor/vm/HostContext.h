@@ -24,11 +24,11 @@
 #include "../precompiled/PrecompiledManager.h"
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
+#include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-utilities/Common.h"
-#include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -130,7 +130,7 @@ public:
             .isSMCrypto = (executor::GlobalHashImpl::g_hashImpl->getHashImplType() ==
                            crypto::HashImplType::Sm3Hash),
             .version = 0,
-            .metrics = metrics},
+            .metrics = std::addressof(executor::ethMetrics)},
         m_vmFactory(vmFactory),
         m_rollbackableStorage(storage),
         m_blockHeader(blockHeader),

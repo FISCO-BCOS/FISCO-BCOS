@@ -56,7 +56,6 @@ namespace bcos::executor
 {
 namespace
 {
-constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
 
 evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 {

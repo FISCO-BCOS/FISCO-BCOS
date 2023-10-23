@@ -186,6 +186,8 @@ static const VMSchedule FiscoBcosScheduleV320 = [] {
     return schedule;
 }();
 
+constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
+
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
 }  // namespace executor
