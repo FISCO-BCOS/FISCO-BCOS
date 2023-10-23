@@ -59,7 +59,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
       - name: configure
-        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
+        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release .
       - name: compile
         run: make -j2
       - name: run uint tests
