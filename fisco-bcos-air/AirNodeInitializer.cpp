@@ -80,9 +80,12 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
         m_nodeInitializer->protocolInitializer()->dataEncryption());
     rpcFactory.setNodeConfig(nodeConfig);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
-    auto topicManager =
-        std::dynamic_pointer_cast<bcos::amop::LocalTopicManager>(gateway->amop()->topicManager());
-    topicManager->setLocalClient(m_rpc);
+    if (gateway->amop())
+    {
+        auto topicManager = std::dynamic_pointer_cast<bcos::amop::LocalTopicManager>(
+            gateway->amop()->topicManager());
+        topicManager->setLocalClient(m_rpc);
+    }
     m_nodeInitializer->initNotificationHandlers(m_rpc);
 
     // NOTE: this should be last called

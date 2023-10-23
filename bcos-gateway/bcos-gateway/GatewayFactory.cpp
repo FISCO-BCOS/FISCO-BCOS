@@ -646,27 +646,32 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         GatewayNodeManager::Ptr gatewayNodeManager;
         AMOPImpl::Ptr amop;
 
-        if (!_config->readonly())
+        if (_airVersion)
         {
-            if (_airVersion)
+            gatewayNodeManager =
+                std::make_shared<GatewayNodeManager>(_config->uuid(), pubHex, keyFactory, service);
+
+            if (!_config->readonly())
+            {
+                amop = buildLocalAMOP(service, pubHex);
+            }
+        }
+        else
+        {
+            // Note: no need to use nodeAliveDetector when enable failover
+            if (_entryPoint)
             {
                 gatewayNodeManager = std::make_shared<GatewayNodeManager>(
                     _config->uuid(), pubHex, keyFactory, service);
-                amop = buildLocalAMOP(service, pubHex);
             }
             else
             {
-                // Note: no need to use nodeAliveDetector when enable failover
-                if (_entryPoint)
-                {
-                    gatewayNodeManager = std::make_shared<GatewayNodeManager>(
-                        _config->uuid(), pubHex, keyFactory, service);
-                }
-                else
-                {
-                    gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
-                        _config->uuid(), pubHex, keyFactory, service);
-                }
+                gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
+                    _config->uuid(), pubHex, keyFactory, service);
+            }
+
+            if (!_config->readonly())
+            {
                 amop = buildAMOP(service, pubHex);
             }
         }
