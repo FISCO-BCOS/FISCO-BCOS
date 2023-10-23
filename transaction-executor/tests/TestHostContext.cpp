@@ -65,8 +65,8 @@ public:
                 .code_address = {}};
             evmc_address origin = {};
 
-            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
-                seq, *precompiledManager);
+            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
+                "", 0, seq, *precompiledManager);
             auto result = co_await hostContext.execute();
 
             BOOST_REQUIRE_EQUAL(result.status_code, 0);
@@ -100,7 +100,7 @@ public:
             .code_address = helloworldAddress};
         evmc_address origin = {};
 
-        HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
+        HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, "", 0,
             seq, *precompiledManager);
         auto result = co_await hostContext.execute();
 
@@ -306,8 +306,8 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 .code_address = callAddress};
             evmc_address origin = {};
 
-            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
-                seq, *precompiledManager);
+            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
+                "", 0, seq, *precompiledManager);
             auto result = co_await hostContext.execute();
         }
 
@@ -335,8 +335,8 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 .code_address = callAddress};
             evmc_address origin = {};
 
-            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, 0,
-                seq, *precompiledManager);
+            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
+                "", 0, seq, *precompiledManager);
             result.emplace(co_await hostContext.execute());
         }
 

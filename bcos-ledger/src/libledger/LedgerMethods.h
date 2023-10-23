@@ -8,6 +8,7 @@
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-tool/ConsensusNode.h"
+#include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include <boost/container/small_vector.hpp>
@@ -308,8 +309,8 @@ inline task::Task<LedgerConfig::Ptr> tag_invoke(
         std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))));
     ledgerConfig->setGasLimit(
         co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_LIMIT, 0));
-    ledgerConfig->setCompatibilityVersion(std::get<0>(
-        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION, 0)));
+    ledgerConfig->setCompatibilityVersion(bcos::tool::toVersionNumber(
+        std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION))));
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
     auto hash = co_await getBlockHash(ledger, blockNumber);
