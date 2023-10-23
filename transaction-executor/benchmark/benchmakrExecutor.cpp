@@ -20,8 +20,6 @@ using namespace bcos::transaction_executor;
 using MutableStorage = MemoryStorage<StateKey, StateValue, ORDERED>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
-bcos::crypto::Hash::Ptr bcos::executor::GlobalHashImpl::g_hashImpl;
-
 struct Fixture
 {
     Fixture()
