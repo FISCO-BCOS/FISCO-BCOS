@@ -23,7 +23,6 @@
 
 #include "Ledger.h"
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/storage/StorageInvokes.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
 #include "utilities/Common.h"
@@ -47,7 +46,6 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
-#include <tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
@@ -55,8 +53,6 @@
 #include <cstddef>
 #include <future>
 #include <memory>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/transform.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -1594,7 +1590,8 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         });
 }
 
-// sync method
+// sync method, to be split
+// FIXME: too long
 bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
     const std::string_view& _genesisData, std::string const& _compatibilityVersion,
     bool _isAuthCheck, std::string const& _consensusType, std::int64_t _epochSealerNum,

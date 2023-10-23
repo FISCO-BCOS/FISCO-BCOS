@@ -1,8 +1,8 @@
 #pragma once
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
+#include "../storage/LegacyStorageMethods.h"
 #include "../storage/StorageInterface.h"
-#include "../storage/StorageInvokes.h"
 #include "../storage2/Storage.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-task/Task.h"

@@ -7,13 +7,13 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-ledger/src/libledger/LedgerImpl2.h"
+#include "bcos-ledger/src/libledger/Ledger.h"
+#include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
-#include "bcos-transaction-executor/precompiled/StorageWrapper.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -273,7 +273,8 @@ BOOST_AUTO_TEST_CASE(precompiled)
         // Use ledger to init storage
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         auto storageWrapper =
-            std::make_shared<StorageWrapper<std::decay_t<decltype(storage)>>>(storage);
+            std::make_shared<bcos::storage::LegacyStorageWrapper<std::decay_t<decltype(storage)>>>(
+                storage);
         auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
         bcos::ledger::Ledger ledger(

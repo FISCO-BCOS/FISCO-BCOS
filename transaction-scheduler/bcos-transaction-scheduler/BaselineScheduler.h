@@ -1,6 +1,8 @@
 #pragma once
 
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -8,8 +10,8 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
+#include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-utilities/Common.h"
-#include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
@@ -39,8 +41,7 @@ namespace bcos::transaction_scheduler
 struct NotFoundTransactionError: public bcos::Error {};
 // clang-format on
 
-template <class MultiLayerStorage, class Executor, class SchedulerImpl,
-    concepts::ledger::IsLedger Ledger>
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
@@ -66,7 +67,7 @@ private:
 
     struct ExecuteResult
     {
-        std::vector<protocol::Transaction::ConstPtr> m_transactions;
+        protocol::TransactionsPtr m_transactions;
         protocol::Block::Ptr m_block;
     };
     std::list<ExecuteResult> m_results;
@@ -91,36 +92,6 @@ private:
             RANGES::views::transform(
                 [&block](uint64_t index) { return block.transactionHash(index); })) |
             RANGES::to<std::vector<protocol::Transaction::ConstPtr>>();
-    }
-
-    task::Task<void> writeBlockAndTransactions(auto& storage,
-        concepts::ledger::IsLedger auto& ledger, protocol::Block& block,
-        std::vector<protocol::Transaction::ConstPtr> const& transactions)
-    {
-        if (block.blockHeaderConst()->number() != 0)
-        {
-            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-
-            co_await ledger.template setBlock<concepts::ledger::HEADER,
-                concepts::ledger::TRANSACTIONS_METADATA, concepts::ledger::RECEIPTS,
-                concepts::ledger::NONCES>(storage, block);
-
-            std::vector<bcos::h256> hashes(RANGES::size(transactions));
-            std::vector<std::vector<bcos::byte>> buffers(RANGES::size(transactions));
-            tbb::parallel_for(
-                tbb::blocked_range(0LU, RANGES::size(transactions)), [&](auto const& range) {
-                    for (auto i = range.begin(); i != range.end(); ++i)
-                    {
-                        auto& transaction = transactions[i];
-                        hashes[i] = transaction->hash();
-                        bcos::concepts::serialize::encode(*transaction, buffers[i]);
-                    }
-                });
-
-            co_await ledger.template setTransactions<true>(
-                storage, std::move(hashes), std::move(buffers));
-        }
     }
 
     bcos::h256 calcauteTransactionRoot(protocol::Block const& block)
@@ -293,12 +264,18 @@ private:
 
             m_multiLayerStorage.newMutable();
             auto view = m_multiLayerStorage.fork(true);
-            auto transactions = co_await getTransactions(*block);
+            auto constTransactions = co_await getTransactions(*block);
+            auto transactions =
+                RANGES::views::transform(constTransactions,
+                    [](protocol::Transaction::ConstPtr const& transaction) {
+                        return std::const_pointer_cast<protocol::Transaction>(transaction);
+                    }) |
+                RANGES::to<std::vector<protocol::Transaction::Ptr>>();
             auto receipts = co_await transaction_scheduler::execute(m_schedulerImpl, view,
                 m_executor, *blockHeader,
                 transactions |
                     RANGES::views::transform(
-                        [](protocol::Transaction::ConstPtr const& transactionPtr)
+                        [](protocol::Transaction::Ptr const& transactionPtr)
                             -> protocol::Transaction const& { return *transactionPtr; }));
 
             auto newBlockHeader = m_blockHeaderFactory.populateBlockHeader(blockHeader);
@@ -321,8 +298,9 @@ private:
             m_lastExecutedBlockNumber = blockHeader->number();
 
             std::unique_lock resultsLock(m_resultsMutex);
-            m_results.push_front(
-                {.m_transactions = std::move(transactions), .m_block = std::move(block)});
+            m_results.push_front({.m_transactions = std::make_shared<protocol::Transactions>(
+                                      std::move(transactions)),
+                .m_block = std::move(block)});
 
             BASELINE_SCHEDULER_LOG(INFO)
                 << "Execute block finished: " << newBlockHeader->number() << " | "
@@ -389,13 +367,18 @@ private:
 
             result.m_block->setBlockHeader(header);
             auto lastStorage = m_multiLayerStorage.lastImmutableStorage();
-            co_await writeBlockAndTransactions(
-                *lastStorage, m_ledger, *(result.m_block), result.m_transactions);
+            if (result.m_block->blockHeaderConst()->number() != 0)
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+
+                co_await ledger::prewriteBlock(
+                    m_ledger, result.m_transactions, result.m_block, true, *lastStorage);
+            }
             co_await m_multiLayerStorage.mergeAndPopImmutableBack();
 
             // Write states
-            auto ledgerConfig =
-                std::make_shared<ledger::LedgerConfig>(co_await m_ledger.getConfig());
+            auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger);
             ledgerConfig->setHash(header->hash());
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number();
             commitLock.unlock();
@@ -409,7 +392,7 @@ private:
                     RANGES::views::iota(0LU, result.m_block->receiptsSize()) |
                     RANGES::views::transform(
                         [&, this](uint64_t index) -> protocol::TransactionSubmitResult::Ptr {
-                            auto& transaction = result.m_transactions[index];
+                            auto& transaction = (*result.m_transactions)[index];
                             auto receipt = result.m_block->receipt(index);
 
                             auto submitResult =
