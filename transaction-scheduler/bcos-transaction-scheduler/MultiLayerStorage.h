@@ -167,7 +167,7 @@ public:
             m_mutableStorage = std::make_shared<MutableStorageType>(args...);
         }
 
-        task::Task<ReadIterator> read(RANGES::input_range auto const& keys)
+        task::Task<ReadIterator> read(RANGES::input_range auto&& keys)
         {
             ReadIterator iterator;
             iterator.m_keyValues = RANGES::views::transform(keys, [](auto&& key) {

@@ -49,11 +49,8 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
-    explicit BaseStorage(std::shared_ptr<StorageInterface> prev,
-        uint32_t _blockVersion = (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION)
-      : storage::StateStorageInterface(prev),
-        m_blockVersion(_blockVersion),
-        m_buckets(std::thread::hardware_concurrency())
+    explicit BaseStorage(std::shared_ptr<StorageInterface> prev)
+      : storage::StateStorageInterface(prev), m_buckets(std::thread::hardware_concurrency())
     {}
 
     BaseStorage(const BaseStorage&) = delete;
@@ -394,41 +391,43 @@ public:
         STORAGE_LOG(INFO) << "Successful merged records" << LOG_KV("count", count);
     }
 
-    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override
+    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl, bool useHashV310) const override
     {
         bcos::crypto::HashType totalHash;
+        auto blockVersion = useHashV310 ? (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION :
+                                          (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION;
 
         std::vector<bcos::crypto::HashType> hashes(m_buckets.size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_buckets.size()),
-            [this, &hashImpl, &hashes](auto const& range) {
-                for (auto i = range.begin(); i < range.end(); ++i)
+        tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_buckets.size()), [&, this](
+                                                                                auto const& range) {
+            for (auto i = range.begin(); i < range.end(); ++i)
+            {
+                auto& bucket = m_buckets[i];
+
+                bcos::crypto::HashType bucketHash(0);
+                for (auto& it : bucket.container)
                 {
-                    auto& bucket = m_buckets[i];
-
-                    bcos::crypto::HashType bucketHash(0);
-                    for (auto& it : bucket.container)
+                    auto& entry = it.entry;
+                    if (entry.dirty())
                     {
-                        auto& entry = it.entry;
-                        if (entry.dirty())
+                        bcos::crypto::HashType entryHash;
+                        if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
                         {
-                            bcos::crypto::HashType entryHash;
-                            if (m_blockVersion >=
-                                (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-                            {
-                                entryHash = entry.hash(it.table, it.key, *hashImpl, m_blockVersion);
-                            }
-                            else
-                            {  // v3.0.0
-                                entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
-                                            entry.hash(it.table, it.key, *hashImpl, m_blockVersion);
-                            }
-                            bucketHash ^= entryHash;
+                            entryHash = entry.hash(it.table, it.key, *hashImpl, blockVersion);
                         }
+                        else
+                        {  // v3.0.0-v3.2.0 use this which will make it not compatible with
+                           // v3.1.0 keyPageStorage
+                            entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
+                                        entry.hash(it.table, it.key, *hashImpl, blockVersion);
+                        }
+                        bucketHash ^= entryHash;
                     }
-
-                    hashes[i] ^= bucketHash;
                 }
-            });
+
+                hashes[i] ^= bucketHash;
+            }
+        });
 
         for (auto const& it : hashes)
         {

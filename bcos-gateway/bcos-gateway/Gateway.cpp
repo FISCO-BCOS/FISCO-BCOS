@@ -31,6 +31,7 @@
 #include "bcos-gateway/libp2p/ServiceV2.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/BoostLog.h"
+#include "filter/Filter.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
@@ -400,6 +401,15 @@ void Gateway::onReceiveP2PMessage(
                            << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload.size());
     }
 
+    // Readonly filter
+    if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, {}))
+    {
+        GATEWAY_LOG(WARNING) << "P2PMessage moduleID: " << moduleID << " filter by readOnlyFilter";
+
+        // Drop the message
+        return;
+    }
+
     if (m_gatewayRateLimiter)
     {
         // The moduleID is not obtained,
@@ -479,6 +489,14 @@ void Gateway::onReceiveBroadcastMessage(
                            << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload->size());
     }
 
+    // Readonly filter
+    if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, bytesConstRef{}))
+    {
+        GATEWAY_LOG(WARNING) << "BroadcastMessage moduleID: " << moduleID
+                             << " filter by readOnlyFilter";
+        return;
+    }
+
     if (m_gatewayRateLimiter)
     {
         auto result = ((moduleID == 0) ?
@@ -502,4 +520,9 @@ void Gateway::onReceiveBroadcastMessage(
     auto type = _msg->ext();
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
         srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+}
+
+void bcos::gateway::Gateway::enableReadOnlyMode()
+{
+    m_readonlyFilter.emplace();
 }

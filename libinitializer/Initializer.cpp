@@ -254,14 +254,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             baselineSchedulerInitializer =
                 std::make_shared<transaction_scheduler::BaselineSchedulerInitializer<Hasher, true>>(
                     existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
-                    m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
+                    m_txpoolInitializer->txpool(), transactionSubmitResultFactory, *ledger);
         }
         else
         {
             baselineSchedulerInitializer = std::make_shared<
                 transaction_scheduler::BaselineSchedulerInitializer<Hasher, false>>(
                 existsRocksDB->rocksDB(), m_protocolInitializer->blockFactory(),
-                m_txpoolInitializer->txpool(), transactionSubmitResultFactory);
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, *ledger);
         }
         std::visit(
             [&, this](auto& initializer) {

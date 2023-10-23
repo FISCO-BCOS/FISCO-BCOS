@@ -4,23 +4,24 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/storage2/StorageMethods.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include <exception>
 #include <iterator>
 
-namespace bcos::transaction_executor
+namespace bcos::storage
 {
 
 template <class Storage>
-class StorageWrapper : public bcos::storage::StorageInterface
+class LegacyStorageWrapper : public virtual bcos::storage::StorageInterface
 {
 private:
     Storage& m_storage;
 
 public:
-    explicit StorageWrapper(Storage& m_storage) : m_storage(m_storage) {}
+    explicit LegacyStorageWrapper(Storage& m_storage) : m_storage(m_storage) {}
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& condition,
@@ -36,7 +37,8 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto value = co_await storage2::readOne(self->m_storage, StateKeyView{table, key});
+                auto value = co_await storage2::readOne(
+                    self->m_storage, transaction_executor::StateKeyView{table, key});
                 callback(nullptr, std::move(value));
             }
             catch (std::exception& e)
@@ -57,9 +59,13 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto{
-                    return StateKeyView{table, std::forward<decltype(key)>(key)};
-                }) | RANGES::to<boost::container::small_vector<StateKeyView, 1>>();
+                auto stateKeys =
+                    keys | RANGES::views::transform([&table](auto&& key) -> auto{
+                        return transaction_executor::StateKeyView{
+                            table, std::forward<decltype(key)>(key)};
+                    }) |
+                    RANGES::to<
+                        boost::container::small_vector<transaction_executor::StateKeyView, 1>>();
                 auto values = co_await storage2::readSome(self->m_storage, stateKeys);
 
                 std::vector<std::optional<storage::Entry>> vectorValues(
@@ -81,7 +87,7 @@ public:
             try
             {
                 co_await storage2::writeOne(
-                    self->m_storage, StateKey{table, key}, std::move(entry));
+                    self->m_storage, transaction_executor::StateKey{table, key}, std::move(entry));
                 callback(nullptr);
             }
             catch (std::exception& e)
@@ -90,6 +96,61 @@ public:
             }
         }(this, table, key, std::move(entry), std::move(callback)));
     }
+
+    Error::Ptr setRows(std::string_view tableName,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            values) override
+    {
+        return task::syncWait(
+            [](decltype(this) self, decltype(tableName) tableName, decltype(keys)& keys,
+                decltype(values)& values) -> task::Task<Error::Ptr> {
+                try
+                {
+                    co_await storage2::writeSome(self->m_storage,
+                        keys | RANGES::views::transform([&](std::string_view key) {
+                            return transaction_executor::StateKey{tableName, key};
+                        }),
+                        values | RANGES::views::transform([](std::string_view value) -> auto{
+                            storage::Entry entry;
+                            entry.setField(0, value);
+                            return entry;
+                        }));
+                    co_return nullptr;
+                }
+                catch (std::exception& e)
+                {
+                    co_return BCOS_ERROR_WITH_PREV_PTR(-1, "setRows error!", e);
+                }
+            }(this, tableName, keys, values));
+    };
 };
 
-}  // namespace bcos::transaction_executor
+template <class Storage>
+class LegacyStateStorageWrapper : public virtual storage::StateStorageInterface,
+                                  public virtual LegacyStorageWrapper<Storage>
+{
+public:
+    LegacyStateStorageWrapper(Storage& m_storage)
+      : StateStorageInterface(nullptr), LegacyStorageWrapper<Storage>(m_storage)
+    {}
+
+    void parallelTraverse(bool onlyDirty,
+        std::function<bool(const std::string_view& table, const std::string_view& key,
+            storage::Entry const& entry)>
+            callback) const override
+    {}
+
+    void rollback(const storage::Recoder& recoder) override {}
+
+    crypto::HashType hash(
+        const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override
+    {
+        return {};
+    }
+};
+
+}  // namespace bcos::storage

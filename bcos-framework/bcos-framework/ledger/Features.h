@@ -1,8 +1,8 @@
 #pragma once
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
+#include "../storage/LegacyStorageMethods.h"
 #include "../storage/StorageInterface.h"
-#include "../storage/StorageInvokes.h"
 #include "../storage2/Storage.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-task/Task.h"
@@ -30,6 +30,8 @@ public:
     enum class Flag
     {
         bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
+        bugfix_statestorage_hash,
+        feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
         feature_paillier,
@@ -92,6 +94,10 @@ public:
         if (version >= protocol::BlockVersion::V3_2_3_VERSION)
         {
             set(Flag::bugfix_revert);
+        }
+        if (version >= protocol::BlockVersion::V3_2_4_VERSION)
+        {
+            set(Flag::bugfix_statestorage_hash);
         }
         setToShardingDefault(version);
     }

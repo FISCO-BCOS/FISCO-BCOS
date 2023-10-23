@@ -1,7 +1,6 @@
 #include "../mock/MockLedger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Exceptions.h"
-#include "bcos-framework/storage/StorageInvokes.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-task/Wait.h"

@@ -76,22 +76,22 @@ private:
     int64_t& m_seq;
     PrecompiledManager const& m_precompiledManager;
 
-    SmallString m_myContractTable;
+    ContractTable m_myContractTable;
     evmc_address m_newContractAddress;  // Set by getMyContractTable, not need initialize value!
     std::vector<protocol::LogEntry> m_logs;
 
-    SmallString getTableName(const evmc_address& address)
+    ContractTable getTableName(const evmc_address& address)
     {
-        SmallString tableName;
-        tableName.reserve(USER_APPS_PREFIX.size() + sizeof(address));
+        ContractTable tableName;
+        tableName.reserve(USER_APPS_PREFIX.size() + sizeof(address) * 2);
         tableName.insert(tableName.end(), USER_APPS_PREFIX.begin(), USER_APPS_PREFIX.end());
-        tableName.insert(tableName.end(), (const char*)address.bytes,
-            (const char*)address.bytes + sizeof(address));
+        boost::algorithm::hex_lower((const char*)address.bytes,
+            (const char*)address.bytes + sizeof(address), std::back_inserter(tableName));
 
         return tableName;
     }
 
-    SmallString getMyContractTable(
+    ContractTable getMyContractTable(
         const protocol::BlockHeader& blockHeader, const evmc_message& message)
     {
         switch (message.kind)
@@ -173,7 +173,7 @@ public:
         entry.set(valueView);
 
         co_await storage2::writeOne(m_rollbackableStorage,
-            StateKey{m_myContractTable, SmallString{bytesConstRef(key->bytes, sizeof(key->bytes))}},
+            StateKey{m_myContractTable, ContractKey{bytesConstRef(key->bytes, sizeof(key->bytes))}},
             std::move(entry));
     }
 
@@ -318,6 +318,18 @@ public:
 
     task::Task<EVMCResult> create()
     {
+        // Write table to s_tables
+        constexpr std::string_view SYS_TABLES{"s_tables"};
+        if (co_await storage2::existsOne(
+                m_rollbackableStorage, StateKey{SYS_TABLES, m_myContractTable}))
+        {
+            // Table exists
+        }
+        storage::Entry tableEntry;
+        tableEntry.setField(0, "value");
+        co_await storage2::writeOne(
+            m_rollbackableStorage, StateKey{SYS_TABLES, m_myContractTable}, std::move(tableEntry));
+
         std::string_view createCode((const char*)m_message.input_data, m_message.input_size);
         auto createCodeHash = GlobalHashImpl::g_hashImpl->hash(createCode);
         auto mode = toRevision(vmSchedule());
@@ -335,6 +347,7 @@ public:
             co_await setCode(bytesConstRef(result.output_data, result.output_size));
             result.create_address = m_newContractAddress;
         }
+
 
         co_return result;
     }

@@ -75,7 +75,7 @@ public:
         return false;
     }
 
-    auto read(RANGES::input_range auto const& keys, bool direct = false)
+    auto read(RANGES::input_range auto&& keys, bool direct = false)
         -> task::Task<task::AwaitableReturnType<decltype(m_storage.read(keys))>>
     {
         if (!direct)
@@ -85,7 +85,7 @@ public:
                 putSet(false, key);
             }
         }
-        co_return co_await m_storage.read(keys);
+        co_return co_await m_storage.read(std::forward<decltype(keys)>(keys));
     }
 
     auto write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
