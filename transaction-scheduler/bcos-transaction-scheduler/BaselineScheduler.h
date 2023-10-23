@@ -36,7 +36,6 @@
 
 namespace bcos::transaction_scheduler
 {
-
 #define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
 // clang-format off
@@ -54,7 +53,8 @@ task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
     txpool::TxPoolInterface& txpool, protocol::Block& block);
 
 /**
- * Calculates the transaction root hash for a given block using the specified hash implementation.
+ * Calculates the transaction root hash for a given block using the specified hash
+ * implementation.
  *
  * @param block The block for which to calculate the transaction root hash.
  * @param hashImpl The hash implementation to use for the calculation.
@@ -217,8 +217,8 @@ private:
     }
 
     /**
-     * Executes a block and returns a tuple containing an error (if any), the block header, and a
-     * boolean indicating success.
+     * Executes a block and returns a tuple containing an error (if any), the block header, and
+     * a boolean indicating success.
      *
      * @param block The block to execute.
      * @param verify Whether to verify the block before executing it.
@@ -341,7 +341,8 @@ private:
     }
 
     /**
-     * Commits a block to the ledger and returns an error object and a ledger configuration object.
+     * Commits a block to the ledger and returns an error object and a ledger configuration
+     * object.
      *
      * @param header A shared pointer to the block header to be committed.
      * @return A task that returns a tuple containing an error object and a ledger configuration
