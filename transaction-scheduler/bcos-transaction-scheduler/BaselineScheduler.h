@@ -87,7 +87,7 @@ private:
     crypto::Hash const& m_hashImpl;
     int64_t m_lastExecutedBlockNumber = -1;
     std::mutex m_executeMutex;
-    int64_t m_lastCommittedBlockNumber = -1;
+    int64_t m_lastcommittedBlockNumber = -1;
     std::mutex m_commitMutex;
     tbb::task_group m_notifyGroup;
 
@@ -361,7 +361,7 @@ private:
             if (!commitLock.owns_lock())
             {
                 auto message = fmt::format(
-                    "Another block:{} is committing!", scheduler.m_lastCommittedBlockNumber);
+                    "Another block:{} is committing!", scheduler.m_lastcommittedBlockNumber);
                 BASELINE_SCHEDULER_LOG(INFO) << message;
 
                 co_return std::make_tuple(
@@ -369,11 +369,11 @@ private:
                     nullptr);
             }
 
-            if (scheduler.m_lastCommittedBlockNumber != -1 &&
-                header->number() - scheduler.m_lastCommittedBlockNumber != 1)
+            if (scheduler.m_lastcommittedBlockNumber != -1 &&
+                header->number() - scheduler.m_lastcommittedBlockNumber != 1)
             {
                 auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
-                    header->number(), scheduler.m_lastCommittedBlockNumber + 1);
+                    header->number(), scheduler.m_lastcommittedBlockNumber + 1);
 
                 BASELINE_SCHEDULER_LOG(INFO) << message;
                 co_return std::make_tuple(
