@@ -200,28 +200,28 @@ void BlockSync::printBehindPeers()
         }
     }
 
-    m_syncStatus->foreachPeer(
-        [knownHighestNumber, blockNumThreshold, observerNodeList](PeerStatus::Ptr _p) {
-            for (auto observerNode : observerNodeList)
+    m_syncStatus->foreachPeer([knownHighestNumber, blockNumThreshold, observerNodeList](
+                                  PeerStatus::Ptr _p) {
+        for (auto observerNode : observerNodeList)
+        {
+            // observer node don't need to print error log
+            if (_p->nodeId()->hex() == observerNode->nodeID()->hex())
             {
-                // observer node don't need to print error log
-                if (_p->nodeId()->hex() == observerNode->nodeID()->hex())
-                {
-                    return true;
-                }
+                return true;
             }
+        }
 
-            if (std::abs(_p->number() - knownHighestNumber) > blockNumThreshold)
-            {
-                BLKSYNC_LOG(ERROR) << "The lowest blocknumber is too far behind the highest block "
-                                      "number queried by getSyncStatus, "
-                                   << "[highest block number: " << knownHighestNumber
-                                   << ", lower node: " << _p->nodeId()->shortHex()
-                                   << ", lower node block number: " << _p->number() << "]";
-                lastLogUtcTime = utcTime();
-            }
-            return true;
-        });
+        if (std::abs(_p->number() - knownHighestNumber) > blockNumThreshold)
+        {
+            BLKSYNC_LOG(WARNING) << "The lowest blocknumber is too far behind the highest block "
+                                    "number queried by getSyncStatus, "
+                                 << "[highest block number: " << knownHighestNumber
+                                 << ", lower node: " << _p->nodeId()->shortHex()
+                                 << ", lower node block number: " << _p->number() << "]";
+            lastLogUtcTime = utcTime();
+        }
+        return true;
+    });
 }
 
 void BlockSync::executeWorker()
