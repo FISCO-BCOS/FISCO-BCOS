@@ -153,51 +153,55 @@ public:
 
     inline void initFixture(std::string version = bcos::protocol::V3_1_VERSION_STR)
     {
-        m_param = std::make_shared<LedgerConfig>();
-        m_param->setBlockNumber(0);
-        m_param->setHash(HashType(""));
-        m_param->setBlockTxCountLimit(1000);
+        task::syncWait([&, this]() -> task::Task<void> {
+            m_param = std::make_shared<LedgerConfig>();
+            m_param->setBlockNumber(0);
+            m_param->setHash(HashType(""));
+            m_param->setBlockTxCountLimit(1000);
 
-        auto signImpl = std::make_shared<Secp256k1Crypto>();
-        consensus::ConsensusNodeList consensusNodeList;
-        consensus::ConsensusNodeList observerNodeList;
-        for (int i = 0; i < 4; ++i)
-        {
-            auto node = std::make_shared<consensus::ConsensusNode>(
-                signImpl->generateKeyPair()->publicKey(), 10 + i);
-            consensusNodeList.emplace_back(node);
-        }
-        auto observer_node = std::make_shared<consensus::ConsensusNode>(
-            signImpl->generateKeyPair()->publicKey(), -1);
-        observerNodeList.emplace_back(observer_node);
+            auto signImpl = std::make_shared<Secp256k1Crypto>();
+            consensus::ConsensusNodeList consensusNodeList;
+            consensus::ConsensusNodeList observerNodeList;
+            for (int i = 0; i < 4; ++i)
+            {
+                auto node = std::make_shared<consensus::ConsensusNode>(
+                    signImpl->generateKeyPair()->publicKey(), 10 + i);
+                consensusNodeList.emplace_back(node);
+            }
+            auto observer_node = std::make_shared<consensus::ConsensusNode>(
+                signImpl->generateKeyPair()->publicKey(), -1);
+            observerNodeList.emplace_back(observer_node);
 
-        m_param->setConsensusNodeList(consensusNodeList);
-        m_param->setObserverNodeList(observerNodeList);
+            m_param->setConsensusNodeList(consensusNodeList);
+            m_param->setObserverNodeList(observerNodeList);
 
-        LEDGER_LOG(TRACE) << "build genesis for first time";
-        auto result = m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
-        BOOST_CHECK(result);
-        LEDGER_LOG(TRACE) << "build genesis for second time";
-        auto result2 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
-        BOOST_CHECK(result2);
+            LEDGER_LOG(TRACE) << "build genesis for first time";
+            auto result = co_await m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
+            BOOST_CHECK(result);
+            LEDGER_LOG(TRACE) << "build genesis for second time";
+            auto result2 = co_await m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
+            BOOST_CHECK(result2);
+        }());
     }
 
     inline void initEmptyFixture()
     {
-        m_param = std::make_shared<LedgerConfig>();
-        m_param->setBlockNumber(0);
-        m_param->setHash(HashType(""));
-        m_param->setBlockTxCountLimit(0);
+        task::syncWait([this]() -> task::Task<void> {
+            m_param = std::make_shared<LedgerConfig>();
+            m_param->setBlockNumber(0);
+            m_param->setHash(HashType(""));
+            m_param->setBlockTxCountLimit(0);
 
-        auto result1 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
-        BOOST_CHECK(result1);
-        auto result2 =
-            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::V3_1_VERSION_STR);
-        BOOST_CHECK(!result2);
-        auto result3 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
-        BOOST_CHECK(result3);
+            auto result1 = co_await m_ledger->buildGenesisBlock(
+                m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+            BOOST_CHECK(result1);
+            auto result2 = co_await m_ledger->buildGenesisBlock(
+                m_param, 30, "", bcos::protocol::V3_1_VERSION_STR);
+            BOOST_CHECK(!result2);
+            auto result3 = co_await m_ledger->buildGenesisBlock(
+                m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+            BOOST_CHECK(result3);
+        }());
     }
 
     inline void initBlocks(int _number)

@@ -30,9 +30,8 @@ inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<buildGenesisBlock> /*
     bool isAuthCheck = false, std::string const& consensusType = "pbft",
     std::int64_t epochSealerNum = 4, std::int64_t epochBlockNum = 1000)
 {
-    ledger.buildGenesisBlock(std::move(ledgerConfig), gasLimit, genesisData, compatibilityVersion,
-        isAuthCheck, consensusType, epochSealerNum, epochBlockNum);
-    return {};
+    co_return co_await ledger.buildGenesisBlock(std::move(ledgerConfig), gasLimit, genesisData,
+        compatibilityVersion, isAuthCheck, consensusType, epochSealerNum, epochBlockNum);
 }
 
 task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,
@@ -41,8 +40,12 @@ task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,
 
 inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInterface& ledger,
     bcos::protocol::TransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, auto&& storage)
+    bool withTransactionsAndReceipts, auto& storage)
 {
+    static_assert(
+        !std::convertible_to<std::remove_const_t<decltype(storage)>, storage::StorageInterface&>,
+        "Please use StorageInterface::Ptr");
+
     storage::StorageInterface::Ptr legacyStorage;
     if constexpr (std::convertible_to<std::decay_t<decltype(storage)>,
                       storage::StorageInterface::Ptr>)
@@ -59,6 +62,9 @@ inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, Ledg
     co_return co_await prewriteBlockToStorage(ledger, std::move(transactions), std::move(block),
         withTransactionsAndReceipts, std::move(legacyStorage));
 }
+
+task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
+    LedgerInterface& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag);
 
 task::Task<TransactionCount> tag_invoke(
     ledger::tag_t<getTransactionCount> /*unused*/, LedgerInterface& ledger);

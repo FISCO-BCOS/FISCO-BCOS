@@ -48,6 +48,48 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         .m_error = {}};
 }
 
+bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
+    ledger::tag_t<getBlockData> /*unused*/, LedgerInterface& ledger,
+    protocol::BlockNumber blockNumber, int32_t blockFlag)
+{
+    struct Awaitable
+    {
+        LedgerInterface& m_ledger;
+        protocol::BlockNumber m_blockNumber;
+        int32_t m_blockFlag;
+
+        std::variant<Error::Ptr, bcos::protocol::Block::Ptr> m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            m_ledger.asyncGetBlockDataByNumber(m_blockNumber, m_blockFlag,
+                [this, handle](Error::Ptr error, bcos::protocol::Block::Ptr block) {
+                    if (error)
+                    {
+                        m_result.emplace<Error::Ptr>(std::move(error));
+                    }
+                    else
+                    {
+                        m_result.emplace<bcos::protocol::Block::Ptr>(std::move(block));
+                    }
+                    handle.resume();
+                });
+        }
+        bcos::protocol::Block::Ptr await_resume()
+        {
+            if (std::holds_alternative<Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
+            }
+            return std::move(std::get<bcos::protocol::Block::Ptr>(m_result));
+        }
+    };
+
+    co_return co_await Awaitable{
+        .m_ledger = ledger, .m_blockNumber = blockNumber, .m_blockFlag = blockFlag, .m_result = {}};
+}
+
 bcos::task::Task<bcos::ledger::TransactionCount> bcos::ledger::tag_invoke(
     ledger::tag_t<getTransactionCount> /*unused*/, LedgerInterface& ledger)
 {

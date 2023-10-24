@@ -43,9 +43,18 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
     };
 
     auto [table, key] = stateKey;
-    auto value =
-        co_await Awaitable{.m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
-    co_return value;
+    co_return co_await Awaitable{
+        .m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
+}
+
+inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
+    StorageInterface& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+{
+    for (auto&& [key, value] : RANGES::views::zip(keys, values))
+    {
+        co_await storage2::writeOne(
+            storage, std::forward<decltype(key)>(key), std::forward<decltype(value)>(value));
+    }
 }
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,

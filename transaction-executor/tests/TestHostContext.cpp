@@ -283,7 +283,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite),
                 std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
             storageWrapper);
-        ledger.buildGenesisBlock(ledgerConfig, 100000, "", "3.5.0");
+        co_await ledger.buildGenesisBlock(ledgerConfig, 100000, "", "3.5.0");
 
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
