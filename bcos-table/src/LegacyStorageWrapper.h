@@ -8,8 +8,10 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
+#include <boost/throw_exception.hpp>
 #include <exception>
 #include <iterator>
+#include <stdexcept>
 
 namespace bcos::storage
 {
@@ -142,14 +144,16 @@ public:
         std::function<bool(const std::string_view& table, const std::string_view& key,
             storage::Entry const& entry)>
             callback) const override
-    {}
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
 
     void rollback(const storage::Recoder& recoder) override {}
 
     crypto::HashType hash(
         const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override
     {
-        return {};
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 };
 

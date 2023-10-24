@@ -2,6 +2,7 @@
 
 #include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-task/Task.h"
@@ -96,6 +97,15 @@ struct GetLedgerConfig
     }
 };
 inline constexpr GetLedgerConfig getLedgerConfig{};
+
+struct GetFeatures
+{
+    task::Task<Features> operator()(auto& ledger) const
+    {
+        co_return co_await tag_invoke(*this, ledger);
+    }
+};
+inline constexpr GetFeatures getFeatures{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
