@@ -1,6 +1,51 @@
 #include "LedgerMethods.h"
 #include <exception>
 
+bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
+    bcos::protocol::TransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
+    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage)
+{
+    struct Awaitable
+    {
+        LedgerInterface& m_ledger;
+        decltype(transactions) m_transactions;
+        decltype(block) m_block;
+        bool m_withTransactionsAndReceipts{};
+        decltype(storage) m_storage;
+
+        Error::Ptr m_error;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            m_ledger.asyncPrewriteBlock(
+                m_storage, std::move(m_transactions), std::move(m_block),
+                [this, handle](Error::Ptr error) {
+                    if (error)
+                    {
+                        m_error = std::move(error);
+                    }
+                    handle.resume();
+                },
+                m_withTransactionsAndReceipts);
+        }
+        void await_resume()
+        {
+            if (m_error)
+            {
+                BOOST_THROW_EXCEPTION(*m_error);
+            }
+        }
+    };
+
+    co_await Awaitable{.m_ledger = ledger,
+        .m_transactions = std::move(transactions),
+        .m_block = std::move(block),
+        .m_withTransactionsAndReceipts = withTransactionsAndReceipts,
+        .m_storage = std::move(storage),
+        .m_error = {}};
+}
+
 bcos::task::Task<bcos::ledger::TransactionCount> bcos::ledger::tag_invoke(
     ledger::tag_t<getTransactionCount> /*unused*/, LedgerInterface& ledger)
 {
@@ -194,25 +239,26 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
 
     co_return co_await Awaitable{.m_ledger = ledger, .m_type = type, .m_result = {}};
 }
-bcos::task::Task<std::tuple<uint64_t, bcos::protocol::BlockNumber>>
-bcos::ledger::getSystemConfigOrDefault(
-    LedgerInterface& ledger, std::string_view key, int64_t defaultValue)
+
+static bcos::task::Task<std::tuple<uint64_t, bcos::protocol::BlockNumber>> getSystemConfigOrDefault(
+    bcos::ledger::LedgerInterface& ledger, std::string_view key, int64_t defaultValue)
 {
     try
     {
-        auto [value, blockNumber] =
-            co_await getSystemConfig(ledger, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
+        auto [value, blockNumber] = co_await bcos::ledger::getSystemConfig(
+            ledger, bcos::ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
 
-        co_return std::tuple<uint64_t, protocol::BlockNumber>{
+        co_return std::tuple<uint64_t, bcos::protocol::BlockNumber>{
             boost::lexical_cast<uint64_t>(value), blockNumber};
     }
     catch (std::exception& e)
     {
         LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
                            << LOG_KV("defaultValue", defaultValue);
-        co_return std::tuple<uint64_t, protocol::BlockNumber>{defaultValue, 0};
+        co_return std::tuple<uint64_t, bcos::protocol::BlockNumber>{defaultValue, 0};
     }
 }
+
 bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger)
 {
@@ -229,6 +275,7 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
         co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION, 0)));
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
+    ledgerConfig->setBlockNumber(blockNumber);
     auto hash = co_await getBlockHash(ledger, blockNumber);
     ledgerConfig->setHash(hash);
     ledgerConfig->setFeatures(co_await getFeatures(ledger));

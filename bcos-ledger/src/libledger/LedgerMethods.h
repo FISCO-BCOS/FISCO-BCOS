@@ -6,14 +6,18 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
+#include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include <boost/throw_exception.hpp>
+#include <concepts>
 #include <exception>
 #include <iterator>
+#include <type_traits>
 #include <variant>
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
@@ -31,51 +35,29 @@ inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<buildGenesisBlock> /*
     return {};
 }
 
+task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,
+    bcos::protocol::TransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
+    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage);
+
 inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInterface& ledger,
     bcos::protocol::TransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, auto& storage)
+    bool withTransactionsAndReceipts, auto&& storage)
 {
-    auto legacyStorage =
-        std::make_shared<storage::LegacyStorageWrapper<std::decay_t<decltype(storage)>>>(storage);
-    struct Awaitable
+    storage::StorageInterface::Ptr legacyStorage;
+    if constexpr (std::convertible_to<std::decay_t<decltype(storage)>,
+                      storage::StorageInterface::Ptr>)
     {
-        LedgerInterface& m_ledger;
-        decltype(transactions) m_transactions;
-        decltype(block) m_block;
-        bool m_withTransactionsAndReceipts{};
-        decltype(legacyStorage) m_storage;
+        legacyStorage = storage;
+    }
+    else
+    {
+        legacyStorage =
+            std::make_shared<storage::LegacyStorageWrapper<std::decay_t<decltype(storage)>>>(
+                storage);
+    }
 
-        Error::Ptr m_error;
-
-        constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
-        {
-            m_ledger.asyncPrewriteBlock(
-                m_storage, std::move(m_transactions), std::move(m_block),
-                [this, handle](Error::Ptr error) {
-                    if (error)
-                    {
-                        m_error = std::move(error);
-                    }
-                    handle.resume();
-                },
-                m_withTransactionsAndReceipts);
-        }
-        void await_resume()
-        {
-            if (m_error)
-            {
-                BOOST_THROW_EXCEPTION(*m_error);
-            }
-        }
-    };
-
-    co_await Awaitable{.m_ledger = ledger,
-        .m_transactions = std::move(transactions),
-        .m_block = std::move(block),
-        .m_withTransactionsAndReceipts = withTransactionsAndReceipts,
-        .m_storage = std::move(legacyStorage),
-        .m_error = {}};
+    co_return co_await prewriteBlockToStorage(ledger, std::move(transactions), std::move(block),
+        withTransactionsAndReceipts, std::move(legacyStorage));
 }
 
 task::Task<TransactionCount> tag_invoke(
@@ -92,9 +74,6 @@ task::Task<SystemConfigEntry> tag_invoke(
 
 task::Task<consensus::ConsensusNodeList> tag_invoke(
     ledger::tag_t<getNodeList> /*unused*/, LedgerInterface& ledger, std::string_view type);
-
-task::Task<std::tuple<uint64_t, protocol::BlockNumber>> getSystemConfigOrDefault(
-    LedgerInterface& ledger, std::string_view key, int64_t defaultValue);
 
 task::Task<LedgerConfig::Ptr> tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger);
