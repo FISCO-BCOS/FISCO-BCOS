@@ -696,7 +696,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         // it.second will occasionally be a null pointer.
         if (!tx)
         {
-            return;
+            return false;
         }
 
         auto txHash = tx->hash();
@@ -704,7 +704,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         if (_avoidDuplicate && tx->sealed())
         {
             ++sealed;
-            return;
+            return false;
         }
 
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
@@ -714,12 +714,12 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
                 TxsMap::WriteAccessor::Ptr accessor;
                 m_invalidTxs.insert(accessor, {txHash, tx});
             }
-            return;
+            return false;
         }
 
         if (m_invalidTxs.contains(txHash))
         {
-            return;
+            return false;
         }
         /// check nonce again when obtain transactions
         // since the invalid nonce has already been checked before the txs import into the
@@ -734,18 +734,18 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             // add to m_invalidTxs to be deleted
             TxsMap::WriteAccessor::Ptr accessor;
             m_invalidTxs.insert(accessor, {txHash, tx});
-            return;
+            return false;
         }
         // blockLimit expired
         if (result == TransactionStatus::BlockLimitCheckFail)
         {
             TxsMap::WriteAccessor::Ptr accessor;
             m_invalidTxs.insert(accessor, {txHash, tx});
-            return;
+            return false;
         }
         if (_avoidTxs && _avoidTxs->contains(txHash))
         {
-            return;
+            return false;
         }
         auto txMetaData = m_config->blockFactory()->createTransactionMetaData();
 
@@ -776,6 +776,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         tx->setBatchHash(HashType());
         m_knownLatestSealedTxHash = txHash;
         m_sealRateCollector.update(1, true);
+        return true;
     };
 
 
@@ -801,8 +802,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         m_txsTable.forEach<TxsMap::ReadAccessor>(m_knownLatestSealedTxHash, eachBucketTxsLimit,
             _txsLimit, [&](TxsMap::ReadAccessor::Ptr accessor) {
                 const auto& tx = accessor->value();
-                handleTx(tx);
-                return true;
+                return handleTx(tx);
             });
     }
     else

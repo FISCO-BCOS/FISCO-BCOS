@@ -159,6 +159,10 @@ public:
                 std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
         }
         auto [it, inserted] = m_values.try_emplace(kv.first, kv.second);
+        if (!inserted)
+        {
+            BCOS_LOG(WARNING) << LOG_DESC("bucket insert failed") << LOG_KV("key", kv.first);
+        }
         accessor->setValue(it);
         return inserted;
     }
@@ -499,6 +503,10 @@ public:
                         {
                             return false;
                         }
+                        if (!handler(accessor))
+                        {
+                            return true;
+                        }
                         txsCount++;
                         totalTxLimit--;
                         if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
@@ -507,7 +515,7 @@ public:
                                             << LOG_KV("eachBucketTxsLimit:", eachBucketTxsLimit)
                                             << LOG_KV("totalTxLimit:", totalTxLimit);
                         }
-                        return handler(accessor);
+                        return true;
                     },
                     accessor);
             });

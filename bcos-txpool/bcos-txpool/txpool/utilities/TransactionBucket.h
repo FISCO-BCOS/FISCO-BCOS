@@ -123,8 +123,8 @@ public:
         auto result = multiIndexMap.emplace(std::move(newData));
         if (!result.second)
         {
-            TXPOOL_LOG(WARNING) << LOG_DESC("bucket insert failed") << LOG_KV("txHash", key)
-                                << LOG_KV("timestamp", newData.timeStamp);
+            TXPOOL_LOG(DEBUG) << LOG_DESC("bucket insert failed") << LOG_KV("txHash", key)
+                              << LOG_KV("timestamp", newData.timeStamp);
         }
         return {std::make_shared<IteratorImpl>(result.first), result.second};
     }
