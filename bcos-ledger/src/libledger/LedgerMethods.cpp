@@ -1,4 +1,6 @@
 #include "LedgerMethods.h"
+#include "bcos-tool/VersionConverter.h"
+#include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
@@ -245,16 +247,15 @@ static bcos::task::Task<std::tuple<uint64_t, bcos::protocol::BlockNumber>> getSy
 {
     try
     {
-        auto [value, blockNumber] = co_await bcos::ledger::getSystemConfig(
-            ledger, bcos::ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
-
+        auto [value, blockNumber] = co_await bcos::ledger::getSystemConfig(ledger, key);
         co_return std::tuple<uint64_t, bcos::protocol::BlockNumber>{
             boost::lexical_cast<uint64_t>(value), blockNumber};
     }
     catch (std::exception& e)
     {
         LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
-                           << LOG_KV("defaultValue", defaultValue);
+                           << LOG_KV("defaultValue", defaultValue)
+                           << boost::diagnostic_information(e);
         co_return std::tuple<uint64_t, bcos::protocol::BlockNumber>{defaultValue, 0};
     }
 }
@@ -271,8 +272,8 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
         std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))));
     ledgerConfig->setGasLimit(
         co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_LIMIT, 0));
-    ledgerConfig->setCompatibilityVersion(std::get<0>(
-        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION, 0)));
+    ledgerConfig->setCompatibilityVersion(tool::toVersionNumber(
+        std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION))));
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
     ledgerConfig->setBlockNumber(blockNumber);
@@ -290,7 +291,7 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
             co_await getNodeList(ledger, ledger::CONSENSUS_CANDIDATE_SEALER));
         ledgerConfig->setEpochSealerNum(co_await getSystemConfigOrDefault(
             ledger, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, DEFAULT_EPOCH_SEALER_NUM));
-        ledgerConfig->setEpochSealerNum(co_await getSystemConfigOrDefault(
+        ledgerConfig->setEpochBlockNum(co_await getSystemConfigOrDefault(
             ledger, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, DEFAULT_EPOCH_BLOCK_NUM));
         ledgerConfig->setNotifyRotateFlagInfo(std::get<0>(co_await getSystemConfigOrDefault(
             ledger, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, DEFAULT_INTERNAL_NOTIFY_FLAG)));
