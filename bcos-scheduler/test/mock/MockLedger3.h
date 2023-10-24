@@ -125,10 +125,9 @@ public:
         {
             _onGetConfig(nullptr, "0", commitBlockNumber);
         }
-
         else if (RANGES::count(ledger::Features::featureKeys(), _key) > 0)
         {
-            _onGetConfig(nullptr, "1", commitBlockNumber);
+            _onGetConfig(BCOS_ERROR_PTR(-1, "Not found!"), "0", commitBlockNumber);
         }
         else
         {
