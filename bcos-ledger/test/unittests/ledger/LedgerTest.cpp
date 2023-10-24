@@ -23,15 +23,22 @@
 
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
+#include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "bcos-tool/NodeConfig.h"
+#include "bcos-tool/VersionConverter.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -1287,5 +1294,68 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
             BOOST_CHECK_EQUAL(block->transaction(0)->hash().hex(), tx->hash().hex());
         });
 }
+
+BOOST_AUTO_TEST_CASE(getLedgerConfig)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        initFixture();
+
+        using KeyType = std::tuple<std::string_view, std::string_view>;
+        Entry value;
+        SystemConfigEntry config;
+
+        config = {"12", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_COUNT_LIMIT}, value);
+
+        config = {"100", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD}, value);
+
+        config = {"200", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_GAS_LIMIT}, value);
+
+        config = {"3.8.1", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION}, value);
+
+        value.set("10086");
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}, value);
+
+        auto randomHash = crypto::HashType::generateRandomFixedBytes();
+        value.set(randomHash.asBytes());
+        co_await storage2::writeOne(*m_storage, KeyType{SYS_NUMBER_2_HASH, "10086"}, value);
+
+        config = {"1", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_SWITCH}, value);
+
+        config = {"12345", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM}, value);
+
+        auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
+        BOOST_CHECK_EQUAL(ledgerConfig->blockTxCountLimit(), 12);
+        BOOST_CHECK_EQUAL(ledgerConfig->leaderSwitchPeriod(), 100);
+        BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->gasLimit()), 200);
+        BOOST_CHECK_EQUAL(ledgerConfig->compatibilityVersion(), tool::toVersionNumber("3.8.1"));
+        BOOST_CHECK_EQUAL(ledgerConfig->blockNumber(), 10086);
+        BOOST_CHECK_EQUAL(ledgerConfig->hash(), randomHash);
+        BOOST_CHECK_EQUAL(ledgerConfig->consensusType(), RPBFT_CONSENSUS_TYPE);
+
+        BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochSealerNum()), 12345);
+        BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochBlockNum()), 1000);
+        BOOST_CHECK_EQUAL(ledgerConfig->notifyRotateFlagInfo(), 0);
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
