@@ -783,15 +783,8 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     if (_avoidDuplicate)
     {
         size_t eachBucketTxsLimit = 0;
-        if (_txsLimit < BUCKET_SIZE || m_txsTable.size() < _txsLimit)
-        {
-            eachBucketTxsLimit = _txsLimit;
-        }
-        else
-        {
-            // After performance testing, 0.25 had the best performance.
-            eachBucketTxsLimit = _txsLimit / (0.25 * CPU_CORES);
-        }
+        // After performance testing, 0.25 had the best performance.
+        eachBucketTxsLimit = (_txsLimit / (0.25 * CPU_CORES)) + 1;
         if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("batchFetchTxs")
