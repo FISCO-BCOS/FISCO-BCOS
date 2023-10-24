@@ -8,12 +8,14 @@
 #include "bcos-framework/bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <gsl/span>
 #include <map>
+#include <range/v3/algorithm/find.hpp>
 
 using namespace bcos::ledger;
 
@@ -122,6 +124,11 @@ public:
         else if (_key == ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE)
         {
             _onGetConfig(nullptr, "0", commitBlockNumber);
+        }
+
+        else if (RANGES::count(ledger::Features::featureKeys(), _key) > 0)
+        {
+            _onGetConfig(nullptr, "1", commitBlockNumber);
         }
         else
         {
