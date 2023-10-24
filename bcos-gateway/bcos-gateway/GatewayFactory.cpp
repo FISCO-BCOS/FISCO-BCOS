@@ -645,11 +645,16 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;
         AMOPImpl::Ptr amop;
+
         if (_airVersion)
         {
             gatewayNodeManager =
                 std::make_shared<GatewayNodeManager>(_config->uuid(), pubHex, keyFactory, service);
-            amop = buildLocalAMOP(service, pubHex);
+
+            if (!_config->readonly())
+            {
+                amop = buildLocalAMOP(service, pubHex);
+            }
         }
         else
         {
@@ -664,7 +669,11 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
                     _config->uuid(), pubHex, keyFactory, service);
             }
-            amop = buildAMOP(service, pubHex);
+
+            if (!_config->readonly())
+            {
+                amop = buildAMOP(service, pubHex);
+            }
         }
 
         // init Gateway

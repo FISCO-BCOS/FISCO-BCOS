@@ -39,8 +39,8 @@ public:
     using Ptr = std::shared_ptr<AMOPImpl>;
     AMOPImpl(TopicManager::Ptr _topicManager, AMOPMessageFactory::Ptr _messageFactory,
         bcos::protocol::AMOPRequestFactory::Ptr _requestFactory,
-        bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID);
-    virtual ~AMOPImpl() {}
+        bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID _p2pNodeID);
+    virtual ~AMOPImpl() = default;
 
     virtual void start();
     virtual void stop();

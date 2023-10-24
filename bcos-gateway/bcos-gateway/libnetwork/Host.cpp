@@ -126,7 +126,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 return preverified;
             }
 
-            // For compatibility, p2p communication between nodes still uses the old public key analysis method
+            // For compatibility, p2p communication between nodes still uses the old public key
+            // analysis method
             if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
                 return preverified;
@@ -461,9 +462,9 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     m_asioInterface->asyncResolveConnect(socket, [=, this](boost::system::error_code const& ec) {
         if (ec)
         {
-            HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
-                            << LOG_KV("endpoint", _nodeIPEndpoint)
-                            << LOG_KV("message", ec.message());
+            HOST_LOG(WARNING) << LOG_DESC("TCP Connection refused by node")
+                              << LOG_KV("endpoint", _nodeIPEndpoint)
+                              << LOG_KV("message", ec.message());
             socket->close();
 
             m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
@@ -472,17 +473,15 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             });
             return;
         }
-        else
-        {
-            insertPendingConns(_nodeIPEndpoint);
-            /// get the public key of the server during handshake
-            std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-            m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
-            /// call handshakeClient after handshake succeed
-            m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
-                boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error,
-                    socket, endpointPublicKey, callback, _nodeIPEndpoint, connect_timer));
-        }
+
+        insertPendingConns(_nodeIPEndpoint);
+        /// get the public key of the server during handshake
+        std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
+        m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
+        /// call handshakeClient after handshake succeed
+        m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
+            boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error, socket,
+                endpointPublicKey, callback, _nodeIPEndpoint, connect_timer));
     });
 }
 

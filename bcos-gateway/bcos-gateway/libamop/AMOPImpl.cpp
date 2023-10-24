@@ -22,6 +22,7 @@
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <boost/bind/bind.hpp>
+#include <utility>
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::amop;
@@ -29,12 +30,12 @@ using namespace bcos::protocol;
 
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID)
-  : m_topicManager(_topicManager),
-    m_messageFactory(_messageFactory),
-    m_requestFactory(_requestFactory),
-    m_network(_network),
-    m_p2pNodeID(_p2pNodeID)
+    P2PInterface::Ptr _network, P2pID _p2pNodeID)
+  : m_topicManager(std::move(_topicManager)),
+    m_messageFactory(std::move(_messageFactory)),
+    m_requestFactory(std::move(_requestFactory)),
+    m_network(std::move(_network)),
+    m_p2pNodeID(std::move(_p2pNodeID))
 {
     m_threadPool = std::make_shared<ThreadPool>("amopDispatcher", 1);
     m_timer = std::make_shared<Timer>(TOPIC_SYNC_PERIOD, "topicSync");

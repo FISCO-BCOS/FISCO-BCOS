@@ -368,8 +368,8 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
             break;
         default:
         {
-            SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type")
-                               << LOG_KV("packetType", packetType) << LOG_KV("seq", message->seq());
+            SERVICE_LOG(INFO) << LOG_DESC("Unrecognized message type")
+                              << LOG_KV("packetType", packetType) << LOG_KV("seq", message->seq());
         }
         break;
         };
