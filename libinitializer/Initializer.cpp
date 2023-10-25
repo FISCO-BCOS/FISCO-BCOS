@@ -129,8 +129,6 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     }
 }
 
-crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
-
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
@@ -238,7 +236,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (useBaselineScheduler)
     {
         auto hasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
-        bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
+        bcos::executor::GlobalHashImpl::g_hashImpl =
             m_protocolInitializer->cryptoSuite()->hashImpl();
         using Hasher = std::remove_cvref_t<decltype(hasher)>;
         auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(storage);

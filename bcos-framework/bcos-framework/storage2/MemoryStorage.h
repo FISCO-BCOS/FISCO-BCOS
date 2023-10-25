@@ -233,7 +233,7 @@ public:
         {
             return m_iterators |
                    RANGES::views::transform(
-                       [](auto const* data) -> std::tuple<const KeyType*, const ValueType*> {
+                       [](auto const* data) -> std::tuple<KeyType const*, ValueType const*> {
                            if (!data)
                            {
                                return {nullptr, nullptr};

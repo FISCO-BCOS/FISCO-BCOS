@@ -35,8 +35,6 @@ using BackendStorage =
 using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
-bcos::crypto::Hash::Ptr bcos::transaction_executor::GlobalHashImpl::g_hashImpl;
-
 template <bool parallel>
 struct Fixture
 {
@@ -57,8 +55,7 @@ struct Fixture
     {
         boost::log::core::get()->set_logging_enabled(false);
 
-        bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
-            std::make_shared<bcos::crypto::Keccak256>();
+        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(m_helloworldBytecodeBinary));
 
         if constexpr (parallel)
@@ -137,8 +134,7 @@ struct Fixture
 
     void prepareIssue(size_t count)
     {
-        bcos::codec::abi::ContractABICodec abiCodec(
-            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
             m_addresses | RANGES::views::transform([this, &abiCodec](const Address& address) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
@@ -155,8 +151,7 @@ struct Fixture
 
     void prepareTransfer(size_t count)
     {
-        bcos::codec::abi::ContractABICodec abiCodec(
-            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
             m_addresses | RANGES::views::chunk(2) |
             RANGES::views::transform([this, &abiCodec](auto&& range) {
@@ -177,8 +172,7 @@ struct Fixture
 
     void prepareConflictTransfer(size_t count)
     {
-        bcos::codec::abi::ContractABICodec abiCodec(
-            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
             RANGES::views::zip(m_addresses, RANGES::views::iota(0LU, m_addresses.size())) |
             RANGES::views::transform([this, &abiCodec](auto&& tuple) {
@@ -214,7 +208,7 @@ struct Fixture
                 else
                 {
                     bcos::codec::abi::ContractABICodec abiCodec(
-                        bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+                        bcos::executor::GlobalHashImpl::g_hashImpl);
                     // Verify the data
                     bcostars::protocol::BlockHeaderImpl blockHeader(
                         [inner = bcostars::BlockHeader()]() mutable {

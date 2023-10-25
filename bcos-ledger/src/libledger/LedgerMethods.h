@@ -11,6 +11,7 @@
 #include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-tool/ConsensusNode.h"
+#include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include <boost/throw_exception.hpp>
@@ -65,6 +66,7 @@ task::Task<TransactionCount> tag_invoke(
 
 task::Task<protocol::BlockNumber> tag_invoke(
     ledger::tag_t<getCurrentBlockNumber> /*unused*/, LedgerInterface& ledger);
+
 
 task::Task<crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber);

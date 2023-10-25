@@ -22,6 +22,7 @@
 #pragma once
 
 #include "../Common.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/vm/HostContext.h"
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -76,7 +77,7 @@ evmc_bytes32 getBalance(
     [[maybe_unused]] evmc_host_context* context, [[maybe_unused]] const evmc_address* addr) noexcept
 {
     // always return 0
-    return transaction_executor::toEvmC(h256(0));
+    return toEvmC(h256(0));
 }
 
 template <class HostContextType>
@@ -90,7 +91,7 @@ template <class HostContextType>
 evmc_bytes32 getCodeHash(evmc_host_context* context, const evmc_address* addr) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
-    return transaction_executor::toEvmC(task::syncWait(hostContext.codeHashAt(*addr)));
+    return toEvmC(task::syncWait(hostContext.codeHashAt(*addr)));
 }
 
 template <class HostContextType>
@@ -162,7 +163,7 @@ template <class HostContextType>
 evmc_bytes32 getBlockHash(evmc_host_context* context, int64_t number) noexcept
 {
     auto& hostContext = static_cast<HostContextType&>(*context);
-    return transaction_executor::toEvmC(task::syncWait(hostContext.blockHash(number)));
+    return toEvmC(task::syncWait(hostContext.blockHash(number)));
 }
 
 template <class HostContextType>

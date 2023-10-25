@@ -16,8 +16,7 @@ class TestTransactionExecutorImplFixture
 public:
     TestTransactionExecutorImplFixture()
     {
-        bcos::transaction_executor::GlobalHashImpl::g_hashImpl =
-            std::make_shared<bcos::crypto::Keccak256>();
+        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         precompiledManager.emplace(std::make_shared<bcos::crypto::Keccak256>());
     }
 
@@ -32,7 +31,7 @@ BOOST_AUTO_TEST_CASE(execute)
         memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
 
         auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
-            bcos::transaction_executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);
+            bcos::executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);
         bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory(cryptoSuite);
 
         bcos::transaction_executor::TransactionExecutorImpl executor(
@@ -55,8 +54,7 @@ BOOST_AUTO_TEST_CASE(execute)
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 
         // Set the value
-        bcos::codec::abi::ContractABICodec abiCodec(
-            bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
         auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(10099));
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
