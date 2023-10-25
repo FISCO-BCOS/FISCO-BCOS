@@ -135,7 +135,25 @@ public:
     }
     void erase(std::shared_ptr<IteratorImpl> it_ptr)
     {
-        multiIndexMap.get<0>().erase(it_ptr->getIterator());
+        auto it = multiIndexMap.get<0>().erase(it_ptr->getIterator());
+        if (it == multiIndexMap.get<0>().end())
+        {
+            if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << LOG_DESC("bucket erase failed")
+                                  << LOG_KV("txHash", it_ptr->first)
+                                  << LOG_KV("timestamp", it_ptr->second->importTime());
+            }
+        }
+        else
+        {
+            if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << LOG_DESC("bucket erase success")
+                                  << LOG_KV("txHash", it_ptr->first)
+                                  << LOG_KV("timestamp", it_ptr->second->importTime());
+            }
+        }
     }
     size_t size() const { return multiIndexMap.size(); }
     void clear() { multiIndexMap.clear(); }

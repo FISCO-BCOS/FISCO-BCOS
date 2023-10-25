@@ -159,10 +159,6 @@ public:
                 std::make_shared<WriteAccessor>(this->shared_from_this());  // acquire lock here
         }
         auto [it, inserted] = m_values.try_emplace(kv.first, kv.second);
-        if (!inserted)
-        {
-            BCOS_LOG(WARNING) << LOG_DESC("bucket insert failed") << LOG_KV("key", kv.first);
-        }
         accessor->setValue(it);
         return inserted;
     }
@@ -495,7 +491,7 @@ public:
                 bucket->template forEach<AccessorType>(
                     [&count, &needBucketContinue, eachBucketLimit, handler = std::move(handler)](
                         typename AccessorType::Ptr accessor) {
-                        auto [needContinue, isValid] = handler(access);
+                        auto [needContinue, isValid] = handler(accessor);
                         needBucketContinue = needContinue;
                         if (isValid)
                         {
