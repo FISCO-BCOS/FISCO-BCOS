@@ -491,26 +491,24 @@ public:
             indexes, [eachBucketLimit, handler = std::move(handler)](size_t,
                          typename BucketType::Ptr bucket, typename AccessorType::Ptr accessor) {
                 size_t count = 0;
-                return bucket->template forEach<AccessorType>(
-                    [&count, eachBucketLimit, handler = std::move(handler)](
+                bool needBucketContinue = true;
+                bucket->template forEach<AccessorType>(
+                    [&count, &needBucketContinue, eachBucketLimit, handler = std::move(handler)](
                         typename AccessorType::Ptr accessor) {
-                        auto [needContinue, needCount] = handler(accessor);
-                        if (!needContinue)
+                        auto [needContinue, isValid] = handler(access);
+                        needBucketContinue = needContinue;
+                        if (isValid)
                         {
-                            return false;
+                            count++;
                         }
-                        if (!needCount)
-                        {
-                            return true;
-                        }
-                        count++;
                         if (count >= eachBucketLimit)
                         {
                             return false;
                         }
-                        return true;
+                        return needContinue;
                     },
                     accessor);
+                return needBucketContinue;
             });
     }
 
