@@ -477,8 +477,8 @@ public:
 #endif
 
     template <class AccessorType>  // handler return isContinue
-    void forEach(const KeyType& startAfter, size_t eachBucketTxsLimit, size_t totalTxLimit,
-        std::function<bool(typename AccessorType::Ptr accessor)> handler)
+    void forEach(const KeyType& startAfter, size_t eachBucketLimit,
+        std::function<std::pair<bool, bool>(typename AccessorType::Ptr accessor)> handler)
     {
         size_t startIdx = (getBucketIndex(startAfter) + 1) % m_buckets.size();
         size_t bucketsSize = m_buckets.size();
@@ -488,32 +488,25 @@ public:
             RANGES::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
 
         forEachBucket<AccessorType>(
-            indexes, [eachBucketTxsLimit, &totalTxLimit, handler = std::move(handler)](size_t,
+            indexes, [eachBucketLimit, handler = std::move(handler)](size_t,
                          typename BucketType::Ptr bucket, typename AccessorType::Ptr accessor) {
-                size_t txsCount = 0;
-
+                size_t count = 0;
                 return bucket->template forEach<AccessorType>(
-                    [&txsCount, eachBucketTxsLimit, &totalTxLimit, handler = std::move(handler)](
+                    [&count, eachBucketLimit, handler = std::move(handler)](
                         typename AccessorType::Ptr accessor) {
-                        if (txsCount >= eachBucketTxsLimit)
-                        {
-                            return true;
-                        }
-                        if (totalTxLimit <= 0)
+                        auto [needContinue, needCount] = handler(accessor);
+                        if (!needContinue)
                         {
                             return false;
                         }
-                        if (!handler(accessor))
+                        if (!needCount)
                         {
                             return true;
                         }
-                        txsCount++;
-                        totalTxLimit--;
-                        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+                        count++;
+                        if (count >= eachBucketLimit)
                         {
-                            BCOS_LOG(TRACE) << LOG_KV("txsCount:", txsCount)
-                                            << LOG_KV("eachBucketTxsLimit:", eachBucketTxsLimit)
-                                            << LOG_KV("totalTxLimit:", totalTxLimit);
+                            return false;
                         }
                         return true;
                     },

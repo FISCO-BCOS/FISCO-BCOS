@@ -792,10 +792,13 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
                               << LOG_KV("limit", _txsLimit)
                               << LOG_KV("eachBucketTxsLimit", eachBucketTxsLimit);
         }
-        m_txsTable.forEach<TxsMap::ReadAccessor>(m_knownLatestSealedTxHash, eachBucketTxsLimit,
-            _txsLimit, [&](TxsMap::ReadAccessor::Ptr accessor) {
+        m_txsTable.forEach<TxsMap::ReadAccessor>(
+            m_knownLatestSealedTxHash, eachBucketTxsLimit, [&](TxsMap::ReadAccessor::Ptr accessor) {
                 const auto& tx = accessor->value();
-                return handleTx(tx);
+                bool isTxValid = handleTx(tx);
+                bool needContinue = (_txsList->transactionsMetaDataSize() +
+                                        _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
+                return std::pair<bool, bool>(needContinue, isTxValid);
             });
     }
     else
