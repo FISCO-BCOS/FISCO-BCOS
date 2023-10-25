@@ -28,9 +28,7 @@
 #define RATELIMIT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][RateLimiter]"
 #define RATELIMIT_MGR_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][RateLimiterManager]"
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 enum GroupType : uint16_t
 {
@@ -42,5 +40,4 @@ enum GroupType : uint16_t
     OUTSIDE_GROUP = 0x2,
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway
