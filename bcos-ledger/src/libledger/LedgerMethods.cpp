@@ -40,12 +40,13 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         }
     };
 
-    co_await Awaitable{.m_ledger = ledger,
+    Awaitable awaitable{.m_ledger = ledger,
         .m_transactions = std::move(transactions),
         .m_block = std::move(block),
         .m_withTransactionsAndReceipts = withTransactionsAndReceipts,
         .m_storage = std::move(storage),
         .m_error = {}};
+    co_await awaitable;
 }
 
 bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
@@ -85,9 +86,10 @@ bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
             return std::move(std::get<bcos::protocol::Block::Ptr>(m_result));
         }
     };
-
-    co_return co_await Awaitable{
+    Awaitable awaitable{
         .m_ledger = ledger, .m_blockNumber = blockNumber, .m_blockFlag = blockFlag, .m_result = {}};
+
+    co_return co_await awaitable;
 }
 
 bcos::task::Task<bcos::ledger::TransactionCount> bcos::ledger::tag_invoke(
@@ -129,7 +131,8 @@ bcos::task::Task<bcos::ledger::TransactionCount> bcos::ledger::tag_invoke(
         }
     };
 
-    co_return co_await Awaitable{.m_ledger = ledger, .m_result = {}};
+    Awaitable awaitable{.m_ledger = ledger, .m_result = {}};
+    co_return co_await awaitable;
 }
 bcos::task::Task<bcos::protocol::BlockNumber> bcos::ledger::tag_invoke(
     ledger::tag_t<getCurrentBlockNumber> /*unused*/, LedgerInterface& ledger)
@@ -165,7 +168,8 @@ bcos::task::Task<bcos::protocol::BlockNumber> bcos::ledger::tag_invoke(
         }
     };
 
-    co_return co_await Awaitable{.m_ledger = ledger, .m_result = {}};
+    Awaitable awaitable{.m_ledger = ledger, .m_result = {}};
+    co_return co_await awaitable;
 }
 bcos::task::Task<bcos::crypto::HashType> bcos::ledger::tag_invoke(
     ledger::tag_t<getBlockHash> /*unused*/, LedgerInterface& ledger,
@@ -204,7 +208,8 @@ bcos::task::Task<bcos::crypto::HashType> bcos::ledger::tag_invoke(
         }
     };
 
-    co_return co_await Awaitable{.m_ledger = ledger, .m_blockNumber = blockNumber, .m_result = {}};
+    Awaitable awaitable{.m_ledger = ledger, .m_blockNumber = blockNumber, .m_result = {}};
+    co_return co_await awaitable;
 }
 bcos::task::Task<bcos::ledger::SystemConfigEntry> bcos::ledger::tag_invoke(
     ledger::tag_t<getSystemConfig> /*unused*/, LedgerInterface& ledger, std::string_view key)
@@ -242,7 +247,8 @@ bcos::task::Task<bcos::ledger::SystemConfigEntry> bcos::ledger::tag_invoke(
         }
     };
 
-    co_return co_await Awaitable{.m_ledger = ledger, .m_key = key, .m_result = {}};
+    Awaitable awaitable{.m_ledger = ledger, .m_key = key, .m_result = {}};
+    co_return co_await awaitable;
 }
 bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
     ledger::tag_t<getNodeList> /*unused*/, LedgerInterface& ledger, std::string_view type)
@@ -257,8 +263,8 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
         void await_suspend(CO_STD::coroutine_handle<> handle)
         {
             m_ledger.asyncGetNodeListByType(
-                m_type, [this, handle](
-                            Error::Ptr error, consensus::ConsensusNodeListPtr consensusNodeList) {
+                m_type, [this, handle](Error::Ptr error,
+                            const consensus::ConsensusNodeListPtr& consensusNodeList) {
                     if (error)
                     {
                         m_result.emplace<Error::Ptr>(std::move(error));
@@ -281,7 +287,8 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
         }
     };
 
-    co_return co_await Awaitable{.m_ledger = ledger, .m_type = type, .m_result = {}};
+    Awaitable awaitable{.m_ledger = ledger, .m_type = type, .m_result = {}};
+    co_return co_await awaitable;
 }
 
 static bcos::task::Task<std::tuple<uint64_t, bcos::protocol::BlockNumber>> getSystemConfigOrDefault(

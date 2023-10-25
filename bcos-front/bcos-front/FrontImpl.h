@@ -168,7 +168,7 @@ public:
             ResponseType& m_response;
         };
 
-        auto awaitable = Awaitable{.m_front = m_front,
+        Awaitable awaitable{.m_front = m_front,
             .m_moduleID = moduleID,
             .m_nodeID = std::move(nodeIDPtr),
             .m_requestBuffer = std::move(requestBuffer),

@@ -1140,8 +1140,8 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
 {
     LEDGER_LOG(DEBUG) << "GetNodeListByType request" << LOG_KV("type", _type);
 
-    asyncGetBlockNumber([this, type = std::move(_type), callback = std::move(_onGetConfig)](
-                            Error::Ptr&& error, bcos::protocol::BlockNumber blockNumber) {
+    asyncGetBlockNumber([this, type = _type, callback = std::move(_onGetConfig)](
+                            Error::Ptr&& error, bcos::protocol::BlockNumber blockNumber) mutable {
         if (error)
         {
             LEDGER_LOG(DEBUG) << "GetNodeListByType" << boost::diagnostic_information(*error);
@@ -1156,7 +1156,7 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
         m_storage->asyncGetRow(SYS_CONSENSUS, "key",
             [callback = std::move(callback), type = type, this, blockNumber](
                 Error::UniquePtr error, std::optional<Entry> entry) {
-                if (error)
+                if (error || !entry)
                 {
                     callback(std::move(error), nullptr);
                     return;

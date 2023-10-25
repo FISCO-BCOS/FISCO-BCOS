@@ -43,8 +43,8 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
     };
 
     auto [table, key] = stateKey;
-    co_return co_await Awaitable{
-        .m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
+    Awaitable awaitable{.m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
+    co_return co_await awaitable;
 }
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
@@ -90,11 +90,12 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
     };
 
     auto [table, key] = stateKey;
-    co_await Awaitable{.m_storage = storage,
+    Awaitable awaitable{.m_storage = storage,
         .m_table = table,
         .m_key = key,
         .m_entry = std::move(entry),
         .m_result = {}};
+    co_await awaitable;
 }
 
 }  // namespace bcos::storage
