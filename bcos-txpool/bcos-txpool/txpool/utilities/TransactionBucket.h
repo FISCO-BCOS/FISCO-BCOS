@@ -135,8 +135,8 @@ public:
     }
     void erase(std::shared_ptr<IteratorImpl> it_ptr)
     {
-        auto it = multiIndexMap.get<0>().erase(it_ptr->getIterator());
-        if (it == multiIndexMap.get<0>().end())
+        auto eraseCount = multiIndexMap.get<0>().erase(it_ptr->first);
+        if (eraseCount == 0)
         {
             if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
             {
