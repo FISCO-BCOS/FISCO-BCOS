@@ -73,7 +73,6 @@ task::Task<TransactionCount> tag_invoke(
 task::Task<protocol::BlockNumber> tag_invoke(
     ledger::tag_t<getCurrentBlockNumber> /*unused*/, LedgerInterface& ledger);
 
-
 task::Task<crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber);
 

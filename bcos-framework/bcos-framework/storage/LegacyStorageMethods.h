@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Entry.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-task/Task.h"
 
 namespace bcos::storage
 {
