@@ -18,7 +18,6 @@
  * @date 2021-05-04
  */
 #pragma once
-#include "bcos-utilities/Error.h"
 #include "libnetwork/Common.h"
 
 #define GATEWAY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Gateway]"
@@ -39,10 +38,6 @@ enum GroupType : uint16_t
     GROUP_WITHOUT_CONSENSUS_NODE = 0x1,
     // group without consensus node and observer node
     OUTSIDE_GROUP = 0x2,
-};
-
-struct UninitializedAMOP : public Error
-{
 };
 
 }  // namespace bcos::gateway
