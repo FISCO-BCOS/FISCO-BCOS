@@ -142,7 +142,7 @@ public:
             {
                 TXPOOL_LOG(TRACE) << LOG_DESC("bucket erase failed")
                                   << LOG_KV("txHash", it_ptr->first)
-                                  << LOG_KV("timestamp", it_ptr->second->importTime());
+                                  << LOG_KV("eraseCount", eraseCount);
             }
         }
         else
@@ -151,7 +151,7 @@ public:
             {
                 TXPOOL_LOG(TRACE) << LOG_DESC("bucket erase success")
                                   << LOG_KV("txHash", it_ptr->first)
-                                  << LOG_KV("timestamp", it_ptr->second->importTime());
+                                  << LOG_KV("eraseCount", eraseCount);
             }
         }
     }
