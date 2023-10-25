@@ -43,6 +43,7 @@ private:
         TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID)
     {
+        constexpr static uint64_t TRANSACTION_GAS = 3000000000;
         try
         {
             if (c_fileLogLevel <= LogLevel::TRACE)
@@ -57,7 +58,7 @@ private:
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
-                .gas = 30000 * 10000,  // TODO: use arg
+                .gas = TRANSACTION_GAS,
                 .recipient = toAddress,
                 .destination_ptr = nullptr,
                 .destination_len = 0,
@@ -75,12 +76,13 @@ private:
 
             int64_t seq = 0;
             HostContext hostContext(executor.m_vmFactory, rollbackableStorage, blockHeader,
-                evmcMessage, evmcMessage.sender, contextID, seq, executor.m_precompiledManager);
+                evmcMessage, evmcMessage.sender, transaction.abi(), contextID, seq,
+                executor.m_precompiledManager);
             auto evmcResult = co_await hostContext.execute();
 
             bcos::bytesConstRef output;
             std::string newContractAddress;
-            if (!RANGES::equal(evmcResult.create_address.bytes, EMPTY_ADDRESS.bytes))
+            if (!RANGES::equal(evmcResult.create_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
             {
                 newContractAddress.reserve(sizeof(evmcResult.create_address) * 2);
                 boost::algorithm::hex_lower(evmcResult.create_address.bytes,
@@ -98,9 +100,9 @@ private:
             }
 
             auto const& logEntries = hostContext.logs();
-            auto receipt = executor.m_receiptFactory.createReceipt(evmcResult.gas_left,
-                std::move(newContractAddress), logEntries, evmcResult.status_code, output,
-                blockHeader.number());
+            auto receipt = executor.m_receiptFactory.createReceipt(
+                TRANSACTION_GAS - evmcResult.gas_left, std::move(newContractAddress), logEntries,
+                evmcResult.status_code, output, blockHeader.number());
 
             co_return receipt;
         }

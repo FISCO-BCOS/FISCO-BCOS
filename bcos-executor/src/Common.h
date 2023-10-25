@@ -49,6 +49,7 @@ DERIVE_BCOS_EXCEPTION(InvalidEncoding);
 namespace executor
 {
 
+constexpr static evmc_address EMPTY_EVM_ADDRESS = {};
 using bytes_view = std::basic_string_view<uint8_t>;
 
 #define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
@@ -185,6 +186,8 @@ static const VMSchedule FiscoBcosScheduleV320 = [] {
     return schedule;
 }();
 
+constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
+
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
 }  // namespace executor
@@ -282,4 +285,8 @@ inline std::string getContractTableName(
 }
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data);
+
+evmc_address unhexAddress(std::string_view view);
+std::string addressBytesStr2HexString(std::string_view receiveAddressBytes);
+std::string address2HexString(const evmc_address& address);
 }  // namespace bcos
