@@ -25,13 +25,14 @@ find_package(Boost REQUIRED COMPONENTS serialization)
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(tarscpp REQUIRED)
 find_package(TBB REQUIRED)
+find_package(tomlplusplus CONFIG REQUIRED)
 
 file(GLOB SRCS bcos-tool/*.cpp)
 add_library(${TOOL_TARGET} ${SRCS})
 target_include_directories(${TOOL_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/bcos-protocol>
 )
-target_link_libraries(${TOOL_TARGET} PUBLIC ${TABLE_TARGET} ${UTILITIES_TARGET} bcos-framework jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
+target_link_libraries(${TOOL_TARGET} PUBLIC ${TABLE_TARGET} ${UTILITIES_TARGET} bcos-framework jsoncpp_static tomlplusplus::tomlplusplus tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
 
 if(TESTS)
   enable_testing()

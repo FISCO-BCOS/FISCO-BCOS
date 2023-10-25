@@ -35,6 +35,7 @@
     "zstd",
     "tbb",
     "zlib",
+    "tomlplusplus",
     {
       "name": "redis-plus-plus",
       "version>=": "1.3.2"

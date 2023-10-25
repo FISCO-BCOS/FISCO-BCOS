@@ -51,6 +51,7 @@ using namespace bcos::tool;
 using namespace bcos::consensus;
 using namespace bcos::ledger;
 using namespace bcos::protocol;
+using namespace std::string_literals;
 
 NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(_keyFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
@@ -83,18 +84,28 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadOthersConfig(_pt);
 }
 
-void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
+void NodeConfig::loadGenesisConfigFromString(std::string const& _content)
+{
+    loadGenesisConfig(toml::parse(_content));
+}
+
+void bcos::tool::NodeConfig::loadGenesisConfig(std::string const& _genesisConfigPath)
+{
+    loadGenesisConfig(toml::parse_file(_genesisConfigPath));
+}
+
+void NodeConfig::loadGenesisConfig(toml::table const& genesis)
 {
     // if version >= 3.1.0, genesisBlock include chainConfig
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
-        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
+    m_compatibilityVersionStr = genesis["version"]["compatibility_version"].value_or<std::string>(
+        std::string(bcos::protocol::RC4_VERSION_STR));
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        loadChainConfig(_genesisConfig, true);
+        loadChainConfig(genesis, true);
     }
-    loadLedgerConfig(_genesisConfig);
-    loadExecutorConfig(_genesisConfig);
+    loadLedgerConfig(genesis);
+    loadExecutorConfig(genesis);
     generateGenesisData();
 }
 
@@ -516,16 +527,16 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime);
 }
 
-void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId)
+void NodeConfig::loadChainConfig(toml::table const& genesis, bool _enforceGroupId)
 {
     try
     {
-        m_smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
+        m_smCryptoType = genesis["chain"]["sm_crypto"].value_or(false);
         if (_enforceGroupId)
         {
-            m_groupId = _pt.get<std::string>("chain.group_id", "group");
+            m_groupId = genesis["chain"]["group_id"].value_or("group"s);
         }
-        m_chainId = _pt.get<std::string>("chain.chain_id", "chain");
+        m_chainId = genesis["chain"]["chain_id"].value_or("chain"s);
     }
     catch (std::exception const& e)
     {
@@ -538,7 +549,7 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("The chainId must be number or digit"));
     }
-    m_blockLimit = checkAndGetValue(_pt, "chain.block_limit", "1000");
+    m_blockLimit = genesis["chain"]["block_limit"].value_or(1000LU);
     if (m_blockLimit <= 0 || m_blockLimit > MAX_BLOCK_LIMIT)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -751,12 +762,12 @@ void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("pipeline_size", m_pipelineSize);
 }
 
-void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig)
+void NodeConfig::loadLedgerConfig(toml::table const& genesis)
 {
     // consensus type
     try
     {
-        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type", "pbft");
+        m_consensusType = genesis["consensus"]["consensus_type"].value_or("pbft"s);
     }
     catch (std::exception const& e)
     {
@@ -771,8 +782,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                 "consensus.consensus_type is illegal, it must be pbft or rpbft!"));
     }
     // blockTxCountLimit
-    auto blockTxCountLimit =
-        checkAndGetValue(_genesisConfig, "consensus.block_tx_count_limit", "1000");
+    auto blockTxCountLimit = genesis["consensus"]["block_tx_count_limit"].value_or(1000LU);
     if (blockTxCountLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -780,7 +790,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     }
     m_ledgerConfig->setBlockTxCountLimit(blockTxCountLimit);
     // txGasLimit
-    auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit", "3000000000");
+    auto txGasLimit = genesis["tx"]["gas_limit"].value_or(3000000000LU);
     if (txGasLimit <= TX_GAS_LIMIT_MIN)
     {
         BOOST_THROW_EXCEPTION(
@@ -790,12 +800,12 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
 
     m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
-        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
+    m_compatibilityVersionStr = genesis["version"]["compatibility_version"].value_or(
+        std::string(bcos::protocol::RC4_VERSION_STR));
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
     // sealerList
-    auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
+    auto consensusNodeList = parseConsensusNodeList(genesis, "consensus", "node.");
     if (!consensusNodeList || consensusNodeList->empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment("Must set sealerList!"));
@@ -805,12 +815,12 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     // rpbft
     if (m_consensusType == RPBFT_CONSENSUS_TYPE)
     {
-        m_epochSealerNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_sealer_num", 4);
-        m_epochBlockNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_block_num", 1000);
+        m_epochSealerNum = genesis["consensus"]["epoch_sealer_num"].value_or(4);
+        m_epochBlockNum = genesis["consensus"]["epoch_block_num"].value_or(1000);
     }
 
     // leaderSwitchPeriod
-    auto consensusLeaderPeriod = checkAndGetValue(_genesisConfig, "consensus.leader_period", "1");
+    auto consensusLeaderPeriod = genesis["consensus"]["leader_period"].value_or(1);
     if (consensusLeaderPeriod <= 0)
     {
         BOOST_THROW_EXCEPTION(
@@ -827,52 +837,55 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                                 (bcos::protocol::BlockVersion)m_compatibilityVersion);
 }
 
-ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::ptree const& _pt,
-    std::string const& _sectionName, std::string const& _subSectionName)
+ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(
+    toml::table const& genesis, std::string const& _sectionName, std::string const& _subSectionName)
 {
-    if (!_pt.get_child_optional(_sectionName))
+    if (!genesis.contains(_sectionName))
     {
         NodeConfig_LOG(DEBUG) << LOG_DESC("parseConsensusNodeList return for empty config")
                               << LOG_KV("sectionName", _sectionName);
         return nullptr;
     }
     auto nodeList = std::make_shared<ConsensusNodeList>();
-    for (auto const& it : _pt.get_child(_sectionName))
+    auto sectionNode = genesis[_sectionName];
+
+    for (auto i = 0;; ++i)
     {
-        if (it.first.find(_subSectionName) != 0)
+        auto key = fmt::format("{}.{}", _subSectionName, i);
+        if (auto node = sectionNode[key])
         {
-            continue;
+            auto nodeString = node.value<std::string>();
+            std::vector<std::string> nodeInfo;
+            boost::split(nodeInfo, *nodeString, boost::is_any_of(":"));
+            if (nodeInfo.empty())
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(
+                        "Uninitialized nodeInfo, key: " + key + ", value: " + *nodeString));
+            }
+            std::string nodeId = nodeInfo[0];
+            boost::to_lower(nodeId);
+            int64_t weight = 1;
+            if (nodeInfo.size() == 2)
+            {
+                auto& weightInfoStr = nodeInfo[1];
+                boost::trim(weightInfoStr);
+                weight = boost::lexical_cast<int64_t>(weightInfoStr);
+            }
+            if (weight <= 0)
+            {
+                BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                          "Please set weight for " + nodeId + " to positive!"));
+            }
+            auto consensusNode = std::make_shared<ConsensusNode>(
+                m_keyFactory->createKey(*fromHexString(nodeId)), weight);
+            NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
+                                 << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
+                                 << LOG_KV("weight", weight);
+            nodeList->push_back(consensusNode);
         }
-        std::string data = it.second.data();
-        std::vector<std::string> nodeInfo;
-        boost::split(nodeInfo, data, boost::is_any_of(":"));
-        if (nodeInfo.size() == 0)
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "Uninitialized nodeInfo, key: " + it.first + ", value: " + data));
-        }
-        std::string nodeId = nodeInfo[0];
-        boost::to_lower(nodeId);
-        int64_t weight = 1;
-        if (nodeInfo.size() == 2)
-        {
-            auto& weightInfoStr = nodeInfo[1];
-            boost::trim(weightInfoStr);
-            weight = boost::lexical_cast<int64_t>(weightInfoStr);
-        }
-        if (weight <= 0)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "Please set weight for " + nodeId + " to positive!"));
-        }
-        auto consensusNode = std::make_shared<ConsensusNode>(
-            m_keyFactory->createKey(*fromHexString(nodeId)), weight);
-        NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
-                             << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
-                             << LOG_KV("weight", weight);
-        nodeList->push_back(consensusNode);
     }
+
     // only sort nodeList after rc3 version
     std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
     NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
@@ -882,9 +895,8 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
 
 void NodeConfig::generateGenesisData()
 {
-    std::string versionData = "";
-    std::string executorConfig = "";
-    std::string genesisdata = "";
+    std::string versionData;
+    std::string executorConfig;
     if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         auto genesisData = std::make_shared<bcos::ledger::GenesisConfig>(m_smCryptoType, m_chainId,
@@ -892,18 +904,18 @@ void NodeConfig::generateGenesisData()
             m_ledgerConfig->leaderSwitchPeriod(), m_compatibilityVersionStr, m_txGasLimit, m_isWasm,
             m_isAuthCheck, m_authAdminAddress, m_isSerialExecute, m_epochSealerNum,
             m_epochBlockNum);
-        genesisdata = genesisData->genesisDataOutPut();
+        auto genesisdata = genesisData->genesisDataOutPut();
         size_t j = 0;
         for (const auto& node : m_ledgerConfig->consensusNodeList())
         {
-            genesisdata = genesisdata + "node." + boost::lexical_cast<std::string>(j) + ":" +
-                          *toHexString(node->nodeID()->data()) + "," +
-                          std::to_string(node->weight()) + "\n";
+            genesisdata += "node." + boost::lexical_cast<std::string>(j) + ":" +
+                           *toHexString(node->nodeID()->data()) + "," +
+                           std::to_string(node->weight()) + "\n";
             ++j;
         }
         NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
                              << LOG_KV("genesisData", genesisdata);
-        m_genesisData = genesisdata;
+        m_genesisData = std::move(genesisdata);
         return;
     }
 
@@ -1005,6 +1017,20 @@ int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt,
     try
     {
         return boost::lexical_cast<int64_t>(value);
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "Invalid value " + value + " for configuration " + _key +
+                                  ", please set the value with a valid number"));
+    }
+}
+
+static int64_t checkAndGetValue(auto const& value, std::string_view defaultValue)
+{
+    try
+    {
+        return boost::lexical_cast<int64_t>(value.value_or(defaultValue));
     }
     catch (std::exception const& e)
     {

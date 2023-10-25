@@ -25,6 +25,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <toml++/toml.h>
 #include <util/tc_clientsocket.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -71,12 +72,9 @@ public:
     virtual void loadServiceTarsProxyConfig(
         const std::string& _serviceSectionName, boost::property_tree::ptree const& _pt);
 
-    virtual void loadGenesisConfig(std::string const& _genesisConfigPath)
-    {
-        boost::property_tree::ptree genesisConfig;
-        boost::property_tree::read_ini(_genesisConfigPath, genesisConfig);
-        loadGenesisConfig(genesisConfig);
-    }
+    void loadGenesisConfig(std::string const& _genesisConfigPath);
+    void loadGenesisConfigFromString(std::string const& _content);
+    void loadGenesisConfig(toml::table const& genesis);
 
     virtual void loadConfigFromString(std::string const& _content)
     {
@@ -86,17 +84,8 @@ public:
         loadConfig(iniConfig);
     }
 
-    virtual void loadGenesisConfigFromString(std::string const& _content)
-    {
-        boost::property_tree::ptree genesisConfig;
-        std::stringstream contentStream(_content);
-        boost::property_tree::read_ini(contentStream, genesisConfig);
-        loadGenesisConfig(genesisConfig);
-    }
-
     virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
         bool _enforceChainConfig = false, bool _enforceGroupId = true);
-    virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
     // the txpool configurations
     size_t txpoolLimit() const { return m_txpoolLimit; }
@@ -264,7 +253,7 @@ public:
     TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
 
 protected:
-    virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
+    void loadChainConfig(toml::table const& genesis, bool _enforceGroupId);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayConfig(boost::property_tree::ptree const& _pt);
     virtual void loadCertConfig(boost::property_tree::ptree const& _pt);
@@ -281,7 +270,7 @@ protected:
         boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
     virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
 
-    virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
+    void loadLedgerConfig(toml::table const& genesis);
 
     // load config.genesis
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
@@ -296,9 +285,8 @@ protected:
 
 
 private:
-    bcos::consensus::ConsensusNodeListPtr parseConsensusNodeList(
-        boost::property_tree::ptree const& _pt, std::string const& _sectionName,
-        std::string const& _subSectionName);
+    bcos::consensus::ConsensusNodeListPtr parseConsensusNodeList(toml::table const& genesis,
+        std::string const& _sectionName, std::string const& _subSectionName);
 
     void generateGenesisData();
     virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
