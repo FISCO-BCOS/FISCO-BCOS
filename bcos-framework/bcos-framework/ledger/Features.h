@@ -35,6 +35,9 @@ public:
         feature_sharding,
         feature_rpbft,
         feature_paillier,
+        feature_balance,
+        feature_balance_precompiled,
+        feature_balance_policy1,
     };
 
 private:

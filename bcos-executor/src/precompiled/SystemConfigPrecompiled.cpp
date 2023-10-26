@@ -150,7 +150,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            int64_t value = validate(configKey, configValue, blockContext.blockVersion());
+            int64_t value = validate(_executive, configKey, configValue, blockContext.blockVersion());
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
@@ -194,6 +194,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 }
 
 int64_t SystemConfigPrecompiled::validate(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     std::string_view _key, std::string_view value, uint32_t blockVersion)
 {
     int64_t configuredValue = 0;
@@ -214,6 +215,15 @@ int64_t SystemConfigPrecompiled::validate(
         if (setFeature && value != "1")
         {
             BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
+        }
+
+        if ((key.compare("feature_balance_precompiled") == 0) || (key.compare("feature_balance_policy1") == 0))
+        {
+            auto valueNumberPair = getSysConfigByKey(_executive, "feature_balance");
+            if(valueNumberPair.second == -1 || valueNumberPair.second > _executive->blockContext().number())
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledError("must set feature_balance first"));
+            }
         }
 
         if (m_valueConverter.contains(key))

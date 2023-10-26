@@ -57,6 +57,15 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(features3.get(Features::Flag::feature_dmc2serial), false);
     BOOST_CHECK_EQUAL(features3.get("feature_dmc2serial"), false);
 
+    BOOST_CHECK_EQUAL(features3.get(Features::Flag::feature_balance), false);
+    BOOST_CHECK_EQUAL(features3.get("feature_balance"), false);
+
+    BOOST_CHECK_EQUAL(features3.get(Features::Flag::feature_balance_precompiled), false);
+    BOOST_CHECK_EQUAL(features3.get("feature_balance_precompiled"), false);
+
+    BOOST_CHECK_EQUAL(features3.get(Features::Flag::feature_balance_policy1), false);
+    BOOST_CHECK_EQUAL(features3.get("feature_balance_policy1"), false);
+
     Features features4;
     BOOST_CHECK_EQUAL(features4.get(Features::Flag::feature_dmc2serial), false);
     BOOST_CHECK_EQUAL(features4.get("feature_dmc2serial"), false);
@@ -73,14 +82,61 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(features5.get(Features::Flag::feature_dmc2serial), true);
     BOOST_CHECK_EQUAL(features5.get("feature_dmc2serial"), true);
 
+    Features features6;
+    BOOST_CHECK_EQUAL(features6.get(Features::Flag::feature_balance), false);
+    BOOST_CHECK_EQUAL(features6.get("feature_balance"), false);
+
+    BOOST_CHECK_EQUAL(features6.get(Features::Flag::feature_balance_precompiled), false);
+    BOOST_CHECK_EQUAL(features6.get("feature_balance_precompiled"), false);
+
+    BOOST_CHECK_EQUAL(features6.get(Features::Flag::feature_balance_policy1), false);
+    BOOST_CHECK_EQUAL(features6.get("feature_balance_policy1"), false);
+
+    features6.set("feature_balance");
+    features6.set("feature_balance_precompiled");
+    features6.set("feature_balance_policy1");
+    BOOST_CHECK_EQUAL(features6.get(Features::Flag::feature_balance), true);
+    BOOST_CHECK_EQUAL(features6.get("feature_balance"), true);
+
+    BOOST_CHECK_EQUAL(features6.get(Features::Flag::feature_balance_precompiled), true);
+    BOOST_CHECK_EQUAL(features6.get("feature_balance_precompiled"), true);
+
+    BOOST_CHECK_EQUAL(features6.get(Features::Flag::feature_balance_policy1), true);
+    BOOST_CHECK_EQUAL(features6.get("feature_balance_policy1"), true);
+
+    Features features7;
+    BOOST_CHECK_EQUAL(features7.get(Features::Flag::feature_balance), false);
+    BOOST_CHECK_EQUAL(features7.get("feature_balance"), false);
+
+    BOOST_CHECK_EQUAL(features7.get(Features::Flag::feature_balance_precompiled), false);
+    BOOST_CHECK_EQUAL(features7.get("feature_balance_precompiled"), false);
+
+    BOOST_CHECK_EQUAL(features7.get(Features::Flag::feature_balance_policy1), false);
+    BOOST_CHECK_EQUAL(features7.get("feature_balance_policy1"), false);
+
+    features7.set(Features::Flag::feature_balance);
+    features7.set(Features::Flag::feature_balance_precompiled);
+    features7.set(Features::Flag::feature_balance_policy1);
+    BOOST_CHECK_EQUAL(features7.get(Features::Flag::feature_balance), true);
+    BOOST_CHECK_EQUAL(features7.get("feature_balance"), true);
+
+    BOOST_CHECK_EQUAL(features7.get(Features::Flag::feature_balance_precompiled), true);
+    BOOST_CHECK_EQUAL(features7.get("feature_balance_precompiled"), true);
+
+    BOOST_CHECK_EQUAL(features7.get(Features::Flag::feature_balance_policy1), true);
+    BOOST_CHECK_EQUAL(features7.get("feature_balance_policy1"), true);
+
     auto keys = Features::featureKeys();
-    BOOST_CHECK_EQUAL(keys.size(), 6);
+    BOOST_CHECK_EQUAL(keys.size(), 9);
     BOOST_CHECK_EQUAL(keys[0], "bugfix_revert");
     BOOST_CHECK_EQUAL(keys[1], "bugfix_statestorage_hash");
     BOOST_CHECK_EQUAL(keys[2], "feature_dmc2serial");
     BOOST_CHECK_EQUAL(keys[3], "feature_sharding");
     BOOST_CHECK_EQUAL(keys[4], "feature_rpbft");
     BOOST_CHECK_EQUAL(keys[5], "feature_paillier");
+    BOOST_CHECK_EQUAL(keys[6], "feature_balance");
+    BOOST_CHECK_EQUAL(keys[7], "feature_balance_precompiled");
+    BOOST_CHECK_EQUAL(keys[8], "feature_balance_policy1");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
