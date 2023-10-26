@@ -99,7 +99,7 @@ public:
         auto tarsCallback = std::make_unique<TarsCallback>();
         tarsCallback->m_cryptoSuite = m_cryptoSuite;
 
-        auto awaitable = Awaitable{.m_callback = tarsCallback.release(),
+        Awaitable awaitable{.m_callback = tarsCallback.release(),
             .m_transaction = std::move(transaction),
             .m_proxy = m_proxy};
 
