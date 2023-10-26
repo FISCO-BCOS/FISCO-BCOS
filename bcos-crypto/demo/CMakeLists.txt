@@ -12,5 +12,5 @@ if(ENABLE_IPPCRYPTO)
 
     add_executable(hasher_test hasher_test.cpp)
     target_include_directories(hasher_test PUBLIC ${IPPCRYPTO_INCLUDE_DIRS})
-    target_link_libraries(hasher_test PUBLIC ${BCOS_CRYPTO_TARGET} ${TABLE_TARGET} Boost::thread ${IPPCRYPTO_LIBRARIES} ZLIB::ZLIB)
+    target_link_libraries(hasher_test PUBLIC ${BCOS_CRYPTO_TARGET} Boost::thread ${IPPCRYPTO_LIBRARIES} ZLIB::ZLIB)
 endif()
