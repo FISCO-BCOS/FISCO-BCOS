@@ -123,8 +123,8 @@ public:
         auto result = multiIndexMap.emplace(std::move(newData));
         if (!result.second)
         {
-            TXPOOL_LOG(WARNING) << LOG_DESC("bucket insert failed") << LOG_KV("txHash", key)
-                                << LOG_KV("timestamp", newData.timeStamp);
+            TXPOOL_LOG(DEBUG) << LOG_DESC("bucket insert failed") << LOG_KV("txHash", key)
+                              << LOG_KV("timestamp", newData.timeStamp);
         }
         return {std::make_shared<IteratorImpl>(result.first), result.second};
     }
@@ -135,7 +135,25 @@ public:
     }
     void erase(std::shared_ptr<IteratorImpl> it_ptr)
     {
-        multiIndexMap.get<0>().erase(it_ptr->getIterator());
+        auto eraseCount = multiIndexMap.get<0>().erase(it_ptr->first);
+        if (eraseCount == 0)
+        {
+            if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << LOG_DESC("bucket erase failed")
+                                  << LOG_KV("txHash", it_ptr->first)
+                                  << LOG_KV("eraseCount", eraseCount);
+            }
+        }
+        else
+        {
+            if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << LOG_DESC("bucket erase success")
+                                  << LOG_KV("txHash", it_ptr->first)
+                                  << LOG_KV("eraseCount", eraseCount);
+            }
+        }
     }
     size_t size() const { return multiIndexMap.size(); }
     void clear() { multiIndexMap.clear(); }
