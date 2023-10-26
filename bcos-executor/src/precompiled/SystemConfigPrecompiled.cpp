@@ -217,13 +217,10 @@ int64_t SystemConfigPrecompiled::validate(
             BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
         }
 
-        if ((key.compare("feature_balance_precompiled") == 0) || (key.compare("feature_balance_policy1") == 0))
+        auto valRet = _executive->blockContext().features().validate(key);
+        if(!valRet.first)
         {
-            auto valueNumberPair = getSysConfigByKey(_executive, "feature_balance");
-            if(valueNumberPair.second == -1 || valueNumberPair.second > _executive->blockContext().number())
-            {
-                BOOST_THROW_EXCEPTION(PrecompiledError("must set feature_balance first"));
-            }
+            BOOST_THROW_EXCEPTION(PrecompiledError(valRet.second));
         }
 
         if (m_valueConverter.contains(key))
