@@ -1052,15 +1052,18 @@ bool NodeConfig::isValidPort(int port)
 
 void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree const& ptree)
 {
-    auto node = ptree.get_child("features");
-    for (const auto& it : node)
+    if (auto node = ptree.get_child_optional("features"))
     {
-        auto flag = it.first;
-        auto enableNumber = it.second.get_value<int>();
-        m_genesisConfig.m_features.emplace_back(ledger::FeatureSet{
-            .flag = ledger::Features::string2Flag(flag), .enableNumber = enableNumber});
+        for (const auto& it : *node)
+        {
+            auto flag = it.first;
+            auto enableNumber = it.second.get_value<int>();
+            m_genesisConfig.m_features.emplace_back(ledger::FeatureSet{
+                .flag = ledger::Features::string2Flag(flag), .enableNumber = enableNumber});
+        }
     }
 }
+
 std::string bcos::tool::NodeConfig::getDefaultServiceName(
     std::string const& _nodeName, std::string const& _serviceName) const
 {
