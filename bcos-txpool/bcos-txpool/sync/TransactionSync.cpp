@@ -153,6 +153,7 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
                 *missedTxsSet, _error, _fetchedTxs, _verifiedProposal, _onVerifyFinished);
             if (missedTxsSize == 0)
             {
+                SYNC_LOG(INFO) << LOG_DESC("missedTxsSize == 0");
                 return;
             }
             if (!_generatedNodeID ||
@@ -170,7 +171,7 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
             // fetch missed txs from the given peer
             auto ledgerMissedTxs =
                 std::make_shared<HashList>(missedTxsSet->begin(), missedTxsSet->end());
-            SYNC_LOG(DEBUG)
+            SYNC_LOG(INFO)
                 << LOG_DESC("requestMissedTxs: missing txs from ledger and fetch from the peer")
                 << LOG_KV("txsSize", ledgerMissedTxs->size())
                 << LOG_KV("peer", _generatedNodeID->shortHex())
@@ -192,7 +193,8 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
 {
     if (_error != nullptr)
     {
-        SYNC_LOG(TRACE) << LOG_DESC("onGetMissedTxsFromLedger: get error response")
+        SYNC_LOG(INFO) << LOG_DESC("onGetMissedTxsFromLedger: get error response")
+                        << LOG_KV("_missedTxs.size()", _missedTxs.size())
                         << LOG_KV("code", _error->errorCode())
                         << LOG_KV("msg", _error->errorMessage());
         return _missedTxs.size();
