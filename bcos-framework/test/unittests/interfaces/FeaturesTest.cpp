@@ -80,9 +80,9 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(keys[3], "feature_sharding");
     BOOST_CHECK_EQUAL(keys[4], "feature_rpbft");
     BOOST_CHECK_EQUAL(keys[5], "feature_paillier");
-    BOOST_CHECK_EQUAL(keys[3], "feature_balance");
-    BOOST_CHECK_EQUAL(keys[4], "feature_balance_precompiled");
-    BOOST_CHECK_EQUAL(keys[5], "feature_balance_policy1");
+    BOOST_CHECK_EQUAL(keys[6], "feature_balance");
+    BOOST_CHECK_EQUAL(keys[7], "feature_balance_precompiled");
+    BOOST_CHECK_EQUAL(keys[8], "feature_balance_policy1");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
