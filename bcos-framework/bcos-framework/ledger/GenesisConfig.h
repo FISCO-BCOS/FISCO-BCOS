@@ -20,9 +20,10 @@
 
 #pragma once
 
+#include "Features.h"
 #include "LedgerConfig.h"
 #include "bcos-framework/consensus/ConsensusNodeInterface.h"
-#include "bcos-ledger/src/libledger/Ledger.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
 #include <sstream>
 #include <string>
@@ -31,31 +32,17 @@
 
 namespace bcos::ledger
 {
+
+struct FeatureSet
+{
+    Features::Flag flag{};
+    protocol::BlockNumber enableNumber{};
+};
+
 class GenesisConfig
 {
 public:
     using Ptr = std::shared_ptr<GenesisConfig>;
-    GenesisConfig(bool smcrypto, std::string chainID, std::string groupID,
-        std::string consensusType, uint64_t txCountLimit, uint64_t leaderSwitchPeriod,
-        std::string compatibilityVersion, uint64_t txGasLimit, bool isWasm, bool isAuthCheck,
-        std::string authAdminAccount, bool isSerialExecute, uint64_t epochSealerNum,
-        uint64_t epochBlockNum)
-      : m_smCrypto(smcrypto),
-        m_chainID(std::move(chainID)),
-        m_groupID(std::move(groupID)),
-        m_consensusType(std::move(consensusType)),
-        m_txCountLimit(txCountLimit),
-        m_leaderSwitchPeriod(leaderSwitchPeriod),
-        m_compatibilityVersion(std::move(compatibilityVersion)),
-        m_txGasLimit(txGasLimit),
-        m_isWasm(isWasm),
-        m_isAuthCheck(isAuthCheck),
-        m_authAdminAccount(std::move(authAdminAccount)),
-        m_isSerialExecute(isSerialExecute),
-        m_epochSealerNum(epochSealerNum),
-        m_epochBlockNum(epochBlockNum)
-    {}
-    virtual ~GenesisConfig() = default;
 
     std::string genesisDataOutPut()
     {
@@ -69,7 +56,8 @@ public:
            << "block_tx_count_limit:" << m_txCountLimit << std::endl
            << "leader_period:" << m_leaderSwitchPeriod << std::endl
            << "[version]" << std::endl
-           << "compatibility_version:" << m_compatibilityVersion << std::endl
+           << "compatibility_version:" << bcos::protocol::BlockVersion(m_compatibilityVersion)
+           << std::endl
            << "[tx]" << std::endl
            << "gaslimit:" << m_txGasLimit << std::endl
            << "[executor]" << std::endl
@@ -77,17 +65,22 @@ public:
            << "isAuthCheck:" << m_isAuthCheck << std::endl
            << "authAdminAccount:" << m_authAdminAccount << std::endl
            << "isSerialExecute:" << m_isSerialExecute << std::endl;
-        if (bcos::tool::toVersionNumber(m_compatibilityVersion) >=
-            (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
+        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
         {
             ss << "epochSealerNum:" << m_epochSealerNum << std::endl
                << "epochBlockNum:" << m_epochBlockNum << std::endl;
         }
+        if (!m_features.empty())
+        {
+            ss << "[features]" << std::endl;
+            for (auto& feature : m_features)
+            {
+                ss << feature.flag << ":" << feature.enableNumber << std::endl;
+            }
+        }
         return ss.str();
     }
 
-
-private:
     // chain config
     bool m_smCrypto;
     std::string m_chainID;
@@ -99,7 +92,7 @@ private:
     uint64_t m_leaderSwitchPeriod = 1;
 
     // version config
-    std::string m_compatibilityVersion;
+    uint32_t m_compatibilityVersion;
 
     // tx config
     uint64_t m_txGasLimit = 3000000000;
@@ -110,7 +103,8 @@ private:
     bool m_isSerialExecute;
 
     // rpbft config
-    uint64_t m_epochSealerNum;
-    uint64_t m_epochBlockNum;
+    int64_t m_epochSealerNum;
+    int64_t m_epochBlockNum;
+    std::vector<FeatureSet> m_features;
 };  // namespace genesisConfig
 }  // namespace bcos::ledger
