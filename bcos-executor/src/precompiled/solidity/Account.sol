@@ -21,12 +21,12 @@ abstract contract Account {
     // 任何用户都可以调用
     function getAccountStatus() public view virtual returns (AccountStatus);
 
-    // 设置账户余额
+    // 设置账户余额，内部接口，用户不可调用
     function setAccountBalance(uint256) public virtual returns (int32);
-    // 获取账户余额
+    // 获取账户余额，任何用户都可以调用
     function getAccountBalance() public view virtual returns (uint256);
-    // 增加账户余额
+    // 增加账户余额，内部接口，用户不可调用
     function addAccountBalance(uint256) public virtual returns (int32);
-    // 减少账户余额
+    // 减少账户余额，内部接口，用户不可调用
     function subAccountBalance(uint256) public virtual returns (int32);
 }
