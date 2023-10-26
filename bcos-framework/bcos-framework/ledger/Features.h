@@ -21,6 +21,9 @@ namespace bcos::ledger
 struct NoSuchFeatureError : public bcos::error::Exception
 {
 };
+struct PreconditionsMisatchError : public bcos::error::Exception
+{
+};
 
 class Features
 {
@@ -71,6 +74,13 @@ public:
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
+
+        if ((flag == Flag::feature_balance_policy1 || flag == Flag::feature_balance_precompiled) &&
+            !get(Flag::feature_balance))
+        {
+            BOOST_THROW_EXCEPTION(PreconditionsMisatchError{});
+        }
+
         m_flags[*index] = true;
     }
     void set(std::string_view flag)
