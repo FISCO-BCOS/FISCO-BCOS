@@ -31,7 +31,7 @@ inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<buildGenesisBlock> /*
     bool isAuthCheck = false, std::string const& consensusType = "pbft",
     std::int64_t epochSealerNum = 4, std::int64_t epochBlockNum = 1000)
 {
-    co_return co_await ledger.buildGenesisBlock(std::move(ledgerConfig), gasLimit, genesisData,
+    co_return ledger.buildGenesisBlock(std::move(ledgerConfig), gasLimit, genesisData,
         compatibilityVersion, isAuthCheck, consensusType, epochSealerNum, epochBlockNum);
 }
 

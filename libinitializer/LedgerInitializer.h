@@ -54,11 +54,10 @@ public:
                 std::move(storageWrapper), blockFactory, storage);
         }
 
-        task::syncWait(
-            ledger->buildGenesisBlock(nodeConfig->ledgerConfig(), nodeConfig->txGasLimit(),
-                nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr(),
-                nodeConfig->isAuthCheck(), nodeConfig->consensusType(),
-                nodeConfig->epochSealerNum(), nodeConfig->epochBlockNum()));
+        ledger->buildGenesisBlock(nodeConfig->ledgerConfig(), nodeConfig->txGasLimit(),
+            nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr(),
+            nodeConfig->isAuthCheck(), nodeConfig->consensusType(), nodeConfig->epochSealerNum(),
+            nodeConfig->epochBlockNum());
 
         return ledger;
     }
