@@ -24,12 +24,10 @@
  * @date 2021-10-23
  */
 
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
+#include "Initializer.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "ExecutorInitializer.h"
-#include "Initializer.h"
 #include "LedgerInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
@@ -59,6 +57,7 @@
 #include <bcos-table/src/KeyPageStorage.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
@@ -118,8 +117,8 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
         privateKeyPath = _privateKeyPath;
     }
     m_protocolInitializer->loadKeyPair(privateKeyPath);
-    boost::property_tree::ptree pt;
-    boost::property_tree::read_ini(_configFilePath, pt);
+
+    auto pt = toml::parse_file(_configFilePath);
     m_nodeConfig->loadNodeServiceConfig(
         m_protocolInitializer->keyPair()->publicKey()->hex(), pt, false);
     if (!_airVersion)

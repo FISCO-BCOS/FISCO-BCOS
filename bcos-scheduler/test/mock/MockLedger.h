@@ -88,7 +88,7 @@ public:
         }
         else if (_key == ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)
         {
-            _onGetConfig(nullptr, bcos::protocol::RC4_VERSION_STR, 100);
+            _onGetConfig(nullptr, std::string(bcos::protocol::RC4_VERSION_STR), 100);
         }
         else
         {

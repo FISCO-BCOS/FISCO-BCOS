@@ -107,7 +107,7 @@ public:
         }
         else if (_key == ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)
         {
-            _onGetConfig(nullptr, bcos::protocol::RC4_VERSION_STR, commitBlockNumber);
+            _onGetConfig(nullptr, std::string(bcos::protocol::RC4_VERSION_STR), commitBlockNumber);
         }
         else if (_key == ledger::SYSTEM_KEY_RPBFT_SWITCH)
         {

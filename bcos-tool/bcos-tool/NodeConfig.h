@@ -27,8 +27,6 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <toml++/toml.h>
 #include <util/tc_clientsocket.h>
-#include <boost/property_tree/ini_parser.hpp>
-#include <boost/property_tree/ptree.hpp>
 #include <cstddef>
 #include <optional>
 #include <unordered_map>
@@ -54,23 +52,21 @@ public:
     virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
         bool enforceChainConfig = false, bool enforceGroupId = true)
     {
-        boost::property_tree::ptree iniConfig;
-        boost::property_tree::read_ini(_configPath, iniConfig);
-        loadConfig(iniConfig, _enforceMemberID, enforceChainConfig, enforceGroupId);
+        loadConfig(
+            toml::parse_file(_configPath), _enforceMemberID, enforceChainConfig, enforceGroupId);
     }
-    virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
-
-    virtual void loadWithoutTarsFrameworkConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadServiceConfig(toml::table const& _pt);
+    virtual void loadRpcServiceConfig(toml::table const& _pt);
+    virtual void loadGatewayServiceConfig(toml::table const& _pt);
+    virtual void loadWithoutTarsFrameworkConfig(toml::table const& _pt);
 
     virtual void loadNodeServiceConfig(
-        std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require = false);
+        std::string const& _nodeID, toml::table const& _pt, bool _require = false);
 
     virtual void loadTarsProxyConfig(const std::string& _tarsProxyConf);
 
     virtual void loadServiceTarsProxyConfig(
-        const std::string& _serviceSectionName, boost::property_tree::ptree const& _pt);
+        const std::string& _serviceSectionName, toml::table const& _pt);
 
     void loadGenesisConfig(std::string const& _genesisConfigPath);
     void loadGenesisConfigFromString(std::string const& _content);
@@ -78,13 +74,10 @@ public:
 
     virtual void loadConfigFromString(std::string const& _content)
     {
-        boost::property_tree::ptree iniConfig;
-        std::stringstream contentStream(_content);
-        boost::property_tree::read_ini(contentStream, iniConfig);
-        loadConfig(iniConfig);
+        loadConfig(toml::parse(_content));
     }
 
-    virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
+    virtual void loadConfig(toml::table const& _pt, bool _enforceMemberID = true,
         bool _enforceChainConfig = false, bool _enforceGroupId = true);
 
     // the txpool configurations
@@ -254,33 +247,31 @@ public:
 
 protected:
     void loadChainConfig(toml::table const& genesis, bool _enforceGroupId);
-    virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadGatewayConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadCertConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadSyncConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadRpcConfig(toml::table const& _pt);
+    virtual void loadGatewayConfig(toml::table const& _pt);
+    virtual void loadCertConfig(toml::table const& _pt);
+    virtual void loadTxPoolConfig(toml::table const& _pt);
+    virtual void loadSecurityConfig(toml::table const& _pt);
+    virtual void loadSealerConfig(toml::table const& _pt);
+    virtual void loadStorageSecurityConfig(toml::table const& _pt);
+    virtual void loadSyncConfig(toml::table const& _pt);
 
-    virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadStorageConfig(toml::table const& _pt);
+    virtual void loadConsensusConfig(toml::table const& _pt);
 
-    virtual void loadFailOverConfig(
-        boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
-    virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadFailOverConfig(toml::table const& _pt, bool _enforceMemberID = true);
+    virtual void loadOthersConfig(toml::table const& _pt);
 
     void loadLedgerConfig(toml::table const& genesis);
 
     // load config.genesis
-    void loadExecutorConfig(boost::property_tree::ptree const& _pt);
+    void loadExecutorConfig(toml::table const& _pt);
 
     // load config.ini
-    void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);
+    void loadExecutorNormalConfig(toml::table const& _pt);
 
-    std::string getServiceName(boost::property_tree::ptree const& _pt,
-        std::string const& _configSection, std::string const& _objName,
-        std::string const& _defaultValue = "", bool _require = true);
+    std::string getServiceName(toml::table const& _pt, std::string const& _configSection,
+        std::string const& _objName, std::string const& _defaultValue = "", bool _require = true);
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
 
@@ -289,48 +280,46 @@ private:
         std::string const& _sectionName, std::string const& _subSectionName);
 
     void generateGenesisData();
-    virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
-        std::string const& _value, std::string const& _defaultValue);
 
     bool isValidPort(int port);
 
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
-    size_t m_txpoolLimit;
-    size_t m_notifyWorkerNum;
-    size_t m_verifierWorkerNum;
-    int64_t m_txsExpirationTime;
+    size_t m_txpoolLimit{};
+    size_t m_notifyWorkerNum{};
+    size_t m_verifierWorkerNum{};
+    int64_t m_txsExpirationTime{};
     // TODO: the block sync module need some configurations?
 
     // chain configuration
-    bool m_smCryptoType;
+    bool m_smCryptoType{};
     std::string m_chainId;
     std::string m_groupId;
-    size_t m_blockLimit;
+    size_t m_blockLimit{};
 
     // sealer configuration
     size_t m_minSealTime = 0;
-    size_t m_checkPointTimeoutInterval;
+    size_t m_checkPointTimeoutInterval{};
     size_t m_pipelineSize = 50;
 
     // for security
     std::string m_privateKeyPath;
-    bool m_enableHsm;
+    bool m_enableHsm{};
     std::string m_hsmLibPath;
-    int m_keyIndex;
-    int m_encKeyIndex;
+    int m_keyIndex{};
+    int m_encKeyIndex{};
     std::string m_password;
 
     // storage security configuration
-    bool m_storageSecurityEnable;
+    bool m_storageSecurityEnable{};
     std::string m_storageSecurityKeyCenterIp;
-    unsigned short m_storageSecurityKeyCenterPort;
+    unsigned short m_storageSecurityKeyCenterPort{};
     std::string m_storageSecurityCipherDataKey;
 
     // ledger configuration
     std::string m_consensusType;
     bcos::ledger::LedgerConfig::Ptr m_ledgerConfig;
-    size_t m_txGasLimit;
+    size_t m_txGasLimit{};
     std::string m_genesisData;
 
     // rpbft
@@ -386,15 +375,15 @@ private:
 
     // config for rpc
     std::string m_rpcListenIP;
-    uint16_t m_rpcListenPort;
-    uint32_t m_rpcThreadPoolSize;
-    bool m_rpcSmSsl;
+    uint16_t m_rpcListenPort{};
+    uint32_t m_rpcThreadPoolSize{};
+    bool m_rpcSmSsl{};
     bool m_rpcDisableSsl = false;
 
     // config for gateway
     std::string m_p2pListenIP;
-    uint16_t m_p2pListenPort;
-    bool m_p2pSmSsl;
+    uint16_t m_p2pListenPort{};
+    bool m_p2pSmSsl{};
     std::string m_p2pNodeDir;
     std::string m_p2pNodeFileName;
 
@@ -418,7 +407,7 @@ private:
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
-    uint32_t m_compatibilityVersion;
+    uint32_t m_compatibilityVersion{};
     std::string m_compatibilityVersionStr;
 
     // failover config
@@ -430,6 +419,5 @@ private:
 
     // others config
     int m_sendTxTimeout = -1;
-    int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
 };
 }  // namespace bcos::tool
