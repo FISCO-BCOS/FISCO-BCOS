@@ -38,9 +38,6 @@ public:
         feature_sharding,
         feature_rpbft,
         feature_paillier,
-        feature_balance,
-        feature_balance_precompiled,
-        feature_balance_policy1
     };
 
 private:
@@ -73,12 +70,6 @@ public:
         if (!index)
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
-        }
-
-        if ((flag == Flag::feature_balance_policy1 || flag == Flag::feature_balance_precompiled) &&
-            !get(Flag::feature_balance))
-        {
-            BOOST_THROW_EXCEPTION(PreconditionsMisatchError{});
         }
 
         m_flags[*index] = true;

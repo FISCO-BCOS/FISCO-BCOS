@@ -108,14 +108,13 @@ public:
         override;
 
     /****** init ledger ******/
-    task::Task<bool> buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
+    bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
         const std::string_view& _genesisData, std::string const& _compatibilityVersion,
         bool _isAuthCheck = false, std::string const& _consensusType = "pbft",
         std::int64_t _epochSealerNum = 4, std::int64_t _epochBlockNum = 1000);
 
     void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
-
 
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,

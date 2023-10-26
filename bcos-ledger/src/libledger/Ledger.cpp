@@ -1596,7 +1596,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
 
 // sync method, to be split
 // FIXME: too long
-task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
+bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
     const std::string_view& _genesisData, std::string const& _compatibilityVersion,
     bool _isAuthCheck, std::string const& _consensusType, std::int64_t _epochSealerNum,
     std::int64_t _epochBlockNum)
@@ -1608,29 +1608,41 @@ task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size
                           << LOG_DESC("gas limit too low, return false")
                           << LOG_KV("gasLimit", _gasLimit)
                           << LOG_KV("gasLimitMin", TX_GAS_LIMIT_MIN);
-        co_return false;
+        return false;
     }
 
-    std::optional<crypto::HashType> blockHash;
-    try
+    std::promise<std::tuple<Error::Ptr, bcos::crypto::HashType>> getBlockPromise;
+    asyncGetBlockHashByNumber(0, [&](Error::Ptr error, bcos::crypto::HashType hash) {
+        getBlockPromise.set_value({std::move(error), hash});
+    });
+
+    auto getBlockResult = getBlockPromise.get_future().get();
+    if (std::get<0>(getBlockResult) &&
+        std::get<0>(getBlockResult)->errorCode() != LedgerError::GetStorageError)
     {
-        blockHash.emplace(co_await ledger::getBlockHash(*this, 0));
-    }
-    catch (Error& e)
-    {
-        if (e.errorCode() != LedgerError::GetStorageError)
-        {
-            BOOST_THROW_EXCEPTION(e);
-        }
+        BOOST_THROW_EXCEPTION(*(std::get<0>(getBlockResult)));
     }
 
-    if (blockHash)
+    if (std::get<1>(getBlockResult))
     {
         // genesis block exists, quit
         LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
-
-        auto block = co_await ledger::getBlockData(*this, 0, HEADER);
-        auto m_genesisBlockHeader = block->blockHeader();
+        std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
+        // get genesisBlockHeader
+        asyncGetBlockDataByNumber(
+            0, HEADER, [&blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
+                if (error)
+                {
+                    LEDGER_LOG(INFO) << "Get genesisBlockHeader from storage failed";
+                    blockHeaderFuture.set_value(nullptr);
+                }
+                else
+                {
+                    blockHeaderFuture.set_value(block->blockHeader());
+                }
+            });
+        bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
+            blockHeaderFuture.get_future().get();
         auto initialGenesisData = m_genesisBlockHeader->extraData().toStringView();
         // check genesisData whether inconsistent with initialGenesisData
         if (initialGenesisData == _genesisData)
@@ -1645,22 +1657,24 @@ task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size
             }
 
             // Before return, make sure sharding flag is placed
-            auto versionEntry = co_await storage2::readOne(
-                *m_storage, std::make_tuple(SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
-            auto blockNumberEntry = co_await storage2::readOne(
-                *m_storage, std::make_tuple(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
-            if (versionEntry && blockNumberEntry)
-            {
-                auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();
-                auto storageVersion = bcos::tool::toVersionNumber(versionStr);
+            task::syncWait([&]() -> task::Task<void> {
+                auto versionEntry = co_await storage2::readOne(
+                    *m_storage, std::make_tuple(SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
+                auto blockNumberEntry = co_await storage2::readOne(
+                    *m_storage, std::make_tuple(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
+                if (versionEntry && blockNumberEntry)
+                {
+                    auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();
+                    auto storageVersion = bcos::tool::toVersionNumber(versionStr);
 
-                Features shardingFeature;
-                shardingFeature.setToShardingDefault((protocol::BlockVersion)storageVersion);
-                co_await shardingFeature.writeToStorage(
-                    *m_storage, boost::lexical_cast<long>(blockNumberEntry->get()));
-            }
+                    Features shardingFeature;
+                    shardingFeature.setToShardingDefault((protocol::BlockVersion)storageVersion);
+                    co_await shardingFeature.writeToStorage(
+                        *m_storage, boost::lexical_cast<long>(blockNumberEntry->get()));
+                }
+            }());
 
-            co_return true;
+            return true;
         }
         // GetBlockDataByNumber success but not consistent with initialGenesisData
         if (m_genesisBlockHeader)
@@ -1687,7 +1701,7 @@ task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size
                                   ", high than support maxVersion"));
     }
     // clang-format off
-    constexpr static auto V300_TABLES = std::to_array<std::string_view>({
+    std::vector<std::string_view> tables {
         SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
         SYS_CONSENSUS, SYS_VALUE,
         SYS_CURRENT_STATE, SYS_VALUE,
@@ -1697,26 +1711,31 @@ task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size
         SYS_NUMBER_2_BLOCK_HEADER, SYS_VALUE,
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
-        SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE}
-    );
-    // clang-format on
-    RANGES::any_view<std::string_view, RANGES::category::random_access | RANGES::category::sized>
-        tables = RANGES::views::all(V300_TABLES);
+        SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
+    };
+
     if (versionNumber >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        constexpr static auto V310_TABLES = std::to_array<std::string_view>(
-            {SYS_CODE_BINARY, SYS_VALUE, SYS_CONTRACT_ABI, SYS_VALUE});
+        std::vector<std::string_view> moreTables{
+            SYS_CODE_BINARY, SYS_VALUE,
+            SYS_CONTRACT_ABI, SYS_VALUE
+        };
 
-        tables = RANGES::views::concat(V300_TABLES, V310_TABLES);
+        for (auto v : moreTables)
+        {
+            tables.push_back(v);
+        }
     }
+    // clang-format on
 
     size_t total = tables.size();
+
     for (size_t i = 0; i < total; i += 2)
     {
         std::promise<std::tuple<Error::UniquePtr>> createTablePromise;
         m_storage->asyncCreateTable(std::string(tables[i]), std::string(tables[i + 1]),
             [&createTablePromise](auto&& error, std::optional<Table>&&) {
-                createTablePromise.set_value({std::forward<decltype(error)>(error)});
+                createTablePromise.set_value({std::move(error)});
             });
         auto createTableResult = createTablePromise.get_future().get();
         if (std::get<0>(createTableResult))
@@ -1724,6 +1743,7 @@ task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size
             BOOST_THROW_EXCEPTION(*(std::get<0>(createTableResult)));
         }
     }
+
 
     createFileSystemTables(versionNumber);
     auto txLimit = _ledgerConfig->blockTxCountLimit();
@@ -1747,7 +1767,35 @@ task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size
 
     auto block = m_blockFactory->createBlock();
     block->setBlockHeader(header);
-    co_await ledger::prewriteBlock(*this, nullptr, block, false, m_storage);
+
+    std::promise<Error::Ptr> genesisBlockPromise;
+    asyncPrewriteBlock(m_storage, nullptr, block, [&genesisBlockPromise](Error::Ptr&& error) {
+        genesisBlockPromise.set_value(std::move(error));
+    });
+
+    auto error = genesisBlockPromise.get_future().get();
+    if (error)
+    {
+        BOOST_THROW_EXCEPTION(*error);
+    }
+
+    // write sys config
+    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> sysTablePromise;
+    m_storage->asyncOpenTable(
+        SYS_CONFIG, [&sysTablePromise](auto&& error, std::optional<Table>&& table) {
+            sysTablePromise.set_value({std::move(error), std::move(table)});
+        });
+
+    auto [tableError, sysTable] = sysTablePromise.get_future().get();
+    if (tableError)
+    {
+        BOOST_THROW_EXCEPTION(*tableError);
+    }
+
+    if (!sysTable)
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONFIG failed!"));
+    }
 
     // Write default features
     Features features;
@@ -1757,14 +1805,12 @@ task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size
     Entry txLimitEntry;
     txLimitEntry.setObject(
         SystemConfigEntry{boost::lexical_cast<std::string>(_ledgerConfig->blockTxCountLimit()), 0});
-    co_await storage2::writeOne(*m_storage, std::make_tuple(SYS_CONFIG, SYSTEM_KEY_TX_COUNT_LIMIT),
-        std::move(txLimitEntry));
+    sysTable->setRow(SYSTEM_KEY_TX_COUNT_LIMIT, std::move(txLimitEntry));
 
     // tx gas limit
     Entry gasLimitEntry;
     gasLimitEntry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>(_gasLimit), 0});
-    co_await storage2::writeOne(
-        *m_storage, std::make_tuple(SYS_CONFIG, SYSTEM_KEY_TX_GAS_LIMIT), std::move(gasLimitEntry));
+    sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
 
     if (RPBFT_CONSENSUS_TYPE == _consensusType &&
         versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
@@ -1775,52 +1821,60 @@ task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size
         Entry epochSealerNumEntry;
         epochSealerNumEntry.setObject(
             SystemConfigEntry{boost::lexical_cast<std::string>(_epochSealerNum), 0});
-        co_await storage2::writeOne(*m_storage,
-            std::make_tuple(SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM),
-            std::move(epochSealerNumEntry));
+        sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, std::move(epochSealerNumEntry));
 
         Entry epochBlockNumEntry;
         epochBlockNumEntry.setObject(
             SystemConfigEntry{boost::lexical_cast<std::string>(_epochBlockNum), 0});
-        co_await storage2::writeOne(*m_storage,
-            std::make_tuple(SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM),
-            std::move(epochBlockNumEntry));
+        sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, std::move(epochBlockNumEntry));
 
         Entry notifyRotateEntry;
         notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
-        co_await storage2::writeOne(*m_storage,
-            std::make_tuple(SYS_CONFIG, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE),
-            std::move(notifyRotateEntry));
+        sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
     }
 
     // consensus leader period
     Entry leaderPeriodEntry;
     leaderPeriodEntry.setObject(SystemConfigEntry{
         boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), 0});
-    co_await storage2::writeOne(*m_storage,
-        std::make_tuple(SYS_CONFIG, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD),
-        std::move(leaderPeriodEntry));
+    sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
     LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
                      << LOG_KV("versionNumber", versionNumber);
     // write compatibility version
     Entry compatibilityVersionEntry;
     compatibilityVersionEntry.setObject(SystemConfigEntry{_compatibilityVersion, 0});
-    co_await storage2::writeOne(*m_storage,
-        std::make_tuple(SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION),
-        std::move(compatibilityVersionEntry));
+    sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
 
     if (versionCompareTo(versionNumber, BlockVersion::V3_3_VERSION) >= 0)
     {
         // write auth check status
         Entry authCheckStatusEntry;
         authCheckStatusEntry.setObject(SystemConfigEntry{_isAuthCheck ? "1" : "0", 0});
-        co_await storage2::writeOne(*m_storage,
-            std::make_tuple(SYS_CONFIG, SYSTEM_KEY_AUTH_CHECK_STATUS),
-            std::move(authCheckStatusEntry));
+        sysTable->setRow(SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(authCheckStatusEntry));
+    }
+
+    // write consensus node list
+    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;
+    m_storage->asyncOpenTable(SYS_CONSENSUS, [&consensusTablePromise](
+                                                 auto&& error, std::optional<Table>&& table) {
+        consensusTablePromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
+    });
+
+    auto [consensusError, consensusTable] = consensusTablePromise.get_future().get();
+    if (consensusError)
+    {
+        BOOST_THROW_EXCEPTION(*consensusError);
+    }
+
+    if (!consensusTable)
+    {
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONSENSUS failed!"));
     }
 
     ConsensusNodeList consensusNodeList;
+
     for (const auto& node : _ledgerConfig->consensusNodeList())
     {
         consensusNodeList.emplace_back(
@@ -1853,32 +1907,56 @@ task::Task<bool> Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size
 
     Entry consensusNodeListEntry;
     consensusNodeListEntry.importFields({encodeConsensusList(consensusNodeList)});
-    co_await storage2::writeOne(*m_storage, std::make_tuple(SYS_CONSENSUS, std::string_view{"key"}),
-        std::move(consensusNodeListEntry));
+
+    std::promise<Error::UniquePtr> setConsensusNodeListPromise;
+    consensusTable->asyncSetRow("key", std::move(consensusNodeListEntry),
+        [&setConsensusNodeListPromise](
+            Error::UniquePtr&& error) { setConsensusNodeListPromise.set_value(std::move(error)); });
+
+    auto setConsensusNodeListError = setConsensusNodeListPromise.get_future().get();
+    if (setConsensusNodeListError)
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR_WITH_PREV(
+            LedgerError::CallbackError, "Write genesis consensus node list failed!", *error));
+    }
+
+    // write current state
+    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> stateTablePromise;
+    m_storage->asyncOpenTable(
+        SYS_CURRENT_STATE, [&stateTablePromise](auto&& error, std::optional<Table>&& table) {
+            stateTablePromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
+        });
+
+    auto [stateError, stateTable] = stateTablePromise.get_future().get();
+    if (stateError)
+    {
+        BOOST_THROW_EXCEPTION(*stateError);
+    }
+
+    if (!stateTable)
+    {
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CURRENT_STATE failed!"));
+    }
 
     Entry currentNumber;
     currentNumber.importFields({"0"});
-    co_await storage2::writeOne(*m_storage,
-        std::make_tuple(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER), std::move(currentNumber));
+    stateTable->setRow(SYS_KEY_CURRENT_NUMBER, std::move(currentNumber));
 
     Entry txNumber;
     txNumber.importFields({"0"});
-    co_await storage2::writeOne(*m_storage,
-        std::make_tuple(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT), std::move(txNumber));
+    stateTable->setRow(SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(txNumber));
 
     Entry txFailedNumber;
     txFailedNumber.importFields({"0"});
-    co_await storage2::writeOne(*m_storage,
-        std::make_tuple(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION),
-        std::move(txFailedNumber));
+    stateTable->setRow(SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(txFailedNumber));
 
     Entry archivedNumber;
     archivedNumber.importFields({"0"});
-    co_await storage2::writeOne(*m_storage,
-        std::make_tuple(SYS_CURRENT_STATE, SYS_KEY_ARCHIVED_NUMBER), std::move(archivedNumber));
+    stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
 
     task::syncWait(features.writeToStorage(*m_storage, 0));
-    co_return true;
+    return true;
 }
 
 bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
