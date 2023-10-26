@@ -21,9 +21,6 @@ namespace bcos::ledger
 struct NoSuchFeatureError : public bcos::error::Exception
 {
 };
-struct PreconditionsMisatchError : public bcos::error::Exception
-{
-};
 
 class Features
 {
