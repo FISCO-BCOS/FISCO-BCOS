@@ -217,10 +217,13 @@ int64_t SystemConfigPrecompiled::validate(
             BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
         }
 
-        auto valRet = _executive->blockContext().features().validate(key);
-        if(!valRet.first)
+        if(setFeature)
         {
-            BOOST_THROW_EXCEPTION(PrecompiledError(valRet.second));
+            auto valRet = _executive->blockContext().features().validate(key);
+            if(!valRet.first)
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledError(valRet.second));
+            }
         }
 
         if (m_valueConverter.contains(key))
