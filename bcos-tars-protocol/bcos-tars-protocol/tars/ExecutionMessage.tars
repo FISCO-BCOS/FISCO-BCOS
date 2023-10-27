@@ -30,5 +30,11 @@ struct ExecutionMessage
     26 optional string delegateCallSender;
     27 optional int evmStatus;
     28 optional bool hasContractTableChanged = false;
+    29 optional string value;
+    30 optional string gasPrice;
+    31 optional string gasLimit;
+    32 optional string maxFeePerGas;
+    33 optional string maxPriorityFeePerGas;
+    34 optional string effectiveGasPrice;
 };
 };

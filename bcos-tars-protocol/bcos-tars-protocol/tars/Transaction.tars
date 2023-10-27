@@ -8,6 +8,11 @@ module bcostars {
         6 optional string to;
         7 optional vector<byte> input;
         8 optional string abi;
+        9 optional string value;
+        10 optional string gasPrice;
+        11 optional string gasLimit;
+        12 optional string maxFeePerGas;
+        13 optional string maxPriorityFeePerGas;
     };
 
     struct Transaction {

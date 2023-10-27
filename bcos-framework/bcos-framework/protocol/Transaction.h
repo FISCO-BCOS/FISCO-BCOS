@@ -94,6 +94,13 @@ public:
     virtual std::string_view to() const = 0;
     virtual std::string_view abi() const = 0;
 
+    // balance
+    virtual std::string_view value() const = 0;
+    virtual std::string_view gasPrice() const = 0;
+    virtual std::string_view gasLimit() const = 0;
+    virtual std::string_view maxFeePerGas() const = 0;
+    virtual std::string_view maxPriorityFeePerGas() const = 0;
+
     virtual std::string_view extraData() const = 0;
     virtual void setExtraData(std::string const& _extraData) = 0;
 

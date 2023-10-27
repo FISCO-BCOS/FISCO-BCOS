@@ -115,6 +115,7 @@ enum ProtocolVersion : uint32_t
 
 enum class BlockVersion : uint32_t
 {
+    V3_6_VERSION = 0x03060000,
     V3_5_VERSION = 0x03050000,
     V3_4_VERSION = 0x03040000,
     V3_3_VERSION = 0x03030000,
@@ -127,6 +128,14 @@ enum class BlockVersion : uint32_t
     MIN_VERSION = RC4_VERSION,
     MAX_VERSION = V3_5_VERSION,
 };
+
+enum class TransactionVersion : int32_t
+{
+    V0_0_VERSION = 0x00000000,
+    V1_0_VERSION = 0x01000000,
+
+};
+
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string V3_0_VERSION_STR = "3.0.0";
 const std::string V3_1_VERSION_STR = "3.1.0";
