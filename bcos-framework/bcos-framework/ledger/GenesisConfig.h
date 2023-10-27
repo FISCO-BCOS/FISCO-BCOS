@@ -70,7 +70,7 @@ public:
             ss << "epochSealerNum:" << m_epochSealerNum << std::endl
                << "epochBlockNum:" << m_epochBlockNum << std::endl;
         }
-        if (!m_features.empty())
+        if (!m_features.empty())  // TODO: Need version check?
         {
             ss << "[features]" << std::endl;
             for (auto& feature : m_features)
