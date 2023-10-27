@@ -175,10 +175,14 @@ public:
         m_param->setObserverNodeList(observerNodeList);
 
         LEDGER_LOG(TRACE) << "build genesis for first time";
-        auto result = m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion = tool::toVersionNumber(version);
+
+        auto result = m_ledger->buildGenesisBlock(genesisConfig, *m_param);
         BOOST_CHECK(result);
         LEDGER_LOG(TRACE) << "build genesis for second time";
-        auto result2 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
+        auto result2 = m_ledger->buildGenesisBlock(genesisConfig, *m_param);
         BOOST_CHECK(result2);
     }
 
@@ -189,14 +193,25 @@ public:
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(0);
 
-        auto result1 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+        GenesisConfig genesisConfig1;
+        genesisConfig1.m_txGasLimit = 3000000000;
+        genesisConfig1.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
+        auto result1 = m_ledger->buildGenesisBlock(genesisConfig1, *m_param);
         BOOST_CHECK(result1);
-        auto result2 =
-            m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::V3_1_VERSION_STR);
+
+        GenesisConfig genesisConfig2;
+        genesisConfig1.m_txGasLimit = 30;
+        genesisConfig1.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
+        auto result2 = m_ledger->buildGenesisBlock(genesisConfig2, *m_param);
         BOOST_CHECK(!result2);
-        auto result3 =
-            m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+
+        GenesisConfig genesisConfig3;
+        genesisConfig1.m_txGasLimit = 3000000000;
+        genesisConfig1.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
+        auto result3 = m_ledger->buildGenesisBlock(genesisConfig3, *m_param);
         BOOST_CHECK(result3);
     }
 

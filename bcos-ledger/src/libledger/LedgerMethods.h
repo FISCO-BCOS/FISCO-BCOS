@@ -26,13 +26,9 @@ namespace bcos::ledger
 {
 
 inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/,
-    auto& ledger, LedgerConfig::Ptr ledgerConfig, size_t gasLimit,
-    const std::string_view& genesisData, std::string const& compatibilityVersion,
-    bool isAuthCheck = false, std::string const& consensusType = "pbft",
-    std::int64_t epochSealerNum = 4, std::int64_t epochBlockNum = 1000)
+    auto& ledger, GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
 {
-    co_return ledger.buildGenesisBlock(std::move(ledgerConfig), gasLimit, genesisData,
-        compatibilityVersion, isAuthCheck, consensusType, epochSealerNum, epochBlockNum);
+    co_return ledger.buildGenesisBlock(genesis, ledgerConfig);
 }
 
 task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,

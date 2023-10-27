@@ -15,13 +15,10 @@ namespace bcos::ledger
 {
 struct BuildGenesisBlock
 {
-    task::Task<bool> operator()(auto& ledger, LedgerConfig::Ptr ledgerConfig, size_t gasLimit,
-        const std::string_view& genesisData, std::string const& compatibilityVersion,
-        bool isAuthCheck = false, std::string const& consensusType = "pbft",
-        std::int64_t epochSealerNum = 4, std::int64_t epochBlockNum = 1000) const
+    task::Task<bool> operator()(
+        auto& ledger, GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig) const
     {
-        co_return co_await tag_invoke(*this, ledger, std::move(ledgerConfig), gasLimit, genesisData,
-            compatibilityVersion, isAuthCheck, consensusType, epochSealerNum, epochBlockNum);
+        co_return co_await tag_invoke(*this, ledger, genesis, ledgerConfig);
     }
 };
 inline constexpr BuildGenesisBlock buildGenesisBlock{};

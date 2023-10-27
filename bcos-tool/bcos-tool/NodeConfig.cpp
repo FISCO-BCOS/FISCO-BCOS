@@ -99,7 +99,6 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
 
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
-    generateGenesisData();
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
@@ -890,47 +889,6 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
     return nodeList;
 }
 
-void NodeConfig::generateGenesisData()
-{
-    std::string versionData;
-    std::string executorConfig;
-    std::string genesisdata;
-    if (m_genesisConfig.m_compatibilityVersion >=
-        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-    {
-        genesisdata = m_genesisConfig.genesisDataOutPut();
-        size_t j = 0;
-        for (const auto& node : m_ledgerConfig->consensusNodeList())
-        {
-            genesisdata = genesisdata + "node." + boost::lexical_cast<std::string>(j) + ":" +
-                          *toHexString(node->nodeID()->data()) + "," +
-                          std::to_string(node->weight()) + "\n";
-            ++j;
-        }
-        NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
-                             << LOG_KV("genesisData", genesisdata);
-        m_genesisData = genesisdata;
-        return;
-    }
-
-    versionData = compatibilityVersionStr() + "-";
-    std::stringstream ss;
-    ss << m_genesisConfig.m_isWasm << "-" << m_genesisConfig.m_isAuthCheck << "-"
-       << m_genesisConfig.m_authAdminAccount << "-" << m_genesisConfig.m_isSerialExecute;
-    executorConfig = ss.str();
-
-    ss.str("");
-    ss << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
-       << m_genesisConfig.m_txGasLimit << "-" << versionData << executorConfig;
-    for (const auto& node : m_ledgerConfig->consensusNodeList())
-    {
-        ss << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";
-    }
-    m_genesisData = ss.str();
-    NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
-                         << LOG_KV("genesisData", m_genesisData);
-}
-
 void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisConfig)
 {
     try
@@ -1069,4 +1027,82 @@ std::string bcos::tool::NodeConfig::getDefaultServiceName(
     std::string const& _nodeName, std::string const& _serviceName) const
 {
     return m_genesisConfig.m_chainID + "." + _nodeName + _serviceName;
+}
+
+std::string bcos::tool::generateGenesisData(
+    ledger::GenesisConfig const& genesisConfig, ledger::LedgerConfig const& ledgerConfig)
+{
+    if (genesisConfig.m_compatibilityVersion >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        std::stringstream ss;
+        ss << "[chain]" << '\n'
+           << "sm_crypto:" << genesisConfig.m_smCrypto << '\n'
+           << "chainID: " << genesisConfig.m_chainID << '\n'
+           << "grouID: " << genesisConfig.m_groupID << '\n'
+           << "[consensys]" << '\n'
+           << "consensus_type: " << genesisConfig.m_consensusType << '\n'
+           << "block_tx_count_limit:" << genesisConfig.m_txCountLimit << '\n'
+           << "leader_period:" << genesisConfig.m_leaderSwitchPeriod << '\n'
+           << "[version]" << '\n'
+           << "compatibility_version:"
+           << bcos::protocol::BlockVersion(genesisConfig.m_compatibilityVersion) << '\n'
+           << "[tx]" << '\n'
+           << "gaslimit:" << genesisConfig.m_txGasLimit << '\n'
+           << "[executor]" << '\n'
+           << "iswasm: " << genesisConfig.m_isWasm << '\n'
+           << "isAuthCheck:" << genesisConfig.m_isAuthCheck << '\n'
+           << "authAdminAccount:" << genesisConfig.m_authAdminAccount << '\n'
+           << "isSerialExecute:" << genesisConfig.m_isSerialExecute << '\n';
+        if (genesisConfig.m_compatibilityVersion >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
+        {
+            ss << "epochSealerNum:" << genesisConfig.m_epochSealerNum << '\n'
+               << "epochBlockNum:" << genesisConfig.m_epochBlockNum << '\n';
+        }
+        if (!genesisConfig.m_features.empty())  // TODO: Need version check?
+        {
+            ss << "[features]" << '\n';
+            for (const auto& feature : genesisConfig.m_features)
+            {
+                ss << feature.flag << ":" << feature.enableNumber << '\n';
+            }
+        }
+
+        size_t j = 0;
+        for (const auto& node : ledgerConfig.consensusNodeList())
+        {
+            ss << "node." + boost::lexical_cast<std::string>(j) + ":" +
+                      *toHexString(node->nodeID()->data()) + "," + std::to_string(node->weight()) +
+                      "\n";
+            ++j;
+        }
+        std::string genesisdata = ss.str();
+        NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
+                             << LOG_KV("genesisData", genesisdata);
+
+        return genesisdata;
+    }
+
+    std::stringstream executorStream;
+    executorStream << genesisConfig.m_isWasm << "-" << genesisConfig.m_isAuthCheck << "-"
+                   << genesisConfig.m_authAdminAccount << "-" << genesisConfig.m_isSerialExecute;
+
+    std::stringstream ss;
+    ss << ledgerConfig.blockTxCountLimit() << "-" << ledgerConfig.leaderSwitchPeriod() << "-"
+       << genesisConfig.m_txGasLimit << "-"
+       << protocol::BlockVersion(genesisConfig.m_compatibilityVersion) << "-"
+       << executorStream.str();
+    for (const auto& node : ledgerConfig.consensusNodeList())
+    {
+        ss << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";
+    }
+    auto genesisdata = ss.str();
+    NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData") << LOG_KV("genesisData", genesisdata);
+
+    return genesisdata;
+}
+bcos::ledger::GenesisConfig const& bcos::tool::NodeConfig::genesisConfig() const
+{
+    return m_genesisConfig;
 }

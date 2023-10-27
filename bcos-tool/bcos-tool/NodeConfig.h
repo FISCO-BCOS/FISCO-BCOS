@@ -268,6 +268,8 @@ public:
     };
     TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
 
+    ledger::GenesisConfig const& genesisConfig() const;
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -299,7 +301,6 @@ protected:
         std::string const& _defaultValue = "", bool _require = true);
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
-
 private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
 
@@ -307,7 +308,6 @@ private:
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);
 
-    void generateGenesisData();
     virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
         std::string const& _value, std::string const& _defaultValue);
 
@@ -346,6 +346,9 @@ private:
     // ledger configuration
     bcos::ledger::LedgerConfig::Ptr m_ledgerConfig;
     std::string m_genesisData;
+
+    // Genesis config
+    ledger::GenesisConfig m_genesisConfig;
 
     // storage configuration
     std::string m_storagePath;
@@ -435,7 +438,9 @@ private:
     // others config
     int m_sendTxTimeout = -1;
     int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
-
-    ledger::GenesisConfig m_genesisConfig;
 };
+
+std::string generateGenesisData(
+    ledger::GenesisConfig const& genesisConfig, ledger::LedgerConfig const& ledgerConfig);
+
 }  // namespace bcos::tool
