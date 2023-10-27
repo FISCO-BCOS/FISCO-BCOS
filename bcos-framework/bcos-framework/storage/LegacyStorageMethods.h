@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Entry.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-task/Task.h"
 
 namespace bcos::storage
 {
@@ -43,9 +45,18 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
     };
 
     auto [table, key] = stateKey;
-    auto value =
-        co_await Awaitable{.m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
-    co_return value;
+    Awaitable awaitable{.m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
+    co_return co_await awaitable;
+}
+
+inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
+    StorageInterface& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+{
+    for (auto&& [key, value] : RANGES::views::zip(keys, values))
+    {
+        co_await storage2::writeOne(
+            storage, std::forward<decltype(key)>(key), std::forward<decltype(value)>(value));
+    }
 }
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
@@ -81,11 +92,12 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
     };
 
     auto [table, key] = stateKey;
-    co_await Awaitable{.m_storage = storage,
+    Awaitable awaitable{.m_storage = storage,
         .m_table = table,
         .m_key = key,
         .m_entry = std::move(entry),
         .m_result = {}};
+    co_await awaitable;
 }
 
 }  // namespace bcos::storage

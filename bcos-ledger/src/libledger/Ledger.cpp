@@ -22,7 +22,10 @@
  */
 
 #include "Ledger.h"
+#include "LedgerMethods.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
 #include "utilities/Common.h"
@@ -51,6 +54,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <array>
 #include <cstddef>
 #include <future>
 #include <memory>
@@ -985,7 +989,7 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
                 bcos::crypto::HashType hash(
                     std::string(hashStr), bcos::crypto::HashType::FromBinary);
 
-                callback(nullptr, std::move(hash));
+                callback(nullptr, hash);
             }
             catch (std::exception& e)
             {
@@ -1407,8 +1411,8 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
 {
     LEDGER_LOG(DEBUG) << "GetNodeListByType request" << LOG_KV("type", _type);
 
-    asyncGetBlockNumber([this, type = std::move(_type), callback = std::move(_onGetConfig)](
-                            Error::Ptr&& error, bcos::protocol::BlockNumber blockNumber) {
+    asyncGetBlockNumber([this, type = _type, callback = std::move(_onGetConfig)](
+                            Error::Ptr&& error, bcos::protocol::BlockNumber blockNumber) mutable {
         if (error)
         {
             LEDGER_LOG(DEBUG) << "GetNodeListByType" << boost::diagnostic_information(*error);
@@ -1423,7 +1427,7 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
         m_storage->asyncGetRow(SYS_CONSENSUS, "key",
             [callback = std::move(callback), type = type, this, blockNumber](
                 Error::UniquePtr error, std::optional<Entry> entry) {
-                if (error)
+                if (error || !entry)
                 {
                     callback(std::move(error), nullptr);
                     return;

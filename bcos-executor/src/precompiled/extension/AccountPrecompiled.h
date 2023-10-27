@@ -48,5 +48,25 @@ private:
     void getAccountStatus(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters) const;
+
+    void setAccountBalance(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        PrecompiledExecResult::Ptr const& _callParameters) const;
+
+    void getAccountBalance(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters) const;
+
+    void addAccountBalance(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        PrecompiledExecResult::Ptr const& _callParameters) const;
+
+    void subAccountBalance(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        PrecompiledExecResult::Ptr const& _callParameters) const;
+
+private:
+    // Fake storage for balance,should be removed after real implementation
+    mutable std::map<std::string,u256>  m_fakeAccountBalances;
 };
 }  // namespace bcos::precompiled

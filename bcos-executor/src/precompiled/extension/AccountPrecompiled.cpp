@@ -29,6 +29,11 @@ using namespace bcos::protocol;
 
 const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(uint8)";
 const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus()";
+const char* const AM_METHOD_GET_ACCOUNT_BALANCE = "getAccountBalance()";
+const char* const AM_METHOD_SET_ACCOUNT_BALANCE = "setAccountBalance(uint256)";
+const char* const AM_METHOD_ADD_ACCOUNT_BALANCE = "addAccountBalance(uint256)";
+const char* const AM_METHOD_SUB_ACCOUNT_BALANCE = "subAccountBalance(uint256)";
+
 
 AccountPrecompiled::AccountPrecompiled(crypto::Hash::Ptr hashImpl) : Precompiled(hashImpl)
 {
@@ -36,6 +41,14 @@ AccountPrecompiled::AccountPrecompiled(crypto::Hash::Ptr hashImpl) : Precompiled
         getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, hashImpl);
     name2Selector[AM_METHOD_GET_ACCOUNT_STATUS] =
         getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, hashImpl);
+    name2Selector[AM_METHOD_GET_ACCOUNT_BALANCE] =
+        getFuncSelector(AM_METHOD_GET_ACCOUNT_BALANCE, hashImpl);
+    name2Selector[AM_METHOD_SET_ACCOUNT_BALANCE] =
+        getFuncSelector(AM_METHOD_SET_ACCOUNT_BALANCE, hashImpl);
+    name2Selector[AM_METHOD_ADD_ACCOUNT_BALANCE] =
+        getFuncSelector(AM_METHOD_ADD_ACCOUNT_BALANCE, hashImpl);
+    name2Selector[AM_METHOD_SUB_ACCOUNT_BALANCE] =
+        getFuncSelector(AM_METHOD_SUB_ACCOUNT_BALANCE, hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
@@ -67,6 +80,22 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     else if (func == name2Selector[AM_METHOD_GET_ACCOUNT_STATUS])
     {
         getAccountStatus(accountTableName, _executive, _callParameters);
+    }
+    else if (func == name2Selector[AM_METHOD_SET_ACCOUNT_BALANCE])
+    {
+        setAccountBalance(accountTableName,_executive,data,_callParameters);
+    }
+    else if (func == name2Selector[AM_METHOD_GET_ACCOUNT_BALANCE])
+    {
+        getAccountBalance(accountTableName, _executive, _callParameters);
+    }
+    else if (func == name2Selector[AM_METHOD_ADD_ACCOUNT_BALANCE])
+    {
+        addAccountBalance(accountTableName,_executive,data,_callParameters);
+    }
+    else if (func == name2Selector[AM_METHOD_SUB_ACCOUNT_BALANCE])
+    {
+        subAccountBalance(accountTableName,_executive,data,_callParameters);
     }
     else
     {
@@ -178,4 +207,70 @@ uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
                            << LOG_KV("status", statusStr);
     auto status = boost::lexical_cast<uint8_t>(statusStr);
     return status;
+}
+
+void AccountPrecompiled::setAccountBalance(const std::string& tableName,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    PrecompiledExecResult::Ptr const& _callParameters) const
+{
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    u256 balance = 0;
+    codec.decode(data, balance);
+
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("AccountPrecompiled")
+                          << LOG_DESC("setAccountBalance") << LOG_KV("account", tableName)
+                          << LOG_KV("balance", to_string(balance));
+
+    m_fakeAccountBalances[tableName] = balance;
+    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+}
+
+void AccountPrecompiled::getAccountBalance(const std::string& tableName,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    PrecompiledExecResult::Ptr const& _callParameters) const
+{
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    u256 balance = m_fakeAccountBalances[tableName];
+    _callParameters->setExecResult(codec.encode(balance));
+}
+
+void AccountPrecompiled::addAccountBalance(const std::string& tableName,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    PrecompiledExecResult::Ptr const& _callParameters) const
+{
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    u256 balance = 0;
+    codec.decode(data, balance);
+
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("AccountPrecompiled")
+                          << LOG_DESC("addAccountBalance") << LOG_KV("account", tableName)
+                          << LOG_KV("balance", to_string(balance));
+
+    m_fakeAccountBalances[tableName] += balance;
+    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+}
+
+void AccountPrecompiled::subAccountBalance(const std::string& tableName,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    PrecompiledExecResult::Ptr const& _callParameters) const
+{
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    u256 balance = 0;
+    codec.decode(data, balance);
+
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("AccountPrecompiled")
+                          << LOG_DESC("subAccountBalance") << LOG_KV("account", tableName)
+                          << LOG_KV("balance", to_string(balance));
+
+    if(m_fakeAccountBalances[tableName] < balance)
+    {
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("Account balance not sufficient."));
+    }
+    m_fakeAccountBalances[tableName] -= balance;
+    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
