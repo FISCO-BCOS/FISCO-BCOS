@@ -368,7 +368,7 @@ download_bin()
         LOG_INFO "Downloading fisco-bcos binary from ${github_link} ..."
         curl -#LO "${github_link}"
     fi
-    if [[ "$(ls -al . | grep "fisco-bcos.*tar.gz" | awk '{print $5}')" -lt "1048576" ]];then
+    if [[ "$(ls -al . | grep "fisco-bcos\.*tar.gz" | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
     fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
@@ -396,7 +396,7 @@ download_lightnode_bin()
         LOG_INFO "Downloading fisco-bcos lightnode binary from ${github_link} ..."
         curl -#LO "${github_link}"
     fi
-    if [[ "$(ls -al . | grep "fisco-bcos-lightnode.*tar.gz" | awk '{print $5}')" -lt "1048576" ]];then
+    if [[ "$(ls -al . | grep "fisco-bcos-lightnode\.*tar.gz" | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos-lightnode failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
     fi
     mkdir -p bin && mv ${light_package_name} bin && cd bin && tar -zxf ${light_package_name} && cd ..
