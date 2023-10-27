@@ -201,15 +201,15 @@ public:
         BOOST_CHECK(result1);
 
         GenesisConfig genesisConfig2;
-        genesisConfig1.m_txGasLimit = 30;
-        genesisConfig1.m_compatibilityVersion =
+        genesisConfig2.m_txGasLimit = 30;
+        genesisConfig2.m_compatibilityVersion =
             tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
         auto result2 = m_ledger->buildGenesisBlock(genesisConfig2, *m_param);
         BOOST_CHECK(!result2);
 
         GenesisConfig genesisConfig3;
-        genesisConfig1.m_txGasLimit = 3000000000;
-        genesisConfig1.m_compatibilityVersion =
+        genesisConfig3.m_txGasLimit = 3000000000;
+        genesisConfig3.m_compatibilityVersion =
             tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
         auto result3 = m_ledger->buildGenesisBlock(genesisConfig3, *m_param);
         BOOST_CHECK(result3);
