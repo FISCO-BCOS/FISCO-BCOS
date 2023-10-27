@@ -219,11 +219,7 @@ int64_t SystemConfigPrecompiled::validate(
 
         if(setFeature)
         {
-            auto valRet = _executive->blockContext().features().validate(key);
-            if(!valRet.first)
-            {
-                BOOST_THROW_EXCEPTION(PrecompiledError(valRet.second));
-            }
+            _executive->blockContext().features().validate(key);
         }
 
         if (m_valueConverter.contains(key))
@@ -247,6 +243,12 @@ int64_t SystemConfigPrecompiled::validate(
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: invalid version")
                               << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg));
+    }
+    catch (bcos::Exception const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: set feature failed")
+                              << LOG_KV("info", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(PrecompiledError(boost::diagnostic_information(e)));
     }
     catch (std::exception const& e)
     {

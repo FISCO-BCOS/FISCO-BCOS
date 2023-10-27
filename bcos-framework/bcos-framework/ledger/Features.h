@@ -21,11 +21,8 @@ namespace bcos::ledger
 struct NoSuchFeatureError : public bcos::error::Exception
 {
 };
-class FeatureCommonError : public bcos::Exception
+struct PreconditionMismatchError : public bcos::Exception
 {
-public:
-    FeatureCommonError() : Exception() {}
-    FeatureCommonError(std::string const& _msg) : Exception(_msg) {}
 };
 
 class Features
@@ -50,7 +47,7 @@ private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
 
 public:
-    auto validate(std::string flag) const
+    void validate(std::string flag) const
     {
         auto value = magic_enum::enum_cast<Flag>(flag);
         if (!value)
@@ -58,20 +55,15 @@ public:
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
 
-        return validate(*value);
+        validate(*value);
     }
-    std::pair<bool, std::string> validate(Flag flag) const
+    void validate(Flag flag) const
     {
-        std::string errMsg("");
-        bool ret = true;
         if ((flag == Flag::feature_balance_policy1 || flag == Flag::feature_balance_precompiled) &&
             !get(Flag::feature_balance))
         {
-            errMsg = "must set feature_balance first";
-            ret = false;
+            BOOST_THROW_EXCEPTION(PreconditionMismatchError{} << errinfo_comment("must set feature_balance first"));
         }
-
-        return std::make_pair(ret, errMsg);
     }
 
     bool get(Flag flag) const
@@ -102,11 +94,7 @@ public:
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
 
-        auto valRet = validate(flag);
-        if(!valRet.first)
-        {
-            BOOST_THROW_EXCEPTION(FeatureCommonError(valRet.second));
-        }
+        validate(flag);
 
         m_flags[*index] = true;
     }

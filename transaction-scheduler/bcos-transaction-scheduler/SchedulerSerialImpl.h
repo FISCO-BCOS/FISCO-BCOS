@@ -23,11 +23,12 @@ private:
             receipts.reserve(RANGES::size(transactions));
         }
 
-        std::atomic<int> contextID(0);
+        int contextID = 0;
         for (auto const& transaction : transactions)
         {
             receipts.emplace_back(co_await transaction_executor::execute(
-                executor, view, blockHeader, transaction, contextID++));
+                executor, view, blockHeader, transaction, contextID));
+            contextID++;
         }
 
         co_return receipts;
