@@ -44,43 +44,6 @@ class GenesisConfig
 public:
     using Ptr = std::shared_ptr<GenesisConfig>;
 
-    std::string genesisDataOutPut()
-    {
-        std::stringstream ss;
-        ss << "[chain]" << '\n'
-           << "sm_crypto:" << m_smCrypto << '\n'
-           << "chainID: " << m_chainID << '\n'
-           << "grouID: " << m_groupID << '\n'
-           << "[consensys]" << '\n'
-           << "consensus_type: " << m_consensusType << '\n'
-           << "block_tx_count_limit:" << m_txCountLimit << '\n'
-           << "leader_period:" << m_leaderSwitchPeriod << '\n'
-           << "[version]" << '\n'
-           << "compatibility_version:" << bcos::protocol::BlockVersion(m_compatibilityVersion)
-           << '\n'
-           << "[tx]" << '\n'
-           << "gaslimit:" << m_txGasLimit << '\n'
-           << "[executor]" << '\n'
-           << "iswasm: " << m_isWasm << '\n'
-           << "isAuthCheck:" << m_isAuthCheck << '\n'
-           << "authAdminAccount:" << m_authAdminAccount << '\n'
-           << "isSerialExecute:" << m_isSerialExecute << '\n';
-        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
-        {
-            ss << "epochSealerNum:" << m_epochSealerNum << '\n'
-               << "epochBlockNum:" << m_epochBlockNum << '\n';
-        }
-        if (!m_features.empty())  // TODO: Need version check?
-        {
-            ss << "[features]" << '\n';
-            for (auto& feature : m_features)
-            {
-                ss << feature.flag << ":" << feature.enableNumber << '\n';
-            }
-        }
-        return ss.str();
-    }
-
     // chain config
     bool m_smCrypto{};
     std::string m_chainID;
