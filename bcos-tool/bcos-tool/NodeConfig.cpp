@@ -786,6 +786,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                                   "Please set consensus.block_tx_count_limit to positive!"));
     }
     m_ledgerConfig->setBlockTxCountLimit(blockTxCountLimit);
+    m_genesisConfig.m_txCountLimit = blockTxCountLimit;
+
     // txGasLimit
     auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit", "3000000000");
     if (txGasLimit <= TX_GAS_LIMIT_MIN)
@@ -794,7 +796,6 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
             InvalidConfig() << errinfo_comment(
                 "Please set tx.gas_limit to more than " + std::to_string(TX_GAS_LIMIT_MIN) + " !"));
     }
-
     m_genesisConfig.m_txGasLimit = txGasLimit;
     // the compatibility version
     auto compatibilityVersion = _genesisConfig.get<std::string>(
