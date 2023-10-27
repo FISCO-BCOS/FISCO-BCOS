@@ -47,48 +47,48 @@ public:
     std::string genesisDataOutPut()
     {
         std::stringstream ss;
-        ss << "[chain]" << std::endl
-           << "sm_crypto:" << m_smCrypto << std::endl
-           << "chainID: " << m_chainID << std::endl
-           << "grouID: " << m_groupID << std::endl
-           << "[consensys]" << std::endl
-           << "consensus_type: " << m_consensusType << std::endl
-           << "block_tx_count_limit:" << m_txCountLimit << std::endl
-           << "leader_period:" << m_leaderSwitchPeriod << std::endl
-           << "[version]" << std::endl
+        ss << "[chain]" << '\n'
+           << "sm_crypto:" << m_smCrypto << '\n'
+           << "chainID: " << m_chainID << '\n'
+           << "grouID: " << m_groupID << '\n'
+           << "[consensys]" << '\n'
+           << "consensus_type: " << m_consensusType << '\n'
+           << "block_tx_count_limit:" << m_txCountLimit << '\n'
+           << "leader_period:" << m_leaderSwitchPeriod << '\n'
+           << "[version]" << '\n'
            << "compatibility_version:" << bcos::protocol::BlockVersion(m_compatibilityVersion)
-           << std::endl
-           << "[tx]" << std::endl
-           << "gaslimit:" << m_txGasLimit << std::endl
-           << "[executor]" << std::endl
-           << "iswasm: " << m_isWasm << std::endl
-           << "isAuthCheck:" << m_isAuthCheck << std::endl
-           << "authAdminAccount:" << m_authAdminAccount << std::endl
-           << "isSerialExecute:" << m_isSerialExecute << std::endl;
+           << '\n'
+           << "[tx]" << '\n'
+           << "gaslimit:" << m_txGasLimit << '\n'
+           << "[executor]" << '\n'
+           << "iswasm: " << m_isWasm << '\n'
+           << "isAuthCheck:" << m_isAuthCheck << '\n'
+           << "authAdminAccount:" << m_authAdminAccount << '\n'
+           << "isSerialExecute:" << m_isSerialExecute << '\n';
         if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
         {
-            ss << "epochSealerNum:" << m_epochSealerNum << std::endl
-               << "epochBlockNum:" << m_epochBlockNum << std::endl;
+            ss << "epochSealerNum:" << m_epochSealerNum << '\n'
+               << "epochBlockNum:" << m_epochBlockNum << '\n';
         }
         if (!m_features.empty())  // TODO: Need version check?
         {
-            ss << "[features]" << std::endl;
+            ss << "[features]" << '\n';
             for (auto& feature : m_features)
             {
-                ss << feature.flag << ":" << feature.enableNumber << std::endl;
+                ss << feature.flag << ":" << feature.enableNumber << '\n';
             }
         }
         return ss.str();
     }
 
     // chain config
-    bool m_smCrypto;
+    bool m_smCrypto{};
     std::string m_chainID;
     std::string m_groupID;
 
     // consensus config
     std::string m_consensusType;
-    uint64_t m_txCountLimit;
+    uint64_t m_txCountLimit = 1000;
     uint64_t m_leaderSwitchPeriod = 1;
 
     // version config
@@ -97,14 +97,14 @@ public:
     // tx config
     uint64_t m_txGasLimit = 3000000000;
     // executorConfig
-    bool m_isWasm;
-    bool m_isAuthCheck;
+    bool m_isWasm{};
+    bool m_isAuthCheck = true;
     std::string m_authAdminAccount;
-    bool m_isSerialExecute;
+    bool m_isSerialExecute = true;
 
     // rpbft config
-    int64_t m_epochSealerNum;
-    int64_t m_epochBlockNum;
+    int64_t m_epochSealerNum = 4;
+    int64_t m_epochBlockNum = 1000;
     std::vector<FeatureSet> m_features;
 };  // namespace genesisConfig
 }  // namespace bcos::ledger
