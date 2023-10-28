@@ -148,7 +148,10 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    void rollback(const storage::Recoder& recoder) override {}
+    void rollback(const storage::Recoder& recoder) override
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
 
     crypto::HashType hash(
         const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override

@@ -20,6 +20,8 @@
 
 #pragma once
 #include <evmc/instructions.h>
+#include <type_traits>
+
 namespace bcos::transaction_executor
 {
 
@@ -56,4 +58,6 @@ public:
     }
 };
 
+template <auto& Tag>
+using tag_t = std::decay_t<decltype(Tag)>;
 }  // namespace bcos::transaction_executor
