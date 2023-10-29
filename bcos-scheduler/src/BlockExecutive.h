@@ -11,6 +11,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/TransactionMetaData.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/BlockFactory.h>
@@ -25,6 +26,7 @@
 #include <ratio>
 #include <stack>
 #include <thread>
+#include <utility>
 
 namespace bcos::scheduler
 {
@@ -49,8 +51,9 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
-      : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool)
+      : BlockExecutive(std::move(block), scheduler, startContextID,
+            std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
+            std::move(_txPool))
     {
         m_syncBlock = _syncBlock;
         m_gasLimit = _gasLimit;
@@ -78,9 +81,10 @@ public:
     virtual void saveMessage(
         std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG);
 
-    inline bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
+    inline bcos::protocol::BlockNumber number() { return m_blockHeader->number(); }
 
     inline bcos::protocol::Block::Ptr block() { return m_block; }
+    inline auto blockHeader() const noexcept { return m_blockHeader; }
     inline bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
     bool isCall() { return m_staticCall; }
@@ -104,6 +108,12 @@ public:
 
     bool isSysBlock() { return m_isSysBlock; }
 
+    virtual size_t getExecutorSize();
+
+    virtual void forEachExecutor(
+        std::function<void(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr)>
+            handleExecutor);
+
 protected:
     struct CommitStatus
     {
@@ -119,6 +129,8 @@ protected:
     void batchBlockCommit(uint64_t rollbackVersion, std::function<void(Error::UniquePtr)> callback);
     void batchBlockRollback(uint64_t version, std::function<void(Error::UniquePtr)> callback);
 
+    virtual bool needPrepareExecutor() { return !m_hasDAG; }
+
     struct BatchStatus  // Batch state per batch
     {
         using Ptr = std::shared_ptr<BatchStatus>;
@@ -129,6 +141,7 @@ protected:
 
         std::atomic_bool callbackExecuted = false;
         mutable SharedMutex x_lock;
+        std::string errorMessage;
     };
 
     void DAGExecute(std::function<void(Error::UniquePtr)> callback);  // only used for DAG
@@ -138,6 +151,9 @@ protected:
     void DMCExecute(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
     virtual std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
+    virtual std::shared_ptr<DmcExecutor> buildDmcExecutor(const std::string& name,
+        const std::string& contractAddress,
+        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor);
     void scheduleExecutive(ExecutiveState::Ptr executiveState);
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(
@@ -150,7 +166,10 @@ protected:
     void buildExecutivesFromMetaData();
     void buildExecutivesFromNormalTransaction();
 
+    bcos::storage::TransactionalStorageInterface::Ptr getStorage();
+
     virtual void serialPrepareExecutor();
+
     bcos::protocol::TransactionsPtr fetchBlockTxsFromTxPool(
         bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool);
     std::string preprocessAddress(const std::string_view& address);
@@ -160,7 +179,7 @@ protected:
 
     std::vector<ExecutiveResult> m_executiveResults;
 
-    size_t m_gasUsed = 0;
+    std::atomic<size_t> m_gasUsed = 0;
 
     GraphKeyLocks::Ptr m_keyLocks = std::make_shared<GraphKeyLocks>();
 
@@ -171,6 +190,7 @@ protected:
     std::chrono::milliseconds m_commitElapsed;
 
     bcos::protocol::Block::Ptr m_block;
+    bcos::protocol::BlockHeader::ConstPtr m_blockHeader;
     bcos::protocol::TransactionsPtr m_blockTxs;
 
     bcos::protocol::BlockHeader::Ptr m_result;
@@ -194,6 +214,7 @@ protected:
     bool m_isRunning = false;
 
     std::function<void()> f_onNeedSwitchEvent;
+    crypto::Hash::Ptr m_hashImpl;
 };
 
 }  // namespace bcos::scheduler

@@ -177,9 +177,8 @@ int main(int argc, char** argv)
         auto transactionFactory =
             std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
         bcos::bytes inputData;
-        auto tx =
-            transactionFactory->createTransaction(0, "to", inputData, bcos::u256(100), 200, "chain",
-                "group", 1112, std::shared_ptr<bcos::crypto::KeyPairInterface>(std::move(keyPair)));
+        auto tx = transactionFactory->createTransaction(
+            0, "to", inputData, std::to_string(100), 200, "chain", "group", 1112, *keyPair);
     }
 
     auto endPoint = std::chrono::high_resolution_clock::now();

@@ -1,5 +1,6 @@
 #pragma once
 #include "bcos-tars-protocol/bcos-tars-protocol/impl/TarsServantProxyCallback.h"
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <servant/Application.h>
@@ -10,6 +11,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/throw_exception.hpp>
+#include <memory>
 
 #define RPCSERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPCSERVICE][INITIALIZER]"
 #define GATEWAYSERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYSERVICE][INITIALIZER]"
@@ -19,7 +21,6 @@
 
 namespace bcostars
 {
-
 inline tars::TC_Endpoint string2TarsEndPoint(const std::string& _strEndPoint)
 {
     std::vector<std::string> temp;
@@ -107,11 +108,25 @@ S createServantProxy(tars::Communicator* communicator, std::string const& _servi
     TarsServantProxyOnConnectHandler _connectHandler = TarsServantProxyOnConnectHandler(),
     TarsServantProxyOnCloseHandler _closeHandler = TarsServantProxyOnCloseHandler())
 {
+    static bool isFirsLog = true;
     auto prx = communicator->stringToProxy<S>(_serviceName);
+    if (isFirsLog)
+    {
+        isFirsLog = false;
+        BCOS_LOG(INFO) << LOG_BADGE("createServantProxy") << LOG_DESC("create servant proxy")
+                       << LOG_KV("serviceName", _serviceName) << LOG_KV("proxy address", prx.get());
+    }
+    else
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("createServantProxy") << LOG_DESC("create servant proxy")
+                        << LOG_KV("serviceName", _serviceName)
+                        << LOG_KV("proxy address", prx.get());
+    }
+
     if (!prx->tars_get_push_callback())
     {
-        auto proxyCallback = new bcostars::TarsServantProxyCallback(_serviceName, *prx);
-
+        auto proxyCallback = std::make_unique<bcostars::TarsServantProxyCallback>(
+            _serviceName, tars::TC_AutoPtr<tars::ServantProxy>::dynamicCast(prx));
         if (_connectHandler)
         {
             proxyCallback->setOnConnectHandler(_connectHandler);
@@ -122,9 +137,13 @@ S createServantProxy(tars::Communicator* communicator, std::string const& _servi
             proxyCallback->setOnCloseHandler(_closeHandler);
         }
 
-        prx->tars_set_push_callback(proxyCallback);
-        proxyCallback->startTimer();
+        proxyCallback->start();
+        prx->tars_set_push_callback(proxyCallback.release());
     }
+
+    prx->tars_async_ping();
+    prx->tars_reconnect(5);
+
     return prx;
 }
 

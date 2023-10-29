@@ -31,11 +31,17 @@ FrontServiceInfo::Ptr LocalRouterTable::getFrontService(
     const std::string& _groupID, NodeIDPtr _nodeID) const
 {
     ReadGuard l(x_nodeList);
-    if (!m_nodeList.count(_groupID) || !m_nodeList.at(_groupID).count(_nodeID->hex()))
+    auto it = m_nodeList.find(_groupID);
+    if (it == m_nodeList.end())
     {
         return nullptr;
     }
-    return m_nodeList.at(_groupID).at(_nodeID->hex());
+    auto it2 = it->second.find(_nodeID->hex());
+    if (it2 == it->second.end())
+    {
+        return nullptr;
+    }
+    return it2->second;
 }
 
 std::vector<FrontServiceInfo::Ptr> LocalRouterTable::getGroupFrontServiceList(
@@ -43,13 +49,15 @@ std::vector<FrontServiceInfo::Ptr> LocalRouterTable::getGroupFrontServiceList(
 {
     std::vector<FrontServiceInfo::Ptr> nodeServiceList;
     ReadGuard l(x_nodeList);
-    if (!m_nodeList.count(_groupID))
+    auto it = m_nodeList.find(_groupID);
+    if (it == m_nodeList.end())
     {
         return nodeServiceList;
     }
-    for (auto const& it : m_nodeList.at(_groupID))
+    nodeServiceList.reserve(it->second.size());
+    for (auto const& item : it->second)
     {
-        nodeServiceList.emplace_back(it.second);
+        nodeServiceList.emplace_back(item.second);
     }
     return nodeServiceList;
 }
@@ -58,32 +66,37 @@ void LocalRouterTable::getGroupNodeInfoList(
     GroupNodeInfo::Ptr _groupNodeInfo, const std::string& _groupID) const
 {
     ReadGuard l(x_nodeList);
-    if (!m_nodeList.count(_groupID))
+    auto it = m_nodeList.find(_groupID);
+    if (it == m_nodeList.end())
     {
         return;
     }
-    for (auto const& item : m_nodeList.at(_groupID))
+    for (auto const& item : it->second)
     {
         _groupNodeInfo->appendNodeID(item.first);
         _groupNodeInfo->appendProtocol(item.second->protocolInfo());
     }
 }
 
-std::map<std::string, std::set<std::string>, std::less<>> LocalRouterTable::nodeListInfo() const
+std::map<std::string, std::map<std::string, uint32_t>> LocalRouterTable::nodeListInfo() const
 {
-    std::map<std::string, std::set<std::string>, std::less<>> nodeList;
+    std::map<std::string, std::map<std::string, uint32_t>> nodeList;
     ReadGuard l(x_nodeList);
     for (auto const& it : m_nodeList)
     {
         auto groupID = it.first;
-        if (!nodeList.count(groupID))
+        auto it2 = nodeList.find(groupID);
+        if (it2 == nodeList.end())
         {
-            nodeList[groupID] = std::set<std::string>();
+            nodeList[groupID] = std::map<std::string, uint32_t>();
         }
+        it2 = nodeList.find(groupID);
         auto const& infos = it.second;
         for (auto const& nodeIt : infos)
         {
-            nodeList[groupID].insert(nodeIt.first);
+            auto nodeID = nodeIt.first;
+            auto nodeType = nodeIt.second->nodeType();
+            it2->second.insert(std::pair<std::string, uint32_t>(nodeID, nodeType));
         }
     }
     return nodeList;
@@ -176,7 +189,7 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         }
         // insert the new node
         auto serviceName = nodeInfo->serviceName(bcos::protocol::FRONT);
-        if (serviceName.size() == 0)
+        if (serviceName.empty())
         {
             continue;
         }
@@ -221,7 +234,7 @@ bool LocalRouterTable::eraseUnreachableNodes()
             }
             pFrontService++;
         }
-        if (nodesInfo.size() == 0)
+        if (nodesInfo.empty())
         {
             UpgradeGuard ul(l);
             it = m_nodeList.erase(it);
@@ -237,7 +250,7 @@ bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& 
     uint16_t _moduleID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
-    if (frontServiceList.size() == 0)
+    if (frontServiceList.empty())
     {
         return false;
     }

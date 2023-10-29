@@ -20,6 +20,7 @@
  */
 #include "FrontServiceInitializer.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-task/Wait.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
@@ -29,6 +30,7 @@
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::initializer;
@@ -37,15 +39,13 @@ using namespace bcos::front;
 FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     bcos::initializer::ProtocolInitializer::Ptr _protocolInitializer,
     bcos::gateway::GatewayInterface::Ptr _gateWay)
-  : m_nodeConfig(_nodeConfig), m_protocolInitializer(_protocolInitializer), m_gateWay(_gateWay)
+  : m_nodeConfig(std::move(_nodeConfig)),
+    m_protocolInitializer(std::move(_protocolInitializer)),
+    m_gateWay(std::move(_gateWay))
 {
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(m_gateWay);
 
-    // make the threadpool configurable
-    auto threadPool =
-        std::make_shared<ThreadPool>("frontService", std::thread::hardware_concurrency());
-    frontServiceFactory->setThreadPool(threadPool);
     m_front = frontServiceFactory->buildFrontService(
         m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());
 }
@@ -54,7 +54,7 @@ void FrontServiceInitializer::start()
 {
     if (m_running)
     {
-        FRONTSERVICE_LOG(WARNING) << LOG_DESC("The front service has already been started");
+        FRONTSERVICE_LOG(INFO) << LOG_DESC("The front service has already been started");
         return;
     }
     FRONTSERVICE_LOG(INFO) << LOG_DESC("Start the front service");
@@ -65,7 +65,7 @@ void FrontServiceInitializer::stop()
 {
     if (!m_running)
     {
-        FRONTSERVICE_LOG(WARNING) << LOG_DESC("The front service has already been stopped");
+        FRONTSERVICE_LOG(INFO) << LOG_DESC("The front service has already been stopped");
         return;
     }
     FRONTSERVICE_LOG(INFO) << LOG_DESC("Stop the front service");
@@ -76,7 +76,7 @@ void FrontServiceInitializer::stop()
 void FrontServiceInitializer::init(bcos::consensus::ConsensusInterface::Ptr _pbft,
     bcos::sync::BlockSyncInterface::Ptr _blockSync, bcos::txpool::TxPoolInterface::Ptr _txpool)
 {
-    initMsgHandlers(_pbft, _blockSync, _txpool);
+    initMsgHandlers(std::move(_pbft), std::move(_blockSync), std::move(_txpool));
 }
 
 
@@ -89,7 +89,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
         bcos::protocol::ModuleID::PBFT, [_pbft](bcos::crypto::NodeIDPtr _nodeID,
                                             const std::string& _id, bcos::bytesConstRef _data) {
             _pbft->asyncNotifyConsensusMessage(
-                nullptr, _id, _nodeID, _data, [](bcos::Error::Ptr _error) {
+                nullptr, _id, std::move(_nodeID), _data, [](const bcos::Error::Ptr& _error) {
                     if (_error)
                     {
                         FRONTSERVICE_LOG(WARNING)
@@ -103,6 +103,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
         "registerModuleMessageDispatcher for the consensus module success");
 
     // register the message dispatcher for the txsSync module
+    //
     m_front->registerModuleMessageDispatcher(
         bcos::protocol::ModuleID::TxsSync, [_txpool](bcos::crypto::NodeIDPtr _nodeID,
                                                std::string const& _id, bcos::bytesConstRef _data) {
@@ -173,10 +174,60 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
             _txpool->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _blockSync->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
             _pbft->notifyConnectedNodes(nodeIdSet, _receiveMsgCallback);
-            FRONTSERVICE_LOG(DEBUG)
+            FRONTSERVICE_LOG(INFO)
                 << LOG_DESC("notifyGroupNodeInfo") << LOG_KV("connectedNodeSize", nodeIdSet.size());
         });
     FRONTSERVICE_LOG(INFO) << LOG_DESC("registerGroupNodeInfoNotification success");
+
+    // TXPOOL onPushTransaction
+    m_front->registerModuleMessageDispatcher(protocol::SYNC_PUSH_TRANSACTION,
+        [this, txpool = _txpool](bcos::crypto::NodeIDPtr const& nodeID,
+            const std::string& messageID, bytesConstRef data) {
+            auto transaction =
+                m_protocolInitializer->blockFactory()->transactionFactory()->createTransaction(
+                    data, false);
+            task::wait(
+                [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
+                    try
+                    {
+                        [[maybe_unused]] auto submitResult =
+                            co_await txpool->submitTransaction(std::move(transaction));
+                    }
+                    catch (std::exception& e)
+                    {
+                        TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
+                                          << boost::diagnostic_information(e);
+                    }
+                }(txpool, std::move(transaction)));
+        });
+
+    m_front->registerModuleMessageDispatcher(protocol::TREE_PUSH_TRANSACTION,
+        [this, txpool = _txpool](bcos::crypto::NodeIDPtr const& nodeID,
+            const std::string& messageID, bytesConstRef data) {
+            auto transaction =
+                m_protocolInitializer->blockFactory()->transactionFactory()->createTransaction(
+                    data, false);
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << "Receive tree push transaction"
+                                  << LOG_KV("nodeID", nodeID->shortHex())
+                                  << LOG_KV("messageID", messageID);
+            }
+            task::wait([](decltype(txpool) txpool, decltype(transaction) transaction,
+                           decltype(data) data, decltype(nodeID) nodeID) -> task::Task<void> {
+                try
+                {
+                    txpool->broadcastTransactionBufferByTree(data, false, nodeID);
+                    [[maybe_unused]] auto submitResult =
+                        co_await txpool->submitTransaction(std::move(transaction));
+                }
+                catch (std::exception& e)
+                {
+                    TXPOOL_LOG(DEBUG) << "Submit transaction failed from p2p. "
+                                      << boost::diagnostic_information(e);
+                }
+            }(txpool, std::move(transaction), data, nodeID));
+        });
 }
 
 

@@ -39,7 +39,7 @@ public:
             bcosNodeID, bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()));
 
         async_response_asyncSendBroadcastMessage(current, toTarsError<bcos::Error::Ptr>(nullptr));
-        return bcostars::Error();
+        return {};
     }
 
     bcostars::Error asyncGetPeers(bcostars::GatewayInfo&, std::vector<bcostars::GatewayInfo>&,
@@ -62,7 +62,7 @@ public:
                 async_response_asyncGetPeers(
                     current, toTarsError(_error), localtarsP2pInfo, peersInfo);
             });
-        return bcostars::Error();
+        return {};
     }
 
     bcostars::Error asyncSendMessageByNodeID(const std::string& groupID, tars::Int32 moduleID,
@@ -81,7 +81,7 @@ public:
             [current](bcos::Error::Ptr error) {
                 async_response_asyncSendMessageByNodeID(current, toTarsError(error));
             });
-        return bcostars::Error();
+        return {};
     }
 
     bcostars::Error asyncSendMessageByNodeIDs(const std::string& groupID, tars::Int32 moduleID,
@@ -129,7 +129,7 @@ public:
                     current, toTarsError(_error), groupInfoImpl->inner());
             });
 
-        return bcostars::Error();
+        return {};
     }
     bcostars::Error asyncNotifyGroupInfo(
         const bcostars::GroupInfo& groupInfo, tars::TarsCurrentPtr current) override;

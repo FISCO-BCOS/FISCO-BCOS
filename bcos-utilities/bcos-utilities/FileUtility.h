@@ -41,4 +41,5 @@ std::shared_ptr<bytes> readContents(boost::filesystem::path const& _file);
  *         returns an empty string
  */
 std::shared_ptr<std::string> readContentsToString(boost::filesystem::path const& _file);
+
 }  // namespace bcos

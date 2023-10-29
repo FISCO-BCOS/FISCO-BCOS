@@ -58,7 +58,7 @@ int64_t PrecompiledGas::calComputationGas()
     int64_t totalGas = 0;
     for (auto const& it : *m_operationList)
     {
-        if (!m_metric->OpCode2GasCost.count(it.first))
+        if (!m_metric->OpCode2GasCost.count(it.first)) [[unlikely]]
         {
             PRECOMPILED_LOG(INFO) << LOG_DESC("Invalid opType:") << it.first;
             continue;

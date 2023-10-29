@@ -55,7 +55,7 @@ inline bcos::Error::Ptr toBcosError(const bcostars::Error& error)
         return nullptr;
     }
 
-    auto bcosError = std::make_shared<bcos::Error>(error.errorCode, error.errorMessage);
+    auto bcosError = BCOS_ERROR_PTR(error.errorCode, error.errorMessage);
     return bcosError;
 }
 
@@ -66,7 +66,7 @@ inline bcos::Error::Ptr toBcosError(tars::Int32 ret)
         return nullptr;
     }
 
-    auto bcosError = std::make_shared<bcos::Error>(ret, "TARS error!");
+    auto bcosError = BCOS_ERROR_PTR(ret, "TARS error!");
     return bcosError;
 }
 
@@ -77,7 +77,7 @@ inline bcos::Error::UniquePtr toUniqueBcosError(const bcostars::Error& error)
         return nullptr;
     }
 
-    auto bcosError = std::make_unique<bcos::Error>(error.errorCode, error.errorMessage);
+    auto bcosError = BCOS_ERROR_UNIQUE_PTR(error.errorCode, error.errorMessage);
     return bcosError;
 }
 
@@ -88,7 +88,7 @@ inline bcos::Error::UniquePtr toUniqueBcosError(tars::Int32 ret)
         return nullptr;
     }
 
-    auto bcosError = std::make_unique<bcos::Error>(ret, "TARS error!");
+    auto bcosError = BCOS_ERROR_UNIQUE_PTR(ret, "TARS error!");
     return bcosError;
 }
 

@@ -29,11 +29,13 @@
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 
 using namespace bcostars;
+using namespace bcos::storage;
 using namespace bcos::initializer;
 using namespace bcos::protocol;
 
@@ -41,16 +43,13 @@ void ExecutorServiceApp::initialize()
 {
     try
     {
-        // m_timer = std::make_shared<bcos::Timer>(3000, "registerExecutor");
         createAndInitExecutor();
-        // m_timer->registerTimeoutHandler(boost::bind(&ExecutorServiceApp::registerExecutor,
-        // this)); m_timer->start();
     }
     catch (std::exception const& e)
     {
         std::cout << "init ExecutorService failed, error: " << boost::diagnostic_information(e)
                   << std::endl;
-        throw e;
+        exit(-1);
     }
 }
 
@@ -65,21 +64,31 @@ void ExecutorServiceApp::createAndInitExecutor()
                                << LOG_KV("iniConfigPath", m_iniConfigPath)
                                << LOG_KV("genesisConfigPath", m_genesisConfigPath);
 
+    m_nodeConfig =
+        std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+
     // init log
     boost::property_tree::ptree pt;
-    boost::property_tree::ptree genesisPt;
     boost::property_tree::read_ini(m_iniConfigPath, pt);
-    boost::property_tree::read_ini(m_genesisConfigPath, genesisPt);
+
+    // init service.without_tars_framework first for determine the log path
+    m_nodeConfig->loadWithoutTarsFrameworkConfig(pt);
+
     m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    m_logInitializer->setLogPath(getLogPath());
-    m_logInitializer->initLog(pt);
+    if (!m_nodeConfig->withoutTarsFramework())
+    {
+        m_logInitializer->setLogPath(getLogPath());
+    }
+    m_logInitializer->initLog(m_iniConfigPath);
+
+    boost::property_tree::ptree genesisPt;
+    boost::property_tree::read_ini(m_genesisConfigPath, genesisPt);
 
     // load protocolInitializer
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("loadNodeConfig");
-    m_nodeConfig =
-        std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    m_nodeConfig->loadConfig(pt);
+
     m_nodeConfig->loadGenesisConfig(genesisPt);
+    m_nodeConfig->loadConfig(pt);
     m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();
@@ -99,7 +108,6 @@ void ExecutorServiceApp::createAndInitExecutor()
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::TXPOOL_NAME, endPoints);
 
-    // TODO: tars
     auto txpoolServicePrx = createServantProxy<bcostars::TxPoolServicePrx>(
         withoutTarsFramework, txpoolServiceName, endPoints);
 
@@ -107,22 +115,27 @@ void ExecutorServiceApp::createAndInitExecutor()
         m_protocolInitializer->cryptoSuite(), m_protocolInitializer->blockFactory());
 
     auto schedulerServiceName = m_nodeConfig->schedulerServiceName();
+
+    m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::SCHEDULER_NAME, endPoints);
+
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create SchedulerServiceClient")
                                << LOG_KV("schedulerServiceName", schedulerServiceName);
 
-    // TODO: tars
-    auto schedulerPrx = createServantProxy<bcostars::SchedulerServicePrx>(schedulerServiceName);
+    auto schedulerPrx = createServantProxy<bcostars::SchedulerServicePrx>(
+        withoutTarsFramework, schedulerServiceName, endPoints);
 
     m_scheduler = std::make_shared<bcostars::SchedulerServiceClient>(
         schedulerPrx, m_protocolInitializer->cryptoSuite());
 
     // create executor
-    auto storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath());
-    std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
+    auto storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(),
+        m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+
+    bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
     {
-        cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
-        cache->setMaxCapacity(m_nodeConfig->cacheSize());
+        cacheFactory = std::make_shared<bcos::storage::CacheStorageFactory>(
+            storage, m_nodeConfig->cacheSize());
         EXECUTOR_SERVICE_LOG(INFO)
             << "createAndInitExecutor: enableLRUCacheStorage, size: " << m_nodeConfig->cacheSize();
     }
@@ -133,16 +146,30 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
+    auto stateStorageFactory =
+        std::make_shared<bcos::storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
 
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, storage);
 
     auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
-        m_txpool, cache, storage, executionMessageFactory,
+        m_txpool, cacheFactory, storage, executionMessageFactory, stateStorageFactory,
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
-        m_nodeConfig->isAuthCheck(), m_nodeConfig->keyPageSize(), "executor");
+        m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), "executor");
 
     m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
+
+    std::weak_ptr<bcos::executor::SwitchExecutorManager> executorWeakPtr = m_executor;
+    std::weak_ptr<bcos::storage::TiKVStorage> storageWeakPtr =
+        dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage);
+    auto switchHandler = [executor = executorWeakPtr, storageWeakPtr]() {
+        if (executor.lock())
+        {
+            executor.lock()->triggerSwitch();
+        }
+    };
+    dynamic_pointer_cast<bcos::storage::TiKVStorage>(storage)->setSwitchHandler(switchHandler);
+
 
     ExecutorServiceParam param;
     param.executor = m_executor;
@@ -155,30 +182,5 @@ void ExecutorServiceApp::createAndInitExecutor()
         throw std::runtime_error("load endpoint information failed");
     }
     m_executorName = ret.second;
-    // registerExecutor();
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("createAndInitExecutor success");
-}
-
-void ExecutorServiceApp::registerExecutor()
-{
-    if (m_registerExecutorSuccess)
-    {
-        m_timer->stop();
-        return;
-    }
-    m_timer->restart();
-    EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("registerExecutor")
-                               << LOG_KV("executorName", m_executorName);
-    m_scheduler->registerExecutor(m_executorName, nullptr, [this](bcos::Error::Ptr&& _error) {
-        if (_error)
-        {
-            EXECUTOR_SERVICE_LOG(ERROR)
-                << LOG_DESC("registerExecutor error") << LOG_KV("name", m_executorName)
-                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-            return;
-        }
-        m_registerExecutorSuccess = true;
-        EXECUTOR_SERVICE_LOG(INFO)
-            << LOG_DESC("registerExecutor success") << LOG_KV("name", m_executorName);
-    });
 }

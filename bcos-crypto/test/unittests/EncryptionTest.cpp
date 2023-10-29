@@ -19,6 +19,7 @@
  */
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/Exceptions.h>
+#include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
@@ -46,11 +47,21 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
     BOOST_CHECK(*decryptedData == plainDataBytes);
 
     // invalid key
-    std::string invalidKey = "ABCD";
-    BOOST_CHECK_THROW(
+    std::string invalidKey = "ABCDCD";
+    try
+    {
         _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(), ciperData->size(),
-            (const unsigned char*)invalidKey.c_str(), invalidKey.size()),
-        DecryptException);
+            (const unsigned char*)invalidKey.c_str(), invalidKey.size());
+        BOOST_CHECK(std::string_view((const char*)ciperData->data(), ciperData->size()) !=
+                    std::string_view(plainData));
+    }
+    catch (std::exception& e)
+    {
+        // We only need to throw DecryptException, if there is another exception,
+        // dynamic_cast will throw exception
+        // So we check no throw here.
+        BOOST_CHECK_NO_THROW(auto dee = dynamic_cast<DecryptException&>(e));
+    }
 
     // invalid ciper
     (*ciperData)[0] += 10;
@@ -91,6 +102,7 @@ BOOST_AUTO_TEST_CASE(testSM4)
     auto sm4 = std::make_shared<SM4Crypto>();
     testEncryption(sm4);
 }
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

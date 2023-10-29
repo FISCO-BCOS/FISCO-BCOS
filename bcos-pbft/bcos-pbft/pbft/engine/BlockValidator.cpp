@@ -28,7 +28,7 @@ using namespace bcos::protocol;
 void BlockValidator::asyncCheckBlock(
     Block::Ptr _block, std::function<void(Error::Ptr, bool)> _onVerifyFinish)
 {
-    auto self = std::weak_ptr<BlockValidator>(shared_from_this());
+    auto self = weak_from_this();
     m_taskPool->enqueue([self, _block, _onVerifyFinish]() {
         auto blockHeader = _block->blockHeader();
         // ignore the genesis block
@@ -71,7 +71,7 @@ void BlockValidator::asyncCheckBlock(
         catch (std::exception const& e)
         {
             PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock exception")
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("message", boost::diagnostic_information(e));
             _onVerifyFinish(nullptr, false);
         }
     });
@@ -151,7 +151,7 @@ bool BlockValidator::checkSignatureList(Block::Ptr _block)
         auto nodeIndex = sign.index;
         auto nodeInfo = m_config->getConsensusNodeByIndex(nodeIndex);
         auto signatureData = ref(sign.signature);
-        if (!signatureData.data())
+        if (signatureData.data() == nullptr)
         {
             PBFT_LOG(FATAL) << LOG_DESC("BlockValidator checkSignatureList: invalid signature")
                             << LOG_KV("signatureSize", signatureList.size())

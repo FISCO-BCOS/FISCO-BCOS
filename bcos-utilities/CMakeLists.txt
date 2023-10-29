@@ -1,15 +1,18 @@
-include(Version)
+
 project(bcos-utilities VERSION ${VERSION})
 
-aux_source_directory(bcos-utilities SRCS)
-
 find_package(Boost REQUIRED COMPONENTS log filesystem chrono thread serialization)
+find_package(zstd CONFIG REQUIRED)
+find_package(redis++ CONFIG REQUIRED)
+
+# aux_source_directory(bcos-utilities SRCS)
+file(GLOB_RECURSE SRCS "bcos-utilities/*.cpp")
 
 add_library(bcos-utilities ${SRCS})
 target_include_directories(bcos-utilities PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-utilities>)
-target_link_libraries(bcos-utilities PUBLIC Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization)
+target_link_libraries(bcos-utilities PUBLIC Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization redis++::redis++_static zstd::libzstd_static ittapi)
 
 if(TESTS)
     enable_testing()

@@ -19,37 +19,34 @@
  * @date 2021-05-18
  */
 #pragma once
-#include "../framework/StateMachineInterface.h"
+#include "bcos-framework/consensus/StateMachineInterface.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-utilities/ThreadPool.h>
 
+#include <utility>
 namespace bcos
 {
 namespace consensus
 {
-class StateMachine : public StateMachineInterface
+class StateMachine : public StateMachineInterface, public std::enable_shared_from_this<StateMachine>
 {
 public:
     StateMachine(bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::protocol::BlockFactory::Ptr _blockFactory)
-      : m_scheduler(_scheduler), m_blockFactory(_blockFactory)
+      : m_scheduler(std::move(_scheduler)), m_blockFactory(std::move(_blockFactory))
     {
         // since execute block is serial, only use one thread to decrease the timecost
         m_worker = std::make_shared<ThreadPool>("stateMachine", 1);
-        m_schedulerWorker =
-            std::make_shared<ThreadPool>("preExec", (std::thread::hardware_concurrency() * 2));
     }
 
-    ~StateMachine() override
+    ~StateMachine() override { stop(); }
+
+    void stop() override
     {
         if (m_worker)
         {
             m_worker->stop();
-        }
-        if (m_schedulerWorker)
-        {
-            m_schedulerWorker->stop();
         }
     }
 
@@ -71,9 +68,6 @@ protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::ThreadPool::Ptr m_worker;
-    // threadPool used for scheduler preExecuteBlock, since preExecuteBlock may fetch transactions
-    // from the txpool, it need to use multiple thread to improve the txs-fetching-speed
-    bcos::ThreadPool::Ptr m_schedulerWorker;
 };
 }  // namespace consensus
 }  // namespace bcos

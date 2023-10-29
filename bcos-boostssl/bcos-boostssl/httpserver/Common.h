@@ -32,11 +32,7 @@
 #define HTTP_STREAM(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[HTTP][STREAM]"
 
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace http
+namespace bcos::boostssl::http
 {
 class HttpStream;
 using HttpRequest = boost::beast::http::request<boost::beast::http::string_body>;
@@ -49,6 +45,4 @@ using WsUpgradeHandler =
     std::function<void(std::shared_ptr<HttpStream>, HttpRequest&&, std::shared_ptr<std::string>)>;
 
 static const int PARSER_BODY_LIMITATION = 100 * 1024 * 1024;
-}  // namespace http
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::http

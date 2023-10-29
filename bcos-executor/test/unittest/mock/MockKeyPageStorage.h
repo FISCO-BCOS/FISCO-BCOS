@@ -35,10 +35,19 @@ namespace bcos::test
 class MockKeyPageStorage : public bcos::storage::TransactionalStorageInterface
 {
 public:
-    MockKeyPageStorage(bcos::crypto::Hash::Ptr hashImpl) : m_hashImpl(std::move(hashImpl))
+    MockKeyPageStorage(bcos::crypto::Hash::Ptr hashImpl) : m_hashImpl(hashImpl)
     {
         auto pre = std::make_shared<MockTransactionalStorage>(hashImpl);
         m_inner = std::make_shared<bcos::storage::KeyPageStorage>(std::move(pre));
+    }
+
+    MockKeyPageStorage(bcos::crypto::Hash::Ptr hashImpl, uint32_t version,
+        std::shared_ptr<std::set<std::string, std::less<>>> _ignoreTables = nullptr)
+      : m_hashImpl(hashImpl)
+    {
+        auto pre = std::make_shared<MockTransactionalStorage>(hashImpl);
+        m_inner = std::make_shared<bcos::storage::KeyPageStorage>(
+            std::move(pre), 10240, version, _ignoreTables);
     }
 
     void asyncGetPrimaryKeys(std::string_view table,
@@ -56,12 +65,13 @@ public:
     }
 
     void asyncGetRows(std::string_view table,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<storage::Entry>>)>
             _callback) noexcept override
     {
-        m_inner->asyncGetRows(table, _keys, std::move(_callback));
+        m_inner->asyncGetRows(table, keys, std::move(_callback));
     }
 
     void asyncSetRow(std::string_view table, std::string_view key, storage::Entry entry,
@@ -79,7 +89,7 @@ public:
 
     void asyncPrepare(const TwoPCParams& params,
         const bcos::storage::TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) noexcept override
     {
         BOOST_CHECK_GT(params.number, 0);
 
@@ -90,8 +100,8 @@ public:
                 std::unique_lock<std::mutex> lock(mutex);
 
                 auto keyHex = boost::algorithm::hex_lower(std::string(key));
-                // EXECUTOR_LOG(TRACE) << "Merge data" << LOG_KV("table", table)
-                //                 << LOG_KV("key", keyHex) << LOG_KV("fields", fields);
+                EXECUTOR_LOG(TRACE) << "Merge data" << LOG_KV("table", table) << LOG_KV("key", key)
+                                    << LOG_KV("fields", entry.get());
 
                 auto myTable = m_inner->openTable(table);
                 if (!myTable)
@@ -104,11 +114,11 @@ public:
                 return true;
             });
 
-        callback(nullptr, 0);
+        callback(nullptr, 0, "");
     }
 
-    void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
+    void asyncCommit(const TwoPCParams& params,
+        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
     {
         BOOST_CHECK_GT(params.number, 0);
         callback(nullptr, 0);
@@ -119,6 +129,44 @@ public:
     {
         BOOST_CHECK_GT(params.number, 0);
         callback(nullptr);
+    }
+
+    std::pair<size_t, Error::Ptr> count(const std::string_view& table)
+    {
+        return m_inner->count(table);
+    }
+
+    Error::Ptr setRows(std::string_view tableName,
+        const std::variant<const gsl::span<const std::string_view>,
+            const gsl::span<const std::string>>& keys,
+        std::variant<gsl::span<const std::string_view>, gsl::span<const std::string>> values)
+        override
+    {
+        std::promise<bool> p;
+        std::atomic_int64_t count = 0;
+        std::visit(
+            [&](auto&& keys, auto&& values) {
+                std::atomic_int64_t c = keys.size();
+                auto collector = [&]() {
+                    c--;
+                    count++;
+                    if (c == 0)
+                    {
+                        p.set_value(true);
+                    }
+                };
+                for (size_t i = 0; i < keys.size(); ++i)
+                {
+                    storage::Entry e;
+                    e.set(std::string(values[i]));
+                    asyncSetRow(tableName, keys[i], std::move(e),
+                        [&collector](Error::UniquePtr) { collector(); });
+                }
+            },
+            keys, values);
+        p.get_future().get();
+        std::cout << "setRows: " << count << std::endl;
+        return nullptr;
     }
 
     bcos::storage::KeyPageStorage::Ptr m_inner;

@@ -63,7 +63,8 @@ void SerialBlockExecutive::saveMessage(
 void SerialBlockExecutive::asyncExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
-    SERIAL_EXECUTE_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute execute block");
+    SERIAL_EXECUTE_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                             << LOG_DESC("serialExecute execute block");
     if (m_result)
     {
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, "Invalid status"), nullptr,
@@ -76,6 +77,7 @@ void SerialBlockExecutive::asyncExecute(
         callback(BCOS_ERROR_UNIQUE_PTR(
                      SchedulerError::ExecutorNotEstablishedError, "The executor has not started!"),
             nullptr, m_isSysBlock);
+        return;
     }
     m_currentTimePoint = std::chrono::system_clock::now();
 
@@ -87,7 +89,7 @@ void SerialBlockExecutive::asyncExecute(
 
     if (!m_staticCall)
     {
-        SERIAL_EXECUTE_LOG(INFO) << BLOCK_NUMBER(number())
+        SERIAL_EXECUTE_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
                                  << LOG_DESC("serialExecute batch next block");
         // Execute nextBlock
         batchNextBlock([this, startT, createMsgT, callback = std::move(callback)](
@@ -109,13 +111,15 @@ void SerialBlockExecutive::asyncExecute(
 
                 if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
                 {
+                    SERIAL_EXECUTE_LOG(ERROR) << "Next block with error! SCHEDULER_TERM_ID_ERROR:"
+                                              << error->errorMessage() << ". trigger switch";
                     triggerSwitch();
                 }
                 return;
             }
 
-            SERIAL_EXECUTE_LOG(INFO)
-                << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute block begin");
+            SERIAL_EXECUTE_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
+                                     << LOG_DESC("serialExecute block begin");
 
             serialExecute([this, createMsgT, startT, callback = std::move(callback)](
                               bcos::Error::UniquePtr error, protocol::BlockHeader::Ptr header,
@@ -126,13 +130,13 @@ void SerialBlockExecutive::asyncExecute(
                         << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute block failed")
                         << LOG_KV("createMsgT", createMsgT)
                         << LOG_KV("executeT", (utcTime() - startT))
-                        << LOG_KV("errorCode", error->errorCode())
-                        << LOG_KV("errorMessage", error->errorMessage());
+                        << LOG_KV("code", error->errorCode())
+                        << LOG_KV("message", error->errorMessage());
                     callback(std::move(error), nullptr, isSysBlock);
                     return;
                 }
 
-                SERIAL_EXECUTE_LOG(INFO)
+                SERIAL_EXECUTE_LOG(DEBUG)
                     << BLOCK_NUMBER(number()) << LOG_DESC("serialExecute success")
                     << LOG_KV("createMsgT", createMsgT) << LOG_KV("executeT", (utcTime() - startT))
                     << LOG_KV("hash", header->hash().abridged());
@@ -158,7 +162,7 @@ void SerialBlockExecutive::serialExecute(
     }
 
 
-    SERIAL_EXECUTE_LOG(INFO) << "Send Transaction, size: " << m_transactions.size();
+    SERIAL_EXECUTE_LOG(DEBUG) << "Send Transaction, size: " << m_transactions.size();
     // handle create message, to generate address
     for (auto& tx : m_transactions)
     {
@@ -194,7 +198,15 @@ void SerialBlockExecutive::serialExecute(
                 nullptr, m_syncBlock);
             return;
         }
-        m_executor->call(std::move(std::move(m_transactions[0])),
+
+        if (!m_executor)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::CallError, "no executor found"), nullptr,
+                m_syncBlock);
+            return;
+        }
+
+        m_executor->call(std::move(m_transactions[0]),
             [this, callback = std::move(callback)](
                 bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr output) {
                 if (error)

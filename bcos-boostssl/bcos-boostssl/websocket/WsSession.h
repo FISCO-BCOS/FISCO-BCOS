@@ -18,6 +18,7 @@
  * @date 2021-07-28
  */
 #pragma once
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -25,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
@@ -36,24 +38,24 @@
 #include <shared_mutex>
 #include <unordered_map>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 class WsService;
 // The websocket session for connection
-class WsSession : public std::enable_shared_from_this<WsSession>
+class WsSession : public std::enable_shared_from_this<WsSession>,
+                  public bcos::ObjectCounter<WsSession>
 {
 public:
     using Ptr = std::shared_ptr<WsSession>;
     using Ptrs = std::vector<std::shared_ptr<WsSession>>;
 
 public:
-    WsSession(std::string _moduleName = "DEFAULT");
+    WsSession(tbb::task_group& taskGroup, std::string _moduleName = "DEFAULT");
 
-    virtual ~WsSession() { WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this); }
+    virtual ~WsSession() noexcept
+    {
+        WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this);
+    }
 
     void drop(uint32_t _reason);
 
@@ -64,7 +66,6 @@ public:
     void startAsServer(bcos::boostssl::http::HttpRequest _httpRequest);
 
     virtual void onMessage(bcos::boostssl::MessageFace::Ptr _message);
-
 
     virtual bool isConnected()
     {
@@ -103,7 +104,7 @@ public:
     {
         m_recvMessageHandler = _recvMessageHandler;
     }
-    WsRecvMessageHandler recvMessageHandler() { return m_recvMessageHandler; }
+    const WsRecvMessageHandler& recvMessageHandler() { return m_recvMessageHandler; }
 
     std::shared_ptr<MessageFaceFactory> messageFactory() { return m_messageFactory; }
     void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
@@ -113,12 +114,6 @@ public:
 
     std::shared_ptr<boost::asio::io_context> ioc() const { return m_ioc; }
     void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = _ioc; }
-
-    std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
-    void setThreadPool(std::shared_ptr<bcos::ThreadPool> _threadPool)
-    {
-        m_threadPool = _threadPool;
-    }
 
     void setVersion(uint16_t _version) { m_version.store(_version); }
     uint16_t version() const { return m_version.load(); }
@@ -138,9 +133,9 @@ public:
     int32_t maxWriteMsgSize() const { return m_maxWriteMsgSize; }
     void setMaxWriteMsgSize(int32_t _maxWriteMsgSize) { m_maxWriteMsgSize = _maxWriteMsgSize; }
 
-    std::size_t msgQueueSize()
+    std::size_t writeQueueSize()
     {
-        bcos::ReadGuard l(x_writeQueue);
+        bcos::ReadGuard lockGuard(x_writeQueue);
         return m_writeQueue.size();
     }
 
@@ -156,8 +151,8 @@ public:
         m_needCheckRspPacket = _needCheckRespPacket;
     }
 
-protected:
-    struct CallBack
+public:
+    struct CallBack : public bcos::ObjectCounter<CallBack>
     {
         using Ptr = std::shared_ptr<CallBack>;
         RespCallBack respCallBack;
@@ -171,16 +166,21 @@ protected:
     virtual void onWsAccept(boost::beast::error_code _ec);
 
     virtual void asyncRead();
-    virtual void onRead(boost::system::error_code ec, std::size_t bytes_transferred);
-
     virtual void asyncWrite(std::shared_ptr<bcos::bytes> _buffer);
+
     virtual void send(std::shared_ptr<bcos::bytes> _buffer);
 
     // async read
     virtual void onReadPacket(boost::beast::flat_buffer& _buffer);
     void onWritePacket();
 
+    struct Message : public bcos::ObjectCounter<Message>
+    {
+        std::shared_ptr<bcos::bytes> buffer;
+    };
+
 protected:
+    tbb::task_group& m_taskGroup;
     // flag for message that need to check respond packet like p2pmessage
     bool m_needCheckRspPacket = false;
     //
@@ -215,15 +215,10 @@ protected:
     // message factory
     std::shared_ptr<MessageFaceFactory> m_messageFactory;
     // thread pool
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
+    // std::shared_ptr<bcos::ThreadPool> m_threadPool;
+
     // ioc
     std::shared_ptr<boost::asio::io_context> m_ioc;
-
-    struct Message
-    {
-        std::shared_ptr<bcos::bytes> buffer;
-    };
-
     // send message queue
     mutable bcos::SharedMutex x_writeQueue;
     std::priority_queue<std::shared_ptr<Message>> m_writeQueue;
@@ -235,16 +230,14 @@ class WsSessionFactory
 public:
     using Ptr = std::shared_ptr<WsSessionFactory>;
     WsSessionFactory() = default;
-    virtual ~WsSessionFactory() {}
+    virtual ~WsSessionFactory() = default;
 
 public:
-    virtual WsSession::Ptr createSession(std::string _moduleName)
+    virtual WsSession::Ptr createSession(tbb::task_group& taskGroup, std::string _moduleName)
     {
-        auto session = std::make_shared<WsSession>(_moduleName);
+        auto session = std::make_shared<WsSession>(taskGroup, _moduleName);
         return session;
     }
 };
 
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

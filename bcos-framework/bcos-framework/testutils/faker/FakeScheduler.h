@@ -19,8 +19,8 @@
  * @date 2021-09-07
  */
 #pragma once
-#include "FakeLedger.h"
 #include "../../dispatcher/SchedulerInterface.h"
+#include "FakeLedger.h"
 
 using namespace bcos;
 using namespace bcos::scheduler;
@@ -35,7 +35,7 @@ public:
     FakeScheduler(FakeLedger::Ptr _ledger, BlockFactory::Ptr _blockFactory)
       : m_ledger(_ledger), m_blockFactory(_blockFactory)
     {}
-    ~FakeScheduler() override {}
+    ~FakeScheduler() override = default;
     void executeBlock(bcos::protocol::Block::Ptr _block, bool,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)>
             _callback) noexcept override
@@ -43,8 +43,9 @@ public:
         auto blockHeader = _block->blockHeader();
         if (m_blockFactory)
         {
-            blockHeader =
-                m_blockFactory->blockHeaderFactory()->populateBlockHeader(_block->blockHeader());
+            auto oldBlockHeader = _block->blockHeader();
+            blockHeader = m_blockFactory->blockHeaderFactory()->populateBlockHeader(oldBlockHeader);
+            blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         }
         _callback(nullptr, std::move(blockHeader), false);
         return;
@@ -66,14 +67,6 @@ public:
     // by rpc
     void call(protocol::Transaction::Ptr,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) noexcept override
-    {}
-
-    // by executor
-    void registerExecutor(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr,
-        std::function<void(Error::Ptr&&)>) noexcept override
-    {}
-
-    void unregisterExecutor(const std::string&, std::function<void(Error::Ptr&&)>) noexcept override
     {}
 
     // clear all status

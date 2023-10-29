@@ -20,12 +20,10 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 using BlockNumber = int64_t;
-using NonceType = u256;
+using NonceType = std::string;
 using NonceList = std::vector<NonceType>;
 using NonceListPtr = std::shared_ptr<NonceList>;
 using BytesList = std::vector<std::shared_ptr<bytes>>;
@@ -33,7 +31,7 @@ using BytesListPtr = std::shared_ptr<BytesList>;
 
 struct ParentInfo
 {
-    BlockNumber blockNumber;
+    BlockNumber blockNumber = 0;
     bcos::crypto::HashType blockHash;
 
     bool operator==(const ParentInfo& rhs) const
@@ -62,15 +60,15 @@ struct Signature
     bytes signature;
 
     template <class Stream, typename = std::enable_if_t<Stream::is_decoder_stream>>
-    friend Stream& operator>>(Stream& _stream, Signature& signature)
+    friend Stream& operator>>(Stream& _stream, Signature& _signature)
     {
-        return _stream >> signature.index >> signature.signature;
+        return _stream >> _signature.index >> _signature.signature;
     }
 
     template <class Stream, typename = std::enable_if_t<Stream::is_encoder_stream>>
-    friend Stream& operator<<(Stream& _stream, Signature const& signature)
+    friend Stream& operator<<(Stream& _stream, Signature const& _signature)
     {
-        return _stream << signature.index << signature.signature;
+        return _stream << _signature.index << _signature.signature;
     }
 };
 using SignatureList = std::vector<Signature>;
@@ -104,9 +102,7 @@ struct Session
 struct TwoPCParams
 {
     BlockNumber number = 0;
-    std::string primaryTableName;
-    std::string primaryTableKey;
+    std::string primaryKey;
     uint64_t timestamp = 0;
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

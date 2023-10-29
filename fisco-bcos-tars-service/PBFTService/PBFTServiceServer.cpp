@@ -31,8 +31,7 @@ Error PBFTServiceServer::asyncCheckBlock(
 {
     auto blockFactory = m_pbftInitializer->blockFactory();
     _current->setResponse(false);
-    auto block = std::make_shared<bcostars::protocol::BlockImpl>(
-        blockFactory->transactionFactory(), blockFactory->receiptFactory());
+    auto block = std::make_shared<bcostars::protocol::BlockImpl>();
     block->setInner(std::move(*const_cast<bcostars::Block*>(&_block)));
     m_pbftInitializer->pbft()->asyncCheckBlock(
         block, [_current](bcos::Error::Ptr _error, bool _verifyResult) {

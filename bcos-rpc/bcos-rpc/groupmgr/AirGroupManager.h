@@ -21,6 +21,8 @@
 #pragma once
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
+
+#include <utility>
 namespace bcos
 {
 namespace rpc
@@ -31,10 +33,12 @@ public:
     using Ptr = std::shared_ptr<AirGroupManager>;
     AirGroupManager(std::string const& _chainID, bcos::group::GroupInfo::Ptr _groupInfo,
         NodeService::Ptr _nodeService)
-      : GroupManager(_chainID), m_nodeService(_nodeService), m_groupInfo(_groupInfo)
+      : GroupManager(_chainID),
+        m_nodeService(std::move(_nodeService)),
+        m_groupInfo(std::move(_groupInfo))
     {}
 
-    ~AirGroupManager() override {}
+    ~AirGroupManager() override = default;
     virtual void init() { initNodeInfo(m_groupInfo->groupID(), "localNode", m_nodeService); }
 
     NodeService::Ptr getNodeService(std::string_view _groupID, std::string_view) const override

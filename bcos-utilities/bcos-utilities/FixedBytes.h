@@ -318,14 +318,19 @@ public:
         return randomFixedBytes;
     }
 
+    static inline std::size_t calcHash(const FixedBytes& _value)
+    {
+        return boost::hash_range(_value.m_data.cbegin(), _value.m_data.cend());
+    }
+
     struct hash
     {
         /// Make a hash of the object's data.
-        size_t operator()(FixedBytes const& _value) const
-        {
-            return boost::hash_range(_value.m_data.cbegin(), _value.m_data.cend());
-        }
+        size_t operator()(FixedBytes const& _value) const { return calcHash(_value); }
     };
+
+    // for boost 1.79.0
+    friend std::size_t hash_value(const FixedBytes& _value) { return calcHash(_value); }
 
     template <unsigned P, unsigned M>
     inline FixedBytes& shiftBloom(FixedBytes<M> const& _FixedBytes)
@@ -708,6 +713,7 @@ inline Address toAddress(std::string const& _address)
     }
     BOOST_THROW_EXCEPTION(InvalidAddress());
 }
+
 }  // namespace bcos
 
 namespace std

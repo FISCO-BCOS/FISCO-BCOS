@@ -53,7 +53,7 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
     // check signature
     try
     {
-        _tx->verify();
+        _tx->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
     }
     catch (std::exception const& e)
     {
@@ -75,6 +75,10 @@ TransactionStatus TxValidator::submittedToChain(bcos::protocol::Transaction::Con
     if (status != TransactionStatus::None)
     {
         return status;
+    }
+    if (isSystemTransaction(_tx))
+    {
+        _tx->setSystemTx(true);
     }
     return TransactionStatus::None;
 }

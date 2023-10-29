@@ -1,6 +1,6 @@
 {
   "name": "fiscobcos",
-  "version-string": "3.0.0",
+  "version-string": "3.5.0",
   "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
   "description": "FISCO BCOS",
   "dependencies": [
@@ -12,35 +12,59 @@
       "name": "vcpkg-cmake-config",
       "host": true
     },
+    "magic-enum",
     "boost-log",
     "boost-beast",
     "boost-uuid",
     "boost-heap",
     "boost-graph",
+    {
+      "name": "boost-context",
+      "version>=": "1.79.0-m1"
+    },
     "boost-property-map",
     "boost-chrono",
     "boost-iostreams",
     "boost-thread",
     "boost-test",
+    "indicators",
+    "boost-compute",
     "boost-multiprecision",
     "boost-program-options",
     "ms-gsl",
+    "zstd",
     "tbb",
     "zlib",
-    "jsoncpp",
-    "protobuf",
-    "cryptopp",
+    {
+      "name": "redis-plus-plus",
+      "version>=": "1.3.2"
+    },
+    {
+      "name": "jsoncpp",
+      "version>=": "1.9.5"
+    },
+    {
+      "name": "protobuf",
+      "version>=": "3.19.4"
+    },
+    {
+      "name": "cryptopp",
+      "version>=": "8.6.0"
+    },
     {
       "name": "tarscpp",
-      "version>=": "3.0.3-m"
+      "version>=": "3.0.3-1#1"
     },
     {
       "name": "openssl",
       "version>=": "1.1.1-tassl"
     },
+    "fmt",
+    "benchmark",
     {
-      "name": "boost-context",
-      "version>=": "1.79.0-m1"
+      "name": "secp256k1",
+      "version>=": "2022-12-13#1",
+      "features": []
     },
     "wedprcrypto",
     "range-v3"
@@ -49,7 +73,14 @@
     "fullnode": {
       "description": "Full node dependencies",
       "dependencies": [
-        "evmone",
+        {
+          "name": "evmone",
+          "version>=": "0.10.0"
+        },
+        {
+          "name": "evmc",
+          "version>=": "10.1.0"
+        },
         "boost-coroutine2",
         {
           "name": "rocksdb",
@@ -63,7 +94,6 @@
     "lightnode": {
       "description": "Light node dependencies",
       "dependencies": [
-        "evmone",
         {
           "name": "rocksdb",
           "features": [
@@ -75,7 +105,7 @@
     "etcd": {
       "description": "ETCD dependencies",
       "dependencies": [
-        "cpprestsdk"
+        "etcd-cpp-apiv3"
       ]
     },
     "tcmalloc": {
@@ -92,7 +122,10 @@
     "jemalloc": {
       "description": "jemalloc dependencies",
       "dependencies": [
-        "jemalloc"
+        {
+          "name": "jemalloc",
+          "version>=": "5.3.0#1"
+        }
       ]
     },
     "mimalloc": {
@@ -100,7 +133,39 @@
       "dependencies": [
         "mimalloc"
       ]
+    },
+    "jthread": {
+      "description": "jthread dependencies",
+      "dependencies": [
+        "josuttis-jthread"
+      ]
     }
   },
-  "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139"
+  "builtin-baseline": "7e3dcf74e37034eea358934a90a11d618520e139",
+  "overrides": [
+    {
+      "name": "rocksdb",
+      "version": "6.27.3"
+    },
+    {
+      "name": "upb",
+      "version": "2021-10-19"
+    },
+    {
+      "name": "grpc",
+      "version": "1.44.0"
+    },
+    {
+      "name": "abseil",
+      "version": "20211102.1"
+    },
+    {
+      "name": "boost-context",
+      "version": "1.79.0-m1"
+    },
+    {
+      "name": "intx",
+      "version": "0.10.1"
+    }
+  ]
 }

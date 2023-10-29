@@ -54,11 +54,12 @@ public:
     virtual NodeCryptoType const& nodeCryptoType() const { return m_nodeCryptoType; }
     virtual std::string const& serviceName(bcos::protocol::ServiceType _type) const
     {
-        if (!m_servicesInfo.count(_type))
+        auto it = m_servicesInfo.find(_type);
+        if (it == m_servicesInfo.end())
         {
             return c_emptyServiceName;
         }
-        return m_servicesInfo.at(_type);
+        return it->second;
     }
 
     virtual void setNodeName(std::string const& _nodeName) { m_nodeName = _nodeName; }
@@ -148,7 +149,12 @@ inline std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
     oss << LOG_KV("name", _nodeInfo->nodeName())
         << LOG_KV("cryptoType", std::to_string((int32_t)_nodeInfo->nodeCryptoType()))
         << LOG_KV("nodeType", _nodeInfo->nodeType());
-
+    auto const& serviceInfos = _nodeInfo->serviceInfo();
+    oss << ", serviceInfos: ";
+    for (auto const& info : serviceInfos)
+    {
+        oss << info.second << ",";
+    }
     return oss.str();
 }
 }  // namespace group

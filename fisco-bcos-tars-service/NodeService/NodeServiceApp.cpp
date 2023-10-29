@@ -26,6 +26,7 @@
 #include "../SchedulerService/SchedulerServiceServer.h"
 #include "../TxPoolService/TxPoolServiceServer.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-tool/NodeConfig.h"
 #include "libinitializer/Initializer.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
@@ -67,7 +68,7 @@ void NodeServiceApp::initialize()
     {
         std::cout << "init NodeService failed, error: " << boost::diagnostic_information(e)
                   << std::endl;
-        throw e;
+        exit(-1);
     }
 }
 
@@ -75,9 +76,17 @@ void NodeServiceApp::initLog()
 {
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(m_iniConfigPath, pt);
+
+    tool::NodeConfig nodeConfig;
+    nodeConfig.loadWithoutTarsFrameworkConfig(pt);
+
     m_logInitializer = std::make_shared<BoostLogInitializer>();
-    m_logInitializer->setLogPath(getLogPath());
-    m_logInitializer->initLog(pt);
+    if (!nodeConfig.withoutTarsFramework())
+    {
+        m_logInitializer->setLogPath(getLogPath());
+    }
+
+    m_logInitializer->initLog(m_iniConfigPath);
 }
 
 void NodeServiceApp::initNodeService()
@@ -93,7 +102,6 @@ void NodeServiceApp::initNodeService()
     m_nodeInitializer->nodeConfig()->getTarsClientProxyEndpoints(
         bcos::protocol::RPC_NAME, endPoints);
 
-    // TODO: tars
     auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
         withoutTarsFramework, rpcServiceName, endPoints);
 

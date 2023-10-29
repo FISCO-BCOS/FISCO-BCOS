@@ -23,16 +23,14 @@
 #include "../config/PBFTConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/ThreadPool.h>
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTLogSync : public std::enable_shared_from_this<PBFTLogSync>
 {
 public:
     using Ptr = std::shared_ptr<PBFTLogSync>;
     PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftCache);
-    virtual ~PBFTLogSync() {}
+    virtual ~PBFTLogSync() = default;
     using SendResponseCallback = std::function<void(bytesConstRef _respData)>;
     using HandlePrePrepareCallback = std::function<void(PBFTMessageInterface::Ptr)>;
     /**
@@ -75,5 +73,4 @@ private:
     PBFTCacheProcessor::Ptr m_pbftCache;
     std::shared_ptr<ThreadPool> m_requestThread;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

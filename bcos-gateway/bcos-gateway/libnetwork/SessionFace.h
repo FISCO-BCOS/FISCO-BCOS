@@ -12,10 +12,12 @@
  */
 
 #pragma once
+#include "bcos-utilities/Error.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
-#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
+#include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <boost/asio.hpp>
+#include <optional>
 
 namespace bcos
 {
@@ -23,22 +25,17 @@ namespace gateway
 {
 class SocketFace;
 
-using SessionCallbackFunc = std::function<void(NetworkException, Message::Ptr)>;
-struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
-{
-    using Ptr = std::shared_ptr<ResponseCallback>;
-
-    uint64_t m_startTime;
-    SessionCallbackFunc callback;
-    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
-};
-
 class SessionFace
 {
 public:
-    virtual ~SessionFace(){};
-
     using Ptr = std::shared_ptr<SessionFace>;
+
+    SessionFace() = default;
+    SessionFace(const SessionFace&) = delete;
+    SessionFace(SessionFace&&) = delete;
+    SessionFace& operator=(SessionFace&&) = delete;
+    SessionFace& operator=(const SessionFace&) = delete;
+    virtual ~SessionFace() noexcept = default;
 
     virtual void start() = 0;
     virtual void disconnect(DisconnectReason) = 0;
@@ -51,14 +48,14 @@ public:
     virtual void setMessageHandler(
         std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler) = 0;
 
-    // handle before sending message, if the check fails, meaning false is returned, the message is
-    // not sent, and the SessionCallbackFunc will be performed
     virtual void setBeforeMessageHandler(
-        std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> handler) = 0;
+        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> handler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 
-    virtual bool actived() const = 0;
+    virtual bool active() const = 0;
+
+    virtual std::size_t writeQueueSize() = 0;
 };
 }  // namespace gateway
 }  // namespace bcos

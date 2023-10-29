@@ -75,7 +75,7 @@ void Worker::startWorking()
                 {
                     BCOS_LOG(WARNING) << LOG_DESC("Exception thrown in Worker thread")
                                       << LOG_KV("threadName", m_threadName)
-                                      << LOG_KV("errorMsg", boost::diagnostic_information(e));
+                                      << LOG_KV("msg", boost::diagnostic_information(e));
                 }
 
                 {
@@ -89,7 +89,6 @@ void Worker::startWorking()
 
                 {
                     boost::unique_lock<boost::mutex> l(x_work);
-                    TIME_RECORD("Worker stopping");
                     while (m_workerState == WorkerState::Stopped)
                         m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
                 }
@@ -97,7 +96,6 @@ void Worker::startWorking()
         }));
     }
 
-    TIME_RECORD("Start worker");
     while (m_workerState == WorkerState::Starting)
         m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
 }
@@ -111,7 +109,6 @@ void Worker::stopWorking()
         if (!m_workerState.compare_exchange_strong(ex, WorkerState::Stopping))
             return;
         m_workerStateNotifier.notify_all();
-        TIME_RECORD("Stop worker");
         while (m_workerState != WorkerState::Stopped)
         {
             m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
@@ -128,7 +125,6 @@ void Worker::terminate()
             return;  // Somebody else is doing this
         l.unlock();
         m_workerStateNotifier.notify_all();
-        TIME_RECORD("Terminate worker");
         m_workerThread->join();
 
         l.lock();

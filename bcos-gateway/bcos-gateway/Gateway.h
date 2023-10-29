@@ -20,36 +20,177 @@
 
 #pragma once
 
+#include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
+#include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
+#include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
 #include <bcos-gateway/libp2p/Service.h>
-#include <bcos-gateway/libratelimit/BWRateStatistics.h>
 #include <bcos-gateway/libratelimit/RateLimiterManager.h>
+#include <bcos-gateway/libratelimit/RateLimiterStat.h>
 #include <bcos-utilities/BoostLog.h>
 
 namespace bcos
 {
 namespace gateway
 {
+class Retry : public std::enable_shared_from_this<Retry>, public ObjectCounter<Retry>
+{
+public:
+    // random choose one p2pID to send message
+    P2pID chooseP2pID()
+    {
+        auto p2pId = P2pID();
+        if (!m_p2pIDs.empty())
+        {
+            p2pId = *m_p2pIDs.begin();
+            m_p2pIDs.erase(m_p2pIDs.begin());
+        }
+
+        return p2pId;
+    }
+
+    // send the message with retry
+    void trySendMessage()
+    {
+        if (m_p2pIDs.empty())
+        {
+            GATEWAY_LOG(DEBUG) << LOG_DESC("[Gateway::Retry]")
+                               << LOG_DESC("unable to send the message")
+                               << LOG_KV("srcNodeID", m_srcNodeID->hex())
+                               << LOG_KV("dstNodeID", m_dstNodeID->hex())
+                               << LOG_KV("seq", std::to_string(m_p2pMessage->seq()))
+                               << LOG_KV("moduleID", m_moduleID);
+
+            if (m_respFunc)
+            {
+                auto errorPtr = BCOS_ERROR_PTR(bcos::protocol::CommonError::GatewaySendMsgFailed,
+                    "unable to send the message");
+                m_respFunc(errorPtr);
+            }
+            return;
+        }
+
+        auto seq = m_p2pMessage->seq();
+        auto p2pID = chooseP2pID();
+        auto self = shared_from_this();
+        auto startT = utcTime();
+        auto callback = [moduleID = m_moduleID, seq, self, startT, p2pID](NetworkException e,
+                            std::shared_ptr<P2PSession> session,
+                            std::shared_ptr<P2PMessage> message) {
+            std::ignore = session;
+            if (e.errorCode() != P2PExceptionType::Success)
+            {
+                // bandwidth overflow , do'not try again
+                if (e.errorCode() == P2PExceptionType::OutBWOverflow)
+                {
+                    if (self->m_respFunc)
+                    {
+                        auto errorPtr = BCOS_ERROR_PTR(
+                            bcos::protocol::CommonError::GatewayBandwidthOverFlow, e.what());
+                        self->m_respFunc(errorPtr);
+                    }
+
+                    return;
+                }
+
+                // QPS overflow , do'not try again ???
+                if (e.errorCode() == P2PExceptionType::InQPSOverflow)
+                {
+                    if (self->m_respFunc)
+                    {
+                        auto errorPtr = BCOS_ERROR_PTR(
+                            bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
+                        self->m_respFunc(errorPtr);
+                    }
+
+                    return;
+                }
+
+                GATEWAY_LOG(DEBUG)
+                    << LOG_BADGE("Retry") << LOG_DESC("network callback") << LOG_KV("seq", seq)
+                    << LOG_KV("dstP2P", p2pID) << LOG_KV("code", e.errorCode())
+                    << LOG_KV("moduleID", moduleID) << LOG_KV("message", e.what())
+                    << LOG_KV("timeCost", (utcTime() - startT));
+                // try again
+                self->trySendMessage();
+                return;
+            }
+
+            try
+            {
+                auto payload = message->payload();
+                int respCode =
+                    boost::lexical_cast<int>(std::string(payload->begin(), payload->end()));
+                // the peer gateway not response not ok ,it means the gateway not dispatch the
+                // message successfully,find another gateway and try again
+                if (respCode != bcos::protocol::CommonError::SUCCESS)
+                {
+                    GATEWAY_LOG(DEBUG) << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
+                                       << LOG_KV("moduleID", moduleID) << LOG_KV("code", respCode)
+                                       << LOG_KV("message", e.what());
+                    // try again
+                    self->trySendMessage();
+                    return;
+                }
+                GATEWAY_LOG(TRACE)
+                    << LOG_BADGE("Retry: asyncSendMessageByNodeID success")
+                    << LOG_KV("dstP2P", p2pID) << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
+                    << LOG_KV("dstNodeID", self->m_dstNodeID->hex())
+                    << LOG_KV("moduleID", moduleID);
+                // send message successfully
+                if (self->m_respFunc)
+                {
+                    self->m_respFunc(nullptr);
+                }
+                return;
+            }
+            catch (const std::exception& e)
+            {
+                GATEWAY_LOG(ERROR) << LOG_BADGE("trySendMessage and receive response exception")
+                                   << LOG_KV("payload", std::string(message->payload()->begin(),
+                                                            message->payload()->end()))
+                                   << LOG_KV("packetType", message->packetType())
+                                   << LOG_KV("src", message->options() ?
+                                                        toHex(*(message->options()->srcNodeID())) :
+                                                        "unknown")
+                                   << LOG_KV("size", message->length())
+                                   << LOG_KV("message", e.what()) << LOG_KV("moduleID", moduleID);
+
+                self->trySendMessage();
+            }
+        };
+        m_p2pInterface->asyncSendMessageByNodeID(p2pID, m_p2pMessage, callback, Options(10000));
+    }
+
+public:
+    std::vector<P2pID> m_p2pIDs;
+    crypto::NodeIDPtr m_srcNodeID;
+    crypto::NodeIDPtr m_dstNodeID;
+    std::shared_ptr<P2PMessage> m_p2pMessage;
+    std::shared_ptr<P2PInterface> m_p2pInterface;
+    ErrorRespFunc m_respFunc;
+    int m_moduleID;
+};
+
 class Gateway : public GatewayInterface, public std::enable_shared_from_this<Gateway>
 {
 public:
     using Ptr = std::shared_ptr<Gateway>;
-    Gateway(std::string const& _chainID, P2PInterface::Ptr _p2pInterface,
+    Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface::Ptr _p2pInterface,
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
-        ratelimit::RateLimiterManager::Ptr _rateLimiterManager,
-        ratelimit::BWRateStatistics::Ptr _rateStatistics,
+        ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
         std::string _gatewayServiceName = "localGateway")
       : m_gatewayServiceName(_gatewayServiceName),
-        m_chainID(_chainID),
+        m_gatewayConfig(_gatewayConfig),
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop),
-        m_rateLimiterManager(_rateLimiterManager),
-        m_rateStatistics(_rateStatistics)
+        m_gatewayRateLimiter(_gatewayRateLimiter)
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
@@ -58,18 +199,6 @@ public:
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::BroadcastMessage,
             boost::bind(&Gateway::onReceiveBroadcastMessage, this, boost::placeholders::_1,
                 boost::placeholders::_2, boost::placeholders::_3));
-
-        m_rateStatisticsTimer = std::make_shared<Timer>(m_rateStatisticsPeriodMS, "rate_reporter");
-        auto rateStatisticsTimer = m_rateStatisticsTimer;
-        auto _rateStatisticsPeriodMS = m_rateStatisticsPeriodMS;
-        m_rateStatisticsTimer->registerTimeoutHandler(
-            [rateStatisticsTimer, _rateStatisticsPeriodMS, _rateStatistics, _rateLimiterManager]() {
-                auto io = _rateStatistics->inAndOutStat(_rateStatisticsPeriodMS);
-                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [rate stat]") << LOG_DESC(io.first);
-                GATEWAY_LOG(DEBUG) << LOG_DESC("\n [rate stat]") << LOG_DESC(io.second);
-                _rateStatistics->flushStat();
-                rateStatisticsTimer->restart();
-            });
     }
     ~Gateway() override { stop(); }
 
@@ -141,7 +270,6 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         bytesConstRef _payload, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
-
     P2PInterface::Ptr p2pInterface() const { return m_p2pInterface; }
     GatewayNodeManager::Ptr gatewayNodeManager() { return m_gatewayNodeManager; }
     /**
@@ -191,19 +319,6 @@ public:
         return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
     }
 
-    // gateway traffic limiting policy impl
-    bool checkBWRateLimit(ratelimit::RateLimiterManager::Ptr _rateLimiterManager,
-        const std::string& _endPoint, const std::string& _groupID, uint16_t _moduleID,
-        uint64_t _msgLength, SessionCallbackFunc _callback);
-    bool checkBWRateLimit(
-        SessionFace::Ptr _session, Message::Ptr _msg, SessionCallbackFunc _callback);
-
-    uint32_t rateStatisticsPeriodMS() const { return m_rateStatisticsPeriodMS; }
-    void setRateStatisticsPeriodMS(uint32_t _rateStatisticsPeriodMS)
-    {
-        m_rateStatisticsPeriodMS = _rateStatisticsPeriodMS;
-    }
-
 protected:
     // for UT
     Gateway() {}
@@ -225,22 +340,15 @@ protected:
 
 private:
     std::string m_gatewayServiceName;
-    std::string m_chainID;
+    GatewayConfig::Ptr m_gatewayConfig;
     // p2p service interface
     P2PInterface::Ptr m_p2pInterface;
     // GatewayNodeManager
     GatewayNodeManager::Ptr m_gatewayNodeManager;
     bcos::amop::AMOPImpl::Ptr m_amop;
 
-    // For bandwidth limitation
-    ratelimit::RateLimiterManager::Ptr m_rateLimiterManager;
-    // For bandwidth statistics
-    ratelimit::BWRateStatistics::Ptr m_rateStatistics;
-
-    //
-    uint32_t m_rateStatisticsPeriodMS = 60000;  // ms
-    // the timer that periodically prints the rate
-    std::shared_ptr<Timer> m_rateStatisticsTimer;
+    // For rate limit
+    ratelimiter::GatewayRateLimiter::Ptr m_gatewayRateLimiter;
 };
 }  // namespace gateway
 }  // namespace bcos

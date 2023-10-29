@@ -1,7 +1,8 @@
 find_package(ZLIB REQUIRED)
+find_package(ethash REQUIRED)
 
 add_executable(perf_demo perf_demo.cpp)
-target_link_libraries(perf_demo PRIVATE bcos-crypto ZLIB::ZLIB)
+target_link_libraries(perf_demo PRIVATE bcos-crypto ZLIB::ZLIB ethash::keccak)
 
 if(ENABLE_IPPCRYPTO)
     find_package(IPPCrypto REQUIRED MODULE)

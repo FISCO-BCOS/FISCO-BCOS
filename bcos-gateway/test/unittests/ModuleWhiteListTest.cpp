@@ -33,7 +33,7 @@ BOOST_FIXTURE_TEST_SUITE(ModuleWhiteListTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(test_moduleWhiteList)
 {
-    bcos::gateway::ratelimit::ModuleWhiteList moduleWhiteList;
+    bcos::gateway::ratelimiter::ModuleWhiteList moduleWhiteList;
 
     BOOST_CHECK(!moduleWhiteList.isModuleExist(1001));
 
@@ -44,6 +44,8 @@ BOOST_AUTO_TEST_CASE(test_moduleWhiteList)
     BOOST_CHECK(moduleWhiteList.isModuleExist(1001));
 
     moduleWhiteList.removeModuleID(1001);
+    BOOST_CHECK(!moduleWhiteList.isModuleExist(1001));
+    BOOST_CHECK(!moduleWhiteList.removeModuleID(1001));
     BOOST_CHECK(!moduleWhiteList.isModuleExist(1001));
 }
 

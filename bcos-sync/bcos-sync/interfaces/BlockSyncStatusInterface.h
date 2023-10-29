@@ -36,9 +36,11 @@ public:
 
     virtual bcos::crypto::HashType const& hash() const = 0;
     virtual bcos::crypto::HashType const& genesisHash() const = 0;
+    virtual std::int64_t time() const = 0;
 
     virtual void setHash(bcos::crypto::HashType const& _hash) = 0;
     virtual void setGenesisHash(bcos::crypto::HashType const& _gensisHash) = 0;
+    virtual void setTime(std::int64_t const time) = 0;
 };
 }  // namespace sync
 }  // namespace bcos

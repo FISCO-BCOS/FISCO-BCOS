@@ -41,33 +41,36 @@ public:
     Ed25519Crypto() = default;
     ~Ed25519Crypto() override {}
     std::shared_ptr<bytes> sign(const KeyPairInterface& _keyPair, const HashType& _messageHash,
-        bool _signatureWithPub = false) override
+        bool _signatureWithPub = false) const override
     {
         return ed25519Sign(_keyPair, _messageHash, _signatureWithPub);
     }
 
-    bool verify(
-        PublicPtr _pubKey, const HashType& _messageHash, bytesConstRef _signatureData) override
+    bool verify(PublicPtr _pubKey, const HashType& _messageHash,
+        bytesConstRef _signatureData) const override
     {
         return ed25519Verify(_pubKey, _messageHash, _signatureData);
     }
 
     bool verify(std::shared_ptr<const bytes> _pubKeyBytes, const HashType& _hash,
-        bytesConstRef _signatureData) override;
+        bytesConstRef _signatureData) const override;
 
-    PublicPtr recover(const HashType& _messageHash, bytesConstRef _signatureData) override
+    PublicPtr recover(const HashType& _messageHash, bytesConstRef _signatureData) const override
     {
         return ed25519Recover(_messageHash, _signatureData);
     }
 
-    KeyPairInterface::UniquePtr generateKeyPair() override { return ed25519GenerateKeyPair(); }
+    KeyPairInterface::UniquePtr generateKeyPair() const override
+    {
+        return ed25519GenerateKeyPair();
+    }
 
-    std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) override
+    std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) const override
     {
         return ed25519Recover(_hashImpl, _in);
     }
 
-    KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) override;
+    KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
 };
 }  // namespace crypto
 }  // namespace bcos

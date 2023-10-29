@@ -41,7 +41,11 @@ public:
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
+    using CRUDParams = std::function<void(const std::shared_ptr<executor::TransactionExecutive>&,
+        const PrecompiledGas::Ptr&, PrecompiledExecResult::Ptr const&)>;
     void createTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void createTableV32(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void createKVTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
@@ -51,5 +55,18 @@ private:
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void desc(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void descWithKeyOrder(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void externalCreateTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledGas::Ptr& gasPricer, const PrecompiledExecResult::Ptr& _callParameters,
+        const std::string& tableName, const CodecWrapper& codec,
+        const std::string& valueField) const;
+
+    inline void registerFunc(uint32_t _selector, CRUDParams _func,
+        protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
+    {
+        selector2Func.insert({_selector, {_minVersion, std::move(_func)}});
+    }
+    std::unordered_map<uint32_t, std::pair<protocol::BlockVersion, CRUDParams>> selector2Func;
 };
 }  // namespace bcos::precompiled

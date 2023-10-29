@@ -48,7 +48,7 @@ public:
         {
             std::cout << "init RpcService failed, error: " << boost::diagnostic_information(e)
                       << std::endl;
-            throw e;
+            exit(-1);
         }
     }
 
@@ -66,7 +66,7 @@ protected:
         // !!! Notice:
         auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(
             std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        nodeConfig->loadConfig(m_iniConfigPath, false);
+        nodeConfig->loadConfig(m_iniConfigPath, false, true, false);
         if (nodeConfig->rpcSmSsl())
         {
             addConfig("sm_ca.crt");
@@ -85,9 +85,16 @@ protected:
         // init the log
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(m_iniConfigPath, pt);
+        // init service.without_tars_framework first for determine the log path
+        nodeConfig->loadWithoutTarsFrameworkConfig(pt);
+
         m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-        m_logInitializer->setLogPath(getLogPath());
-        m_logInitializer->initLog(pt);
+        if (!nodeConfig->withoutTarsFramework())
+        {
+            m_logInitializer->setLogPath(getLogPath());
+        }
+
+        m_logInitializer->initLog(m_iniConfigPath);
         nodeConfig->loadServiceConfig(pt);
         // for stat the nodeVersion
         bcos::initializer::showNodeVersionMetric();

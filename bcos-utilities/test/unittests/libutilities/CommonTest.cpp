@@ -188,7 +188,7 @@ BOOST_AUTO_TEST_CASE(testError)
 {
     std::string errorMessage = " test error";
     int64_t errorCode = -100042;
-    Error::Ptr error = std::make_unique<Error>(errorCode, errorMessage);
+    Error::Ptr error = std::make_unique<Error>(Error::buildError("", errorCode, errorMessage));
     BOOST_CHECK(error->errorCode() == errorCode);
     BOOST_CHECK(error->errorMessage() == errorMessage);
 

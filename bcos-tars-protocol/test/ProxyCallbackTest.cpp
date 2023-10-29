@@ -32,6 +32,7 @@
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
+#include <memory>
 #include <thread>
 #include <vector>
 
@@ -45,28 +46,19 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(TarsServantProxyCallbackTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
 {
-    std::string serviceName = "HelloApp.HelloServer.HelloObj";
-
     tars::TC_Endpoint ep("127.0.0.1", 1111, 0);
     tars::TC_Endpoint ep0("127.0.0.2", 1112, 0);
     tars::TC_Endpoint ep1("127.0.0.3", 1113, 0);
 
-    tars::Communicator* c = new tars::Communicator();
+    std::string serviceName = "HelloApp.HelloServer.HelloObj";
 
-    auto proxy = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
-        c, endPointToString(serviceName, ep));
-
-    proxy->tars_reconnect(3);
-
-    TarsServantProxyCallback cb(serviceName, *proxy);
+    TarsServantProxyCallback cb(serviceName, nullptr);
 
     int conCount = 0;
     cb.setOnConnectHandler([&conCount](const tars::TC_Endpoint& _ep) { conCount++; });
 
     int closeCount = 0;
     cb.setOnCloseHandler([&closeCount](const tars::TC_Endpoint& _ep) { closeCount++; });
-
-    cb.startTimer();
 
     std::this_thread::sleep_for(std::chrono::seconds(3));
 
@@ -149,8 +141,6 @@ BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
 
     BOOST_CHECK_EQUAL(activeEndpoints.size(), 0);
     BOOST_CHECK_EQUAL(inactiveEndpoints.size(), 3);
-
-    c->terminate();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

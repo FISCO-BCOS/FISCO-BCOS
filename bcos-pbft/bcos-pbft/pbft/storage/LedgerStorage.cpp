@@ -66,7 +66,7 @@ PBFTProposalListPtr LedgerStorage::loadState(BlockNumber _stabledIndex)
                            << LOG_KV("end", m_maxCommittedProposalIndex) << LOG_KV("size", offset);
 
     m_stateFetched = false;
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     asyncGetCommittedProposals(
         _stabledIndex + 1, offset, [self](PBFTProposalListPtr _proposalList) {
             try
@@ -89,7 +89,7 @@ PBFTProposalListPtr LedgerStorage::loadState(BlockNumber _stabledIndex)
                     << LOG_DESC(
                            "The committedProposals have been received, but the "
                            "callback is called exception")
-                    << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
     startT = utcSteadyTime();
@@ -109,7 +109,7 @@ PBFTProposalListPtr LedgerStorage::loadState(BlockNumber _stabledIndex)
         BOOST_THROW_EXCEPTION(InitPBFTException() << errinfo_comment(
                                   "loadState failed for fetch committedProposal failed"));
     }
-    if (!m_stateProposals || m_stateProposals->size() == 0)
+    if (!m_stateProposals || m_stateProposals->empty())
     {
         m_maxCommittedProposalIndex = _stabledIndex;
     }
@@ -135,7 +135,7 @@ void LedgerStorage::asyncGetCommittedProposals(
     {
         keys->push_back(boost::lexical_cast<std::string>(i));
     }
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_storage->asyncGetBatch(m_pbftCommitDB, keys,
         [self, _onSuccess](
             Error::UniquePtr&& _error, std::shared_ptr<std::vector<std::string>>&& _values) {
@@ -143,8 +143,8 @@ void LedgerStorage::asyncGetCommittedProposals(
             {
                 PBFT_STORAGE_LOG(WARNING)
                     << LOG_DESC("asyncGetCommittedProposals: get proposals failed")
-                    << LOG_KV("error", _error->errorCode())
-                    << LOG_KV("errorMessage", _error->errorMessage());
+                    << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
                 return;
             }
             try
@@ -176,14 +176,14 @@ void LedgerStorage::asyncGetCommittedProposals(
             catch (std::exception const& e)
             {
                 PBFT_STORAGE_LOG(WARNING) << LOG_DESC("asyncGetCommittedProposals exception")
-                                          << LOG_KV("error", boost::diagnostic_information(e));
+                                          << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
 
 void LedgerStorage::asyncGetLatestCommittedProposalIndex()
 {
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_storage->asyncGet(m_pbftCommitDB, m_maxCommittedProposalKey,
         [self](Error::UniquePtr&& _error, std::string_view&& _value) {
             try
@@ -194,7 +194,7 @@ void LedgerStorage::asyncGetLatestCommittedProposalIndex()
                     storage->m_signalled.notify_all();
                     return;
                 }
-                if (_value.size() == 0)
+                if (_value.empty())
                 {
                     storage->m_maxCommittedProposalIndexFetched = true;
                     storage->m_signalled.notify_all();
@@ -204,8 +204,8 @@ void LedgerStorage::asyncGetLatestCommittedProposalIndex()
                 {
                     PBFT_STORAGE_LOG(WARNING)
                         << LOG_DESC("asyncGetLatestCommittedProposalIndex failed")
-                        << LOG_KV("errorCode", _error->errorCode())
-                        << LOG_KV("errorMessage", _error->errorMessage());
+                        << LOG_KV("code", _error->errorCode())
+                        << LOG_KV("message", _error->errorMessage());
                     storage->m_signalled.notify_all();
                     return;
                 }
@@ -224,7 +224,7 @@ void LedgerStorage::asyncGetLatestCommittedProposalIndex()
             {
                 PBFT_STORAGE_LOG(WARNING)
                     << LOG_DESC("asyncGetLatestCommittedProposalIndex exception")
-                    << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
@@ -254,7 +254,7 @@ void LedgerStorage::asyncPutProposal(std::string const& _dbName, std::string con
     bytesPointer _committedData, BlockNumber _proposalIndex, size_t _retryTime)
 {
     auto startT = utcTime();
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     // TODO: optimize here to decrease copy overhead
     // Note: asyncPut now is a sync implementation, but no need to async here since this
     // timeout-head is only between 5-10ms
@@ -292,7 +292,7 @@ void LedgerStorage::asyncPutProposal(std::string const& _dbName, std::string con
             catch (std::exception const& e)
             {
                 PBFT_STORAGE_LOG(WARNING) << LOG_DESC("asyncPutProposal exception")
-                                          << LOG_KV("error", boost::diagnostic_information(e));
+                                          << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
@@ -319,7 +319,7 @@ void LedgerStorage::asyncCommitStableCheckPoint(PBFTProposalInterface::Ptr _stab
                    << LOG_KV("proofSize", signatureList->size())
                    << LOG_KV("blockProofSize", blockSignatureList.size());
     // Note: enqueue here to increase the performance since commitBlock is a sync implementation
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     m_commitBlockWorker->enqueue([self, blockHeader, _stableProposal]() {
         auto storage = self.lock();
         if (!storage)
@@ -354,7 +354,7 @@ void LedgerStorage::onStableCheckPointCommitted(
 void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stableProposal,
     BlockHeader::Ptr _blockHeader, Block::Ptr _blockInfo)
 {
-    auto self = std::weak_ptr<LedgerStorage>(shared_from_this());
+    auto self = weak_from_this();
     auto startT = utcTime();
     m_scheduler->commitBlock(_blockHeader, [_stableProposal, _blockHeader, _blockInfo, startT,
                                                self](Error::Ptr&& _error,
@@ -369,8 +369,8 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
             if (_error != nullptr)
             {
                 PBFT_STORAGE_LOG(ERROR) << LOG_DESC("commitStableCheckPoint failed")
-                                        << LOG_KV("errorCode", _error->errorCode())
-                                        << LOG_KV("errorInfo", _error->errorMessage())
+                                        << LOG_KV("code", _error->errorCode())
+                                        << LOG_KV("message", _error->errorMessage())
                                         << LOG_KV("proposalIndex", _blockHeader->number())
                                         << LOG_KV("timecost", utcTime() - startT);
                 ledgerStorage->m_onStableCheckPointCommitFailed(std::move(_error), _stableProposal);
@@ -401,7 +401,7 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
         catch (std::exception const& e)
         {
             PBFT_STORAGE_LOG(WARNING) << LOG_DESC("commitStableCheckPoint exception")
-                                      << LOG_KV("error", boost::diagnostic_information(e));
+                                      << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
@@ -422,9 +422,8 @@ void LedgerStorage::asyncRemove(std::string const& _dbName, std::string const& _
                                    << LOG_KV("key", _key);
             return;
         }
-        // TODO: remove failed
         PBFT_STORAGE_LOG(WARNING) << LOG_DESC("asyncRemove failed") << LOG_KV("dbName", _dbName)
-                                  << LOG_KV("key", _key);
+                                  << LOG_KV("key", _key) << LOG_KV("msg", _error->toString());
     });
 }
 

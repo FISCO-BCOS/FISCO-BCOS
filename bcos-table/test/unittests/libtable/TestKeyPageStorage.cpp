@@ -18,6 +18,7 @@
  */
 
 #include "Hash.h"
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
@@ -76,9 +77,7 @@ inline ostream& operator<<(ostream& os, const std::tuple<std::string, crypto::Ha
 }
 }  // namespace std
 
-namespace bcos
-{
-namespace test
+namespace bcos::test
 {
 struct KeyPageStorageFixture
 {
@@ -139,6 +138,21 @@ BOOST_AUTO_TEST_CASE(create_Table)
     BOOST_REQUIRE_THROW(tableFactory->createTable(tableName, valueField), bcos::Error);
 }
 
+
+BOOST_AUTO_TEST_CASE(count_empty_Table)
+{
+    std::string tableName("t_test1");
+    auto countRet = tableFactory->count(tableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
+    auto table = tableFactory->openTable(tableName);
+
+    BOOST_REQUIRE(!table);
+    auto ret = tableFactory->createTable(tableName, valueField);
+    BOOST_REQUIRE(ret);
+    countRet = tableFactory->count(tableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
+}
+
 BOOST_AUTO_TEST_CASE(rollback)
 {
     auto ret = createDefaultTable();
@@ -150,6 +164,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     BOOST_REQUIRE_NO_THROW(table->setRow("name", deleteEntry));
 
     auto hash = tableFactory->hash(hashImpl);
+    auto countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
 
 #ifdef __APPLE__
 #undef __APPLE__
@@ -162,6 +178,9 @@ BOOST_AUTO_TEST_CASE(rollback)
     auto entry = std::make_optional(table->newEntry());
     BOOST_REQUIRE_NO_THROW(entry->setField(0, "Lili"));
     BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
+
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
 
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
@@ -183,6 +202,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "12345");
     table->setRow("id", *entry);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -208,6 +229,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "500");
     table->setRow("balance", *entry);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 3);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -232,6 +255,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     auto deleteEntry2 = std::make_optional(table->newDeletedEntry());
     table->setRow("name", *deleteEntry2);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 
 // delete entry will cause hash mismatch
@@ -248,6 +273,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 #endif
     std::cout << "Try remove balance" << std::endl;
     tableFactory->rollback(*savePoint2);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 3);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -261,6 +288,8 @@ BOOST_AUTO_TEST_CASE(rollback)
         crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
 #endif
     tableFactory->rollback(*savePoint1);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -282,6 +311,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 #endif
 
     tableFactory->rollback(*savePoint);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
     hash = tableFactory->hash(hashImpl);
@@ -308,6 +339,8 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "new record");
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
     hash = tableFactory->hash(hashImpl);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -316,6 +349,8 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     entry = table->newDeletedEntry();
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
     hash = tableFactory->hash(hashImpl);
     // delete entry will cause hash mismatch
 #if defined(__APPLE__)
@@ -444,7 +479,7 @@ BOOST_AUTO_TEST_CASE(rollback3)
     auto entry = table->newEntry();
     entry.set("value");
     table->setRow("name", entry);
-    auto hash = tableFactory->hash(hashImpl);
+    tableFactory->hash(hashImpl);
     // first rollback
     tableFactory->rollback(*savePoint0);
 
@@ -578,6 +613,132 @@ BOOST_AUTO_TEST_CASE(hash)
     entries = table->getRows(keys);
     BOOST_REQUIRE(entries.size() == 1);
     // tableFactory->asyncCommit([](Error::Ptr, size_t) {});
+}
+
+
+BOOST_AUTO_TEST_CASE(hash_V3_1_0)
+{
+    auto hashImpl2 = make_shared<Header256Hash>();
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+    auto tableFactory2 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    auto tableFactory1 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+
+    for (int i = 10; i < 20; ++i)
+    {
+        BOOST_REQUIRE(tableFactory1 != nullptr);
+
+        std::string tableName = "testTable" + boost::lexical_cast<std::string>(i);
+        auto key = "testKey" + boost::lexical_cast<std::string>(i);
+        tableFactory1->createTable(tableName, "value");
+        auto table = tableFactory1->openTable(tableName);
+
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+
+        std::promise<bool> getRow;
+        table->asyncGetRow(key, [&](auto&& error, auto&& result) {
+            BOOST_REQUIRE(!error);
+            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+
+            getRow.set_value(true);
+        });
+
+        getRow.get_future().get();
+    }
+
+    for (int i = 10; i < 20; ++i)
+    {
+        BOOST_REQUIRE(tableFactory2 != nullptr);
+
+        std::string tableName = "testTable" + boost::lexical_cast<std::string>(i);
+        auto key = "testKey" + boost::lexical_cast<std::string>(i);
+        tableFactory2->createTable(tableName, "value");
+        auto table = tableFactory2->openTable(tableName);
+
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+
+        std::promise<bool> getRow;
+        table->asyncGetRow(key, [&](auto&& error, auto&& result) {
+            BOOST_REQUIRE(!error);
+            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+
+            getRow.set_value(true);
+        });
+
+        getRow.get_future().get();
+    }
+
+    auto dbHash1 = tableFactory1->hash(hashImpl);
+    auto dbHash2 = tableFactory2->hash(hashImpl);
+    BOOST_REQUIRE_NE(dbHash1.hex(), dbHash2.hex());
+}
+
+
+BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
+{
+    auto hashImpl2 = std::make_shared<Keccak256>();
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+
+    auto tableFactory1 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+    auto tableFactory2 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+    BOOST_REQUIRE(tableFactory1 != nullptr);
+    BOOST_REQUIRE(tableFactory2 != nullptr);
+
+    auto setData1 = [&](auto&& tableFactory) {
+        std::string tableName = "testTable1";
+        auto key = "testKey1";
+        tableFactory->createTable(tableName, "value");
+        auto table = tableFactory->openTable(tableName);
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+        tableName = "testTable2";
+        tableFactory->createTable(tableName, "value");
+        key = "testKey2";
+        table = tableFactory->openTable(tableName);
+        entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+    };
+    auto setData2 = [&](auto&& tableFactory) {
+        std::string tableName = "testTable2";
+        auto key = "testKey1";
+        tableFactory->createTable(tableName, "value");
+        auto table = tableFactory->openTable(tableName);
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+        tableName = "testTable1";
+        tableFactory->createTable(tableName, "value");
+        key = "testKey2";
+        table = tableFactory->openTable(tableName);
+        entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+    };
+    setData1(tableFactory1);
+    setData2(tableFactory2);
+    auto dbHash1 = tableFactory1->hash(hashImpl2);
+    auto dbHash2 = tableFactory2->hash(hashImpl2);
+    BOOST_REQUIRE_EQUAL(dbHash1.hex(), dbHash2.hex());
+
+    auto tableFactory3 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    auto tableFactory4 = make_shared<KeyPageStorage>(
+        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+
+    setData1(tableFactory3);
+    setData2(tableFactory4);
+    auto dbHash3 = tableFactory3->hash(hashImpl2);
+    auto dbHash4 = tableFactory4->hash(hashImpl2);
+    BOOST_REQUIRE_NE(dbHash3.hex(), dbHash4.hex());
 }
 
 BOOST_AUTO_TEST_CASE(open_sysTables)
@@ -1996,13 +2157,11 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#pragma omp parallel for
         for (int k = 0; k < 1000; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key = boost::lexical_cast<std::string>(k);
             entry->setField(0, boost::lexical_cast<std::string>(k));
-#pragma omp critical
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -2012,25 +2171,20 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#pragma omp parallel for
         for (int k = 0; k < 1000; ++k)
         {
             Condition c;
             c.limit(0, 200);
             auto keys = table->getPrimaryKeys(c);
 
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 200);
             c.limit(200, 300);
             keys = table->getPrimaryKeys(c);
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 300);
             c.limit(900, 200);
             keys = table->getPrimaryKeys(c);
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
             c.GE("900");
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
         }
     }
@@ -2705,7 +2859,203 @@ BOOST_AUTO_TEST_CASE(insertAndDelete)
     }
 }
 
+BOOST_AUTO_TEST_CASE(invalidPageKeyToValid)
+{
+    boost::log::core::get()->set_logging_enabled(true);
+    auto valueFields = "value1";
+
+    auto stateStorage = make_shared<StateStorage>(nullptr);
+    StateStorageInterface::Ptr prev = stateStorage;
+
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 2048);
+    auto tableName = "table_000";
+    BOOST_REQUIRE(tableStorage->createTable(tableName, valueFields));
+
+    auto table = tableStorage->openTable(tableName);
+    BOOST_REQUIRE(table);
+
+    for (size_t k = 1000002000; k < 1000002035; ++k)
+    {
+        auto entry = std::make_optional(table->newEntry());
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry->setField(0, key);
+        // 64B every entry
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    }
+    for (size_t k = 1000002235; k < 1000002264; ++k)
+    {
+        auto entry = std::make_optional(table->newEntry());
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry->setField(0, key);
+        // 64B every entry
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    }
+    {
+        size_t keyVal = 1000002235;
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+        auto entry = table->newEntry();
+        // BOOST_REQUIRE_NO_THROW(table->setRow(key, entry));
+        entry = table->newDeletedEntry();
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, entry));
+    }
+    std::atomic<size_t> totalCount = 0;
+    tableStorage->parallelTraverse(false, [&](auto&& tableView, auto&& keyView, auto&& entry) {
+        ++totalCount;
+        stateStorage->asyncSetRow(tableView, keyView, entry, [](Error::UniquePtr) {});
+        return true;
+    });
+    // BOOST_REQUIRE_EQUAL(totalCount, 66);  // meta + 5page + s_table
+    auto tableStorage2 = std::make_shared<KeyPageStorage>(prev, 2048);
+    {
+        size_t keyVal = 1000002032;
+        auto entry = table->newEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    for (size_t k = 1000002242; k < 1000002249; ++k)
+    {
+        auto entry = table->newDeletedEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+
+    for (size_t k = 1000002235; k >= 1000002224; --k)
+    {
+        auto entry = table->newEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry.setField(0, key);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    size_t keyVal = 1000002235;
+    // auto entry = table->newEntry();
+    auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    // tableStorage2->asyncSetRow(
+    //     tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    totalCount = 0;
+    tableStorage2->parallelTraverse(false, [&](auto&& tableView, auto&& keyView, auto&& entry) {
+        ++totalCount;
+        stateStorage->asyncSetRow(tableView, keyView, entry, [](Error::UniquePtr) {});
+        return true;
+    });
+    // BOOST_REQUIRE_EQUAL(totalCount, 3);  // meta + 5page + s_table
+    auto tableStorage3 = std::make_shared<KeyPageStorage>(prev, 2048);
+    tableStorage3->asyncGetRow(tableName, key,
+        [](Error::UniquePtr, std::optional<Entry> e) { BOOST_REQUIRE(e.has_value()); });
+}
+
+BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
+{
+    boost::log::core::get()->set_logging_enabled(true);
+    auto valueFields = "value1";
+
+    auto stateStorage = make_shared<StateStorage>(nullptr);
+    StateStorageInterface::Ptr prev = stateStorage;
+
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 2048);
+    auto tableName = "table_000";
+    BOOST_REQUIRE(tableStorage->createTable(tableName, valueFields));
+
+    auto table = tableStorage->openTable(tableName);
+    BOOST_REQUIRE(table);
+
+    for (size_t k = 1000002030; k < 1000002035; ++k)
+    {
+        auto entry = std::make_optional(table->newEntry());
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry->setField(0, key);
+        // 64B every entry
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    }
+    std::atomic<size_t> totalCount = 0;
+    tableStorage->parallelTraverse(false, [&](auto&& tableView, auto&& keyView, auto&& entry) {
+        ++totalCount;
+        stateStorage->asyncSetRow(tableView, keyView, entry, [](Error::UniquePtr) {});
+        return true;
+    });
+    // BOOST_REQUIRE_EQUAL(totalCount, 66);  // meta + 5page + s_table
+    auto tableStorage2 = std::make_shared<KeyPageStorage>(prev, 2048);
+    {
+        size_t keyVal = 1000002035;
+        auto entry = table->newEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+        entry.setField(0, key);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    std::cout << "==================== start delete" << std::endl;
+    auto tableStorage3 = std::make_shared<KeyPageStorage>(tableStorage2, 2048);
+    for (size_t k = 1000002035; k >= 1000002030; --k)
+    {
+        auto entry = table->newDeletedEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        // entry.setField(0, key);
+        tableStorage3->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    std::cout << "==================== start insert" << std::endl;
+    auto tableStorage4 = std::make_shared<KeyPageStorage>(tableStorage3, 2048);
+    size_t keyVal = 1000002034;
+    auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    auto entry = table->newEntry();
+    entry.setField(0, "ss");
+    tableStorage4->asyncSetRow(
+        tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    keyVal = 1000002035;
+    key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    entry = table->newEntry();
+    entry.setField(0, "ss");
+    tableStorage4->asyncSetRow(
+        tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    std::atomic<size_t> valid = 0;
+    Condition c;
+    c.limit(0, 200);
+    tableStorage4->asyncGetPrimaryKeys(tableName, c,
+        [&](Error::UniquePtr error, std::vector<std::string> keys) { valid = keys.size(); });
+    BOOST_REQUIRE_EQUAL(valid, 2);
+}
+
+BOOST_AUTO_TEST_CASE(TableMeta_read_write_mutex)
+{
+    // boost::log::core::get()->set_logging_enabled(true);
+    int loop = 10000;
+    auto meta = std::make_shared<storage::KeyPageStorage::TableMeta>();
+    for (int i = 0; i < loop; ++i)
+    {
+        meta->insertPageInfoNoLock(storage::KeyPageStorage::PageInfo(
+            std::to_string(i), i % 2 == 0 ? 0 : i, i, nullptr));
+    }
+    std::shared_ptr<bcos::ThreadPool> threadPool = std::make_shared<bcos::ThreadPool>("test", 2);
+    auto promise = std::make_shared<std::promise<void>>();
+    threadPool->enqueue([&]() {
+        std::cout << "==================== parallelTraverse" << std::endl;
+        Entry entry;
+        entry.setObject(*meta);
+        std::cout << meta->size() << std::endl;
+        promise->set_value();
+    });
+    auto promise2 = std::make_shared<std::promise<void>>();
+    threadPool->enqueue([&]() {
+        std::cout << "==================== meta2" << std::endl;
+
+        storage::KeyPageStorage::TableMeta meta2(*meta);
+        bool ret =
+            (meta2.size() != (size_t)loop && meta2.size() != (size_t)loop / 2) ? false : true;
+        if (!ret)
+        {
+            std::cout << "meta size=" << meta->size() << "meta2 size=" << meta2.size() << std::endl;
+        }
+        BOOST_TEST(ret);
+        std::cout << meta2.size() << "==================== meta2" << std::endl;
+        promise2->set_value();
+    });
+    promise->get_future().get();
+    promise2->get_future().get();
+    std::cout << "==================== test end" << std::endl;
+    // boost::log::core::get()->set_logging_enabled(false);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
-}  // namespace test
-}  // namespace bcos
+}  // namespace bcos::test

@@ -19,25 +19,27 @@
  * @date 2021-04-21
  */
 #pragma once
+#include "bcos-utilities/BoostLog.h"
 #include <boost/algorithm/string.hpp>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <ostream>
 #include <string>
+#include <variant>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 // Note: both MessageExtFieldFlag and NodeType occupy the ext fields
 enum MessageExtFieldFlag : uint32_t
 {
     Response = 0x0001,
+    Compress = 0x0010,
 };
 enum NodeType : uint32_t
 {
     None = 0x0,
+    LIGHT_NODE = 0x1,
     CONSENSUS_NODE = 0x2,
     OBSERVER_NODE = 0x4,
     NODE_OUTSIDE_GROUP = 0x8,
@@ -62,23 +64,34 @@ enum MessageType
     EVENT_LOG_PUSH = 0x122,     // 290
 };
 
+// TODO: Allow add new module, exchange moduleid or version
 enum ModuleID
 {
     PBFT = 1000,
     Raft = 1001,
+
     BlockSync = 2000,
     TxsSync = 2001,
     ConsTxsSync = 2002,
+
     AMOP = 3000,
 
-    LIGHTNODE_GETBLOCK = 4000,
-    LIGHTNODE_GETTRANSACTIONS,
-    LIGHTNODE_GETRECEIPTS,
-    LIGHTNODE_GETSTATUS,
-    LIGHTNODE_SENDTRANSACTION,
-    LIGHTNODE_CALL,
-    LIGHTNODE_END = 4999
+    LIGHTNODE_GET_BLOCK = 4000,
+    LIGHTNODE_GET_TRANSACTIONS = 4001,
+    LIGHTNODE_GET_RECEIPTS = 4002,
+    LIGHTNODE_GET_STATUS = 4003,
+    LIGHTNODE_SEND_TRANSACTION = 4004,
+    LIGHTNODE_CALL = 4005,
+    LIGHTNODE_GET_ABI = 4006,
+    LIGHTNODE_END = 4999,
+
+    SYNC_PUSH_TRANSACTION = 5000,
+    SYNC_GET_TRANSACTIONS = 5001,
+    SYNC_END = 5999,
+
+    TREE_PUSH_TRANSACTION = 6000,
 };
+
 enum ProtocolModuleID : uint32_t
 {
     NodeService = 0x0,
@@ -91,32 +104,107 @@ enum ProtocolVersion : uint32_t
 {
     V0 = 0,
     V1 = 1,
+    V2 = 2,
 };
-enum class Version : uint32_t
+
+// BlockVersion only present the data version with format major.minor.patch of 3 bytes, data should
+// be compatible with the same major.minor version, the patch version should always be compatible,
+// the last byte is reserved, so 3.1.0 is 0x03010000 and is compatible with 3.1.1 which is
+// 0x03010100
+
+enum class BlockVersion : uint32_t
 {
+    V3_5_VERSION = 0x03050000,
+    V3_4_VERSION = 0x03040000,
+    V3_3_VERSION = 0x03030000,
+    V3_2_3_VERSION = 0x03020300,
+    V3_2_VERSION = 0x03020000,
+    V3_1_VERSION = 0x03010000,
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_0_VERSION,
+    MAX_VERSION = V3_5_VERSION,
 };
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string V3_0_VERSION_STR = "3.0.0";
+const std::string V3_1_VERSION_STR = "3.1.0";
+const std::string V3_2_VERSION_STR = "3.2.0";
+const std::string V3_3_VERSION_STR = "3.3.0";
+const std::string V3_4_VERSION_STR = "3.4.0";
+const std::string V3_5_VERSION_STR = "3.5.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
-const Version DEFAULT_VERSION = bcos::protocol::Version::RC4_VERSION;
+const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_5_VERSION;
+const std::string DEFAULT_VERSION_STR = V3_5_VERSION_STR;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 
-inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::Version const& _version)
+[[nodiscard]] inline int versionCompareTo(
+    std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+{
+    int flag = 0;
+    std::visit(
+        [&_v2, &flag](auto&& arg) {
+            auto ver1 = static_cast<uint32_t>(arg);
+            auto ver2 = static_cast<uint32_t>(_v2);
+            flag = ver1 > ver2 ? 1 : -1;
+            flag = (ver1 == ver2) ? 0 : flag;
+        },
+        _v1);
+    return flag;
+}
+
+constexpr auto operator<=>(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+{
+    auto flag = std::strong_ordering::equal;
+    std::visit(
+        [&_v2, &flag](auto&& arg) {
+            auto ver1 = static_cast<uint32_t>(arg);
+            auto ver2 = static_cast<uint32_t>(_v2);
+            flag = (ver1 <=> ver2);
+        },
+        _v1);
+    return flag;
+}
+
+constexpr bool operator>=(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+{
+    auto flag = false;
+    std::visit(
+        [&_v2, &flag](auto&& arg) {
+            auto ver1 = static_cast<uint32_t>(arg);
+            auto ver2 = static_cast<uint32_t>(_v2);
+            flag = (ver1 >= ver2);
+        },
+        _v1);
+    return flag;
+}
+
+inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion const& _version)
 {
     switch (_version)
     {
-    case bcos::protocol::Version::RC4_VERSION:
+    case bcos::protocol::BlockVersion::RC4_VERSION:
         _out << RC4_VERSION_STR;
         break;
-    case bcos::protocol::Version::V3_0_VERSION:
+    case bcos::protocol::BlockVersion::V3_0_VERSION:
         _out << V3_0_VERSION_STR;
+        break;
+    case bcos::protocol::BlockVersion::V3_1_VERSION:
+        _out << V3_1_VERSION_STR;
+        break;
+    case bcos::protocol::BlockVersion::V3_2_VERSION:
+        _out << V3_2_VERSION_STR;
+        break;
+    case bcos::protocol::BlockVersion::V3_3_VERSION:
+        _out << V3_3_VERSION_STR;
+        break;
+    case bcos::protocol::BlockVersion::V3_4_VERSION:
+        _out << V3_4_VERSION_STR;
+        break;
+    case bcos::protocol::BlockVersion::V3_5_VERSION:
+        _out << V3_5_VERSION_STR;
         break;
     default:
         _out << "Unknown";
@@ -136,6 +224,9 @@ inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
         break;
     case NodeType::OBSERVER_NODE:
         _out << "OBSERVER_NODE";
+        break;
+    case NodeType::LIGHT_NODE:
+        _out << "LIGHT_NODE";
         break;
     case NodeType::NODE_OUTSIDE_GROUP:
         _out << "NODE_OUTSIDE_GROUP";
@@ -175,7 +266,7 @@ inline std::optional<ModuleID> stringToModuleID(const std::string& _moduleName)
     }
     else if (boost::iequals(_moduleName, "light_node"))
     {
-        return bcos::protocol::ModuleID::LIGHTNODE_GETBLOCK;
+        return bcos::protocol::ModuleID::LIGHTNODE_GET_BLOCK;
     }
     else
     {
@@ -199,13 +290,24 @@ inline std::string moduleIDToString(ModuleID _moduleID)
         return "cons_txs_sync";
     case ModuleID::AMOP:
         return "amop";
-    case ModuleID::LIGHTNODE_GETBLOCK:
+    case ModuleID::LIGHTNODE_GET_BLOCK:
+    case ModuleID::LIGHTNODE_GET_TRANSACTIONS:
+    case ModuleID::LIGHTNODE_GET_RECEIPTS:
+    case ModuleID::LIGHTNODE_GET_STATUS:
+    case ModuleID::LIGHTNODE_SEND_TRANSACTION:
+    case ModuleID::LIGHTNODE_CALL:
+    case ModuleID::LIGHTNODE_GET_ABI:
         return "light_node";
+    case ModuleID::SYNC_GET_TRANSACTIONS:
+        return "sync_get";
+    case ModuleID::SYNC_PUSH_TRANSACTION:
+        return "sync_push";
+    case ModuleID::TREE_PUSH_TRANSACTION:
+        return "tree_push";
     default:
+        BCOS_LOG(DEBUG) << LOG_BADGE("unrecognized module") << LOG_KV("moduleID", _moduleID);
         return "unrecognized module";
     };
 }
 
-
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

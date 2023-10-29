@@ -91,7 +91,7 @@ public:
             if (ec)
             {
                 HTTP_SESSION(WARNING) << LOG_BADGE("onRead") << LOG_DESC("close the connection")
-                                      << LOG_KV("error", ec);
+                                      << LOG_KV("failed", ec);
                 // return doClose();
                 return;
             }
@@ -129,7 +129,7 @@ public:
         {
             HTTP_SESSION(WARNING) << LOG_DESC("onRead exception")
                                   << LOG_KV("bytesSize", bytes_transferred)
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("failed", boost::diagnostic_information(e));
         }
 
         if (!m_queue->isFull())
@@ -145,7 +145,7 @@ public:
         if (ec)
         {
             HTTP_SESSION(WARNING) << LOG_BADGE("onWrite") << LOG_DESC("close the connection")
-                                  << LOG_KV("error", ec);
+                                  << LOG_KV("failed", ec);
             // return doClose();
             return;
         }
@@ -264,11 +264,6 @@ public:
     HttpStream::Ptr httpStream() { return m_httpStream; }
     void setHttpStream(HttpStream::Ptr _httpStream) { m_httpStream = _httpStream; }
 
-    void setThreadPool(std::shared_ptr<bcos::ThreadPool> _threadPool)
-    {
-        m_threadPool = _threadPool;
-    }
-
     std::shared_ptr<std::string> nodeId() { return m_nodeId; }
     void setNodeId(std::shared_ptr<std::string> _nodeId) { m_nodeId = _nodeId; }
 
@@ -278,13 +273,8 @@ public:
 
 private:
     HttpStream::Ptr m_httpStream;
-
     boost::beast::flat_buffer m_buffer;
-
     std::shared_ptr<Queue> m_queue;
-
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
-
     HttpReqHandler m_httpReqHandler;
     WsUpgradeHandler m_wsUpgradeHandler;
     // the parser is stored in an optional container so we can

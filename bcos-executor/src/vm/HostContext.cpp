@@ -23,9 +23,12 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
+#include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
+#include <bcos-framework/executor/ExecutionMessage.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -37,8 +40,11 @@
 #include <exception>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <sstream>
+#include <utility>
 #include <vector>
+
 
 using namespace std;
 using namespace bcos;
@@ -46,29 +52,11 @@ using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::protocol;
 
-namespace  // anonymous
-{
-/// Upper bound of stack space needed by single CALL/CREATE execution. Set
-/// experimentally.
-// static size_t const c_singleExecutionStackSize = 100 * 1024;
-
-static const std::string SYS_ASSET_NAME = "name";
-static const std::string SYS_ASSET_FUNGIBLE = "fungible";
-static const std::string SYS_ASSET_TOTAL = "total";
-static const std::string SYS_ASSET_SUPPLIED = "supplied";
-static const std::string SYS_ASSET_ISSUER = "issuer";
-static const std::string SYS_ASSET_DESCRIPTION = "description";
-static const std::string SYS_ASSET_INFO = "_sys_asset_info_";
-
-}  // anonymous namespace
-
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 namespace
 {
-evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
+constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
 
 evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 {
@@ -76,19 +64,18 @@ evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 }
 }  // namespace
 
-// crypto::Hash::Ptr g_hashImpl = nullptr;
-
 HostContext::HostContext(CallParameters::UniquePtr callParameters,
     std::shared_ptr<TransactionExecutive> executive, std::string tableName)
-  : m_callParameters(std::move(callParameters)),
+  : evmc_host_context(),
+    m_callParameters(std::move(callParameters)),
     m_executive(std::move(executive)),
-    m_tableName(tableName)
+    m_tableName(std::move(tableName))
 {
     interface = getHostInterface();
     wasm_interface = getWasmHostInterface();
 
     hash_fn = evm_hash_fn;
-    version = 0x03000000;
+    version = m_executive->blockContext().blockVersion();
     isSMCrypto = false;
 
     if (hashImpl() && hashImpl()->getHashImplType() == crypto::HashImplType::Sm3Hash)
@@ -96,20 +83,16 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
         isSMCrypto = true;
     }
     metrics = &ethMetrics;
-    m_startTime = utcTimeUs();
 }
 
 std::string HostContext::get(const std::string_view& _key)
 {
-    auto start = utcTimeUs();
     auto entry = m_executive->storage().getRow(m_tableName, _key);
     if (entry)
     {
-        m_getTimeUsed.fetch_add(utcTimeUs() - start);
         return std::string(entry->getField(0));
     }
-    m_getTimeUsed.fetch_add(utcTimeUs() - start);
-    return std::string();
+    return {};
 }
 
 void HostContext::set(const std::string_view& _key, std::string _value)
@@ -119,7 +102,23 @@ void HostContext::set(const std::string_view& _key, std::string _value)
     entry.importFields({std::move(_value)});
 
     m_executive->storage().setRow(m_tableName, _key, std::move(entry));
-    m_setTimeUsed.fetch_add(utcTimeUs() - start);
+}
+
+
+std::string addressBytesStr2String(std::string_view receiveAddressBytes)
+{
+    std::string strAddress;
+    strAddress.reserve(receiveAddressBytes.size() * 2);
+    boost::algorithm::hex_lower(
+        receiveAddressBytes.begin(), receiveAddressBytes.end(), std::back_inserter(strAddress));
+
+    return strAddress;
+}
+
+std::string evmAddress2String(const evmc_address& address)
+{
+    auto receiveAddressBytes = fromEvmC(address);
+    return addressBytesStr2String(receiveAddressBytes);
 }
 
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
@@ -130,23 +129,20 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     request->senderAddress = myAddress();
     request->origin = origin();
     request->status = 0;
-
+    const auto& blockContext = m_executive->blockContext();
     switch (_msg->kind)
     {
     case EVMC_CREATE2:
         request->createSalt = fromEvmC(_msg->create2_salt);
         break;
     case EVMC_CALL:
-        if (m_executive->blockContext().lock()->isWasm())
+        if (blockContext.isWasm())
         {
             request->receiveAddress.assign((char*)_msg->destination_ptr, _msg->destination_len);
         }
         else
         {
-            auto receiveAddressBytes = fromEvmC(_msg->destination);
-            request->receiveAddress.reserve(receiveAddressBytes.size() * 2);
-            boost::algorithm::hex_lower(receiveAddressBytes.begin(), receiveAddressBytes.end(),
-                std::back_inserter(request->receiveAddress));
+            request->receiveAddress = evmAddress2String(_msg->code_address);
         }
 
         request->codeAddress = request->receiveAddress;
@@ -154,26 +150,60 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         break;
     case EVMC_DELEGATECALL:
     case EVMC_CALLCODE:
-        // TODO: implement this, don't forget the compatibility
+    {
+        if (!blockContext.isWasm())
+        {
+            if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+            {
+                request->delegateCall = true;
+                request->codeAddress = evmAddress2String(_msg->code_address);
+                request->delegateCallSender = evmAddress2String(_msg->sender);
+                request->receiveAddress = codeAddress();
+                request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+                break;
+            }
+        }
+
+        // old logic
         evmc_result result;
         result.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION);
         result.release = nullptr;  // no output to release
         result.gas_left = 0;
+        result.gas_refund = 0;
+
+        // Bugfix:
+        // To compat with lower version,
+        // we must set output_size larger than 0 to trigger OUT_OF_GAS
+        static auto response = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        response->data = bytes(130 * 1024 * 1024);
+        result.output_size = response->data.size();
+        result.output_data = response->data.data();
+        EXECUTOR_LOG(WARNING) << LOG_DESC(
+                                     "delegatecall/callcode is unsupported in your compatibility "
+                                     "version(3.0.0), please update it to 3.1.0(or after) using "
+                                     "console. Otherwise it may "
+                                     "lead to unpredictable behavior.")
+                              << LOG_KV("version", blockContext.blockVersion());
+
         return result;
+    }
     case EVMC_CREATE:
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
         request->create = true;
         break;
     }
+    if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
+    {
+        request->logEntries = std::move(m_callParameters->logEntries);
+    }
     request->gas = _msg->gas;
     // if (built in precompiled) then execute locally
-    auto blockContext = m_executive->blockContext().lock();
 
-    if (m_executive->isBuiltInPrecompiled(request->receiveAddress))
+    if (m_executive->isStaticPrecompiled(request->receiveAddress))
     {
         return callBuiltInPrecompiled(request, false);
     }
-    if (m_executive->isEthereumPrecompiled(request->receiveAddress) && !blockContext->isWasm())
+    if (!blockContext.isWasm() && m_executive->isEthereumPrecompiled(request->receiveAddress))
     {
         return callBuiltInPrecompiled(request, true);
     }
@@ -182,18 +212,15 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     auto response = m_executive->externalCall(std::move(request));
 
-    // Convert CallParameters to evmc_result
-    evmc_result result;
-    result.status_code = evmc_status_code(response->status);
-
-    result.create_address =
-        toEvmC(boost::algorithm::unhex(response->newEVMContractAddress));  // TODO: check if ok
-
-    // TODO: check if the response data need to release
-    result.output_data = response->data.data();
-    result.output_size = response->data.size();
-    result.release = nullptr;  // Response own by HostContext
-    result.gas_left = response->gas;
+    // Convert CallParameters to evmc_resultx
+    evmc_result result{.status_code = toEVMStatus(response, blockContext),
+        .gas_left = response->gas,
+        .gas_refund = 0,
+        .output_data = response->data.data(),
+        .output_size = response->data.size(),
+        .release = nullptr,  // TODO: check if the response data need to release
+        .create_address = toEvmC(boost::algorithm::unhex(response->newEVMContractAddress)),
+        .padding = {}};
 
     // Put response to store in order to avoid data lost
     m_responseStore.emplace_back(std::move(response));
@@ -201,18 +228,36 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     return result;
 }
 
+evmc_status_code HostContext::toEVMStatus(std::unique_ptr<CallParameters> const& response,
+    const bcos::executor::BlockContext& blockContext)
+{
+    if (blockContext.blockVersion() >= (uint32_t)(bcos::protocol::BlockVersion::V3_1_VERSION))
+    {
+        return evmc_status_code(response->evmStatus);
+    }
+
+    return evmc_status_code(response->status);
+}
+
 evmc_result HostContext::callBuiltInPrecompiled(
     std::unique_ptr<CallParameters> const& _request, bool _isEvmPrecompiled)
 {
     auto callResults = std::make_unique<CallParameters>(CallParameters::FINISHED);
     evmc_result preResult{};
-    int32_t resultCode;
+    int32_t resultCode = 0;
     bytes resultData;
 
     if (_isEvmPrecompiled)
     {
-        callResults->gas =
+        auto gasUsed =
             m_executive->costOfPrecompiled(_request->receiveAddress, ref(_request->data));
+        /// NOTE: this assignment is wrong, will cause out of gas, should not use evm precompiled
+        /// before 3.1.0
+        callResults->gas = gasUsed;
+        if (versionCompareTo(version, BlockVersion::V3_1_VERSION) >= 0)
+        {
+            callResults->gas = _request->gas - gasUsed;
+        }
         auto [success, output] =
             m_executive->executeOriginPrecompiled(_request->receiveAddress, ref(_request->data));
         resultCode =
@@ -224,9 +269,9 @@ evmc_result HostContext::callBuiltInPrecompiled(
         try
         {
             auto precompiledCallParams =
-                std::make_shared<precompiled::PrecompiledExecResult>(_request);
+                std::make_shared<precompiled::PrecompiledExecResult>(*_request);
             precompiledCallParams = m_executive->execPrecompiled(precompiledCallParams);
-            callResults->gas = precompiledCallParams->m_gas;
+            callResults->gas = precompiledCallParams->m_gasLeft;
             resultCode = (int32_t)TransactionStatus::None;
             resultData = std::move(precompiledCallParams->m_execResult);
         }
@@ -251,6 +296,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
     }
 
     preResult.gas_left = callResults->gas;
+    preResult.gas_refund = 0;
     if (preResult.gas_left < 0)
     {
         callResults->type = CallParameters::REVERT;
@@ -270,9 +316,42 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
 bool HostContext::setCode(bytes code)
 {
+    m_executive->setContractTableChanged();
+
     // set code will cause exception when exec revert
-    auto table = m_executive->storage().openTable(m_tableName);
-    if (table)
+    // new logic
+    if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
+    {
+        auto contractTable = m_executive->storage().openTable(m_tableName);
+        // set code hash in contract table
+        auto codeHash = hashImpl()->hash(code);
+        if (contractTable)
+        {
+            Entry codeHashEntry;
+            codeHashEntry.importFields({codeHash.asBytes()});
+
+            auto codeEntry = m_executive->storage().getRow(
+                bcos::ledger::SYS_CODE_BINARY, codeHashEntry.getField(0));
+
+            if (!codeEntry)
+            {
+                codeEntry = std::make_optional<Entry>();
+                codeEntry->importFields({std::move(code)});
+
+                // set code in code binary table
+                m_executive->storage().setRow(bcos::ledger::SYS_CODE_BINARY,
+                    codeHashEntry.getField(0), std::move(codeEntry.value()));
+            }
+
+            // dry code hash in account table
+            m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+            return true;
+        }
+        return false;
+    }
+    // old logic
+    auto contractTable = m_executive->storage().openTable(m_tableName);
+    if (contractTable)
     {
         Entry codeHashEntry;
         auto codeHash = hashImpl()->hash(code);
@@ -293,22 +372,97 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
                         << LOG_KV("codeSize", code.size()) << LOG_KV("abiSize", abi.size());
     if (setCode(std::move(code)))
     {
+        // new logic
+        if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
+        {
+            // set abi in abi table
+            auto codeEntry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
+            auto codeHash = codeEntry->getField(0);
+
+            if (c_fileLogLevel <= TRACE) [[unlikely]]
+            {
+                EXECUTOR_LOG(TRACE) << LOG_DESC("set abi") << LOG_KV("codeHash", toHex(codeHash))
+                                    << LOG_KV("abiSize", abi.size());
+            }
+
+            auto abiEntry = m_executive->storage().getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
+
+            if (!abiEntry)
+            {
+                abiEntry = std::make_optional<Entry>();
+                abiEntry->importFields({std::move(abi)});
+
+                m_executive->storage().setRow(
+                    bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry.value()));
+            }
+
+            return;
+        }
+
+        // old logic
         Entry abiEntry;
         abiEntry.importFields({std::move(abi)});
         m_executive->storage().setRow(m_tableName, ACCOUNT_ABI, abiEntry);
     }
 }
 
-size_t HostContext::codeSizeAt(const std::string_view& _a)
+bcos::bytes HostContext::externalCodeRequest(const std::string_view& address)
 {
-    (void)_a;
-    return 1;  // TODO: 1 code size ok?
+    auto request = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    request->gas = gas();
+    request->senderAddress = myAddress();
+    request->receiveAddress = myAddress();
+    request->data = bcos::protocol::GET_CODE_INPUT_BYTES;
+    request->origin = origin();
+    request->status = 0;
+    request->delegateCall = false;
+    request->codeAddress = addressBytesStr2String(address);
+    request->staticCall = staticCall();
+    auto response = m_executive->externalCall(std::move(request));
+    return std::move(response->data);
 }
 
-h256 HostContext::codeHashAt(const std::string_view& _a)
+size_t HostContext::codeSizeAt(const std::string_view& address)
 {
-    (void)_a;
-    return h256();  // TODO: ok?
+    if (m_executive->blockContext().blockVersion() >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        /*
+         Note:
+            evm precompiled(0x1 ~ 0x9): return 0 (Is the same as eth)
+            FISCO BCOS precompiled: return 1
+
+            Because evm precompiled is call by build-in opcode, no need to get code size before
+         called, but FISCO BCOS precompiled is call like contract, so it need to get code size.
+         */
+
+        if (m_executive->isPrecompiled(addressBytesStr2String(address)))
+        {
+            // Only FISCO BCOS precompile: constant precompiled or build-in precompiled
+            // evm precompiled address will go down to externalCodeRequest() and get empty code
+            return 1;
+        }
+        auto code = externalCodeRequest(address);
+        return code.size();  // OPCODE num is bytes.size
+    }
+    return 1;
+}
+
+h256 HostContext::codeHashAt(const std::string_view& address)
+{
+    if (m_executive->blockContext().blockVersion() >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        // precompiled return 0 hash;
+        if (m_executive->isPrecompiled(addressBytesStr2String(address)))
+        {
+            return {0};
+        }
+        auto code = externalCodeRequest(address);
+        auto hash = hashImpl()->hash(code).asBytes();
+        return h256(hash);
+    }
+    return {0};
 }
 
 VMSchedule const& HostContext::vmSchedule() const
@@ -316,51 +470,32 @@ VMSchedule const& HostContext::vmSchedule() const
     return m_executive->vmSchedule();
 }
 
-u256 HostContext::store(const u256& _n)
+evmc_bytes32 HostContext::store(const evmc_bytes32* key)
 {
-    auto start = utcTimeUs();
-
-    auto key = toEvmC(_n);
-    auto keyView = std::string_view((char*)key.bytes, sizeof(key.bytes));
+    evmc_bytes32 result;
+    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
 
     auto entry = m_executive->storage().getRow(m_tableName, keyView);
     if (entry)
     {
-        // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-        // {  // FIXME: this log is only for debug, comment it when release
-        //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
-        //                         << LOG_KV("value", toHex(entry->get()));
-        // }
-        m_getTimeUsed.fetch_add(utcTimeUs() - start);
-        return fromBigEndian<u256>(entry->getField(0));
+        auto field = entry->getField(0);
+        std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
     }
-    // else
-    // {// FIXME: this log is only for debug, comment it when release
-    //     EXECUTOR_LOG(TRACE) << LOG_DESC("store") << LOG_KV("key", toHex(keyView))
-    //                         << LOG_KV("value", "not found");
-    // }
-    m_getTimeUsed.fetch_add(utcTimeUs() - start);
-    return u256();
+    else
+    {
+        std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
+    }
+    return result;
 }
 
-void HostContext::setStore(u256 const& _n, u256 const& _v)
+void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
 {
-    auto start = utcTimeUs();
-    auto key = toEvmC(_n);
-    auto keyView = std::string_view((char*)key.bytes, sizeof(key.bytes));
+    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+    bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
 
-    auto value = toEvmC(_v);
-    bytes valueBytes(value.bytes, value.bytes + sizeof(value.bytes));
-
-    // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-    // {  // FIXME: this log is only for debug, comment it when release
-    //     EXECUTOR_LOG(TRACE) << LOG_DESC("setStore") << LOG_KV("key", toHex(keyView))
-    //                         << LOG_KV("value", toHex(valueBytes));
-    // }
     Entry entry;
     entry.importFields({std::move(valueBytes)});
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
-    m_setTimeUsed.fetch_add(utcTimeUs() - start);
 }
 
 void HostContext::log(h256s&& _topics, bytesConstRef _data)
@@ -386,17 +521,39 @@ void HostContext::log(h256s&& _topics, bytesConstRef _data)
         _data.toBytes());
 }
 
-h256 HostContext::blockHash() const
+h256 HostContext::blockHash(int64_t _number) const
 {
-    return m_executive->blockContext().lock()->hash();
+    if (m_executive->blockContext().blockVersion() >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        if (_number >= blockNumber() || _number < 0)
+        {
+            return h256("");
+        }
+        else
+        {
+            return m_executive->blockContext().blockHash(_number);
+        }
+    }
+    else
+    {
+        return m_executive->blockContext().hash();
+    }
 }
+
 int64_t HostContext::blockNumber() const
 {
-    return m_executive->blockContext().lock()->number();
+    return m_executive->blockContext().number();
 }
-int64_t HostContext::timestamp() const
+
+uint32_t HostContext::blockVersion() const
 {
-    return m_executive->blockContext().lock()->timestamp();
+    return m_executive->blockContext().blockVersion();
+}
+
+uint64_t HostContext::timestamp() const
+{
+    return m_executive->blockContext().timestamp();
 }
 
 std::string_view HostContext::myAddress() const
@@ -406,106 +563,31 @@ std::string_view HostContext::myAddress() const
 
 std::optional<storage::Entry> HostContext::code()
 {
-    auto start = utcTimeUs();
-    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
-    m_getTimeUsed.fetch_add(utcTimeUs() - start);
-    return entry;
+    if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
+    {
+        auto codehash = codeHash();
+
+        auto key = std::string_view((char*)codehash.data(), codehash.size());
+        auto entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, key);
+        if (entry && !entry->get().empty())
+        {
+            return entry;
+        }
+    }
+
+    return m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
 }
 
-h256 HostContext::codeHash()
+crypto::HashType HostContext::codeHash()
 {
     auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
     if (entry)
     {
         auto code = entry->getField(0);
-
-        return h256(std::string(code));  // TODO: h256 support decode from string_view
+        return crypto::HashType(code, crypto::HashType::StringDataType::FromBinary);
     }
 
-    return h256();
-}
-
-bool HostContext::registerAsset(const std::string& _assetName, const std::string_view& _addr,
-    bool _fungible, uint64_t _total, const std::string& _description)
-{
-    (void)_assetName;
-    (void)_addr;
-    (void)_fungible;
-    (void)_total;
-    (void)_description;
-
-    return true;
-}
-
-bool HostContext::issueFungibleAsset(
-    const std::string_view& _to, const std::string& _assetName, uint64_t _amount)
-{
-    (void)_to;
-    (void)_assetName;
-    (void)_amount;
-
-    return true;
-}
-
-uint64_t HostContext::issueNotFungibleAsset(
-    const std::string_view& _to, const std::string& _assetName, const std::string& _uri)
-{
-    (void)_to;
-    (void)_assetName;
-    (void)_uri;
-    return 0;
-}
-
-void HostContext::depositFungibleAsset(
-    const std::string_view& _to, const std::string& _assetName, uint64_t _amount)
-{
-    (void)_to;
-    (void)_assetName;
-    (void)_amount;
-}
-
-void HostContext::depositNotFungibleAsset(const std::string_view& _to,
-    const std::string& _assetName, uint64_t _assetID, const std::string& _uri)
-{
-    (void)_to;
-    (void)_assetName;
-    (void)_assetID;
-    (void)_uri;
-}
-
-bool HostContext::transferAsset(const std::string_view& _to, const std::string& _assetName,
-    uint64_t _amountOrID, bool _fromSelf)
-{
-    (void)_to;
-    (void)_assetName;
-    (void)_amountOrID;
-    (void)_fromSelf;
-    return true;
-}
-
-uint64_t HostContext::getAssetBanlance(
-    const std::string_view& _account, const std::string& _assetName)
-{
-    (void)_account;
-    (void)_assetName;
-    return 0;
-}
-
-std::string HostContext::getNotFungibleAssetInfo(
-    const std::string_view& _owner, const std::string& _assetName, uint64_t _assetID)
-{
-    (void)_owner;
-    (void)_assetName;
-    (void)_assetID;
     return {};
-}
-
-std::vector<uint64_t> HostContext::getNotFungibleAssetIDs(
-    const std::string_view& _account, const std::string& _assetName)
-{
-    (void)_account;
-    (void)_assetName;
-    return std::vector<uint64_t>();
 }
 
 bool HostContext::isWasm()
@@ -513,5 +595,4 @@ bool HostContext::isWasm()
     return m_executive->isWasm();
 }
 
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

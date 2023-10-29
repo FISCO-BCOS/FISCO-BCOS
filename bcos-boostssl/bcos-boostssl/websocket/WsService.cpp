@@ -17,6 +17,7 @@
  * @author: octopus
  * @date 2021-07-28
  */
+#include "bcos-boostssl/websocket/WsStream.h"
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -88,6 +89,7 @@ void WsService::start()
         reconnect();
     }
 
+    // start connect to server
     reportConnectedNodes();
 
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("start")
@@ -124,7 +126,6 @@ void WsService::stop()
         m_heartbeat->cancel();
     }
 
-
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("stop") << LOG_DESC("stop websocket service successfully");
 }
 
@@ -133,6 +134,23 @@ void WsService::reportConnectedNodes()
 {
     auto ss = sessions();
     WEBSOCKET_SERVICE(INFO) << LOG_DESC("connected nodes") << LOG_KV("count", ss.size());
+
+    for (auto const& session : ss)
+    {
+        auto queueSize = session->writeQueueSize();
+        if (queueSize > 0)
+        {
+            WEBSOCKET_SERVICE(INFO)
+                << LOG_DESC("session write queue status") << LOG_KV("endpoint", session->endPoint())
+                << LOG_KV("writeQueueSize", queueSize);
+        }
+        else
+        {
+            WEBSOCKET_SERVICE(DEBUG)
+                << LOG_DESC("session write queue status") << LOG_KV("endpoint", session->endPoint())
+                << LOG_KV("writeQueueSize", queueSize);
+        }
+    }
 
     m_heartbeat = std::make_shared<boost::asio::deadline_timer>(
         *(m_timerIoc), boost::posix_time::milliseconds(m_config->heartbeatPeriod()));
@@ -153,8 +171,8 @@ void WsService::reportConnectedNodes()
         }
         catch (std::exception const& e)
         {
-            BOOST_SSL_LOG(WARNING) << LOG_DESC("reportConnectedNodes exception")
-                                   << LOG_KV("error", boost::diagnostic_information(e));
+            BOOST_SSL_LOG(WARNING) << LOG_DESC("connected nodes exception")
+                                   << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
@@ -300,8 +318,8 @@ void WsService::reconnect()
             auto connectPeers = std::make_shared<std::set<NodeIPEndpoint>>();
 
             // select all disconnected nodes
-            ReadGuard l(x_peers);
-            for (auto& peer : *m_reconnectedPeers)
+            ReadGuard lock(x_peers);
+            for (const auto& peer : *m_reconnectedPeers)
             {
                 std::string connectedEndPoint = peer.address() + ":" + std::to_string(peer.port());
                 auto session = getSession(connectedEndPoint);
@@ -331,18 +349,24 @@ void WsService::reconnect()
         catch (std::exception const& e)
         {
             BOOST_SSL_LOG(WARNING) << LOG_DESC("reconnect exception")
-                                   << LOG_KV("error", boost::diagnostic_information(e));
+                                   << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
 
 bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
 {
-    UpgradableGuard l(x_msgTypeHandlers);
-    if (m_msgType2Method.count(_msgType) || !_msgHandler)
+    if (!_msgHandler)
     {
         return false;
     }
+    UpgradableGuard l(x_msgTypeHandlers);
+    auto it = m_msgType2Method.find(_msgType);
+    if (it != m_msgType2Method.end())
+    {
+        return false;
+    }
+
     UpgradeGuard ul(l);
     m_msgType2Method[_msgType] = _msgHandler;
     return true;
@@ -351,9 +375,10 @@ bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
 MsgHandler WsService::getMsgHandler(uint16_t _type)
 {
     ReadGuard l(x_msgTypeHandlers);
-    if (m_msgType2Method.count(_type))
+    auto it = m_msgType2Method.find(_type);
+    if (it != m_msgType2Method.end())
     {
-        return m_msgType2Method[_type];
+        return it->second;
     }
     return nullptr;
 }
@@ -361,12 +386,13 @@ MsgHandler WsService::getMsgHandler(uint16_t _type)
 bool WsService::eraseMsgHandler(uint16_t _type)
 {
     UpgradableGuard l(x_msgTypeHandlers);
-    if (!m_msgType2Method.count(_type))
+    auto it = m_msgType2Method.find(_type);
+    if (it == m_msgType2Method.end())
     {
         return false;
     }
     UpgradeGuard ul(l);
-    m_msgType2Method.erase(_type);
+    m_msgType2Method.erase(it);
     return true;
 }
 
@@ -376,11 +402,10 @@ std::shared_ptr<WsSession> WsService::newSession(
     _wsStreamDelegate->setMaxReadMsgSize(m_config->maxMsgSize());
 
     std::string endPoint = _wsStreamDelegate->remoteEndpoint();
-    auto session = m_sessionFactory->createSession(m_moduleName);
+    auto session = m_sessionFactory->createSession(m_taskGroup, m_moduleName);
 
-    session->setWsStreamDelegate(_wsStreamDelegate);
+    session->setWsStreamDelegate(std::move(_wsStreamDelegate));
     session->setIoc(m_ioservicePool->getIOService());
-    session->setThreadPool(threadPool());
     session->setMessageFactory(messageFactory());
     session->setEndPoint(endPoint);
     session->setConnectedEndPoint(endPoint);
@@ -405,11 +430,11 @@ std::shared_ptr<WsSession> WsService::newSession(
             }
         });
     session->setRecvMessageHandler(
-        [self](std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session) {
+        [self](std::shared_ptr<boostssl::MessageFace> message, std::shared_ptr<WsSession> session) {
             auto wsService = self.lock();
             if (wsService)
             {
-                wsService->onRecvMessage(_msg, _session);
+                wsService->onRecvMessage(std::move(message), std::move(session));
             }
         });
 
@@ -491,8 +516,8 @@ WsSessions WsService::sessions()
 void WsService::onConnect(Error::Ptr _error, std::shared_ptr<WsSession> _session)
 {
     std::ignore = _error;
-    std::string endpoint = "";
-    std::string connectedEndPoint = "";
+    std::string endpoint;
+    std::string connectedEndPoint;
     if (_session)
     {
         endpoint = _session->endPoint();
@@ -515,8 +540,8 @@ void WsService::onConnect(Error::Ptr _error, std::shared_ptr<WsSession> _session
 void WsService::onDisconnect(Error::Ptr _error, std::shared_ptr<WsSession> _session)
 {
     std::ignore = _error;
-    std::string endpoint = "";
-    std::string connectedEndPoint = "";
+    std::string endpoint;
+    std::string connectedEndPoint;
     if (_session)
     {
         endpoint = _session->endPoint();
@@ -537,29 +562,29 @@ void WsService::onDisconnect(Error::Ptr _error, std::shared_ptr<WsSession> _sess
 }
 
 void WsService::onRecvMessage(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
+    std::shared_ptr<boostssl::MessageFace> message, std::shared_ptr<WsSession> session)
 {
-    auto seq = _msg->seq();
+    const auto& seq = message->seq();
 
     WEBSOCKET_SERVICE(TRACE) << LOG_BADGE("onRecvMessage")
                              << LOG_DESC("receive message from server")
-                             << LOG_KV("type", _msg->packetType()) << LOG_KV("seq", seq)
-                             << LOG_KV("endpoint", _session->endPoint())
-                             << LOG_KV("data size", _msg->payload()->size())
-                             << LOG_KV("use_count", _session.use_count());
+                             << LOG_KV("type", message->packetType()) << LOG_KV("seq", seq)
+                             << LOG_KV("endpoint", session->endPoint())
+                             << LOG_KV("data size", message->payload()->size())
+                             << LOG_KV("use_count", session.use_count());
 
-    auto typeHandler = getMsgHandler(_msg->packetType());
+    auto typeHandler = getMsgHandler(message->packetType());
     if (typeHandler)
     {
-        typeHandler(_msg, _session);
+        typeHandler(std::move(message), std::move(session));
     }
     else
     {
         WEBSOCKET_SERVICE(WARNING)
             << LOG_BADGE("onRecvMessage") << LOG_DESC("unrecognized message type")
-            << LOG_KV("type", _msg->packetType()) << LOG_KV("endpoint", _session->endPoint())
-            << LOG_KV("seq", seq) << LOG_KV("data size", _msg->payload()->size())
-            << LOG_KV("use_count", _session.use_count());
+            << LOG_KV("type", message->packetType()) << LOG_KV("endpoint", session->endPoint())
+            << LOG_KV("seq", seq) << LOG_KV("data size", message->payload()->size())
+            << LOG_KV("use_count", session.use_count());
     }
 }
 
@@ -571,7 +596,7 @@ void WsService::asyncSendMessageByEndPoint(const std::string& _endPoint,
     {
         if (_respFunc)
         {
-            auto error = std::make_shared<Error>(
+            auto error = BCOS_ERROR_PTR(
                 WsError::EndPointNotExist, "there has no connection of the endpoint exist");
             _respFunc(error, nullptr, nullptr);
         }
@@ -600,7 +625,6 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
         Options options;
         RespCallBack respFunc;
 
-    public:
         void trySendMessageWithOutCB()
         {
             if (ss.empty())
@@ -623,7 +647,7 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
         {
             if (ss.empty())
             {
-                auto error = std::make_shared<Error>(
+                auto error = BCOS_ERROR_PTR(
                     WsError::NoActiveCons, "there has no active connection available");
                 respFunc(error, nullptr, nullptr);
                 return;
@@ -648,9 +672,9 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
                     {
                         BOOST_SSL_LOG(WARNING)
                             << LOG_BADGE(moduleName) << LOG_BADGE("asyncSendMessage")
-                            << LOG_DESC("callback error") << LOG_KV("endpoint", endPoint)
-                            << LOG_KV("errorCode", _error->errorCode())
-                            << LOG_KV("errorMessage", _error->errorMessage());
+                            << LOG_DESC("callback failed") << LOG_KV("endpoint", endPoint)
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("message", _error->errorMessage());
 
                         if (self->respFunc)
                         {
@@ -719,7 +743,7 @@ void WsService::broadcastMessage(std::shared_ptr<boostssl::MessageFace> _msg)
 void WsService::broadcastMessage(
     const WsSession::Ptrs& _ss, std::shared_ptr<boostssl::MessageFace> _msg)
 {
-    for (auto& session : _ss)
+    for (const auto& session : _ss)
     {
         if (session->isConnected())
         {

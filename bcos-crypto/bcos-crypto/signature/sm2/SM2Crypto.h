@@ -39,21 +39,22 @@ public:
         m_verifier = wedpr_sm2_verify;
         m_keyPairFactory = std::make_shared<SM2KeyPairFactory>();
     }
-    virtual ~SM2Crypto() {}
+    ~SM2Crypto() = default;
     std::shared_ptr<bytes> sign(const KeyPairInterface& _keyPair, const HashType& _hash,
-        bool _signatureWithPub = false) override;
+        bool _signatureWithPub = false) const override;
 
-    bool verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) override;
+    bool verify(
+        PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const override;
 
     bool verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
-        bytesConstRef _signatureData) override;
+        bytesConstRef _signatureData) const override;
 
-    PublicPtr recover(const HashType& _hash, bytesConstRef _signatureData) override;
-    KeyPairInterface::UniquePtr generateKeyPair() override;
+    PublicPtr recover(const HashType& _hash, bytesConstRef _signatureData) const override;
+    KeyPairInterface::UniquePtr generateKeyPair() const override;
 
-    std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) override;
+    std::pair<bool, bytes> recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _in) const override;
 
-    KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) override;
+    KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) const override;
 
 protected:
     std::function<int8_t(const CInputBuffer* private_key, const CInputBuffer* public_key,
