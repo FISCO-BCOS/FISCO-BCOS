@@ -25,15 +25,15 @@
 #include "../precompiled/PrecompiledManager.h"
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
+#include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/LogEntry.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-utilities/Common.h"
-#include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-framework/storage2/Storage.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -324,6 +324,9 @@ public:
 
     task::Task<EVMCResult> create()
     {
+        checkCreateAuth(m_precompiledManager, m_rollbackableStorage, m_blockHeader,
+            m_newContractAddress, m_origin, executor::GlobalHashImpl::g_hashImpl);
+
         // Write table to s_tables
         constexpr std::string_view SYS_TABLES{"s_tables"};
         if (co_await storage2::existsOne(

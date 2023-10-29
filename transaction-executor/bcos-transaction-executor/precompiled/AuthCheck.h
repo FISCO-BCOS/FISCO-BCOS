@@ -7,34 +7,38 @@
 #include "bcos-transaction-executor/Common.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "bcos-utilities/Exceptions.h"
+#include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
+#include <utility>
 
 namespace bcos::transaction_executor
 {
+
+#define AUTH_CHECK_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("AUTH_CHECK")
+
+inline static const auto authManagerAddress =
+    boost::lexical_cast<unsigned long>(precompiled::AUTH_CONTRACT_MGR_ADDRESS);
+inline static const auto evmAuthManagerAddress = toEvmC(precompiled::AUTH_CONTRACT_MGR_ADDRESS);
 
 struct UnexpectedExternalCall : public bcos::Exception
 {
 };
 
-inline task::Task<void> buildAuthTables(auto& storage)
+inline task::Task<void> createAuthTables(auto& storage)
 {
     co_return;
 }
 
-inline task::Task<bool> checkCreateAuth(PrecompiledManager const& precompiledManager, auto& storage,
-    const protocol::BlockHeader& blockHeader, std::string_view newContractAddress,
+inline bool checkCreateAuth(PrecompiledManager const& precompiledManager, auto& storage,
+    const protocol::BlockHeader& blockHeader, evmc_address const& newContractAddress,
     const evmc_address& origin, crypto::Hash::Ptr hashImpl)
 {
-    static const auto authManagerAddress =
-        boost::lexical_cast<unsigned long>(precompiled::AUTH_CONTRACT_MGR_ADDRESS);
-    static const auto evmAuthManagerAddress = toEvmC(precompiled::AUTH_CONTRACT_MGR_ADDRESS);
-
     const auto* authPrecompiled = precompiledManager.getPrecompiled(authManagerAddress);
     if (!authPrecompiled)
     {
-        co_return true;
+        return true;
     }
-    auto codec = CodecWrapper(hashImpl, false);
+    auto codec = CodecWrapper(std::move(hashImpl), false);
     auto input = codec.encodeWithSig("hasDeployAuth(address)",
         bcos::Address(bcos::bytesConstRef(origin.bytes, sizeof(origin.bytes))));
 
@@ -45,14 +49,14 @@ inline task::Task<bool> checkCreateAuth(PrecompiledManager const& precompiledMan
         .recipient = evmAuthManagerAddress,
         .destination_ptr = nullptr,
         .destination_len = 0,
-        .sender = toEvmC(newContractAddress),
+        .sender = newContractAddress,
         .sender_ptr = nullptr,
         .sender_len = 0,
         .input_data = input.data(),
         .input_size = input.size(),
         .value = {},
         .create2_salt = {},
-        .code_address = {}};
+        .code_address = evmAuthManagerAddress};
 
     auto result = authPrecompiled->call(
         storage, blockHeader, evmcMessage, origin, [](const evmc_message& message) -> EVMCResult {
@@ -61,12 +65,24 @@ inline task::Task<bool> checkCreateAuth(PrecompiledManager const& precompiledMan
     bool code = true;
     codec.decode(bcos::bytesConstRef(result.output_data, result.output_size), code);
 
-    co_return code;
+    return code;
 }
 
-inline task::Task<bool> checkCallAuth(auto& storage)
+// bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
+//         result = contractAuthPrecompiled->checkMethodAuth(
+//             shared_from_this(), callParameters->receiveAddress, func, callParameters->origin);
+//         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
+//             callParameters->origin != callParameters->senderAddress)
+//         {
+//             auto senderCheck = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
+//                 callParameters->receiveAddress, func, callParameters->senderAddress);
+//             result = result && senderCheck;
+//         }
+inline bool checkCallAuth(PrecompiledManager const& precompiledManager, auto& storage,
+    const protocol::BlockHeader& blockHeader, evmc_message const& message,
+    const evmc_address& origin, crypto::Hash::Ptr hashImpl)
 {
-    co_return true;
+    return true;
 }
 
 }  // namespace bcos::transaction_executor
