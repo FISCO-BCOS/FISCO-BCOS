@@ -46,7 +46,6 @@ BOOST_AUTO_TEST_CASE(execute)
             transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
         auto receipt = co_await bcos::transaction_executor::execute(
             executor, storage, blockHeader, *transaction, 0);
-
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 

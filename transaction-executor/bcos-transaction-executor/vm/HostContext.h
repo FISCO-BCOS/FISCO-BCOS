@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "../precompiled/AuthCheck.h"
 #include "../precompiled/PrecompiledManager.h"
 #include "EVMHostInterface.h"
 #include "VMFactory.h"

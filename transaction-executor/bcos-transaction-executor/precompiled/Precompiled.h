@@ -5,6 +5,7 @@
 #include "bcos-executor/src/vm/Precompiled.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-transaction-executor/Common.h"
 #include "bcos-utilities/Overloaded.h"
 #include <type_traits>
 
@@ -28,7 +29,8 @@ private:
 public:
     Precompiled(decltype(m_precompiled) precompiled) : m_precompiled(std::move(precompiled)) {}
     EVMCResult call(auto& storage, protocol::BlockHeader const& blockHeader,
-        evmc_message const& message, evmc_address const& origin, auto externalCaller) const
+        evmc_message const& message, evmc_address const& origin,
+        ExternalCaller auto externalCaller) const
     {
         return std::visit(
             bcos::overloaded{

@@ -43,7 +43,6 @@ private:
         TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID)
     {
-        constexpr static uint64_t TRANSACTION_GAS = 3000000000;
         try
         {
             if (c_fileLogLevel <= LogLevel::TRACE)

@@ -7,17 +7,18 @@
 namespace bcos::transaction_executor
 {
 
-template <class ExternalCaller>
-    requires std::is_invocable_r_v<EVMCResult, ExternalCaller, const evmc_message&>
+template <class T>
+concept ExternalCaller = std::is_invocable_r_v<EVMCResult, T, const evmc_message&>;
+
+template <ExternalCaller Caller>
 class ExecutiveWrapper : public executor::TransactionExecutive
 {
 private:
-    ExternalCaller m_externalCaller;
+    Caller m_externalCaller;
 
 public:
     ExecutiveWrapper(const executor::BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector,
-        decltype(m_externalCaller) externalCaller)
+        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector, Caller externalCaller)
       : executor::TransactionExecutive(
             blockContext, std::move(contractAddress), contextID, seq, gasInjector),
         m_externalCaller(std::move(externalCaller))
