@@ -33,12 +33,12 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
             storage);
 
-    executor::BlockContext blockContext(storageWrapper, nullptr,
+    auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,
         executor::GlobalHashImpl::g_hashImpl, blockHeader.number(), blockHeader.hash(),
         blockHeader.timestamp(), blockHeader.version(), bcos::executor::VMSchedule{}, false, false);
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
-        blockContext, std::move(contractAddress), 0, 0, wasm::GasInjector{},
+        std::move(blockContext), std::move(contractAddress), 0, 0, wasm::GasInjector{},
         std::move(externalCaller), precompiledManager);
 }
 

@@ -50,6 +50,8 @@ public:
         syncWait([this]() -> Task<void> {
             bcostars::protocol::BlockHeaderImpl blockHeader(
                 [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+            blockHeader.setVersion(
+                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
             blockHeader.calculateHash(*hashImpl);
 
             std::string helloworldBytecodeBinary;
@@ -91,6 +93,7 @@ public:
 
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
         blockHeader.calculateHash(*hashImpl);
 
         evmc_message message = {.kind = EVMC_CALL,

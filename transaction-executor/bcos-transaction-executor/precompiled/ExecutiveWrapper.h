@@ -19,15 +19,18 @@ template <ExternalCaller Caller, class PrecompiledManager>
 class ExecutiveWrapper : public executor::TransactionExecutive
 {
 private:
+    std::unique_ptr<executor::BlockContext> m_blockContext;
     Caller m_externalCaller;
     PrecompiledManager const& m_precompiledManager;
 
 public:
-    ExecutiveWrapper(const executor::BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector, Caller externalCaller,
+    ExecutiveWrapper(std::unique_ptr<executor::BlockContext> blockContext,
+        std::string contractAddress, int64_t contextID, int64_t seq,
+        const wasm::GasInjector& gasInjector, Caller externalCaller,
         PrecompiledManager const& precompiledManager)
       : executor::TransactionExecutive(
-            blockContext, std::move(contractAddress), contextID, seq, gasInjector),
+            *blockContext, std::move(contractAddress), contextID, seq, gasInjector),
+        m_blockContext(std::move(blockContext)),
         m_externalCaller(std::move(externalCaller)),
         m_precompiledManager(precompiledManager)
     {}
@@ -35,8 +38,10 @@ public:
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address,
         uint32_t version, bool isAuth, const ledger::Features& features) const override
     {
-        auto address = boost::lexical_cast<unsigned long>(_address);
-        const auto* precompiled = m_precompiledManager.getPrecompiled(address);
+        auto addressBytes = fromHex(_address);
+        auto address = fromBigEndian<u160>(addressBytes);
+        const auto* precompiled =
+            m_precompiledManager.getPrecompiled(address.convert_to<unsigned long>());
         if (precompiled == nullptr)
         {
             return nullptr;
@@ -47,8 +52,9 @@ public:
 
     bool isPrecompiled(const std::string& _address) const override
     {
-        auto address = boost::lexical_cast<unsigned long>(_address);
-        return m_precompiledManager.getPrecompiled(address) != nullptr;
+        auto addressBytes = fromHex(_address);
+        auto address = fromBigEndian<u160>(addressBytes);
+        return m_precompiledManager.getPrecompiled(address.convert_to<unsigned long>()) != nullptr;
     }
 
     executor::CallParameters::UniquePtr externalCall(
@@ -75,7 +81,7 @@ public:
         {
             internalCallParams.emplace();
             auto& [precompiledContract, precompiledInput] = *internalCallParams;
-            CodecWrapper codec(m_blockContext.hashHandler(), m_blockContext.isWasm());
+            CodecWrapper codec(m_blockContext->hashHandler(), m_blockContext->isWasm());
             codec.decode(ref(input->data), precompiledContract, precompiledInput);
             evmcMessage.code_address = unhexAddress(precompiledContract);
             evmcMessage.input_data = precompiledInput.data();
