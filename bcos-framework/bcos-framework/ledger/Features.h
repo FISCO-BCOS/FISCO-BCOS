@@ -68,6 +68,7 @@ public:
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
+
         m_flags[*index] = true;
     }
     void set(std::string_view flag)
