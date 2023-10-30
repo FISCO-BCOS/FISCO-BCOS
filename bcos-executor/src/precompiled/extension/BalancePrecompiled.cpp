@@ -63,8 +63,14 @@ std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
     PrecompiledExecResult::Ptr _callParameters)
 {
     // parse function name
-    uint32_t func = getParamFunc(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    // [tableName][actualParams]
+    std::vector<std::string> dynamicParams;
+    bytes param;
+    codec.decode(_callParameters->input(), dynamicParams, param);
+    auto originParam = ref(param);
+    uint32_t func = getParamFunc(originParam);
 
     /// directly passthrough data to call
     auto selector = selector2Func.find(func);
