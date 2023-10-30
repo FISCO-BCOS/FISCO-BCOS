@@ -33,16 +33,24 @@ using namespace bcos::transaction_executor;
 class TestHostContextFixture
 {
 public:
+    bcos::crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
+    Rollbackable<decltype(storage)> rollbackableStorage;
+    evmc_address helloworldAddress;
+    VMFactory vmFactory;
+    int64_t seq = 0;
+    std::optional<PrecompiledManager> precompiledManager;
+
     TestHostContextFixture() : rollbackableStorage(storage)
     {
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-        precompiledManager.emplace(std::make_shared<bcos::crypto::Keccak256>());
+        precompiledManager.emplace(hashImpl);
 
         // deploy the hello world contract
         syncWait([this]() -> Task<void> {
             bcostars::protocol::BlockHeaderImpl blockHeader(
                 [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+            blockHeader.calculateHash(*hashImpl);
 
             std::string helloworldBytecodeBinary;
             boost::algorithm::unhex(
@@ -83,6 +91,8 @@ public:
 
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.calculateHash(*hashImpl);
+
         evmc_message message = {.kind = EVMC_CALL,
             .flags = 0,
             .depth = 0,
@@ -106,13 +116,6 @@ public:
 
         co_return result;
     }
-
-    memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
-    Rollbackable<decltype(storage)> rollbackableStorage;
-    evmc_address helloworldAddress;
-    VMFactory vmFactory;
-    int64_t seq = 0;
-    std::optional<PrecompiledManager> precompiledManager;
 };
 
 bcos::crypto::Hash::Ptr bcos::executor::GlobalHashImpl::g_hashImpl;

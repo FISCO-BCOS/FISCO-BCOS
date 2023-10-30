@@ -7,22 +7,49 @@
 namespace bcos::transaction_executor
 {
 
+inline std::shared_ptr<precompiled::Precompiled> getInnerPrecompiled(auto const& precompiled)
+{
+    return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled);
+}
+
 template <class T>
 concept ExternalCaller = std::is_invocable_r_v<EVMCResult, T, const evmc_message&>;
 
-template <ExternalCaller Caller>
+template <ExternalCaller Caller, class PrecompiledManager>
 class ExecutiveWrapper : public executor::TransactionExecutive
 {
 private:
     Caller m_externalCaller;
+    PrecompiledManager const& m_precompiledManager;
 
 public:
     ExecutiveWrapper(const executor::BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector, Caller externalCaller)
+        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector, Caller externalCaller,
+        PrecompiledManager const& precompiledManager)
       : executor::TransactionExecutive(
             blockContext, std::move(contractAddress), contextID, seq, gasInjector),
-        m_externalCaller(std::move(externalCaller))
+        m_externalCaller(std::move(externalCaller)),
+        m_precompiledManager(precompiledManager)
     {}
+
+    std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address,
+        uint32_t version, bool isAuth, const ledger::Features& features) const override
+    {
+        auto address = boost::lexical_cast<unsigned long>(_address);
+        const auto* precompiled = m_precompiledManager.getPrecompiled(address);
+        if (precompiled == nullptr)
+        {
+            return nullptr;
+        }
+
+        return getInnerPrecompiled(*precompiled);
+    }
+
+    bool isPrecompiled(const std::string& _address) const override
+    {
+        auto address = boost::lexical_cast<unsigned long>(_address);
+        return m_precompiledManager.getPrecompiled(address) != nullptr;
+    }
 
     executor::CallParameters::UniquePtr externalCall(
         executor::CallParameters::UniquePtr input) override
