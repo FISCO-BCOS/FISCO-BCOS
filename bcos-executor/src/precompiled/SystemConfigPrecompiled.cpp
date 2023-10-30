@@ -150,7 +150,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            int64_t value = validate(configKey, configValue, blockContext.blockVersion());
+            int64_t value = validate(_executive, configKey, configValue, blockContext.blockVersion());
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
@@ -194,6 +194,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 }
 
 int64_t SystemConfigPrecompiled::validate(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     std::string_view _key, std::string_view value, uint32_t blockVersion)
 {
     int64_t configuredValue = 0;
@@ -214,6 +215,11 @@ int64_t SystemConfigPrecompiled::validate(
         if (setFeature && value != "1")
         {
             BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
+        }
+
+        if(setFeature)
+        {
+            _executive->blockContext().features().validate(key);
         }
 
         if (m_valueConverter.contains(key))
@@ -237,6 +243,12 @@ int64_t SystemConfigPrecompiled::validate(
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: invalid version")
                               << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg));
+    }
+    catch (bcos::Exception const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: set feature failed")
+                              << LOG_KV("info", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(PrecompiledError(boost::diagnostic_information(e)));
     }
     catch (std::exception const& e)
     {

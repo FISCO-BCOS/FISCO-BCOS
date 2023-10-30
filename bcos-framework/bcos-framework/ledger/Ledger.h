@@ -5,6 +5,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-ledger/src/libledger/LedgerImpl.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
 #include "bcos-tool/ConsensusNode.h"
@@ -14,12 +15,12 @@ namespace bcos::ledger
 {
 struct BuildGenesisBlock
 {
-    task::Task<void> operator()(auto& ledger, LedgerConfig::Ptr ledgerConfig, size_t gasLimit,
+    task::Task<bool> operator()(auto& ledger, LedgerConfig::Ptr ledgerConfig, size_t gasLimit,
         const std::string_view& genesisData, std::string const& compatibilityVersion,
         bool isAuthCheck = false, std::string const& consensusType = "pbft",
         std::int64_t epochSealerNum = 4, std::int64_t epochBlockNum = 1000) const
     {
-        co_await tag_invoke(*this, ledger, std::move(ledgerConfig), gasLimit, genesisData,
+        co_return co_await tag_invoke(*this, ledger, std::move(ledgerConfig), gasLimit, genesisData,
             compatibilityVersion, isAuthCheck, consensusType, epochSealerNum, epochBlockNum);
     }
 };
@@ -36,6 +37,16 @@ struct PrewriteBlock
     }
 };
 inline constexpr PrewriteBlock prewriteBlock{};
+
+struct GetBlockData
+{
+    task::Task<protocol::Block::Ptr> operator()(
+        auto& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag) const
+    {
+        co_return co_await tag_invoke(*this, ledger, blockNumber, blockFlag);
+    }
+};
+inline constexpr GetBlockData getBlockData{};
 
 struct TransactionCount
 {
