@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/StorageInterface.h>
@@ -54,8 +55,9 @@ public:
         }
 
         ledger->buildGenesisBlock(nodeConfig->ledgerConfig(), nodeConfig->txGasLimit(),
-           nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr(), nodeConfig->isAuthCheck(),
-           nodeConfig->consensusType(), nodeConfig->epochSealerNum(), nodeConfig->epochBlockNum());
+            nodeConfig->genesisData(), nodeConfig->compatibilityVersionStr(),
+            nodeConfig->isAuthCheck(), nodeConfig->consensusType(), nodeConfig->epochSealerNum(),
+            nodeConfig->epochBlockNum());
 
         return ledger;
     }
