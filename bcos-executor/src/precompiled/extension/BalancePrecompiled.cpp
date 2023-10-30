@@ -73,7 +73,6 @@ std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
     uint32_t func = getParamFunc(originParam);
 
     /// directly passthrough data to call
-    auto selector = selector2Func.find(func);
     if (func == name2Selector[BALANCE_METHOD_GET_BALANCE])
     {
         getBalance(_executive, _callParameters);
