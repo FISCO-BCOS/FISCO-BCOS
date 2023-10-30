@@ -251,7 +251,7 @@ public:
     bool enableBaselineScheduler() const { return m_enableBaselineScheduler; }
     struct BaselineSchedulerConfig
     {
-        int parallel = 0;
+        bool parallel = false;
         int chunkSize = 0;
         int maxThread = 0;
     };
