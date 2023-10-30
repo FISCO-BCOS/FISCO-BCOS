@@ -1,5 +1,6 @@
 #pragma once
 #include "ExecutiveWrapper.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/vm/Precompiled.h"
@@ -7,7 +8,12 @@
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-transaction-executor/Common.h"
 #include "bcos-utilities/Overloaded.h"
+#include <evmc/evmc.h>
+#include <boost/throw_exception.hpp>
+#include <memory>
 #include <type_traits>
+#include <typeinfo>
+#include <variant>
 
 #ifdef WITH_WASM
 #include "bcos-executor/src/vm/gas_meter/GasInjector.h"
@@ -20,6 +26,20 @@ class bcos::wasm::GasInjector
 namespace bcos::transaction_executor
 {
 
+inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blockHeader,
+    std::string contractAddress, ExternalCaller auto externalCaller)
+{
+    auto storageWrapper =
+        std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
+            storage);
+
+    executor::BlockContext blockContext(storageWrapper, nullptr,
+        executor::GlobalHashImpl::g_hashImpl, blockHeader.number(), blockHeader.hash(),
+        blockHeader.timestamp(), blockHeader.version(), bcos::executor::VMSchedule{}, false, false);
+    return std::make_shared<ExecutiveWrapper<decltype(externalCaller)>>(blockContext,
+        std::move(contractAddress), 0, 0, wasm::GasInjector{}, std::move(externalCaller));
+}
+
 class Precompiled
 {
 private:
@@ -28,6 +48,7 @@ private:
 
 public:
     Precompiled(decltype(m_precompiled) precompiled) : m_precompiled(std::move(precompiled)) {}
+
     EVMCResult call(auto& storage, protocol::BlockHeader const& blockHeader,
         evmc_message const& message, evmc_address const& origin,
         ExternalCaller auto externalCaller) const
@@ -60,20 +81,9 @@ public:
                     return result;
                 },
                 [&](std::shared_ptr<precompiled::Precompiled> const& precompiled) {
-                    auto storageWrapper = std::make_shared<
-                        storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
-                        storage);
-
-                    executor::BlockContext blockContext(storageWrapper, nullptr,
-                        executor::GlobalHashImpl::g_hashImpl, blockHeader.number(),
-                        blockHeader.hash(), blockHeader.timestamp(), blockHeader.version(),
-                        bcos::executor::VMSchedule{}, false, false);
-                    wasm::GasInjector gasInjector;
-
                     auto contractAddress = address2HexString(message.code_address);
-                    auto executive =
-                        std::make_shared<ExecutiveWrapper<decltype(externalCaller)>>(blockContext,
-                            contractAddress, 0, 0, gasInjector, std::move(externalCaller));
+                    auto executive = buildLegacyExecutive(
+                        storage, blockHeader, contractAddress, std::move(externalCaller));
 
                     auto params = std::make_shared<precompiled::PrecompiledExecResult>();
                     params->m_sender = address2HexString(message.sender);
@@ -106,6 +116,13 @@ public:
                     return result;
                 }},
             m_precompiled);
+    }
+
+    template <class T>
+    T const& dynamicCast() const
+    {
+        return dynamic_cast<T const&>(
+            *std::get<std::shared_ptr<precompiled::Precompiled>>(m_precompiled));
     }
 };
 

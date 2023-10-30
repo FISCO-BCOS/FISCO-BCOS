@@ -1,88 +1,34 @@
 #pragma once
 
-#include "PrecompiledManager.h"
-#include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/storage2/Storage.h"
-#include "bcos-task/Task.h"
-#include "bcos-transaction-executor/Common.h"
-#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
-#include "bcos-utilities/Exceptions.h"
+#include "ExecutiveWrapper.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
+#include <memory>
 #include <utility>
 
 namespace bcos::transaction_executor
 {
 
-#define AUTH_CHECK_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("AUTH_CHECK")
-
-inline static const auto authManagerAddress =
-    boost::lexical_cast<unsigned long>(precompiled::AUTH_CONTRACT_MGR_ADDRESS);
-inline static const auto evmAuthManagerAddress = toEvmC(precompiled::AUTH_CONTRACT_MGR_ADDRESS);
-
-struct UnexpectedExternalCall : public bcos::Exception
+inline std::tuple<bool, std::unique_ptr<executor::CallParameters>> checkAuth(auto& storage,
+    protocol::BlockHeader const& blockHeader, evmc_message const& message,
+    evmc_address const& origin, ExternalCaller auto externalCaller)
 {
-};
+    auto contractAddress = address2HexString(message.code_address);
+    auto executive =
+        buildLegacyExecutive(storage, blockHeader, contractAddress, std::move(externalCaller));
 
-inline task::Task<void> createAuthTables(auto& storage)
-{
-    co_return;
-}
+    auto params = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
+    params->senderAddress = address2HexString(message.sender);
+    params->codeAddress = std::move(contractAddress);
+    params->receiveAddress = address2HexString(message.recipient);
+    params->origin = address2HexString(origin);
+    params->data.assign(message.input_data, message.input_data + message.input_size);
+    params->gas = message.gas;
+    params->staticCall = (message.kind == EVMC_CALL);
+    params->create = (message.kind == EVMC_CREATE);
 
-inline bool checkCreateAuth(PrecompiledManager const& precompiledManager, auto& storage,
-    const protocol::BlockHeader& blockHeader, evmc_address const& newContractAddress,
-    const evmc_address& origin, crypto::Hash::Ptr hashImpl)
-{
-    const auto* authPrecompiled = precompiledManager.getPrecompiled(authManagerAddress);
-    if (!authPrecompiled)
-    {
-        return true;
-    }
-    auto codec = CodecWrapper(std::move(hashImpl), false);
-    auto input = codec.encodeWithSig("hasDeployAuth(address)",
-        bcos::Address(bcos::bytesConstRef(origin.bytes, sizeof(origin.bytes))));
-
-    evmc_message evmcMessage = {.kind = EVMC_CALL,
-        .flags = 0,
-        .depth = 0,
-        .gas = TRANSACTION_GAS,
-        .recipient = evmAuthManagerAddress,
-        .destination_ptr = nullptr,
-        .destination_len = 0,
-        .sender = newContractAddress,
-        .sender_ptr = nullptr,
-        .sender_len = 0,
-        .input_data = input.data(),
-        .input_size = input.size(),
-        .value = {},
-        .create2_salt = {},
-        .code_address = evmAuthManagerAddress};
-
-    auto result = authPrecompiled->call(
-        storage, blockHeader, evmcMessage, origin, [](const evmc_message& message) -> EVMCResult {
-            BOOST_THROW_EXCEPTION(UnexpectedExternalCall{});
-        });
-    bool code = true;
-    codec.decode(bcos::bytesConstRef(result.output_data, result.output_size), code);
-
-    return code;
-}
-
-// bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-//         result = contractAuthPrecompiled->checkMethodAuth(
-//             shared_from_this(), callParameters->receiveAddress, func, callParameters->origin);
-//         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
-//             callParameters->origin != callParameters->senderAddress)
-//         {
-//             auto senderCheck = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
-//                 callParameters->receiveAddress, func, callParameters->senderAddress);
-//             result = result && senderCheck;
-//         }
-inline bool checkCallAuth(PrecompiledManager const& precompiledManager, auto& storage,
-    const protocol::BlockHeader& blockHeader, evmc_message const& message,
-    const evmc_address& origin, crypto::Hash::Ptr hashImpl)
-{
-    return true;
+    auto result = executive->checkAuth(params);
+    return {result, std::move(params)};
 }
 
 }  // namespace bcos::transaction_executor

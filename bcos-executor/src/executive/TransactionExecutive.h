@@ -143,6 +143,8 @@ public:
     bool hasContractTableChanged() const { return m_hasContractTableChanged; }
     void setContractTableChanged() { m_hasContractTableChanged = true; }
 
+    bool checkAuth(const CallParameters::UniquePtr& callParameters);
+
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
@@ -212,7 +214,6 @@ protected:
         return std::string(USER_APPS_PREFIX).append(formatAddress);
     }
 
-    bool checkAuth(const CallParameters::UniquePtr& callParameters);
     bool checkExecAuth(const CallParameters::UniquePtr& callParameters);
     int32_t checkContractAvailable(const CallParameters::UniquePtr& callParameters);
     uint8_t checkAccountAvailable(const CallParameters::UniquePtr& callParameters);

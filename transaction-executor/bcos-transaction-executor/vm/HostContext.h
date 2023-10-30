@@ -81,6 +81,12 @@ private:
     evmc_address m_newContractAddress;  // Set by getMyContractTable, not need initialize value!
     std::vector<protocol::LogEntry> m_logs;
 
+    auto buildLegacyExternalCaller()
+    {
+        return
+            [this](const evmc_message& message) { return task::syncWait(externalCall(message)); };
+    }
+
     ContractTable getTableName(const evmc_address& address)
     {
         ContractTable tableName;
@@ -311,6 +317,8 @@ public:
     {
         // TODO:
         // 1: Check auth
+        auto [result, param] = checkAuth(
+            m_rollbackableStorage, m_blockHeader, m_message, m_origin, buildLegacyExternalCaller());
 
         if (m_message.kind == EVMC_CREATE || m_message.kind == EVMC_CREATE2)
         {
@@ -324,9 +332,6 @@ public:
 
     task::Task<EVMCResult> create()
     {
-        checkCreateAuth(m_precompiledManager, m_rollbackableStorage, m_blockHeader,
-            m_newContractAddress, m_origin, executor::GlobalHashImpl::g_hashImpl);
-
         // Write table to s_tables
         constexpr std::string_view SYS_TABLES{"s_tables"};
         if (co_await storage2::existsOne(
@@ -375,9 +380,7 @@ public:
             if (precompiled)
             {
                 co_return precompiled->call(m_rollbackableStorage, m_blockHeader, m_message,
-                    m_origin, [this](const evmc_message& message) {
-                        return task::syncWait(externalCall(message));
-                    });
+                    m_origin, buildLegacyExternalCaller());
             }
         }
 
