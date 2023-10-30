@@ -349,6 +349,7 @@ private:
     NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 
     bool m_enableFreeNodeRead = false;
+    bool m_syncInfoPrinted = false;
 
 public:
     void maintainBlocks();
