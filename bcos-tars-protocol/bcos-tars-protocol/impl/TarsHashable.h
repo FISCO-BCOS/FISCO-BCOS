@@ -34,7 +34,16 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.update(hashFields.to);
     hasher.update(hashFields.input);
     hasher.update(hashFields.abi);
-
+    // if version == 1, update value, gasPrice, gasLimit, maxFeePerGas, maxPriorityFeePerGas to
+    // hashBuffer calculate hash
+    if (version == 1)
+    {
+        hasher.update(hashFields.value);
+        hasher.update(hashFields.gasPrice);
+        hasher.update(hashFields.gasLimit);
+        hasher.update(hashFields.maxFeePerGas);
+        hasher.update(hashFields.maxPriorityFeePerGas);
+    }
     hasher.final(out);
 }
 

@@ -97,6 +97,32 @@ std::string_view bcostars::protocol::TransactionImpl::abi() const
 {
     return m_inner()->data.abi;
 }
+
+std::string_view bcostars::protocol::TransactionImpl::value() const
+{
+    return m_inner()->data.value;
+}
+
+std::string_view bcostars::protocol::TransactionImpl::gasPrice() const
+{
+    return m_inner()->data.gasPrice;
+}
+
+int64_t bcostars::protocol::TransactionImpl::gasLimit() const
+{
+    return m_inner()->data.gasLimit;
+}
+
+std::string_view bcostars::protocol::TransactionImpl::maxFeePerGas() const
+{
+    return m_inner()->data.maxFeePerGas;
+}
+
+std::string_view bcostars::protocol::TransactionImpl::maxPriorityFeePerGas() const
+{
+    return m_inner()->data.maxPriorityFeePerGas;
+}
+
 int64_t bcostars::protocol::TransactionImpl::importTime() const
 {
     return m_inner()->importTime;
