@@ -19,6 +19,9 @@ namespace bcos::ledger
 struct NoSuchFeatureError : public bcos::error::Exception
 {
 };
+struct PreconditionMismatchError : public bcos::Exception
+{
+};
 
 class Features
 {
@@ -33,6 +36,9 @@ public:
         feature_sharding,
         feature_rpbft,
         feature_paillier,
+        feature_balance,
+        feature_balance_precompiled,
+        feature_balance_policy1,
     };
 
 private:
@@ -47,6 +53,23 @@ public:
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
         return *value;
+    }
+
+    void validate(std::string flag) const
+    {
+        auto value = magic_enum::enum_cast<Flag>(flag);
+        if (!value)
+        {
+            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
+        }
+        validate(*value);
+    }
+
+    void validate(Flag flag) const
+    {
+        if ((flag == Flag::feature_balance_policy1 || flag == Flag::feature_balance_precompiled) &&
+            !get(Flag::feature_balance))
+        {}
     }
 
     bool get(Flag flag) const
@@ -69,6 +92,7 @@ public:
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
 
+        validate(flag);
         m_flags[*index] = true;
     }
     void set(std::string_view flag) { set(string2Flag(flag)); }
