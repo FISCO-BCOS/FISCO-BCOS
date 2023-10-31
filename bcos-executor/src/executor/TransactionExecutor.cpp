@@ -928,14 +928,6 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
         }
     });
 
-    if (isStaticCall)
-    {
-        EXECUTOR_NAME_LOG(FATAL)
-            << "executeTransactionsInternal() only handle non static transactions but "
-               "receive static call";
-        assert(false);
-    }
-
     auto prepareT = utcTime() - startT;
     startT = utcTime();
 

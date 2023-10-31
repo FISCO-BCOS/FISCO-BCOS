@@ -53,14 +53,15 @@ public:
     DmcExecutor(std::string name, std::string contractAddress, bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
-        DmcStepRecorder::Ptr dmcRecorder)
+        DmcStepRecorder::Ptr dmcRecorder, bool isCall)
       : m_name(name),
         m_contractAddress(contractAddress),
         m_block(block),
         m_executor(executor),
         m_keyLocks(keyLocks),
         m_hashImpl(hashImpl),
-        m_dmcRecorder(dmcRecorder)
+        m_dmcRecorder(dmcRecorder),
+        m_isCall(isCall)
     {}
 
     void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
@@ -122,6 +123,7 @@ private:
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);
     std::string newEVMAddress(
         const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
+    bool isCall() { return m_isCall; }
 
 private:
     std::string m_name;
@@ -132,6 +134,7 @@ private:
     bcos::crypto::Hash::Ptr m_hashImpl;
     DmcStepRecorder::Ptr m_dmcRecorder;
     ExecutivePool m_executivePool;
+    bool m_isCall;
 
 
     mutable SharedMutex x_concurrentLock;

@@ -213,6 +213,12 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     request->staticCall = m_callParameters->staticCall;
 
+    // EVM STATICCALL opcode support
+    if (_msg->flags & EVMC_STATIC)
+    {
+        request->staticCall = true;
+    }
+
     auto response = m_executive->externalCall(std::move(request));
 
     // Convert CallParameters to evmc_resultx
