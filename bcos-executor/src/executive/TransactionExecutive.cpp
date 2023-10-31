@@ -1000,6 +1000,13 @@ std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::str
         m_blockContext.features());
 }
 
+std::shared_ptr<precompiled::Precompiled> bcos::executor::TransactionExecutive::getPrecompiled(
+    const std::string& address, uint32_t version, bool isAuth,
+    const ledger::Features& features) const
+{
+    return m_precompiled->at(address, version, isAuth, features);
+}
+
 std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
     const string& _a, bytesConstRef _in) const
 {
@@ -1429,7 +1436,7 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     const auto* authMgrAddress = m_blockContext.isWasm() ? precompiled::AUTH_MANAGER_NAME :
                                                            precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
-        m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
+        getPrecompiled(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
             m_blockContext.isAuthCheck(), m_blockContext.features()));
     EXECUTIVE_LOG(TRACE) << "check auth" << LOG_KV("codeAddress", callParameters->receiveAddress)
                          << LOG_KV("isCreate", callParameters->create)
@@ -1476,7 +1483,7 @@ int32_t TransactionExecutive::checkContractAvailable(
         return 0;
     }
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
-        m_precompiled->at(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
+        getPrecompiled(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
             m_blockContext.isAuthCheck(), m_blockContext.features()));
     // if status is normal, then return 0; else if status is abnormal, then return else
     // if return <0, it means status row not exist, check pass by default in this case
@@ -1494,10 +1501,7 @@ uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::Unique
         // contract calls, pass through
         return 0;
     }
-    AccountPrecompiled::Ptr accountPrecompiled =
-        dynamic_pointer_cast<precompiled::AccountPrecompiled>(
-            m_precompiled->at(ACCOUNT_ADDRESS, m_blockContext.blockVersion(),
-                m_blockContext.isAuthCheck(), m_blockContext.features()));
 
-    return accountPrecompiled->getAccountStatus(callParameters->origin, shared_from_this());
+    return precompiled::AccountPrecompiled::getAccountStatus(
+        callParameters->origin, shared_from_this());
 }

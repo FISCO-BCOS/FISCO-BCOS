@@ -212,6 +212,8 @@ private:
     std::list<ExecuteResult> m_results;
     std::mutex m_resultsMutex;
 
+    ledger::LedgerConfig::Ptr m_ledgerConfig;
+
     /**
      * Executes a block and returns a tuple containing an error (if any), the block header, and
      * a boolean indicating success.
