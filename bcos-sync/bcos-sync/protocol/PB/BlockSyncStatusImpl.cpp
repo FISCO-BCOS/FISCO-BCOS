@@ -43,6 +43,7 @@ void BlockSyncStatusImpl::deserializeObject()
     {
         m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
     }
+    m_time = m_syncMessage->time();
 }
 void BlockSyncStatusImpl::setHash(HashType const& _hash)
 {
@@ -54,4 +55,10 @@ void BlockSyncStatusImpl::setGenesisHash(HashType const& _gensisHash)
 {
     m_genesisHash = _gensisHash;
     m_syncMessage->set_genesishash(_gensisHash.data(), HashType::SIZE);
+}
+
+void BlockSyncStatusImpl::setTime(std::int64_t const time)
+{
+    m_time = time;
+    m_syncMessage->set_time(time);
 }

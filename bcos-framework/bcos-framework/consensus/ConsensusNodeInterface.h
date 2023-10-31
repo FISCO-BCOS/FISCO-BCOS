@@ -21,28 +21,28 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/Common.h>
-namespace bcos
-{
-namespace consensus
+
+namespace bcos::consensus
 {
 class ConsensusNodeInterface
 {
 public:
     using Ptr = std::shared_ptr<ConsensusNodeInterface>;
     ConsensusNodeInterface() = default;
-    virtual ~ConsensusNodeInterface() {}
+    virtual ~ConsensusNodeInterface() = default;
 
     // the nodeID of the consensus node
-    virtual bcos::crypto::PublicPtr nodeID() const = 0;
+    [[nodiscard]] virtual bcos::crypto::PublicPtr nodeID() const = 0;
 
-    virtual uint64_t weight() const { return 100; }
+    [[nodiscard]] virtual uint64_t weight() const { return 100; }
 };
 using ConsensusNodeList = std::vector<ConsensusNodeInterface::Ptr>;
 using ConsensusNodeListPtr = std::shared_ptr<ConsensusNodeList>;
 
 struct ConsensusNodeComparator
 {
-    bool operator()(ConsensusNodeInterface::Ptr _left, ConsensusNodeInterface::Ptr _right) const
+    bool operator()(
+        const ConsensusNodeInterface::Ptr& _left, const ConsensusNodeInterface::Ptr& _right) const
     {
         if (_left->nodeID()->data() == _right->nodeID()->data())
         {
@@ -51,15 +51,15 @@ struct ConsensusNodeComparator
         return (_left->nodeID()->data() < _right->nodeID()->data());
     }
 };
-
+using ConsensusNodeSet = std::set<ConsensusNodeInterface::Ptr, ConsensusNodeComparator>;
+using ConsensusNodeSetPtr = std::shared_ptr<ConsensusNodeSet>;
 inline std::string decsConsensusNodeList(ConsensusNodeList const& _nodeList)
 {
     std::ostringstream stringstream;
-    for (auto node : _nodeList)
+    for (const auto& node : _nodeList)
     {
         stringstream << LOG_KV(node->nodeID()->shortHex(), std::to_string(node->weight()));
     }
     return stringstream.str();
 }
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

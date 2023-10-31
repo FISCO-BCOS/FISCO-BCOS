@@ -23,15 +23,14 @@
 #include "../protocol/Block.h"
 #include "../protocol/Protocol.h"
 #include "../protocol/ProtocolTypeDef.h"
+#include "ConsensusConfigInterface.h"
 #include "ConsensusTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Error.h>
 
 
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 // ConsensusInterface is the interface of consensus exposed to other modules
 class ConsensusInterface
@@ -39,7 +38,7 @@ class ConsensusInterface
 public:
     using Ptr = std::shared_ptr<ConsensusInterface>;
     ConsensusInterface() = default;
-    virtual ~ConsensusInterface() {}
+    virtual ~ConsensusInterface() = default;
 
     virtual void start() = 0;
     virtual void stop() = 0;
@@ -73,6 +72,11 @@ public:
     // Note: if separate sealer with the PBFT module, should implement with notify
     virtual ConsensusNodeList consensusNodeList() const { return ConsensusNodeList(); }
     virtual uint64_t nodeIndex() const { return 0; }
+    virtual consensus::ConsensusConfigInterface::ConstPtr consensusConfig() const
+    {
+        return nullptr;
+    };
+    virtual bool shouldRotateSealers(protocol::BlockNumber) const { return false; }
     virtual uint32_t compatibilityVersion() const
     {
         return (uint32_t)(bcos::protocol::DEFAULT_VERSION);
@@ -85,5 +89,4 @@ public:
 
     virtual void clearExceptionProposalState(bcos::protocol::BlockNumber) {}
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

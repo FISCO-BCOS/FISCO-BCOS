@@ -19,12 +19,14 @@
  */
 #pragma once
 #include "bcos-gateway/Common.h"
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
+#include <mutex>
 namespace bcos
 {
 namespace gateway
 {
-class GatewayStatus
+class GatewayStatus : public ObjectCounter<GatewayStatus>
 {
 public:
     using Ptr = std::shared_ptr<GatewayStatus>;
@@ -53,7 +55,7 @@ private:
     std::string m_uuid;
     // groupID => groupType => P2PNodeIDList
     std::map<std::string, std::map<GroupType, std::set<std::string>>> m_groupP2PNodeList;
-    mutable SharedMutex x_groupP2PNodeList;
+    mutable std::mutex x_groupP2PNodeList;
 };
 
 class GatewayStatusFactory

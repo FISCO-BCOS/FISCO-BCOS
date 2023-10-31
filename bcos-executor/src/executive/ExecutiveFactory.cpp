@@ -20,10 +20,19 @@
  */
 
 #include "ExecutiveFactory.h"
+#include "../vm/Precompiled.h"
 #include "CoroutineTransactionExecutive.h"
+#include "PromiseTransactionExecutive.h"
+#include "ShardingTransactionExecutive.h"
 #include "TransactionExecutive.h"
+#include "bcos-executor/src/precompiled/CastPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/protocol/Protocol.h"
 
 using namespace bcos::executor;
+using namespace bcos::precompiled;
 
 
 std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
@@ -32,19 +41,67 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
     std::shared_ptr<TransactionExecutive> executive;
     if (useCoroutine)
     {
+        /*
+        if (m_isTiKVStorage)
+        {
+            // this logic is just for version lesser than 3.3.0, bug fix
+            executive = std::make_shared<PromiseTransactionExecutive>(m_poolForPromiseWait,
+                m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        }
+        else
+        {
+         */
         executive = std::make_shared<CoroutineTransactionExecutive>(
             m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        //}
     }
     else
     {
         executive = std::make_shared<TransactionExecutive>(
             m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
     }
-    executive->setConstantPrecompiled(m_constantPrecompiled);
-    executive->setEVMPrecompiled(m_precompiledContract);
-    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
 
-    // TODO: register User developed Precompiled contract
-    // registerUserPrecompiled(context);
+    setParams(executive);
     return executive;
+}
+
+void ExecutiveFactory::registerExtPrecompiled(std::shared_ptr<TransactionExecutive>& executive)
+{
+    // TODO: register User developed Precompiled contract if needed
+    // registerUserPrecompiled(context);
+}
+
+void ExecutiveFactory::setParams(std::shared_ptr<TransactionExecutive> executive)
+{
+    executive->setPrecompiled(m_precompiled);
+    executive->setEVMPrecompiled(m_evmPrecompiled);
+    executive->setStaticPrecompiled(m_staticPrecompiled);
+
+    registerExtPrecompiled(executive);
+}
+std::shared_ptr<bcos::precompiled::Precompiled> ExecutiveFactory::getPrecompiled(
+    const std::string& address) const
+{
+    return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck(),
+        m_blockContext.features());
+}
+
+std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
+    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine)
+{
+    if (useCoroutine)
+    {
+        auto needUsePromise = m_isTiKVStorage;  // tikv storage need to use promise executive
+        auto executive = std::make_shared<ShardingTransactionExecutive>(m_blockContext,
+            _contractAddress, contextID, seq, m_gasInjector, m_poolForPromiseWait, needUsePromise);
+        setParams(executive);
+        return executive;
+    }
+    else
+    {
+        auto executive = std::make_shared<TransactionExecutive>(
+            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        setParams(executive);
+        return executive;
+    }
 }

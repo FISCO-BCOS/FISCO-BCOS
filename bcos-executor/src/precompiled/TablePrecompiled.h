@@ -22,6 +22,7 @@
 
 #include "../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/Condition.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/storage/Table.h>
 
@@ -34,18 +35,28 @@ public:
     TablePrecompiled(crypto::Hash::Ptr _hashImpl);
     ~TablePrecompiled() override = default;
 
-    std::shared_ptr<PrecompiledExecResult> call(
-        std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr call(
+        executor::TransactionExecutive::Ptr _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
+    using CRUDParams = std::function<void(const std::string&,
+        const std::shared_ptr<executor::TransactionExecutive>&, bytesConstRef&,
+        const PrecompiledGas::Ptr&, PrecompiledExecResult::Ptr const&)>;
+
     void selectByKey(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void selectByCondition(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void selectByConditionV32(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void count(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void countV32(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void insert(const std::string& tableName,
@@ -57,17 +68,36 @@ private:
     void updateByCondition(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void updateByConditionV32(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void removeByKey(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
     void removeByCondition(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
-    void buildKeyCondition(std::optional<storage::Condition>& keyCondition,
+    void removeByConditionV32(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        const PrecompiledGas::Ptr& gasPricer, PrecompiledExecResult::Ptr const& _callParameters);
+    void buildKeyCondition(std::shared_ptr<storage::Condition>& keyCondition,
         const std::vector<precompiled::ConditionTuple>& conditions,
         const precompiled::LimitTuple& limit) const;
-    void desc(TableInfoTuple& _tableInfo, const std::string& tableName,
+    bool buildConditions(std::optional<precompiled::Condition>& valueCondition,
+        const std::vector<precompiled::ConditionTupleV320>& conditions,
+        const precompiled::LimitTuple& limit, precompiled::TableInfoTupleV320& tableInfo) const;
+    void desc(precompiled::TableInfo& _tableInfo, const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters) const;
+        PrecompiledExecResult::Ptr const& _callParameters, bool withKeyOrder) const;
+    bool isNumericalOrder(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, const std::string& _tableName);
+    static bool isNumericalOrder(const TableInfoTupleV320& tableInfo);
+
+    inline void registerFunc(uint32_t _selector, CRUDParams _func,
+        protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
+    {
+        selector2Func.insert({_selector, {_minVersion, std::move(_func)}});
+    }
+    std::unordered_map<uint32_t, std::pair<protocol::BlockVersion, CRUDParams>> selector2Func;
 };
 }  // namespace bcos::precompiled

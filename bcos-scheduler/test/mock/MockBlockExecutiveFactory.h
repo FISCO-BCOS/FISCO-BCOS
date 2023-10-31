@@ -21,7 +21,9 @@ class MockBlockExecutiveFactory : public bcos::scheduler::BlockExecutiveFactory
 {
 public:
     using Ptr = std::shared_ptr<MockBlockExecutiveFactory>;
-    MockBlockExecutiveFactory(bool isSerialExecute) : BlockExecutiveFactory(isSerialExecute) {}
+    MockBlockExecutiveFactory(bool isSerialExecute, size_t keyPageSize = 10240)
+      : BlockExecutiveFactory(isSerialExecute, keyPageSize)
+    {}
     virtual ~MockBlockExecutiveFactory() {}
 
     std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,

@@ -50,8 +50,8 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     // [tableName][actualParams]
     std::vector<std::string> dynamicParams;
     bytes param;
@@ -83,14 +83,14 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
         /// get(string)
         get(tableName, _executive, data, _callParameters, gasPricer);
     }
-    else
+    else [[unlikely]]
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTablePrecompiled")
                               << LOG_DESC("call undefined function!");
         BOOST_THROW_EXCEPTION(PrecompiledError("KVTablePrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }
 
@@ -100,8 +100,8 @@ void KVTablePrecompiled::get(const std::string& tableName,
 {
     /// get(string) => (bool, string)
     std::string key;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
                            << LOG_KV("get", key);
@@ -125,11 +125,16 @@ void KVTablePrecompiled::set(const std::string& tableName,
 {
     /// set(string,string)
     std::string key, value;
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(data, key, value);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
-                          << LOG_KV("key", key) << LOG_KV("value", value);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("tableName", tableName)
+                           << LOG_KV("key", key) << LOG_KV("value", value);
+
+    if (key.empty() && blockContext.blockVersion() >= BlockVersion::V3_3_VERSION) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(PrecompiledError("Table insert entry key is empty"));
+    }
 
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
 

@@ -136,14 +136,12 @@ void AMOP::publish(
             auto wsMessage = std::dynamic_pointer_cast<WsMessage>(_msg);
             if (!_error && wsMessage && wsMessage->status() != 0)
             {
-                auto errorNew = std::make_shared<Error>();
-                errorNew->setErrorCode(wsMessage->status());
-                errorNew->setErrorMessage(
+                auto errorNew = BCOS_ERROR_PTR(wsMessage->status(),
                     std::string(wsMessage->payload()->begin(), wsMessage->payload()->end()));
 
-                AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response error")
-                                     << LOG_KV("errorCode", errorNew->errorCode())
-                                     << LOG_KV("errorMessage", errorNew->errorMessage());
+                AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response failed")
+                                     << LOG_KV("code", errorNew->errorCode())
+                                     << LOG_KV("message", errorNew->errorMessage());
 
                 _error = errorNew;
             }

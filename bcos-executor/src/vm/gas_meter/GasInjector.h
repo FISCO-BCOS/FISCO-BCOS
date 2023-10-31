@@ -17,10 +17,13 @@
  *  @author xingqiangbai
  *  @date 20200921
  */
+#ifdef WITH_WASM
+
 #pragma once
 #include "Metric.h"
 #include <exception>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace wabt
@@ -28,11 +31,9 @@ namespace wabt
 class Expr;
 template <typename T>
 class intrusive_list;
-typedef intrusive_list<Expr> ExprList;
+using ExprList = intrusive_list<Expr>;
 }  // namespace wabt
-namespace bcos
-{
-namespace wasm
+namespace bcos::wasm
 {
 const uint64_t WASM_MEMORY_PAGES_INIT = 16;
 const uint64_t WASM_MEMORY_PAGES_MAX = 1024;
@@ -66,21 +67,22 @@ public:
         Status status;
         std::shared_ptr<std::vector<uint8_t>> byteCode;
     };
-    GasInjector(const InstructionTable costTable) : m_costTable(costTable) {}
+    GasInjector(InstructionTable costTable = wasm::GetInstructionTable()) : m_costTable(std::move(costTable)) {}
 
-    Result InjectMeter(const std::vector<uint8_t>& byteCode);
+    Result InjectMeter(const std::vector<uint8_t>& byteCode) const;
 
 private:
     struct ImportsInfo
     {
         bool foundGasFunction = false;
-        uint32_t gasFuncIndex;
-        uint32_t globalGasIndex;
-        uint32_t tempVarForMemoryGasIndex;
-        uint32_t originSize;
+        uint32_t gasFuncIndex{};
+        uint32_t globalGasIndex{};
+        uint32_t tempVarForMemoryGasIndex{};
+        uint32_t originSize{};
     };
-    void InjectMeterExprList(wabt::ExprList* exprs, const ImportsInfo& info);
+    void InjectMeterExprList(wabt::ExprList* exprs, const ImportsInfo& info) const;
     const InstructionTable m_costTable;
 };
-}  // namespace wasm
-}  // namespace bcos
+}  // namespace bcos::wasm
+
+#endif

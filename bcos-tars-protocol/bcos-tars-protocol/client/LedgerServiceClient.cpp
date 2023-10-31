@@ -160,14 +160,14 @@ void LedgerServiceClient::asyncGetBatchTxsByHashList(bcos::crypto::HashListPtr _
 
         void callback_asyncGetBatchTxsByHashList(const bcostars::Error& ret,
             const vector<bcostars::Transaction>& _txs,
-            const map<std::string, vector<bcostars::MerkleProofItem>>& _merkleProofList) override
+            const map<std::string, vector<std::string>>& _merkleProofList) override
         {
             // decode the txsList
             auto bcosTxsList = std::make_shared<bcos::protocol::Transactions>();
             for (auto const& tx : _txs)
             {
                 auto bcosTx = std::make_shared<bcostars::protocol::TransactionImpl>(
-                    m_cryptoSuite, [m_tx = std::move(tx)]() mutable { return &m_tx; });
+                    [m_tx = tx]() mutable { return &m_tx; });
                 bcosTxsList->emplace_back(bcosTx);
             }
             // decode the proof list
@@ -179,7 +179,7 @@ void LedgerServiceClient::asyncGetBatchTxsByHashList(bcos::crypto::HashListPtr _
                 auto bcosProof = std::make_shared<bcos::ledger::MerkleProof>();
                 for (auto const& item : proof)
                 {
-                    bcosProof->emplace_back(std::pair(item.left, item.right));
+                    bcosProof->emplace_back(bcos::fromHex(item));
                 }
                 (*proofList)[it.first] = bcosProof;
             }
@@ -222,14 +222,14 @@ void LedgerServiceClient::asyncGetTransactionReceiptByHash(bcos::crypto::HashTyp
         {}
         void callback_asyncGetTransactionReceiptByHash(const bcostars::Error& ret,
             const bcostars::TransactionReceipt& _receipt,
-            const vector<bcostars::MerkleProofItem>& _proof) override
+            const vector<std::string>& _proof) override
         {
             auto bcosReceipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                m_cryptoSuite, [m_receipt = std::move(_receipt)]() mutable { return &m_receipt; });
+                [m_receipt = std::move(_receipt)]() mutable { return &m_receipt; });
             auto bcosProof = std::make_shared<bcos::ledger::MerkleProof>();
             for (auto const& item : _proof)
             {
-                bcosProof->emplace_back(std::pair(item.left, item.right));
+                bcosProof->emplace_back(bcos::fromHex(item));
             }
             m_callback(toBcosError(ret), bcosReceipt, bcosProof);
         }

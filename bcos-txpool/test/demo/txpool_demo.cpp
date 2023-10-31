@@ -21,12 +21,13 @@
 
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-txpool/test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
@@ -59,12 +60,9 @@ void testSubmitAndRemoveTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     tbb::parallel_for(tbb::blocked_range<int>(0, _count), [&](const tbb::blocked_range<int>& _r) {
         for (auto i = _r.begin(); i < _r.end(); i++)
         {
-            auto tx = fakeTransaction(_cryptoSuite, 1000 + i,
+            auto tx = fakeTransaction(_cryptoSuite, std::to_string(1000 + i),
                 ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
-            bcos::bytes encodedData;
-            tx->encode(encodedData);
-            auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
-            txpool->asyncSubmit(txData, [](Error::Ptr, TransactionSubmitResult::Ptr) {});
+            task::syncWait(txpool->submitTransaction(tx));
             auto result = std::make_shared<TransactionSubmitResultImpl>();
             result->setTxHash(tx->hash());
             (*txsResult)[i] = result;

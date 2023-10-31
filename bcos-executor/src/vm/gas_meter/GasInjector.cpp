@@ -18,6 +18,7 @@
  *  @date 20200921
  */
 
+#ifdef WITH_WASM
 #include "GasInjector.h"
 #include "src/binary-reader-ir.h"
 #include "src/binary-reader.h"
@@ -42,7 +43,7 @@ const char* const OUT_OF_GAS_NAME = "outOfGas";
 const char* const GLOBAL_GAS_NAME = "gas";
 
 // write wasm will not use loc, so wrong loc doesn't matter
-void GasInjector::InjectMeterExprList(ExprList* exprs, const ImportsInfo& info)
+void GasInjector::InjectMeterExprList(ExprList* exprs, const ImportsInfo& info) const
 {
     auto insertPoint = exprs->begin();
     int64_t gasCost = 0;
@@ -378,7 +379,7 @@ void GasInjector::InjectMeterExprList(ExprList* exprs, const ImportsInfo& info)
     }
 }
 
-GasInjector::Result GasInjector::InjectMeter(const std::vector<uint8_t>& byteCode)
+GasInjector::Result GasInjector::InjectMeter(const std::vector<uint8_t>& byteCode) const
 {
     GasInjector::Result injectResult;
     // parse wasm use wabt
@@ -562,3 +563,4 @@ GasInjector::Result GasInjector::InjectMeter(const std::vector<uint8_t>& byteCod
 
 }  // namespace wasm
 }  // namespace bcos
+#endif

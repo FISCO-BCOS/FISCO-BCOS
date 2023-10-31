@@ -12,7 +12,10 @@ import json
 import os
 import uuid
 
-from common.utilities import execute_command_and_getoutput
+from config.tars_install_package_generator import generate_tars_package
+from config.tars_install_package_generator import generate_tars_proxy_config
+from config.tars_install_package_generator import initialize_tars_config_env_variables
+
 class ServiceConfigGenerator:
     def __init__(self, config, service_type, node_type, output_dir):
         self.config = config
@@ -23,11 +26,17 @@ class ServiceConfigGenerator:
         self.root_dir = output_dir + "/" + self.service_type
         self.node_type = node_type
 
-    def generate_all_config(self, is_build_opr = False):
+    def generate_all_tars_install_package(self):
         if self.service_type == ServiceInfo.gateway_service_type:
-            return self.generate_gateway_config_files(is_build_opr)
+            return self.generate_gateway_config_files(True)
         else:
-            return self.generate_rpc_config_files(is_build_opr)
+            return self.generate_rpc_config_files(True)
+
+    def generate_all_config(self):
+        if self.service_type == ServiceInfo.gateway_service_type:
+            return self.generate_gateway_config_files(False)
+        else:
+            return self.generate_rpc_config_files(False)
 
     def generate_rpc_config_files(self, is_build_opr):
         utilities.log_info("* generate config for the rpc service, build opr: %s" % str(is_build_opr))
@@ -37,8 +46,7 @@ class ServiceConfigGenerator:
             if self.__generate_config_files(section, rpc_service_config, is_build_opr) is False:
                 return False
             if is_build_opr:
-                self.__copy_tars_conf_file(rpc_service_config, "rpc", "BcosRpcService")
-                self.__generate_and_store_tars_proxy_config(rpc_service_config)
+                self.__copy_tars_conf_file(rpc_service_config, "rpc")
         utilities.log_info("* generate config for the rpc service success")
         return True
 
@@ -52,8 +60,7 @@ class ServiceConfigGenerator:
             if self.__generate_gateway_connection_info_for_all_deploy_ip(gateway_service_config, is_build_opr) is False:
                 return False
             if is_build_opr:
-                self.__copy_tars_conf_file(gateway_service_config, "gateway", "BcosGatewayService")
-                self.__generate_and_store_tars_proxy_config(gateway_service_config)
+                self.__copy_tars_conf_file(gateway_service_config, "gateway")
 
         utilities.log_info("* generate config for the gateway service success")
         return True
@@ -75,117 +82,31 @@ class ServiceConfigGenerator:
                 utilities.execute_command(copy_cmd)
                 utilities.log_info("* copy tars_proxy.ini: " + tars_proxy_conf + " ,dir: " + conf_dir)
 
-
-    def __get_tars_proxy_conf_section_index(self, section, config):
-        if not config.has_section(section):
-            config.add_section(section)
-            return 0
-        
-        index = 0
-        while True:
-            proxy_index_str = "proxy." + str(index)
-            if proxy_index_str in config[section]:
-                index += 1
-                continue
-            return index
-    
-    def __generate_and_store_tars_proxy_config(self, service_config):
-        agency_name = service_config.agency_config.name
-        chain_id = service_config.agency_config.chain_id
-        tars_conf_dir = os.path.join(self.output_dir, chain_id)
-        agency_tars_proxy_conf = os.path.join(tars_conf_dir, agency_name + "_tars_proxy.ini")
-
-        tars_proxy_config = configparser.ConfigParser(
-            comment_prefixes='/', allow_no_value=True)
-
-        if os.path.exists(agency_tars_proxy_conf):
-            tars_proxy_config.read(agency_tars_proxy_conf)
-        
-        index = self.__get_tars_proxy_conf_section_index(self.service_type, tars_proxy_config)
-
-        section = self.service_type
+    def __copy_tars_conf_file(self, service_config, service_type):
         for deploy_ip in service_config.deploy_ip_list:
-            tars_proxy_config[section]['proxy.' + str(index)] = deploy_ip + ":" + str(service_config.tars_listen_port)
-            index += 1
-
-        if os.path.exists(os.path.dirname(agency_tars_proxy_conf)) is False:
-            utilities.mkdir(os.path.dirname(agency_tars_proxy_conf))
-
-        with open(agency_tars_proxy_conf, 'w') as f:
-            tars_proxy_config.write(f)
-
-        return
-
-    def __copy_tars_conf_file(self, service_config, service_type, service_name):
-        for ip in service_config.deploy_ip_list:
-            conf_dir = self.__get_service_config_base_path(service_config, ip, True)
+            conf_dir = self.__get_service_config_base_path(service_config, deploy_ip, True)
             base_dir = os.path.dirname(conf_dir)
+            # utilities.log_info("* ==> generate tars install package deploy ip: %s, service type: %s, chain id: %s, tars pkg dir: %s" % (deploy_ip, service_type, self.config.chain_id, self.config.tars_config.tars_pkg_dir))
 
-            # copy service binary exec
-            shutil.copy(os.path.join(self.config.tars_config.tars_pkg_dir, service_name, service_name), base_dir)
-
-            # copy ssl/ca.crt ssl/ssl.crt ssl/ssl.key
+            # # copy ssl/ca.crt ssl/ssl.crt ssl/ssl.key
             cert_dir = os.path.join(conf_dir, "ssl", "*")
-            cp_cmd = "cp " + cert_dir + " " + conf_dir
-            os.system(cp_cmd)
-
-            # copy start.sh stop.sh tars.conf
-            tars_start_all_file = os.path.join(ConfigInfo.tpl_abs_path, "tars_start_all.sh")
-            tars_stop__all_file = os.path.join(ConfigInfo.tpl_abs_path, "tars_stop_all.sh")
-
-            start_all_file = os.path.join(base_dir, "../", "start_all.sh")
-            stop_all_file = os.path.join(base_dir, "../", "stop_all.sh")
-
-            tars_start_file = os.path.join(ConfigInfo.tpl_abs_path, "tars_start.sh")
-            tars_stop_file = os.path.join(ConfigInfo.tpl_abs_path, "tars_stop.sh")
-            tars_conf_file = os.path.join(ConfigInfo.tpl_abs_path, "tars_" + service_type + ".conf")
-
-            start_file = os.path.join(base_dir, "start.sh")
-            stop_file = os.path.join(base_dir, "stop.sh")
-            conf_file = os.path.join(conf_dir, "tars.conf")
-           
-            shutil.copy(tars_start_file, start_file)
-            shutil.copy(tars_stop_file, stop_file)
-            shutil.copy(tars_conf_file, conf_file)
-
-            if not os.path.exists(start_all_file):
-                shutil.copy(tars_start_all_file, start_all_file)
-            
-            if not os.path.exists(stop_all_file):
-                shutil.copy(tars_stop__all_file, stop_all_file)
-
-            sys_name = platform.system()
-            if sys_name.lower() == "darwin":
-                sed = "sed -i .bak "
-            else:
-                sed = "sed -i "
-
-            sed_cmd = sed + "s/@SERVICE_NAME@/" + service_name + "/g " + start_file
-            execute_command_and_getoutput(sed_cmd)
-            sed_cmd = sed + "s/@SERVICE_NAME@/" + service_name + "/g " + stop_file
-            execute_command_and_getoutput(sed_cmd)
-
-            sed_cmd = sed + "s/@TARS_APP@/" + self.config.chain_id + "/g " + conf_file
-
-            execute_command_and_getoutput(sed_cmd)
-            sed_cmd = sed + "s/@TARS_SERVER@/" + service_config.agency_config.name + service_name + "/g " + conf_file
-            execute_command_and_getoutput(sed_cmd)
-
-            sed_cmd = sed + "s/@TARS_LISTEN_IP@/" + ip + "/g " + conf_file
-            execute_command_and_getoutput(sed_cmd)
-            sed_cmd = sed + "s/@TARS_LISTEN_PORT@/" + str(service_config.tars_listen_port) + "/g " + conf_file
-            execute_command_and_getoutput(sed_cmd)
-
-            if os.path.exists(start_file + ".bak"):
-                os.remove(start_file + ".bak")
-
-            if os.path.exists(stop_file + ".bak"):
-                os.remove(stop_file + ".bak")
-        
-            if os.path.exists(conf_file + ".bak"):
-                os.remove(conf_file + ".bak")
-
+            cp_command = "cp " + cert_dir + " " + conf_dir
+            os.system(cp_command)
+            # remove ssl/
             shutil.rmtree(os.path.join(conf_dir, "ssl"))
+
+            # install package
+            generate_tars_package(base_dir, service_config.binary_name, service_config.name, service_config.agency_config.name, self.config.chain_id, service_type, self.config.tars_config.tars_pkg_dir)
+            
+            config_items = {"@TARS_LISTEN_IP@": deploy_ip, 
+                    "@TARS_LISTEN_PORT@": str(service_config.tars_listen_port)
+                    }
+            # init config env variables
+            initialize_tars_config_env_variables(config_items, conf_dir + '/tars.conf')
+            
+            service_ports_items = {service_type: deploy_ip + ":" + str(service_config.tars_listen_port)}
+            # generate tars proxy config
+            generate_tars_proxy_config(self.output_dir, service_config.agency_config.name, service_config.agency_config.chain_id, service_ports_items)
 
     def __get_cert_config_file_list(self, service_config, ip):
         cert_config_file_list = []

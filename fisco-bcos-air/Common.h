@@ -39,12 +39,13 @@ public:
         std::cout << "[" << bcos::getCurrentDateTime() << "] "
                   << "exit because receive signal " << signal << std::endl;
         ExitHandler::c_shouldExit.store(true);
+        ExitHandler::c_shouldExit.notify_all();
     }
     bool shouldExit() const { return ExitHandler::c_shouldExit.load(); }
 
-    static std::atomic_bool c_shouldExit;
+    static boost::atomic_bool c_shouldExit;
 };
-std::atomic_bool ExitHandler::c_shouldExit = {false};
+boost::atomic_bool ExitHandler::c_shouldExit = {false};
 
 void setDefaultOrCLocale()
 {

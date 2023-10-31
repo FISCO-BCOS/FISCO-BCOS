@@ -23,13 +23,18 @@
 #include "../Common.h"
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
+#include <evmone/advanced_analysis.hpp>
+#include <evmone/baseline.hpp>
+#include <evmone/vm.hpp>
 
 namespace bcos
 {
 namespace executor
 {
-class HostContext;
 
+// using evmoneCodeAnalysis = evmone::advanced::AdvancedCodeAnalysis;
+using evmoneCodeAnalysis = evmone::baseline::CodeAnalysis;
+class HostContext;
 class Result : public evmc_result
 {
 public:
@@ -37,8 +42,10 @@ public:
 
     ~Result()
     {
-        if (release)
+        if (release != nullptr)
+        {
             release(this);
+        }
     }
 
     Result(Result&& _other) noexcept : evmc_result(_other) { _other.release = nullptr; }
@@ -53,9 +60,6 @@ public:
 };
 
 
-/// Returns the EVM-C options parsed from command line.
-std::vector<std::pair<std::string, std::string>>& evmcOptions() noexcept;
-
 /// Translate the VMSchedule to VMInstance-C revision.
 evmc_revision toRevision(VMSchedule const& _schedule);
 
@@ -63,20 +67,29 @@ evmc_revision toRevision(VMSchedule const& _schedule);
 class VMInstance
 {
 public:
-    explicit VMInstance(evmc_vm* _instance) noexcept;
-    ~VMInstance() { m_instance->destroy(m_instance); }
+    explicit VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view code) noexcept;
+    explicit VMInstance(std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision,
+        bytes_view code) noexcept;
+    ~VMInstance()
+    {
+        if (m_instance)
+        {
+            m_instance->destroy(m_instance);
+        }
+    }
 
     VMInstance(VMInstance const&) = delete;
     VMInstance& operator=(VMInstance) = delete;
 
-    Result exec(HostContext& _hostContext, evmc_revision _rev, evmc_message* _msg,
-        const uint8_t* _code, size_t _code_size);
-
-    void enableDebugOutput();
+    Result execute(HostContext& _hostContext, evmc_message* _msg);
+    Result execute(evmone::VM* vm, HostContext& _hostContext, evmc_message* _msg);
 
 private:
     /// The VM instance created with VMInstance-C <prefix>_create() function.
     evmc_vm* m_instance = nullptr;
+    std::shared_ptr<evmoneCodeAnalysis> m_analysis = nullptr;
+    evmc_revision m_revision;
+    bytes_view m_code;
 };
 
 }  // namespace executor

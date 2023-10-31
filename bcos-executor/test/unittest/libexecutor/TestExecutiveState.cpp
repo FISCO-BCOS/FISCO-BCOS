@@ -4,6 +4,7 @@
 #include "../../../src/executive/ExecutiveState.h"
 #include "../../../src/executive/TransactionExecutive.h"
 #include "../mock/MockExecutiveFactory.h"
+#include "../mock/MockLedger.h"
 #include "../mock/MockTransactionExecutive.h"
 #include <boost/test/unit_test.hpp>
 
@@ -20,18 +21,21 @@ struct ExecutiveStateFixture
 {
     ExecutiveStateFixture()
     {
+        ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
         auto input = std::make_unique<CallParameters>(CallParameters::Type::KEY_LOCK);
         input->staticCall = false;
         input->codeAddress = "aabbccddee";
         input->contextID = 1;
         input->seq = 1;
-        std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
-            nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+        blockContext = std::make_shared<BlockContext>(
+            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
 
         executiveFactory = std::make_shared<MockExecutiveFactory>(
-            blockContext, nullptr, nullptr, nullptr, nullptr);
+            *blockContext, nullptr, nullptr, nullptr, nullptr);
     }
+    LedgerCache::Ptr ledgerCache;
     std::shared_ptr<MockTransactionExecutive> executive;
+    std::shared_ptr<BlockContext> blockContext;
     std::shared_ptr<MockExecutiveFactory> executiveFactory;
     std::shared_ptr<ExecutiveState> executiveState;
     CallParameters::UniquePtr input;

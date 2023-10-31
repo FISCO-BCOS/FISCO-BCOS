@@ -22,9 +22,7 @@
 #include "NodeService.h"
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Timer.h>
-namespace bcos
-{
-namespace rpc
+namespace bcos::rpc
 {
 class GroupManager : public std::enable_shared_from_this<GroupManager>
 {
@@ -32,12 +30,12 @@ public:
     using Ptr = std::shared_ptr<GroupManager>;
     GroupManager(std::string _rpcServiceName, std::string const& _chainID,
         NodeServiceFactory::Ptr _nodeServiceFactory, bcos::tool::NodeConfig::Ptr _nodeConfig)
-      : m_rpcServiceName(_rpcServiceName),
+      : m_rpcServiceName(std::move(_rpcServiceName)),
         m_chainID(_chainID),
-        m_nodeServiceFactory(_nodeServiceFactory),
-        m_nodeConfig(_nodeConfig)
+        m_nodeServiceFactory(std::move(_nodeServiceFactory)),
+        m_nodeConfig(std::move(_nodeConfig))
     {}
-    virtual ~GroupManager() {}
+    virtual ~GroupManager() = default;
     virtual bool updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
     virtual void removeGroupNodeList(bcos::group::GroupInfo::Ptr _groupInfo);
 
@@ -48,7 +46,7 @@ public:
 
     virtual bcos::group::GroupInfo::Ptr getGroupInfo(std::string_view _groupID)
     {
-        ReadGuard l(x_nodeServiceList);
+        ReadGuard lock(x_nodeServiceList);
         auto it = m_groupInfos.find(_groupID);
         if (it != m_groupInfos.end())
         {
@@ -60,7 +58,7 @@ public:
     virtual bcos::group::ChainNodeInfo::Ptr getNodeInfo(
         std::string_view _groupID, std::string_view _nodeName)
     {
-        ReadGuard l(x_nodeServiceList);
+        ReadGuard lock(x_nodeServiceList);
         auto it = m_groupInfos.find(_groupID);
         if (it == m_groupInfos.end())
         {
@@ -76,7 +74,7 @@ public:
     virtual std::set<std::string> groupList()
     {
         std::set<std::string> groupList;
-        ReadGuard l(x_nodeServiceList);
+        ReadGuard lock(x_nodeServiceList);
         for (auto const& it : m_groupInfos)
         {
             if (it.second->nodesNum() == 0)
@@ -91,7 +89,8 @@ public:
     virtual std::vector<bcos::group::GroupInfo::Ptr> groupInfoList()
     {
         std::vector<bcos::group::GroupInfo::Ptr> groupList;
-        ReadGuard l(x_nodeServiceList);
+        ReadGuard lock(x_nodeServiceList);
+        groupList.reserve(m_groupInfos.size());
         for (auto const& it : m_groupInfos)
         {
             groupList.push_back(it.second);
@@ -102,8 +101,8 @@ public:
     virtual void updateGroupBlockInfo(std::string const& _groupID, std::string const& _nodeName,
         bcos::protocol::BlockNumber _blockNumber)
     {
-        UpgradableGuard l(x_groupBlockInfos);
-        if (m_groupBlockInfos.count(_groupID))
+        UpgradableGuard lock(x_groupBlockInfos);
+        if (m_groupBlockInfos.contains(_groupID))
         {
             // expired block
             if (m_groupBlockInfos[_groupID] > _blockNumber)
@@ -112,27 +111,27 @@ public:
             }
             // has already in the m_nodesWithLatestBlockNumber
             if (m_groupBlockInfos[_groupID] == _blockNumber &&
-                m_nodesWithLatestBlockNumber.count(_groupID) &&
-                m_nodesWithLatestBlockNumber[_groupID].count(_nodeName))
+                m_nodesWithLatestBlockNumber.contains(_groupID) &&
+                m_nodesWithLatestBlockNumber[_groupID].contains(_nodeName))
             {
                 return;
             }
         }
-        UpgradeGuard ul(l);
+        UpgradeGuard ulock(lock);
         bcos::protocol::BlockNumber oldBlockNumber = 0;
-        if (m_groupBlockInfos.count(_groupID))
+        if (m_groupBlockInfos.contains(_groupID))
         {
             oldBlockNumber = m_groupBlockInfos[_groupID];
         }
-        if (!m_nodesWithLatestBlockNumber.count(_groupID))
+        if (!m_nodesWithLatestBlockNumber.contains(_groupID))
         {
             m_nodesWithLatestBlockNumber[_groupID] = std::set<std::string>();
         }
-        if (!m_groupBlockInfos.count(_groupID))
+        if (!m_groupBlockInfos.contains(_groupID))
         {
             m_groupBlockInfos[_groupID] = _blockNumber;
         }
-        // nodes with newer highest block
+        // nodes with newer the highest block
         if (oldBlockNumber < _blockNumber)
         {
             m_groupBlockInfos[_groupID] = _blockNumber;
@@ -149,19 +148,19 @@ public:
     virtual void registerGroupInfoNotifier(
         std::function<void(bcos::group::GroupInfo::Ptr)> _callback)
     {
-        m_groupInfoNotifier = _callback;
+        m_groupInfoNotifier = std::move(_callback);
     }
 
     void registerBlockNumberNotifier(
         std::function<void(std::string const&, std::string const&, bcos::protocol::BlockNumber)>
             _blockNumberNotifier)
     {
-        m_blockNumberNotifier = _blockNumberNotifier;
+        m_blockNumberNotifier = std::move(_blockNumberNotifier);
     }
     virtual bcos::protocol::BlockNumber getBlockNumberByGroup(const std::string& _groupID);
 
 protected:
-    GroupManager(std::string const& _chainID) : m_chainID(_chainID) {}
+    explicit GroupManager(std::string const& _chainID) : m_chainID(_chainID) {}
 
     bool updateGroupServices(bcos::group::GroupInfo::Ptr _groupInfo, bool _enforceUpdate);
     bool updateNodeService(std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo,
@@ -208,5 +207,4 @@ protected:
     std::function<void(std::string const&, std::string const&, bcos::protocol::BlockNumber)>
         m_blockNumberNotifier;
 };
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc

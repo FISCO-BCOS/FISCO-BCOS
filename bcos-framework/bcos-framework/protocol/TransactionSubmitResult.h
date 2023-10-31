@@ -20,9 +20,7 @@
 #pragma once
 #include "ProtocolTypeDef.h"
 #include "TransactionReceipt.h"
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class TransactionSubmitResult
 {
@@ -45,8 +43,8 @@ public:
     virtual NonceType nonce() const = 0;
     virtual void setNonce(NonceType nonce) = 0;
 
-    virtual TransactionReceipt::Ptr transactionReceipt() const = 0;
-    virtual void setTransactionReceipt(TransactionReceipt::Ptr transactionReceipt) = 0;
+    virtual TransactionReceipt::ConstPtr transactionReceipt() const = 0;
+    virtual void setTransactionReceipt(TransactionReceipt::ConstPtr transactionReceipt) = 0;
 
     virtual std::string const& sender() const = 0;
     virtual void setSender(std::string const& _sender) = 0;
@@ -57,5 +55,4 @@ public:
 
 using TransactionSubmitResults = std::vector<TransactionSubmitResult::Ptr>;
 using TransactionSubmitResultsPtr = std::shared_ptr<TransactionSubmitResults>;
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

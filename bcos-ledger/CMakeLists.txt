@@ -17,7 +17,6 @@
 # ------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.1" CACHE STRING "Minimum OS X deployment version")
 
 aux_source_directory(src/libledger SRCS)
 aux_source_directory(src/libledger/utilities SRCS)
@@ -35,7 +34,7 @@ if (TESTS)
 endif()
 
 # for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("ledger-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
-endif ()
+#if (COVERAGE)
+#    include(Coverage)
+#    config_coverage("ledger-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
+#endif ()

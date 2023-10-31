@@ -56,12 +56,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         sessionFactory = std::make_shared<WsSessionFactory>();
     }
 
-    auto threadPoolSize = _config->threadPoolSize() > 0 ? _config->threadPoolSize() :
-                                                          std::thread::hardware_concurrency();
-    if (!threadPoolSize)
-    {
-        threadPoolSize = 16;
-    }
     auto wsServiceWeakPtr = std::weak_ptr<WsService>(_wsService);
     auto ioServicePool = std::make_shared<IOServicePool>();
     _wsService->setIOServicePool(ioServicePool);
@@ -72,7 +66,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     connector->setIOServicePool(ioServicePool);
 
     auto builder = std::make_shared<WsStreamDelegateBuilder>();
-    auto threadPool = std::make_shared<ThreadPool>("t_ws_pool", threadPoolSize);
 
     // init module_name for log
     WsTools::setModuleName(m_moduleName);
@@ -116,7 +109,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
             _config->listenPort(), ioServicePool->getIOService(), srvCtx, m_moduleName);
         httpServer->setIOServicePool(ioServicePool);
         httpServer->setDisableSsl(_config->disableSsl());
-        httpServer->setThreadPool(threadPool);
         httpServer->setWsUpgradeHandler(
             [wsServiceWeakPtr](std::shared_ptr<HttpStream> _httpStream, HttpRequest&& _httpRequest,
                 std::shared_ptr<std::string> _nodeId) {
@@ -173,7 +165,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
     _wsService->setConfig(_config);
     _wsService->setConnector(connector);
-    _wsService->setThreadPool(threadPool);
     _wsService->setMessageFactory(messageFactory);
     _wsService->setSessionFactory(sessionFactory);
 
@@ -181,9 +172,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         << LOG_BADGE("initWsService") << LOG_DESC("initializer for websocket service")
         << LOG_KV("listenIP", _config->listenIP()) << LOG_KV("listenPort", _config->listenPort())
         << LOG_KV("disableSsl", _config->disableSsl()) << LOG_KV("server", _config->asServer())
-        << LOG_KV("client", _config->asClient())
-        << LOG_KV("threadPoolSize", _config->threadPoolSize())
-        << LOG_KV("maxMsgSize", _config->maxMsgSize())
+        << LOG_KV("client", _config->asClient()) << LOG_KV("maxMsgSize", _config->maxMsgSize())
         << LOG_KV("msgTimeOut", _config->sendMsgTimeout())
         << LOG_KV("connected peers", _config->connectPeers() ? _config->connectPeers()->size() : 0);
 }

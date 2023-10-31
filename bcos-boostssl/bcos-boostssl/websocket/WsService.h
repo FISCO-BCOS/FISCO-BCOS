@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include <bcos-boostssl/httpserver/HttpServer.h>
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-boostssl/websocket/Common.h>
@@ -30,6 +31,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
@@ -43,11 +45,7 @@
 #include <utility>
 #include <vector>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 using WsSessions = std::vector<std::shared_ptr<WsSession>>;
 using MsgHandler =
@@ -64,7 +62,6 @@ public:
     WsService(std::string _moduleName = "DEFAULT");
     virtual ~WsService();
 
-public:
     virtual void start();
     virtual void stop();
     virtual void reconnect();
@@ -77,7 +74,6 @@ public:
     std::string genConnectError(const std::string& _error, const std::string& endpoint, bool end);
     void syncConnectToEndpoints(EndPointsPtr _peers);
 
-public:
     std::shared_ptr<WsSession> newSession(
         std::shared_ptr<WsStreamDelegate> _wsStreamDelegate, std::string const& _nodeId);
     std::shared_ptr<WsSession> getSession(const std::string& _endPoint);
@@ -85,7 +81,6 @@ public:
     void removeSession(const std::string& _endPoint);
     WsSessions sessions();
 
-public:
     virtual void onConnect(bcos::Error::Ptr _error, std::shared_ptr<WsSession> _session);
     virtual void onDisconnect(bcos::Error::Ptr _error, std::shared_ptr<WsSession> _session);
 
@@ -109,7 +104,6 @@ public:
     virtual void broadcastMessage(
         const WsSession::Ptrs& _ss, std::shared_ptr<boostssl::MessageFace> _msg);
 
-public:
     std::shared_ptr<MessageFaceFactory> messageFactory() { return m_messageFactory; }
     void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
     {
@@ -126,12 +120,6 @@ public:
 
     std::string moduleName() { return m_moduleName; }
     void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
-
-    std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
-    void setThreadPool(std::shared_ptr<bcos::ThreadPool> _threadPool)
-    {
-        m_threadPool = _threadPool;
-    }
 
     void setIOServicePool(IOServicePool::Ptr _ioservicePool)
     {
@@ -193,6 +181,7 @@ public:
 
 private:
     bool m_running{false};
+    tbb::task_group m_taskGroup;
 
     int32_t m_waitConnectFinishTimeout = 30000;
     std::string m_moduleName;
@@ -222,7 +211,6 @@ private:
     // http server
     std::shared_ptr<bcos::boostssl::http::HttpServer> m_httpServer;
 
-private:
     // mutex for m_sessions
     mutable boost::shared_mutex x_mutex;
     // all active sessions
@@ -247,6 +235,4 @@ private:
     std::shared_ptr<boost::asio::io_context> m_timerIoc;
 };
 
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

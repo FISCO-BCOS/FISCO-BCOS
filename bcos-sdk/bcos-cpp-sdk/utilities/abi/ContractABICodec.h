@@ -221,7 +221,7 @@ struct Offset<T, List...>
 {
     enum
     {
-        value = Offset<T>::value + Offset<List...>::value
+        value = (size_t)Offset<T>::value + (size_t)Offset<List...>::value
     };
 };
 

@@ -1,4 +1,5 @@
 #pragma once
+#include <tup/Tars.h>
 #include <concepts>
 #include <string>
 
@@ -6,14 +7,6 @@ namespace bcostars::protocol::impl
 {
 
 template <class TarsStructType>
-concept TarsStruct = requires(TarsStructType tarsStruct)
-{
-    {
-        tarsStruct.className()
-        } -> std::same_as<std::string>;
-    {
-        tarsStruct.MD5()
-        } -> std::same_as<std::string>;
-    tarsStruct.resetDefautlt();
-};
+concept TarsStruct = std::derived_from<TarsStructType, tars::TarsStructBase>;
+
 }  // namespace bcostars::protocol::impl

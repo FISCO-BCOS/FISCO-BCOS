@@ -308,7 +308,7 @@ void EventSub::executeAddTasks()
     m_addTasks.clear();
 
     auto taskCount = m_tasks.size();
-    EVENT_SUB(INFO) << LOG_BADGE("executeAddTasks") << LOG_DESC("report event subscribe tasks ")
+    EVENT_SUB(INFO) << LOG_BADGE("executeAddTasks") << LOG_DESC("event subscribe tasks ")
                     << LOG_KV("count", taskCount);
 }
 
@@ -337,7 +337,7 @@ void EventSub::executeCancelTasks()
     m_cancelTasks.clear();
 
     auto taskCount = m_tasks.size();
-    EVENT_SUB(INFO) << LOG_BADGE("executeCancelTasks") << LOG_DESC("report event subscribe tasks ")
+    EVENT_SUB(INFO) << LOG_BADGE("executeCancelTasks") << LOG_DESC("event subscribe tasks ")
                     << LOG_KV("count", taskCount);
 }
 
@@ -517,8 +517,8 @@ void EventSub::processNextBlock(
                 EVENT_SUB(ERROR) << LOG_BADGE("processNextBlock")
                                  << LOG_DESC("asyncGetBlockDataByNumber")
                                  << LOG_KV("id", _task->id()) << LOG_KV("blockNumber", _blockNumber)
-                                 << LOG_KV("errorCode", _error->errorCode())
-                                 << LOG_KV("errorMessage", _error->errorMessage());
+                                 << LOG_KV("code", _error->errorCode())
+                                 << LOG_KV("message", _error->errorMessage());
                 _callback(_error);
                 return;
             }

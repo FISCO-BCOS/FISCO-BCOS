@@ -20,8 +20,8 @@
  */
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
+#include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -49,7 +49,6 @@ public:
 
 protected:
     virtual void createAndInitExecutor();
-    virtual void registerExecutor();
 
 private:
     std::string m_iniConfigPath;
@@ -60,10 +59,9 @@ private:
     bcos::initializer::ProtocolInitializer::Ptr m_protocolInitializer;
 
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
-    bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
+    bcos::executor::SwitchExecutorManager::Ptr m_executor;
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     std::string m_executorName;
     std::shared_ptr<bcos::Timer> m_timer;
-    bool m_registerExecutorSuccess = false;
 };
 }  // namespace bcostars

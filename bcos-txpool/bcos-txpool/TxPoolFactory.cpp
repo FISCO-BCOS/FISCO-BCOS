@@ -36,21 +36,22 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
     TransactionSubmitResultFactory::Ptr _txResultFactory, BlockFactory::Ptr _blockFactory,
     bcos::front::FrontServiceInterface::Ptr _frontService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::string const& _groupId,
-    std::string const& _chainId, int64_t _blockLimit)
-  : m_nodeId(_nodeId),
-    m_cryptoSuite(_cryptoSuite),
-    m_txResultFactory(_txResultFactory),
-    m_blockFactory(_blockFactory),
-    m_frontService(_frontService),
-    m_ledger(_ledger),
+    std::string const& _chainId, int64_t _blockLimit, size_t _txpoolLimit)
+  : m_nodeId(std::move(_nodeId)),
+    m_cryptoSuite(std::move(_cryptoSuite)),
+    m_txResultFactory(std::move(_txResultFactory)),
+    m_blockFactory(std::move(_blockFactory)),
+    m_frontService(std::move(_frontService)),
+    m_ledger(std::move(_ledger)),
     m_groupId(_groupId),
     m_chainId(_chainId),
-    m_blockLimit(_blockLimit)
+    m_blockLimit(_blockLimit),
+    m_txpoolLimit(_txpoolLimit)
 {}
 
 
-TxPool::Ptr TxPoolFactory::createTxPool(size_t _notifyWorkerNum, size_t _verifierWorkerNum,
-    int64_t _txsExpirationTime, bool _preStoreTxs)
+TxPool::Ptr TxPoolFactory::createTxPool(
+    size_t _notifyWorkerNum, size_t _verifierWorkerNum, uint64_t _txsExpirationTime)
 {
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
     auto txpoolNonceChecker = std::make_shared<TxPoolNonceChecker>();
@@ -58,12 +59,12 @@ TxPool::Ptr TxPoolFactory::createTxPool(size_t _notifyWorkerNum, size_t _verifie
         std::make_shared<TxValidator>(txpoolNonceChecker, m_cryptoSuite, m_groupId, m_chainId);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction config");
-    auto txpoolConfig = std::make_shared<TxPoolConfig>(
-        validator, m_txResultFactory, m_blockFactory, m_ledger, txpoolNonceChecker, m_blockLimit);
+    auto txpoolConfig = std::make_shared<TxPoolConfig>(validator, m_txResultFactory, m_blockFactory,
+        m_ledger, txpoolNonceChecker, m_blockLimit, m_txpoolLimit);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction storage");
-    auto txpoolStorage = std::make_shared<MemoryStorage>(
-        txpoolConfig, _notifyWorkerNum, _txsExpirationTime, _preStoreTxs);
+    auto txpoolStorage =
+        std::make_shared<MemoryStorage>(txpoolConfig, _notifyWorkerNum, _txsExpirationTime);
 
     auto syncMsgFactory = std::make_shared<TxsSyncMsgFactoryImpl>();
     TXPOOL_LOG(INFO) << LOG_DESC("create sync config");

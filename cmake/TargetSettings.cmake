@@ -14,7 +14,6 @@ set(CODEC_TARGET "codec")
 
 # bcos-protocol
 set(PROTOCOL_TARGET "protocol")
-set(PBPROTOCOL_TARGET "protocol-pb")
 
 # bcos-tars-protocol
 set(TARS_PROTOCOL_TARGET "protocol-tars")
@@ -33,6 +32,9 @@ set(SYNC_TARGET "sync")
 
 # bcos-pbft
 set(PBFT_TARGET "pbft")
+
+# bcos-rpbft
+set(RPBFT_TARGET "rpbft")
 
 # bcos-storage
 set(STORAGE_TARGET "storage")

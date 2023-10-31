@@ -31,3 +31,7 @@ endif()
 include(GNUInstallDirs)
 install(TARGETS ${BCOS_CPP_SDK_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-cpp-sdk" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" FILES_MATCHING PATTERN "*.h")
+
+if(WITH_SWIG_SDK)
+    add_subdirectory(SWIG)
+endif()

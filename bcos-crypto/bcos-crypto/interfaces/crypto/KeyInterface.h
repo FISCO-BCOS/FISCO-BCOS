@@ -21,9 +21,8 @@
 #pragma once
 #include <bcos-utilities/Common.h>
 #include <memory>
-namespace bcos
-{
-namespace crypto
+
+namespace bcos::crypto
 {
 class KeyInterface
 {
@@ -31,7 +30,7 @@ public:
     using Ptr = std::shared_ptr<KeyInterface>;
     using UniquePtr = std::unique_ptr<KeyInterface>;
     KeyInterface() = default;
-    virtual ~KeyInterface() {}
+    virtual ~KeyInterface() = default;
     virtual const bytes& data() const = 0;
     virtual size_t size() const = 0;
     virtual char* mutableData() = 0;
@@ -48,6 +47,7 @@ using Secret = KeyInterface;
 using PublicPtr = KeyInterface::Ptr;
 using SecretPtr = KeyInterface::Ptr;
 using NodeIDPtr = KeyInterface::Ptr;
+using NodeID = KeyInterface;
 using NodeIDs = std::vector<NodeIDPtr>;
 using NodeIDListPtr = std::shared_ptr<NodeIDs>;
 
@@ -60,7 +60,21 @@ public:
         return _first->data() < _second->data();
     }
 };
+
+struct KeyHasher
+{
+    size_t hash(KeyInterface::Ptr const& _key) const
+    {
+        size_t seed = hashString({_key->constData(), _key->size()});
+        return seed;
+    }
+
+    bool equal(const KeyInterface::Ptr& lhs, const KeyInterface::Ptr& rhs) const
+    {
+        return lhs->data() == rhs->data();
+    }
+    std::hash<std::string_view> hashString;
+};
 using NodeIDSet = std::set<bcos::crypto::NodeIDPtr, KeyCompare>;
 using NodeIDSetPtr = std::shared_ptr<NodeIDSet>;
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

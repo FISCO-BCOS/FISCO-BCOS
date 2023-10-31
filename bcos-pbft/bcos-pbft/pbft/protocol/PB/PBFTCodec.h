@@ -23,9 +23,7 @@
 #include "../../interfaces/PBFTMessageFactory.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTCodec : public PBFTCodecInterface
 {
@@ -33,10 +31,16 @@ public:
     using Ptr = std::shared_ptr<PBFTCodec>;
     PBFTCodec(bcos::crypto::KeyPairInterface::Ptr _keyPair,
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite, PBFTMessageFactory::Ptr _pbftMessageFactory)
-      : m_keyPair(_keyPair), m_cryptoSuite(_cryptoSuite), m_pbftMessageFactory(_pbftMessageFactory)
+      : m_keyPair(std::move(_keyPair)),
+        m_cryptoSuite(std::move(_cryptoSuite)),
+        m_pbftMessageFactory(std::move(_pbftMessageFactory))
     {}
+    PBFTCodec(PBFTCodec const&) = delete;
+    PBFTCodec& operator=(PBFTCodec const&) = delete;
+    PBFTCodec(PBFTCodec&&) = delete;
+    PBFTCodec& operator=(PBFTCodec&&) = delete;
 
-    ~PBFTCodec() override {}
+    ~PBFTCodec() override = default;
 
     bytesPointer encode(
         PBFTBaseMessageInterface::Ptr _pbftMessage, int32_t _version = 0) const override;
@@ -56,5 +60,4 @@ private:
 
     PBFTMessageFactory::Ptr m_pbftMessageFactory;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

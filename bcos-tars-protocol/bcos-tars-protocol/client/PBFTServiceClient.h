@@ -149,10 +149,21 @@ public:
             "PBFTServiceClient: asyncNoteLatestBlockNumber: unimplemented interface!");
     }
 
+    void asyncNoteLatestBlockHash(bcos::crypto::HashType) override
+    {
+        throw std::runtime_error(
+            "PBFTServiceClient: asyncNoteLatestBlockHash: unimplemented interface!");
+    }
+
     // the consensus module notify the sealer to reset sealing when viewchange
     void asyncResetSealing(std::function<void(bcos::Error::Ptr)> _onRecvResponse) override
     {
         throw std::runtime_error("PBFTServiceClient: asyncResetSealing: unimplemented interface!");
+    }
+
+    uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr) override
+    {
+        throw std::runtime_error("PBFTServiceClient: hookWhenSealBlock: unimplemented interface!");
     }
 
     void asyncGetConsensusStatus(

@@ -1,10 +1,3 @@
-[chain]
-    ; use SM crypto or not, should never be changed
-    sm_crypto=false
-    ; the group id, should never be changed
-    group_id=group0
-    ; the chain id, should never be changed
-    chain_id=chain0
 [service]
     rpc=chain0
     gateway=chain0
@@ -15,6 +8,12 @@
 
 [security]
     private_key_path=conf/node.pem
+    enable_hsm=false
+    ; path of hsm dynamic library
+    ;hsm_lib_path=
+    ;key_index=
+    ;password=
+    ;hsm_public_key_file_path=
 
 [storage_security]
     ; enable data disk encryption or not, default is false
@@ -26,6 +25,9 @@
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
+
+[executor]
+    enable_dag=true
 
 [storage]
     data_path=data
@@ -44,6 +46,11 @@
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
 
+[sync]
+    sync_block_by_tree=false
+    send_txs_by_tree=false
+    tree_width=3
+
 [failover]
     ; enable failover or not, default disable
     enable = false
@@ -61,4 +68,5 @@
     level=info
     ; MB
     max_log_file_size=200
+    enable_rate_collector=false
 

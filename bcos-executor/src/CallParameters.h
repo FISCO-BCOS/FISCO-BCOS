@@ -36,6 +36,7 @@ struct CallParameters
     std::string receiveAddress;  // common field, readable format
     std::string origin;          // common field, readable format
 
+    /// WARNING: gasLeft, be cautious to assign value
     int64_t gas = 0;   // common field
     bcos::bytes data;  // common field, transaction data, binary format
     std::string abi;   // common field, contract abi, json format
@@ -49,6 +50,7 @@ struct CallParameters
     std::string newEVMContractAddress;                 // by response, readable format
 
     int32_t status = 0;  // by response
+    int32_t evmStatus = 0;
     Type type;
     bool staticCall = false;      // common field
     bool create = false;          // by request, is creation
@@ -59,6 +61,12 @@ struct CallParameters
      * certain precompiled contract
      */
     bool internalCall = false;
+
+    // delegateCall
+    bool delegateCall = false;
+    bytes delegateCallCode;
+    std::string delegateCallSender;
+    bool hasContractTableChanged = false;
 
     std::string toString()
     {
@@ -100,8 +108,19 @@ struct CallParameters
            << "message:" << message << "|"
            << "newEVMContractAddress:" << newEVMContractAddress << "|"
            << "staticCall:" << staticCall << "|"
-           << "create :" << create << "|";
+           << "create :" << create << "|"
+           << "delegateCall:" << delegateCall << "|"
+           << "delegateCallSender" << delegateCallSender  << "|"
+            << "hasContractTableChanged" << hasContractTableChanged;
         // clang-format on
+        ss << "|logEntries: ";
+        for (const auto& logEntry : logEntries)
+        {
+            ss << "[" << logEntry.address() << "|"
+               << toHexStringWithPrefix(
+                      h256((byte*)logEntry.topics().data(), logEntry.topics().size()))
+               << "|" << toHexStringWithPrefix(logEntry.data()) << "]";
+        }
         return ss.str();
     }
 };

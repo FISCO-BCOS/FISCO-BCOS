@@ -44,7 +44,8 @@ public:
 
     std::string getChecksum()
     {
-        return toHex(m_checksum) + ":" + getSendChecksum() + ":" + getReceiveChecksum();
+        return toHex(m_checksum) + ":" + getSendChecksum() + ":" + getReceiveChecksum() + ":" +
+               std::to_string(m_round);
     }
 
     std::string getSendChecksum() { return toHex(m_sendChecksum); }

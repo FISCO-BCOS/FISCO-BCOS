@@ -108,6 +108,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     // Generate a test block
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(100);
+    block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     for (size_t i = 0; i < 10; ++i)
     {

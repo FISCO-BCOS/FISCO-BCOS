@@ -29,18 +29,11 @@ namespace bcos::crypto::trivial
 {
 
 template <class Object>
-concept Value = std::is_trivial_v<std::remove_cvref_t<Object>> &&
-    !std::is_pointer_v<std::remove_cvref_t<Object>>;
+concept Value = std::is_trivial_v<std::remove_cvref_t<Object>> && !std::is_pointer_v<std::remove_cvref_t<Object>>;
 
-#if (defined __clang__) && (__clang_major__ < 15)
-template <class Object>
-concept Range = RANGES::range<std::remove_cvref_t<Object>> &&
-    std::is_trivial_v<std::remove_cvref_t<RANGES::range_value_t<Object>>>;
-#else
 template <class Object>
 concept Range = RANGES::contiguous_range<std::remove_cvref_t<Object>> &&
     std::is_trivial_v<std::remove_cvref_t<RANGES::range_value_t<Object>>>;
-#endif
 
 template <class Input>
 concept Object = Value<Input> || Range<Input>;
@@ -58,16 +51,14 @@ constexpr auto toView(trivial::Object auto&& object)
     if constexpr (trivial::Value<RawType>)
     {
         using ByteType =
-            std::conditional_t<std::is_const_v<std::remove_reference_t<decltype(object)>>,
-                std::byte const, std::byte>;
+            std::conditional_t<std::is_const_v<std::remove_reference_t<decltype(object)>>, std::byte const, std::byte>;
         std::span<ByteType> view{(ByteType*)&object, sizeof(object)};
 
         return view;
     }
     else if constexpr (trivial::Range<RawType>)
     {
-        using ByteType = std::conditional_t<
-            std::is_const_v<std::remove_reference_t<RANGES::range_value_t<RawType>>>,
+        using ByteType = std::conditional_t<std::is_const_v<std::remove_reference_t<RANGES::range_value_t<RawType>>>,
             std::byte const, std::byte>;
         std::span<ByteType> view{(ByteType*)std::data(object),
             sizeof(std::remove_cvref_t<RANGES::range_value_t<RawType>>) * RANGES::size(object)};
@@ -83,14 +74,14 @@ constexpr auto toView(trivial::Object auto&& object)
 template <class Range>
 concept DynamicRange = requires(Range range, size_t newSize)
 {
-    RANGES::range<Range>;
+    requires RANGES::range<Range>;
     range.resize(newSize);
     range.reserve(newSize);
 };
 
 void resizeTo(RANGES::range auto& out, size_t size)
 {
-    if (RANGES::size(out) < size)
+    if ((size_t)RANGES::size(out) < size)
     {
         if constexpr (DynamicRange<std::remove_cvref_t<decltype(out)>>)
         {

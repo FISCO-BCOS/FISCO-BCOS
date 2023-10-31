@@ -35,9 +35,9 @@ class SmallBankPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<SmallBankPrecompiled>;
 
-    SmallBankPrecompiled(crypto::Hash::Ptr _hashImpl, std::string _tableName);
+    SmallBankPrecompiled(crypto::Hash::Ptr hashImpl, std::string _tableName);
 
-    virtual ~SmallBankPrecompiled(){};
+    ~SmallBankPrecompiled() override{};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
@@ -56,10 +56,7 @@ public:
         return addressBytes.hex();
     }
 
-    static void registerPrecompiled(std::shared_ptr<storage::StorageInterface> storageInterface,
-        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-            registeredMap,
-        crypto::Hash::Ptr _hashImpl)
+    static void createTable(std::shared_ptr<storage::StorageInterface> storageInterface)
     {
         for (int id = 0; id < SMALLBANK_CONTRACT_NUM; id++)
         {
@@ -73,12 +70,23 @@ public:
                     createPromise.set_value(std::move(_e));
                 });
             Error::UniquePtr _e = createPromise.get_future().get();
-            BCOS_LOG(TRACE) << LOG_BADGE("SmallBank") << "create smallbank table"
-                            << LOG_KV("table", _tableName)
-                            << (_e == nullptr ? "" : " withError: " + _e->errorMessage());
+
+            BCOS_LOG(DEBUG) << LOG_BADGE("SmallBank") << "Create SmallBankPrecompiled Table"
+                            << LOG_KV("_tableName", _tableName);
+        }
+    }
+
+    static void registerPrecompiled(
+        executor::PrecompiledMap::Ptr const& registeredMap, crypto::Hash::Ptr hashImpl)
+    {
+        std::string path = std::string{bcos::ledger::SMALLBANK_TRANSFER};
+        for (int id = 0; id < SMALLBANK_CONTRACT_NUM; id++)
+        {
+            std::string _tableName = std::to_string(id);
+            _tableName = path + _tableName;
             std::string&& address = getAddress(id);
-            registeredMap->insert({std::move(address),
-                std::make_shared<precompiled::SmallBankPrecompiled>(_hashImpl, _tableName)});
+            registeredMap->insert(
+                std::move(address), std::make_shared<SmallBankPrecompiled>(hashImpl, _tableName));
         }
         BCOS_LOG(TRACE) << LOG_BADGE("SmallBank") << "Register SmallBankPrecompiled complete"
                         << LOG_KV("addressFrom", getAddress(0))

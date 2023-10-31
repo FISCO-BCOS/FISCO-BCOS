@@ -23,14 +23,9 @@
 #include <bcos-crypto/signature/key/KeyImpl.h>
 #include <bcos-utilities/FixedBytes.h>
 
-namespace bcos
+namespace bcos::crypto
 {
-namespace crypto
-{
-Address inline calculateAddress(Hash::Ptr _hashImpl, PublicPtr _publicKey)
-{
-    return right160(_hashImpl->hash(_publicKey));
-}
+
 
 class KeyPair : public KeyPairInterface
 {
@@ -48,7 +43,7 @@ public:
         m_type(_type)
     {}
 
-    ~KeyPair() override {}
+    ~KeyPair() override = default;
     KeyPairType keyPairType() const override { return m_type; }
     SecretPtr secretKey() const override { return m_secretKey; }
     PublicPtr publicKey() const override { return m_publicKey; }
@@ -63,5 +58,4 @@ protected:
     SecretPtr m_secretKey;
     KeyPairType m_type;
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

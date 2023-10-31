@@ -19,7 +19,8 @@ namespace gateway
 class P2PMessage;
 class Service;
 
-class P2PSession : public std::enable_shared_from_this<P2PSession>
+class P2PSession : public std::enable_shared_from_this<P2PSession>,
+                   public bcos::ObjectCounter<P2PSession>
 {
 public:
     using Ptr = std::shared_ptr<P2PSession>;
@@ -30,7 +31,7 @@ public:
 
     virtual void start();
     virtual void stop(DisconnectReason reason);
-    virtual bool actived() { return m_run; }
+    virtual bool active() { return m_run; }
     virtual void heartBeat();
 
     virtual SessionFace::Ptr session() { return m_session; }
@@ -57,7 +58,8 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const
     {
-        ReadGuard l(x_protocolInfo);
+        // TODO: check if the lock below is necessary?
+        // ReadGuard l(x_protocolInfo);
         return m_protocolInfo;
     }
 

@@ -50,9 +50,9 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
     auto codec =
-        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext.hashHandler(), blockContext.isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
 
     if (func == name2Selector[RING_SIG_METHOD_SET_STR])
@@ -94,6 +94,6 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
         _callParameters->setExecResult(codec->encode((int32_t)CODE_UNKNOW_FUNCTION_CALL, false));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }

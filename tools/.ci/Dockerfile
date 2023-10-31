@@ -8,7 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SOURCE=${SOURCE_BRANCH:-master}
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     curl git clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
-    libgmp-dev flex bison patch libzstd-dev unzip ninja-build pkg-config curl zip tar \
+    libgmp-dev flex bison patch libzstd-dev unzip ninja-build pkg-config curl zip tar ccache uuid-runtime automake autoconf \
     && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && apt-get install -qy --no-install-recommends tzdata \
     && dpkg-reconfigure --frontend noninteractive tzdata \
@@ -25,7 +25,7 @@ ENV VCPKG_FORCE_SYSTEM_BINARIES=1
 
 RUN git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git --recursive --depth=1 -b ${SOURCE} \
     && mkdir -p FISCO-BCOS/build && cd FISCO-BCOS/build \
-    && cmake .. && make -j2 && strip fisco-bcos-air/fisco-bcos || cat /FISCO-BCOS/build/*.log
+    && cmake .. -DBUILD_STATIC=ON && make -j8 && strip fisco-bcos-air/fisco-bcos || cat /FISCO-BCOS/build/*.log
 
 
 FROM ubuntu:20.04

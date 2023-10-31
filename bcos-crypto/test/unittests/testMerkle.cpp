@@ -1,5 +1,6 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/archive/basic_archive.hpp>
@@ -16,7 +17,7 @@
 #include <random>
 #include <stdexcept>
 
-using HashType = std::array<std::byte, 32>;
+using HashType = std::array<uint8_t, 32>;
 
 namespace std
 {
@@ -31,10 +32,13 @@ std::ostream& operator<<(std::ostream& stream, const HashType& hash)
 }
 }  // namespace std
 
+
 namespace bcos::test
 {
 
 using namespace bcos::crypto::merkle;
+using MerkleProof = std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>;
+using MerkleProofPtr = std::shared_ptr<MerkleProof>;
 
 struct TestBinaryMerkleTrieFixture
 {
@@ -59,7 +63,7 @@ template <size_t width>
 void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashes)
 {
     HashType emptyHash;
-    emptyHash.fill(std::byte(0));
+    emptyHash.fill(0);
     auto seed = std::random_device{}();
 
     for (auto count = 0lu; count < RANGES::size(inputHashes); ++count)
@@ -67,7 +71,7 @@ void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashe
         std::span<HashType const> hashes(inputHashes.data(), count);
 
         bcos::crypto::merkle::Merkle<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher, width>
-            trie;
+            trie(bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher{});
         std::vector<HashType> out;
         BOOST_CHECK_THROW(trie.generateMerkle(std::vector<HashType>{}, out),
             boost::wrapexcept<std::invalid_argument>);
@@ -135,6 +139,27 @@ BOOST_AUTO_TEST_CASE(merkle)
 {
     constexpr static size_t testCount = 16;
     loopWidthTest<testCount>(hashes);
+}
+
+template <typename Hasher>
+std::shared_ptr<std::string> calculateRootByMerkleProof(
+    const bcos::bytes& _txHash, MerkleProofPtr merkleProof, Hasher& hasher)
+{
+    auto txHash = _txHash;
+    for (auto& oneLevel : *merkleProof)
+    {
+        auto& left = oneLevel.first;
+        auto& right = oneLevel.second;
+        // left
+        std::for_each(left.begin(), left.end(),
+            [&hasher](const std::string& _hash) { hasher.update(*fromHexString(_hash)); });
+        hasher.update(txHash);
+        // right
+        std::for_each(right.begin(), right.end(),
+            [&hasher](const std::string& _hash) { hasher.update(*fromHexString(_hash)); });
+        hasher.final(txHash);
+    }
+    return toHexString(txHash);
 }
 
 BOOST_AUTO_TEST_CASE(performance) {}
