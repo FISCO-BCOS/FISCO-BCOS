@@ -17,17 +17,14 @@ public:
     TestTransactionExecutorImplFixture()
     {
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-        precompiledManager.emplace(std::make_shared<bcos::crypto::Keccak256>());
     }
-
-    std::optional<PrecompiledManager> precompiledManager;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TransactionExecutorImpl, TestTransactionExecutorImplFixture)
 
 BOOST_AUTO_TEST_CASE(execute)
 {
-    task::syncWait([this]() mutable -> task::Task<void> {
+    task::syncWait([]() mutable -> task::Task<void> {
         memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
 
         auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
@@ -35,10 +32,11 @@ BOOST_AUTO_TEST_CASE(execute)
         bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory(cryptoSuite);
 
         bcos::transaction_executor::TransactionExecutorImpl executor(
-            receiptFactory, *precompiledManager);
+            receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl);
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+        blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
         bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
 
@@ -49,7 +47,6 @@ BOOST_AUTO_TEST_CASE(execute)
             transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
         auto receipt = co_await bcos::transaction_executor::execute(
             executor, storage, blockHeader, *transaction, 0);
-
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 

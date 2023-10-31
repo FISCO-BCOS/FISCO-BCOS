@@ -3,6 +3,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
+#include "precompiled/PrecompiledManager.h"
 #include "transaction-executor/bcos-transaction-executor/RollbackableStorage.h"
 #include "transaction-executor/bcos-transaction-executor/vm/VMInstance.h"
 #include "vm/HostContext.h"
@@ -25,25 +26,23 @@ namespace bcos::transaction_executor
 struct InvalidArgumentsError: public bcos::Error {};
 // clang-format on
 
-template <class PrecompiledManager>
 class TransactionExecutorImpl
 {
 public:
-    TransactionExecutorImpl(protocol::TransactionReceiptFactory const& receiptFactory,
-        PrecompiledManager const& precompiledManager)
-      : m_receiptFactory(receiptFactory), m_precompiledManager(precompiledManager)
+    TransactionExecutorImpl(
+        protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl)
+      : m_receiptFactory(receiptFactory), m_precompiledManager(std::move(hashImpl))
     {}
 
 private:
     VMFactory m_vmFactory;
     protocol::TransactionReceiptFactory const& m_receiptFactory;
-    PrecompiledManager const& m_precompiledManager;
+    PrecompiledManager m_precompiledManager;
 
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(tag_t<execute> /*unused*/,
         TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID)
     {
-        constexpr static uint64_t TRANSACTION_GAS = 3000000000;
         try
         {
             if (c_fileLogLevel <= LogLevel::TRACE)
