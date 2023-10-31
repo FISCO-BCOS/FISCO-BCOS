@@ -37,8 +37,8 @@ public:
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
-    uint8_t getAccountStatus(const std::string& accountTable,
-        const std::shared_ptr<executor::TransactionExecutive>& _executive) const;
+    static uint8_t getAccountStatus(const std::string& accountTable,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive);
 
 private:
     void setAccountStatus(const std::string& tableName,
@@ -67,6 +67,6 @@ private:
 
 private:
     // Fake storage for balance,should be removed after real implementation
-    mutable std::map<std::string,u256>  m_fakeAccountBalances;
+    mutable std::map<std::string, u256> m_fakeAccountBalances;
 };
 }  // namespace bcos::precompiled
