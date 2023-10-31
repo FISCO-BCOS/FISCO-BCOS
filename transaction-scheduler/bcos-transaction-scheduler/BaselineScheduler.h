@@ -72,17 +72,15 @@ bcos::h256 calcauteTransactionRoot(protocol::Block const& block, crypto::Hash co
  */
 std::chrono::milliseconds::rep current();
 
+
 /**
- * Calculates the state root hash for a given block header using the provided storage and hash
- * implementation.
+ * Calculates the state root of the given storage using the specified hash implementation.
  *
- * @param storage The storage to use for retrieving the block data.
- * @param blockHeader The block header for which to calculate the state root hash.
- * @param hashImpl The hash implementation to use for calculating the state root hash.
- * @return A task that will eventually resolve to the calculated state root hash.
+ * @param storage The storage to calculate the state root for.
+ * @param hashImpl The hash implementation to use for the calculation.
+ * @return A task that will eventually resolve to the calculated state root.
  */
-task::Task<bcos::h256> calculateStateRoot(
-    auto& storage, protocol::BlockHeader const& blockHeader, crypto::Hash const& hashImpl)
+task::Task<bcos::h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
 {
     auto blockVersion = true ? (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION :
                                (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION;
@@ -94,6 +92,9 @@ task::Task<bcos::h256> calculateStateRoot(
 
     tbb::combinable<bcos::h256> combinableHash;
     tbb::task_group taskGroup;
+
+    storage::Entry deletedEntry;
+    deletedEntry.setStatus(storage::Entry::DELETED);
     for (auto&& subrange : range)
     {
         taskGroup.run([&]() {
@@ -104,12 +105,9 @@ task::Task<bcos::h256> calculateStateRoot(
                 auto [key, entry] = keyValue;
                 auto& [tableName, keyName] = *key;
 
-                std::optional<storage::Entry> deletedEntry;
                 if (!entry)
                 {
-                    deletedEntry.emplace();
-                    deletedEntry->setStatus(storage::Entry::DELETED);
-                    entry = std::addressof(*deletedEntry);
+                    entry = std::addressof(deletedEntry);
                 }
 
                 if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
@@ -141,7 +139,7 @@ task::Task<bcos::h256> calculateStateRoot(
  */
 void finishExecute(auto& storage, RANGES::range auto const& receipts,
     protocol::BlockHeader const& blockHeader, protocol::BlockHeader& newBlockHeader,
-    protocol::Block& newBlock, crypto::Hash const& hashImpl)
+    protocol::Block& block, crypto::Hash const& hashImpl)
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
@@ -153,24 +151,25 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
             for (auto&& [receipt, index] : RANGES::views::zip(receipts, RANGES::views::iota(0UL)))
             {
                 totalGas += receipt->gasUsed();
-                if (index < newBlock.receiptsSize())
+                if (index < block.receiptsSize())
                 {
-                    newBlock.setReceipt(index, receipt);
+                    block.setReceipt(index, receipt);
                 }
                 else
                 {
-                    newBlock.appendReceipt(receipt);
+                    block.appendReceipt(receipt);
                 }
             }
             newBlockHeader.setGasUsed(totalGas);
         },
         [&]() {
-            // Calcaute state root
-            newBlockHeader.setStateRoot(
-                task::tbb::syncWait(calculateStateRoot(storage, blockHeader, hashImpl)));
+            newBlockHeader.setTxsRoot(calcauteTransactionRoot(block, hashImpl));
+            // TODO: write merkle into storage
         },
         [&]() {
-            // Calcaute receipts root
+            newBlockHeader.setStateRoot(task::tbb::syncWait(calculateStateRoot(storage, hashImpl)));
+        },
+        [&]() {
             bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
             auto hashesRange = receipts | RANGES::views::transform(
                                               [](const auto& receipt) { return receipt->hash(); });
@@ -178,6 +177,7 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
             std::vector<bcos::h256> merkleTrie;
             merkle.generateMerkle(hashesRange, merkleTrie);
             newBlockHeader.setReceiptsRoot(*RANGES::rbegin(merkleTrie));
+            // TODO: write merkle into storage
         });
 }
 
@@ -259,21 +259,6 @@ private:
                 << "Execute block: " << blockHeader->number() << " | " << verify << " | "
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
 
-            // start calucate transaction root
-            std::promise<bcos::h256> transactionRootPromise;
-            tbb::task_group executionGroup;
-            executionGroup.run([&]() {
-                try
-                {
-                    transactionRootPromise.set_value(
-                        calcauteTransactionRoot(*block, scheduler.m_hashImpl));
-                }
-                catch (...)
-                {
-                    transactionRootPromise.set_exception(std::current_exception());
-                }
-            });
-
             scheduler.m_multiLayerStorage.newMutable();
             auto view = scheduler.m_multiLayerStorage.fork(true);
             auto constTransactions = co_await getTransactions(scheduler.m_txpool, *block);
@@ -287,9 +272,23 @@ private:
             auto newBlockHeader = scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
             finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts, *blockHeader,
                 *newBlockHeader, *block, scheduler.m_hashImpl);
-            executionGroup.wait();
-            newBlockHeader->setTxsRoot(transactionRootPromise.get_future().get());
             newBlockHeader->calculateHash(scheduler.m_hashImpl);
+            if (c_fileLogLevel <= DEBUG)
+            {
+                try
+                {
+                    BASELINE_SCHEDULER_LOG(DEBUG)
+                        << newBlockHeader->hash() << " | " << newBlockHeader->version() << " | "
+                        << newBlockHeader->number() << " | " << newBlockHeader->stateRoot() << " | "
+                        << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot()
+                        << " | " << newBlockHeader->gasUsed() << " | "
+                        << newBlockHeader->timestamp();
+                }
+                catch (std::exception& e)
+                {
+                    BASELINE_SCHEDULER_LOG(ERROR) << boost::diagnostic_information(e);
+                }
+            }
 
             if (verify && (newBlockHeader->hash() != blockHeader->hash()))
             {
@@ -319,9 +318,9 @@ private:
                     .m_block = std::move(block)});
 
             BASELINE_SCHEDULER_LOG(INFO)
-                << "Execute block finished: "
-                << static_cast<protocol::BlockVersion>(newBlockHeader->version()) << " | "
-                << newBlockHeader->number() << " | blockHash: " << newBlockHeader->hash()
+                << "Execute block finished: " << newBlockHeader->number() << " | "
+                << static_cast<protocol::BlockVersion>(newBlockHeader->version())
+                << " | blockHash: " << newBlockHeader->hash()
                 << " | stateRoot: " << newBlockHeader->stateRoot()
                 << " | txRoot: " << newBlockHeader->txsRoot()
                 << " | receiptRoot: " << newBlockHeader->receiptsRoot()

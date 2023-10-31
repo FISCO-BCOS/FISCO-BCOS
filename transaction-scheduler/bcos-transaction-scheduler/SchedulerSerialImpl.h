@@ -16,7 +16,6 @@ private:
         tag_t<execute> /*unused*/, SchedulerSerialImpl& /*unused*/, auto& storage, auto& executor,
         protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
     {
-        auto& view = storage;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
         if constexpr (RANGES::sized_range<decltype(transactions)>)
         {
@@ -27,7 +26,7 @@ private:
         for (auto const& transaction : transactions)
         {
             receipts.emplace_back(co_await transaction_executor::execute(
-                executor, view, blockHeader, transaction, contextID));
+                executor, storage, blockHeader, transaction, contextID));
             contextID++;
         }
 
