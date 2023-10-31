@@ -136,6 +136,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
     case EVMC_CREATE2:
         request->createSalt = fromEvmC(_msg->create2_salt);
+        request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+        request->create = true;
         break;
     case EVMC_CALL:
         if (m_executive->blockContext().lock()->isWasm())

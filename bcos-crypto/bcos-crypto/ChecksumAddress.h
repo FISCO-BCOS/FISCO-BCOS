@@ -100,12 +100,12 @@ inline std::string newEVMAddress(
 inline std::string newEVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::string_view& _sender,
     bytesConstRef _init, u256 const& _salt)
 {
-    auto hash =
-        _hashImpl->hash(bytes{0xff} + _sender + toBigEndian(_salt) + _hashImpl->hash(_init));
+    auto hash = _hashImpl->hash(
+        bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) + _hashImpl->hash(_init));
 
     std::string hexAddress;
     hexAddress.reserve(40);
-    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
+    boost::algorithm::hex(hash.data() + 12, hash.data() + 32, std::back_inserter(hexAddress));
 
     toAddress(hexAddress, _hashImpl);
 
