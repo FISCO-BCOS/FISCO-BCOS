@@ -161,7 +161,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
 
     // set value
     message->setValue(std::string(tx->value()));
-    message->setGasLimit(std::string(tx->gasLimit()));
+    message->setGasLimit(tx->gasLimit());
     message->setGasPrice(std::string(tx->gasPrice()));
     message->setMaxFeePerGas(std::string(tx->maxFeePerGas()));
     message->setMaxPriorityFeePerGas(std::string(tx->maxPriorityFeePerGas()));

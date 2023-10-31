@@ -34,7 +34,6 @@ using namespace bcos::precompiled;
 using namespace bcos::ledger;
 
 const char* const BALANCE_METHOD_GET_BALANCE = "getBalance(address)";
-const char* const BALANCE_METHOD_SET_BALANCE = "setBalance(address,uint256)";
 const char* const BALANCE_METHOD_ADD_BALANCE = "addBalance(address,uint256)";
 const char* const BALANCE_METHOD_SUB_BALANCE = "subBalance(address,uint256)";
 const char* const BALANCE_METHOD_TRANSFER = "transfer(address,address,uint256)";
@@ -45,8 +44,7 @@ BalancePrecompiled::BalancePrecompiled(crypto::Hash::Ptr _hashImpl) : Precompile
 {
     name2Selector[BALANCE_METHOD_GET_BALANCE] =
         getFuncSelector(BALANCE_METHOD_GET_BALANCE, _hashImpl);
-    name2Selector[BALANCE_METHOD_SET_BALANCE] =
-        getFuncSelector(BALANCE_METHOD_SET_BALANCE, _hashImpl);
+
     name2Selector[BALANCE_METHOD_ADD_BALANCE] =
         getFuncSelector(BALANCE_METHOD_ADD_BALANCE, _hashImpl);
     name2Selector[BALANCE_METHOD_SUB_BALANCE] =
@@ -77,10 +75,6 @@ std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
     {
         getBalance(_executive, _callParameters);
     }
-    else if (func == name2Selector[BALANCE_METHOD_SET_BALANCE])
-    {
-        setBalance(_executive, _callParameters);
-    }
     else if (func == name2Selector[BALANCE_METHOD_ADD_BALANCE])
     {
         addBalance(_executive, _callParameters);
@@ -109,11 +103,6 @@ std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
 }
 
 void BalancePrecompiled::getBalance(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    PrecompiledExecResult::Ptr const& _callParameters)
-{}
-
-void BalancePrecompiled::setBalance(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr const& _callParameters)
 {}

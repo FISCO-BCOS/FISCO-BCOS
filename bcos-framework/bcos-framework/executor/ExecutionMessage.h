@@ -144,8 +144,8 @@ public:
     virtual std::string_view gasPrice() const = 0;
     virtual void setGasPrice(std::string gasPrice) = 0;
 
-    virtual std::string_view gasLimit() const = 0;
-    virtual void setGasLimit(std::string gasLimit) = 0;
+    virtual int64_t gasLimit() const = 0;
+    virtual void setGasLimit(int64_t gasLimit) = 0;
 
     virtual std::string_view maxFeePerGas() const = 0;
     virtual void setMaxFeePerGas(std::string maxFeePerGas) = 0;

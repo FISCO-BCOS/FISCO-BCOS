@@ -2638,7 +2638,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     }
     callParameters->value = s256(input.value());
     callParameters->gasPrice = s256(input.gasPrice());
-    callParameters->gasLimit = s256(input.gasLimit());
+    callParameters->gasLimit = input.gasLimit();
     callParameters->maxFeePerGas = s256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = s256(input.maxPriorityFeePerGas());
 
@@ -2673,7 +2673,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCallSender = "";
     callParameters->value = s256(input.value());
     callParameters->gasPrice = s256(input.gasPrice());
-    callParameters->gasLimit = s256(input.gasLimit());
+    callParameters->gasLimit = input.gasLimit();
     callParameters->maxFeePerGas = s256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = s256(input.maxPriorityFeePerGas());
 

@@ -95,8 +95,8 @@ public:
     std::string_view gasPrice() const override { return m_inner()->gasPrice; }
     void setGasPrice(std::string gasPrice) override { m_inner()->gasPrice = gasPrice; }
 
-    std::string_view gasLimit() const override { return m_inner()->gasLimit; }
-    void setGasLimit(std::string gasLimit) override { m_inner()->gasLimit = gasLimit; }
+    int64_t gasLimit() const override { return m_inner()->gasLimit; }
+    void setGasLimit(int64_t gasLimit) override { m_inner()->gasLimit = gasLimit; }
 
     std::string_view maxFeePerGas() const override { return m_inner()->maxFeePerGas; }
     void setMaxFeePerGas(std::string maxFeePerGas) override

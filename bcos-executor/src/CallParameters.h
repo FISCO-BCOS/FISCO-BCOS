@@ -44,7 +44,7 @@ struct CallParameters
     // balance
     s256 value = 0;
     s256 gasPrice = 0;
-    s256 gasLimit = 0;
+    int64_t gasLimit = 0;
     s256 maxFeePerGas = 0;
     s256 maxPriorityFeePerGas = 0;
 

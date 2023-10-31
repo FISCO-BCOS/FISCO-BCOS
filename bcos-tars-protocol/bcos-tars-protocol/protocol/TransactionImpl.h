@@ -76,7 +76,7 @@ public:
 
     std::string_view value() const override;
     std::string_view gasPrice() const override;
-    std::string_view gasLimit() const override;
+    int64_t gasLimit() const override;
     std::string_view maxFeePerGas() const override;
     std::string_view maxPriorityFeePerGas() const override;
 

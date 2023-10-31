@@ -97,7 +97,7 @@ public:
     // balance
     virtual std::string_view value() const = 0;
     virtual std::string_view gasPrice() const = 0;
-    virtual std::string_view gasLimit() const = 0;
+    virtual int64_t gasLimit() const = 0;
     virtual std::string_view maxFeePerGas() const = 0;
     virtual std::string_view maxPriorityFeePerGas() const = 0;
 

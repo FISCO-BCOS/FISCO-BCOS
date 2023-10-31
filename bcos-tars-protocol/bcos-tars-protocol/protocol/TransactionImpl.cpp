@@ -108,7 +108,7 @@ std::string_view bcostars::protocol::TransactionImpl::gasPrice() const
     return m_inner()->data.gasPrice;
 }
 
-std::string_view bcostars::protocol::TransactionImpl::gasLimit() const
+int64_t bcostars::protocol::TransactionImpl::gasLimit() const
 {
     return m_inner()->data.gasLimit;
 }

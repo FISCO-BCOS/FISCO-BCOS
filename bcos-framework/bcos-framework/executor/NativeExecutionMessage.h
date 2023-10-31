@@ -45,8 +45,8 @@ public:
     std::string_view gasPrice() const override { return m_gasPrice; }
     void setGasPrice(std::string gasPrice) override { m_gasPrice = std::move(gasPrice); }
 
-    std::string_view gasLimit() const override { return m_gasLimit; }
-    void setGasLimit(std::string gasLimit) override { m_gasLimit = std::move(gasLimit); }
+    int64_t gasLimit() const override { return m_gasLimit; }
+    void setGasLimit(int64_t gasLimit) override { m_gasLimit = gasLimit; }
 
     std::string_view maxFeePerGas() const override { return m_maxFeePerGas; }
     void setMaxFeePerGas(std::string maxFeePerGas) override
@@ -171,7 +171,7 @@ public:
 
     std::string m_value;
     std::string m_gasPrice;
-    std::string m_gasLimit;
+    int64_t m_gasLimit;
     std::string m_maxFeePerGas;
     std::string m_maxPriorityFeePerGas;
     std::string m_effectiveGasPrice;

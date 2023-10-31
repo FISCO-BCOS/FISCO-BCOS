@@ -40,9 +40,6 @@ private:
     void getBalance(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
 
-    void setBalance(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        PrecompiledExecResult::Ptr const& _callParameters);
-
     void addBalance(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
 

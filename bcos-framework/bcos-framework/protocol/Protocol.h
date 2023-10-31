@@ -129,10 +129,10 @@ enum class BlockVersion : uint32_t
     MAX_VERSION = V3_5_VERSION,
 };
 
-enum class TransactionVersion : int32_t
+enum class TransactionVersion : uint32_t
 {
-    V0_0_VERSION = 0x00000000,
-    V1_0_VERSION = 0x01000000,
+    V0_VERSION = 0x00000000,
+    V1_VERSION = 0x00000001,
 
 };
 
