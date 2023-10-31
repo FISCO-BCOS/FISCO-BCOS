@@ -138,19 +138,21 @@ task::Task<bcos::h256> calculateStateRoot(auto& storage, crypto::Hash const& has
  * @param hashImpl The hash implementation used to calculate the block hash.
  */
 void finishExecute(auto& storage, RANGES::range auto const& receipts,
-    protocol::BlockHeader const& blockHeader, protocol::BlockHeader& newBlockHeader,
-    protocol::Block& block, crypto::Hash const& hashImpl)
+    protocol::BlockHeader& newBlockHeader, protocol::Block& block, crypto::Hash const& hashImpl)
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
+    u256 gasUsed;
+    h256 transactionRoot;
+    h256 stateRoot;
+    h256 receiptRoot;
 
     tbb::parallel_invoke(
         [&]() {
             // Append receipts
-            bcos::u256 totalGas = 0;
             for (auto&& [receipt, index] : RANGES::views::zip(receipts, RANGES::views::iota(0UL)))
             {
-                totalGas += receipt->gasUsed();
+                gasUsed += receipt->gasUsed();
                 if (index < block.receiptsSize())
                 {
                     block.setReceipt(index, receipt);
@@ -160,14 +162,17 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
                     block.appendReceipt(receipt);
                 }
             }
-            newBlockHeader.setGasUsed(totalGas);
+            // newBlockHeader.setGasUsed(totalGas);
         },
         [&]() {
-            newBlockHeader.setTxsRoot(calcauteTransactionRoot(block, hashImpl));
+            transactionRoot = calcauteTransactionRoot(block, hashImpl);
+            // newBlockHeader.setTxsRoot(calcauteTransactionRoot(block, hashImpl));
             // TODO: write merkle into storage
         },
         [&]() {
-            newBlockHeader.setStateRoot(task::tbb::syncWait(calculateStateRoot(storage, hashImpl)));
+            stateRoot = task::tbb::syncWait(calculateStateRoot(storage, hashImpl));
+            // newBlockHeader.setStateRoot(task::tbb::syncWait(calculateStateRoot(storage,
+            // hashImpl)));
         },
         [&]() {
             bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
@@ -176,9 +181,15 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
 
             std::vector<bcos::h256> merkleTrie;
             merkle.generateMerkle(hashesRange, merkleTrie);
-            newBlockHeader.setReceiptsRoot(*RANGES::rbegin(merkleTrie));
+
+            receiptRoot = *RANGES::rbegin(merkleTrie);
+            // newBlockHeader.setReceiptsRoot(*RANGES::rbegin(merkleTrie));
             // TODO: write merkle into storage
         });
+    newBlockHeader.setGasUsed(gasUsed);
+    newBlockHeader.setTxsRoot(transactionRoot);
+    newBlockHeader.setStateRoot(stateRoot);
+    newBlockHeader.setReceiptsRoot(receiptRoot);
 }
 
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
@@ -270,8 +281,8 @@ private:
                             -> protocol::Transaction const& { return *transactionPtr; }));
 
             auto newBlockHeader = scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
-            finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts, *blockHeader,
-                *newBlockHeader, *block, scheduler.m_hashImpl);
+            finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts, *newBlockHeader,
+                *block, scheduler.m_hashImpl);
             newBlockHeader->calculateHash(scheduler.m_hashImpl);
             if (c_fileLogLevel <= DEBUG)
             {
