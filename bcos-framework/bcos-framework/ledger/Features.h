@@ -62,6 +62,7 @@ public:
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
+        
         validate(*value);
     }
 
@@ -69,7 +70,10 @@ public:
     {
         if ((flag == Flag::feature_balance_policy1 || flag == Flag::feature_balance_precompiled) &&
             !get(Flag::feature_balance))
-        {}
+        {
+            BOOST_THROW_EXCEPTION(
+                PreconditionMismatchError{} << errinfo_comment("must set feature_balance first"));
+        }
     }
 
     bool get(Flag flag) const
