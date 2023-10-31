@@ -40,15 +40,15 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
         MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)>
             m_multiLayerStorage;
         transaction_executor::PrecompiledManager m_precompiledManager;
-        transaction_executor::TransactionExecutorImpl<transaction_executor::PrecompiledManager>
-            m_transactionExecutor;
+        transaction_executor::TransactionExecutorImpl m_transactionExecutor;
 
         Data(::rocksdb::DB& rocksDB, protocol::BlockFactory& blockFactory)
           : m_rocksDBStorage(rocksDB, storage2::rocksdb::StateKeyResolver{},
                 storage2::rocksdb::StateValueResolver{}),
             m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
             m_precompiledManager(blockFactory.cryptoSuite()->hashImpl()),
-            m_transactionExecutor(*blockFactory.receiptFactory(), m_precompiledManager)
+            m_transactionExecutor(
+                *blockFactory.receiptFactory(), blockFactory.cryptoSuite()->hashImpl())
         {}
     };
     auto data = std::make_shared<Data>(rocksDB, *blockFactory);
