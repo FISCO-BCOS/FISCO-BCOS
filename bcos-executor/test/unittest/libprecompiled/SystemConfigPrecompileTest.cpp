@@ -8,7 +8,6 @@
 #include "precompiled/TableManagerPrecompiled.h"
 #include "precompiled/common/PrecompiledResult.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/tools/old/interface.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
