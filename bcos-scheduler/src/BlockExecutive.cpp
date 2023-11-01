@@ -165,6 +165,8 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     message->setGasPrice(std::string(tx->gasPrice()));
     message->setMaxFeePerGas(std::string(tx->maxFeePerGas()));
     message->setMaxPriorityFeePerGas(std::string(tx->maxPriorityFeePerGas()));
+    message->setEffectiveGasPrice(std::string(tx->gasPrice()));
+    m_executiveResults[contextID].version = tx->version();
 
     return message;
 }
@@ -1626,17 +1628,35 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         txGasUsed = 0;
     }
     m_gasUsed.fetch_add(txGasUsed);
-    auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
-        std::string(output->newEVMContractAddress()), output->takeLogEntries(), output->status(),
-        output->data(), number());
-
-    // write receipt in results
-    SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
-                         << " -> contextID:" << output->contextID() - m_startContextID
-                         << ", receipt: " << receipt->hash() << ", gasUsed: " << receipt->gasUsed()
-                         << ", version: " << receipt->version()
-                         << ", status: " << receipt->status();
-    m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
+    auto version = m_executiveResults[output->contextID()].version;
+    if (version == 0)
+    {
+        auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+            std::string(output->newEVMContractAddress()), output->takeLogEntries(),
+            output->status(), output->data(), number());
+        // write receipt in results
+        SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
+                             << " -> contextID:" << output->contextID() - m_startContextID
+                             << ", receipt: " << receipt->hash()
+                             << ", gasUsed: " << receipt->gasUsed()
+                             << ", version: " << receipt->version()
+                             << ", status: " << receipt->status();
+        m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
+    }
+    else
+    {
+        auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+            std::string(output->newEVMContractAddress()), output->takeLogEntries(),
+            output->status(), output->data(), number(), std::string(output->effectiveGasPrice()));
+        // write receipt in results
+        SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
+                             << " -> contextID:" << output->contextID() - m_startContextID
+                             << ", receipt: " << receipt->hash()
+                             << ", gasUsed: " << receipt->gasUsed()
+                             << ", version: " << receipt->version()
+                             << ", status: " << receipt->status();
+        m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
+    }
 }
 
 
