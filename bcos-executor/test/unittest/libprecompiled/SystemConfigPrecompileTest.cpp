@@ -8,6 +8,7 @@
 #include "precompiled/TableManagerPrecompiled.h"
 #include "precompiled/common/PrecompiledResult.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/test/tools/old/interface.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -130,6 +131,23 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
     result = systemConfigPrecompiled.call(executive310, getParameters);
     codec.decode(bcos::ref(result->execResult()), value);
     BOOST_CHECK_EQUAL(value, "1");
+}
+
+BOOST_AUTO_TEST_CASE(getFeatures)
+{
+    SystemConfigPrecompiled systemConfigPrecompiled;
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
+
+    CodecWrapper codec(hashImpl, false);
+    auto setInput = codec.encodeWithSig("getFeatureKeys()");
+    setParameters->m_input = bcos::ref(setInput);
+    auto result = systemConfigPrecompiled.call(executive323, setParameters);
+    std::vector<std::string> gotFeatures;
+    codec.decode(bcos::ref(result->execResult()), gotFeatures);
+
+    auto originFeatures = Features::featureKeys();
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        originFeatures.begin(), originFeatures.end(), gotFeatures.begin(), gotFeatures.end());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

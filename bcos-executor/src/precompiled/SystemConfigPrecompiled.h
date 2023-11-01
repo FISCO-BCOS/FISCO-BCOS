@@ -59,6 +59,8 @@ private:
     const std::set<std::string_view> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,
         bcos::ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, bcos::ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
         bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION};
+
+    uint32_t m_getFeatureKeysFunc{};
 };
 
 }  // namespace bcos::precompiled
