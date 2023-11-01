@@ -28,7 +28,9 @@
 #include <fmt/format.h>
 #include <ittnotify.h>
 #include <oneapi/tbb/combinable.h>
+#include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_invoke.h>
+#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -82,49 +84,28 @@ std::chrono::milliseconds::rep current();
  */
 task::Task<bcos::h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
 {
-    auto blockVersion = true ? (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION :
-                               (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION;
-
     auto it = co_await storage.seek(storage2::STORAGE_BEGIN);
-
-    static constexpr int HASH_CHUNK_SIZE = 32;
-    auto range = it.range() | RANGES::views::chunk(HASH_CHUNK_SIZE);
-
-    tbb::combinable<bcos::h256> combinableHash;
-    tbb::task_group taskGroup;
+    auto range = it.range();
 
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
-    for (auto&& subrange : range)
+
+    bcos::h256 stateRoot;
+    for (auto const& keyValue : range)
     {
-        taskGroup.run([&]() {
-            auto& entryHash = combinableHash.local();
+        auto [key, entry] = keyValue;
+        auto& [tableName, keyName] = *key;
 
-            for (auto const& keyValue : subrange)
-            {
-                auto [key, entry] = keyValue;
-                auto& [tableName, keyName] = *key;
+        if (!entry)
+        {
+            entry = std::addressof(deletedEntry);
+        }
 
-                if (!entry)
-                {
-                    entry = std::addressof(deletedEntry);
-                }
-
-                if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-                {
-                    entryHash ^= entry->hash(tableName, keyName, hashImpl, blockVersion);
-                }
-                else
-                {
-                    entryHash ^= hashImpl.hash(tableName) ^ hashImpl.hash(keyName) ^
-                                 entry->hash(tableName, keyName, hashImpl, blockVersion);
-                }
-            }
-        });
+        stateRoot ^= entry->hash(tableName, keyName, hashImpl,
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
     }
-    taskGroup.wait();
-    co_return combinableHash.combine(
-        [](const bcos::h256& lhs, const bcos::h256& rhs) -> bcos::h256 { return lhs ^ rhs; });
+
+    co_return stateRoot;
 }
 
 /**
@@ -162,18 +143,9 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
                     block.appendReceipt(receipt);
                 }
             }
-            // newBlockHeader.setGasUsed(totalGas);
         },
-        [&]() {
-            transactionRoot = calcauteTransactionRoot(block, hashImpl);
-            // newBlockHeader.setTxsRoot(calcauteTransactionRoot(block, hashImpl));
-            // TODO: write merkle into storage
-        },
-        [&]() {
-            stateRoot = task::tbb::syncWait(calculateStateRoot(storage, hashImpl));
-            // newBlockHeader.setStateRoot(task::tbb::syncWait(calculateStateRoot(storage,
-            // hashImpl)));
-        },
+        [&]() { transactionRoot = calcauteTransactionRoot(block, hashImpl); },
+        [&]() { stateRoot = task::tbb::syncWait(calculateStateRoot(storage, hashImpl)); },
         [&]() {
             bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
             auto hashesRange = receipts | RANGES::views::transform(
@@ -183,13 +155,12 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
             merkle.generateMerkle(hashesRange, merkleTrie);
 
             receiptRoot = *RANGES::rbegin(merkleTrie);
-            // newBlockHeader.setReceiptsRoot(*RANGES::rbegin(merkleTrie));
-            // TODO: write merkle into storage
         });
     newBlockHeader.setGasUsed(gasUsed);
     newBlockHeader.setTxsRoot(transactionRoot);
     newBlockHeader.setStateRoot(stateRoot);
     newBlockHeader.setReceiptsRoot(receiptRoot);
+    newBlockHeader.calculateHash(hashImpl);
 }
 
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
@@ -283,7 +254,7 @@ private:
             auto newBlockHeader = scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
             finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts, *newBlockHeader,
                 *block, scheduler.m_hashImpl);
-            newBlockHeader->calculateHash(scheduler.m_hashImpl);
+
             if (c_fileLogLevel <= DEBUG)
             {
                 try

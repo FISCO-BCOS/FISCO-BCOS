@@ -25,6 +25,7 @@ struct ReadSome
         co_return co_await tag_invoke(*this, storage, keys);
     }
 };
+inline constexpr ReadSome readSome{};
 
 struct WriteSome
 {
@@ -38,6 +39,7 @@ struct WriteSome
             std::forward<decltype(values)>(values));
     }
 };
+inline constexpr WriteSome writeSome{};
 
 struct RemoveSome
 {
@@ -48,6 +50,7 @@ struct RemoveSome
         co_await tag_invoke(*this, storage, keys);
     }
 };
+inline constexpr RemoveSome removeSome{};
 struct ReadOne
 {
     auto operator()(auto& storage, auto const& key) const
@@ -56,6 +59,7 @@ struct ReadOne
         co_return co_await tag_invoke(*this, storage, key);
     }
 };
+inline constexpr ReadOne readOne{};
 
 struct WriteOne
 {
@@ -68,6 +72,7 @@ struct WriteOne
             *this, storage, std::forward<decltype(key)>(key), std::forward<decltype(value)>(value));
     }
 };
+inline constexpr WriteOne writeOne{};
 
 struct RemoveOne
 {
@@ -78,6 +83,7 @@ struct RemoveOne
         co_await tag_invoke(*this, storage, key);
     }
 };
+inline constexpr RemoveOne removeOne{};
 
 struct ExistsOne
 {
@@ -88,6 +94,7 @@ struct ExistsOne
         co_return co_await tag_invoke(*this, storage, key);
     }
 };
+inline constexpr ExistsOne existsOne{};
 
 struct Merge
 {
@@ -98,23 +105,6 @@ struct Merge
         co_await tag_invoke(*this, fromStorage, toStorage);
     }
 };
-
-/******************************************************************/
-// Basic methods without default implementation
-/******************************************************************/
-
-inline constexpr ReadSome readSome{};
-inline constexpr WriteSome writeSome{};
-inline constexpr RemoveSome removeSome{};
-
-/******************************************************************/
-// Advance methods with default implementation, depends on basic methods
-/******************************************************************/
-
-inline constexpr ReadOne readOne{};
-inline constexpr WriteOne writeOne{};
-inline constexpr RemoveOne removeOne{};
-inline constexpr ExistsOne existsOne{};
 inline constexpr Merge merge{};
 
 template <auto& Tag>
