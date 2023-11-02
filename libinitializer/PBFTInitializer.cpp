@@ -23,7 +23,6 @@
 #include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
-#include <range/v3/view/transform.hpp>
 
 #ifdef WITH_TIKV
 #include <bcos-leader-election/src/LeaderElectionFactory.h>

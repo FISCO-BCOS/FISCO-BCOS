@@ -19,12 +19,9 @@
  * @date 2021-09-08
  */
 #pragma once
-#include <utility>
-
-#include "../ledger/Features.h"
 #include "ChainNodeInfoFactory.h"
 #include "GroupTypeDef.h"
-#include "bcos-utilities/Ranges.h"
+#include <utility>
 namespace bcos::group
 {
 class GroupInfo
