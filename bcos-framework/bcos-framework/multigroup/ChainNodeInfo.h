@@ -117,10 +117,6 @@ public:
             std::string>
     {
         m_featureKeys.clear();
-        if constexpr (RANGES::sized_range<decltype(featureKeys)>)
-        {
-            m_featureKeys.reserve(RANGES::size(featureKeys));
-        }
         for (auto&& key : featureKeys)
         {
             m_featureKeys.emplace_back(std::forward<decltype(key)>(key));

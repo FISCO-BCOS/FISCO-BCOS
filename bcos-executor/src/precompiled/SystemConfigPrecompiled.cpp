@@ -49,9 +49,6 @@ SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl:
     name2Selector[SYSCONFIG_METHOD_GET_STR] =
         getFuncSelector(SYSCONFIG_METHOD_GET_STR, GlobalHashImpl::g_hashImpl);
 
-    constexpr static auto SYSCONFIG_METHOD_GET_FEATUREKEYS_SIG = "getFeatureKeys()"sv;
-    m_getFeatureKeysFunc =
-        getFuncSelectorByFunctionName(SYSCONFIG_METHOD_GET_FEATUREKEYS_SIG, m_hashImpl);
     auto defaultCmp = [](std::string_view _key, int64_t _value, int64_t _minValue) {
         if (_value < _minValue)
         {
@@ -162,14 +159,6 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 
         auto valueNumberPair = getSysConfigByKey(_executive, configKey);
         _callParameters->setExecResult(codec.encode(valueNumberPair.first, valueNumberPair.second));
-    }
-    else if (func == m_getFeatureKeysFunc)
-    {
-        auto featureKeys =
-            Features::featureKeys() |
-            RANGES::views::transform([](std::string_view key) { return std::string{key}; }) |
-            RANGES::to<std::vector<std::string>>();
-        _callParameters->setExecResult(codec.encode(featureKeys));
     }
     else [[unlikely]]
     {
