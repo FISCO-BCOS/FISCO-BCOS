@@ -63,7 +63,8 @@ void SyncMaster::printSyncInfo()
     if (!m_syncInfoPrinted && hour == 0)
     {
         m_syncInfoPrinted = true;
-        SYNC_LOG(INFO) << LOG_DESC("print sync info") << LOG_KV("infoJson", syncInfo());
+        SYNC_LOG(INFO) << LOG_DESC("print sync info") << LOG_KV("peersCount", m_syncStatus->size())
+                       << LOG_KV("infoJson", syncInfo());
     }
     else if (m_syncInfoPrinted && hour != 0)
     {
