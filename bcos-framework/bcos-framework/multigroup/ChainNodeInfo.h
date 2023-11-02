@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-utilities/Ranges.h"
 #include <bcos-utilities/Common.h>
 #include <memory>
 namespace bcos
@@ -48,7 +49,7 @@ public:
         m_nodeCryptoType = (NodeCryptoType)_type;
     }
 
-    virtual ~ChainNodeInfo() {}
+    virtual ~ChainNodeInfo() = default;
 
     virtual std::string const& nodeName() const { return m_nodeName; }
     virtual NodeCryptoType const& nodeCryptoType() const { return m_nodeCryptoType; }
@@ -94,10 +95,7 @@ public:
     bcos::protocol::NodeType nodeType() const { return m_nodeType; }
 
     bcos::protocol::ProtocolInfo::ConstPtr nodeProtocol() const { return m_nodeProtocol; }
-    void setNodeProtocol(bcos::protocol::ProtocolInfo&& _protocol)
-    {
-        *m_nodeProtocol = std::move(_protocol);
-    }
+    void setNodeProtocol(bcos::protocol::ProtocolInfo&& _protocol) { *m_nodeProtocol = _protocol; }
 
     void setNodeProtocol(bcos::protocol::ProtocolInfo const& _protocol)
     {
@@ -113,7 +111,23 @@ public:
     void setCompatibilityVersion(uint32_t _version) { m_compatibilityVersion = _version; }
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
 
-protected:
+    auto const& featureKeys() const { return m_featureKeys; }
+    void setFeatureKeys(RANGES::input_range auto&& featureKeys)
+        requires std::same_as<std::decay_t<RANGES::range_value_t<decltype(featureKeys)>>,
+            std::string>
+    {
+        m_featureKeys.clear();
+        if constexpr (RANGES::sized_range<decltype(featureKeys)>)
+        {
+            m_featureKeys.reserve(RANGES::size(featureKeys));
+        }
+        for (auto&& key : featureKeys)
+        {
+            m_featureKeys.emplace_back(std::forward<decltype(key)>(key));
+        }
+    }
+
+private:
     bool m_microService = false;
     // the node name
     std::string m_nodeName;
@@ -131,6 +145,8 @@ protected:
 
     // the node protocol
     bcos::protocol::ProtocolInfo::Ptr m_nodeProtocol;
+
+    std::vector<std::string> m_featureKeys;
 
     // the system version
     uint32_t m_compatibilityVersion;

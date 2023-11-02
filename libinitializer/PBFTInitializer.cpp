@@ -19,9 +19,11 @@
  * @date 2021-06-10
  */
 #include "PBFTInitializer.h"
+#include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
+#include <range/v3/view/transform.hpp>
 
 #ifdef WITH_TIKV
 #include <bcos-leader-election/src/LeaderElectionFactory.h>
@@ -169,6 +171,9 @@ void PBFTInitializer::initChainNodeInfo(
     auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     m_nodeInfo->setNodeProtocol(*nodeProtocolInfo);
     m_nodeInfo->setCompatibilityVersion(m_pbft->compatibilityVersion());
+    m_nodeInfo->setFeatureKeys(
+        ledger::Features::featureKeys() |
+        RANGES::views::transform([](std::string_view view) { return std::string(view); }));
     m_groupInfo->appendNodeInfo(m_nodeInfo);
     INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
                           << LOG_KV("nodeType", m_nodeInfo->nodeType())

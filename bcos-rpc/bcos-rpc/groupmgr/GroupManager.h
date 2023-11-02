@@ -103,7 +103,7 @@ public:
         bcos::protocol::BlockNumber _blockNumber)
     {
         UpgradableGuard l(x_groupBlockInfos);
-        if (m_groupBlockInfos.count(_groupID))
+        if (m_groupBlockInfos.contains(_groupID))
         {
             // expired block
             if (m_groupBlockInfos[_groupID] > _blockNumber)
@@ -112,23 +112,23 @@ public:
             }
             // has already in the m_nodesWithLatestBlockNumber
             if (m_groupBlockInfos[_groupID] == _blockNumber &&
-                m_nodesWithLatestBlockNumber.count(_groupID) &&
-                m_nodesWithLatestBlockNumber[_groupID].count(_nodeName))
+                m_nodesWithLatestBlockNumber.contains(_groupID) &&
+                m_nodesWithLatestBlockNumber[_groupID].contains(_nodeName))
             {
                 return;
             }
         }
         UpgradeGuard ul(l);
         bcos::protocol::BlockNumber oldBlockNumber = 0;
-        if (m_groupBlockInfos.count(_groupID))
+        if (m_groupBlockInfos.contains(_groupID))
         {
             oldBlockNumber = m_groupBlockInfos[_groupID];
         }
-        if (!m_nodesWithLatestBlockNumber.count(_groupID))
+        if (!m_nodesWithLatestBlockNumber.contains(_groupID))
         {
             m_nodesWithLatestBlockNumber[_groupID] = std::set<std::string>();
         }
-        if (!m_groupBlockInfos.count(_groupID))
+        if (!m_groupBlockInfos.contains(_groupID))
         {
             m_groupBlockInfos[_groupID] = _blockNumber;
         }
@@ -156,12 +156,12 @@ public:
         std::function<void(std::string const&, std::string const&, bcos::protocol::BlockNumber)>
             _blockNumberNotifier)
     {
-        m_blockNumberNotifier = _blockNumberNotifier;
+        m_blockNumberNotifier = std::move(_blockNumberNotifier);
     }
     virtual bcos::protocol::BlockNumber getBlockNumberByGroup(const std::string& _groupID);
 
 protected:
-    GroupManager(std::string const& _chainID) : m_chainID(_chainID) {}
+    GroupManager(std::string _chainID) : m_chainID(std::move(_chainID)) {}
 
     bool updateGroupServices(bcos::group::GroupInfo::Ptr _groupInfo, bool _enforceUpdate);
     bool updateNodeService(std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo,

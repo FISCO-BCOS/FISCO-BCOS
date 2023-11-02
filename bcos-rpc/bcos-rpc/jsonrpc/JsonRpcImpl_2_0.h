@@ -113,8 +113,6 @@ public:
 
     void getGroupBlockNumber(RespFunc _respFunc) override;
 
-    void setNodeInfo(const NodeInfo& _nodeInfo) { m_nodeInfo = _nodeInfo; }
-    NodeInfo nodeInfo() const { return m_nodeInfo; }
     GroupManager::Ptr groupManager() { return m_groupManager; }
 
     int sendTxTimeout() const { return m_sendTxTimeout; }
@@ -161,7 +159,6 @@ private:
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
 
-    NodeInfo m_nodeInfo;
     // Note: here clientID must non-empty for the rpc will set clientID as source for the tx for
     // tx-notify and the scheduler will not notify the tx-result if the tx source is empty
     std::string m_clientID = "localRpc";

@@ -19,21 +19,23 @@
  * @date 2021-09-08
  */
 #pragma once
+#include <utility>
+
+#include "../ledger/Features.h"
 #include "ChainNodeInfoFactory.h"
 #include "GroupTypeDef.h"
-namespace bcos
-{
-namespace group
+#include "bcos-utilities/Ranges.h"
+namespace bcos::group
 {
 class GroupInfo
 {
 public:
     using Ptr = std::shared_ptr<GroupInfo>;
     GroupInfo() = default;
-    GroupInfo(std::string const& _chainID, std::string const& _groupID)
-      : m_chainID(_chainID), m_groupID(_groupID)
+    GroupInfo(std::string _chainID, std::string _groupID)
+      : m_chainID(std::move(_chainID)), m_groupID(std::move(_groupID))
     {}
-    virtual ~GroupInfo() {}
+    virtual ~GroupInfo() = default;
 
     virtual std::string const& genesisConfig() const { return m_genesisConfig; }
     virtual std::string const& iniConfig() const { return m_iniConfig; }
@@ -60,7 +62,7 @@ public:
     {
         UpgradableGuard l(x_nodeInfos);
         auto const& nodeName = _nodeInfo->nodeName();
-        if (m_nodeInfos.count(nodeName))
+        if (m_nodeInfos.contains(nodeName))
         {
             return false;
         }
@@ -73,7 +75,7 @@ public:
     {
         WriteGuard l(x_nodeInfos);
         auto const& nodeName = _nodeInfo->nodeName();
-        if (m_nodeInfos.count(nodeName))
+        if (m_nodeInfos.contains(nodeName))
         {
             *(m_nodeInfos[nodeName]) = *_nodeInfo;
             return;
@@ -84,7 +86,7 @@ public:
     virtual bool removeNodeInfo(std::string const& _nodeName)
     {
         UpgradableGuard l(x_nodeInfos);
-        if (!m_nodeInfos.count(_nodeName))
+        if (!m_nodeInfos.contains(_nodeName))
         {
             return false;
         }
@@ -101,8 +103,19 @@ public:
         return m_nodeInfos.size();
     }
 
-    // return copied nodeInfos to ensure thread-safe
-    auto nodeInfos() { return m_nodeInfos; }
+    auto nodeInfos() const
+    {
+        ReadGuard l(x_nodeInfos);
+        return m_nodeInfos;
+    }
+
+    // Use range with lock
+    auto nodeInfoList() const
+    {
+        return m_nodeInfos |
+               RANGES::views::transform([lock = std::make_shared<ReadGuard>(x_nodeInfos)](
+                                            auto const& pair) -> auto& { return pair; });
+    }
 
     bcos::group::ChainNodeInfoFactory::Ptr chainNodeInfoFactory() const
     {
@@ -111,7 +124,7 @@ public:
 
     void setChainNodeInfoFactory(bcos::group::ChainNodeInfoFactory::Ptr _chainNodeInfoFactory)
     {
-        m_chainNodeInfoFactory = _chainNodeInfoFactory;
+        m_chainNodeInfoFactory = std::move(_chainNodeInfoFactory);
     }
 
     bool wasm() const { return m_wasm; }
@@ -119,7 +132,7 @@ public:
     virtual void setWasm(bool _wasm) { m_wasm = _wasm; }
     virtual void setSmCryptoType(bool _smCryptoType) { m_smCryptoType = _smCryptoType; }
 
-protected:
+private:
     bool m_wasm{false};
     bool m_smCryptoType{false};
 
@@ -136,7 +149,7 @@ protected:
     mutable SharedMutex x_nodeInfos;
 };
 
-inline std::string printGroupInfo(GroupInfo::Ptr _groupInfo)
+inline std::string printGroupInfo(const GroupInfo::Ptr& _groupInfo)
 {
     if (!_groupInfo)
     {
@@ -147,5 +160,4 @@ inline std::string printGroupInfo(GroupInfo::Ptr _groupInfo)
         << LOG_KV("nodeSize", _groupInfo->nodesNum());
     return oss.str();
 }
-}  // namespace group
-}  // namespace bcos
+}  // namespace bcos::group
