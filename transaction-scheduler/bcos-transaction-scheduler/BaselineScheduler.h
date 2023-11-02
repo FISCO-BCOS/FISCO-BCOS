@@ -213,6 +213,12 @@ private:
             ittapi::ITT_DOMAINS::instance().EXECUTE_BLOCK);
         try
         {
+            if (!scheduler.m_ledgerConfig)
+            {
+                scheduler.m_ledgerConfig =
+                    task::syncWait(ledger::getLedgerConfig(scheduler.m_ledger));
+            }
+
             auto blockHeader = block->blockHeaderConst();
             std::unique_lock executeLock(scheduler.m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
@@ -245,33 +251,17 @@ private:
             scheduler.m_multiLayerStorage.newMutable();
             auto view = scheduler.m_multiLayerStorage.fork(true);
             auto constTransactions = co_await getTransactions(scheduler.m_txpool, *block);
-            auto receipts = co_await transaction_scheduler::execute(scheduler.m_schedulerImpl, view,
-                scheduler.m_executor, *blockHeader,
+            auto receipts = co_await transaction_scheduler::executeBlock(scheduler.m_schedulerImpl,
+                view, scheduler.m_executor, *blockHeader,
                 constTransactions |
                     RANGES::views::transform(
                         [](protocol::Transaction::ConstPtr const& transactionPtr)
-                            -> protocol::Transaction const& { return *transactionPtr; }));
+                            -> protocol::Transaction const& { return *transactionPtr; }),
+                *scheduler.m_ledgerConfig);
 
             auto newBlockHeader = scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
             finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts, *newBlockHeader,
                 *block, scheduler.m_hashImpl);
-
-            if (c_fileLogLevel <= DEBUG)
-            {
-                try
-                {
-                    BASELINE_SCHEDULER_LOG(DEBUG)
-                        << newBlockHeader->hash() << " | " << newBlockHeader->version() << " | "
-                        << newBlockHeader->number() << " | " << newBlockHeader->stateRoot() << " | "
-                        << newBlockHeader->txsRoot() << " | " << newBlockHeader->receiptsRoot()
-                        << " | " << newBlockHeader->gasUsed() << " | "
-                        << newBlockHeader->timestamp();
-                }
-                catch (std::exception& e)
-                {
-                    BASELINE_SCHEDULER_LOG(ERROR) << boost::diagnostic_information(e);
-                }
-            }
 
             if (verify && (newBlockHeader->hash() != blockHeader->hash()))
             {
@@ -389,6 +379,7 @@ private:
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger);
             ledgerConfig->setHash(header->hash());
+            scheduler.m_ledgerConfig = ledgerConfig;
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number();
             commitLock.unlock();
 
@@ -498,13 +489,26 @@ public:
     {
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
-            // TODO: Use real block number and storage block header version
-            auto blockHeader = self->m_blockHeaderFactory.createBlockHeader();
-            blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_3_VERSION);
             auto view = self->m_multiLayerStorage.fork(false);
             view.newTemporaryMutable();
-            auto receipt = co_await transaction_executor::execute(
-                self->m_executor, view, *blockHeader, *transaction, 0);
+            auto blockHeader = self->m_blockHeaderFactory.createBlockHeader();
+            auto ledgerConfig = self->m_ledgerConfig;
+
+            protocol::TransactionReceipt::Ptr receipt;
+            if (ledgerConfig)
+            {
+                blockHeader->setVersion(ledgerConfig->compatibilityVersion());
+                blockHeader->setNumber(ledgerConfig->blockNumber());
+                receipt = co_await transaction_executor::executeTransaction(
+                    self->m_executor, view, *blockHeader, *transaction, 0, *ledgerConfig);
+            }
+            else
+            {
+                blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_4_VERSION);
+                receipt = co_await transaction_executor::executeTransaction(
+                    self->m_executor, view, *blockHeader, *transaction, 0, ledger::LedgerConfig{});
+            }
+
 
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));

@@ -1,3 +1,4 @@
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
@@ -20,9 +21,9 @@ using namespace bcos::transaction_scheduler;
 struct MockExecutor
 {
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::executeTransaction> /*unused*/,
         MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID)
+        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&)
     {
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
@@ -70,9 +71,11 @@ BOOST_AUTO_TEST_CASE(simple)
 
         multiLayerStorage.newMutable();
         auto view = multiLayerStorage.fork(true);
-        auto receipts =
-            co_await bcos::transaction_scheduler::execute(scheduler, view, executor, blockHeader,
-                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
+        ledger::LedgerConfig ledgerConfig;
+        auto receipts = co_await bcos::transaction_scheduler::executeBlock(scheduler, view,
+            executor, blockHeader,
+            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
+            ledgerConfig);
         BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;
@@ -84,9 +87,9 @@ constexpr static size_t MOCK_USER_COUNT = 1000;
 struct MockConflictExecutor
 {
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        bcos::transaction_executor::tag_t<bcos::transaction_executor::executeTransaction> /*unused*/,
         MockConflictExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID)
+        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&)
     {
         auto input = transaction.input();
         auto inputNum =
@@ -148,8 +151,9 @@ BOOST_AUTO_TEST_CASE(conflict)
         auto transactionRefs =
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; });
         auto view = multiLayerStorage.fork(true);
-        auto receipts = co_await bcos::transaction_scheduler::execute(
-            scheduler, view, executor, blockHeader, transactionRefs);
+        ledger::LedgerConfig ledgerConfig;
+        auto receipts = co_await bcos::transaction_scheduler::executeBlock(
+            scheduler, view, executor, blockHeader, transactionRefs, ledgerConfig);
 
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {

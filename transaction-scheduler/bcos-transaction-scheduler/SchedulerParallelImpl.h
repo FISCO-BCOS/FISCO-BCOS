@@ -2,6 +2,7 @@
 
 #include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
@@ -77,7 +78,8 @@ class SchedulerParallelImpl
         decltype(m_localStorage)& localStorage() & { return m_localStorage; }
         auto& readWriteSetStorage() & { return m_localReadWriteSetStorage; }
 
-        task::Task<void> execute(protocol::BlockHeader const& blockHeader)
+        task::Task<void> execute(
+            protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig)
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK);
@@ -89,8 +91,8 @@ class SchedulerParallelImpl
                     PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute aborted";
                     co_return;
                 }
-                *receipt = co_await transaction_executor::execute(
-                    m_executor, m_localReadWriteSetStorage, blockHeader, *transaction, contextID);
+                *receipt = co_await transaction_executor::executeTransaction(m_executor,
+                    m_localReadWriteSetStorage, blockHeader, *transaction, contextID, ledgerConfig);
             }
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";
@@ -111,8 +113,9 @@ public:
 
 private:
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
-        tag_t<execute> /*unused*/, SchedulerParallelImpl& scheduler, auto& storage, auto& executor,
-        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
+        tag_t<executeBlock> /*unused*/, SchedulerParallelImpl& scheduler, auto& storage,
+        auto& executor, protocol::BlockHeader const& blockHeader,
+        RANGES::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
@@ -166,7 +169,7 @@ private:
                             {
                                 return chunk;
                             }
-                            task::tbb::syncWait(chunk->execute(blockHeader));
+                            task::tbb::syncWait(chunk->execute(blockHeader, ledgerConfig));
 
                             return chunk;
                         }) &

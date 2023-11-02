@@ -39,9 +39,10 @@ private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
     PrecompiledManager m_precompiledManager;
 
-    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(tag_t<execute> /*unused*/,
-        TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig)
     {
         try
         {

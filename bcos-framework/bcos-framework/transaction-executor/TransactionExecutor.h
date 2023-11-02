@@ -52,7 +52,7 @@ using StateKeyView = std::tuple<std::string_view, std::string_view>;
 using StateKey = std::tuple<ContractTable, ContractKey>;
 using StateValue = storage::Entry;
 
-struct Execute
+struct ExecuteTransaction
 {
     /**
      * @brief Executes a transaction and returns a task that resolves to a transaction receipt.
@@ -75,7 +75,7 @@ struct Execute
             std::forward<decltype(args)>(args)...);
     }
 };
-inline constexpr Execute execute{};
+inline constexpr ExecuteTransaction executeTransaction{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

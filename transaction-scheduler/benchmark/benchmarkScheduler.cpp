@@ -99,8 +99,10 @@ struct Fixture
 
                         m_multiLayerStorage.newMutable();
                         auto view = m_multiLayerStorage.fork(true);
-                        auto receipts = co_await transaction_scheduler::execute(
-                            scheduler, view, m_executor, *block->blockHeaderConst(), transactions);
+                        ledger::LedgerConfig ledgerConfig;
+                        auto receipts =
+                            co_await transaction_scheduler::executeBlock(scheduler, view,
+                                m_executor, *block->blockHeaderConst(), transactions, ledgerConfig);
                         if (receipts[0]->status() != 0)
                         {
                             fmt::print("deployContract unexpected receipt status: {}, {}\n",
@@ -234,13 +236,15 @@ struct Fixture
                             std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
                     auto view = m_multiLayerStorage.fork(true);
-                    auto receipts = co_await transaction_scheduler::execute(scheduler, view,
+                    ledger::LedgerConfig ledgerConfig;
+                    auto receipts = co_await transaction_scheduler::executeBlock(scheduler, view,
                         m_executor, blockHeader,
                         checkTransactions | RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                                                                          -> auto& {
                             return *transaction;
-                        }));
+                        }),
+                        ledgerConfig);
 
                     auto balances = receipts |
                                     RANGES::views::transform([&abiCodec](auto const& receipt) {
@@ -312,13 +316,17 @@ static void issue(benchmark::State& state)
                         blockHeader.setNumber((i++) + 1);
                         blockHeader.setVersion(
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-
-                        [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
-                            scheduler, view, fixture.m_executor, blockHeader,
-                            fixture.m_transactions |
-                                RANGES::views::transform(
-                                    [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                            transaction) -> auto& { return *transaction; }));
+                        ledger::LedgerConfig ledgerConfig;
+                        [[maybe_unused]] auto receipts =
+                            co_await transaction_scheduler::executeBlock(scheduler, view,
+                                fixture.m_executor, blockHeader,
+                                fixture.m_transactions |
+                                    RANGES::views::transform([
+                                    ](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
+                                                                     transaction) -> auto& {
+                                        return *transaction;
+                                    }),
+                                ledgerConfig);
                     }
 
                     view.release();
@@ -368,13 +376,15 @@ static void transfer(benchmark::State& state)
 
                     fixture.m_multiLayerStorage.newMutable();
                     auto view = fixture.m_multiLayerStorage.fork(true);
-                    [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
+                    ledger::LedgerConfig ledgerConfig;
+                    [[maybe_unused]] auto receipts = co_await transaction_scheduler::executeBlock(
                         scheduler, view, fixture.m_executor, blockHeader,
                         fixture.m_transactions | RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                                                                               -> auto& {
                             return *transaction;
-                        }));
+                        }),
+                        ledgerConfig);
 
                     fixture.m_transactions.clear();
                     fixture.prepareTransfer(count);
@@ -389,13 +399,17 @@ static void transfer(benchmark::State& state)
                         blockHeader.setNumber((i++) + 1);
                         blockHeader.setVersion(
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-
-                        [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
-                            scheduler, view, fixture.m_executor, blockHeader,
-                            fixture.m_transactions |
-                                RANGES::views::transform(
-                                    [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                            transaction) -> auto& { return *transaction; }));
+                        ledger::LedgerConfig ledgerConfig;
+                        [[maybe_unused]] auto receipts =
+                            co_await transaction_scheduler::executeBlock(scheduler, view,
+                                fixture.m_executor, blockHeader,
+                                fixture.m_transactions |
+                                    RANGES::views::transform([
+                                    ](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
+                                                                     transaction) -> auto& {
+                                        return *transaction;
+                                    }),
+                                ledgerConfig);
                     }
 
                     // Check
@@ -458,14 +472,15 @@ static void conflictTransfer(benchmark::State& state)
                         });
                     blockHeader.setNumber(0);
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-
-                    [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
+                    ledger::LedgerConfig ledgerConfig;
+                    [[maybe_unused]] auto receipts = co_await transaction_scheduler::executeBlock(
                         scheduler, view, fixture.m_executor, blockHeader,
                         fixture.m_transactions | RANGES::views::transform([
                         ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
                                                                               -> auto& {
                             return *transaction;
-                        }));
+                        }),
+                        ledgerConfig);
 
                     fixture.m_transactions.clear();
                     fixture.prepareConflictTransfer(count);
@@ -480,13 +495,17 @@ static void conflictTransfer(benchmark::State& state)
                         blockHeader.setNumber((i++) + 1);
                         blockHeader.setVersion(
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-
-                        [[maybe_unused]] auto receipts = co_await transaction_scheduler::execute(
-                            scheduler, view, fixture.m_executor, blockHeader,
-                            fixture.m_transactions |
-                                RANGES::views::transform(
-                                    [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                            transaction) -> auto& { return *transaction; }));
+                        ledger::LedgerConfig ledgerConfig;
+                        [[maybe_unused]] auto receipts =
+                            co_await transaction_scheduler::executeBlock(scheduler, view,
+                                fixture.m_executor, blockHeader,
+                                fixture.m_transactions |
+                                    RANGES::views::transform([
+                                    ](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
+                                                                     transaction) -> auto& {
+                                        return *transaction;
+                                    }),
+                                ledgerConfig);
                     }
 
                     // Check
