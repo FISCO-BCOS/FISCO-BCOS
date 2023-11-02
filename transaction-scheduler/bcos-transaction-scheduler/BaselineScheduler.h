@@ -27,9 +27,11 @@
 #include <bcos-utilities/ITTAPI.h>
 #include <fmt/format.h>
 #include <ittnotify.h>
+#include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/combinable.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_invoke.h>
+#include <oneapi/tbb/parallel_reduce.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -37,6 +39,7 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <range/v3/range/concepts.hpp>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler
@@ -82,16 +85,14 @@ std::chrono::milliseconds::rep current();
  * @param hashImpl The hash implementation to use for the calculation.
  * @return A task that will eventually resolve to the calculated state root.
  */
-task::Task<bcos::h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
+task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
 {
-    auto it = co_await storage.seek(storage2::STORAGE_BEGIN);
-    auto range = it.range();
+    auto range = co_await storage2::range(storage);
 
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
-
-    bcos::h256 stateRoot;
-    for (auto const& keyValue : range)
+    h256 stateRoot;
+    for (auto keyValue : range)
     {
         auto [key, entry] = keyValue;
         auto& [tableName, keyName] = *key;

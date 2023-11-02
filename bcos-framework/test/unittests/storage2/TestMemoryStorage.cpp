@@ -244,7 +244,7 @@ BOOST_AUTO_TEST_CASE(range)
                 return std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             }));
-        auto readRange = readIt.range();
+        auto readRange = co_await storage2::range(storage);
         for (auto&& [kv, num] : RANGES::views::zip(readRange, RANGES::iota_view<size_t>(0)))
         {
             auto& [key, value] = kv;

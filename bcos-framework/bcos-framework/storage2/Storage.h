@@ -107,6 +107,17 @@ struct Merge
 };
 inline constexpr Merge merge{};
 
+struct Range
+{
+    template <class... Args>
+    auto operator()(auto& storage, Args... args) const
+        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage, args...))>>
+    {
+        co_return co_await tag_invoke(*this, storage, args...);
+    }
+};
+inline constexpr Range range{};
+
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
 
