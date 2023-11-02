@@ -26,31 +26,13 @@
 
 #define RPC_IMPL_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPC][JSONRPC]"
 
-namespace bcos
+namespace bcos::rpc
 {
-namespace rpc
-{
-struct NodeInfo
-{
-    std::string version;
-    std::string supportedVersion;
-    std::string nodeID;
-    std::string chainID;
-    std::string groupID;
-    std::string agency;
-    std::string buildTime;
-    std::string gitCommitHash;
-    bool isWasm;
-    bool isSM;
-};
-
 class JsonRpcException : public std::exception
 {
 public:
     JsonRpcException(int32_t _code, std::string const& _msg) : m_code(_code), m_msg(_msg) {}
     const char* what() const noexcept override { return m_msg.c_str(); }
-
-public:
     int32_t code() const noexcept { return m_code; }
     std::string msg() const noexcept { return m_msg; }
 
@@ -132,18 +114,24 @@ inline void nodeInfoToJson(Json::Value& _response, bcos::group::ChainNodeInfo::P
     protocolResponse["minSupportedVersion"] = protocol->minVersion();
     protocolResponse["maxSupportedVersion"] = protocol->maxVersion();
     protocolResponse["compatibilityVersion"] = _nodeInfo->compatibilityVersion();
+
+    auto featureKeys = Json::Value(Json::arrayValue);
+    for (auto const& key : _nodeInfo->featureKeys())
+    {
+        featureKeys.append(key);
+    }
+    _response["featureKeys"] = std::move(featureKeys);
     _response["protocol"] = protocolResponse;
 }
 
-inline void groupInfoToJson(Json::Value& _response, bcos::group::GroupInfo::Ptr _groupInfo)
+inline void groupInfoToJson(Json::Value& _response, bcos::group::GroupInfo const& _groupInfo)
 {
-    _response["chainID"] = _groupInfo->chainID();
-    _response["groupID"] = _groupInfo->groupID();
-    _response["genesisConfig"] = _groupInfo->genesisConfig();
-    _response["iniConfig"] = _groupInfo->iniConfig();
+    _response["chainID"] = _groupInfo.chainID();
+    _response["groupID"] = _groupInfo.groupID();
+    _response["genesisConfig"] = _groupInfo.genesisConfig();
+    _response["iniConfig"] = _groupInfo.iniConfig();
     _response["nodeList"] = Json::Value(Json::arrayValue);
-    auto nodeInfos = _groupInfo->nodeInfos();
-    for (auto const& it : nodeInfos)
+    for (auto const& it : _groupInfo.nodeInfoList())
     {
         Json::Value nodeInfoResponse;
         nodeInfoToJson(nodeInfoResponse, it.second);
@@ -157,9 +145,8 @@ inline void groupInfoListToJson(
     for (const auto& groupInfo : _groupInfoList)
     {
         Json::Value item;
-        groupInfoToJson(item, groupInfo);
+        groupInfoToJson(item, *groupInfo);
         _response.append(item);
     }
 }
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc

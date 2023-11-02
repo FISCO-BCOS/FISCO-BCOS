@@ -231,9 +231,11 @@ uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 }
 
 uint32_t bcos::precompiled::getFuncSelectorByFunctionName(
-    std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl)
+    std::string_view _functionName, const crypto::Hash::Ptr& _hashImpl)
 {
-    uint32_t func = *(uint32_t*)(_hashImpl->hash(_functionName).ref().getCroppedData(0, 4).data());
+    auto hash = _hashImpl->hash(
+        bytesConstRef((const unsigned char*)_functionName.data(), _functionName.size()));
+    uint32_t func = *(uint32_t*)hash.ref().getCroppedData(0, 4).data();
     uint32_t selector = ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
                         ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
     return selector;

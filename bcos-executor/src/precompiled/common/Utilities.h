@@ -101,7 +101,7 @@ uint32_t getFuncSelector(std::string const& _functionName,
 void clearName2SelectCache();
 uint32_t getParamFunc(bytesConstRef _param);
 uint32_t getFuncSelectorByFunctionName(
-    std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl);
+    std::string_view _functionName, const crypto::Hash::Ptr& _hashImpl);
 
 bcos::precompiled::ContractStatus getContractStatus(
     std::shared_ptr<bcos::executor::TransactionExecutive> _executive,
