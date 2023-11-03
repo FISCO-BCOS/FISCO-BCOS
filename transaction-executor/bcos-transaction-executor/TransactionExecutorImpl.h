@@ -77,7 +77,7 @@ private:
             int64_t seq = 0;
             HostContext hostContext(executor.m_vmFactory, rollbackableStorage, blockHeader,
                 evmcMessage, evmcMessage.sender, transaction.abi(), contextID, seq,
-                executor.m_precompiledManager);
+                executor.m_precompiledManager, ledgerConfig);
             auto evmcResult = co_await hostContext.execute();
 
             bcos::bytesConstRef output;

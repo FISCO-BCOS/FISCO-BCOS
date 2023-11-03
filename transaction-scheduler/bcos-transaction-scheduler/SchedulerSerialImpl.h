@@ -25,10 +25,12 @@ private:
             receipts.reserve(RANGES::size(transactions));
         }
 
-        for (auto&& [contextID, transaction] : RANGES::views::enumerate(transactions))
+        int contextID = 0;
+        for (auto&& transaction : RANGES::views::iota(0), transactions)
         {
             receipts.emplace_back(co_await transaction_executor::executeTransaction(
                 executor, storage, blockHeader, transaction, contextID, ledgerConfig));
+            ++contextID;
         }
 
         co_return receipts;

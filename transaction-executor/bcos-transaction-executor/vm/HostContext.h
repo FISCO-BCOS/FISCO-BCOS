@@ -28,6 +28,7 @@
 #include "VMFactory.h"
 #include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/LogEntry.h"
@@ -77,6 +78,7 @@ private:
     int m_contextID;
     int64_t& m_seq;
     PrecompiledManager const& m_precompiledManager;
+    ledger::LedgerConfig const& m_ledgerConfig;
 
     ContractTable m_myContractTable;
     evmc_address m_newContractAddress;  // Set by getMyContractTable, not need initialize value!
@@ -131,7 +133,8 @@ private:
 public:
     HostContext(VMFactory& vmFactory, Storage& storage, protocol::BlockHeader const& blockHeader,
         const evmc_message& message, const evmc_address& origin, std::string_view abi,
-        int contextID, int64_t& seq, PrecompiledManager const& precompiledManager)
+        int contextID, int64_t& seq, PrecompiledManager const& precompiledManager,
+        ledger::LedgerConfig const& ledgerConfig)
       : evmc_host_context{.interface = getHostInterface<HostContext>(),
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
@@ -148,6 +151,7 @@ public:
         m_contextID(contextID),
         m_seq(seq),
         m_precompiledManager(precompiledManager),
+        m_ledgerConfig(ledgerConfig),
         m_myContractTable(getMyContractTable(blockHeader, message))
     {}
     ~HostContext() noexcept = default;
@@ -313,8 +317,15 @@ public:
 
     task::Task<EVMCResult> execute()
     {
-        auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, m_message, m_origin,
-            buildLegacyExternalCaller(), m_precompiledManager);
+        if (m_ledgerConfig.authCheckStatus() != 0U)
+        {
+            auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, m_message,
+                m_origin, buildLegacyExternalCaller(), m_precompiledManager);
+            if (!result)
+            {
+                // TODO: build EVMCResult and return
+            }
+        }
 
         if (m_message.kind == EVMC_CREATE || m_message.kind == EVMC_CREATE2)
         {
@@ -336,8 +347,11 @@ public:
             // Table exists
         }
 
-        createAuthTable(m_rollbackableStorage, m_blockHeader, m_message, m_origin,
-            m_myContractTable, buildLegacyExternalCaller(), m_precompiledManager);
+        if (m_ledgerConfig.authCheckStatus() != 0U)
+        {
+            createAuthTable(m_rollbackableStorage, m_blockHeader, m_message, m_origin,
+                m_myContractTable, buildLegacyExternalCaller(), m_precompiledManager);
+        }
 
         storage::Entry tableEntry;
         tableEntry.setField(0, "value");
@@ -432,7 +446,7 @@ public:
         }
 
         HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_blockHeader, *messagePtr,
-            m_origin, {}, m_contextID, m_seq, m_precompiledManager);
+            m_origin, {}, m_contextID, m_seq, m_precompiledManager, m_ledgerConfig);
 
         auto result = co_await hostcontext.execute();
         auto& logs = hostcontext.logs();

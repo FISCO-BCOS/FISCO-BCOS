@@ -239,28 +239,19 @@ BOOST_AUTO_TEST_CASE(range)
                 return entry;
             }));
 
-        auto readIt = co_await storage.read(
-            RANGES::iota_view<int, int>(0, 10) | RANGES::views::transform([](int i) {
+        auto readRange = co_await storage2::readSome(
+            storage, RANGES::iota_view<int, int>(0, 10) | RANGES::views::transform([](int i) {
                 return std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             }));
-        auto readRange = co_await storage2::range(storage);
-        for (auto&& [kv, num] : RANGES::views::zip(readRange, RANGES::iota_view<size_t>(0)))
+        for (auto&& [value, num] : RANGES::views::zip(readRange, RANGES::iota_view<size_t>(0)))
         {
-            auto& [key, value] = kv;
-            BOOST_CHECK(key);
             BOOST_CHECK(value);
-
-            auto& [tableName, keyName] = *key;
-            BOOST_CHECK_EQUAL(tableName, "table");
-            BOOST_CHECK_EQUAL(keyName, "key:" + boost::lexical_cast<std::string>(num));
             BOOST_CHECK_EQUAL(value->get(), "Hello world!" + boost::lexical_cast<std::string>(num));
             BOOST_CHECK_LT(num, 10);
         }
 
-        auto seekIt = co_await storage.seek(storage2::STORAGE_BEGIN);
-        auto seekRange = seekIt.range();
-
+        auto seekRange = co_await storage2::range(storage);
         for (auto&& [kv, num] : RANGES::views::zip(seekRange, RANGES::iota_view<size_t>(0)))
         {
             auto& [key, value] = kv;
