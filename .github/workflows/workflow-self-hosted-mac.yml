@@ -42,7 +42,7 @@ jobs:
         run: ./tools/.ci/clear_build_cache.sh
         
       - name: Config vcpkg registry proxy
-        run: sed -i "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
+        run: sed -i .bkp "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
     
       - name: Build for mac
         run: |
