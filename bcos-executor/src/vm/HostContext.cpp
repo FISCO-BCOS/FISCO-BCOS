@@ -136,8 +136,11 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
     case EVMC_CREATE2:
         request->createSalt = fromEvmC(_msg->create2_salt);
-        request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
-        request->create = true;
+        if (features().get(ledger::Features::Flag::bugfix_evm))
+        {
+            request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+            request->create = true;
+        }
         break;
     case EVMC_CALL:
         if (m_executive->blockContext().lock()->isWasm())
@@ -215,10 +218,13 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     request->staticCall = m_callParameters->staticCall;
 
-    // EVM STATICCALL opcode support
-    if (_msg->flags & EVMC_STATIC)
+    if (features().get(ledger::Features::Flag::bugfix_evm))
     {
-        request->staticCall = true;
+        // EVM STATICCALL opcode support
+        if (_msg->flags & EVMC_STATIC)
+        {
+            request->staticCall = true;
+        }
     }
 
     auto response = m_executive->externalCall(std::move(request));

@@ -38,7 +38,12 @@ h256 DelegateHostContext::codeHash()
 
 std::string_view DelegateHostContext::myAddress() const
 {
-    return m_thisAddress;
+    if (this->features().get(ledger::Features::Flag::bugfix_evm))
+    {
+        return m_thisAddress;
+    }
+
+    return HostContext::myAddress();
 }
 
 std::string_view DelegateHostContext::caller() const

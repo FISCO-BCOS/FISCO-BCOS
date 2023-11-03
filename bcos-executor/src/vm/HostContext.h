@@ -160,6 +160,10 @@ public:
     bool isWasm();
 
     bcos::bytes codeAt(const std::string_view& address) { return externalCodeRequest(address); }
+    const bcos::ledger::Features& features() const
+    {
+        return m_executive->blockContext().lock()->features();
+    }
 
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }

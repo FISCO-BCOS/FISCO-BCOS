@@ -118,18 +118,25 @@ size_t copyCode(evmc_host_context* _context, const evmc_address* _addr, size_t _
     uint8_t* _bufferData, size_t _bufferSize)
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
-    auto addr = fromEvmC(*_addr);
-    bytes const& code = hostContext.codeAt(addr);
+    if (hostContext.features().get(ledger::Features::Flag::bugfix_evm))
+    {
+        auto addr = fromEvmC(*_addr);
+        bytes const& code = hostContext.codeAt(addr);
 
-    // Handle "big offset" edge case.
-    if (_codeOffset >= code.size())
-        return 0;
+        // Handle "big offset" edge case.
+        if (_codeOffset >= code.size())
+            return 0;
 
-    size_t maxToCopy = code.size() - _codeOffset;
-    size_t numToCopy = std::min(maxToCopy, _bufferSize);
-    std::copy_n(&code[_codeOffset], numToCopy, _bufferData);
-    return numToCopy;
+        size_t maxToCopy = code.size() - _codeOffset;
+        size_t numToCopy = std::min(maxToCopy, _bufferSize);
+        std::copy_n(&code[_codeOffset], numToCopy, _bufferData);
+        return numToCopy;
+    }
+
+    hostContext.setCode(bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize));
+    return _bufferSize;
 }
+
 
 bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     const evmc_address* _beneficiary) noexcept
