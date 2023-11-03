@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(keys.size(), 3);
     BOOST_CHECK_EQUAL(keys[0], "bugfix_revert");
     BOOST_CHECK_EQUAL(keys[1], "bugfix_statestorage_hash");
-    BOOST_CHECK_EQUAL(keys[2], "bugfix_evm");
+    BOOST_CHECK_EQUAL(keys[2], "bugfix_evm_create2_delegatecall_staticcall_codecopy");
     BOOST_CHECK_EQUAL(keys[3], "feature_dmc2serial");
 }
 

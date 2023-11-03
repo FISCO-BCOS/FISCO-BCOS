@@ -28,7 +28,7 @@ public:
     {
         bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
         bugfix_statestorage_hash,
-        bugfix_evm,
+        bugfix_evm_create2_delegatecall_staticcall_codecopy,
         feature_dmc2serial,
     };
 
@@ -83,7 +83,7 @@ public:
         if (version >= protocol::BlockVersion::V3_2_4_VERSION)
         {
             set(Flag::bugfix_statestorage_hash);
-            set(Flag::bugfix_evm);
+            set(Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
         }
     }
 

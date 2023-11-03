@@ -118,7 +118,7 @@ size_t copyCode(evmc_host_context* _context, const evmc_address* _addr, size_t _
     uint8_t* _bufferData, size_t _bufferSize)
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
-    if (hostContext.features().get(ledger::Features::Flag::bugfix_evm))
+    if (hostContext.features().get(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
     {
         auto addr = fromEvmC(*_addr);
         bytes const& code = hostContext.codeAt(addr);
