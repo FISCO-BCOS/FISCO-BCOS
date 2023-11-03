@@ -28,12 +28,12 @@ download_console()
         if [ $? -ne 0 ]; then
             cd ..
             rm -rf ${console_file}
-            git clone -b ${console_branch} https://ghproxy.com/github.com/FISCO-BCOS/console.git
+            git clone -b ${console_branch} https://github.com/FISCO-BCOS/console.git
         fi
         git pull
     else
         rm -rf ${console_file}
-        git clone -b ${console_branch} https://ghproxy.com/github.com/FISCO-BCOS/console.git
+        git clone -b ${console_branch} https://github.com/FISCO-BCOS/console.git
     fi
 }
 
