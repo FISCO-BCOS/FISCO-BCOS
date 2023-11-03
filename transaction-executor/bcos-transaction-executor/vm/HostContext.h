@@ -26,6 +26,7 @@
 #include "../precompiled/PrecompiledManager.h"
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -109,17 +110,36 @@ private:
         {
         case EVMC_CREATE:
         {
-            auto address = fmt::format("{}_{}_{}", blockHeader.number(), m_contextID, m_seq);
-            auto hash = executor::GlobalHashImpl::g_hashImpl->hash(address);
-            std::uninitialized_copy_n(
-                hash.data(), sizeof(m_newContractAddress.bytes), m_newContractAddress.bytes);
+            if (concepts::bytebuffer::equalTo(
+                    message.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+            {
+                auto address =
+                    fmt::format(FMT_COMPILE("{}_{}_{}"), blockHeader.number(), m_contextID, m_seq);
+                auto hash = executor::GlobalHashImpl::g_hashImpl->hash(address);
+                std::uninitialized_copy_n(
+                    hash.data(), sizeof(m_newContractAddress.bytes), m_newContractAddress.bytes);
+            }
+            else
+            {
+                m_newContractAddress = message.code_address;
+            }
 
             return getTableName(m_newContractAddress);
         }
         case EVMC_CREATE2:
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error("Unimplementation!"));
-            break;
+            auto const& hashImpl = *executor::GlobalHashImpl::g_hashImpl;
+
+            auto field1 = hashImpl.hash(bytes{0xff});
+            auto field2 = bytesConstRef(message.sender.bytes, sizeof(message.sender.bytes));
+            auto field3 = toBigEndian(fromEvmC(message.create2_salt));
+            auto field4 = hashImpl.hash(bytesConstRef(message.input_data, message.input_size));
+            auto hashView = RANGES::views::concat(field1, field2, field3, field4);
+
+            std::uninitialized_copy_n(hashView.begin() + 12, sizeof(m_newContractAddress.bytes),
+                m_newContractAddress.bytes);
+
+            return getTableName(m_newContractAddress);
         }
         default:
         {
@@ -359,7 +379,8 @@ public:
             m_rollbackableStorage, StateKey{SYS_TABLES, m_myContractTable}, std::move(tableEntry));
 
         std::string_view createCode((const char*)m_message.input_data, m_message.input_size);
-        auto createCodeHash = executor::GlobalHashImpl::g_hashImpl->hash(createCode);
+        auto createCodeHash = executor::GlobalHashImpl::g_hashImpl->hash(
+            bytesConstRef((const uint8_t*)createCode.data(), createCode.size()));
         auto mode = toRevision(vmSchedule());
         auto vmInstance =
             co_await m_vmFactory.create(VMKind::evmone, createCodeHash, createCode, mode);
