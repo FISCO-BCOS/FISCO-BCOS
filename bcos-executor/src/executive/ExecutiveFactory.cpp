@@ -25,6 +25,7 @@
 #include "PromiseTransactionExecutive.h"
 #include "ShardingTransactionExecutive.h"
 #include "TransactionExecutive.h"
+#include "TransactionExecutiveSerial.h"
 #include "bcos-executor/src/precompiled/CastPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
@@ -36,7 +37,7 @@ using namespace bcos::precompiled;
 
 
 std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
-    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine)
+    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine, bool isSerialFlow)
 {
     std::shared_ptr<TransactionExecutive> executive;
     if (useCoroutine)
@@ -57,8 +58,16 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
     }
     else
     {
-        executive = std::make_shared<TransactionExecutive>(
-            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        if(isSerialFlow)
+        {
+            executive = std::make_shared<TransactionExecutiveSerial>(
+                m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        }
+        else
+        {
+            executive = std::make_shared<TransactionExecutive>(
+                m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        }
     }
 
     setParams(executive);
@@ -87,21 +96,30 @@ std::shared_ptr<bcos::precompiled::Precompiled> ExecutiveFactory::getPrecompiled
 }
 
 std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
-    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine)
+    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine, bool isSerialFlow)
 {
+    std::shared_ptr<TransactionExecutive> executive;
     if (useCoroutine)
     {
         auto needUsePromise = m_isTiKVStorage;  // tikv storage need to use promise executive
-        auto executive = std::make_shared<ShardingTransactionExecutive>(m_blockContext,
+        executive = std::make_shared<ShardingTransactionExecutive>(m_blockContext,
             _contractAddress, contextID, seq, m_gasInjector, m_poolForPromiseWait, needUsePromise);
-        setParams(executive);
-        return executive;
+
     }
     else
     {
-        auto executive = std::make_shared<TransactionExecutive>(
-            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
-        setParams(executive);
-        return executive;
+        if(isSerialFlow)
+        {
+            executive = std::make_shared<TransactionExecutiveSerial>(
+                m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        }
+        else
+        {
+            executive = std::make_shared<TransactionExecutive>(
+                m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        }
     }
+
+    setParams(executive);
+    return executive;
 }
