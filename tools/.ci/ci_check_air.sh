@@ -69,6 +69,10 @@ init()
     ${fisco_bcos_path} -v
     clear_node
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
+
+    # 将node3替换为baseline scheduler; Replace node3 with baseline scheduler
+    perl -p -i -e 's/baseline_scheduler_parallel=.+/baseline_scheduler_parallel=true/g' nodes/127.0.0.1/node3/config.ini
+
     cd nodes/127.0.0.1 && wait_and_start
 }
 

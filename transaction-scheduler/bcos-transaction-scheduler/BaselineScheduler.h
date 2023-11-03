@@ -180,6 +180,8 @@ private:
         std::function<void(Error::Ptr)>)>
         m_transactionNotifier;
     crypto::Hash const& m_hashImpl;
+    ledger::LedgerConfig::Ptr m_ledgerConfig;
+
     int64_t m_lastExecutedBlockNumber = -1;
     std::mutex m_executeMutex;
     int64_t m_lastcommittedBlockNumber = -1;
@@ -194,8 +196,6 @@ private:
     };
     std::list<ExecuteResult> m_results;
     std::mutex m_resultsMutex;
-
-    ledger::LedgerConfig::Ptr m_ledgerConfig;
 
     /**
      * Executes a block and returns a tuple containing an error (if any), the block header, and
@@ -213,12 +213,6 @@ private:
             ittapi::ITT_DOMAINS::instance().EXECUTE_BLOCK);
         try
         {
-            if (!scheduler.m_ledgerConfig)
-            {
-                scheduler.m_ledgerConfig =
-                    task::syncWait(ledger::getLedgerConfig(scheduler.m_ledger));
-            }
-
             auto blockHeader = block->blockHeaderConst();
             std::unique_lock executeLock(scheduler.m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
@@ -450,7 +444,8 @@ public:
         m_ledger(ledger),
         m_txpool(txPool),
         m_transactionSubmitResultFactory(transactionSubmitResultFactory),
-        m_hashImpl(hashImpl)
+        m_hashImpl(hashImpl),
+        m_ledgerConfig(task::syncWait(ledger::getLedgerConfig(m_ledger)))
     {}
     BaselineScheduler(const BaselineScheduler&) = delete;
     BaselineScheduler(BaselineScheduler&&) noexcept = default;

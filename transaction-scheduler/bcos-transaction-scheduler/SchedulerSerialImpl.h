@@ -4,7 +4,6 @@
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
-#include <range/v3/view/enumerate.hpp>
 
 namespace bcos::transaction_scheduler
 {
