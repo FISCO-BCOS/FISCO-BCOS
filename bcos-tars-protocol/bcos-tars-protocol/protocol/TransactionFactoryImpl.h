@@ -26,7 +26,6 @@
 #include <fstream>
 #include <stdexcept>
 #include <utility>
-using namespace bcos::protocol;
 
 namespace bcostars::protocol
 {
