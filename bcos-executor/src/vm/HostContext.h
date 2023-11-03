@@ -159,6 +159,8 @@ public:
 
     bool isWasm();
 
+    bcos::bytes codeAt(const std::string_view& address) { return externalCodeRequest(address); }
+
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
     virtual bcos::bytes externalCodeRequest(const std::string_view& address);
