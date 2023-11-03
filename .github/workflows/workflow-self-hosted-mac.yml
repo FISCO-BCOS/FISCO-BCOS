@@ -40,7 +40,7 @@ jobs:
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
-
+            
       - name: Build for mac
         run: |
           mkdir -p build && cd build && rm -rf  CMakeCache.txt
