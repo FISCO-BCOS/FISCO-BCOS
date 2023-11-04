@@ -124,28 +124,12 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
                 m_hash ^= m_hashes[i];
             }
         }
-        void join(XORHash rhs) { m_hash ^= rhs.m_hash; }
+        void join(XORHash const& rhs) { m_hash ^= rhs.m_hash; }
     };
 
     XORHash xorHash(hashes);
     tbb::parallel_reduce(tbb::blocked_range<size_t>(0, hashes.size()), xorHash);
     co_return xorHash.m_hash;
-
-    // for (auto keyValue : range)
-    // {
-    //     auto [key, entry] = keyValue;
-    //     auto& [tableName, keyName] = *key;
-
-    //     if (!entry)
-    //     {
-    //         entry = std::addressof(deletedEntry);
-    //     }
-
-    //     stateRoot ^= entry->hash(tableName, keyName, hashImpl,
-    //         static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
-    // }
-
-    // co_return stateRoot;
 }
 
 /**
