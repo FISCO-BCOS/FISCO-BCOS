@@ -54,12 +54,20 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
         {
             result = std::current_exception();
         }
-        finished.test_and_set();
-        finished.notify_one();
+
+        if (finished.test_and_set())
+        {
+            // 此处返回true说明外部首先设置了finished，那么需要通知外部已经执行完成了
+            finished.notify_one();
+        }
     }(std::forward<Task>(task), result, finished);
     waitTask.start();
 
-    finished.wait(false);
+    if (!finished.test_and_set())
+    {
+        // 此处返回false说明task还在执行中，需要等待task完成
+        finished.wait(false);
+    }
     if (std::holds_alternative<std::exception_ptr>(result))
     {
         std::rethrow_exception(std::get<std::exception_ptr>(result));

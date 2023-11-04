@@ -25,7 +25,6 @@
 #include "bcos-framework/storage2/StorageMethods.h"
 #include <evmone/evmone.h>
 #include <boost/throw_exception.hpp>
-#include <evmone/baseline.hpp>
 #include <memory>
 #include <string>
 #include <tuple>
