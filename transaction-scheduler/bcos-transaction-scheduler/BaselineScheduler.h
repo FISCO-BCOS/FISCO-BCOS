@@ -29,6 +29,7 @@
 #include <ittnotify.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/combinable.h>
+#include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_invoke.h>
 #include <oneapi/tbb/parallel_reduce.h>
@@ -40,6 +41,7 @@
 #include <exception>
 #include <memory>
 #include <range/v3/range/concepts.hpp>
+#include <range/v3/view/enumerate.hpp>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler
@@ -92,8 +94,10 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
     h256 stateRoot;
-    for (auto keyValue : range)
-    {
+
+    tbb::concurrent_vector<h256> hashes;
+    hashes.reserve(RANGES::size(range));
+    tbb::parallel_for_each(range, [&](auto const& keyValue) {
         auto [key, entry] = keyValue;
         auto& [tableName, keyName] = *key;
 
@@ -102,11 +106,46 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
             entry = std::addressof(deletedEntry);
         }
 
-        stateRoot ^= entry->hash(tableName, keyName, hashImpl,
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
-    }
+        hashes.emplace_back(entry->hash(tableName, keyName, hashImpl,
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION)));
+    });
 
-    co_return stateRoot;
+    struct XORHash
+    {
+        h256 m_hash;
+        decltype(hashes)& m_hashes;
+
+        XORHash(decltype(hashes)& hashes) : m_hashes(hashes){};
+        XORHash(XORHash& source, tbb::split /*unused*/) : m_hashes(source.m_hashes){};
+        void operator()(const tbb::blocked_range<size_t>& range)
+        {
+            for (size_t i = range.begin(); i != range.end(); ++i)
+            {
+                m_hash ^= m_hashes[i];
+            }
+        }
+        void join(XORHash rhs) { m_hash ^= rhs.m_hash; }
+    };
+
+    XORHash xorHash(hashes);
+    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, hashes.size()), xorHash);
+    co_return xorHash.m_hash;
+
+    // for (auto keyValue : range)
+    // {
+    //     auto [key, entry] = keyValue;
+    //     auto& [tableName, keyName] = *key;
+
+    //     if (!entry)
+    //     {
+    //         entry = std::addressof(deletedEntry);
+    //     }
+
+    //     stateRoot ^= entry->hash(tableName, keyName, hashImpl,
+    //         static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
+    // }
+
+    // co_return stateRoot;
 }
 
 /**
