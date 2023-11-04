@@ -339,6 +339,7 @@ public:
     {
         if (m_ledgerConfig.authCheckStatus() != 0U)
         {
+            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.authCheckStatus();
             auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, m_message,
                 m_origin, buildLegacyExternalCaller(), m_precompiledManager);
             if (!result)
