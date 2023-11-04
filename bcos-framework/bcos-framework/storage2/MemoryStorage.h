@@ -60,7 +60,7 @@ private:
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
-    constexpr static unsigned DEFAULT_CAPACITY = 4 * 1024 * 1024;  // For mru
+    constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
     using Mutex = std::mutex;
     using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
@@ -148,26 +148,22 @@ private:
 
     friend auto tag_invoke(
         bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage& storage)
+        requires(!withConcurrent)
     {
-        auto range = RANGES::views::transform(
-                         storage.m_buckets,
-                         [](auto const& bucket) -> auto const& { return bucket.container; }) |
-                     RANGES::views::join |
-                     RANGES::views::transform(
-                         [](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
-                             if constexpr (withLogicalDeletion)
-                             {
-                                 return std::make_tuple(std::addressof(data.key),
-                                     std::holds_alternative<Deleted>(data.value) ?
-                                         nullptr :
-                                         std::addressof(std::get<ValueType>(data.value)));
-                             }
-                             else
-                             {
-                                 return std::make_tuple(
-                                     std::addressof(data.key), std::addressof(data.value));
-                             }
-                         });
+        auto range = RANGES::views::transform(storage.m_buckets[0].container,
+            [](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
+                if constexpr (withLogicalDeletion)
+                {
+                    return std::make_tuple(std::addressof(data.key),
+                        std::holds_alternative<Deleted>(data.value) ?
+                            nullptr :
+                            std::addressof(std::get<ValueType>(data.value)));
+                }
+                else
+                {
+                    return std::make_tuple(std::addressof(data.key), std::addressof(data.value));
+                }
+            });
         return task::AwaitableValue<decltype(range)>(std::move(range));
     }
 

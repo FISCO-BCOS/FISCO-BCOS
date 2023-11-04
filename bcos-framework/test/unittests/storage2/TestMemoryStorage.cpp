@@ -252,6 +252,7 @@ BOOST_AUTO_TEST_CASE(range)
         }
 
         auto seekRange = co_await storage2::range(storage);
+        BOOST_CHECK_EQUAL(RANGES::size(seekRange), 100);
         for (auto&& [kv, num] : RANGES::views::zip(seekRange, RANGES::iota_view<size_t>(0)))
         {
             auto& [key, value] = kv;
