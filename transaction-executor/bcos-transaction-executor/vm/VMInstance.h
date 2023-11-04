@@ -57,11 +57,7 @@ public:
         {
             assert(instance->abi_version == EVMC_ABI_VERSION);
             if (instance->set_option != nullptr)
-            {
-                instance->set_option(instance, "advanced", "");
-                instance->set_option(instance, "trace", "");
-                // instance->set_option(instance, "baseline", "");
-            }
+            {}
             m_instance.emplace<EVMC_VM>(instance);
         }
         else
