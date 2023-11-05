@@ -28,9 +28,10 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
         std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
     ReturnVariant result;
     boost::atomic_flag finished;
+    boost::atomic_flag waitFlag;
 
-    auto waitTask = [](Task&& task, decltype(result)& result,
-                        boost::atomic_flag& finished) -> task::Task<void> {
+    auto waitTask = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
+                        boost::atomic_flag& waitFlag) -> task::Task<void> {
         try
         {
             if constexpr (std::is_void_v<ReturnType>)
@@ -58,15 +59,16 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
         if (finished.test_and_set())
         {
             // 此处返回true说明外部首先设置了finished，那么需要通知外部已经执行完成了
-            finished.notify_one();
+            waitFlag.test_and_set();
+            waitFlag.notify_one();
         }
-    }(std::forward<Task>(task), result, finished);
+    }(std::forward<Task>(task), result, finished, waitFlag);
     waitTask.start();
 
     if (!finished.test_and_set())
     {
         // 此处返回false说明task还在执行中，需要等待task完成
-        finished.wait(false);
+        waitFlag.wait(false);
     }
     if (std::holds_alternative<std::exception_ptr>(result))
     {
