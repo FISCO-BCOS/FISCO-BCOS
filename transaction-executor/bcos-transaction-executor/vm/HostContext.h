@@ -94,7 +94,6 @@ private:
     ContractTable getTableName(const evmc_address& address)
     {
         ContractTable tableName;
-        tableName.reserve(executor::USER_APPS_PREFIX.size() + sizeof(address) * 2);
         tableName.insert(
             tableName.end(), executor::USER_APPS_PREFIX.begin(), executor::USER_APPS_PREFIX.end());
         boost::algorithm::hex_lower((const char*)address.bytes,
@@ -202,13 +201,12 @@ public:
     task::Task<void> set(const evmc_bytes32* key, const evmc_bytes32* value)
     {
         std::string_view valueView((char*)value->bytes, sizeof(value->bytes));
-
         storage::Entry entry;
         entry.set(valueView);
 
+        auto keyView = bytesConstRef(key->bytes, sizeof(key->bytes));
         co_await storage2::writeOne(m_rollbackableStorage,
-            StateKey{m_myContractTable, ContractKey{bytesConstRef(key->bytes, sizeof(key->bytes))}},
-            std::move(entry));
+            StateKey{m_myContractTable, ContractKey{keyView}}, std::move(entry));
     }
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
