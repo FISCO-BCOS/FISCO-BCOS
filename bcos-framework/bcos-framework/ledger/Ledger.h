@@ -38,6 +38,16 @@ struct PrewriteBlock
 };
 inline constexpr PrewriteBlock prewriteBlock{};
 
+struct StoreTransactionsAndReceipts
+{
+    task::Task<void> operator()(auto& ledger, bcos::protocol::TransactionsPtr blockTxs,
+        bcos::protocol::Block::ConstPtr block) const
+    {
+        co_await tag_invoke(*this, ledger, std::move(blockTxs), std::move(block));
+    }
+};
+inline constexpr StoreTransactionsAndReceipts storeTransactionsAndReceipts{};
+
 struct GetBlockData
 {
     task::Task<protocol::Block::Ptr> operator()(

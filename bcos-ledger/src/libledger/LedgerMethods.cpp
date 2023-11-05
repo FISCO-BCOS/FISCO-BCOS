@@ -49,6 +49,14 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
     co_await awaitable;
 }
 
+bcos::task::Task<void> bcos::ledger::tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>,
+    LedgerInterface& ledger, bcos::protocol::TransactionsPtr blockTxs,
+    bcos::protocol::Block::ConstPtr block)
+{
+    ledger.storeTransactionsAndReceipts(std::move(blockTxs), std::move(block));
+    co_return;
+}
+
 bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
     ledger::tag_t<getBlockData> /*unused*/, LedgerInterface& ledger,
     protocol::BlockNumber blockNumber, int32_t blockFlag)

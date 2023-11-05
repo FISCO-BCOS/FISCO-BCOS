@@ -113,9 +113,9 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
     struct XORHash
     {
         h256 m_hash;
-        decltype(hashes)& m_hashes;
+        decltype(hashes) const& m_hashes;
 
-        XORHash(decltype(hashes)& hashes) : m_hashes(hashes){};
+        XORHash(decltype(hashes) const& hashes) : m_hashes(hashes){};
         XORHash(XORHash& source, tbb::split /*unused*/) : m_hashes(source.m_hashes){};
         void operator()(const tbb::blocked_range<size_t>& range)
         {
@@ -125,9 +125,7 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
             }
         }
         void join(XORHash const& rhs) { m_hash ^= rhs.m_hash; }
-    };
-
-    XORHash xorHash(hashes);
+    } xorHash(hashes);
     tbb::parallel_reduce(tbb::blocked_range<size_t>(0, hashes.size()), xorHash);
     co_return xorHash.m_hash;
 }
@@ -378,6 +376,7 @@ private:
                 BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected empty results!"));
             }
 
+            auto now = current();
             auto result = std::move(scheduler.m_results.back());
             scheduler.m_results.pop_back();
             resultsLock.unlock();
@@ -390,14 +389,17 @@ private:
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
 
                 co_await ledger::prewriteBlock(
-                    scheduler.m_ledger, result.m_transactions, result.m_block, true, *lastStorage);
+                    scheduler.m_ledger, result.m_transactions, result.m_block, false, *lastStorage);
             }
             co_await scheduler.m_multiLayerStorage.mergeAndPopImmutableBack();
+            co_await ledger::storeTransactionsAndReceipts(
+                scheduler.m_ledger, result.m_transactions, result.m_block);
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger);
             ledgerConfig->setHash(header->hash());
             scheduler.m_ledgerConfig = ledgerConfig;
-            BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number();
+            BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
+                                         << " | elapsed: " << (current() - now) << "ms";
             commitLock.unlock();
 
             scheduler.m_notifyGroup.run([&, result = std::move(result),
