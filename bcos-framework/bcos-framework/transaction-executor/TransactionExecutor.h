@@ -26,10 +26,14 @@ class SmallString : public boost::container::small_vector<char, length>
 {
 public:
     using boost::container::small_vector<char, length>::small_vector;
-    SmallString(const char* str) { this->assign(str, str + strlen(str)); }
-    SmallString(concepts::bytebuffer::ByteBuffer auto const& bytes)
+    explicit SmallString(std::string_view view)
     {
-        this->assign(RANGES::begin(bytes), RANGES::end(bytes));
+        this->assign(RANGES::begin(view), RANGES::end(view));
+    }
+    explicit SmallString(bytesConstRef ref) { this->assign(RANGES::begin(ref), RANGES::end(ref)); }
+    explicit SmallString(const std::string& str)
+    {
+        this->assign(RANGES::begin(str), RANGES::end(str));
     }
     auto operator<=>(std::string_view view) const
     {

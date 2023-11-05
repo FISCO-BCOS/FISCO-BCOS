@@ -440,7 +440,7 @@ public:
             else
             {
                 it = bucket.get().container.emplace_hint(
-                    it, Data{.key = key, .value = std::forward<decltype(value)>(value)});
+                    it, Data{.key = KeyType(key), .value = std::forward<decltype(value)>(value)});
             }
 
             if constexpr (withMRU)
