@@ -7,10 +7,10 @@ namespace bcos
 namespace executor
 {
 
-class TransactionExecutiveSerial : public TransactionExecutive
+class BillingTransactionExecutive : public TransactionExecutive
 {
 public:
-    TransactionExecutiveSerial(const BlockContext& blockContext, std::string contractAddress,
+    BillingTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
         int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
     : TransactionExecutive(blockContext, contractAddress, contextID, seq, gasInjector)
     {}
