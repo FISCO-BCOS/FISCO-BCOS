@@ -114,6 +114,8 @@ public:
             });
     }
 
+    void setIsCall(bool isCall) { m_isCall = isCall; }
+
 private:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
     void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);

@@ -101,7 +101,8 @@ inline std::string newEVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::s
     bytesConstRef _init, u256 const& _salt)
 {
     auto hash = _hashImpl->hash(
-        bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) + _hashImpl->hash(_init));
+        bytes{0xff} + (_sender.starts_with("0x") ? fromHexWithPrefix(_sender) : fromHex(_sender)) +
+        toBigEndian(_salt) + _hashImpl->hash(_init));
 
     std::string hexAddress;
     hexAddress.reserve(40);

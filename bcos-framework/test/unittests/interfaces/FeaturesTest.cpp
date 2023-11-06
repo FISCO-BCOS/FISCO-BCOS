@@ -41,12 +41,9 @@ BOOST_AUTO_TEST_CASE(feature)
     features3.setToDefault(bcos::protocol::BlockVersion::V3_2_3_VERSION);
     flags = features3.flags();
     // std::tie(flag, name, value) = flags[0];
-    flag = std::get<0>(flags[0]);
-    name = std::get<1>(flags[0]);
-    value = std::get<2>(flags[0]);
-    BOOST_CHECK_EQUAL(flag, Features::Flag::bugfix_revert);
-    BOOST_CHECK_EQUAL(name, "bugfix_revert");
-    BOOST_CHECK_EQUAL(value, true);
+    BOOST_CHECK_EQUAL(std::get<0>(flags[0]), Features::Flag::bugfix_revert);
+    BOOST_CHECK_EQUAL(std::get<1>(flags[0]), "bugfix_revert");
+    BOOST_CHECK_EQUAL(std::get<2>(flags[0]), true);
 
     BOOST_CHECK_EQUAL(features3.get(Features::Flag::feature_dmc2serial), false);
     BOOST_CHECK_EQUAL(features3.get("feature_dmc2serial"), false);
@@ -68,7 +65,7 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(features5.get("feature_dmc2serial"), true);
 
     auto keys = Features::featureKeys();
-    BOOST_CHECK_EQUAL(keys.size(), 3);
+    BOOST_CHECK_EQUAL(keys.size(), 4);
     BOOST_CHECK_EQUAL(keys[0], "bugfix_revert");
     BOOST_CHECK_EQUAL(keys[1], "bugfix_statestorage_hash");
     BOOST_CHECK_EQUAL(keys[2], "bugfix_evm_create2_delegatecall_staticcall_codecopy");
