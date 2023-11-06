@@ -26,8 +26,7 @@ struct Fixture
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         m_receiptFactory(m_cryptoSuite),
-        m_precompiledManager(bcos::executor::GlobalHashImpl::g_hashImpl),
-        m_executor(m_receiptFactory, m_precompiledManager),
+        m_executor(m_receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl),
         blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
     {
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
@@ -54,8 +53,7 @@ struct Fixture
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     MutableStorage m_backendStorage;
     ReceiptFactory m_receiptFactory;
-    PrecompiledManager m_precompiledManager;
-    bcos::transaction_executor::TransactionExecutorImpl<PrecompiledManager> m_executor;
+    bcos::transaction_executor::TransactionExecutorImpl m_executor;
     bcos::bytes m_helloworldBytecodeBinary;
 
     bcostars::BlockHeader tarsBlockHeader;
