@@ -28,20 +28,16 @@
 #include <fmt/format.h>
 #include <ittnotify.h>
 #include <oneapi/tbb/blocked_range.h>
-#include <oneapi/tbb/combinable.h>
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_invoke.h>
 #include <oneapi/tbb/parallel_reduce.h>
-#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <chrono>
 #include <exception>
 #include <memory>
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/view/enumerate.hpp>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler

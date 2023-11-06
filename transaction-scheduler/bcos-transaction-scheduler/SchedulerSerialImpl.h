@@ -25,7 +25,7 @@ private:
         }
 
         int contextID = 0;
-        for (auto&& transaction : RANGES::views::iota(0), transactions)
+        for (auto const& transaction : transactions)
         {
             receipts.emplace_back(co_await transaction_executor::executeTransaction(
                 executor, storage, blockHeader, transaction, contextID, ledgerConfig));
