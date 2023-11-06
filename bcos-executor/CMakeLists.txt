@@ -15,9 +15,7 @@ find_package(Boost REQUIRED serialization program_options context)
 find_package(jsoncpp REQUIRED)
 
 file(GLOB_RECURSE SRCS src/*.cpp)
-add_library(${EXECUTOR_TARGET} ${SRCS}
-        src/executive/TransactionExecutiveSerial.cpp
-        src/executive/TransactionExecutiveSerial.h)
+add_library(${EXECUTOR_TARGET} ${SRCS})
 if(WITH_WASM)
     target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
         Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig Paillier)

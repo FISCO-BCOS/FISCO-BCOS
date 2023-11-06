@@ -67,7 +67,7 @@ void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)
 std::shared_ptr<TransactionExecutive> ExecutiveSerialFlow::buildExecutive(
     CallParameters::UniquePtr& input)
 {
-    return m_executiveFactory->build(input->codeAddress, input->contextID, input->seq, false, true);
+    return m_executiveFactory->build(input->codeAddress, input->contextID, input->seq, ExecutiveType::billing);
 }
 
 void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
