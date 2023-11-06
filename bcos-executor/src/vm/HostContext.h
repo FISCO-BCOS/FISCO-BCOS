@@ -115,7 +115,7 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
-    std::string_view myAddress() const;
+    virtual std::string_view myAddress() const;
     virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
@@ -158,6 +158,12 @@ public:
     static crypto::Hash::Ptr& hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
     bool isWasm();
+
+    bcos::bytes codeAt(const std::string_view& address) { return externalCodeRequest(address); }
+    const bcos::ledger::Features& features() const
+    {
+        return m_executive->blockContext().lock()->features();
+    }
 
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
