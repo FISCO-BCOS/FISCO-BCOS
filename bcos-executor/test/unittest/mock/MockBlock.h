@@ -30,6 +30,7 @@ public:
     protocol::BlockHeader::ConstPtr blockHeaderConst() const override { return m_blockHeader; }
     protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
     protocol::Transaction::ConstPtr transaction(uint64_t _index) const override { return {}; }
+    protocol::Transaction::Ptr getTransaction(uint64_t _index) const override { return {}; }
     protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override { return {}; }
     protocol::TransactionMetaData::ConstPtr transactionMetaData(uint64_t _index) const override
     {

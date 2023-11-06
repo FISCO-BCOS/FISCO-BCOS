@@ -317,11 +317,11 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                     // Note: here storeVerifiedBlock will block m_verifier and decrease the
                     // proposal-verify-perf, so we async the storeVerifiedBlock here using
                     // m_txsPreStore
-                    if (!verifyError && verifyRet && block && block->blockHeader())
-                    {
-                        txpool->m_txsPreStore->enqueue(
-                            [txpool, block]() { txpool->storeVerifiedBlock(block); });
-                    }
+                    // if (!verifyError && verifyRet && block && block->blockHeader())
+                    // {
+                    //     txpool->m_txsPreStore->enqueue(
+                    //         [txpool, block]() { txpool->storeVerifiedBlock(block); });
+                    // }
                 };
 
             if (missedTxs->empty())
