@@ -40,10 +40,10 @@ public:
     Hash() = default;
     virtual ~Hash() = default;
     virtual HashType hash(bytesConstRef _data) const = 0;
-    // HashType hash(std::string_view view) const
-    // {
-    //     return hash(bytesConstRef((const unsigned char*)view.data(), view.size()));
-    // }
+    HashType hash(std::string_view view) const
+    {
+        return hash(bytesConstRef((const unsigned char*)view.data(), view.size()));
+    }
     virtual HashType emptyHash()
     {
         if (HashType() == m_emptyHash)
