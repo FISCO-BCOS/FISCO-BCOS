@@ -59,8 +59,10 @@ public:
     }
 
     virtual ~ExecutiveFactory() = default;
+//    virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
+//        int64_t contextID, int64_t seq, bool useCoroutine = true);
     virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
-        int64_t contextID, int64_t seq, bool useCoroutine = true, bool isSerialFlow = false);
+        int64_t contextID, int64_t seq, ExecutiveType execType);
     const BlockContext& getBlockContext() { return m_blockContext; };
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& address) const;
@@ -96,7 +98,7 @@ public:
     ~ShardingExecutiveFactory() override = default;
 
     std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
-        int64_t contextID, int64_t seq, bool useCoroutine = true, bool isSerialFlow = false) override;
+        int64_t contextID, int64_t seq, ExecutiveType execType) override;
 };
 
 }  // namespace bcos::executor
