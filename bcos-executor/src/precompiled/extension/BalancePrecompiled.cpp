@@ -19,7 +19,6 @@
  */
 
 #include "BalancePrecompiled.h"
-#include "AccountManagerPrecompiled.h"
 #include "libinitializer/AuthInitializer.h"
 #include <bcos-tool/BfsFileFactory.h>
 #include <boost/archive/binary_iarchive.hpp>
@@ -117,7 +116,7 @@ void BalancePrecompiled::getBalance(
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
                           << LOG_DESC("getBalance") << LOG_KV("account", accountStr);
-    auto newParams = codec.encode("getAccountBalance", accountStr);
+    auto newParams = codec.encodeWithSig("getAccountBalance", accountStr);
     auto getBalanceResult = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gasLeft);
@@ -151,11 +150,10 @@ void BalancePrecompiled::addBalance(
     }
 
     //  addAccountBalance
-    auto newParams = codec.encode("addAccountBalance(uint256)", accountStr, value);
+    auto newParams = codec.encodeWithSig("addAccountBalance(uint256)", accountStr, value);
     auto addBalanceResult = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gasLeft);
-
 
     _callParameters->setExternalResult(std::move(addBalanceResult));
 }
@@ -182,7 +180,7 @@ void BalancePrecompiled::subBalance(
     }
 
     //  subAccountBalance
-    auto newParams = codec.encode("subAccountBalance(uint256)", accountStr, value);
+    auto newParams = codec.encodeWithSig("subAccountBalance(uint256)", accountStr, value);
     auto subBalanceResult = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, accountStr, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gasLeft);
@@ -217,14 +215,14 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
 
 
     // first subAccountBalance, then addAccountBalance
-    auto newParams = codec.encode("subAccountBalance(uint256)", fromStr, value);
+    auto newParams = codec.encodeWithSig("subAccountBalance(uint256)", fromStr, value);
     auto subBalanceResult = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         _callParameters->m_codeAddress, fromStr, _callParameters->m_staticCall,
         _callParameters->m_create, _callParameters->m_gasLeft);
 
     if (subBalanceResult->status == int32_t(CODE_SUCCESS))
     {
-        newParams = codec.encode("addAccountBalance(uint256)", toStr, value);
+        newParams = codec.encodeWithSig("addAccountBalance(uint256)", toStr, value);
         auto addBalanceResult = externalRequest(_executive, ref(newParams),
             _callParameters->m_origin, _callParameters->m_codeAddress, toStr,
             _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gasLeft);
