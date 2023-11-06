@@ -21,18 +21,20 @@
 
 #pragma once
 
+#include "../precompiled/AuthCheck.h"
+#include "../precompiled/Precompiled.h"
 #include "../precompiled/PrecompiledManager.h"
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
+#include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/LogEntry.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-utilities/Common.h"
-#include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-framework/storage2/Storage.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -62,7 +64,7 @@ inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-template <class Storage, class PrecompiledManager>
+template <class Storage>
 class HostContext : public evmc_host_context
 {
 private:
@@ -79,6 +81,12 @@ private:
     ContractTable m_myContractTable;
     evmc_address m_newContractAddress;  // Set by getMyContractTable, not need initialize value!
     std::vector<protocol::LogEntry> m_logs;
+
+    auto buildLegacyExternalCaller()
+    {
+        return
+            [this](const evmc_message& message) { return task::syncWait(externalCall(message)); };
+    }
 
     ContractTable getTableName(const evmc_address& address)
     {
@@ -300,16 +308,13 @@ public:
 
     void suicide()
     {
-        if (blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-        {
-            // suicide(m_myContractTable); // TODO: add suicide
-        }
+        // suicide(m_myContractTable); // TODO: add suicide
     }
 
     task::Task<EVMCResult> execute()
     {
-        // TODO:
-        // 1: Check auth
+        auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, m_message, m_origin,
+            buildLegacyExternalCaller(), m_precompiledManager);
 
         if (m_message.kind == EVMC_CREATE || m_message.kind == EVMC_CREATE2)
         {
@@ -330,6 +335,10 @@ public:
         {
             // Table exists
         }
+
+        createAuthTable(m_rollbackableStorage, m_blockHeader, m_message, m_origin,
+            m_myContractTable, buildLegacyExternalCaller(), m_precompiledManager);
+
         storage::Entry tableEntry;
         tableEntry.setField(0, "value");
         co_await storage2::writeOne(
@@ -338,7 +347,8 @@ public:
         std::string_view createCode((const char*)m_message.input_data, m_message.input_size);
         auto createCodeHash = executor::GlobalHashImpl::g_hashImpl->hash(createCode);
         auto mode = toRevision(vmSchedule());
-        auto vmInstance = m_vmFactory.create(VMKind::evmone, createCodeHash, createCode, mode);
+        auto vmInstance =
+            co_await m_vmFactory.create(VMKind::evmone, createCodeHash, createCode, mode);
 
         auto savepoint = m_rollbackableStorage.current();
         auto result = vmInstance.execute(
@@ -368,12 +378,11 @@ public:
             auto addressUL = address.convert_to<unsigned long>();
             auto const* precompiled = m_precompiledManager.getPrecompiled(addressUL);
 
-            if (precompiled)
+            if (precompiled != nullptr)
             {
-                co_return precompiled->call(m_rollbackableStorage, m_blockHeader, m_message,
-                    m_origin, [this](const evmc_message& message) {
-                        return task::syncWait(externalCall(message));
-                    });
+                co_return transaction_executor::call(*precompiled, m_rollbackableStorage,
+                    m_blockHeader, m_message, m_origin, buildLegacyExternalCaller(),
+                    m_precompiledManager);
             }
         }
 
@@ -389,7 +398,7 @@ public:
         auto mode = toRevision(vmSchedule());
 
         auto codeHash = co_await codeHashAt(m_message.code_address);
-        auto vmInstance = m_vmFactory.create(VMKind::evmone, codeHash, code, mode);
+        auto vmInstance = co_await m_vmFactory.create(VMKind::evmone, codeHash, code, mode);
         auto savepoint = m_rollbackableStorage.current();
         auto result = vmInstance.execute(
             interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());

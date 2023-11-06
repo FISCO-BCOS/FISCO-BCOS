@@ -83,7 +83,7 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     }
     else if (func == name2Selector[AM_METHOD_SET_ACCOUNT_BALANCE])
     {
-        setAccountBalance(accountTableName,_executive,data,_callParameters);
+        setAccountBalance(accountTableName, _executive, data, _callParameters);
     }
     else if (func == name2Selector[AM_METHOD_GET_ACCOUNT_BALANCE])
     {
@@ -91,11 +91,11 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     }
     else if (func == name2Selector[AM_METHOD_ADD_ACCOUNT_BALANCE])
     {
-        addAccountBalance(accountTableName,_executive,data,_callParameters);
+        addAccountBalance(accountTableName, _executive, data, _callParameters);
     }
     else if (func == name2Selector[AM_METHOD_SUB_ACCOUNT_BALANCE])
     {
-        subAccountBalance(accountTableName,_executive,data,_callParameters);
+        subAccountBalance(accountTableName, _executive, data, _callParameters);
     }
     else
     {
@@ -176,8 +176,8 @@ void AccountPrecompiled::getAccountStatus(const std::string& tableName,
     _callParameters->setExecResult(codec.encode(status));
 }
 
-uint8_t AccountPrecompiled::getAccountStatus(const std::string& account,
-    const std::shared_ptr<executor::TransactionExecutive>& _executive) const
+uint8_t AccountPrecompiled::getAccountStatus(
+    const std::string& account, const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
     auto accountTable = getAccountTableName(account);
     auto entry = _executive->storage().getRow(accountTable, ACCOUNT_STATUS);
@@ -266,10 +266,9 @@ void AccountPrecompiled::subAccountBalance(const std::string& tableName,
                           << LOG_DESC("subAccountBalance") << LOG_KV("account", tableName)
                           << LOG_KV("balance", to_string(balance));
 
-    if(m_fakeAccountBalances[tableName] < balance)
+    if (m_fakeAccountBalances[tableName] < balance)
     {
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("Account balance not sufficient."));
+        BOOST_THROW_EXCEPTION(PrecompiledError("Account balance not sufficient."));
     }
     m_fakeAccountBalances[tableName] -= balance;
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));

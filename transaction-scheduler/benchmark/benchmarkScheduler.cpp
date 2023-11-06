@@ -50,8 +50,7 @@ struct Fixture
         m_blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             m_cryptoSuite, m_blockHeaderFactory, m_transactionFactory, m_receiptFactory)),
         m_multiLayerStorage(m_backendStorage),
-        m_precompiledManager(std::make_shared<bcos::crypto::Keccak256>()),
-        m_executor(*m_receiptFactory, m_precompiledManager)
+        m_executor(*m_receiptFactory, m_cryptoSuite->hashImpl())
     {
         boost::log::core::get()->set_logging_enabled(false);
 
@@ -274,8 +273,7 @@ struct Fixture
     MultiLayerStorageType m_multiLayerStorage;
     bcos::bytes m_helloworldBytecodeBinary;
 
-    PrecompiledManager m_precompiledManager;
-    TransactionExecutorImpl<PrecompiledManager> m_executor;
+    TransactionExecutorImpl m_executor;
     std::variant<std::monostate, SchedulerSerialImpl, SchedulerParallelImpl> m_scheduler;
 
     std::string m_contractAddress;
