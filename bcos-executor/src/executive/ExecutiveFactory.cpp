@@ -108,16 +108,10 @@ std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
     }
     else
     {
-        if(isSerialFlow)
-        {
-            executive = std::make_shared<TransactionExecutiveSerial>(
+        assert(!isSerialFlow);
+        executive = std::make_shared<TransactionExecutive>(
                 m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
-        }
-        else
-        {
-            executive = std::make_shared<TransactionExecutive>(
-                m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
-        }
+)
     }
 
     setParams(executive);
