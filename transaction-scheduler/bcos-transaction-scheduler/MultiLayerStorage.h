@@ -81,18 +81,39 @@ public:
         static task::Task<bool> fillMissingValues(
             auto& storage, RANGES::input_range auto const& keys, RANGES::input_range auto& values)
         {
-            boost::container::small_vector<std::pair<KeyType const*, std::optional<ValueType>*>, 1>
+            using InputKeyType = RANGES::range_value_t<decltype(keys)>;
+            constexpr bool isLvalueKeyType = std::is_lvalue_reference_v<InputKeyType>;
+            using StoreKeyType = std::conditional_t<isLvalueKeyType, KeyType const*, KeyType>;
+
+            boost::container::small_vector<std::pair<StoreKeyType, std::optional<ValueType>*>, 1>
                 missingKeyValues;
             for (auto&& [key, value] : RANGES::views::zip(keys, values))
             {
                 if (!value)
                 {
-                    missingKeyValues.emplace_back(std::addressof(key), std::addressof(value));
+                    if constexpr (isLvalueKeyType)
+                    {
+                        missingKeyValues.emplace_back(std::addressof(key), std::addressof(value));
+                    }
+                    else
+                    {
+                        missingKeyValues.emplace_back(
+                            std::forward<decltype(key)>(key), std::addressof(value));
+                    }
                 }
             }
-            auto gotValues = co_await storage2::readSome(storage,
-                missingKeyValues | RANGES::views::keys |
-                    RANGES::views::transform([](auto* key) -> auto const& { return *key; }));
+            auto gotValues = co_await storage2::readSome(
+                storage, missingKeyValues | RANGES::views::keys |
+                             RANGES::views::transform([](auto&& key) -> auto const& {
+                                 if constexpr (isLvalueKeyType)
+                                 {
+                                     return *key;
+                                 }
+                                 else
+                                 {
+                                     return key;
+                                 }
+                             }));
 
             size_t count = 0;
             for (auto&& [from, to] :
