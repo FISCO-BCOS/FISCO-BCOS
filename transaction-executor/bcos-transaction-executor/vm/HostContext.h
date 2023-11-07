@@ -243,7 +243,7 @@ public:
                 StateKey{ledger::SYS_CODE_BINARY, codeHashEntry.get()}, std::move(codeEntry));
         }
         co_await storage2::writeOne(m_rollbackableStorage,
-            StateKey{m_myContractTable, executor::ACCOUNT_CODE_HASH_SV}, std::move(codeHashEntry));
+            StateKey{m_myContractTable, executor::ACCOUNT_CODE_HASH}, std::move(codeHashEntry));
     }
 
     task::Task<void> setCode(bytesConstRef code)
