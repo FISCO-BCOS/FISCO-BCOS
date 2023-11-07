@@ -7,6 +7,7 @@
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
+#include <functional>
 #include <iterator>
 #include <stdexcept>
 #include <type_traits>
@@ -83,7 +84,8 @@ public:
         {
             using InputKeyType = RANGES::range_value_t<decltype(keys)>;
             constexpr bool isLvalueKeyType = std::is_lvalue_reference_v<InputKeyType>;
-            using StoreKeyType = std::conditional_t<isLvalueKeyType, KeyType const*, KeyType>;
+            using StoreKeyType =
+                std::conditional_t<isLvalueKeyType, std::reference_wrapper<KeyType>, KeyType>;
 
             boost::container::small_vector<std::pair<StoreKeyType, std::optional<ValueType>*>, 1>
                 missingKeyValues;
@@ -93,7 +95,7 @@ public:
                 {
                     if constexpr (isLvalueKeyType)
                     {
-                        missingKeyValues.emplace_back(std::addressof(key), std::addressof(value));
+                        missingKeyValues.emplace_back(std::ref(key), std::addressof(value));
                     }
                     else
                     {
@@ -102,18 +104,8 @@ public:
                     }
                 }
             }
-            auto gotValues = co_await storage2::readSome(
-                storage, missingKeyValues | RANGES::views::keys |
-                             RANGES::views::transform([](auto&& key) -> auto const& {
-                                 if constexpr (isLvalueKeyType)
-                                 {
-                                     return *key;
-                                 }
-                                 else
-                                 {
-                                     return key;
-                                 }
-                             }));
+            auto gotValues =
+                co_await storage2::readSome(storage, missingKeyValues | RANGES::views::keys);
 
             size_t count = 0;
             for (auto&& [from, to] :
