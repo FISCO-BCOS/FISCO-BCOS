@@ -193,8 +193,8 @@ protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 enum ExecutiveType : uint8_t
 {
     common = 0,
-    coroutine,
-    billing
+    coroutine = 1,
+    billing = 2
 };
 
 }  // namespace executor
