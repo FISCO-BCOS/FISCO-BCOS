@@ -11,6 +11,7 @@ using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
+using namespace std::string_view_literals;
 
 struct TableNameHash
 {
@@ -46,8 +47,8 @@ BOOST_AUTO_TEST_CASE(noMutable)
     task::syncWait([this]() -> task::Task<void> {
         auto view = multiLayerStorage.fork(true);
         storage::Entry entry;
-        BOOST_CHECK_THROW(
-            co_await storage2::writeOne(view, StateKey{"test_table", "test_key"}, std::move(entry)),
+        BOOST_CHECK_THROW(co_await storage2::writeOne(
+                              view, StateKey{"test_table"sv, "test_key"sv}, std::move(entry)),
             NotExistsMutableStorageError);
 
         co_return;
@@ -62,7 +63,7 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
 
         multiLayerStorage.newMutable();
         auto view = std::make_optional(multiLayerStorage.fork(true));
-        StateKey key{"test_table", "test_key"};
+        StateKey key{"test_table"sv, "test_key"sv};
 
         storage::Entry entry;
         entry.set("Hello world!");
@@ -94,7 +95,7 @@ BOOST_AUTO_TEST_CASE(merge)
         multiLayerStorage.newMutable();
         auto view = std::make_optional(multiLayerStorage.fork(true));
         auto toKey = RANGES::views::transform([](int num) {
-            return StateKey{"test_table", fmt::format("key: {}", num)};
+            return StateKey{"test_table"sv, fmt::format("key: {}", num)};
         });
         auto toValue = RANGES::views::transform([](int num) {
             storage::Entry entry;

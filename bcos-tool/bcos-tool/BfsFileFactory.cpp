@@ -84,13 +84,13 @@ bool BfsFileFactory::buildDir(Table& _table)
 }
 
 void BfsFileFactory::buildDirEntry(
-    storage::Entry& _mutableEntry, std::variant<FileType, std::string> fileType)
+    storage::Entry& _mutableEntry, std::variant<FileType, std::string, std::string_view> fileType)
 {
     std::string_view type;
     std::visit(
         [&type](const auto& _type) {
             using T = std::decay_t<decltype(_type)>;
-            if constexpr (std::is_same_v<T, std::string>)
+            if constexpr (std::is_convertible_v<T, std::string_view>)
             {
                 type = _type;
             }

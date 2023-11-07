@@ -53,6 +53,9 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
 
         if (finished.test_and_set())
         {
+            // finished已经被设置,说明外部已经suspend了,此处要获取spsendPoint并resume
+            // finished has been set, which means that the external has been suspended, here you
+            // need to get spsendPoint and resume
             suspendPoint.wait({});
             oneapi::tbb::task::resume(suspendPoint.load());
         }
@@ -61,6 +64,9 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
 
     if (!finished.test_and_set())
     {
+        // finished第一次被设置,说明task还在执行中,suspend并等待task来执行resume
+        // finished is set for the first time, indicating that the task is still being executed,
+        // suspending and waiting for the task to execute resume
         oneapi::tbb::task::suspend([&](oneapi::tbb::task::suspend_point tag) {
             suspendPoint.store(tag);
             suspendPoint.notify_one();

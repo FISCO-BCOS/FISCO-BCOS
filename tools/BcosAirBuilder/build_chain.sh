@@ -1417,6 +1417,8 @@ generate_common_ini() {
 
 [executor]
     enable_dag=true
+    baseline_scheduler=false
+    baseline_scheduler_parallel=false
 
 [storage]
     data_path=data

@@ -8,6 +8,7 @@
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
+#include "libinitializer/Common.h"
 
 std::tuple<std::function<std::shared_ptr<bcos::scheduler::SchedulerInterface>()>,
     std::function<void(std::function<void(bcos::protocol::BlockNumber)>)>>
@@ -89,5 +90,10 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
     }
 
     auto scheduler = std::make_shared<SchedulerSerialImpl>();
+
+    INITIALIZER_LOG(INFO) << "Initialize baseline scheduler, parallel: " << config.parallel
+                          << ", chunkSize: " << config.chunkSize
+                          << ", maxThread: " << config.maxThread;
+
     return buildBaselineHolder(std::move(scheduler));
 }

@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(setAndGetTest)
 {
     std::string contract = "/apps/0x11111";
     std::string shard = "/shards/hello";
-    storage.createTable(contract, STORAGE_VALUE);
+    storage.createTable(contract, std::string(STORAGE_VALUE));
 
     // test empty
     auto emptyShard = ContractShardUtils::getContractShard(storage, contract);
@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(setAndGetTreeTest)
     FOR
     {
         std::string contract = "/apps/0x000000000" + std::to_string(i);
-        storage.createTable(contract, STORAGE_VALUE);
+        storage.createTable(contract, std::string(STORAGE_VALUE));
 
         std::string parent = "/apps/0x000000000" + std::to_string(i / 2);
         ContractShardUtils::setContractShardByParent(storage, parent, contract);

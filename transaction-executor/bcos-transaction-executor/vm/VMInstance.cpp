@@ -1,4 +1,6 @@
 #include "VMInstance.h"
+#include <evmone/evmone.h>
+#include <evmone/vm.hpp>
 
 void bcos::transaction_executor::VMInstance::ReleaseEVMC::operator()(evmc_vm* ptr) const noexcept
 {
@@ -19,7 +21,9 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
                           [&](EVMC_ANALYSIS_RESULT const& instance) {
                               auto state = evmone::advanced::AdvancedExecutionState(*msg, rev,
                                   *host, context, std::basic_string_view<uint8_t>(code, codeSize));
-                              return EVMCResult(evmone::advanced::execute(state, *instance));
+                              auto* evm = evmc_create_evmone();
+                              return EVMCResult(evmone::baseline::execute(
+                                  *static_cast<evmone::VM*>(evm), msg->gas, state, *instance));
                           }},
         m_instance);
 }
