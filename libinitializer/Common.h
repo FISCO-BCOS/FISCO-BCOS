@@ -31,9 +31,7 @@
 #include <memory>
 
 #define INITIALIZER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[INITIALIZER]"
-namespace bcos
-{
-namespace initializer
+namespace bcos::initializer
 {
 inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
     unsigned _hexedPrivateKeySize, bcos::security::DataEncryptInterface::Ptr _certEncryptionHandler)
@@ -88,5 +86,4 @@ inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
     }
     return fromHexString(keyHex);
 }
-}  // namespace initializer
-}  // namespace bcos
+}  // namespace bcos::initializer

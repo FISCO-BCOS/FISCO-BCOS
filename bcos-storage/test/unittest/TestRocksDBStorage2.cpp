@@ -58,13 +58,13 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
             rocksDB(*originRocksDB, StateKeyResolver{}, StateValueResolver{});
 
         auto notExistsValue =
-            co_await storage2::readOne(rocksDB, StateKey{"Non exists table", "Non exists key"});
+            co_await storage2::readOne(rocksDB, StateKey{"Non exists table"sv, "Non exists key"sv});
         BOOST_REQUIRE(!notExistsValue);
 
         auto keys = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
-            auto stateKey = StateKey{tableName, key};
+            auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
         auto values = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {
@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         auto queryKeys = RANGES::views::iota(0, 150) | RANGES::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
-            auto stateKey = StateKey{tableName, key};
+            auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
         auto it = co_await rocksDB.read(queryKeys);
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         auto removeKeys = RANGES::views::iota(50, 70) | RANGES::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
-            StateKey stateKey{tableName, key};
+            StateKey stateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
         co_await rocksDB.remove(removeKeys);
@@ -165,7 +165,7 @@ BOOST_AUTO_TEST_CASE(merge)
         auto keys = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
-            auto stateKey = StateKey{tableName, key};
+            auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
         auto values = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {

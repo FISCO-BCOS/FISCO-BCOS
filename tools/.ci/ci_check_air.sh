@@ -69,6 +69,12 @@ init()
     ${fisco_bcos_path} -v
     clear_node
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
+
+    # 将node2、node3替换为baseline scheduler, 这样不一致时可立即发现
+    # Replace node2 and node3 with baseline scheduler, so that inconsistencies can be detected immediately
+    # perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node2/config.ini
+    # perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node3/config.ini
+
     cd nodes/127.0.0.1 && wait_and_start
 }
 

@@ -3,15 +3,13 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
-#include <iostream>
-#include <range/v3/view/transform.hpp>
-
 #include <boost/test/unit_test.hpp>
+#include <iostream>
 
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
-using namespace std::literals;
+using namespace std::string_view_literals;
 
 class TestRollbackableStorageFixture
 {
@@ -40,7 +38,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
             RANGES::views::single(StateKeyView{tableID, "Key2"}), RANGES::views::single(entry2));
 
         // Check the entry exists
-        std::vector<StateKey> keys{StateKey{tableID, "Key1"}, StateKey{"table1", "Key2"}};
+        std::vector<StateKey> keys{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
         auto it = co_await rollbackableStorage.read(keys);
         auto count = 0;
         while (co_await it.next())
@@ -57,7 +55,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         co_await rollbackableStorage.rollback(point);
 
         // Query again
-        std::vector<StateKey> keys2{StateKey{tableID, "Key1"}, StateKey{"table1", "Key2"}};
+        std::vector<StateKey> keys2{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
         auto it2 = co_await rollbackableStorage.read(keys2);
         auto count2 = 0;
         while (co_await it2.next())
@@ -89,7 +87,7 @@ BOOST_AUTO_TEST_CASE(removeRollback)
             RANGES::views::single(StateKey{tableID, "Key2"sv}), RANGES::views::single(entry2));
 
         // Check the entry exists
-        std::vector<StateKey> keys{StateKey{tableID, "Key1"}, StateKey{"table1", "Key2"}};
+        std::vector<StateKey> keys{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
         auto it = co_await rollbackableStorage.read(keys);
         auto count = 0;
         while (co_await it.next())
@@ -104,7 +102,7 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         co_await rollbackableStorage.rollback(point);
 
         // Query again
-        std::vector<StateKey> keys2{StateKey{tableID, "Key1"}, StateKey{"table1", "Key2"}};
+        std::vector<StateKey> keys2{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
         auto it2 = co_await rollbackableStorage.read(keys2);
         auto count2 = 0;
         while (co_await it2.next())
@@ -125,18 +123,18 @@ BOOST_AUTO_TEST_CASE(equal)
             storage;
 
         co_await storage.write(
-            RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place, "table", "0"),
+            RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place, "table"sv, "0"sv),
             RANGES::single_view(0));
         co_await storage.write(
-            RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place, "table", "1"),
+            RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place, "table"sv, "1"sv),
             RANGES::single_view(1));
         co_await storage.write(
-            RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place, "table", "2"),
+            RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place, "table"sv, "2"sv),
             RANGES::single_view(2));
 
         auto it = co_await storage.read(
             RANGES::iota_view<int, int>(0, 3) | RANGES::views::transform([](int num) {
-                return StateKey("table", boost::lexical_cast<std::string>(num));
+                return StateKey("table"sv, boost::lexical_cast<std::string>(num));
             }));
         int i = 0;
         while (co_await it.next())

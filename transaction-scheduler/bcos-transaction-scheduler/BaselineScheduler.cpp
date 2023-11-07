@@ -42,7 +42,7 @@ bcos::h256 bcos::transaction_scheduler::calcauteTransactionRoot(
                           [&block](uint64_t index) { return block.transactionHash(index); });
         merkle.generateMerkle(hashes, merkleTrie);
     }
-    // TODO: write merkle into storage
+
     return *RANGES::rbegin(merkleTrie);
 }
 

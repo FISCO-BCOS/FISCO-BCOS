@@ -45,7 +45,7 @@ class VMFactory
 {
 private:
     storage2::memory_storage::MemoryStorage<crypto::HashType,
-        std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>,
+        std::shared_ptr<evmone::baseline::CodeAnalysis const>,
         storage2::memory_storage::Attribute(
             storage2::memory_storage::CONCURRENT | storage2::memory_storage::MRU),
         std::hash<crypto::HashType>>
@@ -78,8 +78,8 @@ public:
 
             if (!codeAnalysis)
             {
-                codeAnalysis.emplace(std::make_shared<evmone::advanced::AdvancedCodeAnalysis>(
-                    evmone::advanced::analyze(
+                codeAnalysis.emplace(
+                    std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(
                         mode, evmone::bytes_view((const uint8_t*)code.data(), code.size()))));
                 co_await storage2::writeOne(m_evmoneCodeAnalysisCache, codeHash, *codeAnalysis);
             }

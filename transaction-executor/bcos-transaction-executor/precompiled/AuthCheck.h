@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ExecutiveWrapper.h"
+#include "bcos-executor/src/CallParameters.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
