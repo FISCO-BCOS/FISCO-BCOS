@@ -59,6 +59,7 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
         if (finished.test_and_set())
         {
             // 此处返回true说明外部首先设置了finished，那么需要通知外部已经执行完成了
+            // If true is returned here, the external finish is set first, and the external execution needs to be notified
             waitFlag.test_and_set();
             waitFlag.notify_one();
         }
@@ -68,6 +69,7 @@ auto syncWait(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
     if (!finished.test_and_set())
     {
         // 此处返回false说明task还在执行中，需要等待task完成
+        // If false is returned, the task is still being executed and you need to wait for the task to complete
         waitFlag.wait(false);
     }
     if (std::holds_alternative<std::exception_ptr>(result))
