@@ -147,7 +147,7 @@ private:
     }
 
     friend auto tag_invoke(
-        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage& storage)
+        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
         requires(!withConcurrent)
     {
         auto range = RANGES::views::transform(storage.m_buckets[0].container,

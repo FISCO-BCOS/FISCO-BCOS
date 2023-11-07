@@ -48,6 +48,8 @@ private:
         std::add_lvalue_reference_t<CachedStorage>, std::monostate>
         m_cacheStorage;
 
+    // 同一时间只允许一个可以修改的view
+    // Only one view that can be modified is allowed at a time
     std::mutex m_mutableMutex;
 
 public:
@@ -78,34 +80,108 @@ public:
           : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
         {}
 
-        static auto readStorage(auto& storage,
-            boost::container::small_vector<std::tuple<KeyType, std::optional<ValueType>>, 1>&
-                keyValues) -> task::Task<bool>
+        static task::Task<bool> readForMissings(auto& storage, RANGES::input_range auto& cache,
+            RANGES::input_range auto const& keys, RANGES::input_range auto& values)
         {
-            auto keyIndexes =
-                RANGES::views::enumerate(keyValues) | RANGES::views::filter([](auto&& tuple) {
-                    return !std::get<1>(std::get<1>(tuple));
-                }) |
-                RANGES::views::transform([](auto&& tuple) -> auto{ return std::get<0>(tuple); }) |
-                RANGES::to<boost::container::small_vector<size_t, 1>>();
-            auto it = co_await storage.read(RANGES::views::transform(
-                keyIndexes, [&](auto& index) -> auto& { return std::get<0>(keyValues[index]); }));
+            cache = RANGES::views::zip(keys, values) | RANGES::views::filter([](auto&& tuple) {
+                auto&& [key, value] = tuple;
+                return !value;
+            }) | RANGES::views::transform([](auto&& tuple) {
+                auto&& [key, value] = tuple;
+                return std::make_tuple(std::addressof(key), std::addressof(value));
+            }) | RANGES::to<std::decay_t<decltype(cache)>>();
 
-            bool finished = true;
-            auto indexIt = RANGES::begin(keyIndexes);
-            while (co_await it.next())
+            auto missingKeys = cache | RANGES::views::transform([](auto&& tuple) -> auto const& {
+                auto&& [key, value] = tuple;
+                return *key;
+            });
+            auto missingValues = co_await storage2::readSome(storage, missingKeys);
+            size_t count = 0;
+            for (auto&& [from, to] : RANGES::views::zip(
+                     missingValues, cache | RANGES::views::transform([](auto&& tuple) -> auto& {
+                         auto&& [key, value] = tuple;
+                         return *value;
+                     })))
             {
-                if (co_await it.hasValue())
+                if (from)
                 {
-                    std::get<1>(keyValues[*indexIt]).emplace(co_await it.value());
+                    *to = std::move(*from);
+                    ++count;
                 }
-                else
-                {
-                    finished = false;
-                }
-                RANGES::advance(indexIt, 1);
             }
-            co_return finished;
+            co_return count == RANGES::size(missingKeys);
+        }
+
+        friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& storage,
+            RANGES::input_range auto const& keys)
+            -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
+                *storage.m_mutableStorage, keys))>>
+            requires RANGES::sized_range<decltype(keys)> &&
+                     RANGES::sized_range<task::AwaitableReturnType<decltype(storage2::readSome(
+                         *storage.m_mutableStorage, keys))>>
+        {
+            task::AwaitableReturnType<decltype(storage2::readSome(*storage.m_mutableStorage, keys))>
+                values;
+            values.resize(RANGES::size(keys));
+
+            boost::container::small_vector<std::tuple<KeyType const*, std::optional<ValueType>*>, 1>
+                cache;
+            if (storage.m_mutableStorage &&
+                co_await readForMissings(*storage.m_mutableStorage, cache, keys, values))
+            {
+                co_return values;
+            }
+
+            for (auto& immutableStorage : storage.m_immutableStorages)
+            {
+                if (co_await readForMissings(*immutableStorage, cache, keys, values))
+                {
+                    co_return values;
+                }
+            }
+
+            if constexpr (withCacheStorage)
+            {
+                if (co_await readForMissings(storage.m_cacheStorage, cache, keys, values))
+                {
+                    co_return values;
+                }
+            }
+
+            co_await readForMissings(storage.m_backendStorage, cache, keys, values);
+            co_return values;
+        }
+
+        friend task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
+            View& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+        {
+            if (!storage.m_mutableStorage) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
+            }
+            co_await storage2::writeSome(*storage.m_mutableStorage,
+                std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
+        }
+
+        friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
+            View& storage, RANGES::input_range auto&& keys)
+        {
+            if (!storage.m_mutableStorage)
+            {
+                BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
+            }
+
+            co_await storage2::removeSome(
+                *storage.m_mutableStorage, std::forward<decltype(keys)>(keys));
+        }
+
+        MutableStorageType& mutableStorage()
+        {
+            if (!m_mutableStorage)
+            {
+                BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
+            }
+            return *m_mutableStorage;
         }
 
     public:
@@ -115,46 +191,10 @@ public:
         View& operator=(View&&) noexcept = default;
         ~View() noexcept = default;
 
-        void release() { m_mutableLock.unlock(); }
-
-        class ReadIterator
-        {
-            friend class View;
-
-        private:
-            boost::container::small_vector<std::tuple<KeyType, std::optional<ValueType>>, 1>
-                m_keyValues;
-            int64_t m_index = -1;
-
-        public:
-            using Key = std::remove_cvref_t<typename MultiLayerStorage::KeyType> const&;
-            using Value = std::remove_cvref_t<typename MultiLayerStorage::ValueType> const&;
-
-            ReadIterator() = default;
-
-            ReadIterator(const ReadIterator&) = delete;
-            ReadIterator(ReadIterator&& rhs) noexcept = default;
-            ReadIterator& operator=(const ReadIterator&) = delete;
-            ReadIterator& operator=(ReadIterator&&) noexcept = default;
-            ~ReadIterator() noexcept = default;
-
-            task::AwaitableValue<bool> next()
-            {
-                return {static_cast<size_t>(++m_index) != m_keyValues.size()};
-            }
-            task::AwaitableValue<Key> key() const { return {std::get<0>(m_keyValues[m_index])}; }
-            task::AwaitableValue<Value> value() const
-            {
-                return {*(std::get<1>(m_keyValues[m_index]))};
-            }
-            task::AwaitableValue<bool> hasValue() const
-            {
-                return {std::get<1>(m_keyValues[m_index]).has_value()};
-            }
-        };
-
         using Key = KeyType;
         using Value = ValueType;
+
+        void release() { m_mutableLock.unlock(); }
 
         template <class... Args>
         void newTemporaryMutable(Args... args)
@@ -167,96 +207,6 @@ public:
             m_mutableStorage = std::make_shared<MutableStorageType>(args...);
         }
 
-        task::Task<ReadIterator> read(RANGES::input_range auto&& keys)
-        {
-            ReadIterator iterator;
-            iterator.m_keyValues = RANGES::views::transform(keys, [](auto&& key) {
-                return std::tuple<KeyType, std::optional<ValueType>>(
-                    std::forward<decltype(key)>(key), std::optional<ValueType>{});
-            }) | RANGES::to<decltype(iterator.m_keyValues)>();
-
-            if (m_mutableStorage)
-            {
-                if (co_await readStorage(*m_mutableStorage, iterator.m_keyValues))
-                {
-                    co_return iterator;
-                }
-            }
-
-            if (!RANGES::empty(m_immutableStorages))
-            {
-                for (auto& immutableStorage : m_immutableStorages)
-                {
-                    if (co_await readStorage(*immutableStorage, iterator.m_keyValues))
-                    {
-                        co_return iterator;
-                    }
-                }
-            }
-
-            if constexpr (withCacheStorage)
-            {
-                if (co_await readStorage(m_cacheStorage, iterator.m_keyValues))
-                {
-                    co_return iterator;
-                }
-            }
-
-            auto missingKeyIndexes =
-                RANGES::views::enumerate(iterator.m_keyValues) |
-                RANGES::views::filter(
-                    [](auto&& tuple) { return !std::get<1>(std::get<1>(tuple)); }) |
-                RANGES::views::transform([](auto&& tuple) -> auto{ return std::get<0>(tuple); }) |
-                RANGES::to<boost::container::small_vector<size_t, 1>>();
-            co_await readStorage(m_backendStorage, iterator.m_keyValues);
-            // Write data into cache
-            if constexpr (withCacheStorage)
-            {
-                for (auto index : missingKeyIndexes)
-                {
-                    if (std::get<1>(iterator.m_keyValues[index]))
-                    {
-                        co_await storage2::writeOne(m_cacheStorage,
-                            std::get<0>(iterator.m_keyValues[index]),
-                            *std::get<1>(iterator.m_keyValues[index]));
-                    }
-                }
-            }
-
-            co_return iterator;
-        }
-
-        task::Task<void> write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
-        {
-            if (!m_mutableStorage) [[unlikely]]
-            {
-                BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
-            }
-
-            co_await m_mutableStorage->write(
-                std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
-            co_return;
-        }
-
-        task::Task<void> remove(RANGES::input_range auto const& keys)
-        {
-            if (!m_mutableStorage)
-            {
-                BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
-            }
-
-            co_await m_mutableStorage->remove(keys);
-            co_return;
-        }
-
-        MutableStorageType& mutableStorage()
-        {
-            if (!m_mutableStorage)
-            {
-                BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
-            }
-            return *m_mutableStorage;
-        }
         BackendStorage& backendStorage() { return m_backendStorage; }
     };
 

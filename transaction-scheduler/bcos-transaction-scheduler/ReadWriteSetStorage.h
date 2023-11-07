@@ -1,5 +1,6 @@
 #pragma once
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include <bcos-task/Trait.h>
 #include <oneapi/tbb.h>
 #include <compare>
@@ -30,6 +31,42 @@ private:
             it->second.write |= write;
             it->second.read |= (!write);
         }
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
+        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys)
+        -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage.m_storage, keys))>>
+    {
+        for (auto&& key : keys)
+        {
+            storage.putSet(false, key);
+        }
+        co_return co_await storage2::readSome(storage.m_storage, keys);
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
+        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys,
+        RANGES::input_range auto&& values)
+        -> task::Task<task::AwaitableReturnType<decltype(storage2::writeSome(
+            storage.m_storage, std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))>>
+    {
+        for (auto&& key : keys)
+        {
+            storage.putSet(true, std::forward<decltype(key)>(key));
+        }
+        co_return co_await storage2::writeSome(
+            storage.m_storage, keys, std::forward<decltype(values)>(values));
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
+        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys)
+        -> task::Task<task::AwaitableReturnType<decltype(storage2::removeSome(storage.m_storage, keys))>>
+    {
+        for (auto&& key : keys)
+        {
+            storage.putSet(true, std::forward<decltype(key)>(key));
+        }
+        co_return co_await storage2::removeSome(storage.m_storage, keys);
     }
 
 public:
@@ -73,44 +110,6 @@ public:
         }
 
         return false;
-    }
-
-    auto read(RANGES::input_range auto&& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(m_storage.read(keys))>>
-    {
-        for (auto&& key : keys)
-        {
-            putSet(false, key);
-        }
-        co_return co_await readDirect(std::forward<decltype(keys)>(keys));
-    }
-
-    auto readDirect(RANGES::input_range auto&& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(m_storage.read(keys))>>
-    {
-        co_return co_await m_storage.read(std::forward<decltype(keys)>(keys));
-    }
-
-    auto write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
-        -> task::Task<task::AwaitableReturnType<decltype(m_storage.write(
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))>>
-    {
-        for (auto&& key : keys)
-        {
-            putSet(true, std::forward<decltype(key)>(key));
-        }
-        co_return co_await m_storage.write(
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
-    }
-
-    auto remove(RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(m_storage.remove(keys))>>
-    {
-        for (auto&& key : keys)
-        {
-            putSet(true, std::forward<decltype(key)>(key));
-        }
-        co_return co_await m_storage.remove(keys);
     }
 };
 

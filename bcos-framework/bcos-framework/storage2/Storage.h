@@ -3,6 +3,7 @@
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Ranges.h"
 #include <optional>
+#include <range/v3/view/transform.hpp>
 
 // tag_invoke storage interface
 namespace bcos::storage2
@@ -18,11 +19,13 @@ using ReturnType = typename task::AwaitableReturnType<Invoke>;
 
 struct ReadSome
 {
-    auto operator()(auto& storage, RANGES::input_range auto const& keys) const
-        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage, keys))>>
-        requires RANGES::range<ReturnType<decltype(tag_invoke(*this, storage, keys))>>
+    auto operator()(auto& storage, RANGES::input_range auto const& keys, auto&&... args) const
+        -> task::Task<ReturnType<decltype(tag_invoke(
+            *this, storage, keys, std::forward<decltype(args)>(args)...))>>
+        requires RANGES::range<ReturnType<decltype(tag_invoke(
+            *this, storage, keys, std::forward<decltype(args)>(args)...))>>
     {
-        co_return co_await tag_invoke(*this, storage, keys);
+        co_return co_await tag_invoke(*this, storage, keys, std::forward<decltype(args)>(args)...);
     }
 };
 inline constexpr ReadSome readSome{};
@@ -53,10 +56,11 @@ struct RemoveSome
 inline constexpr RemoveSome removeSome{};
 struct ReadOne
 {
-    auto operator()(auto& storage, auto const& key) const
-        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage, key))>>
+    auto operator()(auto& storage, auto const& key, auto&&... args) const
+        -> task::Task<ReturnType<decltype(tag_invoke(
+            *this, storage, key, std::forward<decltype(args)>(args)...))>>
     {
-        co_return co_await tag_invoke(*this, storage, key);
+        co_return co_await tag_invoke(*this, storage, key, std::forward<decltype(args)>(args)...);
     }
 };
 inline constexpr ReadOne readOne{};
@@ -150,6 +154,26 @@ auto tag_invoke(bcos::storage2::tag_t<existsOne> /*unused*/, auto& storage, auto
 {
     auto result = co_await readOne(storage, key);
     co_return result.has_value();
+}
+
+task::Task<void> tag_invoke(
+    bcos::storage2::tag_t<merge> /*unused*/, auto const& fromStorage, auto& toStorage)
+{
+    auto range = co_await storage2::range(fromStorage);
+
+    auto validRange = range | RANGES::views::filter([](auto input) {
+        auto [key, value] = input;
+        return key != nullptr && value != nullptr;
+    });
+    co_await storage2::writeSome(toStorage,
+        validRange | RANGES::views::transform([](auto&& input) -> auto const& {
+            auto [key, value] = input;
+            return *key;
+        }),
+        validRange | RANGES::views::transform([](auto&& input) -> auto const& {
+            auto [key, value] = input;
+            return *value;
+        }));
 }
 
 }  // namespace bcos::storage2
