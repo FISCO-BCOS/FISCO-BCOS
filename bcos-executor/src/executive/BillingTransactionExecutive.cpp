@@ -50,7 +50,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
             return message;
         }
 
-        s256 gasPrice;
+        u256 gasPrice;
         codec.decode(ref(gasPriceRet->data), gasPrice);
 
         if(balance < message->gas * gasPrice)
