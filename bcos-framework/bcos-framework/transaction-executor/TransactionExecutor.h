@@ -19,7 +19,7 @@
 namespace bcos::transaction_executor
 {
 constexpr static size_t CONTRACT_KEY_LENGTH = 32;
-constexpr static size_t CONTRACT_TABLE_LENGTH = std::string_view{"/apps/"}.size() + 20 * 2;
+constexpr static size_t CONTRACT_TABLE_LENGTH = 48;
 
 template <size_t length>
 class SmallString : public boost::container::small_vector<char, length>
