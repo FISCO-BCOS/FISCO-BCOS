@@ -32,7 +32,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
             message->message = balanceRet->message;
             return message;
         }
-        s256 balance;
+        u256 balance;
         codec.decode(ref(balanceRet->data), balance);
 
         CallParameters::UniquePtr callParam4SystemConfig =
