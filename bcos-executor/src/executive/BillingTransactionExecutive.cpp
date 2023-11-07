@@ -70,7 +70,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
         }
     }
 
-    EXECUTIVE_LOG(TRACE) << "Execute finish\t" << message->toFullString();
+    EXECUTIVE_LOG(TRACE) << "Execute billing executive finish\t" << message->toFullString();
 
     return message;
 }
