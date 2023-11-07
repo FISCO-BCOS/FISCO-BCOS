@@ -83,6 +83,11 @@ inline constexpr ExecuteTransaction executeTransaction{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
+
+struct ReadDirect
+{
+};
+inline constexpr ReadDirect readDirect{};
 }  // namespace bcos::transaction_executor
 
 template <>

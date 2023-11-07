@@ -78,7 +78,7 @@ public:
           : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
         {}
 
-        static task::Task<bool> fillMissingValue(
+        static task::Task<bool> fillMissingValues(
             auto& storage, RANGES::input_range auto const& keys, RANGES::input_range auto& values)
         {
             boost::container::small_vector<std::pair<KeyType const*, std::optional<ValueType>*>, 1>
@@ -104,30 +104,33 @@ public:
                     ++count;
                 }
             }
+
             co_return count == RANGES::size(gotValues);
         }
 
         friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& storage,
             RANGES::input_range auto const& keys)
             -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
-                *storage.m_mutableStorage, keys))>>
+                (MutableStorageType&)(std::declval<MutableStorageType>()), keys))>>
             requires RANGES::sized_range<decltype(keys)> &&
                      RANGES::sized_range<task::AwaitableReturnType<decltype(storage2::readSome(
-                         *storage.m_mutableStorage, keys))>>
+                         (MutableStorageType&)std::declval<MutableStorageType>(), keys))>>
         {
             task::AwaitableReturnType<decltype(storage2::readSome(*storage.m_mutableStorage, keys))>
-                values;
-            values.resize(RANGES::size(keys));
-
+                values(RANGES::size(keys));
             if (storage.m_mutableStorage &&
-                co_await fillMissingValue(*storage.m_mutableStorage, keys, values))
+                co_await fillMissingValues(*storage.m_mutableStorage, keys, values))
             {
                 co_return values;
+            }
+            else
+            {
+                values.resize(RANGES::size(keys));
             }
 
             for (auto& immutableStorage : storage.m_immutableStorages)
             {
-                if (co_await fillMissingValue(*immutableStorage, keys, values))
+                if (co_await fillMissingValues(*immutableStorage, keys, values))
                 {
                     co_return values;
                 }
@@ -135,14 +138,92 @@ public:
 
             if constexpr (withCacheStorage)
             {
-                if (co_await fillMissingValue(storage.m_cacheStorage, keys, values))
+                if (co_await fillMissingValues(storage.m_cacheStorage, keys, values))
                 {
                     co_return values;
                 }
             }
 
-            co_await fillMissingValue(storage.m_backendStorage, keys, values);
+            co_await fillMissingValues(storage.m_backendStorage, keys, values);
             co_return values;
+        }
+
+        friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& storage,
+            RANGES::input_range auto const& keys, transaction_executor::ReadDirect&& /*unused*/)
+            -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
+                (MutableStorageType&)std::declval<MutableStorageType>(), keys))>>
+        {
+            if (storage.m_mutableStorage)
+            {
+                co_return co_await storage2::readSome(*storage.m_mutableStorage, keys);
+            }
+
+            for (auto& immutableStorage : storage.m_immutableStorages)
+            {
+                co_return co_await storage2::readSome(*immutableStorage);
+            }
+
+            if constexpr (withCacheStorage)
+            {
+                co_return co_await storage2::readSome(storage.m_cacheStorage);
+            }
+
+            co_return co_await storage2::readSome(storage.m_backendStorage);
+        }
+
+        friend auto tag_invoke(
+            storage2::tag_t<storage2::readOne> /*unused*/, View& storage, auto const& key)
+            -> task::Task<task::AwaitableReturnType<decltype(storage2::readOne(
+                (MutableStorageType&)std::declval<MutableStorageType>(), key))>>
+        {
+            if (storage.m_mutableStorage)
+            {
+                if (auto value = co_await storage2::readOne(*storage.m_mutableStorage, key))
+                {
+                    co_return value;
+                }
+            }
+
+            for (auto& immutableStorage : storage.m_immutableStorages)
+            {
+                if (auto value = co_await storage2::readOne(*immutableStorage, key))
+                {
+                    co_return value;
+                }
+            }
+
+            if constexpr (withCacheStorage)
+            {
+                if (auto value = co_await storage2::readOne(storage.m_cacheStorage, key))
+                {
+                    co_return value;
+                }
+            }
+
+            co_return co_await storage2::readOne(storage.m_backendStorage, key);
+        }
+
+        friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& storage,
+            auto const& key, transaction_executor::ReadDirect&& /*unused*/)
+            -> task::Task<task::AwaitableReturnType<decltype(storage2::readOne(
+                (MutableStorageType&)std::declval<MutableStorageType>(), key))>>
+        {
+            if (storage.m_mutableStorage)
+            {
+                co_return co_await storage2::readOne(*storage.m_mutableStorage, key);
+            }
+
+            for (auto& immutableStorage : storage.m_immutableStorages)
+            {
+                co_return co_await storage2::readOne(*immutableStorage, key);
+            }
+
+            if constexpr (withCacheStorage)
+            {
+                co_return co_await storage2::readOne(storage.m_cacheStorage, key);
+            }
+
+            co_return co_await storage2::readOne(storage.m_backendStorage, key);
         }
 
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
