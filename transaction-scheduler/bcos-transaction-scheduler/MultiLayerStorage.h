@@ -82,26 +82,19 @@ public:
         static task::Task<bool> fillMissingValues(
             auto& storage, RANGES::input_range auto const& keys, RANGES::input_range auto& values)
         {
-            using InputKeyType = RANGES::range_value_t<decltype(keys)>;
-            constexpr bool isLvalueKeyType = std::is_lvalue_reference_v<InputKeyType>;
-            using StoreKeyType =
-                std::conditional_t<isLvalueKeyType, std::reference_wrapper<KeyType>, KeyType>;
+            using StoreKeyType = std::conditional_t<
+                std::is_lvalue_reference_v<RANGES::range_value_t<decltype(keys)>>,
+                std::reference_wrapper<KeyType>, KeyType>;
 
-            boost::container::small_vector<std::pair<StoreKeyType, std::optional<ValueType>*>, 1>
+            boost::container::small_vector<
+                std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>, 1>
                 missingKeyValues;
             for (auto&& [key, value] : RANGES::views::zip(keys, values))
             {
                 if (!value)
                 {
-                    if constexpr (isLvalueKeyType)
-                    {
-                        missingKeyValues.emplace_back(std::ref(key), std::addressof(value));
-                    }
-                    else
-                    {
-                        missingKeyValues.emplace_back(
-                            std::forward<decltype(key)>(key), std::addressof(value));
-                    }
+                    missingKeyValues.emplace_back(
+                        std::forward<decltype(key)>(key), std::ref(value));
                 }
             }
             auto gotValues =
@@ -113,7 +106,7 @@ public:
             {
                 if (from)
                 {
-                    *to = std::move(from);
+                    to.get() = std::move(from);
                     ++count;
                 }
             }
