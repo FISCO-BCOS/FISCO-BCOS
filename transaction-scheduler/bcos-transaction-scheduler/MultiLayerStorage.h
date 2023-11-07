@@ -1,12 +1,10 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-task/AwaitableValue.h"
 #include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
-#include <bcos-concepts/Basic.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
-#include <bcos-task/AwaitableValue.h>
 #include <oneapi/tbb/parallel_invoke.h>
-#include <oneapi/tbb/task_group.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
@@ -80,36 +78,33 @@ public:
           : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
         {}
 
-        static task::Task<bool> readForMissings(auto& storage, RANGES::input_range auto& cache,
-            RANGES::input_range auto const& keys, RANGES::input_range auto& values)
+        static task::Task<bool> fillMissingValue(
+            auto& storage, RANGES::input_range auto const& keys, RANGES::input_range auto& values)
         {
-            cache = RANGES::views::zip(keys, values) | RANGES::views::filter([](auto&& tuple) {
-                auto&& [key, value] = tuple;
-                return !value;
-            }) | RANGES::views::transform([](auto&& tuple) {
-                auto&& [key, value] = tuple;
-                return std::make_tuple(std::addressof(key), std::addressof(value));
-            }) | RANGES::to<std::decay_t<decltype(cache)>>();
+            boost::container::small_vector<std::pair<KeyType const*, std::optional<ValueType>*>, 1>
+                missingKeyValues;
+            for (auto&& [key, value] : RANGES::views::zip(keys, values))
+            {
+                if (!value)
+                {
+                    missingKeyValues.emplace_back(std::addressof(key), std::addressof(value));
+                }
+            }
+            auto gotValues = co_await storage2::readSome(storage,
+                missingKeyValues | RANGES::views::keys |
+                    RANGES::views::transform([](auto* key) -> auto const& { return *key; }));
 
-            auto missingKeys = cache | RANGES::views::transform([](auto&& tuple) -> auto const& {
-                auto&& [key, value] = tuple;
-                return *key;
-            });
-            auto missingValues = co_await storage2::readSome(storage, missingKeys);
             size_t count = 0;
-            for (auto&& [from, to] : RANGES::views::zip(
-                     missingValues, cache | RANGES::views::transform([](auto&& tuple) -> auto& {
-                         auto&& [key, value] = tuple;
-                         return *value;
-                     })))
+            for (auto&& [from, to] :
+                RANGES::views::zip(gotValues, missingKeyValues | RANGES::views::values))
             {
                 if (from)
                 {
-                    *to = std::move(*from);
+                    *to = std::move(from);
                     ++count;
                 }
             }
-            co_return count == RANGES::size(missingKeys);
+            co_return count == RANGES::size(gotValues);
         }
 
         friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& storage,
@@ -124,17 +119,15 @@ public:
                 values;
             values.resize(RANGES::size(keys));
 
-            boost::container::small_vector<std::tuple<KeyType const*, std::optional<ValueType>*>, 1>
-                cache;
             if (storage.m_mutableStorage &&
-                co_await readForMissings(*storage.m_mutableStorage, cache, keys, values))
+                co_await fillMissingValue(*storage.m_mutableStorage, keys, values))
             {
                 co_return values;
             }
 
             for (auto& immutableStorage : storage.m_immutableStorages)
             {
-                if (co_await readForMissings(*immutableStorage, cache, keys, values))
+                if (co_await fillMissingValue(*immutableStorage, keys, values))
                 {
                     co_return values;
                 }
@@ -142,13 +135,13 @@ public:
 
             if constexpr (withCacheStorage)
             {
-                if (co_await readForMissings(storage.m_cacheStorage, cache, keys, values))
+                if (co_await fillMissingValue(storage.m_cacheStorage, keys, values))
                 {
                     co_return values;
                 }
             }
 
-            co_await readForMissings(storage.m_backendStorage, cache, keys, values);
+            co_await fillMissingValue(storage.m_backendStorage, keys, values);
             co_return values;
         }
 

@@ -160,20 +160,13 @@ task::Task<void> tag_invoke(
     bcos::storage2::tag_t<merge> /*unused*/, auto const& fromStorage, auto& toStorage)
 {
     auto range = co_await storage2::range(fromStorage);
-
-    auto validRange = range | RANGES::views::filter([](auto input) {
-        auto [key, value] = input;
-        return key != nullptr && value != nullptr;
-    });
-    co_await storage2::writeSome(toStorage,
-        validRange | RANGES::views::transform([](auto&& input) -> auto const& {
-            auto [key, value] = input;
-            return *key;
-        }),
-        validRange | RANGES::views::transform([](auto&& input) -> auto const& {
-            auto [key, value] = input;
-            return *value;
-        }));
+    for (auto [key, value] : range)
+    {
+        if (value)
+        {
+            co_await storage2::writeOne(toStorage, *key, *value);
+        }
+    }
 }
 
 }  // namespace bcos::storage2

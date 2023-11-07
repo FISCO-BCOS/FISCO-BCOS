@@ -323,7 +323,7 @@ public:
         }
     };
 
-    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto&& keys)
+    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto const& keys)
     {
         task::AwaitableValue<ReadIterator> outputAwaitable(ReadIterator{});
         ReadIterator& output = outputAwaitable.value();
@@ -333,7 +333,7 @@ public:
         }
 
         std::conditional_t<withConcurrent, std::bitset<BUCKETS_COUNT>, Empty> locks;
-        for (auto&& key : keys)
+        for (auto const& key : keys)
         {
             auto bucketIndex = getBucketIndex(key);
             auto& bucket = getBucketByIndex(bucketIndex);
@@ -440,7 +440,8 @@ public:
             else
             {
                 it = bucket.get().container.emplace_hint(
-                    it, Data{.key = KeyType(key), .value = std::forward<decltype(value)>(value)});
+                    it, Data{.key = KeyType(std::forward<decltype(key)>(key)),
+                            .value = std::forward<decltype(value)>(value)});
             }
 
             if constexpr (withMRU)

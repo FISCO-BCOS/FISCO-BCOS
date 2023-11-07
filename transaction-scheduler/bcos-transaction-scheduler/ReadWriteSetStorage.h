@@ -34,21 +34,24 @@ private:
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
-        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage.m_storage, keys))>>
+        ReadWriteSetStorage& storage, RANGES::input_range auto&& keys)
+        -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
+            storage.m_storage, std::forward<decltype(keys)>(keys)))>>
+        requires std::is_lvalue_reference_v<decltype(keys)>
     {
         for (auto&& key : keys)
         {
-            storage.putSet(false, key);
+            storage.putSet(false, std::forward<decltype(key)>(key));
         }
-        co_return co_await storage2::readSome(storage.m_storage, keys);
+        co_return co_await storage2::readSome(
+            storage.m_storage, std::forward<decltype(keys)>(keys));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys,
+        ReadWriteSetStorage& storage, RANGES::input_range auto&& keys,
         RANGES::input_range auto&& values)
-        -> task::Task<task::AwaitableReturnType<decltype(storage2::writeSome(
-            storage.m_storage, std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))>>
+        -> task::Task<task::AwaitableReturnType<decltype(storage2::writeSome(storage.m_storage,
+            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))>>
     {
         for (auto&& key : keys)
         {
@@ -60,7 +63,8 @@ private:
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
         ReadWriteSetStorage& storage, RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(storage2::removeSome(storage.m_storage, keys))>>
+        -> task::Task<
+            task::AwaitableReturnType<decltype(storage2::removeSome(storage.m_storage, keys))>>
     {
         for (auto&& key : keys)
         {

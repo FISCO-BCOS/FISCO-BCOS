@@ -126,8 +126,8 @@ template <ReadableStorage Storage>
 auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, Storage& storage,
     RANGES::input_range auto const& keys)
     -> task::Task<boost::container::small_vector<
-        std::optional<std::remove_cvref_t<
-            typename task::AwaitableReturnType<decltype(storage.read(keys))>::Value>>,
+        std::optional<std::remove_cvref_t<typename task::AwaitableReturnType<decltype(storage.read(
+            std::forward<decltype(keys)>(keys)))>::Value>>,
         1>>
 {
     using ValueType = std::remove_cvref_t<

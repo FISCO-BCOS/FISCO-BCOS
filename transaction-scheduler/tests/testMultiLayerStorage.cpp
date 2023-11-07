@@ -19,7 +19,8 @@ struct TableNameHash
     size_t operator()(const bcos::transaction_executor::StateKey& key) const
     {
         auto const& tableID = std::get<0>(key);
-        return std::hash<std::string_view>{}(tableID);
+        std::string_view tableIDView(tableID.data(), tableID.size());
+        return std::hash<std::string_view>{}(tableIDView);
     }
 };
 
