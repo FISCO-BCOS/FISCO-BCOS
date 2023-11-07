@@ -2135,7 +2135,7 @@ void TransactionExecutor::getABI(
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
-        std::string abiKey = codeHash.empty() ? ACCOUNT_ABI : codeHash;
+        std::string abiKey = codeHash.empty() ? std::string(ACCOUNT_ABI) : codeHash;
         // try to get abi from SYS_CONTRACT_ABI first
         EXECUTOR_LOG(TRACE) << LOG_DESC("get abi") << LOG_KV("abiKey", abiKey);
 
