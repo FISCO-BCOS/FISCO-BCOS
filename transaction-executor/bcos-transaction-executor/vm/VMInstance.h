@@ -29,6 +29,7 @@
 #include <evmc/evmc.h>
 #include <evmone/advanced_analysis.hpp>
 #include <evmone/advanced_execution.hpp>
+#include <evmone/baseline.hpp>
 #include <variant>
 
 namespace bcos::transaction_executor
@@ -43,25 +44,20 @@ private:
         void operator()(evmc_vm* ptr) const noexcept;
     };
     using EVMC_VM = std::unique_ptr<evmc_vm, ReleaseEVMC>;
-    using EVMC_ANALYSIS_RESULT = std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>;
+    using EVMC_ANALYSIS_RESULT = std::shared_ptr<evmone::baseline::CodeAnalysis const>;
     std::variant<EVMC_VM, EVMC_ANALYSIS_RESULT> m_instance;
 
 public:
     template <class Instance>
     explicit VMInstance(Instance instance) noexcept
         requires std::same_as<Instance, evmc_vm*> ||
-                 std::same_as<Instance,
-                     std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>>
+                 std::same_as<Instance, std::shared_ptr<evmone::baseline::CodeAnalysis const>>
     {
         if constexpr (std::is_same_v<Instance, evmc_vm*>)
         {
             assert(instance->abi_version == EVMC_ABI_VERSION);
             if (instance->set_option != nullptr)
-            {
-                instance->set_option(instance, "advanced", "");
-                instance->set_option(instance, "trace", "");
-                // instance->set_option(instance, "baseline", "");
-            }
+            {}
             m_instance.emplace<EVMC_VM>(instance);
         }
         else

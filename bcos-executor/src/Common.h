@@ -69,6 +69,7 @@ static constexpr std::string_view USER_SHARD_PREFIX = "/shards/";
 
 static const char* const STORAGE_VALUE = "value";
 static const char* const ACCOUNT_CODE_HASH = "codeHash";
+constexpr static std::string_view ACCOUNT_CODE_HASH_SV{"codeHash"};
 static const char* const ACCOUNT_CODE = "code";
 static const char* const ACCOUNT_BALANCE = "balance";
 static const char* const ACCOUNT_ABI = "abi";

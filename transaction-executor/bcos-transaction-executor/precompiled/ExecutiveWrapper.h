@@ -2,6 +2,7 @@
 #include "../Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
+#include <evmc/evmc.h>
 #include <memory>
 
 namespace bcos::transaction_executor
@@ -60,7 +61,7 @@ public:
     executor::CallParameters::UniquePtr externalCall(
         executor::CallParameters::UniquePtr input) override
     {
-        evmc_message evmcMessage{.kind = EVMC_CALL,
+        evmc_message evmcMessage{.kind = input->create ? EVMC_CREATE : EVMC_CALL,
             .flags = 0,
             .depth = 0,
             .gas = input->gas,

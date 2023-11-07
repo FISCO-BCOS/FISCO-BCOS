@@ -24,9 +24,10 @@ using namespace bcos::transaction_scheduler;
 struct MockExecutor
 {
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        bcos::transaction_executor::tag_t<
+            bcos::transaction_executor::executeTransaction> /*unused*/,
         MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID)
+        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&)
     {
         co_return std::shared_ptr<protocol::TransactionReceipt>();
     }
@@ -34,9 +35,10 @@ struct MockExecutor
 struct MockScheduler
 {
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
-        transaction_scheduler::tag_t<transaction_scheduler::execute> /*unused*/,
+        transaction_scheduler::tag_t<transaction_scheduler::executeBlock> /*unused*/,
         MockScheduler& /*unused*/, auto& storage, auto& executor,
-        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions)
+        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions,
+        ledger::LedgerConfig const&)
     {
         auto receipts =
             RANGES::iota_view<size_t, size_t>(0, RANGES::size(transactions)) |
@@ -70,6 +72,13 @@ inline task::AwaitableValue<ledger::LedgerConfig::Ptr> tag_invoke(
     ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/, MockLedger& ledger)
 {
     return {std::make_shared<ledger::LedgerConfig>()};
+}
+
+task::AwaitableValue<void> tag_invoke(ledger::tag_t<ledger::storeTransactionsAndReceipts>,
+    MockLedger& ledger, bcos::protocol::TransactionsPtr blockTxs,
+    bcos::protocol::Block::ConstPtr block)
+{
+    return {};
 }
 
 struct MockTxPool : public txpool::TxPoolInterface

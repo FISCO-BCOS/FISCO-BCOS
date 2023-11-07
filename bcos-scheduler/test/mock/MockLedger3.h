@@ -129,6 +129,10 @@ public:
         {
             _onGetConfig(BCOS_ERROR_PTR(-1, "Not found!"), "0", commitBlockNumber);
         }
+        else if (_key == SYSTEM_KEY_AUTH_CHECK_STATUS)
+        {
+            _onGetConfig(nullptr, "0", commitBlockNumber);
+        }
         else
         {
             BOOST_FAIL("Unknown query key: " + std::string(_key));
