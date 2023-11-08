@@ -88,7 +88,7 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
     auto total = unstoredTxs->size();
 
     // if blockVersion >= 3.5.0, txs are stored in block
-    if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_5_VERSION))
+    if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
     {
         std::vector<std::string_view> txHashKeys(total);
         std::vector<std::string> values(total);
@@ -228,7 +228,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     if (writeTxsAndReceipts)
     {  // 9 storage callbacks and write hash=>tx
         TOTAL_CALLBACK = 9;
-        if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_5_VERSION))
+        if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
         {
             --TOTAL_CALLBACK;
         }
@@ -345,11 +345,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                             << LOG_KV("blockNumber", blockNumberStr);
     }
 
-    LEDGER_LOG(INFO) << LOG_KV("blockVersion", blockVersion)
-                     << LOG_KV(
-                            "V3_5_VERSION", uint32_t(bcos::protocol::BlockVersion::V3_5_VERSION));
-
-    if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_5_VERSION))
+    if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
     {
         // The genesis block does not have any txs,
         // so it need to be stored separately in the SYS_NUMBER_2_BLOCK_TXS table.
@@ -430,7 +426,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         }
 
         // if blockVersion >= v3.5.0 , blocks must be stored in SYS_NUMBER_2_BLOCK_TXS
-        if (blockVersion < uint32_t(bcos::protocol::BlockVersion::V3_5_VERSION))
+        if (blockVersion < uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
         {
             start = utcTime();
             asyncPreStoreBlockTxs(_blockTxs, block, [setRowCallback](auto&& error) {
@@ -578,7 +574,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     RecursiveGuard guard(m_mutex);
     size_t unstoredTxs = 0;
     // TODO: usr block level flag to indicate whether the transactions has been stored
-    if (blockVersion >= (uint32_t)BlockVersion::V3_5_VERSION)
+    if (blockVersion >= (uint32_t)BlockVersion::V3_6_VERSION)
     {
         std::vector<std::string> values(txSize);
         std::vector<std::string_view> valuesView(txSize);
