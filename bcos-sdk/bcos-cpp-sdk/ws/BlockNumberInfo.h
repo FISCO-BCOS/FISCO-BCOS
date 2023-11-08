@@ -27,11 +27,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace service
+namespace bcos::cppsdk::service
 {
 class BlockNumberInfo
 {
@@ -54,9 +50,7 @@ public:
 private:
     std::string m_group;
     std::string m_node;
-    int64_t m_blockNumber;
+    int64_t m_blockNumber = 0;
 };
 
-}  // namespace service
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::service

@@ -135,12 +135,6 @@
       "dependencies": [
         "mimalloc"
       ]
-    },
-    "jthread": {
-      "description": "jthread dependencies",
-      "dependencies": [
-        "josuttis-jthread"
-      ]
     }
   },
   "builtin-baseline": "51b14cd4e1230dd51c11ffeff6f7d53c61cc5297",
@@ -266,10 +260,6 @@
     {
       "name": "indicators",
       "version": "2.2"
-    },
-    {
-      "name": "josuttis-jthread",
-      "version": "2020-07-21"
     },
     {
       "name": "redis-plus-plus",

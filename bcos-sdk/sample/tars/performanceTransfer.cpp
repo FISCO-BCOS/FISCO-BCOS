@@ -18,12 +18,9 @@
 #include <atomic>
 #include <chrono>
 #include <exception>
-#include <string>
-#ifdef __APPLE__
-#include <jthread.hpp>
-#endif
 #include <latch>
 #include <random>
+#include <string>
 #include <thread>
 
 std::atomic_long blockNumber = 0;
@@ -236,6 +233,7 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
     return 0;
 }
 
+#if __cpp_lib_jthread
 void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClient)
 {
     while (!token.stop_requested())
@@ -251,6 +249,23 @@ void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClien
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
+#else
+void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient)
+{
+    while (true)
+    {
+        try
+        {
+            blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+        }
+        catch (std::exception& e)
+        {
+            std::cout << boost::diagnostic_information(e);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+}
+#endif
 
 int main(int argc, char* argv[])
 {
@@ -277,9 +292,12 @@ int main(int argc, char* argv[])
         .timeoutMs = 600000,
     };
     bcos::sdk::RPCClient rpcClient(config);
+#if __cpp_lib_jthread
     std::jthread getBlockNumber(
         [&](std::stop_token token) { loopFetchBlockNumber(token, rpcClient); });
-
+#else
+    std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient); });
+#endif
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
             std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
@@ -321,6 +339,10 @@ int main(int argc, char* argv[])
             exit(1);
         }
     }
+#if __cpp_lib_jthread
     getBlockNumber.request_stop();
+#else
+    getBlockNumber.join();
+#endif
     return 0;
 }
