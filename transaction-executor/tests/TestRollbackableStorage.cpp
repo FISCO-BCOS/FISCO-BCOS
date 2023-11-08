@@ -1,3 +1,4 @@
+
 #include "../bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -14,31 +15,35 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace std::string_view_literals;
 
+using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED>;
+
+namespace bcos::transaction_executor
+{
+auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& storage,
+    RANGES::input_range auto const& keys, storage2::READ_FRONT_TYPE /*unused*/)
+    -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
+{
+    co_return co_await storage2::readSome(storage, keys);
+}
+}  // namespace bcos::transaction_executor
+
 class TestRollbackableStorageFixture
 {
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestRollbackableStorage, TestRollbackableStorageFixture)
 
-using BackendStorage1 =
-    memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED>;
 using BackendStorag2 =
     memory_storage::MemoryStorage<StateKey, int, storage2::memory_storage::ORDERED>;
-
-auto tag_invoke(storage2::tag_t<storage2::readSome>&& /*unused*/, BackendStorage1& storage,
-    RANGES::input_range auto const& keys, ReadDirect&& /*unused*/)
-    -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
-{
-    co_return storage2::readSome(storage, keys);
-}
-
-// static_assert(HasReadOneDirect<BackendStorage1>);
 
 BOOST_AUTO_TEST_CASE(addRollback)
 {
     task::syncWait([]() -> task::Task<void> {
-        BackendStorage1 memoryStorage;
+        MutableStorage memoryStorage;
         Rollbackable rollbackableStorage(memoryStorage);
+
+        auto view = RANGES::single_view(StateKey{"table1"sv, "Key1"sv});
+        co_await storage2::readSome(memoryStorage, view, storage2::READ_FRONT);
 
         std::string_view tableID = "table1";
         auto point = rollbackableStorage.current();
@@ -82,7 +87,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
 BOOST_AUTO_TEST_CASE(removeRollback)
 {
     task::syncWait([]() -> task::Task<void> {
-        BackendStorage1 memoryStorage;
+        MutableStorage memoryStorage;
         Rollbackable rollbackableStorage(memoryStorage);
 
         std::string_view tableID = "table1";

@@ -21,12 +21,23 @@ public:
     ledger::LedgerConfig ledgerConfig;
 };
 
+using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED>;
+namespace bcos::transaction_executor
+{
+auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& storage,
+    RANGES::input_range auto const& keys, storage2::READ_FRONT_TYPE /*unused*/)
+    -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
+{
+    co_return co_await storage2::readSome(storage, keys);
+}
+}  // namespace bcos::transaction_executor
+
 BOOST_FIXTURE_TEST_SUITE(TransactionExecutorImpl, TestTransactionExecutorImplFixture)
 
 BOOST_AUTO_TEST_CASE(execute)
 {
     task::syncWait([this]() mutable -> task::Task<void> {
-        memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
+        MutableStorage storage;
 
         auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
             bcos::executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);

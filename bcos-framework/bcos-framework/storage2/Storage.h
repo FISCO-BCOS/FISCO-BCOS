@@ -14,6 +14,11 @@ struct STORAGE_BEGIN_TYPE
 };
 inline constexpr STORAGE_BEGIN_TYPE STORAGE_BEGIN{};
 
+struct READ_FRONT_TYPE
+{
+};
+inline constexpr READ_FRONT_TYPE READ_FRONT{};
+
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
 

@@ -12,10 +12,9 @@ namespace bcos::transaction_executor
 
 template <class Storage>
 concept HasReadOneDirect =
-    requires(Storage&& storage) {
-        requires RANGES::range<task::AwaitableReturnType<decltype(tag_invoke(
-            std::declval<storage2::ReadSome>(), storage,
-            std::declval<std::vector<typename Storage::Key>>(), std::declval<ReadDirect>()))>>;
+    requires(Storage& storage) {
+        requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
+            storage, std::declval<std::vector<typename Storage::Key>>(), storage2::READ_FRONT))>>;
     };
 
 template <class Storage>
@@ -39,12 +38,12 @@ public:
             auto& record = m_records[index - 1];
             if (record.oldValue)
             {
-                co_await m_storage.write(RANGES::single_view(record.key),
-                    RANGES::single_view(std::move(*record.oldValue)));
+                co_await storage2::writeOne(
+                    m_storage, std::move(record.key), std::move(*record.oldValue));
             }
             else
             {
-                co_await m_storage.remove(RANGES::single_view(record.key));
+                co_await storage2::removeOne(m_storage, record.key);
             }
             m_records.pop_back();
         }
@@ -73,19 +72,17 @@ public:
         -> task::Task<task::AwaitableReturnType<decltype(storage2::writeSome(
             (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys),
             std::forward<decltype(values)>(values)))>>
-    // requires HasReadOneDirect<Storage>
+        requires HasReadOneDirect<Storage>
     {
         // Store values to history
+        auto oldValues = co_await storage2::readSome(storage.m_storage, keys, storage2::READ_FRONT);
+        for (auto&& [key, value] : RANGES::views::zip(keys, oldValues))
         {
-            auto values = co_await storage2::readSome(storage.m_storage, keys, readDirect);
-            for (auto&& [key, value] : RANGES::views::zip(keys, values))
+            auto& record =
+                storage.m_records.emplace_back(Record{.key = StateKey{key}, .oldValue = {}});
+            if (value)
             {
-                auto& record =
-                    storage.m_records.emplace_back(Record{.key = StateKey{key}, .oldValue = {}});
-                if (value)
-                {
-                    record.oldValue.emplace(std::move(*value));
-                }
+                record.oldValue.emplace(std::move(*value));
             }
         }
 
@@ -100,15 +97,13 @@ public:
         requires HasReadOneDirect<Storage>
     {
         // Store values to history
+        auto oldValues = co_await storage2::readSome(storage.m_storage, keys, storage2::READ_FRONT);
+        for (auto&& [key, value] : RANGES::views::zip(keys, oldValues))
         {
-            auto values = co_await storage2::readSome(storage.m_storage, keys, readDirect);
-            for (auto&& [key, value] : RANGES::views::zip(keys, values))
+            if (value)
             {
-                if (value)
-                {
-                    auto& record = storage.m_records.emplace_back(
-                        Record{.key = StateKey{key}, .oldValue = std::move(*value)});
-                }
+                auto& record = storage.m_records.emplace_back(
+                    Record{.key = StateKey{key}, .oldValue = std::move(*value)});
             }
         }
 

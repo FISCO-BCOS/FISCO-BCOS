@@ -327,13 +327,13 @@ public:
     {
         task::AwaitableValue<ReadIterator> outputAwaitable(ReadIterator{});
         ReadIterator& output = outputAwaitable.value();
-        if constexpr (RANGES::sized_range<std::remove_cvref_t<decltype(keys)>>)
+        if constexpr (RANGES::sized_range<decltype(keys)>)
         {
             output.m_iterators.reserve(RANGES::size(keys));
         }
 
         std::conditional_t<withConcurrent, std::bitset<BUCKETS_COUNT>, Empty> locks;
-        for (auto const& key : keys)
+        for (auto&& key : keys)
         {
             auto bucketIndex = getBucketIndex(key);
             auto& bucket = getBucketByIndex(bucketIndex);
