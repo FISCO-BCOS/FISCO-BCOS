@@ -119,6 +119,8 @@ public:
     virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
+    std::string_view receiveAddress() const { return m_callParameters->receiveAddress; }
+
     bytes_view data() const
     {
         return bytes_view(m_callParameters->data.data(), m_callParameters->data.size());
@@ -159,6 +161,7 @@ public:
     static crypto::Hash::Ptr& hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
     bool isWasm();
+    const std::shared_ptr<TransactionExecutive>& getTransactionExecutive() const { return m_executive; }
 
     bcos::bytes codeAt(const std::string_view& address) { return externalCodeRequest(address); }
     const bcos::ledger::Features& features() const
