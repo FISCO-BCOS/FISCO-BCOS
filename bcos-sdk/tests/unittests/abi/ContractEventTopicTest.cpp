@@ -17,7 +17,7 @@
  * @author: octopus
  * @date 2022-02-24
  */
-#include <bcos-cpp-sdk/utilities/abi/ContractEventTopic.h>
+#include <bcos-cpp-sdk/utilities/abi/ContractABIEventTopic.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
@@ -41,7 +41,7 @@ BOOST_FIXTURE_TEST_SUITE(ContractEventTopicTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(test_EventTopic_Keccak256)
 {
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-    auto contactEventTopic = std::make_shared<bcos::codec::abi::ContractEventTopic>(hashImpl);
+    auto contactEventTopic = std::make_shared<bcos::codec::abi::ContractABIEventTopic>(hashImpl);
 
     // int
     {
@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(test_EventTopic_Keccak256)
 BOOST_AUTO_TEST_CASE(test_EventTopic_SM3)
 {
     auto hashImpl = std::make_shared<bcos::crypto::SM3>();
-    auto contactEventTopic = std::make_shared<bcos::codec::abi::ContractEventTopic>(hashImpl);
+    auto contactEventTopic = std::make_shared<bcos::codec::abi::ContractABIEventTopic>(hashImpl);
 
     // int
     {
