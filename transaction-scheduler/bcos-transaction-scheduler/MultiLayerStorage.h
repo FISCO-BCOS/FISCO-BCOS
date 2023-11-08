@@ -4,6 +4,7 @@
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
+#include "transaction-executor/bcos-transaction-executor/RollbackableStorage.h"
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
@@ -428,4 +429,5 @@ public:
     }
     BackendStorage& backendStorage() { return m_backendStorage; }
 };
+
 }  // namespace bcos::transaction_scheduler

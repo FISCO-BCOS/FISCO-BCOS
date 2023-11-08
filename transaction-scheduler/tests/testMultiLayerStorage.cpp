@@ -36,6 +36,8 @@ public:
 
     BackendStorage backendStorage;
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+
+    // static_assert(HasReadOneDirect<MultiLayerStorage<MutableStorage, void, BackendStorage>>);
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestMultiLayerStorage, TestMultiLayerStorageFixture)

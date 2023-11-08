@@ -21,6 +21,15 @@ using namespace bcos::transaction_executor;
 using MutableStorage = MemoryStorage<StateKey, StateValue, ORDERED>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
+auto tag_invoke(storage2::tag_t<storage2::readSome>&& /*unused*/, MutableStorage& storage,
+    RANGES::input_range auto const& keys, ReadDirect&& /*unused*/)
+    -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
+{
+    co_return storage2::readSome(storage, keys);
+}
+
+// static_assert(HasReadOneDirect<MutableStorage>);
+
 struct Fixture
 {
     Fixture()

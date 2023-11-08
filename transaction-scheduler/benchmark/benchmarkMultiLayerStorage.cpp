@@ -43,7 +43,7 @@ struct Fixture
                 return entry;
             });
 
-            co_await view.write(allKeys, allValues);
+            co_await storage2::writeSome(view, allKeys, allValues);
         }(count));
 
         for (auto i = 0; i < layer; ++i)
