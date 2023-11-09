@@ -3,7 +3,6 @@
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Ranges.h"
 #include <optional>
-#include <range/v3/view/transform.hpp>
 
 // tag_invoke storage interface
 namespace bcos::storage2

@@ -49,7 +49,7 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
         ReadWriteSetStorage& storage, RANGES::input_range auto&& keys,
-        const storage2::READ_FRONT_TYPE& readFront /*unused*/)
+        const storage2::READ_FRONT_TYPE& /*unused*/)
         -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
             storage.m_storage, std::forward<decltype(keys)>(keys)))>>
     {
