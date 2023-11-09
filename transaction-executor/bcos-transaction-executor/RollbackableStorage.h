@@ -18,8 +18,19 @@ concept HasReadOneDirect =
     };
 
 template <class Storage>
+    requires HasReadOneDirect<Storage>
 class Rollbackable
 {
+private:
+    constexpr static size_t MOSTLY_STEPS = 7;
+    struct Record
+    {
+        StateKey key;
+        std::optional<StateValue> oldValue;
+    };
+    boost::container::small_vector<Record, MOSTLY_STEPS> m_records;
+    Storage& m_storage;
+
 public:
     using Savepoint = int64_t;
     using Key = typename Storage::Key;
@@ -50,21 +61,13 @@ public:
         co_return;
     }
 
-    constexpr static size_t MOSTLY_STEPS = 7;
-    struct Record
-    {
-        StateKey key;
-        std::optional<StateValue> oldValue;
-    };
-    boost::container::small_vector<Record, MOSTLY_STEPS> m_records;
-    Storage& m_storage;
-
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, Rollbackable& storage,
-        RANGES::input_range auto const& keys)
+        RANGES::input_range auto&& keys)
         -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
-            (Storage&)std::declval<Storage>(), keys))>>
+            (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys)))>>
     {
-        co_return co_await storage2::readSome(storage.m_storage, keys);
+        co_return co_await storage2::readSome(
+            storage.m_storage, std::forward<decltype(keys)>(keys));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, Rollbackable& storage,
@@ -72,7 +75,6 @@ public:
         -> task::Task<task::AwaitableReturnType<decltype(storage2::writeSome(
             (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys),
             std::forward<decltype(values)>(values)))>>
-        requires HasReadOneDirect<Storage>
     {
         // Store values to history
         auto oldValues = co_await storage2::readSome(storage.m_storage, keys, storage2::READ_FRONT);
@@ -94,7 +96,6 @@ public:
         RANGES::input_range auto const& keys)
         -> task::Task<task::AwaitableReturnType<decltype(storage2::removeSome(
             (Storage&)std::declval<Storage>(), keys))>>
-        requires HasReadOneDirect<Storage>
     {
         // Store values to history
         auto oldValues = co_await storage2::readSome(storage.m_storage, keys, storage2::READ_FRONT);

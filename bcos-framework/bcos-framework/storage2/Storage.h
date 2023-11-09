@@ -24,13 +24,14 @@ using ReturnType = typename task::AwaitableReturnType<Invoke>;
 
 struct ReadSome
 {
-    auto operator()(auto& storage, RANGES::input_range auto const& keys, auto&&... args) const
-        -> task::Task<ReturnType<decltype(tag_invoke(
-            *this, storage, keys, std::forward<decltype(args)>(args)...))>>
-        requires RANGES::range<ReturnType<decltype(tag_invoke(
-            *this, storage, keys, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& storage, RANGES::input_range auto&& keys, auto&&... args) const
+        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage,
+            std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
+        requires RANGES::range<ReturnType<decltype(tag_invoke(*this, storage,
+            std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
     {
-        co_return co_await tag_invoke(*this, storage, keys, std::forward<decltype(args)>(args)...);
+        co_return co_await tag_invoke(*this, storage, std::forward<decltype(keys)>(keys),
+            std::forward<decltype(args)>(args)...);
     }
 };
 inline constexpr ReadSome readSome{};

@@ -1,5 +1,6 @@
 
 #include "../bcos-transaction-executor/RollbackableStorage.h"
+#include "TestMemoryStorage.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/storage2/StorageMethods.h"
@@ -14,18 +15,6 @@ using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace std::string_view_literals;
-
-using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED>;
-
-namespace bcos::transaction_executor
-{
-auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& storage,
-    RANGES::input_range auto const& keys, storage2::READ_FRONT_TYPE /*unused*/)
-    -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
-{
-    co_return co_await storage2::readSome(storage, keys);
-}
-}  // namespace bcos::transaction_executor
 
 class TestRollbackableStorageFixture
 {
@@ -129,29 +118,21 @@ BOOST_AUTO_TEST_CASE(equal)
     task::syncWait([]() -> task::Task<void> {
         BackendStorag2 storage;
 
-        co_await storage.write(
-            RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place, "table"sv, "0"sv),
-            RANGES::single_view(0));
-        co_await storage.write(
-            RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place, "table"sv, "1"sv),
-            RANGES::single_view(1));
-        co_await storage.write(
-            RANGES::single_view<transaction_executor::StateKey>(RANGES::in_place, "table"sv, "2"sv),
-            RANGES::single_view(2));
+        co_await storage2::writeOne(storage, transaction_executor::StateKey("table"sv, "0"sv), 0);
+        co_await storage2::writeOne(storage, transaction_executor::StateKey("table"sv, "1"sv), 1);
+        co_await storage2::writeOne(storage, transaction_executor::StateKey("table"sv, "2"sv), 2);
 
-        auto it = co_await storage.read(
-            RANGES::iota_view<int, int>(0, 3) | RANGES::views::transform([](int num) {
-                return StateKey("table"sv, boost::lexical_cast<std::string>(num));
-            }));
+        auto keys = RANGES::iota_view<int, int>(0, 3) | RANGES::views::transform([](int num) {
+            return StateKey("table"sv, boost::lexical_cast<std::string>(num));
+        });
+        auto values = co_await storage2::readSome(storage, keys);
         int i = 0;
-        while (co_await it.next())
+        for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
-            auto& key = co_await it.key();
-            auto& value = co_await it.value();
             auto view = std::get<1>(key);
             auto str = boost::lexical_cast<std::string>(i);
             BOOST_CHECK_EQUAL(static_cast<std::string>(view), std::string_view(str));
-            BOOST_CHECK_EQUAL(value, i);
+            BOOST_CHECK_EQUAL(*value, i);
             ++i;
         }
         BOOST_CHECK_EQUAL(i, 3);

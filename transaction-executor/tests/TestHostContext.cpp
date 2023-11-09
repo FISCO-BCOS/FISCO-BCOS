@@ -2,6 +2,7 @@
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "../bcos-transaction-executor/vm/VMInstance.h"
 #include "TestBytecode.h"
+#include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
@@ -29,17 +30,6 @@
 using namespace bcos::task;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
-
-using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED>;
-namespace bcos::transaction_executor
-{
-auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& storage,
-    RANGES::input_range auto const& keys, storage2::READ_FRONT_TYPE /*unused*/)
-    -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
-{
-    co_return co_await storage2::readSome(storage, keys);
-}
-}  // namespace bcos::transaction_executor
 
 class TestHostContextFixture
 {

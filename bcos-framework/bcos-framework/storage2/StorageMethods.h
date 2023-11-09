@@ -122,14 +122,14 @@ auto tag_invoke(bcos::storage2::tag_t<removeSome> /*unused*/, ErasableStorage au
 }
 
 auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, ReadableStorage auto& storage,
-    RANGES::input_range auto const& keys)
+    RANGES::input_range auto&& keys)
     -> task::Task<boost::container::small_vector<
         std::optional<std::remove_cvref_t<typename task::AwaitableReturnType<decltype(storage.read(
             std::forward<decltype(keys)>(keys)))>::Value>>,
         1>>
 {
-    using ValueType = std::remove_cvref_t<
-        typename task::AwaitableReturnType<decltype(storage.read(keys))>::Value>;
+    using ValueType = std::remove_cvref_t<typename task::AwaitableReturnType<decltype(storage.read(
+        std::forward<decltype(keys)>(keys)))>::Value>;
     static_assert(std::is_copy_assignable_v<ValueType>);
 
     boost::container::small_vector<std::optional<ValueType>, 1> values;
@@ -137,7 +137,7 @@ auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, ReadableStorage auto
     {
         values.reserve(RANGES::size(keys));
     }
-    auto it = co_await storage.read(keys);
+    auto it = co_await storage.read(std::forward<decltype(keys)>(keys));
     while (co_await it.next())
     {
         if (co_await it.hasValue())
