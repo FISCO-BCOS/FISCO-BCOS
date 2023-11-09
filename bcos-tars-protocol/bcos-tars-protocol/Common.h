@@ -81,7 +81,7 @@ public:
     void writeBuf(const ByteType* buf, size_t len)
     {
         TarsReserveBuf(*this, _len + len);
-        utilities::CopyMemory(_buf + _len, buf, len);
+        bcos::utilities::CopyMemory(_buf + _len, buf, len);
         _len += len;
     }
 
