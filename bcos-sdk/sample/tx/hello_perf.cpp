@@ -13,20 +13,18 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file deploy_hello.cpp
+ * @file simple_hello_perf.cpp
  * @author: octopus
  * @date 2022-01-16
  */
+#include "bcos-utilities/ratelimiter/RateReporter.h"
+#include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <bcos-cpp-sdk/SdkFactory.h>
 #include <bcos-cpp-sdk/utilities/crypto/KeyPairBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilderService.h>
 #include <bcos-utilities/Common.h>
-#include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/compare.hpp>
-#include <cstdlib>
-#include <iterator>
-#include <memory>
 
 using namespace bcos;
 using namespace bcos::cppsdk;
@@ -38,7 +36,7 @@ using namespace bcos::boostssl;
 pragma solidity>=0.4.24 <0.6.11;
 
 contract HelloWorld {
-    string name;
+    std::string name;
 
     constructor() public {
         name = "Hello, World!";
@@ -53,7 +51,7 @@ contract HelloWorld {
     }
 }
 */
-constexpr static std::string_view hwBIN =
+const char* hwBIN =
     "608060405234801561001057600080fd5b506040518060400160405280600d81526020017f48656c6c6f2c20576f72"
     "6c6421000000000000000000000000000000000000008152506000908051906020019061005c929190610062565b50"
     "610107565b828054600181600116156101000203166002900490600052602060002090601f01602090048101928260"
@@ -117,33 +115,36 @@ const char* hwSmBIN =
 
 //-------------------------------------------------------------------------------------------------
 
-std::string_view getBinary(bool _sm)
+std::string getBinary(bool _sm)
 {
     return _sm ? hwSmBIN : hwBIN;
 }
 
 void usage()
 {
-    std::cerr << "Desc: deploy HelloWorld contract\n";
-    std::cerr << "Usage: deploy_hello <config> <groupID>\n"
+    std::cerr << "Desc: c++ deploy HelloWorld perf contract\n";
+    std::cerr << "Usage: hello_perf <config> <groupID> <clientCount> <QPS>\n"
               << "Example:\n"
-              << "    ./deploy_hello ./config_sample.ini group0\n"
+              << "    ./hello_perf ./config_sample.ini group0 16 1024\n"
                  "\n";
     std::exit(0);
 }
 
 int main(int argc, char** argv)
 {
-    if (argc < 3)
+    if (argc < 5)
     {
         usage();
     }
 
     std::string config = argv[1];
     std::string group = argv[2];
+    uint32_t client = std::atoi(argv[3]);
+    uint32_t qps = std::atoi(argv[4]);
 
-    std::cout << LOG_DESC(" [DeployHello] params ===>>>> ") << LOG_KV("\n\t # config", config)
-              << LOG_KV("\n\t # groupID", group) << std::endl;
+    std::cout << LOG_DESC(" [HelloPerf] params ===>>>> ") << LOG_KV("\n\t # config", config)
+              << LOG_KV("\n\t # groupID", group) << LOG_KV("\n\t # clientCount", client)
+              << LOG_KV("\n\t # qps", qps) << std::endl;
 
     auto factory = std::make_shared<SdkFactory>();
     // construct cpp-sdk object
@@ -151,56 +152,63 @@ int main(int argc, char** argv)
     // start sdk
     sdk->start();
 
-    std::cout << LOG_DESC(" [DeployHello] start sdk ... ") << std::endl;
+    std::cout << LOG_DESC(" [HelloPerf] start sdk ... ") << std::endl;
+
+    auto ratelimit = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(qps);
+    auto sendRateReporter = std::make_shared<bcos::RateReporter>("SendRate", 1000);
+    auto recvRateReporter = std::make_shared<bcos::RateReporter>("RecvRate", 1000);
+    sendRateReporter->start();
+    recvRateReporter->start();
 
     // get group info
     bcos::group::GroupInfo::Ptr groupInfo = sdk->service()->getGroupInfo(group);
     if (!groupInfo)
     {
-        std::cout << LOG_DESC(" [DeployHello] group not exist") << LOG_KV("group", group)
+        std::cout << LOG_DESC(" [HelloPerf] group not exist") << LOG_KV("group", group)
                   << std::endl;
         exit(-1);
     }
 
-    crypto::SignatureCrypto::Ptr keyPairFactory;
-    crypto::KeyPairInterface::UniquePtr keyPair;
-    if (groupInfo->smCryptoType())
-    {
-        keyPairFactory = std::make_shared<bcos::crypto::SM2Crypto>();
-        keyPair = keyPairFactory->generateKeyPair();
-    }
-    else
-    {
-        keyPairFactory = std::make_shared<bcos::crypto::Secp256k1Crypto>();
-        keyPair = keyPairFactory->generateKeyPair();
-    }
+    auto transactionBuilder = std::make_shared<bcos::cppsdk::utilities::TransactionBuilder>();
 
-    std::cout << LOG_DESC(" [DeployHello] sm_crypto_type ") << groupInfo->smCryptoType()
+    auto keyPairBuilder = std::make_shared<KeyPairBuilder>();
+    auto keyPair = keyPairBuilder->genKeyPair(
+        groupInfo->smCryptoType() ? CryptoType::SM2 : CryptoType::Secp256K1);
+
+    bcos::crypto::CryptoSuite* cryptoSuite = groupInfo->smCryptoType() ?
+                                                 &*transactionBuilder->smCryptoSuite() :
+                                                 &*transactionBuilder->ecdsaCryptoSuite();
+
+    std::cout << LOG_DESC(" [HelloPerf] sm_crypto_type ") << groupInfo->smCryptoType() << std::endl;
+
+    std::cout << LOG_DESC(" [HelloPerf] new account ")
+              << LOG_KV(
+                     "address", cryptoSuite->calculateAddress(keyPair->publicKey()).hexPrefixed())
               << std::endl;
 
-    std::cout << LOG_DESC(" [DeployHello] new account ")
-              << LOG_KV("address", keyPair->publicKey()->hex()) << std::endl;
+    // int64_t blockLimit = -1;
+    // sdk->service()->getBlockLimit(group, blockLimit);
 
-    int64_t blockLimit = -1;
-    sdk->service()->getBlockLimit(group, blockLimit);
-
-    std::cout << LOG_DESC(" [DeployHello] block limit ") << LOG_KV("blockLimit", blockLimit)
-              << std::endl;
+    // std::cout << LOG_DESC(" [DeployHello] block limit ") << LOG_KV("blockLimit", blockLimit)
+    //           << std::endl;
 
     auto hexBin = getBinary(groupInfo->smCryptoType());
-    auto binBytes = fromHexString(std::string(hexBin));
+    auto binBytes = fromHexString(hexBin);
 
     auto rpcService = sdk->jsonRpcService();
+
+    std::string contractAddress;
 
     std::promise<bool> p;
     auto f = p.get_future();
     rpcService->sendTransaction(*keyPair, group, "", "", std::move(*binBytes), "", 0, "extraData",
-        [&p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
+        [&contractAddress, &p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
             if (_error && _error->errorCode() != 0)
             {
                 std::cout << LOG_DESC(" [DeployHello] send transaction response error")
                           << LOG_KV("errorCode", _error->errorCode())
                           << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
+                exit(0);
             }
             else
             {
@@ -220,8 +228,8 @@ int main(int argc, char** argv)
                         return;
                     }
 
-                    std::cout << LOG_DESC(" [DeployHello] contract address ==> " +
-                                          root["result"]["contractAddress"].asString())
+                    contractAddress = root["result"]["contractAddress"].asString();
+                    std::cout << LOG_DESC(" [DeployHello] contract address ==> " + contractAddress)
                               << std::endl;
                 }
                 catch (const std::exception& _e)
@@ -232,67 +240,41 @@ int main(int argc, char** argv)
             }
             p.set_value(true);
         });
-
     f.get();
-    /*
 
-    auto transactionBuilderService =
-        std::make_shared<TransactionBuilderService>(sdk->service(), group, transactionBuilder);
+    std::string getData = "0x6d4ce63c";
 
-    auto r =
-        transactionBuilderService->createSignedTransaction(*keyPair, "", *binBytes.get(), "", 0);
-
-    std::cout << LOG_DESC(" [DeployHello] create signed transaction success")
-              << LOG_KV("tx hash", tx->hash()) << std::endl;
-
-    std::promise<bool> p;
-    auto f = p.get_future();
-    std::string buffer;
-    bcos::concepts::serialize::encode(
-        std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx)->inner(), buffer);
-
-    auto hexBuffer = boost::algorithm::hex_lower(buffer);
-
-    sdk->jsonRpc()->sendTransaction(group, "", hexBuffer, false,
-        [&p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
-            if (_error && _error->errorCode() != 0)
-            {
-                std::cout << LOG_DESC(" [DeployHello] send transaction response failed")
-                          << LOG_KV("code", _error->errorCode())
-                          << LOG_KV("message", _error->errorMessage()) << std::endl;
-            }
-            else
-            {
-                std::string receipt = std::string(_resp->begin(), _resp->end());
-                std::cout << LOG_DESC(" [DeployHello] recv response success ")
-                          << LOG_KV("transaction receipt", receipt) << std::endl;
-
-                Json::Value root;
-                Json::Reader jsonReader;
-
-                try
-                {
-                    if (!jsonReader.parse(receipt, root))
+    auto task = [&group, &keyPair, &getData, &ratelimit, &recvRateReporter, &sendRateReporter,
+                    &rpcService, &contractAddress]() {
+        while (true)
+        {
+            ratelimit->acquire(1);
+            sendRateReporter->update(1, true);
+            auto getBytes = fromHexString(getData);
+            rpcService->sendTransaction(*keyPair, group, "", contractAddress, std::move(*getBytes),
+                "", 0, "extraData",
+                [&recvRateReporter](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
+                    recvRateReporter->update(1, true);
+                    if (_error && _error->errorCode() != 0)
                     {
-                        std::cout << LOG_DESC(" [DeployHello] [ERROR] recv invalid json object")
-                                  << LOG_KV("resp", receipt) << std::endl;
-                        return;
+                        std::cout << LOG_DESC(" [DeployHello] send transaction response error")
+                                  << LOG_KV("errorCode", _error->errorCode())
+                                  << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
                     }
+                });
+        }
+    };
 
-                    std::cout << LOG_DESC(" [DeployHello] contract address ==> " +
-                                          root["result"]["contractAddress"].asString())
-                              << std::endl;
-                }
-                catch (const std::exception& _e)
-                {
-                    std::cout << LOG_DESC(" [DeployHello] [ERROR] recv invalid json object")
-                              << LOG_KV("resp", receipt) << std::endl;
-                }
-            }
-            p.set_value(true);
-        });
-    f.get();
-    */
+    std::vector<std::shared_ptr<std::thread>> threads;
+    for (uint32_t i = 0; i < client; i++)
+    {
+        threads.push_back(std::make_shared<std::thread>(task));
+    }
+
+    for (auto& thread : threads)
+    {
+        thread->join();
+    }
 
     return 0;
 }

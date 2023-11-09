@@ -19,7 +19,7 @@
  */
 
 #include <bcos-cpp-sdk/event/EventSubParams.h>
-#include <bcos-cpp-sdk/utilities/abi/ContractEventTopic.h>
+#include <bcos-cpp-sdk/utilities/abi/ContractABIEventTopic.h>
 #include <json/json.h>
 #include <exception>
 
@@ -39,7 +39,7 @@ bool EventSubParams::verifyParams()
     {
         for (const auto& topic : m_topics[i])
         {
-            if (!codec::abi::ContractEventTopic::validEventTopic(topic))
+            if (!codec::abi::ContractABIEventTopic::validEventTopic(topic))
             {
                 return false;
             }
