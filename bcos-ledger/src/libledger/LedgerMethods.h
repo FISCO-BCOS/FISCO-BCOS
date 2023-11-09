@@ -60,6 +60,9 @@ inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, Ledg
         withTransactionsAndReceipts, std::move(legacyStorage));
 }
 
+task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerInterface& ledger,
+    bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block);
+
 task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag);
 

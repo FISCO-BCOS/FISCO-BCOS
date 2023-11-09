@@ -24,7 +24,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcos::protocol
 {

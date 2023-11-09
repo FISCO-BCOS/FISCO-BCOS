@@ -150,7 +150,7 @@ void BlockContext::killSuicides()
         return;
     }
 
-    auto emptyCodeHash = m_hashImpl->hash("");
+    auto emptyCodeHash = m_hashImpl->hash(""sv);
     for (std::string_view table2Suicide : m_suicides)
     {
         auto contractTable = storage()->openTable(table2Suicide);

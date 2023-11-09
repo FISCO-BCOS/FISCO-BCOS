@@ -24,7 +24,7 @@ private:
     void putSet(bool write, auto const& key)
     {
         auto [it, inserted] =
-            m_readWriteSet.try_emplace(key, ReadWriteFlag{.read = !write, .write = write});
+            m_readWriteSet.try_emplace(KeyType(key), ReadWriteFlag{.read = !write, .write = write});
         if (!inserted)
         {
             it->second.write |= write;

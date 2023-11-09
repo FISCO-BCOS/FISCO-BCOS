@@ -33,8 +33,8 @@ jobs:
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: 8
-          java-package: jdk
+          java-version: '8.0.382'
+
       - name: Set up Node.js 16.x
         uses: actions/setup-node@v2
         with:
@@ -62,18 +62,15 @@ jobs:
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
-      - name: Config vcpkg registry proxy
-        run: sed -i "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
-
       - name: update vcpkg
         run: |
-          cd ${{ env.VCPKG_ROOT }} && git checkout master #&& git pull
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
           cd -
 
       - name: Build for linux
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Debug -DLINKER=gold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON -DTOOLS=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Debug -DLINKER=gold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON -DTOOLS=ON .. || cat *.log
           make -j6
       - name: Test
         run: |

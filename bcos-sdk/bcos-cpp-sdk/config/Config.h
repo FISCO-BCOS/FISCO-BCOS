@@ -25,11 +25,7 @@
 #include <memory>
 #include <string>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace config
+namespace bcos::cppsdk::config
 {
 class Config
 {
@@ -48,8 +44,15 @@ public:
     void loadSslCert(boost::property_tree::ptree const& _pt, bcos::boostssl::ws::WsConfig& _config);
     void loadSMSslCert(
         boost::property_tree::ptree const& _pt, bcos::boostssl::ws::WsConfig& _config);
+
+    bool sendRpcRequestToHighestBlockNode() const { return m_sendRpcRequestToHighestBlockNode; }
+    void setSendRpcRequestToHighestBlockNode(bool _sendRpcRequestToHighestBlockNode)
+    {
+        m_sendRpcRequestToHighestBlockNode = _sendRpcRequestToHighestBlockNode;
+    }
+
+private:
+    bool m_sendRpcRequestToHighestBlockNode = true;
 };
 
-}  // namespace config
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::config

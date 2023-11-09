@@ -106,7 +106,7 @@ public:
                 auto myTable = m_inner->openTable(table);
                 if (!myTable)
                 {
-                    m_inner->createTable(std::string(table), executor::STORAGE_VALUE);
+                    m_inner->createTable(std::string(table), std::string(executor::STORAGE_VALUE));
                     myTable = m_inner->openTable(std::string(table));
                 }
                 myTable->setRow(key, entry);

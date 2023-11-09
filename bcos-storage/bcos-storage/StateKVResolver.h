@@ -37,7 +37,6 @@ struct StateKeyResolver
         auto& [tableName, key] = stateKey;
 
         DBKey buffer;
-        buffer.reserve(tableName.size() + 1 + key.size());
         buffer.insert(buffer.end(), RANGES::begin(tableName), RANGES::end(tableName));
         buffer.emplace_back(TABLE_KEY_SPLIT);
         buffer.insert(buffer.end(), RANGES::begin(key), RANGES::end(key));

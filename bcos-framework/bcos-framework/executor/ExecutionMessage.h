@@ -136,6 +136,30 @@ public:
     virtual void setInternalCall(bool internalCall) = 0;
 
     // -----------------------------------------------
+    // balance fields
+    // -----------------------------------------------
+    virtual std::string_view value() const = 0;
+    virtual void setValue(std::string value) = 0;
+
+    virtual std::string_view gasPrice() const = 0;
+    virtual void setGasPrice(std::string gasPrice) = 0;
+
+    virtual int64_t gasLimit() const = 0;
+    virtual void setGasLimit(int64_t gasLimit) = 0;
+
+    virtual std::string_view maxFeePerGas() const = 0;
+    virtual void setMaxFeePerGas(std::string maxFeePerGas) = 0;
+
+    virtual std::string_view maxPriorityFeePerGas() const = 0;
+    virtual void setMaxPriorityFeePerGas(std::string maxPriorityFeePerGas) = 0;
+
+    // -----------------------------------------------
+    // balance receipt fields
+    // -----------------------------------------------
+    virtual std::string_view effectiveGasPrice() const = 0;
+    virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
+
+    // -----------------------------------------------
     // Request / Response common fields
     // -----------------------------------------------
     virtual int64_t gasAvailable() const = 0;

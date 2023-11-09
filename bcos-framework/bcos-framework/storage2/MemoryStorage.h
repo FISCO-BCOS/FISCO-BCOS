@@ -17,6 +17,7 @@
 #include <thread>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace bcos::storage2::memory_storage
 {
@@ -39,26 +40,27 @@ enum Attribute : int
 {
     NONE = 0,
     ORDERED = 1,
-    CONCURRENT = 2,
-    MRU = 4,
-    LOGICAL_DELETION = 8,
+    CONCURRENT = 1 << 1,
+    MRU = 1 << 2,
+    LOGICAL_DELETION = 1 << 3,
 };
 
 template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE,
     class BucketHasher = void>
 class MemoryStorage
 {
-private:
+public:
     constexpr static bool withOrdered = (attribute & Attribute::ORDERED) != 0;
     constexpr static bool withConcurrent = (attribute & Attribute::CONCURRENT) != 0;
     constexpr static bool withMRU = (attribute & Attribute::MRU) != 0;
     constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
 
+private:
     constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
-    constexpr static unsigned DEFAULT_CAPACITY = 4 * 1024 * 1024;  // For mru
+    constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
     using Mutex = std::mutex;
     using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
@@ -144,6 +146,27 @@ private:
         return sizeof(ObjectType);
     }
 
+    friend auto tag_invoke(
+        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage& storage)
+        requires(!withConcurrent)
+    {
+        auto range = RANGES::views::transform(storage.m_buckets[0].container,
+            [](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
+                if constexpr (withLogicalDeletion)
+                {
+                    return std::make_tuple(std::addressof(data.key),
+                        std::holds_alternative<Deleted>(data.value) ?
+                            nullptr :
+                            std::addressof(std::get<ValueType>(data.value)));
+                }
+                else
+                {
+                    return std::make_tuple(std::addressof(data.key), std::addressof(data.value));
+                }
+            });
+        return task::AwaitableValue<decltype(range)>(std::move(range));
+    }
+
 public:
     using Key = KeyType;
     using Value = ValueType;
@@ -227,19 +250,6 @@ public:
             {
                 m_bucketLocks.clear();
             }
-        }
-
-        auto range() const&
-        {
-            return m_iterators |
-                   RANGES::views::transform(
-                       [](auto const* data) -> std::tuple<KeyType const*, ValueType const*> {
-                           if (!data)
-                           {
-                               return {nullptr, nullptr};
-                           }
-                           return {std::addressof(data->key), std::addressof(data->value)};
-                       });
         }
     };
 
@@ -430,7 +440,7 @@ public:
             else
             {
                 it = bucket.get().container.emplace_hint(
-                    it, Data{.key = key, .value = std::forward<decltype(value)>(value)});
+                    it, Data{.key = KeyType(key), .value = std::forward<decltype(value)>(value)});
             }
 
             if constexpr (withMRU)

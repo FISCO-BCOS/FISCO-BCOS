@@ -1004,9 +1004,7 @@ int64_t NodeConfig::checkAndGetValue(
 
 bool NodeConfig::isValidPort(int port)
 {
-    if (port <= 1024 || port > 65535)
-        return false;
-    return true;
+    return !(port <= 1024 || port > 65535);
 }
 
 void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree const& ptree)
@@ -1016,7 +1014,7 @@ void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree con
         for (const auto& it : *node)
         {
             auto flag = it.first;
-            auto enableNumber = it.second.get_value<int>();
+            auto enableNumber = it.second.get_value<bool>();
             m_genesisConfig.m_features.emplace_back(ledger::FeatureSet{
                 .flag = ledger::Features::string2Flag(flag), .enableNumber = enableNumber});
         }

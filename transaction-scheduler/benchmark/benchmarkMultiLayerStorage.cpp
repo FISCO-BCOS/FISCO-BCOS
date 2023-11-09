@@ -9,6 +9,8 @@ using namespace bcos;
 using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_scheduler;
 
+using namespace std::string_view_literals;
+
 struct TableNameHash
 {
     size_t operator()(const bcos::transaction_executor::StateKey& key) const
@@ -30,7 +32,8 @@ struct Fixture
         task::syncWait([this](int64_t count) -> task::Task<void> {
             auto view = multiLayerStorage.fork(true);
             allKeys = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
-                return transaction_executor::StateKey{"test_table", fmt::format("key: {}", num)};
+                auto key = fmt::format("key: {}", num);
+                return transaction_executor::StateKey{"test_table"sv, std::string_view(key)};
             }) | RANGES::to<decltype(allKeys)>();
 
             auto allValues = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
@@ -112,8 +115,9 @@ static void write1(benchmark::State& state)
         {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", i));
+            auto key = fmt::format("key: {}", i);
             co_await storage2::writeOne(view,
-                transaction_executor::StateKey{"test_table", fmt::format("key: {}", i)},
+                transaction_executor::StateKey{"test_table"sv, std::string_view(key)},
                 std::move(entry));
             ++i;
         }

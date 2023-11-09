@@ -45,12 +45,10 @@ jobs:
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
-      - name: Config vcpkg registry proxy
-        run: sed -i "s/https:\/\/github.com/http:\/\/ghproxy.com\/https:\/\/github.com/g" vcpkg-configuration.json
 
       - name: update vcpkg
         run: |
-          cd ${{ env.VCPKG_ROOT }} && git checkout master #&& git pull
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
           cd -
 
       - name: Build for linux
@@ -61,5 +59,5 @@ jobs:
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
           alias cmake='cmake3'
-          cd build && cmake3 -DCMAKE_BUILD_TYPE=Debug -DBUILD_STATIC=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=On -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          cd build && cmake3 -DCMAKE_BUILD_TYPE=Debug -DBUILD_STATIC=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=On -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j4
