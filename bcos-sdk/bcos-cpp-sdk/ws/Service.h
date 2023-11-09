@@ -31,14 +31,10 @@
 #include <unordered_map>
 #include <vector>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace service
+namespace bcos::cppsdk::service
 {
 using WsHandshakeSucHandler = std::function<void(bcos::boostssl::ws::WsSession::Ptr)>;
-using BlockNotifierCallback = std::function<void(const std::string& _group, int64_t _blockNumber)>;
+using BlockNotifierCallback = std::function<void(const std::string&, int64_t)>;
 using BlockNotifierCallbacks = std::vector<BlockNotifierCallback>;
 
 class Service : public bcos::boostssl::ws::WsService
@@ -51,16 +47,16 @@ public:
 
     // ---------------------overide begin------------------------------------
 
-    virtual void start() override;
-    virtual void stop() override;
+    void start() override;
+    void stop() override;
 
-    virtual void onConnect(
+    void onConnect(
         bcos::Error::Ptr _error, std::shared_ptr<bcos::boostssl::ws::WsSession> _session) override;
 
-    virtual void onDisconnect(
+    void onDisconnect(
         bcos::Error::Ptr _error, std::shared_ptr<bcos::boostssl::ws::WsSession> _session) override;
 
-    virtual void onRecvMessage(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+    void onRecvMessage(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session) override;
     // ---------------------overide end -------------------------------------
 
@@ -133,6 +129,30 @@ public:
         }
     }
 
+    void setStrictConnectVersion(int64_t _strictVersion)
+    {
+        m_strictConnectVersion = _strictVersion;
+    }
+
+    uint64_t localProtocolInfo() const { return m_localProtocol->version(); }
+    uint32_t negotiatedProtocolInfo()
+    {
+        uint16_t maxVersion = 0;
+        uint16_t minVersion = UINT16_MAX;
+        for (const auto& session : sessions())
+        {
+            if (session->version() > maxVersion)
+            {
+                maxVersion = session->version();
+            }
+            if (session->version() < minVersion)
+            {
+                minVersion = session->version();
+            }
+        }
+        return maxVersion << 16 | minVersion;
+    }
+
 private:
     uint32_t m_wsHandshakeTimeout = 10000;  // 10s
     std::atomic<uint32_t> m_handshakeSucCount = 0;
@@ -163,8 +183,8 @@ private:
     bcos::group::GroupInfoFactory::Ptr m_groupInfoFactory;
 
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
+
+    int64_t m_strictConnectVersion = -1;
 };
 
-}  // namespace service
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::service
