@@ -68,10 +68,11 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     uint32_t func = getParamFunc(originParam);
     bytesConstRef data = getParamData(originParam);
     auto table = _executive->storage().openTable(accountTableName);
-    if (!table.has_value()) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(PrecompiledError(accountTableName + " does not exist"));
-    }
+//    for fake debug, temporary comment
+//    if (!table.has_value()) [[unlikely]]
+//    {
+//        BOOST_THROW_EXCEPTION(PrecompiledError(accountTableName + " does not exist"));
+//    }
 
     if (func == name2Selector[AM_METHOD_SET_ACCOUNT_STATUS])
     {

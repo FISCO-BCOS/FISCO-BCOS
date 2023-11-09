@@ -28,7 +28,10 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
         u256 gasPrice = 1;
 
         bytes subBalanceIn = codec.encodeWithSig("subAccountBalance(uint256)", message->gas * gasPrice);
-        callParam4AccountPre->data = subBalanceIn;
+        std::vector<std::string> codeParameters{currentSenderAddr};
+        auto newParams = codec.encode(codeParameters, subBalanceIn);
+        callParam4AccountPre->data = std::move(newParams);
+        
         auto subBalanceRet = callPrecompiled(std::move(callParam4AccountPre));
         if(subBalanceRet->type == CallParameters::REVERT)
         {
