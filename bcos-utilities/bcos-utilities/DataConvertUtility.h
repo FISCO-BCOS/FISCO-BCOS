@@ -20,6 +20,7 @@
 
 #include "Common.h"
 #include "Error.h"
+#include "bcos-utilities/CopyMemory.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
 #include <boost/utility/string_view.hpp>
@@ -98,7 +99,7 @@ std::shared_ptr<std::string> toHexString(
     auto hexStringSize = std::distance(_begin, _end) * 2 + _prefix.size();
     std::shared_ptr<std::string> hexString = std::make_shared<std::string>(hexStringSize, '0');
     // set the _prefix
-    memcpy((void*)hexString->data(), (const void*)_prefix.data(), _prefix.size());
+    utilities::CopyMemory((void*)hexString->data(), (const void*)_prefix.data(), _prefix.size());
     static char const* hexCharsCollection = "0123456789abcdef";
     // covert the bytes into hex chars
     size_t offset = _prefix.size();
@@ -266,7 +267,7 @@ inline std::vector<T>& operator+=(
 {
     auto s = _a.size();
     _a.resize(_a.size() + _b.size());
-    memcpy(_a.data() + s, _b.data(), _b.size() * sizeof(T));
+    utilities::CopyMemory(_a.data() + s, _b.data(), _b.size() * sizeof(T));
     return _a;
 }
 

@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
 namespace bcos
@@ -55,8 +56,8 @@ protected:
     virtual void encodeCommonFields(bytesPointer _signatureData) const
     {
         _signatureData->resize(64);
-        memcpy(_signatureData->data(), m_r.data(), 32);
-        memcpy(_signatureData->data() + 32, m_s.data(), 32);
+        utilities::CopyMemory(_signatureData->data(), m_r.data(), 32);
+        utilities::CopyMemory(_signatureData->data() + 32, m_s.data(), 32);
     }
 
 protected:

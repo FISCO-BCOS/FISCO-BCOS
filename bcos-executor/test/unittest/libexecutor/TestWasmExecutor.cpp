@@ -31,6 +31,7 @@
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
+#include "bcos-utilities/CopyMemory.h"
 // #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
@@ -89,16 +90,16 @@ struct WasmExecutorFixture
         ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
-        executor = bcos::executor::TransactionExecutorFactory::build(
-            ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
+        executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
+            backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
-        memcpy(keyPair->secretKey()->mutableData(),
+        utilities::CopyMemory(keyPair->secretKey()->mutableData(),
             fromHexString("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
                 ->data(),
             32);
-        memcpy(keyPair->publicKey()->mutableData(),
+        utilities::CopyMemory(keyPair->publicKey()->mutableData(),
             fromHexString(
                 "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
                 "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")

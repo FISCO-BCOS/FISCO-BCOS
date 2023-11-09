@@ -26,6 +26,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-table/src/StateStorageFactory.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
+#include "bcos-utilities/CopyMemory.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -104,11 +105,11 @@ public:
 
         codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
-        memcpy(keyPair->secretKey()->mutableData(),
+        utilities::CopyMemory(keyPair->secretKey()->mutableData(),
             fromHexString("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
                 ->data(),
             32);
-        memcpy(keyPair->publicKey()->mutableData(),
+        utilities::CopyMemory(keyPair->publicKey()->mutableData(),
             fromHexString(
                 "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
                 "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")

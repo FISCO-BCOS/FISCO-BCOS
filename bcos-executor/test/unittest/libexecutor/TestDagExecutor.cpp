@@ -35,6 +35,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
+#include "bcos-utilities/CopyMemory.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -89,11 +90,11 @@ struct DagExecutorFixture
         ledger = std::make_shared<MockLedger>();
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
-        memcpy(keyPair->secretKey()->mutableData(),
+        utilities::CopyMemory(keyPair->secretKey()->mutableData(),
             fromHexString("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
                 ->data(),
             32);
-        memcpy(keyPair->publicKey()->mutableData(),
+        utilities::CopyMemory(keyPair->publicKey()->mutableData(),
             fromHexString(
                 "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
                 "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
@@ -199,8 +200,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
-    auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
+    auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
+        backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
@@ -434,8 +435,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
-    auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
+    auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
+        backend, executionResultFactory, stateStorageFactory, hashImpl, true, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
@@ -664,8 +665,8 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
-    auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+    auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
+        backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
@@ -911,8 +912,8 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
-    auto executor = bcos::executor::TransactionExecutorFactory::build(
-        ledger, txpool, nullptr, backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+    auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
+        backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
 
     auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 

@@ -18,6 +18,7 @@
  * @date 2022.01.17
  * @author yujiechen
  */
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -278,7 +279,7 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
         goto done;
     }
     // remove the prefix 04
-    memcpy(output_public_key->data, publicKey + 1, c_PUBLICKEY_LEN);
+    utilities::CopyMemory(output_public_key->data, publicKey + 1, c_PUBLICKEY_LEN);
     ret = WEDPR_SUCCESS;
 done:
     if (sm2Key)

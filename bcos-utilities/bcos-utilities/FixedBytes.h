@@ -22,6 +22,7 @@
 
 #include "DataConvertUtility.h"
 #include "Exceptions.h"
+#include "bcos-utilities/CopyMemory.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/functional/hash.hpp>
 #include <boost/throw_exception.hpp>
@@ -172,12 +173,12 @@ public:
 
     explicit FixedBytes(byte const* _data, size_t _dataSize) : FixedBytes()
     {
-        memcpy(m_data.data(), _data, (std::min)(_dataSize, (size_t)N));
+        utilities::CopyMemory(m_data.data(), _data, (std::min)(_dataSize, (size_t)N));
     }
 
     explicit FixedBytes(byte const* _bs, ConstructorType) : FixedBytes()
     {
-        memcpy(m_data.data(), _bs, N);
+        utilities::CopyMemory(m_data.data(), _bs, N);
     }
 
     /// Explicitly construct, copying from a  string.
@@ -394,13 +395,13 @@ private:
         {
         case DataAlignType::AlignLeft:
         {
-            memcpy(m_data.data(), _bytesData.data(), copyDataSize);
+            utilities::CopyMemory(m_data.data(), _bytesData.data(), copyDataSize);
             break;
         }
         case DataAlignType::AlignRight:
         {
             auto startIndex = N - copyDataSize;
-            memcpy(m_data.data() + startIndex, _bytesData.data(), copyDataSize);
+            utilities::CopyMemory(m_data.data() + startIndex, _bytesData.data(), copyDataSize);
             break;
         }
         case DataAlignType::AcquireEqual:
@@ -413,7 +414,7 @@ private:
                 BOOST_THROW_EXCEPTION(ConstructFixedBytesFailed() << errinfo_comment(
                                           "Require " + std::to_string(N) + " length input data"));
             }
-            memcpy(m_data.data(), _bytesData.data(), N);
+            utilities::CopyMemory(m_data.data(), _bytesData.data(), N);
             break;
         }
         }
@@ -666,7 +667,7 @@ Address const ZeroAddress;
 inline h160 right160(h256 const& _t)
 {
     h160 ret;
-    memcpy(ret.data(), _t.data() + 12, 20);
+    utilities::CopyMemory(ret.data(), _t.data() + 12, 20);
     return ret;
 }
 
@@ -674,7 +675,7 @@ inline h160 right160(h256 const& _t)
 inline h160 left160(h256 const& _t)
 {
     h160 ret;
-    memcpy(&ret[0], _t.data(), 20);
+    utilities::CopyMemory(&ret[0], _t.data(), 20);
     return ret;
 }
 

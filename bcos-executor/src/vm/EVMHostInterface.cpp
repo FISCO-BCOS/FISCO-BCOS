@@ -26,6 +26,7 @@
 #include "EVMHostInterface.h"
 #include "../Common.h"
 #include "HostContext.h"
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
@@ -118,7 +119,8 @@ size_t copyCode(evmc_host_context* _context, const evmc_address* _addr, size_t _
     uint8_t* _bufferData, size_t _bufferSize)
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
-    if (hostContext.features().get(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+    if (hostContext.features().get(
+            ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
     {
         auto addr = fromEvmC(*_addr);
         bytes const& code = hostContext.codeAt(addr);
@@ -281,7 +283,7 @@ int32_t get(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressL
     {
         return -1;
     }
-    memcpy(_value, value.data(), value.size());
+    utilities::CopyMemory(_value, value.data(), value.size());
     return value.size();
 }
 
