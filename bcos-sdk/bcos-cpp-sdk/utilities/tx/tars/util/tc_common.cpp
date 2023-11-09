@@ -1128,10 +1128,9 @@ std::string TC_Common::msToTimeString(int64_t ms)
     int64_t sec = ms / 1000;
     int64_t msec = ms % 1000;
 
-    char szMS[5] = {0};
-    snprintf(szMS, sizeof(szMS) - 1, "%03d", (int)msec);
+    std::string szMS = std::to_string(msec);
 
-    return TC_Common::tm2str(sec, "%Y%m%d-%H%M%S-") + std::string(szMS);
+    return TC_Common::tm2str(sec, "%Y%m%d-%H%M%S-") + szMS;
 }
 
 
@@ -1562,7 +1561,7 @@ int TC_Common::getMatchPeriodDays(const std::vector<int>& days,
     // 在周期切片中按下标取对应的数据
     for (auto const& v : slice)
     {
-        if (std::cmp_greater(std::abs(period.second), v.size()))
+        if (std::abs(period.second) > (int)v.size())
         {
             continue;
         }
