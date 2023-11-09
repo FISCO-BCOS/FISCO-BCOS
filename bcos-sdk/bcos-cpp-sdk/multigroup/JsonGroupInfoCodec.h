@@ -24,9 +24,8 @@
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
 #include <bcos-framework/multigroup/GroupTypeDef.h>
 #include <json/json.h>
-namespace bcos
-{
-namespace group
+
+namespace bcos::group
 {
 class JsonGroupInfoCodec : public GroupInfoCodec
 {
@@ -37,7 +36,7 @@ public:
         m_groupInfoFactory = std::make_shared<GroupInfoFactory>();
         m_chainNodeInfoCodec = std::make_shared<JsonChainNodeInfoCodec>();
     }
-    ~JsonGroupInfoCodec() override {}
+    ~JsonGroupInfoCodec() override = default;
 
     GroupInfo::Ptr deserialize(const std::string& _json) override
     {
@@ -143,5 +142,4 @@ private:
     GroupInfoFactory::Ptr m_groupInfoFactory;
     JsonChainNodeInfoCodec::Ptr m_chainNodeInfoCodec;
 };
-}  // namespace group
-}  // namespace bcos
+}  // namespace bcos::group
