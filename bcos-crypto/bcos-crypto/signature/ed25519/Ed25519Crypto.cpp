@@ -18,6 +18,7 @@
  * @date 2021.04.01
  * @author yujiechen
  */
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
@@ -103,7 +104,7 @@ std::pair<bool, bytes> bcos::crypto::ed25519Recover(Hash::Ptr _hashImpl, bytesCo
         h256 r;
         h256 s;
     } in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
+    utilities::CopyMemory(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
     // verify the signature
     auto signatureData = std::make_shared<SignatureDataWithPub>(in.r, in.s, in.pub.ref());
     try

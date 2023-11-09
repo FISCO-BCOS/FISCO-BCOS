@@ -18,6 +18,7 @@
  * @date 2022.10.07
  * @author lucasli
  */
+#include "bcos-utilities/CopyMemory.h"
 #include "hsm-crypto/hsm/CryptoProvider.h"
 #include "hsm-crypto/hsm/SDFCryptoProvider.h"
 #include <bcos-crypto/signature/Exceptions.h>
@@ -166,7 +167,7 @@ std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesCo
         h256 r;
         h256 s;
     } in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
+    utilities::CopyMemory(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
     // verify the signature
     auto signatureData = std::make_shared<SignatureDataWithPub>(in.r, in.s, in.pub.ref());
     try

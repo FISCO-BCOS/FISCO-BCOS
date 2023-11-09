@@ -19,6 +19,7 @@
  * @author yujiechen
  */
 
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithV.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -101,7 +102,7 @@ std::pair<bool, bytes> bcos::crypto::secp256k1Recover(Hash::Ptr _hashImpl, bytes
         h256 r;
         h256 s;
     } in;
-    memcpy(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
+    utilities::CopyMemory(&in, _input.data(), std::min(_input.size(), sizeof(_input)));
     u256 v = (u256)in.v;
     if (v >= 27 && v <= 28)
     {

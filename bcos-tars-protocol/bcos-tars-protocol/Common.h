@@ -25,6 +25,7 @@
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/TwoPCParams.h"
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
@@ -80,7 +81,7 @@ public:
     void writeBuf(const ByteType* buf, size_t len)
     {
         TarsReserveBuf(*this, _len + len);
-        memcpy(_buf + _len, buf, len);
+        bcos::utilities::CopyMemory(_buf + _len, buf, len);
         _len += len;
     }
 
@@ -302,8 +303,8 @@ inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::P2PInfo const& _p2pInfo)
     return tarsP2PInfo;
 }
 
-inline bcostars::GroupNodeInfo toTarsNodeIDInfo(
-    std::string const& _groupID, std::set<std::string> const& _nodeIDList, std::set<std::uint32_t> const& _nodeTypeList)
+inline bcostars::GroupNodeInfo toTarsNodeIDInfo(std::string const& _groupID,
+    std::set<std::string> const& _nodeIDList, std::set<std::uint32_t> const& _nodeTypeList)
 {
     GroupNodeInfo groupNodeIDInfo;
     groupNodeIDInfo.groupID = _groupID;
@@ -360,7 +361,7 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
     {
         auto const& nodeIDListInfo = it.nodeIDList;
         auto const& nodeTypeInfo = it.nodeTypeList;
-        for(size_t i = 0; i < nodeIDListInfo.size(); ++i)
+        for (size_t i = 0; i < nodeIDListInfo.size(); ++i)
         {
             auto nodeID = nodeIDListInfo[i];
             auto nodeType = nodeTypeInfo[i];

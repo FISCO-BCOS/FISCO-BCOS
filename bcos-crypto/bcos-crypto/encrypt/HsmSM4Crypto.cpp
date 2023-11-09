@@ -18,12 +18,12 @@
  * @date 2022.11.04
  * @author lucasli
  */
+#include "bcos-utilities/CopyMemory.h"
+#include "hsm-crypto/hsm/CryptoProvider.h"
+#include "hsm-crypto/hsm/SDFCryptoProvider.h"
 #include <bcos-crypto/encrypt/Exceptions.h>
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-
-#include "hsm-crypto/hsm/CryptoProvider.h"
-#include "hsm-crypto/hsm/SDFCryptoProvider.h"
 
 using namespace hsm;
 using namespace bcos;
@@ -38,7 +38,7 @@ bcos::bytesPointer HsmSM4Crypto::HsmSM4Encrypt(const unsigned char* _plainData,
     int nSize = 16 - padding;
     int inDataVLen = _plainDataSize + nSize;
     bytes inDataV(inDataVLen);
-    memcpy(inDataV.data(), _plainData, _plainDataSize);
+    utilities::CopyMemory(inDataV.data(), _plainData, _plainDataSize);
     memset(inDataV.data() + _plainDataSize, 0, nSize);
 
     // Encrypt

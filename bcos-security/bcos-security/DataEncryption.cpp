@@ -22,6 +22,7 @@
 
 #include "DataEncryption.h"
 #include "KeyCenter.h"
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-utilities/Base64.h>
@@ -147,7 +148,7 @@ std::string DataEncryption::encrypt(const std::string& data)
         reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
 
     std::string value(encData->size(), 0);
-    memcpy(value.data(), encData->data(), encData->size());
+    utilities::CopyMemory(value.data(), encData->data(), encData->size());
 
     return value;
 }
@@ -159,7 +160,7 @@ std::string DataEncryption::decrypt(const std::string& data)
         reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
 
     std::string value(decData->size(), 0);
-    memcpy(value.data(), decData->data(), decData->size());
+    utilities::CopyMemory(value.data(), decData->data(), decData->size());
 
     return value;
 }

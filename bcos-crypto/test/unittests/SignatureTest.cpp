@@ -17,6 +17,7 @@
  * @file SignatureTest.h
  * @date 2021.03.06
  */
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/hash/Sha3.h>
@@ -305,7 +306,7 @@ inline void SM2SignAndVerifyTest(SM2Crypto::Ptr _smCrypto)
     unsigned fieldLen = 32;
     std::shared_ptr<bytes> data = std::make_shared<bytes>(fieldLen, 0);
     auto binData = fromHexString("508b2b49c1d2dc46cbd5a011686fdc19937dbc704afe6c547a862b3e2b6c69");
-    memcpy(data->data(), binData->data(), binData->size());
+    utilities::CopyMemory(data->data(), binData->data(), binData->size());
     // padding zero to the r field
     memmove(data->data() + (fieldLen - binData->size()), data->data(), binData->size());
     memset(data->data(), 0, (fieldLen - binData->size()));

@@ -21,6 +21,7 @@
 
 #include "../vm/Precompiled.h"
 #include "../Common.h"
+#include "bcos-utilities/CopyMemory.h"
 #include "wedpr-crypto/WedprBn128.h"
 #include "wedpr-crypto/WedprCrypto.h"
 #include <bcos-utilities/Log.h>
@@ -344,7 +345,7 @@ constexpr uint8_t blake2b_sigma[12][16] =
 inline uint64_t load64(const void* src) noexcept
 {
     uint64_t w;
-    memcpy(&w, src, sizeof w);
+    utilities::CopyMemory(&w, src, sizeof w);
     return w;
 }
 
@@ -417,7 +418,7 @@ bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesCons
         BOOST_THROW_EXCEPTION(InvalidInputSize());
 
     blake2b_state s{};
-    std::memcpy(&s.h, _stateVector.data(), _stateVector.size());
+    utilities::CopyMemory(&s.h, _stateVector.data(), _stateVector.size());
 
     if (_t0.size() != sizeof(s.t[0]) || _t1.size() != sizeof(s.t[1]))
         BOOST_THROW_EXCEPTION(InvalidInputSize());
@@ -435,7 +436,7 @@ bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesCons
     blake2b_compress(_rounds, &s, block);
 
     bytes result(sizeof(s.h));
-    std::memcpy(&result[0], &s.h[0], result.size());
+    utilities::CopyMemory(&result[0], &s.h[0], result.size());
 
     return result;
 }
@@ -446,7 +447,7 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
 {  // _in is hash(32),v(32),r(32),s(32), return address
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover: ") << _in.size();
     byte rawRSV[RSV_LENGTH];
-    memcpy(rawRSV, _in.data() + 64, RSV_LENGTH - 1);
+    utilities::CopyMemory(rawRSV, _in.data() + 64, RSV_LENGTH - 1);
     rawRSV[RSV_LENGTH - 1] = (byte)((int)_in[63] - 27);
     CInputBuffer msgHash{(const char*)_in.data(), crypto::HashType::SIZE};
     CInputBuffer rsv{(const char*)rawRSV, RSV_LENGTH};

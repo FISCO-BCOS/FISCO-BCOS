@@ -21,6 +21,7 @@
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-rpc/groupmgr/TarsGroupManager.h"
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
@@ -98,7 +99,8 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                 if (nullptr != keyContent)
                 {
                     certConfig.caCert.resize(keyContent->size());
-                    memcpy(certConfig.caCert.data(), keyContent->data(), keyContent->size());
+                    utilities::CopyMemory(
+                        certConfig.caCert.data(), keyContent->data(), keyContent->size());
                 }
             }
             catch (std::exception& e)
@@ -120,7 +122,8 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                 if (nullptr != keyContent)
                 {
                     certConfig.nodeCert.resize(keyContent->size());
-                    memcpy(certConfig.nodeCert.data(), keyContent->data(), keyContent->size());
+                    utilities::CopyMemory(
+                        certConfig.nodeCert.data(), keyContent->data(), keyContent->size());
                 }
             }
             catch (std::exception& e)
@@ -153,7 +156,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
         }
         certConfig.nodeKey.resize(keyContent->size());
-        memcpy(certConfig.nodeKey.data(), keyContent->data(), keyContent->size());
+        utilities::CopyMemory(certConfig.nodeKey.data(), keyContent->data(), keyContent->size());
 
         contextConfig->setIsCertPath(false);
 
@@ -184,7 +187,8 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                 if (nullptr != keyContent)
                 {
                     certConfig.caCert.resize(keyContent->size());
-                    memcpy(certConfig.caCert.data(), keyContent->data(), keyContent->size());
+                    utilities::CopyMemory(
+                        certConfig.caCert.data(), keyContent->data(), keyContent->size());
                 }
             }
             catch (std::exception& e)
@@ -206,7 +210,8 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                 if (nullptr != keyContent)
                 {
                     certConfig.nodeCert.resize(keyContent->size());
-                    memcpy(certConfig.nodeCert.data(), keyContent->data(), keyContent->size());
+                    utilities::CopyMemory(
+                        certConfig.nodeCert.data(), keyContent->data(), keyContent->size());
                 }
             }
             catch (std::exception& e)
@@ -239,7 +244,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
         }
         certConfig.nodeKey.resize(keyContent->size());
-        memcpy(certConfig.nodeKey.data(), keyContent->data(), keyContent->size());
+        utilities::CopyMemory(certConfig.nodeKey.data(), keyContent->data(), keyContent->size());
 
         // enNodeCert
         if (false == _nodeConfig->enSmNodeCert().empty())
@@ -250,7 +255,8 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
                 if (nullptr != keyContent)
                 {
                     certConfig.enNodeCert.resize(keyContent->size());
-                    memcpy(certConfig.enNodeCert.data(), keyContent->data(), keyContent->size());
+                    utilities::CopyMemory(
+                        certConfig.enNodeCert.data(), keyContent->data(), keyContent->size());
                 }
             }
             catch (std::exception& e)
@@ -283,7 +289,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
         }
         certConfig.enNodeKey.resize(keyContent->size());
-        memcpy(certConfig.enNodeKey.data(), keyContent->data(), keyContent->size());
+        utilities::CopyMemory(certConfig.enNodeKey.data(), keyContent->data(), keyContent->size());
 
         contextConfig->setIsCertPath(false);
 

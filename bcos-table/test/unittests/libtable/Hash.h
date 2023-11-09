@@ -17,6 +17,7 @@
  * @file Header256Hash.h
  */
 
+#include "bcos-utilities/CopyMemory.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <functional>
 
@@ -35,7 +36,7 @@ public:
         std::hash<std::string_view> hash;
         auto h = hash(std::string_view((const char*)_data.data(), _data.size()));
         uint8_t hash_result[32] = {0};
-        memcpy(hash_result, &h, sizeof(h));
+        utilities::CopyMemory(hash_result, &h, sizeof(h));
         return HashType(hash_result, 32);
     }
     bcos::crypto::hasher::AnyHasher hasher() const override

@@ -18,6 +18,7 @@
  *  @date 2021-02-24
  */
 #pragma once
+#include "bcos-utilities/CopyMemory.h"
 #include <atomic>
 #include <cassert>
 #include <cstring>
@@ -146,7 +147,7 @@ public:
         }
         else
         {
-            memcpy((void*)_dataContainer.data(), (void*)data(),
+            utilities::CopyMemory((void*)_dataContainer.data(), (void*)data(),
                 (std::min)(_dataContainer.count(), count()) * sizeof(T));
         }
         // reset the remaining data to 0
