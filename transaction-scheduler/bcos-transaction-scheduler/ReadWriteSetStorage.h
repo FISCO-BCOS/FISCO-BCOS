@@ -37,7 +37,7 @@ public:
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
         ReadWriteSetStorage& storage, RANGES::input_range auto&& keys)
         -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
-            storage.m_storage, std::forward<decltype(keys)>(keys)))>>
+            (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys)))>>
     {
         for (auto&& key : keys)
         {
@@ -51,7 +51,7 @@ public:
         ReadWriteSetStorage& storage, RANGES::input_range auto&& keys,
         const storage2::READ_FRONT_TYPE& /*unused*/)
         -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
-            storage.m_storage, std::forward<decltype(keys)>(keys)))>>
+            (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys)))>>
     {
         co_return co_await storage2::readSome(
             storage.m_storage, std::forward<decltype(keys)>(keys));
@@ -60,8 +60,9 @@ public:
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
         ReadWriteSetStorage& storage, RANGES::input_range auto&& keys,
         RANGES::input_range auto&& values)
-        -> task::Task<task::AwaitableReturnType<decltype(storage2::writeSome(storage.m_storage,
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))>>
+        -> task::Task<task::AwaitableReturnType<decltype(storage2::writeSome(
+            (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys),
+            std::forward<decltype(values)>(values)))>>
     {
         for (auto&& key : keys)
         {
@@ -73,8 +74,8 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
         ReadWriteSetStorage& storage, RANGES::input_range auto const& keys)
-        -> task::Task<
-            task::AwaitableReturnType<decltype(storage2::removeSome(storage.m_storage, keys))>>
+        -> task::Task<task::AwaitableReturnType<decltype(storage2::removeSome(
+            (Storage&)std::declval<Storage>(), keys))>>
     {
         for (auto&& key : keys)
         {
@@ -83,7 +84,6 @@ public:
         co_return co_await storage2::removeSome(storage.m_storage, keys);
     }
 
-public:
     using Key = KeyType;
     using Value = typename task::AwaitableReturnType<decltype(storage2::readOne(
         m_storage, std::declval<KeyType>()))>::value_type;
