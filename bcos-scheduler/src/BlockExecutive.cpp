@@ -676,8 +676,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                 }
             }
             status->checkAndCommit(*status);
-        },
-        false);
+        });
 }
 
 void BlockExecutive::asyncNotify(

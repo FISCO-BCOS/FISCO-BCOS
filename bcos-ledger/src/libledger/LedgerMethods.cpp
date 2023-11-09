@@ -28,8 +28,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
                         m_error = std::move(error);
                     }
                     handle.resume();
-                },
-                m_withTransactionsAndReceipts);
+                });
         }
         void await_resume()
         {

@@ -50,7 +50,7 @@ public:
      */
     virtual void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) = 0;
+        std::function<void(Error::Ptr&&)> callback) = 0;
 
     /**
      * @brief async store txs in block when tx pool verify

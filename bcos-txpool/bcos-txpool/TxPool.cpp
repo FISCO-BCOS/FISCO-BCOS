@@ -318,7 +318,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                     // proposal-verify-perf, so we async the storeVerifiedBlock here using
                     // m_txsPreStore
 
-                    // Note: To avoid error transactions being stored, the block is only stored once during commit
+                    // Note: To avoid incomplete transactions in the block, the block is only stored once during commit
                     // if (!verifyError && verifyRet && block && block->blockHeader())
                     // {
                     //     txpool->m_txsPreStore->enqueue(

@@ -257,6 +257,8 @@ public:
                     m_blockFactory->transactionFactory()->createTransaction(bcos::ref(txData)));
             }
 
+            m_ledger->storeTransactionsAndReceipts(txList, m_fakeBlocks->at(i));
+
             std::promise<bool> p1;
             auto f1 = p1.get_future();
             m_ledger->asyncPreStoreBlockTxs(
@@ -1284,6 +1286,7 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     initFixture();
     auto transactions = std::make_shared<Transactions>();
     transactions->push_back(tx);
+    // m_ledger->storeTransactionsAndReceipts(transactions, std::const_pointer_cast<const bcos::protocol::Block>(block));
     m_ledger->asyncPrewriteBlock(
         m_storage, blockTxs, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
 
