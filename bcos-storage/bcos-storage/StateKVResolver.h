@@ -29,7 +29,7 @@ struct StateKeyResolver
 {
     using DBKey = boost::container::small_vector<char,
         transaction_executor::ContractTable::static_capacity +
-            transaction_executor::ContractKey::static_capacity + 1>;
+            transaction_executor::ContractKey::static_capacity>;
     constexpr static char TABLE_KEY_SPLIT = ':';
 
     static DBKey encode(auto const& stateKey)

@@ -56,6 +56,12 @@ using StateKeyView = std::tuple<std::string_view, std::string_view>;
 using StateKey = std::tuple<ContractTable, ContractKey>;
 using StateValue = storage::Entry;
 
+// struct EVMContractTableKey
+// {
+//     uint8_t address[20];
+//     uint8_t key[32];
+// };
+
 struct ExecuteTransaction
 {
     /**

@@ -38,6 +38,7 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <range/v3/view/enumerate.hpp>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler
@@ -85,25 +86,31 @@ std::chrono::milliseconds::rep current();
  */
 task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
 {
+    constexpr static auto STATE_ROOT_CHUNK_SIZE = 32;
+
     auto range = co_await storage2::range(storage);
+    auto chunkedRange = range | RANGES::views::chunk(STATE_ROOT_CHUNK_SIZE);
 
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
-    h256 stateRoot;
 
     tbb::concurrent_vector<h256> hashes;
-    hashes.reserve(RANGES::size(range));
-    tbb::parallel_for_each(range, [&](auto const& keyValue) {
-        auto [key, entry] = keyValue;
-        auto& [tableName, keyName] = *key;
-
-        if (!entry)
+    hashes.reserve(RANGES::size(chunkedRange));
+    tbb::parallel_for_each(chunkedRange, [&](auto&& subrange) {
+        h256 localHash;
+        for (auto [key, entry] : subrange)
         {
-            entry = std::addressof(deletedEntry);
-        }
+            auto& [tableName, keyName] = *key;
 
-        hashes.emplace_back(entry->hash(tableName, keyName, hashImpl,
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION)));
+            if (!entry)
+            {
+                entry = std::addressof(deletedEntry);
+            }
+
+            localHash ^= entry->hash(tableName, keyName, hashImpl,
+                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
+        }
+        hashes.emplace_back(localHash);
     });
 
     struct XORHash

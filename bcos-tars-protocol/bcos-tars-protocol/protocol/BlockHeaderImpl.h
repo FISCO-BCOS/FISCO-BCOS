@@ -22,13 +22,11 @@
 #pragma once
 
 #include "bcos-tars-protocol/tars/Block.h"
-
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <gsl/span>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcostars::protocol
 {
