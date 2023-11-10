@@ -21,6 +21,7 @@
 
 #include "ExecutiveFactory.h"
 #include "../vm/Precompiled.h"
+#include "BillingTransactionExecutive.h"
 #include "CoroutineTransactionExecutive.h"
 #include "PromiseTransactionExecutive.h"
 #include "ShardingTransactionExecutive.h"
@@ -36,11 +37,12 @@ using namespace bcos::precompiled;
 
 
 std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
-    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine)
+    const std::string& _contractAddress, int64_t contextID, int64_t seq, ExecutiveType execType)
 {
     std::shared_ptr<TransactionExecutive> executive;
-    if (useCoroutine)
+    switch(execType)
     {
+    case ExecutiveType::coroutine:
         /*
         if (m_isTiKVStorage)
         {
@@ -54,9 +56,12 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
         executive = std::make_shared<CoroutineTransactionExecutive>(
             m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
         //}
-    }
-    else
-    {
+        break;
+    case ExecutiveType::billing:
+        executive = std::make_shared<BillingTransactionExecutive>(
+            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+        break;
+    default:
         executive = std::make_shared<TransactionExecutive>(
             m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
     }
@@ -87,21 +92,23 @@ std::shared_ptr<bcos::precompiled::Precompiled> ExecutiveFactory::getPrecompiled
 }
 
 std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
-    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool useCoroutine)
+    const std::string& _contractAddress, int64_t contextID, int64_t seq, ExecutiveType execType)
 {
-    if (useCoroutine)
+    std::shared_ptr<TransactionExecutive> executive;
+    bool needUsePromise = false;
+    switch(execType)
     {
-        auto needUsePromise = m_isTiKVStorage;  // tikv storage need to use promise executive
-        auto executive = std::make_shared<ShardingTransactionExecutive>(m_blockContext,
+    case ExecutiveType::coroutine:
+        needUsePromise = m_isTiKVStorage;  // tikv storage need to use promise executive
+        executive = std::make_shared<ShardingTransactionExecutive>(m_blockContext,
             _contractAddress, contextID, seq, m_gasInjector, m_poolForPromiseWait, needUsePromise);
-        setParams(executive);
-        return executive;
-    }
-    else
-    {
-        auto executive = std::make_shared<TransactionExecutive>(
+        break;
+    default:
+        assert(execType != ExecutiveType::billing);
+        executive = std::make_shared<TransactionExecutive>(
             m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
-        setParams(executive);
-        return executive;
     }
+
+    setParams(executive);
+    return executive;
 }

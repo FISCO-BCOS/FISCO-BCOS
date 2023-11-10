@@ -161,14 +161,16 @@ protected:
     CallParameters::UniquePtr callDynamicPrecompiled(
         CallParameters::UniquePtr callParameters, const std::string& code);
 
+//    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
+//        int64_t contextID, int64_t seq, bool useCoroutine = true)
     virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
-        int64_t contextID, int64_t seq, bool useCoroutine = true)
+            int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine)
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
 
 
-        return executiveFactory->build(_contractAddress, contextID, seq, useCoroutine);
+        return executiveFactory->build(_contractAddress, contextID, seq, execType);
     }
 
     void revert();
