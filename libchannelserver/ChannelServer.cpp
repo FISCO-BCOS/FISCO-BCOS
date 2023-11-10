@@ -96,9 +96,9 @@ void dev::channel::ChannelServer::onAccept(
     {
         boost::system::error_code ec;
         auto remoteEndpoint = session->sslSocket()->lowest_layer().remote_endpoint(ec);
-        CHANNEL_LOG(TRACE) << LOG_DESC("Receive new connection")
-                           << LOG_KV("from", remoteEndpoint.address().to_string()) << ":"
-                           << remoteEndpoint.port();
+        CHANNEL_LOG(INFO) << LOG_DESC("Receive new connection")
+                          << LOG_KV("from", remoteEndpoint.address().to_string()) << ":"
+                          << remoteEndpoint.port();
 
         session->setHost(remoteEndpoint.address().to_string());
         session->setPort(remoteEndpoint.port());
@@ -293,6 +293,8 @@ void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& e
         else
         {
             CHANNEL_LOG(WARNING) << LOG_DESC("SSL handshake error")
+                                 << LOG_KV("remoteHost", session->host())
+                                 << LOG_KV("remotePort", session->port())
                                  << LOG_KV("message", error.message());
 
             try
